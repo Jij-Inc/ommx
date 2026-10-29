@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 ///
 /// Create via DecisionVariable operations:
 ///
+/// >>> from ommx import DecisionVariable
 /// >>> x = DecisionVariable.integer(1)
 /// >>> y = DecisionVariable.integer(2)
 /// >>> p = x * x * y + x * y * y + 1  # Cubic polynomial

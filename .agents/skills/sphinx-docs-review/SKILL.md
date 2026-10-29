@@ -100,6 +100,12 @@ includes would leave `help()` and runtime doctests with incomplete documentation
 When moving a source, update its includes, direct test readers, and any manifest
 source paths together.
 
+Check the registration path before replacing inline docs with `include_str!`.
+The current `pyo3-stub-gen` derive macros extract literal doc attributes and do not
+expand that include for generated metadata. Existing manually registered classes
+pass the same include to PyO3 and `PyClassInfo`; keep literal method docs when
+that shared-source route is unavailable, and compare runtime and generated text.
+
 ## Validation Commands
 
 Use the narrowest commands that match the diff. Python commands must run through

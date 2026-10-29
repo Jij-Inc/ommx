@@ -3,7 +3,7 @@
   "title": "OMMX Book 概念とページの依存台帳",
   "created_at": "2026-10-26",
   "language": "ja",
-  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstanceの編集契約。英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。",
+  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。",
   "baseline": {
     "repository": "Jij-Inc/ommx",
     "source_revision": "0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2",
@@ -84,6 +84,28 @@
         "docs/en/release_note/ommx-1.7.md"
       ],
       "note": "日英Solution・SampleSet・ParametricInstance Guideを削除し、各クラスの意味と実行例を共有Referenceへ移管。入力のState・Samplesと共通のCollection/FamilyView/ID契約もReferenceに置く。意味的な概念IDを保持し旧G4S/G4M/G5系の所有先と代表経路を更新。samples.countsは現行公開APIのsample IDと候補数の意味に合わせ、内部圧縮や存在しないnum_occurrences属性を要求しない。共有collectionの詳細は本文照合で確認し、APIごとの前提ノードを増やさない。日英homeに固定構造の数値条件を変える入口を加える。未台帳化の英語移行ガイド・release noteはリンクの限定変更で各章全体の監査は対象外。歴史的baselineを変更せずレビュー記録はチャットに残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "3153113617fd4e2979a31f5bcfa99deb2c82b6d3",
+      "target_revision": "codex/function-api-reference",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "R_API.function",
+        "R_API.named_function",
+        "R_API.named_function.samples",
+        "R_API.named_function.values",
+        "R_API.instance.display",
+        "R_API.solution.extract",
+        "R_API.solution.named_values",
+        "R_API.instance.named_values",
+        "RELEASE"
+      ],
+      "untracked_source_paths": [
+        "docs/en/release_note/ommx-3.0.md"
+      ],
+      "note": "日英Function Guideと日本語の指標評価・名前付き抽出How-toを共有Referenceへ統合。既存のFunction説明と各所有APIを補い、基本操作の旧ページは残さない。意味的な概念IDを再利用しG2・P13・P14系の所有先を更新する。表現の契約と式評価、ラベル表示、報告用指標、結果抽出、別Instanceへの値の照合は実際の説明先を分け、リンクだけから習得を付与しない。日英の目的別入口を揃える。歴史的baselineと過去の編集記録は保持し、本文レビューの記録はチャットへ残す。"
     }
   ],
   "interpretation": {
@@ -212,7 +234,7 @@
     {
       "id": "expression.basics",
       "label": "ID・演算子・係数から式を構成する",
-      "owner": "G2",
+      "owner": "R_API.function",
       "requires": [
         "variable.basics"
       ],
@@ -229,7 +251,7 @@
     {
       "id": "expression.evaluate",
       "label": "Function単体に値を与えて評価する",
-      "owner": "G2",
+      "owner": "R_API.function",
       "requires": [
         "expression.basics",
         "state.values"
@@ -354,7 +376,7 @@
     {
       "id": "solution.extract",
       "label": "nameとsubscriptsで変数値を抽出する",
-      "owner": "P14",
+      "owner": "R_API.solution.named_values",
       "requires": [
         "solution.read",
         "variables.metadata"
@@ -465,7 +487,7 @@
     {
       "id": "named.outputs",
       "label": "評価用の名前付き式を読む",
-      "owner": "G2.named",
+      "owner": "R_API.named_function",
       "requires": [
         "expression.basics",
         "evaluation.basic"
@@ -475,7 +497,7 @@
         "NamedFunction",
         "named_functions"
       ],
-      "scope": "目的関数・制約とは別に、候補ごとの指標をInstanceへ保持できることを理解する。登録・結果抽出や省略変数の値の解釈は各How-to節で別に扱い、Guideのリンクだけから習得を付与しない。"
+      "scope": "目的関数・制約とは別に候補ごとの指標をInstanceへ保持できると理解する。登録・取得と省略値の解釈はNamedFunction内の各実行例で扱い、他APIのリンクだけから習得を付与しない。"
     },
     {
       "id": "variables.roles",
@@ -899,7 +921,7 @@
     {
       "id": "function.support",
       "label": "式を評価できることとAdapterの入力対応を区別する",
-      "owner": "G2.support",
+      "owner": "R_API.function",
       "requires": [
         "expression.basics",
         "instance.model"
@@ -1399,7 +1421,7 @@
     {
       "id": "expression.labels",
       "label": "Instanceのラベルを使って式を表示する",
-      "owner": "G2.display",
+      "owner": "R_API.instance.display",
       "requires": [
         "expression.basics",
         "variables.metadata"
@@ -1414,7 +1436,7 @@
     {
       "id": "named.evaluate",
       "label": "名前付き評価式を登録しSolutionから値を取得する",
-      "owner": "P13",
+      "owner": "R_API.named_function",
       "requires": [
         "named.outputs",
         "solution.read"
@@ -1429,7 +1451,7 @@
     {
       "id": "named.samples",
       "label": "複数候補からサンプルIDを指定して指標を取得する",
-      "owner": "P13.samples",
+      "owner": "R_API.named_function.samples",
       "requires": [
         "named.evaluate",
         "state.values"
@@ -1443,7 +1465,7 @@
     {
       "id": "named.values",
       "label": "評価用の式だけに使う変数の値を明示する",
-      "owner": "P13.values",
+      "owner": "R_API.named_function.values",
       "requires": [
         "named.outputs",
         "state.values",
@@ -1458,7 +1480,7 @@
     {
       "id": "state.named_reuse",
       "label": "別Instanceの名前・添字へ照合し候補を再評価する",
-      "owner": "P14.reuse",
+      "owner": "R_API.instance.named_values",
       "requires": [
         "solution.extract",
         "state.values",
@@ -1468,7 +1490,7 @@
       "aliases": [
         "state_from_named_values"
       ],
-      "scope": "開発版だけの任意経路。名前照合で対象IDを得る操作と、値・実行可能性の検査を分ける。公開環境で結果抽出しただけではこの能力や実行環境を付与しない。"
+      "scope": "Referenceに対応する開発版SDK環境で、名前照合による対象IDへの対応付けと値・実行可能性の検査を区別する。公開b7向けの環境や結果抽出だけから利用可能性を推定しない。"
     },
     {
       "id": "bounds.tighten",
@@ -1655,7 +1677,11 @@
             "experiment.record",
             "class.qubo",
             "bigm.contract",
-            "parametric.materialize"
+            "parametric.materialize",
+            "expression.basics",
+            "named.outputs",
+            "solution.extract",
+            "expression.labels"
           ]
         }
       ],
@@ -1752,7 +1778,11 @@
             "experiment.record",
             "class.qubo",
             "bigm.contract",
-            "parametric.materialize"
+            "parametric.materialize",
+            "expression.basics",
+            "named.outputs",
+            "solution.extract",
+            "expression.labels"
           ]
         }
       ],
@@ -2507,141 +2537,6 @@
       ]
     },
     {
-      "id": "G2",
-      "title": "Functionの式評価とInstanceの候補評価",
-      "slice": "I",
-      "role": "guide",
-      "status": "existing",
-      "source_paths": [
-        "docs/ja/user_guide/function.md"
-      ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/function.md"
-      ],
-      "requires": [
-        "ext.math",
-        "instance.model",
-        "variable.basics",
-        "constraint.basics"
-      ],
-      "sections": [
-        {
-          "id": "expression",
-          "introduces": [
-            "expression.basics"
-          ],
-          "uses": [
-            "expression.basics"
-          ],
-          "mentions": []
-        },
-        {
-          "id": "evaluate",
-          "introduces": [
-            "state.values",
-            "expression.evaluate",
-            "evaluation.basic",
-            "feasibility.basic"
-          ],
-          "uses": [
-            "expression.evaluate",
-            "evaluation.basic",
-            "feasibility.basic"
-          ],
-          "mentions": [
-            "function.support",
-            "expression.form",
-            "expression.labels",
-            "named.outputs"
-          ]
-        }
-      ],
-      "deferred": [],
-      "parent_page": null,
-      "notes": "Instanceの変数・目的関数・制約を前提に、一つの最小例でFunction単体の数値評価と問題全体の候補評価を区別する。ここで扱うのは手元の未変換の問題と候補の実行可能性であり、変換後の結果やfeasibility viewの読み分けは教えない。演算カタログや格納表現・数値契約は必要な操作のAPI Referenceへ案内し、具体的な表現条件はR_API.functionを訪問した場合だけ追跡する。 名前・添字を使った式の表示は任意のG2.display、名前付き評価式の概念はG2.namedに分け、細部のAPIカタログへ戻さない。",
-      "contract_status": "proposed",
-      "implementation_verified": false,
-      "source_paths_existing": [
-        "docs/ja/user_guide/function.md"
-      ]
-    },
-    {
-      "id": "G2.support",
-      "title": "式の評価可能性とAdapterの入力対応",
-      "slice": "I",
-      "role": "guide-section",
-      "status": "existing",
-      "source_paths": [
-        "docs/ja/user_guide/function.md"
-      ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/function.md"
-      ],
-      "requires": [
-        "expression.basics",
-        "instance.model"
-      ],
-      "sections": [
-        {
-          "id": "limits",
-          "introduces": [
-            "function.support"
-          ],
-          "uses": [
-            "function.support"
-          ],
-          "mentions": [
-            "expression.form",
-            "class.membership",
-            "preparation.target"
-          ]
-        }
-      ],
-      "deferred": [],
-      "parent_page": "G2",
-      "notes": "実在する「評価できる式が、そのまま求解に使えるとは限らない」節。評価可能性と入力対応の違いだけを説明し、表現の詳細はAPI Reference、classへの判定や変換の選択はG9/G10へ送る。構築方法を一通り学ぶことはモデラー・ファイルから受け取った問題を使う前提ではない。",
-      "contract_status": "proposed",
-      "implementation_verified": false,
-      "source_paths_existing": [
-        "docs/ja/user_guide/function.md"
-      ]
-    },
-    {
-      "id": "G2.named",
-      "title": "名前付きの評価式",
-      "slice": "L",
-      "role": "guide-section",
-      "status": "existing",
-      "source_paths": [
-        "docs/ja/user_guide/function.md"
-      ],
-      "source_urls": [],
-      "requires": [
-        "expression.basics",
-        "evaluation.basic"
-      ],
-      "sections": [
-        {
-          "id": "outputs",
-          "introduces": [
-            "named.outputs"
-          ],
-          "uses": [
-            "named.outputs"
-          ],
-          "mentions": []
-        }
-      ],
-      "deferred": [],
-      "parent_page": "G2",
-      "notes": "「目的関数以外にも、候補の指標を持てる」で概念を短く説明する。登録から結果取得の実行はP13へ移し、Guide訪問だけから操作習得は付与しない。",
-      "contract_status": "proposed",
-      "implementation_verified": false,
-      "source_paths_existing": [
-        "docs/ja/user_guide/function.md"
-      ]
-    },
-    {
       "id": "G3",
       "title": "特殊制約の意味",
       "slice": "B",
@@ -2940,7 +2835,7 @@
       ],
       "deferred": [],
       "parent_page": "R_API.solution",
-      "notes": "クラスの「Inspect evaluated values」からextract_decision_variables・extract_constraints・extract_named_functions・DataFrameの操作別Referenceへ案内する部分経路。リンクだけでは各操作を習得扱いにしない。P14の既存How-to本文の統合は後続の移管対象。",
+      "notes": "クラスの「Inspect evaluated values」から抽出・DataFrameの所有メソッドへ案内する部分経路。リンクだけでは操作を習得扱いにせず、実行例と契約を読むR_API.solution.named_valuesで追跡する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -4943,19 +4838,52 @@
     },
     {
       "id": "R_API.function",
-      "title": "Function APIの演算・表現と数値評価の契約",
-      "slice": "I",
-      "role": "reference-section",
+      "title": "Functionの意味・構築・演算・評価と表現の契約",
+      "slice": "Function and named results Reference migration",
+      "role": "reference-entry",
       "status": "existing",
       "source_paths": [
+        "python/ommx/src/docstrings/ommx/Function.md",
         "python/ommx/src/function.rs",
-        "python/ommx/src/docstrings/ommx/Function.md"
+        "python/ommx/src/linear.rs",
+        "python/ommx/src/quadratic.rs",
+        "python/ommx/src/polynomial.rs",
+        "docs/api/_items/ommx.Function.rst"
       ],
       "source_urls": [],
       "requires": [
-        "expression.basics"
+        "ext.math",
+        "ext.python",
+        "instance.model",
+        "variable.basics",
+        "constraint.basics"
       ],
       "sections": [
+        {
+          "id": "expression",
+          "introduces": [
+            "expression.basics"
+          ],
+          "uses": [
+            "expression.basics"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "evaluate",
+          "introduces": [
+            "state.values",
+            "expression.evaluate",
+            "evaluation.basic",
+            "feasibility.basic"
+          ],
+          "uses": [
+            "expression.evaluate",
+            "evaluation.basic",
+            "feasibility.basic"
+          ],
+          "mentions": []
+        },
         {
           "id": "representation",
           "introduces": [
@@ -4967,16 +4895,42 @@
           "mentions": [
             "function.representation"
           ]
+        },
+        {
+          "id": "solver-support",
+          "introduces": [
+            "function.support"
+          ],
+          "uses": [
+            "function.support"
+          ],
+          "mentions": [
+            "class.membership",
+            "preparation.target"
+          ]
+        },
+        {
+          "id": "related-operations",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "expression.labels",
+            "named.outputs"
+          ]
         }
       ],
       "deferred": [],
       "parent_page": "R_API",
-      "notes": "Functionの生成API Referenceに掲載するbinding docstringと共有Markdown原稿が、構築・演算・多項式と複合式・数値評価の契約を所有する。G2のリンクやAPI一覧の訪問だけではこの節を既習としない。RPNの符号化そのものは別のR_WIRE.functionが所有し、本節の外部仕様リンクだけからwire契約の習得を付与しない。",
+      "notes": "日英Function Guideを共有Referenceへ統合する。式のID参照、構築・演算、格納表現、式単体と問題全体の評価の違いを本文と実行例で説明する。Linear・Quadratic・Polynomialの係数からの構築は各クラスの完全例へ接続する。評価可能性はAdapterの入力対応を保証しない。表示と指標の操作は所有APIへ送り、リンクだけから習得を付与しない。RPNの符号化はR_WIRE.functionが所有する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
+        "python/ommx/src/docstrings/ommx/Function.md",
         "python/ommx/src/function.rs",
-        "python/ommx/src/docstrings/ommx/Function.md"
+        "python/ommx/src/linear.rs",
+        "python/ommx/src/quadratic.rs",
+        "python/ommx/src/polynomial.rs",
+        "docs/api/_items/ommx.Function.rst"
       ]
     },
     {
@@ -5369,16 +5323,21 @@
       ]
     },
     {
-      "id": "G2.display",
-      "title": "式を変数名で確認する",
-      "slice": "L",
-      "role": "guide-section",
+      "id": "R_API.instance.display",
+      "title": "Instanceのラベルを使った式の文字列化とNotebook表示",
+      "slice": "Function and named results Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/function.md"
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/parametric_instance.rs",
+        "docs/api/_items/ommx.Instance.rst",
+        "docs/api/_items/ommx.ParametricInstance.rst"
       ],
       "source_urls": [],
       "requires": [
+        "ext.python",
+        "instance.model",
         "expression.basics",
         "variable.basics"
       ],
@@ -5396,12 +5355,15 @@
         }
       ],
       "deferred": [],
-      "parent_page": "G2",
-      "notes": "「式を変数名で確認する」の最小例。添字付きのラベルを先に説明し、Instance経由の表示とFunction単体のID表示を対比する。ParametricInstanceへの言及は問題族を作る能力を与えない。IDによる表示文脈とプレビューの省略を局所説明し、全体は上限なしformat_functionで読む。APIは表示引数・既定値を確認する先とする。",
+      "parent_page": "R_API.instance",
+      "notes": "format_function・display_functionの実行例で名前・添字を導入し、Function単体のID表示とモデル側のラベル表示を区別する。表示先のIDを使い、別モデルの名前照合はしない。全体の文字列と省略され得るNotebookプレビューを分ける。ParametricInstanceの例はパラメータ名も表示するが、表示経路から問題族全体の操作習得は付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/function.md"
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/parametric_instance.rs",
+        "docs/api/_items/ommx.Instance.rst",
+        "docs/api/_items/ommx.ParametricInstance.rst"
       ]
     },
     {
@@ -5440,13 +5402,15 @@
       ]
     },
     {
-      "id": "P13",
-      "title": "目的関数以外の指標を評価する",
-      "slice": "L",
-      "role": "how-to",
+      "id": "R_API.named_function",
+      "title": "NamedFunctionの意味と指標の登録・評価・取得",
+      "slice": "Function and named results Reference migration",
+      "role": "reference-entry",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/evaluate_named_functions.md"
+        "python/ommx/src/docstrings/ommx/NamedFunction.md",
+        "python/ommx/src/named_function.rs",
+        "docs/api/_items/ommx.NamedFunction.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -5463,9 +5427,18 @@
       ],
       "sections": [
         {
+          "id": "reporting-expression",
+          "introduces": [
+            "named.outputs"
+          ],
+          "uses": [
+            "named.outputs"
+          ],
+          "mentions": []
+        },
+        {
           "id": "register-and-read",
           "introduces": [
-            "named.outputs",
             "named.evaluate"
           ],
           "uses": [
@@ -5475,22 +5448,26 @@
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "Instanceと候補評価の知識を明示し、コードの実行状態はこのページだけで完結させる。最初の登録→評価→取得を完了してから任意の複数候補・省略変数の節へ進む。辞書の空tupleとDataFrameのindex/valueは局所説明する。",
+      "parent_page": "R_API",
+      "notes": "NamedFunctionの冒頭で目的関数・制約と異なる報告用指標の意味を説明し、登録→候補評価→辞書とDataFrameによる取得を一つの完全例にする。空tuple、評価式のIDと表のindex/valueを局所説明する。複数候補と省略変数の解釈は後続の任意節で追跡する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/evaluate_named_functions.md"
+        "python/ommx/src/docstrings/ommx/NamedFunction.md",
+        "python/ommx/src/named_function.rs",
+        "docs/api/_items/ommx.NamedFunction.rst"
       ]
     },
     {
-      "id": "P13.samples",
-      "title": "複数候補から名前付き指標を取得する",
-      "slice": "L",
-      "role": "how-to-section",
+      "id": "R_API.named_function.samples",
+      "title": "複数候補の名前付き指標をサンプルIDで取得する",
+      "slice": "Function and named results Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/evaluate_named_functions.md"
+        "python/ommx/src/docstrings/ommx/NamedFunction.md",
+        "python/ommx/src/named_function.rs",
+        "docs/api/_items/ommx.NamedFunction.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -5510,22 +5487,26 @@
         }
       ],
       "deferred": [],
-      "parent_page": "P13",
-      "notes": "候補IDを先に説明してからevaluate_samplesとID付き抽出を使う。一般のSampleSetの選択規則を習得したとは扱わない。",
+      "parent_page": "R_API.named_function",
+      "notes": "NamedFunctionの複数候補の実行例で候補IDを説明し、同じ式の指標をID付きで取り出す。費用を最小にする候補と距離を最小にする候補は異なり得る。指標追加はSampleSetの並べ替えやbest_feasibleの選択基準を変えない。一般の候補選択・変換後の解釈の習得は付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/evaluate_named_functions.md"
+        "python/ommx/src/docstrings/ommx/NamedFunction.md",
+        "python/ommx/src/named_function.rs",
+        "docs/api/_items/ommx.NamedFunction.rst"
       ]
     },
     {
-      "id": "P13.values",
-      "title": "評価式だけに現れる変数の値を明示する",
-      "slice": "L",
-      "role": "how-to-section",
+      "id": "R_API.named_function.values",
+      "title": "報告用の式だけに現れる変数の値を明示する",
+      "slice": "Function and named results Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/evaluate_named_functions.md"
+        "python/ommx/src/docstrings/ommx/NamedFunction.md",
+        "python/ommx/src/named_function.rs",
+        "docs/api/_items/ommx.NamedFunction.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -5550,22 +5531,25 @@
         }
       ],
       "deferred": [],
-      "parent_page": "P13",
-      "notes": "既定値2と明示値4のInteger例と隣接説明で、特定候補の値が必要な理由を教える。全変数役割・補完規則はG6に残す。指標自体は制約でなくても、明示した変数値の定義域は候補評価で検査されることを補足する。",
+      "parent_page": "R_API.named_function",
+      "notes": "NamedFunctionの省略値と明示値を比較する実行例で、報告用の式だけに使う変数はusedとはならず、特定候補の指標にはその値が必要と説明する。指標は制約ではないが、与えた変数値の定義域は候補評価で検査される。全変数役割・補完規則はG6とpopulate_stateに委ねる。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/evaluate_named_functions.md"
+        "python/ommx/src/docstrings/ommx/NamedFunction.md",
+        "python/ommx/src/named_function.rs",
+        "docs/api/_items/ommx.NamedFunction.rst"
       ]
     },
     {
-      "id": "P14",
-      "title": "結果を名前と添字で取り出す",
-      "slice": "L",
-      "role": "how-to",
+      "id": "R_API.solution.named_values",
+      "title": "Solutionの値を名前・添字やDataFrameで取得する",
+      "slice": "Function and named results Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/extract_named_values.md"
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -5601,22 +5585,24 @@
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "小さな問題・候補をこのページで構築して独立に抽出を学ぶ。tupleキーを利用直後に説明し、全名前の辞書・名前なし/重複・DataFrameへ進む。開発版再入力は任意子節であり公開環境の親経路に継承させない。",
+      "parent_page": "R_API.solution",
+      "notes": "extract_decision_variablesの完全例からtupleキー、全名前の辞書、名前なしと重複ラベル、decision_variables_dfへ進む。各メソッドの例は必要な問題と候補を自分で用意する。IDは変数の識別、名前・添字はモデル上のラベルという違いを説明する。SampleSetでの抽出は候補IDを必要とする別API、別Instanceへの入力はstate_from_named_valuesに送る。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/extract_named_values.md"
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst"
       ]
     },
     {
-      "id": "P14.reuse",
-      "title": "別Instanceへ名前と添字で値を対応付ける",
-      "slice": "L",
-      "role": "how-to-section",
+      "id": "R_API.instance.named_values",
+      "title": "名前・添字で別InstanceのIDへ値を対応付ける",
+      "slice": "Function and named results Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/extract_named_values.md"
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -5638,12 +5624,13 @@
         }
       ],
       "deferred": [],
-      "parent_page": "P14",
-      "notes": "「別のInstanceへ値を対応付ける場合」は、Referenceと同じリビジョンの開発版SDK環境を既に用意した読者への任意の参照例。公開SDK導入から実行できる経路を約束しない。IDが異なる例と新boundへの違反で照合と評価を区別する。部分入力を埋めないことと、供給した名前・添字の不明/曖昧エラーを短く説明し、正確な条件はstate_from_named_valuesへ送る。",
+      "parent_page": "R_API.instance",
+      "notes": "state_from_named_valuesの完全例で抽出元と受取先を構築し、IDが異なっても名前・添字で照合できることと、新しいboundへの違反を示す。照合は値・実行可能性の検査ではなく、入力にない値を埋めない。公開b7向けSETUPだけからこの操作を実行できると約束せず、Referenceに対応する開発版環境を用意した経路を独立して追跡する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/extract_named_values.md"
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ]
     },
     {
@@ -6165,13 +6152,13 @@
       "steps": [
         "SETUP",
         "R_API.instance",
-        "G2",
+        "R_API.function",
         "R_API.parametric"
       ]
     },
     {
       "id": "function_api_contract",
-      "title": "Functionの概念から必要なAPIの表現・数値契約へ進む",
+      "title": "Function Referenceで式の意味から表現・数値契約まで読む",
       "initial": [
         "ext.math",
         "ext.python"
@@ -6179,8 +6166,6 @@
       "steps": [
         "SETUP",
         "R_API.instance",
-        "G2",
-        "G2.support",
         "R_API.function"
       ]
     },
@@ -6271,9 +6256,9 @@
         "SETUP",
         "R_API.instance",
         "R_API.solution",
-        "P13",
-        "P13.samples",
-        "P13.values"
+        "R_API.named_function",
+        "R_API.named_function.samples",
+        "R_API.named_function.values"
       ]
     },
     {
@@ -6288,12 +6273,12 @@
         "R_API.instance",
         "R_API.solution",
         "R_API.solution.extract",
-        "P14"
+        "R_API.solution.named_values"
       ]
     },
     {
       "id": "named_metrics_direct",
-      "title": "Instanceと評価を知る読者が指標のHow-toへ直接入る",
+      "title": "Instanceと候補評価を知る読者がNamedFunctionへ直接入る",
       "initial": [
         "ext.math",
         "ext.python",
@@ -6308,7 +6293,7 @@
       ],
       "steps": [
         "SETUP",
-        "P13"
+        "R_API.named_function"
       ]
     },
     {
@@ -6325,7 +6310,7 @@
       ],
       "steps": [
         "SETUP",
-        "P14"
+        "R_API.solution.named_values"
       ]
     },
     {
@@ -6338,9 +6323,8 @@
       "steps": [
         "SETUP",
         "R_API.instance",
-        "G2",
-        "G2.display",
-        "G2.named"
+        "R_API.function",
+        "R_API.instance.display"
       ]
     },
     {
@@ -6383,8 +6367,8 @@
       "steps": [
         "R_API.instance",
         "R_API.solution",
-        "P14",
-        "P14.reuse"
+        "R_API.solution.named_values",
+        "R_API.instance.named_values"
       ]
     },
     {
@@ -6454,6 +6438,20 @@
       ],
       "steps": [
         "R_API.parametric"
+      ]
+    },
+    {
+      "id": "function_api_direct",
+      "title": "問題モデルを知る読者がFunction Referenceへ直接入る",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "instance.model",
+        "variable.basics",
+        "constraint.basics"
+      ],
+      "steps": [
+        "R_API.function"
       ]
     }
   ],

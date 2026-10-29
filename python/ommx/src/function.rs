@@ -343,6 +343,7 @@ impl Function {
     ///
     /// >>> from ommx import DecisionVariable, Function
     /// >>> x = Function(DecisionVariable.continuous(0))
+    /// >>> assert ((x + 1) * (x + 1)).almost_equal(x * x + 2 * x + 1)
     /// >>> assert (x * x).almost_equal(x * x)
     /// >>> assert not (x ** 2).almost_equal(x * x)
     #[pyo3(signature = (other, atol=ATol::default().into_inner()))]

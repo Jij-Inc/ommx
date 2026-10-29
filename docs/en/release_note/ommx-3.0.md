@@ -483,7 +483,7 @@ Because a `Function` is no longer necessarily a polynomial,
 `None` for composed expressions. Polynomial-term accessors and
 {meth}`~ommx.Function.content_factor` raise `TypeError` instead of treating a
 composed expression as an empty polynomial. See the
-[Function user guide](../user_guide/function.md) for operation ordering,
+{class}`Function API Reference <ommx.Function>` for operation ordering,
 evaluation errors, and serialization details.
 
 The instance-class API now names that polynomial requirement explicitly. This

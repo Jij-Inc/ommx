@@ -432,24 +432,43 @@ impl Solution {
         self.inner.named_function_names()
     }
 
-    /// Extract the values of decision variables based on the `name` with `subscripts` key.
+    /// Extract evaluated variable values using their model name and subscript tuples.
+    ///
+    /// Use labels such as product, facility, or time indices to return results
+    /// to application code. The result is a dictionary: ``(i,)`` identifies a
+    /// one-dimensional subscript, ``(i, j)`` a pair, and ``()`` a scalar variable
+    /// without subscripts. Names and subscripts are labels, not variable IDs;
+    /// ``parameters`` and ``description`` do not distinguish extraction keys.
     ///
     /// Raises KeyError if no decision variable has the requested name, and
     /// ValueError if the same subscript is found more than once.
     ///
-    /// # Examples
+    /// >>> from ommx import Instance
+    /// >>> instance = Instance.maximize()
+    /// >>> x = [instance.new_binary("x", subscripts=[i]) for i in range(2)]
+    /// >>> y = instance.new_integer("y", lower=0, upper=3)
+    /// >>> instance.objective = 3 * x[0] + 5 * x[1] + y
+    /// >>> _ = instance.add_constraint(x[0] + x[1] <= 1)
+    /// >>> solution = instance.evaluate({x[0].id: 1, x[1].id: 0, y.id: 2})
+    /// >>> assert solution.feasible
+    /// >>> assert solution.extract_decision_variables("x") == {(0,): 1.0, (1,): 0.0}
+    /// >>> assert solution.extract_decision_variables("y") == {(): 2.0}
+    /// >>> named_values = solution.extract_all_decision_variables()
+    /// >>> assert named_values == {"x": {(0,): 1.0, (1,): 0.0}, "y": {(): 2.0}}
+    /// >>> table = solution.decision_variables_df()
+    /// >>> x_rows = table.loc[table["name"] == "x", ["subscripts", "value"]]
+    /// >>> assert x_rows["value"].to_dict() == {x[0].id: 1.0, x[1].id: 0.0}
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
-    /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
-    /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=x,
-    /// ...     objective=sum(x),
-    /// ...     constraints={0: sum(x) == 1},
-    /// ...     sense=Sense.Maximize,
-    /// ... )
-    /// >>> solution = instance.evaluate({i: 1 for i in range(3)})
-    /// >>> solution.extract_decision_variables("x")
-    /// {(0,): 1.0, (1,): 1.0, (2,): 1.0}
+    /// {meth}`~ommx.Solution.extract_all_decision_variables` groups all named
+    /// variables. {meth}`~ommx.Solution.decision_variables_df` also includes
+    /// unnamed variables and keeps variable IDs as its index; its ``subscripts``
+    /// column contains lists, while the dictionaries above use tuple keys.
+    /// {meth}`~ommx.SampleSet.extract_decision_variables` provides the same query
+    /// for a selected sample ID.
+    ///
+    /// To reuse values in a rebuilt model, use
+    /// {meth}`~ommx.Instance.state_from_named_values` on the receiving Instance.
+    /// It resolves that model's IDs by labels; it does not establish feasibility.
     pub fn extract_decision_variables<'py>(
         &self,
         py: Python<'py>,
@@ -469,9 +488,17 @@ impl Solution {
     /// Returns a mapping from variable name to a mapping from subscripts to values.
     /// This is useful for extracting all variables at once in a structured format.
     /// Variables without names are not included in the result.
+    /// Scalar variables use the empty tuple ``()`` as their inner key.
+    /// Names and subscripts select matches; parameters and descriptions are ignored.
     ///
     /// Raises ValueError if the same name and subscript combination is found
-    /// multiple times.
+    /// multiple times. Distinct IDs do not disambiguate duplicate labels in this
+    /// format. Use {attr}`~ommx.Solution.state` or
+    /// {meth}`~ommx.Solution.decision_variables_df` for values keyed by ID.
+    /// See {meth}`~ommx.Solution.extract_decision_variables` for the complete
+    /// single-name, grouped, and table workflow, and
+    /// {meth}`~ommx.Instance.state_from_named_values` to map these values into
+    /// another Instance.
     ///
     /// # Examples
     ///
@@ -578,6 +605,9 @@ impl Solution {
     /// Discover names with {attr}`~ommx.Solution.named_function_names`, or use
     /// {meth}`~ommx.Solution.named_functions_df` for a table including labels.
     /// A scalar metric uses the empty tuple ``()`` as its key.
+    /// Names and subscripts select matches; parameters and descriptions are ignored.
+    /// The {class}`~ommx.NamedFunction` class example covers registration,
+    /// single-candidate and multi-candidate evaluation, and reporting-only variables.
     ///
     /// Raises KeyError if no named function has the requested name, and
     /// ValueError if the same subscript is found more than once.
@@ -608,6 +638,12 @@ impl Solution {
     }
 
     /// Extract all named functions grouped by name (returns a Python dict).
+    ///
+    /// The outer keys are names; each inner dictionary maps subscript tuples to
+    /// evaluated values, with ``()`` for a scalar metric. Entries without names
+    /// are excluded. Parameters and descriptions are ignored when grouping.
+    /// Use {meth}`~ommx.Solution.named_functions_df` to include unnamed entries
+    /// and retain their IDs.
     ///
     /// Raises ValueError if the same name and subscript combination is found
     /// multiple times.
@@ -715,7 +751,10 @@ impl Solution {
     /// have no ``substituted_value`` field, so that compatibility column is NA;
     /// read the populated value from ``value``. ``include`` selects optional
     /// label/sidecar columns as on {meth}`~ommx.Instance.decision_variables_df`.
-    /// Editing this table does not update the Solution.
+    /// The table includes variables without names. ``subscripts`` holds lists
+    /// such as ``[0]``; {meth}`~ommx.Solution.extract_decision_variables` uses
+    /// tuples as dictionary keys instead. Editing this table does not update
+    /// the Solution.
     ///
     /// >>> from ommx import Instance
     /// >>> instance = Instance.maximize()
@@ -839,9 +878,12 @@ impl Solution {
         )
     }
 
-    /// DataFrame of evaluated named functions
+    /// DataFrame of evaluated named functions, including entries without names.
     ///
     /// Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}
+    ///
+    /// The index is the named-function ID, and ``value`` is its evaluated metric.
+    /// See {class}`~ommx.NamedFunction` for a complete registration-to-table example.
     #[pyo3(signature = (include = None))]
     pub fn named_functions_df<'py>(
         &self,

@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 ///
 /// Create a linear function `f(x₁, x₂) = 2x₁ + 3x₂ + 1`:
 ///
+/// >>> from ommx import DecisionVariable, Linear
 /// >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
 ///
 /// Or create via DecisionVariable arithmetic:

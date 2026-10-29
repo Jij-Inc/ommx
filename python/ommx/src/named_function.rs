@@ -3,17 +3,7 @@ use ommx::{Evaluate, NamedFunctionID};
 use pyo3::{prelude::*, Bound, PyAny};
 use std::collections::HashMap;
 
-/// NamedFunction wrapper for Python.
-///
-/// Holds the Rust `NamedFunction` plus an owned snapshot of its label
-/// (`name` / `subscripts` / `parameters` / `description`). The label
-/// store lives at the host (`Instance` / `Solution` / `SampleSet`) level;
-/// when a wrapper is created via a host accessor, the host snapshots its
-/// store into the third tuple slot. Mutations on a wrapper do NOT
-/// propagate back to the host — re-insert via `Instance.from_components`
-/// (or equivalent) to apply changes. Same shape as `Constraint` /
-/// `DecisionVariable` after PR #843.
-#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[doc = include_str!("docstrings/ommx/NamedFunction.md")]
 #[pyclass]
 #[derive(Clone)]
 pub struct NamedFunction(
@@ -21,6 +11,26 @@ pub struct NamedFunction(
     pub ommx::NamedFunction,
     pub ommx::NamedFunctionLabel,
 );
+
+// Share the included class documentation with stub generation, which reads
+// literal doc attributes rather than expanding include_str! in gen_stub_pyclass.
+impl pyo3_stub_gen::PyStubType for NamedFunction {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::locally_defined("NamedFunction", Default::default())
+    }
+}
+pyo3_stub_gen::impl_py_runtime_type!(NamedFunction);
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::type_info::PyClassInfo {
+        pyclass_name: "NamedFunction",
+        struct_id: std::any::TypeId::of::<NamedFunction>,
+        getters: &[], setters: &[], module: None,
+        doc: include_str!("docstrings/ommx/NamedFunction.md"),
+        bases: &[],
+        has_eq: false, has_ord: false, has_hash: false, has_str: false,
+        subclass: false,
+    }
+}
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]

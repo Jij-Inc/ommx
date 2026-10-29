@@ -60,7 +60,11 @@ The development direction is to combine these techniques and select or repeat th
 |---|---|---|
 | Solve a problem with a solver | [Solve with an OMMX Adapter](./tutorial/solve_with_ommx_adapter.md) | Create an Instance, solve it, and read the result |
 | Evaluate a candidate you already have | {class}`~ommx.Solution` | Evaluate variable values against a problem and read objective and feasibility results |
+| Evaluate metrics beyond the objective | {class}`~ommx.NamedFunction` | Compute distance or other reporting metrics for each candidate separately from the objective |
+| Extract results by name and subscript | {meth}`Named variable values <ommx.Solution.extract_decision_variables>` | Obtain evaluated variable values as dictionaries or tables for further processing |
 | Understand the problem representation | {class}`~ommx.Instance` | Describe variables, objectives, and constraints |
+| Construct and evaluate expressions | {class}`~ommx.Function` | Build scalar expressions and distinguish their values from a candidate's feasibility |
+| Inspect expressions using variable labels | {meth}`Expression formatting <ommx.Instance.format_function>` | Read expressions using the names and subscripts held by an Instance |
 | Change numeric conditions in a fixed problem structure | {class}`~ommx.ParametricInstance` | Reuse the structure and variable/constraint IDs with different parameter values |
 | Use special constraints | [Special Constraints](./user_guide/special_constraints.md) | Understand Indicator, OneHot, and SOS1 constraints and their solver integration |
 | Convert constraints for a different backend | [Adapter Input Classes and Explicit Constraint Lowering](./user_guide/capability_model.md) | Distinguish input requirements from conversion and inspect conversion history |
@@ -131,7 +135,6 @@ user_guide/agent_skills
 user_guide/supported_ommx_adapters
 user_guide/adapter_diagnostics
 user_guide/adapter_initial_state
-user_guide/function
 user_guide/special_constraints
 user_guide/capability_model
 user_guide/experiment
