@@ -91,7 +91,7 @@ enum Owner {
     Sampled(Py<SampledConstraintCollection>),
 }
 
-#[doc = include_str!("family.md")]
+#[doc = include_str!("../docstrings/ommx/ConstraintFamilyView.md")]
 #[pyclass(frozen)]
 pub struct ConstraintFamilyView {
     owner: Owner,
@@ -108,7 +108,7 @@ pyo3_stub_gen::inventory::submit! {
         pyclass_name: "ConstraintFamilyView",
         struct_id: std::any::TypeId::of::<ConstraintFamilyView>,
         getters: &[], setters: &[], module: Some("ommx._ommx_rust"),
-        doc: include_str!("family.md"),
+        doc: include_str!("../docstrings/ommx/ConstraintFamilyView.md"),
         bases: &[|| <std::collections::BTreeMap<FamilyKey, FamilyRow> as PyStubType>::type_input()],
         has_eq: false, has_ord: false, has_hash: false, has_str: false, subclass: false,
     }

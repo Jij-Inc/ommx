@@ -2956,7 +2956,7 @@
       "status": "existing",
       "source_paths": [
         "python/ommx/src/samples.rs",
-        "python/ommx/src/samples.md",
+        "python/ommx/src/docstrings/ommx/Samples.md",
         "docs/api/_items/ommx.Samples.rst"
       ],
       "source_urls": [],
@@ -2985,7 +2985,7 @@
       "implementation_verified": false,
       "source_paths_existing": [
         "python/ommx/src/samples.rs",
-        "python/ommx/src/samples.md",
+        "python/ommx/src/docstrings/ommx/Samples.md",
         "docs/api/_items/ommx.Samples.rst"
       ]
     },
@@ -4949,7 +4949,7 @@
       "status": "existing",
       "source_paths": [
         "python/ommx/src/function.rs",
-        "python/ommx/src/function.md"
+        "python/ommx/src/docstrings/ommx/Function.md"
       ],
       "source_urls": [],
       "requires": [
@@ -4971,12 +4971,12 @@
       ],
       "deferred": [],
       "parent_page": "R_API",
-      "notes": "Functionの生成API Referenceに掲載するbinding docstringと隣接Markdownが、構築・演算・多項式と複合式・数値評価の契約を所有する。G2のリンクやAPI一覧の訪問だけではこの節を既習としない。RPNの符号化そのものは別のR_WIRE.functionが所有し、本節の外部仕様リンクだけからwire契約の習得を付与しない。",
+      "notes": "Functionの生成API Referenceに掲載するbinding docstringと共有Markdown原稿が、構築・演算・多項式と複合式・数値評価の契約を所有する。G2のリンクやAPI一覧の訪問だけではこの節を既習としない。RPNの符号化そのものは別のR_WIRE.functionが所有し、本節の外部仕様リンクだけからwire契約の習得を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
         "python/ommx/src/function.rs",
-        "python/ommx/src/function.md"
+        "python/ommx/src/docstrings/ommx/Function.md"
       ]
     },
     {

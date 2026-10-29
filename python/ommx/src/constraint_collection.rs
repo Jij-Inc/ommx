@@ -227,7 +227,7 @@ impl PyStubType for ConstraintCollectionValue {
     }
 }
 
-#[doc = include_str!("constraint_collection/mapping.md")]
+#[doc = include_str!("docstrings/ommx/ConstraintCollection.md")]
 #[pyclass(frozen)]
 pub struct ConstraintCollection {
     owner: ConstraintHost,
@@ -235,7 +235,7 @@ pub struct ConstraintCollection {
 collection_stub!(
     ConstraintCollection,
     ConstraintCollectionValue,
-    include_str!("constraint_collection/mapping.md")
+    include_str!("docstrings/ommx/ConstraintCollection.md")
 );
 impl ConstraintCollection {
     /// Constructed only by the owning root property; no rows are copied.
@@ -467,7 +467,7 @@ impl PyStubType for RemovedConstraintCollectionValue {
     }
 }
 
-#[doc = include_str!("constraint_collection/removed.md")]
+#[doc = include_str!("docstrings/ommx/RemovedConstraintCollection.md")]
 #[pyclass(frozen)]
 pub struct RemovedConstraintCollection {
     owner: ConstraintHost,
@@ -475,7 +475,7 @@ pub struct RemovedConstraintCollection {
 collection_stub!(
     RemovedConstraintCollection,
     RemovedConstraintCollectionValue,
-    include_str!("constraint_collection/removed.md")
+    include_str!("docstrings/ommx/RemovedConstraintCollection.md")
 );
 impl RemovedConstraintCollection {
     /// Constructed only by the owning root property; no rows are copied.
@@ -695,7 +695,7 @@ impl PyStubType for EvaluatedConstraintCollectionValue {
     }
 }
 
-#[doc = include_str!("constraint_collection/evaluated.md")]
+#[doc = include_str!("docstrings/ommx/EvaluatedConstraintCollection.md")]
 #[pyclass(frozen)]
 pub struct EvaluatedConstraintCollection {
     owner: Py<crate::Solution>,
@@ -703,7 +703,7 @@ pub struct EvaluatedConstraintCollection {
 collection_stub!(
     EvaluatedConstraintCollection,
     EvaluatedConstraintCollectionValue,
-    include_str!("constraint_collection/evaluated.md")
+    include_str!("docstrings/ommx/EvaluatedConstraintCollection.md")
 );
 impl EvaluatedConstraintCollection {
     /// Constructed only by the owning root property; no rows are copied.
@@ -905,7 +905,7 @@ impl PyStubType for SampledConstraintCollectionValue {
     }
 }
 
-#[doc = include_str!("constraint_collection/sampled.md")]
+#[doc = include_str!("docstrings/ommx/SampledConstraintCollection.md")]
 #[pyclass(frozen)]
 pub struct SampledConstraintCollection {
     owner: Py<crate::SampleSet>,
@@ -913,7 +913,7 @@ pub struct SampledConstraintCollection {
 collection_stub!(
     SampledConstraintCollection,
     SampledConstraintCollectionValue,
-    include_str!("constraint_collection/sampled.md")
+    include_str!("docstrings/ommx/SampledConstraintCollection.md")
 );
 impl SampledConstraintCollection {
     /// Constructed only by the owning root property; no rows are copied.

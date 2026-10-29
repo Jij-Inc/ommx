@@ -32,6 +32,7 @@ then sample generated artifacts to confirm the behavior is reflected correctly.
      `docs/api/pyo3_stub_gen_ext.py`, AutoAPI configuration, and generated API
      item pages.
    - Python binding docs/stubs: `python/ommx/src/*.rs`,
+     `python/ommx/src/docstrings/`,
      `python/ommx/src/lib.rs`, `python/ommx/src/bin/stub_gen.rs`,
      `python/ommx/pyproject.toml`, `python/ommx/ommx/_ommx_rust/__init__.pyi`,
      and generated `__init__.py` files.
@@ -43,8 +44,8 @@ then sample generated artifacts to confirm the behavior is reflected correctly.
    - For PyO3-backed API changes, check `pyo3_stub_gen::reexport_module_members!`
      in `python/ommx/src/lib.rs` and `[tool.pyo3-stub-gen]` in
      `python/ommx/pyproject.toml`.
-   - For docstring changes, review the Rust/Python source docstrings that feed
-     generated stubs and `docs/api/api_reference.json`.
+   - For docstring changes, review the Rust/Python source docstrings and their
+     included Markdown that feed generated stubs and `docs/api/api_reference.json`.
 
 3. Verify generated artifacts for consistency, not prose quality.
    - For API/docstring generation changes, confirm the applicable generated
@@ -75,6 +76,29 @@ then sample generated artifacts to confirm the behavior is reflected correctly.
      docstrings when AutoAPI/docutils parse stability matters.
    - Check for `toc.not_included`, unexpected indentation, block quotes missing
      blank lines, duplicate labels, and unresolved class/method references.
+
+## Markdown Docstring Sources
+
+Keep external Python binding docstrings in `python/ommx/src/docstrings/`, using
+public Python module names as directories and the public object name, with its
+original capitalization, as the filename. For example, `ommx.ConstraintCollection`
+uses `ommx/ConstraintCollection.md`, and `ommx.experiment.Experiment` uses
+`ommx/experiment/Experiment.md`. An external method docstring uses a filename such
+as `ommx/Instance.evaluate.md`. Resolve names from public exports, not Rust type
+names or the internal `ommx._ommx_rust` module.
+
+Use Markdown for long explanations and keep short descriptions inline in `///`.
+Each documented API has one entry source, normally one complete Markdown file.
+Prefer linking to the API that owns a shared explanation. If splitting an entry
+becomes useful, prefix its fragments with the owning API name; choose separators
+and suffixes when a concrete split is needed rather than introducing speculative
+fragment conventions now.
+
+Feed the same complete text to runtime docstrings and stub/reference metadata.
+If fragments are introduced, compose them before those consumers; Sphinx-only
+includes would leave `help()` and runtime doctests with incomplete documentation.
+When moving a source, update its includes, direct test readers, and any manifest
+source paths together.
 
 ## Validation Commands
 

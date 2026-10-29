@@ -8,7 +8,7 @@ use pyo3::{
 };
 use std::collections::{BTreeSet, HashMap};
 
-#[doc = include_str!("samples.md")]
+#[doc = include_str!("docstrings/ommx/Samples.md")]
 #[pyclass(skip_from_py_object)]
 #[derive(Clone, Default)]
 pub struct Samples(pub ommx::Sampled<ommx::v1::State>);
@@ -18,7 +18,7 @@ pyo3_stub_gen::inventory::submit! {
     pyo3_stub_gen::type_info::PyClassInfo {
         pyclass_name: "Samples",
         struct_id: || std::any::TypeId::of::<Samples>(),
-        doc: include_str!("samples.md"),
+        doc: include_str!("docstrings/ommx/Samples.md"),
         module: Some("ommx._ommx_rust"),
         bases: &[],
         getters: &[],

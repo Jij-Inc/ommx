@@ -13,7 +13,11 @@ def test_function_runtime_and_reference_share_canonical_documentation() -> None:
     from ommx import Function
 
     project_root = API_DOCS_DIR.parents[1]
-    source = (project_root / "python/ommx/src/function.md").read_text().strip()
+    source = (
+        (project_root / "python/ommx/src/docstrings/ommx/Function.md")
+        .read_text()
+        .strip()
+    )
     reference = json.loads((API_DOCS_DIR / "api_reference.json").read_text())
     function = next(
         item
