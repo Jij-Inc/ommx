@@ -13,28 +13,11 @@ use pyo3::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+#[pyo3_stub_gen::derive::gen_stub_pyclass(skip_stub_type, module = "ommx._ommx_rust")]
 #[doc = include_str!("docstrings/ommx/Function.md")]
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Function(pub ommx::Function);
-
-// Manual PyClassInfo submission (instead of #[gen_stub_pyclass])
-pyo3_stub_gen::inventory::submit! {
-    pyo3_stub_gen::type_info::PyClassInfo {
-        pyclass_name: "Function",
-        struct_id: || std::any::TypeId::of::<Function>(),
-        doc: include_str!("docstrings/ommx/Function.md"),
-        module: Some("ommx._ommx_rust"),
-        bases: &[],
-        getters: &[],
-        setters: &[],
-        has_eq: false,
-        has_hash: false,
-        has_ord: false,
-        has_str: false,
-        subclass: false,
-    }
-}
 
 // PyStubType: input uses ToFunction, output uses Function
 impl pyo3_stub_gen::PyStubType for Function {

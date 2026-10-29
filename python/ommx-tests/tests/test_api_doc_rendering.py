@@ -1,3 +1,4 @@
+import ast
 import importlib
 import json
 from pathlib import Path
@@ -10,7 +11,20 @@ from sphinx.addnodes import desc_parameterlist, desc_sig_operator
 API_DOCS_DIR = Path(__file__).resolve().parents[3] / "docs" / "api"
 
 
-@pytest.mark.parametrize("class_name", ["Function", "NamedFunction"])
+@pytest.mark.parametrize(
+    "class_name",
+    [
+        "Function",
+        "NamedFunction",
+        "State",
+        "Samples",
+        "ConstraintCollection",
+        "RemovedConstraintCollection",
+        "EvaluatedConstraintCollection",
+        "SampledConstraintCollection",
+        "ConstraintFamilyView",
+    ],
+)
 def test_runtime_and_reference_share_canonical_documentation(class_name: str) -> None:
     import ommx
 
@@ -31,6 +45,16 @@ def test_runtime_and_reference_share_canonical_documentation(class_name: str) ->
     assert runtime_doc is not None
     assert runtime_doc.strip() == source
     assert api_class["doc"].strip() == source
+
+    stub = ast.parse(
+        (project_root / "python/ommx/ommx/_ommx_rust/__init__.pyi").read_text()
+    )
+    stub_class = next(
+        node
+        for node in stub.body
+        if isinstance(node, ast.ClassDef) and node.name == class_name
+    )
+    assert ast.get_docstring(stub_class) == source
 
 
 def test_bare_doctest_is_fenced_without_rewriting_existing_myst(

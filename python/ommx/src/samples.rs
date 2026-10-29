@@ -8,28 +8,11 @@ use pyo3::{
 };
 use std::collections::{BTreeSet, HashMap};
 
+#[pyo3_stub_gen::derive::gen_stub_pyclass(skip_stub_type, module = "ommx._ommx_rust")]
 #[doc = include_str!("docstrings/ommx/Samples.md")]
 #[pyclass(skip_from_py_object)]
 #[derive(Clone, Default)]
 pub struct Samples(pub ommx::Sampled<ommx::v1::State>);
-
-// Manual PyClassInfo submission (instead of #[gen_stub_pyclass])
-pyo3_stub_gen::inventory::submit! {
-    pyo3_stub_gen::type_info::PyClassInfo {
-        pyclass_name: "Samples",
-        struct_id: || std::any::TypeId::of::<Samples>(),
-        doc: include_str!("docstrings/ommx/Samples.md"),
-        module: Some("ommx._ommx_rust"),
-        bases: &[],
-        getters: &[],
-        setters: &[],
-        has_eq: false,
-        has_hash: false,
-        has_ord: false,
-        has_str: false,
-        subclass: false,
-    }
-}
 
 // PyStubType: input uses ToSamples, output uses Samples
 impl pyo3_stub_gen::PyStubType for Samples {

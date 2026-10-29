@@ -100,11 +100,14 @@ includes would leave `help()` and runtime doctests with incomplete documentation
 When moving a source, update its includes, direct test readers, and any manifest
 source paths together.
 
-Check the registration path before replacing inline docs with `include_str!`.
-The current `pyo3-stub-gen` derive macros extract literal doc attributes and do not
-expand that include for generated metadata. Existing manually registered classes
-pass the same include to PyO3 and `PyClassInfo`; keep literal method docs when
-that shared-source route is unavailable, and compare runtime and generated text.
+Use `#[doc = include_str!("docstrings/ommx/PublicClass.md")]` with the normal
+`gen_stub_pyclass` or `gen_stub_pymethods` macros. The workspace requires
+`pyo3-stub-gen` 0.23.2 or later, which preserves `include_str!` and `concat!`
+expressions in generated metadata. For classes with a custom `PyStubType`, use
+`gen_stub_pyclass(skip_stub_type)` and retain their runtime type registration;
+preserve any explicit stub module. Manual registration may still be needed for
+metadata the derive cannot express, such as virtual Mapping bases. Compare the
+complete Markdown with runtime docstrings, generated stubs, and API metadata.
 
 ## Validation Commands
 
