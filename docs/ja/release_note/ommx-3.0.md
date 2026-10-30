@@ -1233,7 +1233,7 @@ HiGHS Adapter は HiGHS の logging callback から MIP progress snapshot を記
 
 PySCIPOpt の progress history は、diagnostics に termination report が含まれる場合に synthetic な `TERMINATION` 行を含むようになりました。これにより、別の termination report を重複させずに、`progress_history_records` と `progress_history_df` から最終 solver state も確認できます。
 
-direct solve と Experiment 経由の workflow については [Adapter 固有 diagnostics](../how_to/inspect_adapter_diagnostics.md) を参照してください。
+direct solve と Experiment 経由の workflow は{class}`SCIPの診断Reference <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>`、HiGHS固有の報告は{class}`HiGHSの診断Reference <ommx_highs_adapter.HighsDiagnosticsAnalyzer>`を参照してください。
 
 ### 🆕 top-level root 向け versioned protobuf bytes API ([#989](https://github.com/Jij-Inc/ommx/pull/989))
 
@@ -1265,7 +1265,7 @@ Solver Adapter に、共通の {class}`~ommx.Solution` 結果には入らない 
 
 PySCIPOpt Adapter は、SCIP の `BESTSOLFOUND` と `DUALBOUNDIMPROVED` callback から {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` diagnostics を出力し、`model.optimize()` の後に {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` を出力するようになりました。termination report には SCIP の status、primal / dual bound、gap、incumbent objective value、node 数、LP / cut / solution counter、primal-dual integral、求解時間、SCIP / PySCIPOpt version metadata が含まれます。typed collector の中身や Experiment から読み出した dictionary は {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` で records または pandas DataFrame に後処理できます。direct collection では OMMX Solution へ decode する前に termination report が記録されるため、infeasible や unbounded の検出などで decode が adapter exception を投げる場合でも呼び出し側で確認できます。
 
-収集・調査の手順は[Adapterのdiagnostics](../how_to/inspect_adapter_diagnostics.md)、reportの各fieldは{class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`のAPI Referenceを参照してください。
+収集・調査の手順は{class}`SCIPの診断Reference <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>`、reportの各fieldは{class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`のAPI Referenceを参照してください。
 
 ## 3.0.0 Alpha 5
 

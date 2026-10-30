@@ -87,6 +87,8 @@ assert solution.objective == 1
 
 同じ問題を複数ソルバーで解きたい場合は、API Referenceの{mod}`Adapter比較の完全な使用例 <ommx.adapter>`へ進んでください。[OpenJijのTSP Notebook](./tutorial/tsp_sampling_with_openjij_adapter)は、経路の描画まで扱う任意の応用例です。
 
+終了理由や探索の進捗を調べたい場合は、{class}`SCIP <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>`または{class}`HiGHS <ommx_highs_adapter.HighsDiagnosticsAnalyzer>`の診断例へ進んでください。SCIPのReferenceには、記録済みのbound・gapのグラフもあります。
+
 Adapterを実装する人は、利用者向けTutorialの通読ではなく、[Developer Guide](./developer_guide/adapter.md)から共通の入力・変換・評価の契約と参照実装を確認してください。
 
 ## データの交換と共有を支える仕組み
@@ -166,7 +168,6 @@ user_guide/evaluate_and_interpret
 :maxdepth: 1
 :hidden:
 
-how_to/inspect_adapter_diagnostics
 how_to/use_initial_state
 ```
 

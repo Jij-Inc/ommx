@@ -59,11 +59,31 @@ Adapter; consult the concrete package Reference.
 Collecting diagnostics
 ----------------------
 
+Diagnostics describe the backend's search and termination, whereas
+:class:`~ommx.Solution` evaluates the returned candidate against the OMMX
+problem. Use a collector for direct inspection; an Experiment is optional.
+The :class:`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` and
+:class:`~ommx_highs_adapter.HighsDiagnosticsAnalyzer` references each start with
+a complete small-model example and cover progress, terminal values, and reports
+retained when decoding fails. The SCIP Reference also provides a recorded
+bound/gap plot with downloadable source data and a drawing script.
+
 .. py:class:: ommx.adapter.DiagnosticCollector()
 
    A collector implementing :class:`ommx.adapter.DiagnosticsSink`.
    Pass it as an Adapter's ``diagnostics`` argument to retain reports in
    emission order. The ``diagnostics`` property returns the collected reports.
+
+   The concrete Adapter determines which events and report fields are recorded.
+   A final report is not guaranteed if execution fails before the backend
+   finishes. Pass the collected reports to that backend's Analyzer.
+
+To persist diagnostics with :meth:`~ommx.experiment.Run.log_solve` or
+:meth:`~ommx.experiment.Run.log_sample`, pass ``store_diagnostics=True`` instead
+of a collector: those methods reserve the ``diagnostics`` keyword. Collection
+is disabled by default, and persistence is best-effort. Stored reports are
+dictionaries accepted by the same Analyzer; the SCIP example shows the complete
+record-and-read workflow.
 
 Integrations maintained in separate repositories
 ------------------------------------------------

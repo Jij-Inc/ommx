@@ -85,6 +85,8 @@ After [installing the SDK and an Adapter](./getting_started/install.md), choose 
 
 To compare solvers, use the {mod}`complete Adapter comparison example <ommx.adapter>` in the API Reference. The [OpenJij TSP example](./tutorial/tsp_sampling_with_openjij_adapter) is an optional application that includes route visualization.
 
+To inspect termination reasons and search progress, use the diagnostic examples for {class}`SCIP <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>` or {class}`HiGHS <ommx_highs_adapter.HighsDiagnosticsAnalyzer>`. The SCIP Reference also includes a recorded bound/gap graph.
+
 If you are connecting your own solving tool, the [adapter implementation guide](./tutorial/implement_adapter.md) explains how to translate its input and output through OMMX's common interface.
 
 ## Support data exchange and sharing
@@ -161,7 +163,6 @@ user_guide/cli
 how_to/manage_local_registry
 how_to/share_artifact_registry
 user_guide/agent_skills
-user_guide/adapter_diagnostics
 user_guide/adapter_initial_state
 user_guide/tracing
 ```

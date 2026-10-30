@@ -1300,7 +1300,7 @@ The HiGHS Adapter now records MIP progress snapshots from the HiGHS logging call
 
 PySCIPOpt progress histories now include a synthetic `TERMINATION` row when diagnostics include a termination report, so `progress_history_records` and `progress_history_df` include the final solver state without duplicating the separate termination report.
 
-See [Adapter-specific Diagnostics](../user_guide/adapter_diagnostics.md) for the direct and Experiment-based workflows.
+See the {class}`SCIP diagnostics Reference <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>` for the direct and Experiment-based workflows, and the {class}`HiGHS diagnostics Reference <ommx_highs_adapter.HighsDiagnosticsAnalyzer>` for HiGHS-specific reports.
 
 ### 🆕 Versioned protobuf bytes APIs for top-level roots ([#989](https://github.com/Jij-Inc/ommx/pull/989))
 
@@ -1332,7 +1332,7 @@ Solver adapters now have an adapter-specific diagnostics channel for preserving 
 
 The PySCIPOpt Adapter now emits {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` diagnostics from SCIP `BESTSOLFOUND` and `DUALBOUNDIMPROVED` callbacks, plus {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` after `model.optimize()`. The termination report includes SCIP status, primal/dual bounds, gap, incumbent objective value, node counts, LP/cut/solution counters, primal-dual integral, timing, and SCIP/PySCIPOpt version metadata. {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` can post-process the typed collector contents or dictionaries loaded from an Experiment into records or pandas DataFrames. With direct collection, the termination report is recorded before decoding back to an OMMX Solution, so it remains available to the caller even when decoding raises an adapter exception such as infeasible or unbounded detection.
 
-See [Adapter-specific Diagnostics](../user_guide/adapter_diagnostics.md) for the full API workflow and the PySCIPOpt report field references.
+See the {class}`SCIP diagnostics Reference <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>` for the full API workflow and the PySCIPOpt report field references.
 
 ## 3.0.0 Alpha 5
 

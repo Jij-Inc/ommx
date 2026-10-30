@@ -35,7 +35,11 @@ Penalty化した問題でも、報告目的値にはソルバーが使うpenalty
 
 候補の評価だけでは最適性も分かりません。時間制限で終了したソルバーが実行可能な候補を返すことも、多数のサンプルから選んだ候補が観測した範囲で最良でも大域的には最適でないこともあります。ソルバーの最適性の主張は実際に解いた問題に対するものであり、別の表現へ引き継ぐには変換の保証が必要です。{meth}`最適性の引継ぎのReference <ommx.Instance.map_active_optimality>`で扱います。
 
-Backendの診断情報は、なぜ終了したか、探索がどこまで進んだかを読むためのものです。boundはソルバーが解いた問題の最適値の範囲を限定し、gapはbackendの定義に従った隔たりを示します。符号・スケール・penaltyが変わる場合、どちらも報告目的値と同じ尺度とは限りません。具体的な報告形式は、{class}`SCIP <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>`と{class}`HiGHS <ommx_highs_adapter.HighsDiagnosticsAnalyzer>`の診断情報のReferenceにあります。
+Backendの診断情報は、なぜ終了したか、探索がどこまで進んだかを読むためのものです。boundはソルバーが解いた問題の最適値の範囲を限定し、gapはbackendの定義に従った隔たりを示します。符号・スケール・penaltyが変わる場合、どちらも報告目的値と同じ尺度とは限りません。
+
+例えば最小化問題で、見つかった最良の実行可能な候補の目的値が120、証明された下界が100なら、最適値は100から120の間にあります。前者がprimal bound、後者がdual boundで、最大化では上下の役割が逆になります。進捗グラフでは、探索によってこの範囲がどう狭まるかを読みます。両者が一致する前に探索が終了することも、候補が見つかるまで有限なboundが得られないこともあります。報告される相対gapはbackendの定義に従うため、単なる区間の幅とは異なります。
+
+収集方法、各fieldの意味、実行例は{class}`SCIP <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>`と{class}`HiGHS <ommx_highs_adapter.HighsDiagnosticsAnalyzer>`の診断情報のReferenceにあります。SCIPのReferenceには、記録データと描画コードを備えたbound・gapのグラフもあります。途中の記録は観測値なので、最終的な結果は終了報告で確認します。
 
 ## 同じ基準で候補を比較する
 
