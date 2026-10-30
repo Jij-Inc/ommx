@@ -506,7 +506,7 @@ does not admit a composed, non-polynomial `Function`.
 ### 🆕 Checked SOS1 Big-M promotion ([#1186](https://github.com/Jij-Inc/ommx/pull/1186))
 
 An {class}`~ommx.Sos1Constraint` allows at most one member to be
-non-zero. A {class}`~ommx.Sos1BigMFormulation` represents this
+non-zero. A {meth}`Big-M formulation <ommx.Instance.promote_sos1_big_m>` represents this
 condition with binary selectors, member-selector link constraints, and a
 selector-cardinality constraint.
 

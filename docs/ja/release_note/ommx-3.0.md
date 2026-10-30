@@ -474,7 +474,7 @@ Python SDK 3.0.0 Beta 4で公開したAPIから、次の破壊的なrenameが含
 ### 🆕 検証付きSOS1 Big-M promotion ([#1186](https://github.com/Jij-Inc/ommx/pull/1186))
 
 {class}`~ommx.Sos1Constraint`は、memberのうち高々1つだけが
-非零となる制約です。{class}`~ommx.Sos1BigMFormulation`は、
+非零となる制約です。{meth}`Big-M formulation <ommx.Instance.promote_sos1_big_m>`は、
 この条件をbinary selector、memberとselectorのlink制約、およびselectorの
 cardinality制約で表します。
 
