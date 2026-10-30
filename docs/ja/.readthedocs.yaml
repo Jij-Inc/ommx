@@ -6,6 +6,7 @@ version: 2
 
 sphinx:
   configuration: docs/ja/conf.py
+  fail_on_warning: true
 
 build:
   os: ubuntu-24.04
@@ -17,6 +18,8 @@ build:
       - asdf install uv latest
       - asdf global uv latest
     create_environment:
-      - uv venv "${READTHEDOCS_VIRTUALENV_PATH}"
+      # Override the repository's Python 3.10 pin for SDK development.
+      - uv venv --python 3.12 "${READTHEDOCS_VIRTUALENV_PATH}"
     install:
-      - UV_PROJECT_ENVIRONMENT="${READTHEDOCS_VIRTUALENV_PATH}" uv sync --frozen --only-group docs
+      # API rendering reads sources and generated metadata without the compiled SDK.
+      - UV_PROJECT_ENVIRONMENT="${READTHEDOCS_VIRTUALENV_PATH}" uv sync --python 3.12 --frozen --only-group docs --no-install-workspace

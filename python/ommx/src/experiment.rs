@@ -450,7 +450,7 @@ impl PyExperiment {
     /// Load a committed Experiment Artifact by image reference.
     ///
     /// If the image is not found in the default Local Registry, OMMX tries to
-    /// pull it from the remote registry, matching {meth}`Artifact.load`.
+    /// pull it from the remote registry, matching {meth}`~ommx.artifact.Artifact.load`.
     /// The loaded artifact must contain an Experiment config. Use
     /// `Experiment(...)` to create a new unsealed experiment.
     ///
@@ -490,7 +490,7 @@ impl PyExperiment {
     /// `.ommx` OCI archive file (or an OCI Image Layout directory).
     ///
     /// The archive is imported into the default Local Registry, matching
-    /// {meth}`Artifact.import_archive`, and then interpreted as an
+    /// {meth}`~ommx.artifact.Artifact.import_archive`, and then interpreted as an
     /// Experiment. The imported artifact must contain an Experiment config.
     #[staticmethod]
     pub fn import_archive(py: Python<'_>, path: PathBuf) -> OmmxPyResult<Self> {

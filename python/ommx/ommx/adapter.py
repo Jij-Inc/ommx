@@ -76,10 +76,19 @@ class SolverAdapter(ABC):
     does not mutate the input. A subclass should call ``require_applicable``
     before constructing backend input.
 
+    Membership describes the exact input, not every problem that could become
+    acceptable after transformation. It does not run preparation or a backend,
+    guarantee that a candidate will be returned, or rule out converter/backend
+    errors such as implementation limits or numerical failures. Those errors
+    are distinct from the membership-based applicability decision.
+
     The easy :meth:`solve` API prepares an isolated copy with the Adapter's
     recommended policy. Use :meth:`solve_without_preparation` when the caller
     has prepared an exact input explicitly and wants the Adapter to require
     ``INPUT_CLASS`` membership without applying preparation.
+    Adapter constructors likewise require an already applicable input.
+    The :class:`ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter` Reference includes
+    a complete custom-policy example from model construction to strict solve.
 
     When encoding OMMX decision variables, use
     ``ommx_instance.used_decision_variables`` rather than the complete decision
@@ -103,7 +112,10 @@ class SolverAdapter(ABC):
         The easy APIs apply it to an isolated copy. Advanced callers may edit
         and apply it explicitly before using a preparation-free API. This
         method itself neither prepares an instance nor guarantees
-        applicability. The default policy is empty.
+        applicability. It does not inspect any particular Instance, and the
+        class and policy are independent values. Application-specific choices
+        such as penalty weights may still need to be supplied by the caller.
+        The default policy is empty.
         """
         return PreparationPolicy()
 

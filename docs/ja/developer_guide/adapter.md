@@ -2,8 +2,8 @@
 
 このページは、独自のBackendをOMMXへ接続するAdapter実装者向けの入口です。まず、Adapter利用者にも共通する次のモデルを確認してください。
 
-1. [InstanceClassとAdapterの入力条件](../user_guide/instance_class.md)
-2. [Instance PreparationとPreparationPolicy](../user_guide/preparation_policy.md)
+1. {class}`~ommx.InstanceClass`
+2. {meth}`~ommx.Instance.prepare`
 3. [候補を評価して結果を判断する](../user_guide/evaluate_and_interpret.md)
 
 ## 実装時に参照するAPI

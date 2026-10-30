@@ -48,7 +48,7 @@ penaltyによって除去される制約には、エンコード後の式が保�
 
 構築時とprotobuf読み込み時には種類間の番号重複をエラーとし、自動再採番はしません。
 3.0.0 beta期間中に作成したデータも、番号が重複している場合は読み込めなくなります。
-詳細は[特殊制約のID](../user_guide/special_constraints.md)を参照してください。
+詳細は{class}`制約IDの規則 <ommx.Instance>`を参照してください。
 
 ### ⚠ 型付き制約IDとnativeな結果取得 ([#1289](https://github.com/Jij-Inc/ommx/pull/1289))
 
@@ -298,7 +298,7 @@ print(report.rejections)  # 元の制約 ID -> 変換できなかった理由
 元の変数に対する目的関数と実行可能な値の組み合わせは保持しますが、
 違反量や許容誤差の境界付近での判定は変わる場合があります。
 選択用の変数を別に持つ場合の指定方法と移行例は、
-{ref}`SOS1 変換ガイド <sos1-big-m-formulation>` を参照してください。
+{meth}`~ommx.Instance.promote_sos1_big_m` を参照してください。
 
 ### 🆕 線形制約を使って変数の上下限を絞り込む ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
 
@@ -473,8 +473,8 @@ Python SDK 3.0.0 Beta 4で公開したAPIから、次の破壊的なrenameが含
 
 ### 🆕 検証付きSOS1 Big-M promotion ([#1186](https://github.com/Jij-Inc/ommx/pull/1186))
 
-{ref}`SOS1制約 <sos1-constraint>`は、memberのうち高々1つだけが
-非零となる制約です。{ref}`Big-M formulation <sos1-big-m-formulation>`は、
+{class}`~ommx.Sos1Constraint`は、memberのうち高々1つだけが
+非零となる制約です。{meth}`Big-M formulation <ommx.Instance.promote_sos1_big_m>`は、
 この条件をbinary selector、memberとselectorのlink制約、およびselectorの
 cardinality制約で表します。
 
@@ -630,7 +630,7 @@ Converter 固有の表現検査や backend の上限検査は solver input の�
 その失敗は `AdapterNotApplicableError` ではなく conversion または backend の error です。
 特に OpenJij の signed ID と finite coefficient の検査は sampler input の構築時に
 行われるようになりました。責務境界の詳細は
-[Adapterのexact input（INPUT_CLASS）](../user_guide/instance_class.md)と
+{class}`~ommx.InstanceClass`と
 [Developer Guide: OMMX Adapterを実装する](../developer_guide/adapter.md)を参照してください。
 
 ### Adapter の input class 宣言を必須化 ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
@@ -700,8 +700,8 @@ HiGHS、Python-MIP、PySCIPOpt、OpenJijはいずれもこのフローを利用�
 preparation stepが失敗した場合、それより前に完了した変更はinstanceに残ります。v2または
 Beta 2から移行する場合は、OpenJijのモデル変換optionとpre-release版の
 `OpenJijPreparation*` APIを、この共通フローに置き換えてください。exact inputの意味は
-[Adapter の exact input（INPUT_CLASS）](../user_guide/instance_class.md)、Policyと実行の責任境界は
-[Instance Preparation と PreparationPolicy](../user_guide/preparation_policy.md)、完全な利用例は
+{class}`~ommx.InstanceClass`、Policyと実行の責任境界は
+{meth}`~ommx.Instance.prepare`、完全な利用例は
 [OpenJijによるサンプリング](../tutorial/tsp_sampling_with_openjij_adapter)、対応するAPIの
 置き換えは[Python SDK v2からv3へのマイグレーションガイド](../migration/python_sdk_v2_to_v3.md)
 を参照してください。
@@ -759,8 +759,8 @@ source_samples = preparation.evaluate_source(prepared_samples)
 有限penaltyとapproximate integer slackは明示的なopt-inが必要です。prepare後の値は
 別の {class}`~ommx.Instance` なので、sourceから推論せず `preparation.input` 自体の
 applicabilityを確認してください。受け入れるmodel classとpreparationの詳細は
-[Adapter の exact input（INPUT_CLASS）](../user_guide/instance_class.md) と
-[Instance Preparation と PreparationPolicy](../user_guide/preparation_policy.md) および
+{class}`~ommx.InstanceClass` と
+{meth}`~ommx.Instance.prepare` および
 [OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) を参照してください。
 
 2.6.1から移行する場合、非対応入力にはAdapter固有exceptionではなく
@@ -853,7 +853,7 @@ indicator = (xs[0] <= 1).with_indicator(xs[1])
 {meth}`~ommx.Instance.log_encode` のように、本質的に ID の集合や mapping を扱う
 API は従来どおり ID ベースです。
 
-modeling workflow については [特殊制約](../user_guide/special_constraints.md) を
+modeling workflow については {class}`~ommx.IndicatorConstraint`・{class}`~ommx.OneHotConstraint`・{class}`~ommx.Sos1Constraint` を
 参照してください。
 
 ### 🆕 Instance の incremental modeling ([#1077](https://github.com/Jij-Inc/ommx/pull/1077))
@@ -1103,7 +1103,7 @@ instance.unary_encode({0})
 {class}`~ommx.Function` の text 表現は raw ID ベースのままです。
 
 {class}`~ommx.Instance` と {class}`~ommx.ParametricInstance` に対する
-{func}`str` / {func}`repr` は、objective・constraint・named function の式を
+{class}`str` / {func}`repr` は、objective・constraint・named function の式を
 文脈付きで表示する compact summary を返すようになりました。これにより
 `print(instance)` で、upstream の modeling tool から来た modeling label と
 encoding 後の ID の対応を確認しやすくなります。
@@ -1219,7 +1219,7 @@ direct solve と Experiment 経由の workflow については [Adapter 固有 d
 
 これらの top-level root にあった version を明示しない `to_bytes()` / `from_bytes(...)` は削除されました。legacy な v1 wire format が必要な場合は `to_v1_bytes()` / `from_v1_bytes(...)` に、新しい正規化済み v2 payload が必要な場合は v2 のメソッドに置き換えてください。
 
-v1 専用 DTO である {class}`~ommx.State`、{class}`~ommx.Samples`、{class}`~ommx.Parameters` も `to_v1_bytes()` / `from_v1_bytes(...)` を使うようにし、Python の bytes API は対象とする protobuf version を常に名前で示す形に揃えました。
+v1 専用 DTO である {class}`~ommx.State`、{class}`~ommx.Samples`、`Parameters` も `to_v1_bytes()` / `from_v1_bytes(...)` を使うようにし、Python の bytes API は対象とする protobuf version を常に名前で示す形に揃えました。
 
 Artifact と Experiment の solve payload は、これらの top-level root を `ommx.v2` payload として保存するようになりました。一方で、既存 Artifact の `ommx.v1` payload layer は引き続き読み込めます。
 
@@ -1542,7 +1542,7 @@ df = solution.constraints_df(include=("label", "parameters", "removed_reason"))
 - {class}`~ommx.NamedFunction`, {class}`~ommx.EvaluatedNamedFunction`, {class}`~ommx.SampledNamedFunction`
 - {class}`~ommx.DecisionVariable`, {class}`~ommx.EvaluatedDecisionVariable`, {class}`~ommx.SampledDecisionVariable`
 
-これらのメソッドは元々、Python SDK が独自の protobuf ベースのラッパー層を持っていた時代に Python ↔ Rust 境界を跨ぐたびにシリアライズが必要だったために用意されていたものでした。v3 で全型を PyO3 から直接再エクスポートする方針に切り替わったことでこの境界自体が消え、要素単位のバイト列ラウンドトリップは役目を終えています。label/context storage の整理に合わせて維持し続けるコストも見合わなくなったため、ここで廃止します。永続化やプロセス間でのデータ交換が必要な場合は、これまで通りコンテナ型（{class}`~ommx.Instance` / {class}`~ommx.ParametricInstance` / {class}`~ommx.Solution` / {class}`~ommx.SampleSet`）と evaluate 用の DTO（{class}`~ommx.State` / {class}`~ommx.Samples` / {class}`~ommx.Parameters`）の versioned bytes API を使ってください。利用できる型では `to_v1_bytes` / `from_v1_bytes` または `to_v2_bytes` / `from_v2_bytes` を使います。
+これらのメソッドは元々、Python SDK が独自の protobuf ベースのラッパー層を持っていた時代に Python ↔ Rust 境界を跨ぐたびにシリアライズが必要だったために用意されていたものでした。v3 で全型を PyO3 から直接再エクスポートする方針に切り替わったことでこの境界自体が消え、要素単位のバイト列ラウンドトリップは役目を終えています。label/context storage の整理に合わせて維持し続けるコストも見合わなくなったため、ここで廃止します。永続化やプロセス間でのデータ交換が必要な場合は、これまで通りコンテナ型（{class}`~ommx.Instance` / {class}`~ommx.ParametricInstance` / {class}`~ommx.Solution` / {class}`~ommx.SampleSet`）と evaluate 用の DTO（{class}`~ommx.State` / {class}`~ommx.Samples` / `Parameters`）の versioned bytes API を使ってください。利用できる型では `to_v1_bytes` / `from_v1_bytes` または `to_v2_bytes` / `from_v2_bytes` を使います。
 
 ### 🆕 label/context 書き込みスルーラッパー: `AttachedConstraint` / `AttachedDecisionVariable` ([#849](https://github.com/Jij-Inc/ommx/pull/849), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#852](https://github.com/Jij-Inc/ommx/pull/852))
 
@@ -1642,7 +1642,7 @@ Instance.from_components(..., constraints={5: c}, ...)
 - {class}`~ommx.OneHotConstraint` — 従来 `ConstraintHints.OneHot` として扱われていた one-hot 制約
 - {class}`~ommx.Sos1Constraint` — 従来 `ConstraintHints.Sos1` として扱われていた SOS1 制約
 
-具体的な使い方と評価結果の参照については [特殊制約の意味と評価](../user_guide/special_constraints.md)、Indicator 制約を含む active / removed の扱いについては [候補を評価して結果を判断する](../user_guide/evaluate_and_interpret.md) を参照してください。
+具体的な使い方と評価結果の参照については {class}`~ommx.IndicatorConstraint`・{class}`~ommx.OneHotConstraint`・{class}`~ommx.Sos1Constraint`、Indicator 制約を含む active / removed の扱いについては [候補を評価して結果を判断する](../user_guide/evaluate_and_interpret.md) を参照してください。
 
 これに伴い旧 API である `ConstraintHints` / `OneHot` / `Sos1` クラス、`Instance.constraint_hints` プロパティ、PySCIPOpt Adapter の `use_sos1` フラグは削除されています。
 

@@ -5,11 +5,8 @@ use std::collections::{BTreeSet, HashMap};
 
 use crate::{ConstraintHost, VariableIDInput};
 
-/// A one-hot constraint: exactly one variable must be 1, the rest must be 0.
-///
-/// This is a structural constraint — no explicit function is stored.
-/// The implicit constraint is `sum(x_i) = 1` where all `x_i` are binary.
 #[gen_stub_pyclass]
+#[doc = include_str!("docstrings/ommx/OneHotConstraint.md")]
 #[pyclass]
 #[derive(Clone)]
 pub struct OneHotConstraint(pub ommx::OneHotConstraint, pub ommx::ConstraintContext);

@@ -116,4 +116,4 @@ python receive_artifact.py
 - ファイルではなくレジストリで配布したい場合：[レジストリでArtifactを共有する](../how_to/share_artifact_registry.md)
 - 複数の試行の条件・結果を整理したい場合：[Experiment Tutorial](experiment_management)。このファイル受け渡しにExperimentは必要ありません。
 
-データ形式を別の言語やツールで扱う場合は、Pythonの手順ではなく[Artifact仕様](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/rust/ommx/doc/artifact_design.md)を参照してください。
+データ形式を別の言語やツールで扱う場合は、Pythonの手順ではなく[Artifact仕様](https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/doc/artifact_design.md)を参照してください。

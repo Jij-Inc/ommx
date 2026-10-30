@@ -120,7 +120,7 @@ scalar values.
 Direct collection is useful when OMMX Solution decoding fails. The PySCIPOpt
 and HiGHS Adapters record the termination report before decoding, so the
 collector can still contain the final solver status and bounds when the solve
-raises an adapter exception such as {exc}`~ommx.adapter.InfeasibleDetected` or
+raises an adapter exception such as {class}`~ommx.InfeasibleDetected` or
 {exc}`~ommx.adapter.UnboundedDetected`.
 
 ```python

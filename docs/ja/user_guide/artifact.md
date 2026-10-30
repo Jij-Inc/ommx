@@ -55,4 +55,4 @@ Artifactはデータをまとめる汎用の保存形式です。試行のまと
 
 Python SDKのバージョンは、呼び出すAPIの版です。使用する版は[インストール手順](../getting_started/install.md)で確認してください。問題や評価結果の保存形式（OMMX Messageのwire schema）、Artifactそのものの形式・種別とは別です。例えば、汎用Artifactの種別`application/org.ommx.v1.artifact`にある`v1`は、SDKのメジャーバージョンではありません。
 
-言語をまたぐ読み書きでは、[Artifact仕様](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/rust/ommx/doc/artifact_design.md)と[Message定義](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/proto)を基準にします。開発版では形式も更新されるため、別のSDKの仕様やAPIを混ぜず、対象バージョンの資料を確認します。Python APIの正確な条件は{mod}`ommx.artifact`を参照してください。
+言語をまたぐ読み書きでは、[Artifact仕様](https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/doc/artifact_design.md)と[Message定義](https://github.com/Jij-Inc/ommx/tree/main/proto)を基準にします。このBookと同じmainの仕様を参照してください。別の実装とデータを交換する場合は、その実装が対応する形式も確認します。Python APIの正確な条件は{mod}`ommx.artifact`を参照してください。

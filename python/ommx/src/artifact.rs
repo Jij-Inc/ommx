@@ -1414,7 +1414,7 @@ pub struct PyArtifactDraft(DraftInner);
 impl PyArtifactDraft {
     /// Create a new artifact draft with an explicit image name. The
     /// artifact is published into the user's persistent SQLite Local
-    /// Registry on `commit()`; call {meth}`Artifact.save(path)` on the
+    /// Registry on `commit()`; call {meth}`Artifact.save(path) <ommx.artifact.Artifact.save>` on the
     /// returned handle if you also want a `.ommx` archive file for
     /// sharing.
     ///
@@ -1470,7 +1470,7 @@ impl PyArtifactDraft {
     /// are not intended for cross-timezone sharing; pick an explicit
     /// name via `ArtifactDraft.new(...)` if absolute time matters.
     ///
-    /// Call {meth}`Artifact.save(path)` on the returned handle to also
+    /// Call {meth}`Artifact.save(path) <ommx.artifact.Artifact.save>` on the returned handle to also
     /// write a `.ommx` archive file for sharing.
     ///
     /// >>> from ommx.testing import SingleFeasibleLPGenerator, DataType

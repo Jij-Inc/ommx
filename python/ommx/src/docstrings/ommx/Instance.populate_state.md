@@ -135,7 +135,8 @@ can be rejected as inconsistent.
 
 ```
 
-`atol` defaults to {attr}`~ommx.DEFAULT_ATOL`. Missing used IDs, unknown IDs,
+`atol` defaults to the value returned by {func}`~ommx.get_default_atol`.
+Missing used IDs, unknown IDs,
 non-finite supplied values, and inconsistent fixed or dependent assertions raise
 `ValueError`. Invalid finite values can remain in the populated state: use
 {meth}`~ommx.Instance.evaluate` to inspect kind, bound, and constraint feasibility.

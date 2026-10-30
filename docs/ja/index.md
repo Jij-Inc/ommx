@@ -6,7 +6,7 @@ OMMX（Open Mathematical prograMming eXchange; オミキス）は、**数理最�
 
 ## いまOMMXを使う理由
 
-現在のv3開発版では、次のような作業を共通の問題表現に対して行えます。対応バージョンと導入方法は[インストール](./getting_started/install.md)を参照してください。
+3.0.0 stable releaseまでは、このBookとAPI Referenceはともに`main`の内容を説明します。[インストール手順](./getting_started/install.md)には、最新の公開prereleaseと`main`からの導入方法を併記しています。未リリースの機能を使う場合は`main`を選んでください。現在の実装では、次の作業を共通の問題表現に対して行えます。
 
 | 利用者の目的 | OMMXに任せられること | 利用者が決めること |
 |---|---|---|
@@ -44,7 +44,7 @@ assert solution.objective == 1
 
 どの構造をそのまま扱えるかは解法ごとに異なります。例えばIndicatorやSOS1は、対応するモデルなら[PySCIPOpt Adapterでそのまま解く](./tutorial/solve_special_constraints_with_pyscipopt_adapter.md)ことも、変数の範囲などの適用条件を満たせば[通常制約へ変換してHiGHSに渡す](./tutorial/prepare_instance_for_adapter.md)こともできます。利用者が選んだ変換方針に従って、必要な段階で表現を変えます。
 
-ただし、変換が何を保存するかは操作ごとに異なります。同じ条件を別の式で表す場合もあれば、課す条件や比較する目的値を変える場合もあります。変換前後の実行可能性・目的値・最適性を、すべて同じ保証として扱うことはできません。具体的な条件の例は[特殊制約](./user_guide/special_constraints.md)、変換した問題の結果の読み方は[候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md)で説明します。
+ただし、変換が何を保存するかは操作ごとに異なります。同じ条件を別の式で表す場合もあれば、課す条件や比較する目的値を変える場合もあります。変換前後の実行可能性・目的値・最適性を、すべて同じ保証として扱うことはできません。具体的な条件の例は{class}`~ommx.IndicatorConstraint`・{class}`~ommx.OneHotConstraint`・{class}`~ommx.Sos1Constraint`、変換した問題の結果の読み方は[候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md)で説明します。
 
 ## 共通の表現の上に、変換の技術を蓄積する
 
@@ -67,8 +67,8 @@ assert solution.objective == 1
 | 問題や候補解の意味を理解する | {class}`~ommx.Instance` → {class}`~ommx.Solution` | 変数の役割、実行可能性、目的値、最適性の違い |
 | 式を構築・評価する | {class}`~ommx.Function` | 式を作り、式の値と候補の実行可能性を区別する |
 | 固定した構造の数値条件を変える | {class}`~ommx.ParametricInstance` | 構造と変数・制約のIDを再利用し、パラメータの値を変えたInstanceを作る |
-| 特殊制約を使う | [特殊制約の意味と評価](./user_guide/special_constraints.md) | Indicator・OneHot・SOS1の成立条件 |
-| 問題を変換し、結果を確認する | [Instanceを変換するHow-to](./how_to/transform_instance_without_solver.md) | target classとPolicyを指定し、変換結果と手元の候補を検査する |
+| 特殊制約を使う | {class}`~ommx.IndicatorConstraint`・{class}`~ommx.OneHotConstraint`・{class}`~ommx.Sos1Constraint` | Indicator・OneHot・SOS1の成立条件 |
+| 問題を変換し、解法を選ぶ | [問題を変換して解法へ渡す](./user_guide/transform_and_solve.md) | 構造を保つ理由と、入力条件・変換の保証・設定を分ける |
 | 制約から変数の上下限を絞る | [bound更新のHow-to](./how_to/tighten_bounds.md) | 一回の更新と、変更された変数を確認する |
 | 式を変数名で確認する | {meth}`ラベルを使った式の表示 <ommx.Instance.format_function>` | Instanceの名前・添字を使って式を読む |
 | 変換後の結果を解釈する | [候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md) | activeな問題と、元の条件を使った評価の違い |
@@ -90,7 +90,7 @@ Adapterを使って解きたい人は、まず[Python SDKとAdapterのインス�
 2. [PySCIPOpt Adapterで特殊制約をそのまま解く](./tutorial/solve_special_constraints_with_pyscipopt_adapter.md)：IndicatorとSOS1の意味を知り、対応ソルバーでそのまま解く。
 3. [Adapter向けにInstanceを準備する](./tutorial/prepare_instance_for_adapter.md)：特殊制約を直接扱わないHiGHSへ、loweringを経て同じモデルを渡す。
 
-独自の変換方針が必要なら[Preparationで変換する制約族を選ぶ](./how_to/customize_preparation.md)、同じ問題を複数ソルバーで解きたいなら[複数のAdapterで結果を比較する](./how_to/compare_adapters.md)へ進んでください。
+独自の変換方針が必要なら{class}`明示的なPreparationと求解の例 <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`、同じ問題を複数ソルバーで解きたいなら[複数のAdapterで結果を比較する](./how_to/compare_adapters.md)へ進んでください。
 
 OpenJijを使いたい人は、上記3つのTutorialを実行せず、[OpenJij Adapterで小さな問題をサンプリングする](./how_to/sample_with_openjij_adapter)から始められます。[TSPのNotebook](./tutorial/tsp_sampling_with_openjij_adapter)は任意の応用例です。
 
@@ -152,9 +152,7 @@ tutorial/evaluate_existing_candidate
 :maxdepth: 1
 :hidden:
 
-how_to/customize_preparation
 how_to/compare_adapters
-how_to/transform_instance_without_solver
 how_to/sample_with_openjij_adapter
 how_to/load_existing_instance
 how_to/tighten_bounds
@@ -162,6 +160,14 @@ how_to/export_mps
 how_to/continue_experiment
 how_to/attach_experiment_data
 how_to/share_artifact_registry
+```
+
+```{toctree}
+:caption: 問題を変換して解法へ渡す
+:maxdepth: 1
+:hidden:
+
+user_guide/transform_and_solve
 ```
 
 ```{toctree}
@@ -177,11 +183,6 @@ user_guide/evaluate_and_interpret
 :maxdepth: 1
 :hidden:
 
-user_guide/special_constraints
-user_guide/instance_class
-user_guide/preparation_policy
-user_guide/transformation_guarantees
-user_guide/supported_ommx_adapters
 how_to/inspect_adapter_diagnostics
 how_to/use_initial_state
 ```

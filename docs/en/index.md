@@ -6,7 +6,7 @@ For example, developing a new solving method becomes harder if you must also rei
 
 ## Why use OMMX today?
 
-The current v3 development line supports the following tasks on a common problem representation. Its examples require a v3 preview of the SDK and, when needed, matching adapter packages. Use the [versioned installation guide (Japanese)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/getting_started/install.html). Unversioned installation commands in older tutorials select the stable v2 series. This Book and the [v3 release notes](./release_note/ommx-3.0.md) also describe development features that may not yet be in a published package; check the selected release's availability before using them.
+Until the 3.0.0 stable release, both this Book and the API Reference describe `main`. The [installation guide](./getting_started/install.md) covers the latest published prerelease and installation from `main`; use `main` for features that have not been released yet. The current implementation supports the following tasks on a common problem representation.
 
 | Your goal | What OMMX can handle | What you decide |
 |---|---|---|
@@ -42,9 +42,9 @@ Solvers differ in which objectives and constraints they can handle directly. OMM
 
 For example, the requirement to select exactly one of three binary variables can be represented as a OneHot special constraint. If ordinary linear constraints are needed, it can be converted to `x[0] + x[1] + x[2] == 1`. Keeping the explicit "select exactly one" structure makes its meaning available to later analysis and transformations. In v3, special constraints are objects that can be constructed, evaluated, and transformed, just like regular constraints.
 
-Which structures can remain explicit depends on the solving method. For supported models, the [PySCIPOpt Adapter passes Indicator and SOS1 constraints to SCIP](./user_guide/special_constraints.md). When their conversion conditions, including variable-domain and bound requirements, are met, they can instead be [lowered to regular constraints](./user_guide/capability_model.md) for a backend such as HiGHS, provided the resulting problem meets that adapter's input requirements. Your transformation policy determines which conversions are permitted.
+Which structures can remain explicit depends on the solving method. For supported models, the {class}`PySCIPOpt Adapter <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` passes Indicator and SOS1 constraints directly to SCIP. For another backend, OMMX can {meth}`lower special constraints to regular constraints <ommx.Instance.lower_special_constraints>` when the conversion conditions hold. [Transform a problem and connect it to a solving method](./user_guide/transform_and_solve.md) explains how to choose between these paths.
 
-What a transformation preserves depends on the operation. Some express the same condition in another form; others change the conditions imposed or the objective being compared. Feasibility, objective values, and optimality before and after a transformation are distinct guarantees. [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md) explains how to read transformed results. The [constraint-lowering guide](./user_guide/capability_model.md) covers supported conversions; individual operations' conditions and guarantees belong to the {doc}`API Reference <api/index>`.
+What a transformation preserves depends on the operation. Some express the same condition in another form; others change the conditions imposed or the objective being compared. Feasibility, objective values, and optimality before and after a transformation are distinct guarantees. [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md) explains how to read transformed results. {meth}`~ommx.Instance.lower_special_constraints` covers supported conversions; individual operations' conditions and guarantees belong to the {doc}`API Reference <api/index>`.
 
 ## Accumulate transformation techniques on a common representation
 
@@ -66,8 +66,8 @@ The development direction is to combine these techniques and select or repeat th
 | Construct and evaluate expressions | {class}`~ommx.Function` | Build scalar expressions and distinguish their values from a candidate's feasibility |
 | Inspect expressions using variable labels | {meth}`Expression formatting <ommx.Instance.format_function>` | Read expressions using the names and subscripts held by an Instance |
 | Change numeric conditions in a fixed problem structure | {class}`~ommx.ParametricInstance` | Reuse the structure and variable/constraint IDs with different parameter values |
-| Use special constraints | [Special Constraints](./user_guide/special_constraints.md) | Understand Indicator, OneHot, and SOS1 constraints and their solver integration |
-| Convert constraints for a different backend | [Adapter Input Classes and Explicit Constraint Lowering](./user_guide/capability_model.md) | Distinguish input requirements from conversion and inspect conversion history |
+| Use special constraints | {class}`~ommx.IndicatorConstraint`, {class}`~ommx.OneHotConstraint`, {class}`~ommx.Sos1Constraint` | Understand Indicator, OneHot, and SOS1 constraints and their solver integration |
+| Transform a problem and choose a method | [Transform a problem and connect it to a solving method](./user_guide/transform_and_solve.md) | Preserve structure and distinguish input conditions, transformation guarantees, and settings |
 | Tighten variable bounds from constraints | {meth}`Bound tightening <ommx.Instance.tighten_bounds_simultaneously_once>` | Perform one update and inspect the changed bounds |
 | Compare multiple candidates | {class}`~ommx.SampleSet` | Read sample evaluations and select among the candidates obtained |
 | Sample a QUBO with OpenJij | [TSP sampling example](./tutorial/tsp_sampling_with_openjij_adapter) | Follow a QUBO sampling application and inspect its results |
@@ -82,7 +82,7 @@ If you already have a problem and candidate values, begin with [Evaluate candida
 
 ## Use or implement an Adapter
 
-After the versioned setup above, start with the small knapsack model in [Solve with an OMMX Adapter](./tutorial/solve_with_ommx_adapter.md). The [supported adapters](./user_guide/supported_ommx_adapters.md) page lists the available integrations. Continue to [Special Constraints](./user_guide/special_constraints.md) for constraints that a backend can handle directly, or [Explicit Constraint Lowering](./user_guide/capability_model.md) for conversions and their conditions.
+After the setup above, start with the small knapsack model in [Solve with an OMMX Adapter](./tutorial/solve_with_ommx_adapter.md). The {doc}`Adapter packages and input contracts </api/adapters>` page lists the available integrations. Continue to {class}`~ommx.IndicatorConstraint`, {class}`~ommx.OneHotConstraint`, {class}`~ommx.Sos1Constraint` for constraints that a backend can handle directly, or {meth}`~ommx.Instance.lower_special_constraints` for conversions and their conditions.
 
 To compare solvers, use [Solve with multiple adapters and compare the results](./tutorial/switching_adapters.md). To try sampling, use the [OpenJij TSP example](./tutorial/tsp_sampling_with_openjij_adapter). Each has its own model; you do not need the runtime state of a previous tutorial.
 
@@ -111,6 +111,14 @@ Connect software through a common representation of problems and results.
 Alongside problems and results, Artifacts can record what was solved and with which settings. They use [OCI standards](https://opencontainers.org/), so they can also be distributed through existing registries such as GitHub Container Registry. OMMX uses this mechanism to publish [MIPLIB](./tutorial/download_miplib_instance.md) and [QPLIB](./tutorial/download_qplib_instance.md) problems. The [Artifact format specification](https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/doc/artifact_design.md) defines manifests, layers, and media types for tools that need to read or write the format directly.
 
 ```{toctree}
+:caption: Get started
+:maxdepth: 1
+:hidden:
+
+getting_started/install
+```
+
+```{toctree}
 :caption: Tutorial
 :maxdepth: 1
 :hidden:
@@ -123,6 +131,14 @@ tutorial/share_in_ommx_artifact
 tutorial/download_miplib_instance
 tutorial/download_qplib_instance
 tutorial/implement_adapter
+```
+
+```{toctree}
+:caption: Transform problems and connect solvers
+:maxdepth: 1
+:hidden:
+
+user_guide/transform_and_solve
 ```
 
 ```{toctree}
@@ -140,11 +156,8 @@ user_guide/evaluate_and_interpret
 
 user_guide/cli
 user_guide/agent_skills
-user_guide/supported_ommx_adapters
 user_guide/adapter_diagnostics
 user_guide/adapter_initial_state
-user_guide/special_constraints
-user_guide/capability_model
 user_guide/experiment
 user_guide/tracing
 ```
