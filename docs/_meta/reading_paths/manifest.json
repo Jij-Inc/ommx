@@ -168,7 +168,7 @@
         "MIG3",
         "RELEASE"
       ],
-      "note": "2次案第2章を日英で追加し、旧special_constraints/capability_model/instance_class/preparation_policy/transformation_guarantees/supported_ommx_adaptersと日本語の明示Preparation二手順を共有Referenceへ統合。旧G3/G9/G10/G11/P1/P11/G7系を意味的な所有先へ移し、未実装だったencoding節は既存API本文へ割り当てる。新章は数学読者の独立入口とし、API操作能力をリンクだけで付与しない。transformation.guaranteesは数学的な判断として再評価し、固定・penalty・boundの操作契約と分離する。歴史的baselineと過去の編集記録を保持し、本文照合の証拠はチャットに残す。 HOME/HOME_ENは目的別入口を新章とReferenceへ接続する。SETUP/T2/T3/P2/P3/P4/P12/P15/P16/T8/DEV_A/MIG3/RELEASEは削除ページから実在する移管先への導線と対応する案内文の変更のみを対象とし、既存の各ページ全体の学習契約を再監査したものではない。未台帳化の英語release noteとswitching_adaptersもリンク・案内文の限定変更であり、章全体は今回のレビュー範囲外。台帳化済みのP12/T8のNotebookは参照リンクのみを変更し、コードセル・出力・実行結果全体を再検証した扱いにしない。",
+      "note": "2次案第2章を日英で追加し、旧special_constraints/capability_model/instance_class/preparation_policy/transformation_guarantees/supported_ommx_adaptersと日本語の明示Preparation二手順を共有Referenceへ統合。旧G3/G9/G10/G11/P1/P11/G7系を意味的な所有先へ移し、未実装だったencoding節は既存API本文へ割り当てる。新章は数学読者の独立入口とし、API操作能力をリンクだけで付与しない。transformation.guaranteesは数学的な判断として再評価し、固定・penalty・boundの操作契約と分離する。歴史的baselineと過去の編集記録を保持し、本文照合の証拠はチャットに残す。 HOME/HOME_ENは目的別入口を新章とReferenceへ接続する。SETUP/T2/T3/P2/P3/P4/P12/P15/P16/T8/DEV_A/MIG3/RELEASEは削除ページから実在する移管先への導線と対応する案内文の変更のみを対象とし、既存の各ページ全体の学習契約を再監査したものではない。未台帳化の英語release noteとswitching_adaptersもリンク・案内文の限定変更であり、章全体は今回のレビュー範囲外。台帳化済みのP12/T8のNotebookは参照リンクのみを変更し、コードセル・出力・実行結果全体を再検証した扱いにしない。 Ready前レビューで、SETUPの固定b7向け案内と開発版Referenceの実行例の版を分け、削除済みHow-toへの実行確認範囲の言及を解消する。",
       "untracked_source_paths": [
         "docs/en/release_note/ommx-3.0.md",
         "docs/en/tutorial/switching_adapters.md"
@@ -1965,7 +1965,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "PR #1159のレビュー修正で、最初のPySCIPOpt実行にHiGHSを要求せず、必要な時点で追加する手順にする。公開b7の3 Tutorial・2 How-to用の環境であり、全Book共通の互換性記録やK-acceptanceの完了ではない。 PR #1284（I1）はSDKのみで止められる導入を先に置き、必要なAdapterだけ後で追加する。Cで追加したNotebookカーネル手順は保持する。",
+      "notes": "PR #1159のレビュー修正で、最初のPySCIPOpt実行にHiGHSを要求せず、必要な時点で追加する手順にする。公開b7は残るTutorial・How-toの実行基準であり、全Book共通の互換性記録やK-acceptanceの完了ではない。 PR #1284（I1）はSDKのみで止められる導入を先に置き、必要なAdapterだけ後で追加する。Cで追加したNotebookカーネル手順は保持する。 PR #1319では、開発版Referenceへ移した操作例に対応するSDK・Adapter版が必要なことを入口で明示する。削除したInstance変換How-toと独自Policy How-toを公開b7で実行確認済みの現行ページとして列挙しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -6936,7 +6936,7 @@
   "environment_requirements": [
     {
       "page": "SETUP",
-      "observed": "公開SDK 3.0.0b7を案内。Adapterは任意追加。"
+      "observed": "残るTutorial・How-toには公開SDK 3.0.0b7を案内。Adapterは任意追加。開発版API Referenceの例には閲覧中のReferenceに対応するSDK・Adapter版を別途用意し、b7で動作するとはみなさない。"
     },
     {
       "page": "P9",

@@ -4,6 +4,8 @@
 
 バージョンを指定せずにインストールすると、安定版のv2が選ばれるため、Tutorialのv3 APIを使えません。ここでは、公開済みの`3.0.0b7`で実行を確認した手順を示します。
 
+この固定版は、以下のTutorial・How-to向けの実行基準です。API Referenceは閲覧中のドキュメントと同じリビジョンを説明しているため、その実行例には対応するSDK・Adapterの版を使ってください。開発版Referenceの全機能を`3.0.0b7`で使えるとは限りません。
+
 ## 1. 仮想環境を作る
 
 Python 3.12を用意し、作業用のディレクトリで次を実行します。動作確認環境はmacOS（Apple Silicon）・Python 3.12.12です。
@@ -49,7 +51,7 @@ python -m ipykernel install --user --name ommx-book --display-name "OMMX Book"
 python -m pip install "ommx==3.0.0b7"
 ```
 
-{meth}`~ommx.Instance.prepare`で問題を変換する場合は、ここまでで準備が完了です。{class}`~ommx.InstanceClass`のmembership例もSDKだけで実行できます。
+求解せずに問題を変換したり、入力条件への所属を調べたりする操作にはSDKだけを使います。手順は{meth}`~ommx.Instance.prepare`と{class}`~ommx.InstanceClass`のReferenceを参照し、例に対応するSDKの版を用意してください。
 
 [既存の問題と候補解を評価する](../tutorial/evaluate_existing_candidate)場合も、ここまでで準備が完了です。[既存の問題の入手](../how_to/load_existing_instance.md)と候補評価にAdapterは使いません。それぞれのページに記載した公開データの初回取得には、ネットワーク接続が必要です。
 
@@ -62,7 +64,7 @@ python -m pip install "ommx==3.0.0b7"
 python -m pip install "ommx-pyscipopt-adapter==3.0.0b7"
 ```
 
-このAdapterで、最初の二つのTutorialと{class}`明示的なPreparationと求解の例 <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`を実行できます。
+このAdapterで、次の二つのTutorialを実行できます。独自の変換方針を使う場合は、対応する版の{class}`明示的なPreparationと求解の例 <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`を参照してください。
 
 1. [PySCIPOpt Adapterで0-1ナップサック問題を解く](../tutorial/solve_with_ommx_adapter)：変換せずに求解し、結果を読む。
 2. [PySCIPOpt Adapterで特殊制約をそのまま解く](../tutorial/solve_special_constraints_with_pyscipopt_adapter.md)：IndicatorとSOS1を使う。
@@ -100,7 +102,7 @@ python -m pip install matplotlib
 ```
 
 ```{note}
-このBookはv3の開発版に対応しており、API Referenceなどには未公開の機能が含まれる場合があります。上記のバージョンで実行を確認した範囲は、ここから案内するInstance変換How-toとmembership例、既存問題の入手How-toと候補評価Tutorial、3つのAdapter Tutorialと2つのAdapter How-to、およびOpenJijの小さなサンプリングHow-toとTSPのNotebookです。ほかの機能や外部ツールの導入条件は、それぞれのページを確認してください。
+このBookはv3の開発版に対応しており、API Referenceなどには未公開の機能が含まれる場合があります。上記の固定バージョンは、既存問題の入手How-toと候補評価Tutorial、3つのAdapter Tutorial、Adapter比較How-to、およびOpenJijの小さなサンプリングHow-toとTSPのNotebookの実行基準です。Referenceへ移した例の版は、ここからのリンクだけで判断せず、閲覧中のReferenceと合わせてください。ほかの機能や外部ツールの導入条件は、それぞれのページを確認してください。
 ```
 
 (install-cli)=
