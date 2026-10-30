@@ -521,22 +521,93 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     unchanged. :meth:`solve_without_preparation` and the constructor require
     the input to satisfy :attr:`INPUT_CLASS` already.
 
-    **Native Indicator constraints**
+    **Build, solve, and inspect a 0-1 knapsack problem**
 
-    An active binary indicator makes the bound on ``x`` apply. The additional
-    regular constraint forces that indicator to one:
+    Select items to maximize their total value while keeping their total weight
+    at most the capacity. Each Binary variable is one when its item is selected.
+    The names and subscripts preserve the connection to the input data:
 
-    >>> from ommx import Instance
+    >>> from ommx import Instance, Solution
     >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
-    >>> indicator_model = Instance.maximize()
-    >>> z = indicator_model.new_binary("z")
-    >>> x = indicator_model.new_continuous("x", lower=0, upper=10)
-    >>> indicator_model.objective = x
-    >>> _ = indicator_model.add_constraint(z == 1)
-    >>> _ = indicator_model.add_indicator_constraint((x <= 5).with_indicator(z))
-    >>> solution = OMMXPySCIPOptAdapter.solve(indicator_model)
+    >>> values = [10, 13, 18, 31, 7, 15]
+    >>> weights = [11, 25, 20, 35, 10, 33]
+    >>> capacity = 47
+    >>> problem = Instance.maximize()
+    >>> items = [problem.new_binary("item", subscripts=[i]) for i in range(len(values))]
+    >>> problem.objective = sum(value * item for value, item in zip(values, items))
+    >>> weight_limit = problem.add_constraint(
+    ...     sum(weight * item for weight, item in zip(weights, items)) <= capacity,
+    ...     "Weight limit",
+    ... )
+    >>> solution = OMMXPySCIPOptAdapter.solve(problem)
     >>> assert solution.feasible
-    >>> assert abs(solution.objective - 5.0) < 1e-6
+    >>> assert solution.optimality == Solution.OPTIMAL
+    >>> selected = sorted(
+    ...     i for (i,), value in solution.extract_decision_variables("item").items()
+    ...     if value > 0.5
+    ... )
+    >>> selected
+    [0, 3]
+    >>> assert abs(solution.objective - sum(values[i] for i in selected)) < 1e-6
+    >>> assert abs(solution.objective - 41.0) < 1e-6
+
+    :attr:`ommx.Solution.objective` is the returned candidate's objective value;
+    the value alone does not establish optimality. Here SCIP proves optimality
+    for the problem being evaluated. The decision-variable table provides IDs,
+    names, subscripts, and values for tabular analysis. The regular-constraint
+    table reports the normalized left-hand side: total weight minus capacity.
+
+    >>> variables = solution.decision_variables_df()
+    >>> assert set(variables["name"]) == {"item"}
+    >>> assert sorted(variables["value"]) == [0.0, 0.0, 0.0, 0.0, 1.0, 1.0]
+    >>> selection = variables[["subscripts", "value"]].copy()
+    >>> selection["choice"] = selection["value"].map(
+    ...     lambda value: "Include" if value > 0.5 else "Exclude"
+    ... )
+    >>> assert selection["choice"].value_counts().to_dict() == {"Exclude": 4, "Include": 2}
+    >>> constraints = solution.constraints_df(kind="regular")
+    >>> residual = constraints.loc[weight_limit.constraint_id, "value"]
+    >>> assert abs(residual - (sum(weights[i] for i in selected) - capacity)) < 1e-6
+    >>> assert abs(residual - (-1.0)) < 1e-6
+
+    The selected items weigh 46, so the inequality has one unit of slack.
+    :class:`ommx.Solution` documents result extraction and evaluation semantics.
+    The input can also come from a modeler, :meth:`ommx.Instance.load_mps`, or
+    :class:`ommx.artifact.Artifact`; model construction is independent of solve.
+
+    **Native Indicator and SOS1 constraints**
+
+    This model rewards enabling a feature and selecting options. When
+    ``enabled`` is one, the Indicator requires ``option_a + option_b <= 1``.
+    The SOS1 allows at most one of ``option_b`` and ``option_c`` to be nonzero;
+    it does not require either one to be selected. SCIP receives both
+    structures directly:
+
+    >>> from ommx import Instance, Sos1Constraint, SpecialConstraintKind
+    >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+    >>> source = Instance.maximize()
+    >>> enabled = source.new_binary("enabled")
+    >>> option_a = source.new_binary("option_a")
+    >>> option_b = source.new_binary("option_b")
+    >>> option_c = source.new_binary("option_c")
+    >>> source.objective = 10 * enabled + 6 * option_a + 5 * option_b + 4 * option_c
+    >>> _ = source.add_indicator_constraint((option_a + option_b <= 1).with_indicator(enabled))
+    >>> _ = source.add_sos1_constraint(
+    ...     Sos1Constraint(variables=[option_b, option_c], name="exclusive_options")
+    ... )
+    >>> assert OMMXPySCIPOptAdapter.INPUT_CLASS.contains(source)
+    >>> solution = OMMXPySCIPOptAdapter.solve(source)
+    >>> assert solution.feasible
+    >>> assert abs(solution.objective - 20.0) < 1e-6
+    >>> assert source.active_special_constraint_kinds == {
+    ...     SpecialConstraintKind.Indicator, SpecialConstraintKind.Sos1,
+    ... }
+    >>> assert not source.removed_constraints
+
+    The selected values are ``enabled = option_a = option_c = 1`` and
+    ``option_b = 0``. The :class:`ommx_highs_adapter.OMMXHighsAdapter`
+    Reference solves this same model through lowering, demonstrating the
+    distinction between native support and preparation for a target input class.
 
     **OneHot preparation without changing the source**
 
@@ -556,10 +627,10 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     >>> assert choice_model.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
     >>> assert not choice_model.removed_constraints
 
-    **Native SOS1 constraints**
+    **SOS1 with continuous variables**
 
-    At most one continuous variable may be nonzero; all may be zero. SCIP can
-    handle this structure directly:
+    Native SOS1 support also applies to continuous variables: at most one may
+    be nonzero, and all may be zero.
 
     >>> from ommx import Instance, Sos1Constraint
     >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
@@ -689,49 +760,15 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         Examples
         =========
 
-        KnapSack Problem
-
-        .. doctest::
-
-            >>> from ommx import Instance, DecisionVariable
-            >>> from ommx import Solution
-            >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
-
-            >>> p = [10, 13, 18, 32, 7, 15]
-            >>> w = [11, 15, 20, 35, 10, 33]
-            >>> x = [DecisionVariable.binary(i) for i in range(6)]
-            >>> instance = Instance.from_components(
-            ...     decision_variables=x,
-            ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
-            ...     sense=Sense.Maximize,
-            ... )
-
-            Solve it
-
-            >>> solution = OMMXPySCIPOptAdapter.solve(instance)
-
-            Check output
-
-            >>> sorted([(id, value) for id, value in solution.state.entries.items()])
-            [(0, 1.0), (1, 0.0), (2, 0.0), (3, 1.0), (4, 0.0), (5, 0.0)]
-            >>> solution.feasible
-            True
-            >>> assert solution.optimality == Solution.OPTIMAL
-
-            p[0] + p[3] = 42
-            w[0] + w[3] = 46 <= 47
-
-            >>> solution.objective
-            42.0
-            >>> solution.get_constraint_value(0)
-            -1.0
+        The :class:`OMMXPySCIPOptAdapter` class documentation contains a complete
+        knapsack example from model construction through named-variable
+        extraction, tabular analysis, objective value, and constraint slack.
 
         Infeasible Problem
 
         .. doctest::
 
-                >>> from ommx import Instance, DecisionVariable
+                >>> from ommx import Instance, DecisionVariable, Sense
                 >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
                 >>> x = DecisionVariable.integer(0, upper=3, lower=0)
@@ -751,7 +788,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         .. doctest::
 
-                >>> from ommx import Instance, DecisionVariable
+                >>> from ommx import Instance, DecisionVariable, Sense
                 >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
                 >>> x = DecisionVariable.integer(0, lower=0)

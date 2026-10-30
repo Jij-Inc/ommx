@@ -67,7 +67,7 @@ main：
 uv sync --locked --package ommx-pyscipopt-adapter --no-default-groups --inexact
 ```
 
-[0-1ナップサック問題を解く例](../tutorial/solve_with_ommx_adapter)と[特殊制約をそのまま解く例](../tutorial/solve_special_constraints_with_pyscipopt_adapter.md)を参照してください。独自の変換方針を使う手順は、Referenceの{class}`明示的なPreparationと求解の例 <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`にあります。
+{class}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter`のReferenceに、ナップサック問題の求解と結果分析、特殊制約の直接利用、明示的なPreparationから求解までの完全な使用例があります。
 
 (install-highs-adapter)=
 ### HiGHS Adapter
@@ -84,7 +84,7 @@ main：
 uv sync --locked --package ommx-highs-adapter --no-default-groups --inexact
 ```
 
-[Adapter向けにInstanceを準備する例](../tutorial/prepare_instance_for_adapter.md)を参照してください。この例はモデルをその場で作るため、前のTutorialの実行状態やPySCIPOpt Adapterは不要です。[複数のAdapterで結果を比較する](../how_to/compare_adapters.md)場合は、両方のAdapterと、後述の手順でmatplotlibを用意します。
+{class}`~ommx_highs_adapter.OMMXHighsAdapter`のReferenceに、特殊制約を準備して解く完全な使用例があります。モデルをその場で作るため、HiGHSとSDKだけで実行できます。[複数のAdapterで結果を比較する](../how_to/compare_adapters.md)場合は、両方のAdapterと、後述の手順でmatplotlibを用意します。
 
 (install-openjij-adapter)=
 ### OpenJij Adapter
@@ -101,7 +101,7 @@ main：
 uv sync --locked --package ommx-openjij-adapter --no-default-groups --inexact
 ```
 
-OpenJij本体も依存関係として導入されます。ほかのAdapterやソルバーのライセンス設定は不要です。[小さな問題のサンプリング](../how_to/sample_with_openjij_adapter)を参照してください。任意の応用例である[TSPのNotebook](../tutorial/tsp_sampling_with_openjij_adapter)では、経路の描画にmatplotlibを使います。
+OpenJij本体も依存関係として導入されます。ほかのAdapterやソルバーのライセンス設定は不要です。{class}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter`のReferenceに、重みを選び、得られた候補を選択するまでの小さな使用例があります。任意の応用例である[TSPのNotebook](../tutorial/tsp_sampling_with_openjij_adapter)では、経路の描画にmatplotlibを使います。
 
 ## 3. 必要に応じてNotebook・描画用ツールを追加する
 

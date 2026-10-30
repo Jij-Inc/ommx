@@ -186,7 +186,7 @@ HiGHS モデルに保持するようにしました。
 
 モデル構築から求解・解の復元まで行う場合は `OMMXHighsAdapter.solve(instance)` を、
 構築済みモデルを求解する場合は `adapter.solver_input.run()` を使ってください。
-詳細は [Adapter チュートリアル](../tutorial/solve_with_ommx_adapter)を参照してください。
+完全な使用例は {class}`HiGHS AdapterのReference <ommx_highs_adapter.OMMXHighsAdapter>`を参照してください。
 
 項数の多い線形目的関数や制約を構築する際には、加算のたびに蓄積済みの式全体を
 コピーせず、項を追加するようにしました。

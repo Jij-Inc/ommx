@@ -58,7 +58,7 @@ The development direction is to combine these techniques and select or repeat th
 
 | Your task | Start here | What you will learn |
 |---|---|---|
-| Solve a problem with a solver | [Solve with an OMMX Adapter](./tutorial/solve_with_ommx_adapter.md) | Create an Instance, solve it, and read the result |
+| Solve a problem with a solver | {class}`PySCIPOpt Adapter Reference <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` | Create an Instance, solve it, and read the result |
 | Evaluate a candidate you already have | [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md) | Align the problem, objective, and conditions being evaluated; distinguish feasibility from optimality |
 | Evaluate metrics beyond the objective | {class}`~ommx.NamedFunction` | Compute distance or other reporting metrics for each candidate separately from the objective |
 | Extract results by name and subscript | {meth}`Named variable values <ommx.Solution.extract_decision_variables>` | Obtain evaluated variable values as dictionaries or tables for further processing |
@@ -70,20 +70,20 @@ The development direction is to combine these techniques and select or repeat th
 | Transform a problem and choose a method | [Transform a problem and connect it to a solving method](./user_guide/transform_and_solve.md) | Preserve structure and distinguish input conditions, transformation guarantees, and settings |
 | Tighten variable bounds from constraints | {meth}`Bound tightening <ommx.Instance.tighten_bounds_simultaneously_once>` | Perform one update and inspect the changed bounds |
 | Compare multiple candidates | {class}`~ommx.SampleSet` | Read sample evaluations and select among the candidates obtained |
-| Sample a QUBO with OpenJij | [TSP sampling example](./tutorial/tsp_sampling_with_openjij_adapter) | Follow a QUBO sampling application and inspect its results |
+| Sample with OpenJij | {class}`OpenJij SA Adapter Reference <ommx_openjij_adapter.OMMXOpenJijSAAdapter>` | Choose penalty weights, prepare a problem, and inspect the returned candidates |
 | Obtain existing problems | [MIPLIB](./tutorial/download_miplib_instance.md) or [QPLIB](./tutorial/download_qplib_instance.md) | Download a problem as an OMMX Instance |
 | Save and share problems, results, and trials | [Choose what to record](./user_guide/record_and_share.md) | Select a transfer format and the information needed to inspect or rerun work |
 | Connect your own solving tool | [Implement an Adapter](./tutorial/implement_adapter.md) | Translate backend inputs and outputs through the common adapter interface |
 
 This Book explains what OMMX can do, why and when to use it, what to choose, and how to interpret results. Use small examples to understand the meaning, then consult the {doc}`API Reference <api/index>` for detailed calls, arguments, preconditions, and guarantees. You do not need to read every page in order.
 
-If you already have a problem and candidate values, begin with [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md). Use {class}`~ommx.Solution` for executable evaluation examples. Running an adapter tutorial is not a prerequisite.
+If you already have a problem and candidate values, begin with [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md). Use {class}`~ommx.Solution` for executable evaluation examples. You can evaluate candidates independently of an Adapter.
 
 ## Use or implement an Adapter
 
-After the setup above, start with the small knapsack model in [Solve with an OMMX Adapter](./tutorial/solve_with_ommx_adapter.md). The {doc}`Adapter packages and input contracts </api/adapters>` page lists the available integrations. Continue to {class}`~ommx.IndicatorConstraint`, {class}`~ommx.OneHotConstraint`, {class}`~ommx.Sos1Constraint` for constraints that a backend can handle directly, or {meth}`~ommx.Instance.lower_special_constraints` for conversions and their conditions.
+After [installing the SDK and an Adapter](./getting_started/install.md), choose a complete example from its Reference. {class}`PySCIPOpt <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` covers a knapsack model, native special constraints, and explicit preparation. {class}`HiGHS <ommx_highs_adapter.OMMXHighsAdapter>` shows how OMMX can lower special constraints for a backend that does not accept them directly. {class}`OpenJij SA <ommx_openjij_adapter.OMMXOpenJijSAAdapter>` covers caller-chosen penalty weights, sampling, and selecting among returned candidates. Each example supplies its own model. The {doc}`Adapter packages and input contracts </api/adapters>` page lists the available integrations.
 
-To compare solvers, use [Solve with multiple adapters and compare the results](./tutorial/switching_adapters.md). To try sampling, use the [OpenJij TSP example](./tutorial/tsp_sampling_with_openjij_adapter). Each has its own model; you do not need the runtime state of a previous tutorial.
+To compare solvers, use [Solve with multiple adapters and compare the results](./tutorial/switching_adapters.md). The [OpenJij TSP example](./tutorial/tsp_sampling_with_openjij_adapter) is an optional application that includes route visualization.
 
 If you are connecting your own solving tool, the [adapter implementation guide](./tutorial/implement_adapter.md) explains how to translate its input and output through OMMX's common interface.
 
@@ -122,7 +122,6 @@ getting_started/install
 :maxdepth: 1
 :hidden:
 
-tutorial/solve_with_ommx_adapter
 tutorial/tsp_sampling_with_openjij_adapter
 tutorial/switching_adapters
 tutorial/download_miplib_instance

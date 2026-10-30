@@ -33,19 +33,7 @@ _tracer = trace.get_tracer("ommx.adapter.openjij")
 
 
 class OMMXOpenJijSAAdapter(SamplerAdapter):
-    """
-    Sample an applicable Binary polynomial input with OpenJij simulated annealing.
-
-    The direct Adapter input must use only Binary decision variables, have
-    no active regular or special constraints, and be a minimization problem.
-    Arbitrary polynomial objective degree is supported through OpenJij's QUBO
-    and Binary-HUBO paths.
-
-    :meth:`sample` and :meth:`solve` prepare an isolated copy with
-    :meth:`recommended_preparation_policy`. Use :meth:`sample_without_preparation` or
-    :meth:`solve_without_preparation` after explicitly preparing an instance when
-    caller-owned choices such as fixed penalty magnitudes are required.
-    """
+    """Implementation of :class:`ommx_openjij_adapter.OMMXOpenJijSAAdapter`."""
 
     INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
         [
@@ -175,6 +163,10 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     ) -> SampleSet:
         """Prepare and sample an isolated copy of ``ommx_instance``.
 
+        This obtains a fresh recommended policy. For a complete example with
+        an explicit penalty weight, see
+        :class:`ommx_openjij_adapter.OMMXOpenJijSAAdapter`.
+
         OpenJij ``initial_state`` values are defined against the solver-variable
         representation of an exact Adapter input, so they are accepted only by
         :meth:`sample_without_preparation`.
@@ -217,6 +209,10 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     ) -> SampleSet:
         """Sample an exact OpenJij Adapter input without preparing it.
 
+        See :class:`ommx_openjij_adapter.OMMXOpenJijSAAdapter` for a complete
+        example from an explicitly prepared constrained model to candidate
+        evaluation and selection.
+
         ``initial_state`` is defined against this exact input's solver-variable
         representation.
         """
@@ -256,6 +252,10 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """Prepare, sample, and return the best feasible result.
+
+        Selects from the obtained candidates and does not prove optimality.
+        Raises :class:`ValueError` if no sampled candidate is feasible. Use
+        :meth:`sample` to retain all candidates for inspection.
 
         OpenJij ``initial_state`` values are defined against the solver-variable
         representation of an exact Adapter input, so they are accepted only by
@@ -298,6 +298,12 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """Return the best feasible result from :meth:`sample_without_preparation`.
+
+        Selection uses the reported objective and retained feasibility checks.
+        It does not prove optimality and raises :class:`ValueError` when no
+        feasible candidate was obtained. Use :meth:`sample_without_preparation`
+        to inspect all candidates, as shown in
+        :class:`ommx_openjij_adapter.OMMXOpenJijSAAdapter`.
 
         ``initial_state`` is defined against the exact Adapter input's
         solver-variable representation.

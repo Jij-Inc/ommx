@@ -42,7 +42,7 @@ assert solution.objective == 1
 
 例えば、三つの0-1変数からちょうど一つを選ぶ条件は、OneHotという特殊制約で表せます。通常の線形制約が必要なら、`x[0] + x[1] + x[2] == 1`へ変換できます。最初から式だけにしてしまわず、「ちょうど一つを選ぶ」という構造を保持することで、その意味を後の分析や変換に利用できます。v3では特殊制約を通常の制約と同様に、構築・評価・変換の対象として扱います。
 
-どの構造をそのまま扱えるかは解法ごとに異なります。例えばIndicatorやSOS1は、対応するモデルなら[PySCIPOpt Adapterでそのまま解く](./tutorial/solve_special_constraints_with_pyscipopt_adapter.md)ことも、変数の範囲などの適用条件を満たせば[通常制約へ変換してHiGHSに渡す](./tutorial/prepare_instance_for_adapter.md)こともできます。利用者が選んだ変換方針に従って、必要な段階で表現を変えます。
+どの構造をそのまま扱えるかは解法ごとに異なります。例えばIndicatorやSOS1は、対応するモデルなら{class}`PySCIPOpt Adapterでそのまま解く <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`ことも、変数の範囲などの適用条件を満たせば{class}`通常制約へ変換してHiGHSに渡す <ommx_highs_adapter.OMMXHighsAdapter>`こともできます。利用者が選んだ変換方針に従って、必要な段階で表現を変えます。
 
 ただし、変換が何を保存するかは操作ごとに異なります。同じ条件を別の式で表す場合もあれば、課す条件や比較する目的値を変える場合もあります。変換前後の実行可能性・目的値・最適性を、すべて同じ保証として扱うことはできません。具体的な条件の例は{class}`~ommx.IndicatorConstraint`・{class}`~ommx.OneHotConstraint`・{class}`~ommx.Sos1Constraint`、変換した問題の結果の読み方は[候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md)で説明します。
 
@@ -58,11 +58,11 @@ assert solution.objective == 1
 
 | やりたいこと | 最初に読むページ | この段階で学ぶこと |
 |---|---|---|
-| ソルバーで問題を解く | [Adapterで解くTutorial](./tutorial/solve_with_ommx_adapter) | Instanceを作り、求解して結果を読む |
+| ソルバーで問題を解く | {class}`PySCIPOpt AdapterのReference <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` | Instanceを作り、求解して結果を読む |
 | 手元の問題と候補解を評価する | [候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md) | 評価する問題・目的・条件を揃え、実行可能性と最適性を区別する |
 | 目的関数以外の指標を評価する | {class}`~ommx.NamedFunction` | 費用とは別の距離などを候補ごとに計算する |
 | 結果を名前と添字で取り出す | {meth}`名前付きの変数値の抽出 <ommx.Solution.extract_decision_variables>` | 変数値を後処理用の辞書や表にする |
-| OpenJijでサンプリングする | [小さな問題をサンプリングするHow-to](./how_to/sample_with_openjij_adapter) | 重みを設定して問題を準備し、候補を目的値と実行可能性で読む |
+| OpenJijでサンプリングする | {class}`OpenJij SA AdapterのReference <ommx_openjij_adapter.OMMXOpenJijSAAdapter>` | 重みを設定して問題を準備し、候補を目的値と実行可能性で読む |
 | 独自のAdapterを実装する | [Adapter Developer Guide](./developer_guide/adapter.md) | 入力・変換・評価の契約と参照実装 |
 | 問題や候補解の意味を理解する | {class}`~ommx.Instance` → {class}`~ommx.Solution` | 変数の役割、実行可能性、目的値、最適性の違い |
 | 式を構築・評価する | {class}`~ommx.Function` | 式を作り、式の値と候補の実行可能性を区別する |
@@ -79,19 +79,13 @@ assert solution.objective == 1
 
 このBookでは、何ができるか、なぜ・いつ使うか、何を選び、結果をどう読むかを説明します。小さな例で意味をつかみ、実装に必要な詳しい呼び出し方や引数・前提条件・保証は{doc}`API Reference <api/index>`で確認してください。全ページを順に読む必要はありません。
 
-問題と候補の値がすでにある人は、[候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md)から始められます。具体的な評価の呼び出し方は{class}`~ommx.Solution`、ファイルから読み込む例は[候補評価のTutorial](./tutorial/evaluate_existing_candidate)にあります。Adapter Tutorialの実行は前提ではありません。
+問題と候補の値がすでにある人は、[候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md)から始められます。具体的な評価の呼び出し方は{class}`~ommx.Solution`、ファイルから読み込む例は[候補評価のTutorial](./tutorial/evaluate_existing_candidate)にあります。候補評価はAdapterから独立して使えます。
 
 ## Adapterを使う・作る
 
-Adapterを使って解きたい人は、まず[Python SDKとAdapterのインストール](./getting_started/install.md)で実行環境を用意してください。次の3つのTutorialで、変換なしの求解からOMMXによるPreparationへ進めます。
+まず[Python SDKとAdapterのインストール](./getting_started/install.md)で実行環境を用意し、使いたいAdapterのReferenceで完全な使用例を選びます。{class}`PySCIPOpt <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`にはナップサック問題の求解、特殊制約の直接利用、明示的なPreparationの例があります。{class}`HiGHS <ommx_highs_adapter.OMMXHighsAdapter>`では、直接受け取れない特殊制約をOMMXがloweringする例を扱います。{class}`OpenJij SA <ommx_openjij_adapter.OMMXOpenJijSAAdapter>`では、利用者が重みを選び、samplingして候補を選ぶ例を扱います。各例はモデルをその場で作ります。ほかの接続先は{doc}`Adapterの一覧と入力契約 </api/adapters>`から探せます。
 
-1. [PySCIPOpt Adapterで0-1ナップサック問題を解く](./tutorial/solve_with_ommx_adapter)：Instanceを作り、`solve()`を呼び、pandasで結果を読む。
-2. [PySCIPOpt Adapterで特殊制約をそのまま解く](./tutorial/solve_special_constraints_with_pyscipopt_adapter.md)：IndicatorとSOS1の意味を知り、対応ソルバーでそのまま解く。
-3. [Adapter向けにInstanceを準備する](./tutorial/prepare_instance_for_adapter.md)：特殊制約を直接扱わないHiGHSへ、loweringを経て同じモデルを渡す。
-
-独自の変換方針が必要なら{class}`明示的なPreparationと求解の例 <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`、同じ問題を複数ソルバーで解きたいなら[複数のAdapterで結果を比較する](./how_to/compare_adapters.md)へ進んでください。
-
-OpenJijを使いたい人は、上記3つのTutorialを実行せず、[OpenJij Adapterで小さな問題をサンプリングする](./how_to/sample_with_openjij_adapter)から始められます。[TSPのNotebook](./tutorial/tsp_sampling_with_openjij_adapter)は任意の応用例です。
+同じ問題を複数ソルバーで解きたい場合は[複数のAdapterで結果を比較する](./how_to/compare_adapters.md)へ進んでください。[OpenJijのTSP Notebook](./tutorial/tsp_sampling_with_openjij_adapter)は、経路の描画まで扱う任意の応用例です。
 
 Adapterを実装する人は、利用者向けTutorialの通読ではなく、[Developer Guide](./developer_guide/adapter.md)から共通の入力・変換・評価の契約と参照実装を確認してください。
 
@@ -130,9 +124,6 @@ getting_started/install
 :maxdepth: 1
 :hidden:
 
-tutorial/solve_with_ommx_adapter
-tutorial/solve_special_constraints_with_pyscipopt_adapter
-tutorial/prepare_instance_for_adapter
 tutorial/tsp_sampling_with_openjij_adapter
 ```
 
@@ -150,7 +141,6 @@ tutorial/evaluate_existing_candidate
 :hidden:
 
 how_to/compare_adapters
-how_to/sample_with_openjij_adapter
 how_to/load_existing_instance
 how_to/tighten_bounds
 how_to/share_artifact_registry
