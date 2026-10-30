@@ -6,6 +6,14 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 種類の追加に対応する公開API ([#1329](https://github.com/Jij-Inc/ommx/pull/1329))
+
+`Kind`、`SpecialConstraintKind`、`ProvenanceKind` の型ヒントを、網羅的な Enum から
+既知の定数を持つ値クラスに変更しました。既存の定数・比較・hash・整数変換と
+Kind の protobuf 変換は引き続き利用できます。種類や制約familyを処理するときは、
+未対応の値を明示的に拒否する分岐を残してください。
+V3の数値スカラーの拡張契約は[移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
 ### 🆕 finite-domain 決定変数 ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
 
 {class}`~ommx.DecisionVariable` で、明示的に列挙した数値の集合を正確な

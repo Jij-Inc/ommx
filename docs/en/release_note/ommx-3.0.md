@@ -6,6 +6,15 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### Extensible kind APIs ([#1329](https://github.com/Jij-Inc/ommx/pull/1329))
+
+`Kind`, `SpecialConstraintKind`, and `ProvenanceKind` now have nominal value
+class type hints instead of exhaustive Enum hints. Known constants, comparisons,
+hashing, integer conversion, and Kind protobuf conversion remain available.
+Keep an explicit rejecting fallback when handling kinds or constraint families.
+See [the migration guide](../migration/python_sdk_v2_to_v3.md#extensible-variable-and-constraint-kinds)
+for the V3 numeric scalar extension contract.
+
 ### 🆕 Finite-domain decision variables ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
 
 {class}`~ommx.DecisionVariable` can now represent an exact, explicitly
