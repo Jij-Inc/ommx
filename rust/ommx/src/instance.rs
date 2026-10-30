@@ -84,18 +84,21 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 /// input support. Native input is described by [`crate::InstanceClass`], while
 /// `ommx.v2.Feature` describes wire-format reconstruction requirements. These
 /// concepts are intentionally independent.
+/// Additional families may be added; consumers must retain a rejecting fallback.
 ///
 /// The [`PartialOrd`] / [`Ord`] derives follow variant declaration order
 /// (`Indicator < OneHot < Sos1`), which is also the order in which
 /// [`SpecialConstraintKinds`] iterates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+#[repr(i32)]
 pub enum SpecialConstraintKind {
     /// Indicator constraints: binvar = 1 → f(x) <= 0
-    Indicator,
+    Indicator = 1,
     /// One-hot constraints: exactly one of a set of binary variables must be 1
-    OneHot,
+    OneHot = 2,
     /// SOS1 constraints: at most one of a set of variables can be non-zero
-    Sos1,
+    Sos1 = 3,
 }
 
 /// A set of [`SpecialConstraintKind`] transformation selectors.

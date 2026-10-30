@@ -18506,39 +18506,196 @@
         {
           "kind": "Class",
           "name": "Kind",
-          "doc": "Kind of decision variable",
+          "doc": "Numeric scalar decision-variable domain kind.\n\nNew kinds may be added. This value type does not promise an exhaustive\nlist. Inspect known constants and reject unsupported kinds in consumers\nthat interpret domain semantics. Generic metadata queries retain Kind.",
           "bases": [],
-          "methods": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__hash__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__int__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__str__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "from_pb",
+              "doc": "Convert a known protobuf kind. Unknown semantic kinds are rejected.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Kind",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "to_pb",
+              "doc": "Convert to the protobuf kind number.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
           "attributes": [
             {
               "name": "Binary",
-              "doc": "Binary decision variable (0 or 1)",
-              "type_": null
+              "doc": "",
+              "type_": {
+                "display": "Kind",
+                "link_target": null,
+                "children": []
+              }
             },
             {
               "name": "Continuous",
-              "doc": "Continuous decision variable (real-valued)",
-              "type_": null
+              "doc": "",
+              "type_": {
+                "display": "Kind",
+                "link_target": null,
+                "children": []
+              }
             },
             {
               "name": "FiniteDomain",
-              "doc": "Finite-domain decision variable (one of explicitly enumerated values)",
-              "type_": null
+              "doc": "",
+              "type_": {
+                "display": "Kind",
+                "link_target": null,
+                "children": []
+              }
             },
             {
               "name": "Integer",
-              "doc": "Integer decision variable",
-              "type_": null
+              "doc": "",
+              "type_": {
+                "display": "Kind",
+                "link_target": null,
+                "children": []
+              }
             },
             {
               "name": "SemiContinuous",
-              "doc": "Semi-continuous decision variable (continuous in range or zero)",
-              "type_": null
+              "doc": "",
+              "type_": {
+                "display": "Kind",
+                "link_target": null,
+                "children": []
+              }
             },
             {
               "name": "SemiInteger",
-              "doc": "Semi-integer decision variable (integer in range or zero)",
-              "type_": null
+              "doc": "",
+              "type_": {
+                "display": "Kind",
+                "link_target": null,
+                "children": []
+              }
             }
           ],
           "deprecated": null
@@ -26201,24 +26358,111 @@
         {
           "kind": "Class",
           "name": "ProvenanceKind",
-          "doc": "Kind of constraint from which a regular {class}`~ommx.Constraint` was generated.\n\nSee {class}`~ommx.Provenance` for details.",
+          "doc": "Source constraint family. Additional provenance families may be added.",
           "bases": [],
-          "methods": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__hash__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__int__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
           "attributes": [
             {
               "name": "IndicatorConstraint",
-              "doc": "The regular constraint was generated from an indicator constraint.",
-              "type_": null
+              "doc": "",
+              "type_": {
+                "display": "ProvenanceKind",
+                "link_target": null,
+                "children": []
+              }
             },
             {
               "name": "OneHotConstraint",
-              "doc": "The regular constraint was generated from a one-hot constraint.",
-              "type_": null
+              "doc": "",
+              "type_": {
+                "display": "ProvenanceKind",
+                "link_target": null,
+                "children": []
+              }
             },
             {
               "name": "Sos1Constraint",
-              "doc": "The regular constraint was generated from a SOS1 constraint.",
-              "type_": null
+              "doc": "",
+              "type_": {
+                "display": "ProvenanceKind",
+                "link_target": null,
+                "children": []
+              }
             }
           ],
           "deprecated": null
@@ -36354,24 +36598,111 @@
         {
           "kind": "Class",
           "name": "SpecialConstraintKind",
-          "doc": "Kind of active special constraint in an instance.\n\nUse these values with {attr}`~ommx.Instance.active_special_constraint_kinds` to\ninspect an instance and {meth}`~ommx.Instance.lower_special_constraints` to select\nspecial constraint families for explicit lowering to regular constraints.\nThis is a transformation selector, not an adapter input declaration or an\n``ommx.v2.Feature`` wire-format requirement.",
+          "doc": "Special constraint family selector. Additional families may be added.\nHandle supported values explicitly and reject all other values.\nThis selects transformations; adapter input is declared by InstanceClass.",
           "bases": [],
-          "methods": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__hash__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__int__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
           "attributes": [
             {
               "name": "Indicator",
-              "doc": "Indicator constraints: binvar = 1 → f(x) <= 0",
-              "type_": null
+              "doc": "",
+              "type_": {
+                "display": "SpecialConstraintKind",
+                "link_target": null,
+                "children": []
+              }
             },
             {
               "name": "OneHot",
-              "doc": "One-hot constraints: exactly one of a set of binary variables must be 1",
-              "type_": null
+              "doc": "",
+              "type_": {
+                "display": "SpecialConstraintKind",
+                "link_target": null,
+                "children": []
+              }
             },
             {
               "name": "Sos1",
-              "doc": "SOS1 constraints: at most one of a set of variables can be non-zero",
-              "type_": null
+              "doc": "",
+              "type_": {
+                "display": "SpecialConstraintKind",
+                "link_target": null,
+                "children": []
+              }
             }
           ],
           "deprecated": null

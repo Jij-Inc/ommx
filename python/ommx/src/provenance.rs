@@ -1,34 +1,9 @@
 use pyo3::prelude::*;
 
-/// Kind of constraint from which a regular {class}`~ommx.Constraint` was generated.
-///
-/// See {class}`~ommx.Provenance` for details.
-#[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, frozen)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ProvenanceKind {
-    /// The regular constraint was generated from an indicator constraint.
-    IndicatorConstraint = 1,
-    /// The regular constraint was generated from a one-hot constraint.
-    OneHotConstraint = 2,
-    /// The regular constraint was generated from a SOS1 constraint.
-    Sos1Constraint = 3,
-}
-
-#[pyo3_stub_gen::derive::gen_stub_pymethods]
-#[pymethods]
-impl ProvenanceKind {
-    fn __hash__(&self) -> isize {
-        *self as isize
-    }
-
-    fn __repr__(&self) -> &'static str {
-        match self {
-            ProvenanceKind::IndicatorConstraint => "ProvenanceKind.IndicatorConstraint",
-            ProvenanceKind::OneHotConstraint => "ProvenanceKind.OneHotConstraint",
-            ProvenanceKind::Sos1Constraint => "ProvenanceKind.Sos1Constraint",
-        }
-    }
+crate::enums::open_kind! {
+    /// Source constraint family. Additional provenance families may be added.
+    ProvenanceKind, ommx::SpecialConstraintKind, |kind| kind as i32;
+    IndicatorConstraint => Indicator, OneHotConstraint => OneHot, Sos1Constraint => Sos1
 }
 
 /// One step in a regular constraint's transformation history.
@@ -50,19 +25,9 @@ pub struct Provenance {
 
 impl From<&ommx::Provenance> for Provenance {
     fn from(p: &ommx::Provenance) -> Self {
-        match p {
-            ommx::Provenance::IndicatorConstraint(id) => Self {
-                kind: ProvenanceKind::IndicatorConstraint,
-                original_id: (*id).into_inner(),
-            },
-            ommx::Provenance::OneHotConstraint(id) => Self {
-                kind: ProvenanceKind::OneHotConstraint,
-                original_id: (*id).into_inner(),
-            },
-            ommx::Provenance::Sos1Constraint(id) => Self {
-                kind: ProvenanceKind::Sos1Constraint,
-                original_id: (*id).into_inner(),
-            },
+        Self {
+            kind: p.kind().into(),
+            original_id: p.original_id(),
         }
     }
 }
@@ -82,9 +47,9 @@ impl Provenance {
 
     /// The ID of the original special constraint (before transformation).
     #[getter]
-    pub fn original_id(&self) -> crate::constraint_id::AnyConstraintID {
+    pub fn original_id(&self) -> PyResult<crate::constraint_id::AnyConstraintID> {
         use crate::constraint_id::AnyConstraintID;
-        match self.kind {
+        Ok(match self.kind {
             ProvenanceKind::IndicatorConstraint => AnyConstraintID::Indicator(
                 ommx::IndicatorConstraintID::from(self.original_id).into(),
             ),
@@ -94,15 +59,19 @@ impl Provenance {
             ProvenanceKind::Sos1Constraint => {
                 AnyConstraintID::Sos1(ommx::Sos1ConstraintID::from(self.original_id).into())
             }
-        }
+            _ => {
+                return Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                    "Unsupported provenance family",
+                ))
+            }
+        })
     }
 
     pub fn __repr__(&self) -> String {
-        let kind_name = match self.kind {
-            ProvenanceKind::IndicatorConstraint => "IndicatorConstraint",
-            ProvenanceKind::OneHotConstraint => "OneHotConstraint",
-            ProvenanceKind::Sos1Constraint => "Sos1Constraint",
-        };
+        let kind_name = format!(
+            "{:?}Constraint",
+            ommx::SpecialConstraintKind::from(self.kind)
+        );
         format!("Provenance({}({}))", kind_name, self.original_id)
     }
 }

@@ -9020,6 +9020,37 @@ class InvalidRemoteArtifactError(RemoteArtifactError):
     ...
 
 @typing.final
+class Kind:
+    r"""
+    Numeric scalar decision-variable domain kind.
+
+    New kinds may be added. This value type does not promise an exhaustive
+    list. Inspect known constants and reject unsupported kinds in consumers
+    that interpret domain semantics. Generic metadata queries retain Kind.
+    """
+
+    Binary: Kind
+    Integer: Kind
+    Continuous: Kind
+    SemiInteger: Kind
+    SemiContinuous: Kind
+    FiniteDomain: Kind
+    def __hash__(self) -> builtins.int: ...
+    def __int__(self) -> builtins.int: ...
+    def __eq__(self, other: typing.Any) -> builtins.bool: ...
+    def __repr__(self) -> builtins.str: ...
+    @staticmethod
+    def from_pb(value: builtins.int) -> Kind:
+        r"""
+        Convert a known protobuf kind. Unknown semantic kinds are rejected.
+        """
+    def to_pb(self) -> builtins.int:
+        r"""
+        Convert to the protobuf kind number.
+        """
+    def __str__(self) -> builtins.str: ...
+
+@typing.final
 class Linear:
     r"""
     Linear function of decision variables.
@@ -10960,6 +10991,20 @@ class Provenance:
         """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __hash__(self) -> builtins.int: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ProvenanceKind:
+    r"""
+    Source constraint family. Additional provenance families may be added.
+    """
+
+    IndicatorConstraint: ProvenanceKind
+    OneHotConstraint: ProvenanceKind
+    Sos1Constraint: ProvenanceKind
+    def __hash__(self) -> builtins.int: ...
+    def __int__(self) -> builtins.int: ...
+    def __eq__(self, other: typing.Any) -> builtins.bool: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -14179,6 +14224,22 @@ class Sos1ConstraintID(ConstraintIDBase):
         """
 
 @typing.final
+class SpecialConstraintKind:
+    r"""
+    Special constraint family selector. Additional families may be added.
+    Handle supported values explicitly and reject all other values.
+    This selects transformations; adapter input is declared by InstanceClass.
+    """
+
+    Indicator: SpecialConstraintKind
+    OneHot: SpecialConstraintKind
+    Sos1: SpecialConstraintKind
+    def __hash__(self) -> builtins.int: ...
+    def __int__(self) -> builtins.int: ...
+    def __eq__(self, other: typing.Any) -> builtins.bool: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class SpecialConstraintPreparation:
     r"""
     Selection for the special-constraint Preparation phase.
@@ -14360,50 +14421,6 @@ class Equality(enum.Enum):
     def __str__(self) -> builtins.str: ...
 
 @typing.final
-class Kind(enum.Enum):
-    r"""
-    Kind of decision variable
-    """
-
-    Binary = ...
-    r"""
-    Binary decision variable (0 or 1)
-    """
-    Integer = ...
-    r"""
-    Integer decision variable
-    """
-    Continuous = ...
-    r"""
-    Continuous decision variable (real-valued)
-    """
-    SemiInteger = ...
-    r"""
-    Semi-integer decision variable (integer in range or zero)
-    """
-    SemiContinuous = ...
-    r"""
-    Semi-continuous decision variable (continuous in range or zero)
-    """
-    FiniteDomain = ...
-    r"""
-    Finite-domain decision variable (one of explicitly enumerated values)
-    """
-
-    def __hash__(self) -> builtins.int: ...
-    @staticmethod
-    def from_pb(value: builtins.int) -> Kind:
-        r"""
-        Convert from Protocol Buffer kind value
-        """
-    def to_pb(self) -> builtins.int:
-        r"""
-        Convert to Protocol Buffer kind value
-        """
-    def __repr__(self) -> builtins.str: ...
-    def __str__(self) -> builtins.str: ...
-
-@typing.final
 class Optimality(enum.Enum):
     r"""
     Optimality status of a solution
@@ -14433,30 +14450,6 @@ class Optimality(enum.Enum):
         """
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
-
-@typing.final
-class ProvenanceKind(enum.Enum):
-    r"""
-    Kind of constraint from which a regular {class}`~ommx.Constraint` was generated.
-
-    See {class}`~ommx.Provenance` for details.
-    """
-
-    IndicatorConstraint = ...
-    r"""
-    The regular constraint was generated from an indicator constraint.
-    """
-    OneHotConstraint = ...
-    r"""
-    The regular constraint was generated from a one-hot constraint.
-    """
-    Sos1Constraint = ...
-    r"""
-    The regular constraint was generated from a SOS1 constraint.
-    """
-
-    def __hash__(self) -> builtins.int: ...
-    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class Relaxation(enum.Enum):
@@ -14512,33 +14505,6 @@ class Sense(enum.Enum):
         """
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
-
-@typing.final
-class SpecialConstraintKind(enum.Enum):
-    r"""
-    Kind of active special constraint in an instance.
-
-    Use these values with {attr}`~ommx.Instance.active_special_constraint_kinds` to
-    inspect an instance and {meth}`~ommx.Instance.lower_special_constraints` to select
-    special constraint families for explicit lowering to regular constraints.
-    This is a transformation selector, not an adapter input declaration or an
-    ``ommx.v2.Feature`` wire-format requirement.
-    """
-
-    Indicator = ...
-    r"""
-    Indicator constraints: binvar = 1 → f(x) <= 0
-    """
-    OneHot = ...
-    r"""
-    One-hot constraints: exactly one of a set of binary variables must be 1
-    """
-    Sos1 = ...
-    r"""
-    SOS1 constraints: at most one of a set of variables can be non-zero
-    """
-
-    def __hash__(self) -> builtins.int: ...
 
 def _run_cli(args: typing.Sequence[builtins.str]) -> builtins.int: ...
 def gc(

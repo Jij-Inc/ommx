@@ -240,7 +240,7 @@ where
     let mut entries: Vec<Bound<'py, PyAny>> = Vec::new();
     for id in ids {
         for (step, p) in store.provenance(id).iter().enumerate() {
-            let (source_kind, source_id) = provenance_parts(p);
+            let (source_kind, source_id) = provenance_parts(p)?;
             let dict = PyDict::new(py);
             dict.set_item(id_col, typed_constraint_id(Into::<u64>::into(id), id_col)?)?;
             dict.set_item("step", step as u64)?;
@@ -393,21 +393,9 @@ pub fn variable_parameters_dataframe<'py>(
     long_format_dataframe(py, entries, &[id_col, "key", "value"])
 }
 
-fn provenance_parts(p: &Provenance) -> (&'static str, crate::constraint_id::AnyConstraintID) {
-    match *p {
-        Provenance::IndicatorConstraint(id) => (
-            "IndicatorConstraint",
-            crate::constraint_id::AnyConstraintID::Indicator(id.into()),
-        ),
-        Provenance::OneHotConstraint(id) => (
-            "OneHotConstraint",
-            crate::constraint_id::AnyConstraintID::OneHot(id.into()),
-        ),
-        Provenance::Sos1Constraint(id) => (
-            "Sos1Constraint",
-            crate::constraint_id::AnyConstraintID::Sos1(id.into()),
-        ),
-    }
+fn provenance_parts(p: &Provenance) -> PyResult<(String, crate::constraint_id::AnyConstraintID)> {
+    let row = crate::Provenance::from(p);
+    Ok((format!("{:?}Constraint", p.kind()), row.original_id()?))
 }
 
 /// Build a long-format DataFrame from pre-built entry dicts.
@@ -729,15 +717,7 @@ pub fn set_equality(dict: &Bound<PyDict>, equality: ommx::Equality) -> PyResult<
 
 /// Set kind column as a string.
 pub fn set_kind(dict: &Bound<PyDict>, kind: ommx::Kind) -> PyResult<()> {
-    let s = match kind {
-        ommx::Kind::Binary => "Binary",
-        ommx::Kind::Integer => "Integer",
-        ommx::Kind::Continuous => "Continuous",
-        ommx::Kind::SemiInteger => "SemiInteger",
-        ommx::Kind::SemiContinuous => "SemiContinuous",
-        ommx::Kind::FiniteDomain => "FiniteDomain",
-    };
-    dict.set_item("kind", s)
+    dict.set_item("kind", format!("{kind:?}"))
 }
 
 /// Set exact finite-domain values, or pandas.NA for interval-domain kinds.

@@ -363,16 +363,6 @@ impl pyo3_stub_gen::PyStubType for AnyConstraintID {
     }
 }
 
-impl From<&ommx::Provenance> for AnyConstraintID {
-    fn from(p: &ommx::Provenance) -> Self {
-        match *p {
-            ommx::Provenance::IndicatorConstraint(id) => Self::Indicator(id.into()),
-            ommx::Provenance::OneHotConstraint(id) => Self::OneHot(id.into()),
-            ommx::Provenance::Sos1Constraint(id) => Self::Sos1(id.into()),
-        }
-    }
-}
-
 macro_rules! any_constraint_id {
     ($id:ident, $variant:ident) => {
         impl From<ommx::$id> for AnyConstraintID {

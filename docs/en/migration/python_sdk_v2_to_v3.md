@@ -1124,3 +1124,18 @@ now return violations instead of signed function values.** Parameters are ignore
 as in variable extraction; duplicate subscripts across families raise `ValueError`.
 
 For signed regular values, use `solution.get_constraint_value(id)` or `row.evaluated_value`. See {meth}`name-based extraction <ommx.Solution.extract_constraints>`.
+
+## Extensible variable and constraint kinds
+
+`Kind`, `SpecialConstraintKind`, and `ProvenanceKind` are immutable value classes
+with known constants. Their type hints no longer describe exhaustive Enums.
+Keep an explicit rejecting fallback when dispatching on these values, even
+when all currently known constants have been handled; `assert_never` cannot
+establish complete support. Comparisons, hashing, integer conversion and
+`Kind.from_pb()` / `to_pb()` remain available. Unknown protobuf kinds are rejected.
+
+Common constraint collections continue to expose `ConstraintIDBase` and
+`ConstraintView`, with precise return types for concrete family IDs. New kinds
+and families do not imply support by an existing adapter or transformation.
+The V3 extension contract covers numeric scalar domains. Non-scalar values
+require a separate design for value storage and evaluation.

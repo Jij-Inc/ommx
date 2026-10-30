@@ -693,3 +693,16 @@ removed = instance.removed_constraints.of_kind("regular")[7]  # RemovedConstrain
 抽出と同様にparametersは無視し、種類をまたぐ添字の重複は`ValueError`にします。
 
 通常制約の符号付き評価値には`solution.get_constraint_value(id)`か`row.evaluated_value`を使います。詳しくは{meth}`名前と添字による取得 <ommx.Solution.extract_constraints>`を参照してください。
+
+## 変数・制約の種類の拡張
+
+`Kind`、`SpecialConstraintKind`、`ProvenanceKind` は、既知の定数を持つ不変な値クラスです。
+型ヒントは全種類を列挙する Enum を表しません。現在の全定数を処理した場合も、
+未対応の値を明示的に拒否する分岐を残してください。`assert_never` では対応の網羅性を保証できません。
+比較・hash・整数への変換と `Kind.from_pb()` / `to_pb()` は引き続き利用できます。
+未知の protobuf kind は拒否します。
+
+共通の制約コレクションは `ConstraintIDBase` と `ConstraintView` を返し、
+具体的な family の ID による取得では具体的な戻り値型を維持します。
+種類や family が追加されても、既存の adapter や変換がその意味に対応するとは限りません。
+V3 の拡張契約は数値スカラーのドメインを対象とし、非スカラー値の格納・評価は別途設計します。

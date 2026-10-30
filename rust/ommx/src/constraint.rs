@@ -105,10 +105,30 @@ impl From<ConstraintID> for u64 {
 /// it is promoted to a regular `Constraint` with a provenance step recording
 /// the original indicator constraint ID.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Provenance {
     IndicatorConstraint(crate::IndicatorConstraintID),
     OneHotConstraint(crate::OneHotConstraintID),
     Sos1Constraint(crate::Sos1ConstraintID),
+}
+
+impl Provenance {
+    /// Source family, including families added in future SDK versions.
+    pub fn kind(&self) -> crate::SpecialConstraintKind {
+        match self {
+            Self::IndicatorConstraint(_) => crate::SpecialConstraintKind::Indicator,
+            Self::OneHotConstraint(_) => crate::SpecialConstraintKind::OneHot,
+            Self::Sos1Constraint(_) => crate::SpecialConstraintKind::Sos1,
+        }
+    }
+    /// Source constraint number. Interpret it together with the source family.
+    pub fn original_id(&self) -> u64 {
+        match self {
+            Self::IndicatorConstraint(id) => id.into_inner(),
+            Self::OneHotConstraint(id) => id.into_inner(),
+            Self::Sos1Constraint(id) => id.into_inner(),
+        }
+    }
 }
 
 /// Constraint context outside the intrinsic mathematical constraint.
