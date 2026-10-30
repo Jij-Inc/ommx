@@ -5,11 +5,8 @@ use std::collections::{BTreeSet, HashMap};
 
 use crate::{ConstraintHost, VariableIDInput};
 
-/// A SOS1 (Special Ordered Set type 1) constraint: at most one variable can be non-zero.
-///
-/// This is a structural constraint — no explicit function is stored.
-/// Unlike OneHotConstraint, SOS1 allows all variables to be zero.
 #[gen_stub_pyclass]
+#[doc = include_str!("docstrings/ommx/Sos1Constraint.md")]
 #[pyclass]
 #[derive(Clone)]
 pub struct Sos1Constraint(pub ommx::Sos1Constraint, pub ommx::ConstraintContext);

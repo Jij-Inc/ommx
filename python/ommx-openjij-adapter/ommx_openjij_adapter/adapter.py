@@ -323,7 +323,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     def decode_to_samples(self, data: oj.Response) -> Samples:
         """
-        Convert `openjij.Response <https://openjij.github.io/OpenJij/reference/openjij/index.html#openjij.Response>`_ to :class:`Samples`
+        Convert `openjij.Response <https://openjij.github.io/OpenJij/reference/openjij/index.html#openjij.Response>`_ to :class:`ommx.Samples`
 
         There is a static method :meth:`decode_to_samples` that does the same thing.
         """

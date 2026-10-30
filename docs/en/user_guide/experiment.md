@@ -389,8 +389,8 @@ OMMX does not store an orphan table in SQLite. Orphans are computed during each 
 ## Cleanup Workflow
 
 Installing the Python SDK also provides the `ommx` command. In a uv project
-that depends on `ommx`, run `uv run ommx --help` or prefix the commands below
-with `uv run`. The Python entry point uses the same Rust CLI as the standalone
+prepared by the [installation guide](../getting_started/install.md), run `uv run --no-sync ommx --help` or prefix
+the commands below with `uv run --no-sync`. The Python entry point uses the same Rust CLI as the standalone
 executable and honors `OMMX_LOCAL_REGISTRY_ROOT`.
 
 Run cleanup commands in report mode first.

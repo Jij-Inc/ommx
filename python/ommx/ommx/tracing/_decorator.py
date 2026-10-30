@@ -12,11 +12,8 @@ from ._render import save_chrome_trace
 from ._result import TraceResult
 
 
-_F = Callable[..., Any]
-
-
 @overload
-def traced(func: _F) -> _F: ...
+def traced(func: Callable[..., Any]) -> Callable[..., Any]: ...
 
 
 @overload
@@ -24,11 +21,11 @@ def traced(
     *,
     name: Optional[str] = ...,
     output: Optional[Union[str, Path]] = ...,
-) -> Callable[[_F], _F]: ...
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
 
 def traced(
-    func: Optional[_F] = None,
+    func: Optional[Callable[..., Any]] = None,
     *,
     name: Optional[str] = None,
     output: Optional[Union[str, Path]] = None,
@@ -85,7 +82,7 @@ def traced(
         except Exception:  # noqa: BLE001 - intentional swallow
             pass
 
-    def _decorator(fn: _F) -> _F:
+    def _decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
         span_name = name if name is not None else fn.__qualname__
 
         if inspect.iscoroutinefunction(fn):

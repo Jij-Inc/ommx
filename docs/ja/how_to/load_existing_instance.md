@@ -101,15 +101,15 @@ instance = artifact.instance
 次のバージョンは別々のものです。
 
 - **SDKのバージョン**：Pythonから呼ぶAPIを定めます。使用する版は[インストール手順](../getting_started/install.md)で確認してください。
-- **Messageのwire schema**：問題や解をシリアライズしたデータの形式です。配布済みデータにある`application/org.ommx.v1.instance`の`v1`は、SDKのメジャーバージョンではありません。対応するスキーマは[Message定義](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/proto)で確認できます。
-- **Artifactの形式**：Messageなどをまとめて受け渡すパッケージの形式です。Python APIとは独立した[Artifact仕様](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/rust/ommx/doc/artifact_design.md)が定めています。
+- **Messageのwire schema**：問題や解をシリアライズしたデータの形式です。配布済みデータにある`application/org.ommx.v1.instance`の`v1`は、SDKのメジャーバージョンではありません。対応するスキーマは[Message定義](https://github.com/Jij-Inc/ommx/tree/main/proto)で確認できます。
+- **Artifactの形式**：Messageなどをまとめて受け渡すパッケージの形式です。Python APIとは独立した[Artifact仕様](https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/doc/artifact_design.md)が定めています。
 
 ## 入手後に進む先
 
 - 名前や説明を整える：{class}`~ommx.Instance`のAPI Referenceにあるメタデータ編集例。
 - MPS入力に対応する外部ツールへ渡す：[InstanceをMPSファイルで出力する](./export_mps.md)。現在のモデルを出力する形式であり、OMMXのラベルや評価用情報のすべては保持されません。
 - 手元の候補を検査する：[既存の問題と候補解を評価する](../tutorial/evaluate_existing_candidate)。
-- 表現を変えて検査する：[Instanceを変換し、結果を確認する](./transform_instance_without_solver.md)。
-- ソルバーへ渡す：[サポートされているOMMX Adapter](../user_guide/supported_ommx_adapters.md)から使うAdapterを選ぶ。
+- 表現を変えて検査する：{meth}`~ommx.Instance.prepare`。
+- ソルバーへ渡す：{doc}`Adapterの一覧と入力契約 </api/adapters>`から使うAdapterを選ぶ。
 
 データに付いた作者・ライセンス・出典などは`instance.authors`、`instance.license`、`instance.annotations`で確認できます。配布元の既知の目的値などは問題についての情報であり、手元の候補の実行可能性や最適性を保証するものではありません。

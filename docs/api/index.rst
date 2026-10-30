@@ -21,6 +21,7 @@ Utilities
    ../autoapi/ommx/cli/index
    ../autoapi/ommx/dataset/index
    ../autoapi/ommx/display/index
+   ../autoapi/ommx/experiment/attachments/index
    ../autoapi/ommx/testing/index
    ../autoapi/ommx/mps/index
    ../autoapi/ommx/qplib/index
@@ -32,6 +33,7 @@ Adapters
 .. toctree::
    :maxdepth: 1
 
+   adapters
    ../autoapi/ommx_python_mip_adapter/index
    ../autoapi/ommx_pyscipopt_adapter/index
    ../autoapi/ommx_highs_adapter/index
