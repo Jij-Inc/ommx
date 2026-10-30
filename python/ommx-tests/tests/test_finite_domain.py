@@ -1,4 +1,5 @@
 import math
+import sys
 
 import pytest
 
@@ -20,6 +21,32 @@ def test_create_finite_domain_variable():
     assert x.bound.lower == 0.1
     assert x.bound.upper == 1.0
     assert x.name == "x"
+
+
+def test_finite_domain_equality_compares_exact_values():
+    variable = DecisionVariable.finite_domain(0, [0.0, 1.0, 2.0], name="x")
+
+    assert not variable.equals_to(DecisionVariable.finite_domain(0, [0.0, 2.0]))
+    assert not variable.equals_to(DecisionVariable.finite_domain(0, [0.0, 0.5, 2.0]))
+    assert variable.equals_to(
+        DecisionVariable.finite_domain(0, [2.0, 0.0, 1.0], name="different label")
+    )
+    assert not variable.equals_to(DecisionVariable.finite_domain(1, [0.0, 1.0, 2.0]))
+
+
+@pytest.mark.parametrize("value", [-sys.float_info.max, sys.float_info.max])
+def test_extreme_finite_domain_members_can_be_evaluated_and_fixed(value):
+    instance = Instance.minimize()
+    variable = instance.new_finite_domain([-sys.float_info.max, sys.float_info.max])
+
+    solution = instance.evaluate({variable.id: value})
+    assert solution.objective == 0.0
+    assert solution.feasible
+    assert not instance.evaluate({variable.id: 0.0}).feasible
+
+    fixed = instance.partial_evaluate({variable.id: value})
+    assert fixed.attached_decision_variable(variable.id).substituted_value == value
+    assert fixed.evaluate({}).feasible
 
 
 @pytest.mark.parametrize(

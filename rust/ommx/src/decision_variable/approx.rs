@@ -17,7 +17,7 @@ impl AbsDiffEq for DecisionVariable {
                         .values()
                         .iter()
                         .zip(rhs.values())
-                        .all(|(lhs, rhs)| (*lhs - *rhs).abs() <= *epsilon);
+                        .all(|(lhs, rhs)| epsilon.approx_eq(*lhs, *rhs));
             }
             (Some(_), None) | (None, Some(_)) => return false,
             (None, None) => {}
@@ -78,6 +78,16 @@ mod tests {
     use super::*;
     use crate::{Bound, DecisionVariable};
     use ::approx::{assert_abs_diff_eq, assert_abs_diff_ne};
+
+    #[test]
+    fn finite_domain_comparison_rejects_overflowing_differences() {
+        let negative = DecisionVariable::new_finite_domain(vec![-f64::MAX]).unwrap();
+        let positive = DecisionVariable::new_finite_domain(vec![f64::MAX]).unwrap();
+        let atol = ATol::new(f64::INFINITY).unwrap();
+        assert!(!negative.abs_diff_eq(&positive, atol));
+        assert!(!positive.abs_diff_eq(&negative, atol));
+        assert!(negative.abs_diff_eq(&negative, atol));
+    }
 
     #[test]
     fn test_equal_rows_are_equal_independent_of_table_key() {

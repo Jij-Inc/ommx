@@ -432,7 +432,7 @@ impl DecisionVariable {
     /// This is different from `__eq__` which creates a Constraint.
     /// Use this method when you want to check if two variables represent the same variable.
     pub fn equals_to(&self, other: &DecisionVariable) -> bool {
-        self.0 == other.0 && self.1.kind() == other.1.kind() && self.1.bound() == other.1.bound()
+        self.0 == other.0 && self.1 == other.1
     }
 
     // =====================

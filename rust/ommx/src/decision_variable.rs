@@ -264,7 +264,7 @@ impl FiniteDomain {
     fn contains(&self, value: f64, atol: ATol) -> bool {
         self.values
             .iter()
-            .any(|possible| (*possible - value).abs() <= *atol)
+            .any(|possible| atol.approx_eq(*possible, value))
     }
 
     fn clipped(&self, bound: Bound) -> Result<Self, DecisionVariableError> {
@@ -285,6 +285,13 @@ enum Domain {
 }
 
 impl Domain {
+    fn contains(&self, value: f64, atol: ATol) -> bool {
+        match self {
+            Self::Bound(bound) => bound.contains(value, atol),
+            Self::FiniteDomain(domain) => domain.contains(value, atol),
+        }
+    }
+
     fn bound(&self) -> Bound {
         match self {
             Self::Bound(bound) => *bound,
@@ -457,7 +464,7 @@ impl DecisionVariable {
             atol,
         };
         ensure_finite_value(id, value)?;
-        if !self.bound().contains(value, atol) {
+        if !self.domain.contains(value, atol) {
             return Err(err());
         }
         match self.kind {
@@ -467,12 +474,7 @@ impl DecisionVariable {
                     return Err(err());
                 }
             }
-            Kind::FiniteDomain => {
-                if !self.finite_domain().unwrap().contains(value, atol) {
-                    return Err(err());
-                }
-            }
-            Kind::Continuous | Kind::SemiContinuous => {}
+            Kind::Continuous | Kind::SemiContinuous | Kind::FiniteDomain => {}
         }
         Ok(())
     }
@@ -1114,6 +1116,48 @@ mod tests {
         assert!(variable
             .check_value_consistency(id, 0.3 + *ATol::default(), ATol::default())
             .is_ok());
+    }
+
+    #[test]
+    fn finite_domain_membership_does_not_depend_on_hull_residuals() {
+        let id = VariableID::from(1);
+        let variable = DecisionVariable::new_finite_domain(vec![-f64::MAX, f64::MAX]).unwrap();
+        for value in [-f64::MAX, f64::MAX] {
+            variable
+                .check_value_consistency(id, value, ATol::default())
+                .unwrap();
+        }
+        assert!(matches!(
+            variable.check_value_consistency(id, 0.0, ATol::default()),
+            Err(DecisionVariableError::SubstitutedValueInconsistent { .. })
+        ));
+        for value in [f64::NAN, f64::NEG_INFINITY, f64::INFINITY] {
+            assert!(matches!(
+                variable.check_value_consistency(id, value, ATol::default()),
+                Err(DecisionVariableError::NonFiniteValue { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn finite_domain_membership_uses_finite_inclusive_tolerance() {
+        let id = VariableID::from(1);
+        let variable = DecisionVariable::new_finite_domain(vec![1.0, 3.0]).unwrap();
+        let atol = ATol::new(0.25).unwrap();
+        for value in [0.75, 1.25, 2.75, 3.25] {
+            variable.check_value_consistency(id, value, atol).unwrap();
+        }
+        for value in [
+            0.75_f64.next_down(),
+            1.25_f64.next_up(),
+            2.75_f64.next_down(),
+            3.25_f64.next_up(),
+        ] {
+            assert!(variable.check_value_consistency(id, value, atol).is_err());
+        }
+
+        let domain = FiniteDomain::new(vec![-f64::MAX]).unwrap();
+        assert!(!domain.contains(f64::MAX, ATol::new(f64::INFINITY).unwrap()));
     }
 
     #[test]
