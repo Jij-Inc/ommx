@@ -76,7 +76,10 @@ jobs:
   push:
     runs-on: ubuntu-22.04
     needs: build
-    if: github.actor != 'dependabot[bot]'
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
     permissions:
       contents: read
       packages: write
