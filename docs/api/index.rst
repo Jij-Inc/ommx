@@ -21,6 +21,7 @@ Utilities
    ../autoapi/ommx/cli/index
    ../autoapi/ommx/dataset/index
    ../autoapi/ommx/display/index
+   ../autoapi/ommx/experiment/attachments/index
    ../autoapi/ommx/testing/index
    ../autoapi/ommx/mps/index
    ../autoapi/ommx/qplib/index

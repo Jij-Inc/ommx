@@ -14,8 +14,8 @@ requested and active, and therefore actually lowered. Empty when no
 requested kind was active.
 
 ``atol`` controls zero-sensitive interval bounds used while lowering
-Indicator constraints. If omitted, {attr}`~ommx.DEFAULT_ATOL` is used. This
-aligns zero-sensitive Function body evaluation; lowering itself assumes
+Indicator constraints. If omitted, the default from {func}`~ommx.get_default_atol`
+is used. This aligns zero-sensitive Function body evaluation; lowering itself assumes
 exact discrete variable values.
 
 Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. The

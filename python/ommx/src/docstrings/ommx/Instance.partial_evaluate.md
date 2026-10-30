@@ -7,7 +7,7 @@ the remaining variables under chosen conditions.
 
 `state` accepts a {class}`~ommx.State`, an ID-to-value mapping, or an iterable of
 `(variable_id, value)` pairs. `atol` is the absolute tolerance; `None` uses
-{attr}`~ommx.DEFAULT_ATOL`.
+the default from {func}`~ommx.get_default_atol`.
 
 **A fixed subproblem is not necessarily equivalent to the original**
 

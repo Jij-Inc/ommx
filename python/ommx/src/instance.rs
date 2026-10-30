@@ -1559,7 +1559,7 @@ impl Instance {
 
     /// Format a function using this instance's decision-variable labels.
     ///
-    /// The plain {func}`repr` / {func}`str` representation of {class}`~ommx.Function`
+    /// The plain {func}`repr` / {class}`str` representation of {class}`~ommx.Function`
     /// remains context-free and renders raw ``x<id>`` symbols such as ``x1``.
     /// This method resolves names and subscripts from this instance without
     /// changing the expression or its value.
@@ -2540,7 +2540,7 @@ impl Instance {
     /// The instance is not mutated on error.
     ///
     /// ``atol`` controls which Function-body values the bound evaluator treats
-    /// as zero. If omitted, :attr:`DEFAULT_ATOL` is used. Big-M algebra assumes
+    /// as zero. If omitted, the default from {func}`~ommx.get_default_atol` is used. Big-M algebra assumes
     /// the indicator variable is exactly binary; this does not canonicalize an
     /// approximate solver value near 0 or 1.
     ///
@@ -2605,7 +2605,7 @@ impl Instance {
     /// emitted sides, no mutation happens and the instance is left untouched.
     ///
     /// ``atol`` has the same Function-body meaning as in the single-constraint
-    /// conversion. If omitted, :attr:`DEFAULT_ATOL` is used.
+    /// conversion. If omitted, the default from {func}`~ommx.get_default_atol` is used.
     #[pyo3(signature = (*, atol=None))]
     pub fn convert_all_indicators_to_constraints(
         &mut self,
@@ -2911,7 +2911,7 @@ impl Instance {
     /// infeasible.
     /// ``atol`` controls zero-sensitive interval evaluation and the inclusive
     /// inequality feasibility threshold and must be less than ``0.5``. If
-    /// omitted, :attr:`DEFAULT_ATOL` is used.
+    /// omitted, the default from {func}`~ommx.get_default_atol` is used.
     #[pyo3(signature = (constraint_id, max_integer_range, *, atol=None))]
     pub(crate) fn convert_inequality_to_equality_with_integer_slack(
         &mut self,
@@ -2949,7 +2949,8 @@ impl Instance {
     ///
     /// ``atol`` controls zero-sensitive interval bounds and the inclusive
     /// inequality feasibility threshold used to select the slack coefficient;
-    /// it must be less than ``0.5``. If omitted, :attr:`DEFAULT_ATOL` is used.
+    /// it must be less than ``0.5``. If omitted, the default from
+    /// {func}`~ommx.get_default_atol` is used.
     ///
     /// # Examples
     ///

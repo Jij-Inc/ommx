@@ -33,8 +33,8 @@ impl SpecialConstraintPreparation {
     /// reasons and provenance, and failure semantics.
     ///
     /// ``atol`` is used when Indicator Function bodies require zero-sensitive
-    /// interval evaluation. If omitted, :attr:`DEFAULT_ATOL` is stored in the
-    /// preparation step.
+    /// interval evaluation. If omitted, the default from
+    /// {func}`~ommx.get_default_atol` is stored in the preparation step.
     #[staticmethod]
     #[pyo3(signature = (*, kinds, atol=None))]
     pub fn lower_special_constraints(

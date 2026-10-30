@@ -589,7 +589,7 @@ class ArtifactDraft:
         r"""
         Create a new artifact draft with an explicit image name. The
         artifact is published into the user's persistent SQLite Local
-        Registry on `commit()`; call {meth}`Artifact.save(path)` on the
+        Registry on `commit()`; call {meth}`Artifact.save(path) <ommx.artifact.Artifact.save>` on the
         returned handle if you also want a `.ommx` archive file for
         sharing.
 
@@ -642,7 +642,7 @@ class ArtifactDraft:
         are not intended for cross-timezone sharing; pick an explicit
         name via `ArtifactDraft.new(...)` if absolute time matters.
 
-        Call {meth}`Artifact.save(path)` on the returned handle to also
+        Call {meth}`Artifact.save(path) <ommx.artifact.Artifact.save>` on the returned handle to also
         write a `.ommx` archive file for sharing.
 
         >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
@@ -2871,7 +2871,7 @@ class Experiment:
         Load a committed Experiment Artifact by image reference.
 
         If the image is not found in the default Local Registry, OMMX tries to
-        pull it from the remote registry, matching {meth}`Artifact.load`.
+        pull it from the remote registry, matching {meth}`~ommx.artifact.Artifact.load`.
         The loaded artifact must contain an Experiment config. Use
         `Experiment(...)` to create a new unsealed experiment.
 
@@ -2899,7 +2899,7 @@ class Experiment:
         `.ommx` OCI archive file (or an OCI Image Layout directory).
 
         The archive is imported into the default Local Registry, matching
-        {meth}`Artifact.import_archive`, and then interpreted as an
+        {meth}`~ommx.artifact.Artifact.import_archive`, and then interpreted as an
         Experiment. The imported artifact must contain an Experiment config.
         """
     @staticmethod
@@ -5295,8 +5295,8 @@ class Instance:
         requested kind was active.
 
         ``atol`` controls zero-sensitive interval bounds used while lowering
-        Indicator constraints. If omitted, {attr}`~ommx.DEFAULT_ATOL` is used. This
-        aligns zero-sensitive Function body evaluation; lowering itself assumes
+        Indicator constraints. If omitted, the default from {func}`~ommx.get_default_atol`
+        is used. This aligns zero-sensitive Function body evaluation; lowering itself assumes
         exact discrete variable values.
 
         Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. The
@@ -5422,7 +5422,7 @@ class Instance:
         r"""
         Format a function using this instance's decision-variable labels.
 
-        The plain {func}`repr` / {func}`str` representation of {class}`~ommx.Function`
+        The plain {func}`repr` / {class}`str` representation of {class}`~ommx.Function`
         remains context-free and renders raw ``x<id>`` symbols such as ``x1``.
         This method resolves names and subscripts from this instance without
         changing the expression or its value.
@@ -5974,7 +5974,8 @@ class Instance:
 
         ```
 
-        `atol` defaults to {attr}`~ommx.DEFAULT_ATOL`. Missing used IDs, unknown IDs,
+        `atol` defaults to the value returned by {func}`~ommx.get_default_atol`.
+        Missing used IDs, unknown IDs,
         non-finite supplied values, and inconsistent fixed or dependent assertions raise
         `ValueError`. Invalid finite values can remain in the populated state: use
         {meth}`~ommx.Instance.evaluate` to inspect kind, bound, and constraint feasibility.
@@ -6013,7 +6014,7 @@ class Instance:
 
         `state` accepts a {class}`~ommx.State`, an ID-to-value mapping, or an iterable of
         `(variable_id, value)` pairs. `atol` is the absolute tolerance; `None` uses
-        {attr}`~ommx.DEFAULT_ATOL`.
+        the default from {func}`~ommx.get_default_atol`.
 
         **A fixed subproblem is not necessarily equivalent to the original**
 
@@ -6520,7 +6521,7 @@ class Instance:
         The instance is not mutated on error.
 
         ``atol`` controls which Function-body values the bound evaluator treats
-        as zero. If omitted, :attr:`DEFAULT_ATOL` is used. Big-M algebra assumes
+        as zero. If omitted, the default from {func}`~ommx.get_default_atol` is used. Big-M algebra assumes
         the indicator variable is exactly binary; this does not canonicalize an
         approximate solver value near 0 or 1.
 
@@ -6574,7 +6575,7 @@ class Instance:
         emitted sides, no mutation happens and the instance is left untouched.
 
         ``atol`` has the same Function-body meaning as in the single-constraint
-        conversion. If omitted, :attr:`DEFAULT_ATOL` is used.
+        conversion. If omitted, the default from {func}`~ommx.get_default_atol` is used.
         """
     def log_encode(
         self,
@@ -6815,7 +6816,7 @@ class Instance:
         infeasible.
         ``atol`` controls zero-sensitive interval evaluation and the inclusive
         inequality feasibility threshold and must be less than ``0.5``. If
-        omitted, :attr:`DEFAULT_ATOL` is used.
+        omitted, the default from {func}`~ommx.get_default_atol` is used.
         """
     def add_integer_slack_to_inequality(
         self,
@@ -6842,7 +6843,8 @@ class Instance:
 
         ``atol`` controls zero-sensitive interval bounds and the inclusive
         inequality feasibility threshold used to select the slack coefficient;
-        it must be less than ``0.5``. If omitted, :attr:`DEFAULT_ATOL` is used.
+        it must be less than ``0.5``. If omitted, the default from
+        {func}`~ommx.get_default_atol` is used.
 
         # Examples
 
@@ -9568,7 +9570,7 @@ class ParametricInstance:
         r"""
         Format a function using this parametric instance's decision-variable and parameter labels.
 
-        The plain {func}`repr` / {func}`str` representation of {class}`~ommx.Function`
+        The plain {func}`repr` / {class}`str` representation of {class}`~ommx.Function`
         remains context-free and renders raw ``x<id>`` symbols such as ``x1``.
         This method resolves both variable and parameter labels before any
         parameter values have been supplied.
@@ -13438,8 +13440,8 @@ class SpecialConstraintPreparation:
         reasons and provenance, and failure semantics.
 
         ``atol`` is used when Indicator Function bodies require zero-sensitive
-        interval evaluation. If omitted, :attr:`DEFAULT_ATOL` is stored in the
-        preparation step.
+        interval evaluation. If omitted, the default from
+        {func}`~ommx.get_default_atol` is stored in the preparation step.
         """
 
 @typing.final

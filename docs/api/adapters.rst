@@ -52,6 +52,15 @@ Settings such as penalty weights, tolerances, and time or sample limits remain
 application choices. Diagnostic and initial-state support also differ by
 Adapter; consult the concrete package Reference.
 
+Collecting diagnostics
+----------------------
+
+.. py:class:: ommx.adapter.DiagnosticCollector()
+
+   A collector implementing :class:`ommx.adapter.DiagnosticsSink`.
+   Pass it as an Adapter's ``diagnostics`` argument to retain reports in
+   emission order. The ``diagnostics`` property returns the collected reports.
+
 Integrations maintained in separate repositories
 ------------------------------------------------
 

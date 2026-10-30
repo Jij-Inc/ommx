@@ -1170,7 +1170,7 @@ for rendering a function with decision-variable and parameter modeling labels.
 The context-free {class}`~ommx.Function` text representation remains raw-ID
 based.
 
-Calling {func}`str` / {func}`repr` on {class}`~ommx.Instance` or
+Calling {class}`str` / {func}`repr` on {class}`~ommx.Instance` or
 {class}`~ommx.ParametricInstance` now prints a compact summary with
 context-aware objective, constraint, and named-function expressions. This makes
 `print(instance)` useful for checking that encoded IDs still correspond to the
@@ -1287,7 +1287,7 @@ See [Adapter-specific Diagnostics](../user_guide/adapter_diagnostics.md) for the
 
 The old unversioned `to_bytes()` / `from_bytes(...)` methods on these top-level roots are removed. Replace them with `to_v1_bytes()` / `from_v1_bytes(...)` when you need the legacy v1 wire format, or with the v2 methods for normalized v2 payloads.
 
-The v1-only DTOs {class}`~ommx.State`, {class}`~ommx.Samples`, and {class}`~ommx.Parameters` also use `to_v1_bytes()` / `from_v1_bytes(...)` so Python byte APIs always name the protobuf version they target.
+The v1-only DTOs {class}`~ommx.State`, {class}`~ommx.Samples`, and `Parameters` also use `to_v1_bytes()` / `from_v1_bytes(...)` so Python byte APIs always name the protobuf version they target.
 
 Artifact and Experiment solve payloads now store these top-level roots as `ommx.v2` payloads, while still reading existing `ommx.v1` payload layers for older Artifacts.
 
@@ -1610,7 +1610,7 @@ Bytes serialization is removed from the following component-level types:
 - {class}`~ommx.NamedFunction`, {class}`~ommx.EvaluatedNamedFunction`, {class}`~ommx.SampledNamedFunction`
 - {class}`~ommx.DecisionVariable`, {class}`~ommx.EvaluatedDecisionVariable`, {class}`~ommx.SampledDecisionVariable`
 
-These methods originally existed to ferry values across the Python ↔ Rust boundary back when the Python SDK had its own protobuf-based wrapper layer and had to serialize on every hop. With the v3 transition to direct PyO3 re-exports the boundary disappears, so element-level bytes round-trips no longer serve a purpose, and keeping them aligned with the label/context storage redesign would only add maintenance cost. Versioned bytes APIs remain available on the container types ({class}`~ommx.Instance`, {class}`~ommx.ParametricInstance`, {class}`~ommx.Solution`, {class}`~ommx.SampleSet`) and on the cross-evaluate DTOs ({class}`~ommx.State`, {class}`~ommx.Samples`, {class}`~ommx.Parameters`) — use `to_v1_bytes` / `from_v1_bytes` or `to_v2_bytes` / `from_v2_bytes` where available when you need to persist or exchange data on disk or over the wire.
+These methods originally existed to ferry values across the Python ↔ Rust boundary back when the Python SDK had its own protobuf-based wrapper layer and had to serialize on every hop. With the v3 transition to direct PyO3 re-exports the boundary disappears, so element-level bytes round-trips no longer serve a purpose, and keeping them aligned with the label/context storage redesign would only add maintenance cost. Versioned bytes APIs remain available on the container types ({class}`~ommx.Instance`, {class}`~ommx.ParametricInstance`, {class}`~ommx.Solution`, {class}`~ommx.SampleSet`) and on the cross-evaluate DTOs ({class}`~ommx.State`, {class}`~ommx.Samples`, `Parameters`) — use `to_v1_bytes` / `from_v1_bytes` or `to_v2_bytes` / `from_v2_bytes` where available when you need to persist or exchange data on disk or over the wire.
 
 ### 🆕 Write-through label/context wrappers: `AttachedConstraint` / `AttachedDecisionVariable` ([#849](https://github.com/Jij-Inc/ommx/pull/849), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#852](https://github.com/Jij-Inc/ommx/pull/852))
 

@@ -453,7 +453,7 @@ impl ParametricInstance {
 
     /// Format a function using this parametric instance's decision-variable and parameter labels.
     ///
-    /// The plain {func}`repr` / {func}`str` representation of {class}`~ommx.Function`
+    /// The plain {func}`repr` / {class}`str` representation of {class}`~ommx.Function`
     /// remains context-free and renders raw ``x<id>`` symbols such as ``x1``.
     /// This method resolves both variable and parameter labels before any
     /// parameter values have been supplied.

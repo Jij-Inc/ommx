@@ -61,6 +61,26 @@ exclude_patterns = [
 # spurious warnings.
 suppress_warnings = ["autoapi.python_import_resolution"]
 
+# Both language builds use -W, so unresolved cross-references must be warnings.
+nitpicky = True
+
+# Exact external types without published Python-domain inventory entries.
+# Keep OMMX references checked; do not add package-wide ignore patterns.
+nitpick_ignore = [
+    # HiGHS uses non-Sphinx documentation for its Python interface.
+    ("py:class", "highspy.Highs"),
+    # Python-MIP's inventory covers Model/LinExpr but not its Solver base class.
+    ("py:class", "mip.Solver"),
+    # OpenJij's published Book inventory does not contain the Response API.
+    ("py:class", "openjij.Response"),
+    # OpenTelemetry documents its SDK, but not these generated protobuf classes.
+    (
+        "py:class",
+        "opentelemetry.proto.collector.trace.v1.trace_service_pb2.ExportTraceServiceRequest",
+    ),
+    ("py:class", "opentelemetry.proto.trace.v1.trace_pb2.Span"),
+]
+
 # -- MyST / myst-nb settings ------------------------------------------------
 
 myst_enable_extensions = ["dollarmath"]
@@ -110,7 +130,7 @@ autoapi_ignore = [
     "**/conftest.py",
     "**/ommx/v1/**",
     "**/ommx/artifact/**",
-    "**/ommx/experiment/**",
+    "**/ommx/experiment/__init__.py",
     "**/ommx/_ommx_rust/**",
     "**/.pyodide_build/**",
     "**/node_modules/pyodide/**",
@@ -125,4 +145,7 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable", None),
     "pandas": ("https://pandas.pydata.org/docs", None),
     "opentelemetry": ("https://opentelemetry-python.readthedocs.io/en/latest", None),
+    "ipython": ("https://ipython.readthedocs.io/en/stable", None),
+    "pyscipopt": ("https://pyscipopt.readthedocs.io/en/stable", None),
+    "mip": ("https://docs.python-mip.com/en/latest", None),
 }

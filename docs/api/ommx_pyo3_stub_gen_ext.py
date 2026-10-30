@@ -2,12 +2,18 @@
 
 import ast
 import re
-from functools import lru_cache
+from contextlib import contextmanager
+from functools import lru_cache, wraps
 from pathlib import Path
 
 import pyo3_stub_gen_ext as generated_extension
 from docutils import nodes
-from sphinx.addnodes import desc_parameter, desc_parameterlist, desc_sig_operator
+from sphinx.addnodes import (
+    desc_parameter,
+    desc_parameterlist,
+    desc_sig_operator,
+    pending_xref,
+)
 
 
 _ORIGINAL_HOOKS_ATTRIBUTE = "_ommx_pyo3_stub_gen_ext_original_hooks"
@@ -33,6 +39,178 @@ _STUB_PATH = (
     / "_ommx_rust"
     / "__init__.pyi"
 )
+
+_REFERENCE_HOOKS_ATTRIBUTE = "_ommx_pyo3_stub_gen_ext_reference_hooks"
+_ITEM_BUILDERS = (
+    "_build_class",
+    "_build_function",
+    "_build_type_alias",
+    "_build_variable",
+)
+_DIRECTIVES = (
+    "Pyo3APIDirective",
+    "Pyo3APIPackageDirective",
+    "Pyo3APISummaryDirective",
+)
+if not hasattr(generated_extension, _REFERENCE_HOOKS_ATTRIBUTE):
+    setattr(
+        generated_extension,
+        _REFERENCE_HOOKS_ATTRIBUTE,
+        {
+            **{name: getattr(generated_extension, name) for name in _ITEM_BUILDERS},
+            **{name: getattr(generated_extension, name).run for name in _DIRECTIVES},
+            "_build_type_expr": generated_extension._build_type_expr,
+            "_register_module": generated_extension._register_module,
+        },
+    )
+_reference_hooks = getattr(generated_extension, _REFERENCE_HOOKS_ATTRIBUTE)
+
+
+@contextmanager
+def _reference_context(env, module_name, class_name=None):
+    saved = dict(env.ref_context)
+    env.ref_context["py:module"] = module_name
+    env.ref_context["py:class"] = class_name
+    try:
+        yield
+    finally:
+        env.ref_context.clear()
+        env.ref_context.update(saved)
+
+
+def _with_reference_context(rendered, module_name, class_name=None):
+    """Supply the owner context normally set by Python-domain directives."""
+    for root in rendered:
+        for reference in root.findall(pending_xref):
+            if reference.get("refdomain") != "py":
+                continue
+            if not reference.get("py:module"):
+                reference["py:module"] = module_name
+            if class_name and not reference.get("py:class"):
+                reference["py:class"] = class_name
+    return rendered
+
+
+def _item_builder_with_context(name):
+    original = _reference_hooks[name]
+
+    @wraps(original)
+    def build(env, item, module_name):
+        class_name = item["name"] if name == "_build_class" else None
+        with _reference_context(env, module_name, class_name):
+            return _with_reference_context(
+                original(env, item, module_name), module_name, class_name
+            )
+
+    return build
+
+
+def _register_module(env, module_name, doc_module):
+    _reference_hooks["_register_module"](env, module_name, doc_module)
+    domain = env.get_domain("py")
+    node_id = f"module-{module_name}"
+    domain.note_module(
+        module_name,
+        node_id,
+        generated_extension._extract_first_line_doc(doc_module.get("doc", "")),
+        "",
+        False,
+    )
+    # note_module populates the module index, but py:mod resolves via objects.
+    domain.note_object(module_name, "module", node_id, location=env.docname)
+    # A package directive renders multiple module docstrings in one run.
+    # Its enclosing context manager restores the caller's context afterwards.
+    env.ref_context["py:module"] = module_name
+    env.ref_context["py:class"] = None
+
+
+def _module_directive_with_context(name):
+    original = _reference_hooks[name]
+
+    @wraps(original)
+    def run(directive):
+        module_name = directive.arguments[0]
+        with _reference_context(directive.env, module_name):
+            rendered = _with_reference_context(original(directive), module_name)
+        ids = {
+            node_id
+            for root in rendered
+            for node in root.findall(nodes.Element)
+            for node_id in node.get("ids", [])
+        }
+        for registered_name, module in directive.env.get_domain("py").modules.items():
+            if registered_name != module_name and not (
+                name == "Pyo3APIPackageDirective"
+                and registered_name.startswith(f"{module_name}.")
+            ):
+                continue
+            if module.docname == directive.env.docname and module.node_id not in ids:
+                rendered.insert(0, nodes.target(ids=[module.node_id]))
+                ids.add(module.node_id)
+        return rendered
+
+    return run
+
+
+@lru_cache(maxsize=1)
+def _binding_reexports():
+    """Read actual public aliases without importing the compiled extension."""
+    package = _STUB_PATH.parent.parent
+    exports = {}
+    for module, source in (
+        ("ommx", package / "__init__.py"),
+        ("ommx.artifact", package / "artifact/__init__.py"),
+        ("ommx.experiment", package / "experiment/__init__.py"),
+        ("ommx.adapter", package / "adapter.py"),
+    ):
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom) and node.module == "ommx._ommx_rust":
+                for alias in node.names:
+                    exports[f"ommx._ommx_rust.{alias.name}"] = (
+                        f"{module}.{alias.asname or alias.name}"
+                    )
+    return exports
+
+
+@lru_cache(maxsize=1)
+def _stub_type_aliases():
+    tree = ast.parse(_STUB_PATH.read_text(encoding="utf-8"))
+    return {
+        f"ommx._ommx_rust.{node.target.id}": node.value
+        for node in tree.body
+        if isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+        and isinstance(node.annotation, ast.Name)
+        and node.annotation.id == "TypeAlias"
+    }
+
+
+def _alias_type_expression(expression):
+    """Expand a stub-only alias while retaining links to its constituent types."""
+    result = {"display": ast.unparse(expression), "link_target": None, "children": []}
+    if isinstance(expression, ast.BinOp) and isinstance(expression.op, ast.BitOr):
+        result["children"] = [
+            _alias_type_expression(expression.left),
+            _alias_type_expression(expression.right),
+        ]
+    elif isinstance(expression, ast.Name):
+        result["link_target"] = {
+            "fqn": f"ommx._ommx_rust.{expression.id}",
+            "kind": "Class",
+        }
+    return result
+
+
+def _build_type_expr(type_expr):
+    target = type_expr.get("link_target")
+    if target:
+        public_name = _binding_reexports().get(target["fqn"])
+        if public_name:
+            type_expr = {**type_expr, "link_target": {**target, "fqn": public_name}}
+        elif target["fqn"] in _stub_type_aliases():
+            type_expr = _alias_type_expression(_stub_type_aliases()[target["fqn"]])
+    return _reference_hooks["_build_type_expr"](type_expr)
 
 
 def _callable_parameters(node: ast.FunctionDef | ast.AsyncFunctionDef):
@@ -237,4 +415,10 @@ def _parse_myst(markdown_text: str, env=None):
 def setup(app):
     generated_extension._parse_myst = _parse_myst
     generated_extension._build_callable_signatures = _build_callable_signatures
-    return {"version": "0.1", "parallel_read_safe": True}
+    generated_extension._build_type_expr = _build_type_expr
+    generated_extension._register_module = _register_module
+    for name in _ITEM_BUILDERS:
+        setattr(generated_extension, name, _item_builder_with_context(name))
+    for name in _DIRECTIVES:
+        getattr(generated_extension, name).run = _module_directive_with_context(name)
+    return {"version": "0.1", "env_version": 1, "parallel_read_safe": True}

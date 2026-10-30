@@ -1103,7 +1103,7 @@ instance.unary_encode({0})
 {class}`~ommx.Function` の text 表現は raw ID ベースのままです。
 
 {class}`~ommx.Instance` と {class}`~ommx.ParametricInstance` に対する
-{func}`str` / {func}`repr` は、objective・constraint・named function の式を
+{class}`str` / {func}`repr` は、objective・constraint・named function の式を
 文脈付きで表示する compact summary を返すようになりました。これにより
 `print(instance)` で、upstream の modeling tool から来た modeling label と
 encoding 後の ID の対応を確認しやすくなります。
@@ -1219,7 +1219,7 @@ direct solve と Experiment 経由の workflow については [Adapter 固有 d
 
 これらの top-level root にあった version を明示しない `to_bytes()` / `from_bytes(...)` は削除されました。legacy な v1 wire format が必要な場合は `to_v1_bytes()` / `from_v1_bytes(...)` に、新しい正規化済み v2 payload が必要な場合は v2 のメソッドに置き換えてください。
 
-v1 専用 DTO である {class}`~ommx.State`、{class}`~ommx.Samples`、{class}`~ommx.Parameters` も `to_v1_bytes()` / `from_v1_bytes(...)` を使うようにし、Python の bytes API は対象とする protobuf version を常に名前で示す形に揃えました。
+v1 専用 DTO である {class}`~ommx.State`、{class}`~ommx.Samples`、`Parameters` も `to_v1_bytes()` / `from_v1_bytes(...)` を使うようにし、Python の bytes API は対象とする protobuf version を常に名前で示す形に揃えました。
 
 Artifact と Experiment の solve payload は、これらの top-level root を `ommx.v2` payload として保存するようになりました。一方で、既存 Artifact の `ommx.v1` payload layer は引き続き読み込めます。
 
@@ -1542,7 +1542,7 @@ df = solution.constraints_df(include=("label", "parameters", "removed_reason"))
 - {class}`~ommx.NamedFunction`, {class}`~ommx.EvaluatedNamedFunction`, {class}`~ommx.SampledNamedFunction`
 - {class}`~ommx.DecisionVariable`, {class}`~ommx.EvaluatedDecisionVariable`, {class}`~ommx.SampledDecisionVariable`
 
-これらのメソッドは元々、Python SDK が独自の protobuf ベースのラッパー層を持っていた時代に Python ↔ Rust 境界を跨ぐたびにシリアライズが必要だったために用意されていたものでした。v3 で全型を PyO3 から直接再エクスポートする方針に切り替わったことでこの境界自体が消え、要素単位のバイト列ラウンドトリップは役目を終えています。label/context storage の整理に合わせて維持し続けるコストも見合わなくなったため、ここで廃止します。永続化やプロセス間でのデータ交換が必要な場合は、これまで通りコンテナ型（{class}`~ommx.Instance` / {class}`~ommx.ParametricInstance` / {class}`~ommx.Solution` / {class}`~ommx.SampleSet`）と evaluate 用の DTO（{class}`~ommx.State` / {class}`~ommx.Samples` / {class}`~ommx.Parameters`）の versioned bytes API を使ってください。利用できる型では `to_v1_bytes` / `from_v1_bytes` または `to_v2_bytes` / `from_v2_bytes` を使います。
+これらのメソッドは元々、Python SDK が独自の protobuf ベースのラッパー層を持っていた時代に Python ↔ Rust 境界を跨ぐたびにシリアライズが必要だったために用意されていたものでした。v3 で全型を PyO3 から直接再エクスポートする方針に切り替わったことでこの境界自体が消え、要素単位のバイト列ラウンドトリップは役目を終えています。label/context storage の整理に合わせて維持し続けるコストも見合わなくなったため、ここで廃止します。永続化やプロセス間でのデータ交換が必要な場合は、これまで通りコンテナ型（{class}`~ommx.Instance` / {class}`~ommx.ParametricInstance` / {class}`~ommx.Solution` / {class}`~ommx.SampleSet`）と evaluate 用の DTO（{class}`~ommx.State` / {class}`~ommx.Samples` / `Parameters`）の versioned bytes API を使ってください。利用できる型では `to_v1_bytes` / `from_v1_bytes` または `to_v2_bytes` / `from_v2_bytes` を使います。
 
 ### 🆕 label/context 書き込みスルーラッパー: `AttachedConstraint` / `AttachedDecisionVariable` ([#849](https://github.com/Jij-Inc/ommx/pull/849), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#852](https://github.com/Jij-Inc/ommx/pull/852))
 

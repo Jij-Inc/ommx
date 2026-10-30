@@ -14,7 +14,7 @@ from opentelemetry.proto.trace.v1.trace_pb2 import Span as ProtoSpan
 from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
 
 if TYPE_CHECKING:  # pragma: no cover - type hints only
-    from ._result import TraceResult
+    from ommx.tracing import TraceResult
 
 
 # ---------------------------------------------------------------------------

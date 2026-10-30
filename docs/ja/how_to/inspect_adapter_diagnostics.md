@@ -121,7 +121,7 @@ print(analysis.termination_result)
 
 直接取得は、OMMX Solution への decode が失敗する場合にも有用です。PySCIPOpt Adapter と
 HiGHS Adapter は decode の前に termination report を記録するため、
-{exc}`~ommx.adapter.InfeasibleDetected` や {exc}`~ommx.adapter.UnboundedDetected` などの
+{class}`~ommx.InfeasibleDetected` や {exc}`~ommx.adapter.UnboundedDetected` などの
 adapter exception が発生しても、collector には solver の最終 status や bound が残ります。
 
 ```python
