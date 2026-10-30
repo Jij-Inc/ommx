@@ -174,7 +174,7 @@ sense in the HiGHS model.
 
 Use `OMMXHighsAdapter.solve(instance)` for model construction, solving, and
 solution recovery, or call `adapter.solver_input.run()` to solve a constructed
-model. See the [adapter tutorial](../tutorial/solve_with_ommx_adapter.md).
+model. See the {class}`HiGHS Adapter Reference <ommx_highs_adapter.OMMXHighsAdapter>` for a complete example.
 
 When assembling long linear objectives and constraints, the adapter now adds
 terms without repeatedly copying the accumulated expression.

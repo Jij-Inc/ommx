@@ -67,7 +67,7 @@ main:
 uv sync --locked --package ommx-pyscipopt-adapter --no-default-groups --inexact
 ```
 
-Start with [Solve with an OMMX Adapter](../tutorial/solve_with_ommx_adapter.md). The {class}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter` Reference contains complete examples of native special constraints and explicit preparation followed by solving.
+The {class}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter` Reference contains complete examples of a knapsack model and result analysis, native special constraints, and explicit preparation followed by solving.
 
 (install-highs-adapter)=
 ### HiGHS Adapter
@@ -84,7 +84,7 @@ main:
 uv sync --locked --package ommx-highs-adapter --no-default-groups --inexact
 ```
 
-The {class}`~ommx_highs_adapter.OMMXHighsAdapter` Reference describes its inputs and execution. To [compare adapters](../tutorial/switching_adapters.md), install both HiGHS and PySCIPOpt, then add matplotlib as described below.
+The {class}`~ommx_highs_adapter.OMMXHighsAdapter` Reference includes a complete example of preparing special constraints and solving the resulting model. It constructs its own input and needs only HiGHS and the SDK. To [compare adapters](../tutorial/switching_adapters.md), install both HiGHS and PySCIPOpt, then add matplotlib as described below.
 
 (install-openjij-adapter)=
 ### OpenJij Adapter
@@ -101,7 +101,7 @@ main:
 uv sync --locked --package ommx-openjij-adapter --no-default-groups --inexact
 ```
 
-This also installs OpenJij itself. Other adapters and solver license setup are unnecessary. See the {mod}`~ommx_openjij_adapter` Reference for sampling APIs. The optional [TSP Notebook](../tutorial/tsp_sampling_with_openjij_adapter) uses matplotlib to draw routes.
+This also installs OpenJij itself. Other adapters and solver license setup are unnecessary. The {class}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter` Reference contains a small example from choosing penalty weights to selecting a returned candidate. The optional [TSP Notebook](../tutorial/tsp_sampling_with_openjij_adapter) uses matplotlib to draw routes.
 
 ## 3. Add Notebook and plotting tools when needed
 

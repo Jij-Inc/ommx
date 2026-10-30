@@ -419,8 +419,70 @@ class OMMXHighsAdapter(SolverAdapter):
     """
     OMMX Adapter for HiGHS solver.
 
-    This adapter translates OMMX optimization problems (ommx.Instance) into HiGHS-compatible
-    formats and converts HiGHS solutions back to OMMX format (ommx.Solution).
+    This adapter encodes linear OMMX problems for HiGHS and returns an evaluated
+    :class:`ommx.Solution`. Install ``ommx-highs-adapter`` alongside a compatible
+    OMMX SDK to run these examples. :attr:`INPUT_CLASS` describes exact inputs;
+    :meth:`solve` prepares an isolated copy with the recommended policy before
+    solving. Constructors and :meth:`solve_without_preparation` instead require
+    an already applicable input.
+
+    **Solve a linear mixed-integer problem**
+
+    >>> from ommx_highs_adapter import OMMXHighsAdapter
+    >>> from ommx import Instance, Solution
+    >>> instance = Instance.maximize()
+    >>> x = instance.new_binary("x")
+    >>> y = instance.new_integer("y", lower=0, upper=10)
+    >>> instance.objective = 2 * x + 3 * y
+    >>> _ = instance.add_constraint(x + y <= 5)
+    >>> solution = OMMXHighsAdapter.solve(instance)
+    >>> assert solution.feasible
+    >>> assert solution.optimality == Solution.OPTIMAL
+    >>> assert abs(solution.objective - 15.0) < 1e-6
+    >>> assert solution.state.entries == {x.id: 0.0, y.id: 5.0}
+
+    The objective property describes the returned candidate; it is not by
+    itself a guarantee of optimality. :class:`ommx.Solution` explains how to
+    extract and interpret evaluated values.
+
+    **Prepare Indicator and SOS1 constraints without changing the source**
+
+    HiGHS input through this Adapter has only regular linear constraints.
+    The following model has an Indicator requiring ``option_a + option_b <= 1``
+    when ``enabled`` is one, and an SOS1 allowing at most one of ``option_b``
+    and ``option_c`` to be nonzero. The easy solve path lowers both on its copy.
+    This example is self-contained; it uses the same model that
+    :class:`ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter` can encode natively.
+
+    >>> from ommx import Instance, Sos1Constraint, SpecialConstraintKind
+    >>> from ommx_highs_adapter import OMMXHighsAdapter
+    >>> source = Instance.maximize()
+    >>> enabled = source.new_binary("enabled")
+    >>> option_a = source.new_binary("option_a")
+    >>> option_b = source.new_binary("option_b")
+    >>> option_c = source.new_binary("option_c")
+    >>> source.objective = 10 * enabled + 6 * option_a + 5 * option_b + 4 * option_c
+    >>> _ = source.add_indicator_constraint((option_a + option_b <= 1).with_indicator(enabled))
+    >>> _ = source.add_sos1_constraint(
+    ...     Sos1Constraint(variables=[option_b, option_c], name="exclusive_options")
+    ... )
+    >>> assert not OMMXHighsAdapter.INPUT_CLASS.contains(source)
+    >>> solution = OMMXHighsAdapter.solve(source)
+    >>> assert solution.feasible
+    >>> assert abs(solution.objective - 20.0) < 1e-6
+    >>> assert source.active_special_constraint_kinds == {
+    ...     SpecialConstraintKind.Indicator, SpecialConstraintKind.Sos1,
+    ... }
+    >>> assert not source.removed_constraints
+
+    All variables here are Binary with finite bounds, so the recommended
+    lowering can construct the required linear rows. An arbitrary model need
+    not be preparable. :attr:`INPUT_CLASS` describes direct acceptance;
+    :meth:`recommended_preparation_policy` returns an editable recommendation,
+    not a guarantee of success. For an application-selected policy, call
+    :meth:`ommx.Instance.prepare` explicitly and then
+    :meth:`solve_without_preparation`; the PySCIPOpt Adapter Reference provides
+    a complete example of that sequence.
 
     Translation Specifications
     ==========================
@@ -532,7 +594,7 @@ class OMMXHighsAdapter(SolverAdapter):
     --------------
     **Unsupported Features**:
 
-    - Quadratic functions (HiGHS supports linear problems only)
+    - Quadratic functions (this Adapter encodes linear problems only)
     - Semi-integer variables (``Kind.SemiInteger``) - support planned
     - Semi-continuous variables (``Kind.SemiContinuous``) - support planned
     - Constraint types other than ``Equality.EqualToZero``/
@@ -560,28 +622,6 @@ class OMMXHighsAdapter(SolverAdapter):
 
        - ``Kind.SemiInteger`` support is planned but not yet implemented
        - ``Kind.SemiContinuous`` support is planned but not yet implemented
-
-    Examples
-    --------
-    >>> from ommx_highs_adapter import OMMXHighsAdapter
-    >>> from ommx import DecisionVariable, Instance, Sense
-    >>>
-    >>> # Define problem
-    >>> x = DecisionVariable.binary(0)
-    >>> y = DecisionVariable.integer(1, lower=0, upper=10)
-    >>> instance = Instance.from_components(
-    ...     decision_variables=[x, y],
-    ...     objective=2*x + 3*y,
-    ...     constraints={0: x + y <= 5},
-    ...     sense=Sense.Maximize,
-    ... )
-    >>>
-    >>> # Solve
-    >>> solution = OMMXHighsAdapter.solve(instance)
-    >>> print(f"Optimal value: {solution.objective}")
-    Optimal value: 15.0
-    >>> print(f"Variables: {solution.state.entries}")
-    Variables: {0: 0.0, 1: 5.0}
 
     """
 
