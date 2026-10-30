@@ -10,7 +10,7 @@ Removed constraints no longer restrict the active formulation, but
 allows `x=1`, while the retained `x <= 0` condition rejects it:
 
 ```pycon
->>> from ommx import Instance
+>>> from ommx import ConstraintKind, Instance
 >>> instance = Instance.maximize()
 >>> x = instance.new_binary("x")
 >>> instance.objective = x
@@ -28,13 +28,15 @@ allows `x=1`, while the retained `x <= 0` condition rejects it:
 ```
 
 Inspect the removal reason on the model and the evaluated violation on the
-result. `kind="regular"` selects the regular-constraint family; the same table
+result. `kind=ConstraintKind.Regular` selects the regular-constraint family; the same table
 APIs also accept `"indicator"`, `"one_hot"`, and `"sos1"` for those families.
 
 ```pycon
->>> model_rows = instance.constraints_df(kind="regular", removed=True)
+>>> model_rows = instance.constraints_df(kind=ConstraintKind.Regular, removed=True)
 >>> assert model_rows.loc[limit_id, "removed_reason"] == "example.relax_limit"
->>> result_rows = solution.constraints_df(kind="regular", include=("removed_reason",))
+>>> result_rows = solution.constraints_df(
+...     kind=ConstraintKind.Regular, include=("removed_reason",)
+... )
 >>> assert result_rows.loc[limit_id, "removed_reason"] == "example.relax_limit"
 >>> assert result_rows.loc[limit_id, "removed_reason.purpose"] == "inspection"
 >>> assert result_rows.loc[limit_id, "violation"] == 1.0

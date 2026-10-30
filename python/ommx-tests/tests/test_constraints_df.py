@@ -9,6 +9,7 @@ kind × include / removed combination — update via
 """
 
 from __future__ import annotations
+from ommx import ConstraintKind
 from ommx import ConstraintID, OneHotConstraintID
 
 import pandas as pd
@@ -120,17 +121,24 @@ def _sample_set_basic():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("kind", ["regular", "indicator", "one_hot", "sos1"])
+@pytest.mark.parametrize(
+    "kind",
+    [
+        ConstraintKind.Regular,
+        ConstraintKind.Indicator,
+        ConstraintKind.OneHot,
+        ConstraintKind.Sos1,
+    ],
+    ids=str,
+)
 def test_instance_constraints_df_kind(snapshot, kind):
     """Default `include=` (label + parameters); index is `{kind}_constraint_id`."""
     assert _df_snap(_instance_all_kinds().constraints_df(kind=kind)) == snapshot
 
 
 def test_instance_constraints_df_unknown_kind():
-    """Unknown `kind=` raises ValueError. The `Literal` annotation
-    catches the typo statically; the runtime check is a defense-in-
-    depth fallback for callers without a type checker."""
-    with pytest.raises(ValueError, match="unknown constraint kind"):
+    """The selector must be a ConstraintKind value, even without a type checker."""
+    with pytest.raises(TypeError, match="ConstraintKind"):
         _instance_all_kinds().constraints_df(kind="bogus")  # type: ignore[arg-type]
 
 
@@ -147,7 +155,9 @@ def test_instance_constraints_df_reports_composed_function_type():
     )
 
     assert (
-        instance.constraints_df(kind="regular").loc[ConstraintID(10), "type"]
+        instance.constraints_df(kind=ConstraintKind.Regular).loc[
+            ConstraintID(10), "type"
+        ]
         == "Expression"
     )
 
@@ -155,7 +165,9 @@ def test_instance_constraints_df_reports_composed_function_type():
 def test_instance_constraints_df_unknown_include_flag():
     """Unknown `include=` flag raises ValueError."""
     with pytest.raises(ValueError, match="unknown include flag"):
-        _instance_all_kinds().constraints_df(kind="regular", include=["bogus"])
+        _instance_all_kinds().constraints_df(
+            kind=ConstraintKind.Regular, include=["bogus"]
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +178,11 @@ def test_instance_constraints_df_unknown_include_flag():
 def test_instance_constraints_df_include_empty(snapshot):
     """`include=[]` strips label + parameters columns; only core columns remain."""
     assert (
-        _df_snap(_instance_all_kinds().constraints_df(kind="regular", include=[]))
+        _df_snap(
+            _instance_all_kinds().constraints_df(
+                kind=ConstraintKind.Regular, include=[]
+            )
+        )
         == snapshot
     )
 
@@ -175,7 +191,9 @@ def test_instance_constraints_df_include_label_only(snapshot):
     """`include=("label",)` keeps name/subscripts/description, drops parameters."""
     assert (
         _df_snap(
-            _instance_all_kinds().constraints_df(kind="regular", include=["label"])
+            _instance_all_kinds().constraints_df(
+                kind=ConstraintKind.Regular, include=["label"]
+            )
         )
         == snapshot
     )
@@ -185,7 +203,9 @@ def test_instance_constraints_df_include_parameters_only(snapshot):
     """`include=("parameters",)` keeps parameters.{key}, drops name/subscripts/description."""
     assert (
         _df_snap(
-            _instance_all_kinds().constraints_df(kind="regular", include=["parameters"])
+            _instance_all_kinds().constraints_df(
+                kind=ConstraintKind.Regular, include=["parameters"]
+            )
         )
         == snapshot
     )
@@ -198,13 +218,20 @@ def test_instance_constraints_df_include_parameters_only(snapshot):
 
 def test_instance_constraints_df_removed_default_excludes_removed(snapshot):
     """Default `removed=False` returns active rows only — relaxed id=10 omitted."""
-    assert _df_snap(_instance_with_removed().constraints_df(kind="regular")) == snapshot
+    assert (
+        _df_snap(_instance_with_removed().constraints_df(kind=ConstraintKind.Regular))
+        == snapshot
+    )
 
 
 def test_instance_constraints_df_removed_true_includes_both(snapshot):
     """`removed=True` returns active + removed; auto-sets `removed_reason` columns."""
     assert (
-        _df_snap(_instance_with_removed().constraints_df(kind="regular", removed=True))
+        _df_snap(
+            _instance_with_removed().constraints_df(
+                kind=ConstraintKind.Regular, removed=True
+            )
+        )
         == snapshot
     )
 
@@ -215,7 +242,7 @@ def test_instance_constraints_df_removed_true_no_label(snapshot):
     assert (
         _df_snap(
             _instance_with_removed().constraints_df(
-                kind="regular", include=[], removed=True
+                kind=ConstraintKind.Regular, include=[], removed=True
             )
         )
         == snapshot
@@ -241,7 +268,7 @@ def test_instance_constraints_df_removed_true_id_sorted(snapshot):
         sense=Sense.Maximize,
     )
     inst.relax_constraint(20, "relax_middle")
-    df = inst.constraints_df(kind="regular", removed=True)
+    df = inst.constraints_df(kind=ConstraintKind.Regular, removed=True)
     assert list(df.index) == [ConstraintID(5), ConstraintID(20), ConstraintID(30)]
     assert _df_snap(df) == snapshot
 
@@ -255,14 +282,14 @@ def test_instance_constraints_df_removed_reason_active_only_keeps_column(
     guard against the column silently disappearing when no row in
     the view carries a reason."""
     df = _instance_all_kinds().constraints_df(
-        kind="regular", include=["label", "removed_reason"]
+        kind=ConstraintKind.Regular, include=["label", "removed_reason"]
     )
     assert "removed_reason" in df.columns
     assert _df_snap(df) == snapshot
 
 
 def test_instance_constraints_df_one_hot_removed_true(snapshot):
-    """`removed=True` on `kind="one_hot"` exercises the merge-sort and
+    """`removed=True` on `kind=ConstraintKind.OneHot` exercises the merge-sort and
     reason-column path on a special-kind constraint. The capability-
     model docs advertise this surface for auditing OneHot →
     regular-constraint conversion (see capability_model.md), so it
@@ -279,7 +306,7 @@ def test_instance_constraints_df_one_hot_removed_true(snapshot):
         sense=Sense.Maximize,
     )
     instance.convert_one_hot_to_constraint(7)
-    df = instance.constraints_df(kind="one_hot", removed=True)
+    df = instance.constraints_df(kind=ConstraintKind.OneHot, removed=True)
     # Globally id-sorted: active id 5, then removed id 7.
     assert list(df.index) == [OneHotConstraintID(5), OneHotConstraintID(7)]
     assert _df_snap(df) == snapshot
@@ -292,16 +319,20 @@ def test_instance_constraints_df_one_hot_removed_true(snapshot):
 
 def test_parametric_instance_constraints_df_default(snapshot):
     """`ParametricInstance.constraints_df()` uses the same wide shape as Instance."""
-    assert _df_snap(_parametric_instance().constraints_df(kind="regular")) == snapshot
+    assert (
+        _df_snap(_parametric_instance().constraints_df(kind=ConstraintKind.Regular))
+        == snapshot
+    )
 
 
 @pytest.mark.parametrize(
     "kind, expected_name",
     [
-        ("indicator", "indicator_constraint_id"),
-        ("one_hot", "one_hot_constraint_id"),
-        ("sos1", "sos1_constraint_id"),
+        (ConstraintKind.Indicator, "indicator_constraint_id"),
+        (ConstraintKind.OneHot, "one_hot_constraint_id"),
+        (ConstraintKind.Sos1, "sos1_constraint_id"),
     ],
+    ids=str,
 )
 def test_parametric_instance_constraints_df_special_kinds_empty(
     snapshot, kind, expected_name
@@ -325,7 +356,16 @@ def test_parametric_instance_constraints_df_special_kinds_empty(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("kind", ["regular", "indicator", "one_hot", "sos1"])
+@pytest.mark.parametrize(
+    "kind",
+    [
+        ConstraintKind.Regular,
+        ConstraintKind.Indicator,
+        ConstraintKind.OneHot,
+        ConstraintKind.Sos1,
+    ],
+    ids=str,
+)
 def test_solution_constraints_df_kind(snapshot, kind):
     """`Solution.constraints_df(kind=...)` — evaluated stage core columns +
     context. No `removed=` parameter at this stage."""
@@ -335,7 +375,7 @@ def test_solution_constraints_df_kind(snapshot, kind):
 def test_solution_constraints_df_no_removed_parameter():
     """`Solution.constraints_df` does not accept `removed=`."""
     with pytest.raises(TypeError):
-        _solution_basic().constraints_df(kind="regular", removed=True)  # type: ignore[call-arg]
+        _solution_basic().constraints_df(kind=ConstraintKind.Regular, removed=True)  # type: ignore[call-arg]
 
 
 def test_solution_constraints_df_removed_reason_include(snapshot):
@@ -344,7 +384,7 @@ def test_solution_constraints_df_removed_reason_include(snapshot):
     assert (
         _df_snap(
             _solution_with_removed().constraints_df(
-                kind="regular", include=["label", "removed_reason"]
+                kind=ConstraintKind.Regular, include=["label", "removed_reason"]
             )
         )
         == snapshot
@@ -358,7 +398,7 @@ def test_solution_constraints_df_removed_reason_no_removals_keeps_column(snapsho
     column silently disappearing when no row in the view carries a
     reason."""
     df = _solution_basic().constraints_df(
-        kind="regular", include=["label", "removed_reason"]
+        kind=ConstraintKind.Regular, include=["label", "removed_reason"]
     )
     assert "removed_reason" in df.columns
     assert _df_snap(df) == snapshot
@@ -369,7 +409,16 @@ def test_solution_constraints_df_removed_reason_no_removals_keeps_column(snapsho
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("kind", ["regular", "indicator", "one_hot", "sos1"])
+@pytest.mark.parametrize(
+    "kind",
+    [
+        ConstraintKind.Regular,
+        ConstraintKind.Indicator,
+        ConstraintKind.OneHot,
+        ConstraintKind.Sos1,
+    ],
+    ids=str,
+)
 def test_sample_set_constraints_df_kind(snapshot, kind):
     """`SampleSet.constraints_df(kind=...)` adds per-sample dynamic columns
     (`value.{sid}`, `feasible.{sid}`, ...) on top of the core schema."""
@@ -379,4 +428,4 @@ def test_sample_set_constraints_df_kind(snapshot, kind):
 def test_sample_set_constraints_df_no_removed_parameter():
     """`SampleSet.constraints_df` does not accept `removed=`."""
     with pytest.raises(TypeError):
-        _sample_set_basic().constraints_df(kind="regular", removed=True)  # type: ignore[call-arg]
+        _sample_set_basic().constraints_df(kind=ConstraintKind.Regular, removed=True)  # type: ignore[call-arg]

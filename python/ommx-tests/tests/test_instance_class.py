@@ -27,7 +27,7 @@ from ommx import (
     PolynomialRequirement,
     Sense,
     Sos1Constraint,
-    SpecialConstraintKind,
+    ConstraintKind,
 )
 from ommx.adapter import (
     AdapterNotApplicableError,
@@ -390,14 +390,14 @@ def test_membership_is_recomputed_after_explicit_lowering() -> None:
     )
 
     assert not prepared_input_class.contains(instance)
-    assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
+    assert instance.active_special_constraint_kinds == {ConstraintKind.OneHot}
     assert instance.lower_special_constraints(set()) == set()
     assert set(
         (cid for cid in instance.constraints if isinstance(cid, OneHotConstraintID))
     ) == {OneHotConstraintID(30)}
 
-    lowered = instance.lower_special_constraints({SpecialConstraintKind.OneHot})
-    assert lowered == {SpecialConstraintKind.OneHot}
+    lowered = instance.lower_special_constraints({ConstraintKind.OneHot})
+    assert lowered == {ConstraintKind.OneHot}
     assert instance.active_special_constraint_kinds == set()
     assert prepared_input_class.contains(instance)
 

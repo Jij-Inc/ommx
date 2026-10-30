@@ -1,5 +1,7 @@
 """Tests for OneHotConstraint and Sos1Constraint as first-class constraint types."""
 
+from ommx import ConstraintKind
+
 from ommx import OneHotConstraintID, Sos1ConstraintID
 
 from typing import cast, get_args
@@ -372,7 +374,7 @@ def test_convert_sos1_rejects_domain_excluding_zero():
 
 
 def test_sos1_constraints_df_roundtrips_removed_context(snapshot):
-    """`constraints_df(kind="sos1", removed=True)` surfaces reason + constraint_ids
+    """`constraints_df(kind=ConstraintKind.Sos1, removed=True)` surfaces reason + constraint_ids
     parameter as columns on removed rows. Active is empty after conversion."""
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
@@ -384,8 +386,11 @@ def test_sos1_constraints_df_roundtrips_removed_context(snapshot):
     )
     instance.convert_sos1_to_constraints(7)
 
-    assert instance.constraints_df(kind="sos1").empty
-    assert _df_snap(instance.constraints_df(kind="sos1", removed=True)) == snapshot
+    assert instance.constraints_df(kind=ConstraintKind.Sos1).empty
+    assert (
+        _df_snap(instance.constraints_df(kind=ConstraintKind.Sos1, removed=True))
+        == snapshot
+    )
 
 
 def test_evaluate_with_sos1_infeasible():
@@ -440,20 +445,23 @@ def _solution_one_hot_infeasible():
 
 
 def test_solution_one_hot_constraints_df_feasible(snapshot, _solution_one_hot_feasible):
-    """`Solution.constraints_df(kind="one_hot")` for feasible: feasible=True,
+    """`Solution.constraints_df(kind=ConstraintKind.OneHot)` for feasible: feasible=True,
     active_variable=2."""
     assert (
-        _df_snap(_solution_one_hot_feasible.constraints_df(kind="one_hot")) == snapshot
+        _df_snap(_solution_one_hot_feasible.constraints_df(kind=ConstraintKind.OneHot))
+        == snapshot
     )
 
 
 def test_solution_one_hot_constraints_df_infeasible(
     snapshot, _solution_one_hot_infeasible
 ):
-    """`Solution.constraints_df(kind="one_hot")` for infeasible: feasible=False,
+    """`Solution.constraints_df(kind=ConstraintKind.OneHot)` for infeasible: feasible=False,
     active_variable=NA."""
     assert (
-        _df_snap(_solution_one_hot_infeasible.constraints_df(kind="one_hot"))
+        _df_snap(
+            _solution_one_hot_infeasible.constraints_df(kind=ConstraintKind.OneHot)
+        )
         == snapshot
     )
 
@@ -487,19 +495,25 @@ def _solution_sos1_all_zero():
 
 
 def test_solution_sos1_constraints_df_one_active(snapshot, _solution_sos1_one_active):
-    """`Solution.constraints_df(kind="sos1")` with one nonzero: feasible=True,
+    """`Solution.constraints_df(kind=ConstraintKind.Sos1)` with one nonzero: feasible=True,
     active_variable=2."""
-    assert _df_snap(_solution_sos1_one_active.constraints_df(kind="sos1")) == snapshot
+    assert (
+        _df_snap(_solution_sos1_one_active.constraints_df(kind=ConstraintKind.Sos1))
+        == snapshot
+    )
 
 
 def test_solution_sos1_constraints_df_all_zero(snapshot, _solution_sos1_all_zero):
-    """`Solution.constraints_df(kind="sos1")` with all-zero: feasible=True,
+    """`Solution.constraints_df(kind=ConstraintKind.Sos1)` with all-zero: feasible=True,
     active_variable=NA."""
-    assert _df_snap(_solution_sos1_all_zero.constraints_df(kind="sos1")) == snapshot
+    assert (
+        _df_snap(_solution_sos1_all_zero.constraints_df(kind=ConstraintKind.Sos1))
+        == snapshot
+    )
 
 
 def test_solution_one_hot_removed_reasons_df_after_conversion(snapshot):
-    """`Solution.constraints_df(kind="one_hot", include=(..., "removed_reason"))`
+    """`Solution.constraints_df(kind=ConstraintKind.OneHot, include=(..., "removed_reason"))`
     after `convert_one_hot_to_constraint` carries the conversion reason."""
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
@@ -513,14 +527,16 @@ def test_solution_one_hot_removed_reasons_df_after_conversion(snapshot):
     sol = instance.evaluate({0: 1.0, 1: 0.0, 2: 0.0})
     assert (
         _df_snap(
-            sol.constraints_df(kind="one_hot", include=["label", "removed_reason"])
+            sol.constraints_df(
+                kind=ConstraintKind.OneHot, include=["label", "removed_reason"]
+            )
         )
         == snapshot
     )
 
 
 def test_solution_sos1_removed_reasons_df_after_conversion(snapshot):
-    """`Solution.constraints_df(kind="sos1", include=(..., "removed_reason"))`
+    """`Solution.constraints_df(kind=ConstraintKind.Sos1, include=(..., "removed_reason"))`
     after `convert_sos1_to_constraints` carries the conversion reason and
     the comma-joined `constraint_ids` parameter."""
     x = [DecisionVariable.binary(i) for i in range(3)]
@@ -534,7 +550,11 @@ def test_solution_sos1_removed_reasons_df_after_conversion(snapshot):
     instance.convert_sos1_to_constraints(7)
     sol = instance.evaluate({0: 1.0, 1: 0.0, 2: 0.0})
     assert (
-        _df_snap(sol.constraints_df(kind="sos1", include=["label", "removed_reason"]))
+        _df_snap(
+            sol.constraints_df(
+                kind=ConstraintKind.Sos1, include=["label", "removed_reason"]
+            )
+        )
         == snapshot
     )
 
@@ -561,9 +581,12 @@ def _sample_set_one_hot():
 def test_sample_set_one_hot_constraints_df_dynamic_columns(
     snapshot, _sample_set_one_hot
 ):
-    """`SampleSet.constraints_df(kind="one_hot")` static columns + per-sample
+    """`SampleSet.constraints_df(kind=ConstraintKind.OneHot)` static columns + per-sample
     `feasible.{sample_id}` / `active_variable.{sample_id}` columns."""
-    assert _df_snap(_sample_set_one_hot.constraints_df(kind="one_hot")) == snapshot
+    assert (
+        _df_snap(_sample_set_one_hot.constraints_df(kind=ConstraintKind.OneHot))
+        == snapshot
+    )
 
 
 @pytest.fixture
@@ -587,13 +610,15 @@ def _sample_set_sos1():
 
 
 def test_sample_set_sos1_constraints_df_dynamic_columns(snapshot, _sample_set_sos1):
-    """`SampleSet.constraints_df(kind="sos1")` per-sample feasibility +
+    """`SampleSet.constraints_df(kind=ConstraintKind.Sos1)` per-sample feasibility +
     active_variable columns."""
-    assert _df_snap(_sample_set_sos1.constraints_df(kind="sos1")) == snapshot
+    assert (
+        _df_snap(_sample_set_sos1.constraints_df(kind=ConstraintKind.Sos1)) == snapshot
+    )
 
 
 def test_sample_set_one_hot_removed_reasons_df_after_conversion(snapshot):
-    """`SampleSet.constraints_df(kind="one_hot", include=(..., "removed_reason"))`
+    """`SampleSet.constraints_df(kind=ConstraintKind.OneHot, include=(..., "removed_reason"))`
     after `convert_one_hot_to_constraint` surfaces conversion reasons."""
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
@@ -606,6 +631,10 @@ def test_sample_set_one_hot_removed_reasons_df_after_conversion(snapshot):
     instance.convert_one_hot_to_constraint(7)
     ss = instance.evaluate_samples({0: {0: 1.0, 1: 0.0, 2: 0.0}})
     assert (
-        _df_snap(ss.constraints_df(kind="one_hot", include=["label", "removed_reason"]))
+        _df_snap(
+            ss.constraints_df(
+                kind=ConstraintKind.OneHot, include=["label", "removed_reason"]
+            )
+        )
         == snapshot
     )

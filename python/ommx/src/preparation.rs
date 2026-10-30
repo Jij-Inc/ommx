@@ -1,5 +1,5 @@
 use crate::error::OmmxPyResult;
-use crate::{Instance, InstanceClass, Sense, SpecialConstraintKind};
+use crate::{ConstraintKind, Instance, InstanceClass, Sense};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use std::collections::{BTreeMap, HashSet};
@@ -38,7 +38,7 @@ impl SpecialConstraintPreparation {
     #[staticmethod]
     #[pyo3(signature = (*, kinds, atol=None))]
     pub fn lower_special_constraints(
-        kinds: HashSet<SpecialConstraintKind>,
+        kinds: HashSet<ConstraintKind>,
         atol: Option<f64>,
     ) -> OmmxPyResult<Self> {
         Ok(Self {
@@ -461,13 +461,13 @@ impl PreparationPolicy {
     /// ...     BinaryPowerPreparation, FixedPenaltyPreparation,
     /// ...     IntegerEncodingPreparation, IntegerSlackPreparation,
     /// ...     ObjectivePreparation, PreparationPolicy, Sense,
-    /// ...     SpecialConstraintKind, SpecialConstraintPreparation,
+    /// ...     ConstraintKind, SpecialConstraintPreparation,
     /// ... )
     /// >>> expected_special = SpecialConstraintPreparation.lower_special_constraints(
     /// ...     kinds={
-    /// ...         SpecialConstraintKind.Indicator,
-    /// ...         SpecialConstraintKind.OneHot,
-    /// ...         SpecialConstraintKind.Sos1,
+    /// ...         ConstraintKind.Indicator,
+    /// ...         ConstraintKind.OneHot,
+    /// ...         ConstraintKind.Sos1,
     /// ...     }
     /// ... )
     /// >>> expected_penalty = FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=1.0)
@@ -529,14 +529,14 @@ impl PreparationPolicy {
     /// >>> from ommx import (
     /// ...     FixedPenaltyPreparation, IntegerEncodingPreparation,
     /// ...     IntegerSlackPreparation, ObjectivePreparation,
-    /// ...     PreparationPolicy, Sense, SpecialConstraintKind,
+    /// ...     PreparationPolicy, Sense, ConstraintKind,
     /// ...     SpecialConstraintPreparation,
     /// ... )
     /// >>> expected_special = SpecialConstraintPreparation.lower_special_constraints(
     /// ...     kinds={
-    /// ...         SpecialConstraintKind.Indicator,
-    /// ...         SpecialConstraintKind.OneHot,
-    /// ...         SpecialConstraintKind.Sos1,
+    /// ...         ConstraintKind.Indicator,
+    /// ...         ConstraintKind.OneHot,
+    /// ...         ConstraintKind.Sos1,
     /// ...     }
     /// ... )
     /// >>> first = PreparationPolicy.for_hubo(inequality_integer_slack_max_range=17)

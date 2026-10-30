@@ -5,7 +5,7 @@ import enum
 import pytest
 from typing_extensions import assert_type
 
-from ommx import Kind, ProvenanceKind, SpecialConstraintKind
+from ommx import Kind, ProvenanceKind, ConstraintKind
 
 
 def known_kind_consumer(kind: Kind) -> bool:
@@ -24,15 +24,16 @@ def known_kind_consumer(kind: Kind) -> bool:
     raise NotImplementedError(f"Unsupported variable kind: {kind}")
 
 
-def known_family_consumer(kind: SpecialConstraintKind) -> bool:
+def known_family_consumer(kind: ConstraintKind) -> bool:
     match kind:
         case (
-            SpecialConstraintKind.Indicator
-            | SpecialConstraintKind.OneHot
-            | SpecialConstraintKind.Sos1
+            ConstraintKind.Regular
+            | ConstraintKind.Indicator
+            | ConstraintKind.OneHot
+            | ConstraintKind.Sos1
         ):
             return True
-    assert_type(kind, SpecialConstraintKind)
+    assert_type(kind, ConstraintKind)
     raise NotImplementedError(f"Unsupported constraint family: {kind}")
 
 
@@ -66,15 +67,20 @@ def test_known_kind_values_and_rejection():
 
 def test_special_kind_values():
     for kind in [
-        SpecialConstraintKind.Indicator,
-        SpecialConstraintKind.OneHot,
-        SpecialConstraintKind.Sos1,
+        ConstraintKind.Indicator,
+        ConstraintKind.OneHot,
+        ConstraintKind.Sos1,
     ]:
         assert known_family_consumer(kind)
         assert not isinstance(kind, enum.Enum)
 
 
 def test_provenance_kind_values():
+    assert (
+        repr(ProvenanceKind.IndicatorConstraint) == "ProvenanceKind.IndicatorConstraint"
+    )
+    assert repr(ProvenanceKind.OneHotConstraint) == "ProvenanceKind.OneHotConstraint"
+    assert repr(ProvenanceKind.Sos1Constraint) == "ProvenanceKind.Sos1Constraint"
     for kind in [
         ProvenanceKind.IndicatorConstraint,
         ProvenanceKind.OneHotConstraint,

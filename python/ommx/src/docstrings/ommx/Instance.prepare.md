@@ -25,7 +25,7 @@ necessary when it must be evaluated or reused separately after the mutation.
 ...     PolynomialRequirement,
 ...     PreparationPolicy,
 ...     Sense,
-...     SpecialConstraintKind,
+...     ConstraintKind,
 ...     SpecialConstraintPreparation,
 ... )
 >>> instance = Instance.maximize()
@@ -51,7 +51,7 @@ necessary when it must be evaluated or reused separately after the mutation.
 >>> assert not target.contains(instance)
 >>> policy = PreparationPolicy(
 ...     special_constraints=SpecialConstraintPreparation.lower_special_constraints(
-...         kinds={SpecialConstraintKind.OneHot}
+...         kinds={ConstraintKind.OneHot}
 ...     )
 ... )
 >>> assert set(instance.constraints) == {OneHotConstraintID(0)}
@@ -60,7 +60,7 @@ necessary when it must be evaluated or reused separately after the mutation.
 >>> assert len(instance.constraints) == 1
 >>> assert instance.active_special_constraint_kinds == set()
 >>> assert set(instance.removed_constraints) == {OneHotConstraintID(0)}
->>> assert instance.constraints_df(kind="regular").shape[0] == 1
+>>> assert instance.constraints_df(kind=ConstraintKind.Regular).shape[0] == 1
 >>> after = instance.evaluate(state)
 >>> assert before.feasible and after.feasible
 >>> assert before.objective == after.objective == 3.0

@@ -1,5 +1,7 @@
 """Family views preserve typed identities and the owner's lifecycle semantics."""
 
+from ommx import ConstraintKind
+
 from collections.abc import Mapping
 from typing import Any, get_origin
 
@@ -111,7 +113,7 @@ def test_every_lifecycle_uses_same_key_rules(kind, id_type, _):
             rows[number] = rows[number]  # type: ignore[index]
         with pytest.raises(TypeError):
             del rows[number]  # type: ignore[index]
-        with pytest.raises(ValueError, match="unknown constraint kind"):
+        with pytest.raises(TypeError, match="ConstraintKind"):
             parent.of_kind("unknown")  # type: ignore[call-overload]
         with pytest.raises(TypeError):
             parent.of_kind(1)  # type: ignore[call-overload]
@@ -120,7 +122,7 @@ def test_every_lifecycle_uses_same_key_rules(kind, id_type, _):
 @pytest.mark.parametrize("host", [Instance, ParametricInstance])
 def test_live_views_and_iteration_timing(host):
     model = make_model(host)
-    rows = model.constraints.of_kind("regular")
+    rows = model.constraints.of_kind(ConstraintKind.Regular)
     keys, values, items = rows.keys(), rows.values(), rows.items()
     direct = iter(rows)
     key_iterator = iter(keys)
@@ -130,13 +132,13 @@ def test_live_views_and_iteration_timing(host):
     assert added.constraint_id in list(key_iterator)
     assert len(rows) == len(keys) == len(values) == len(items) == 2
     assert any(row.name == "later" for row in values)
-    assert len(model.constraints.of_kind("sos1")) == 1
+    assert len(model.constraints.of_kind(ConstraintKind.Sos1)) == 1
 
 
 def test_removal_and_restoration_update_family_views():
     model = make_model(Instance)
-    active = model.constraints.of_kind("regular")
-    removed = model.removed_constraints.of_kind("regular")
+    active = model.constraints.of_kind(ConstraintKind.Regular)
+    removed = model.removed_constraints.of_kind(ConstraintKind.Regular)
     assert not removed
     model.relax_constraint(5, "manual")
     assert not active
@@ -146,18 +148,18 @@ def test_removal_and_restoration_update_family_views():
     assert not removed
     assert 5 in active
     assert snapshot.removed_reason == "manual"
-    sos1 = model.constraints.of_kind("sos1")
-    removed_sos1 = model.removed_constraints.of_kind("sos1")
+    sos1 = model.constraints.of_kind(ConstraintKind.Sos1)
+    removed_sos1 = model.removed_constraints.of_kind(ConstraintKind.Sos1)
     model.convert_sos1_to_constraints(8)
     assert not sos1
     assert 8 in removed_sos1
     # Result views retain removed rows just like their parent collections.
-    assert 8 in model.evaluate({0: 1, 1: 0}).constraints.of_kind("sos1")
+    assert 8 in model.evaluate({0: 1, 1: 0}).constraints.of_kind(ConstraintKind.Sos1)
 
 
 def test_result_rows_are_fetched_lazily_and_owner_is_retained():
     solution = make_model(Instance).evaluate({0: 1, 1: 0})
-    rows = solution.constraints.of_kind("regular")
+    rows = solution.constraints.of_kind(ConstraintKind.Regular)
     values = rows.values()
     snapshot = rows[5]
     solution.set_dual_variable(5, 3)
@@ -169,7 +171,7 @@ def test_result_rows_are_fetched_lazily_and_owner_is_retained():
 
 def test_precise_types_and_runtime_generic_alias():
     model = make_model(Instance)
-    rows = model.constraints.of_kind("sos1")
+    rows = model.constraints.of_kind(ConstraintKind.Sos1)
     assert_type(rows, ConstraintFamilyView[Sos1ConstraintID, AttachedSos1Constraint])
     assert_type(rows[8], AttachedSos1Constraint)
     assert_type(rows[Sos1ConstraintID(8)], AttachedSos1Constraint)
@@ -186,23 +188,49 @@ def test_precise_types_and_runtime_generic_alias():
     assert mapping[Sos1ConstraintID(8)] == rows[8]
     alias = ConstraintFamilyView[Sos1ConstraintID, AttachedSos1Constraint]
     assert get_origin(alias) is ConstraintFamilyView
-    assert_type(model.constraints.of_kind("regular")[5], AttachedConstraint)
-    assert_type(model.constraints.of_kind("indicator")[6], AttachedIndicatorConstraint)
-    assert_type(model.constraints.of_kind("one_hot")[7], AttachedOneHotConstraint)
-    solution = model.evaluate({0: 1, 1: 0})
-    assert_type(solution.constraints.of_kind("regular")[5], EvaluatedConstraint)
     assert_type(
-        solution.constraints.of_kind("indicator")[6], EvaluatedIndicatorConstraint
+        model.constraints.of_kind(ConstraintKind.Regular)[5], AttachedConstraint
     )
-    assert_type(solution.constraints.of_kind("one_hot")[7], EvaluatedOneHotConstraint)
-    assert_type(solution.constraints.of_kind("sos1")[8], EvaluatedSos1Constraint)
+    assert_type(
+        model.constraints.of_kind(ConstraintKind.Indicator)[6],
+        AttachedIndicatorConstraint,
+    )
+    assert_type(
+        model.constraints.of_kind(ConstraintKind.OneHot)[7], AttachedOneHotConstraint
+    )
+    solution = model.evaluate({0: 1, 1: 0})
+    assert_type(
+        solution.constraints.of_kind(ConstraintKind.Regular)[5], EvaluatedConstraint
+    )
+    assert_type(
+        solution.constraints.of_kind(ConstraintKind.Indicator)[6],
+        EvaluatedIndicatorConstraint,
+    )
+    assert_type(
+        solution.constraints.of_kind(ConstraintKind.OneHot)[7],
+        EvaluatedOneHotConstraint,
+    )
+    assert_type(
+        solution.constraints.of_kind(ConstraintKind.Sos1)[8], EvaluatedSos1Constraint
+    )
     samples = model.evaluate_samples({9: {0: 1, 1: 0}})
-    assert_type(samples.constraints.of_kind("regular")[5], SampledConstraint)
-    assert_type(samples.constraints.of_kind("indicator")[6], SampledIndicatorConstraint)
-    assert_type(samples.constraints.of_kind("one_hot")[7], SampledOneHotConstraint)
-    assert_type(samples.constraints.of_kind("sos1")[8], SampledSos1Constraint)
+    assert_type(
+        samples.constraints.of_kind(ConstraintKind.Regular)[5], SampledConstraint
+    )
+    assert_type(
+        samples.constraints.of_kind(ConstraintKind.Indicator)[6],
+        SampledIndicatorConstraint,
+    )
+    assert_type(
+        samples.constraints.of_kind(ConstraintKind.OneHot)[7], SampledOneHotConstraint
+    )
+    assert_type(
+        samples.constraints.of_kind(ConstraintKind.Sos1)[8], SampledSos1Constraint
+    )
     removed = remove_all(model)
-    assert_type(removed.of_kind("regular")[5], RemovedConstraint)
-    assert_type(removed.of_kind("indicator")[6], RemovedIndicatorConstraint)
-    assert_type(removed.of_kind("one_hot")[7], RemovedOneHotConstraint)
-    assert_type(removed.of_kind("sos1")[8], RemovedSos1Constraint)
+    assert_type(removed.of_kind(ConstraintKind.Regular)[5], RemovedConstraint)
+    assert_type(
+        removed.of_kind(ConstraintKind.Indicator)[6], RemovedIndicatorConstraint
+    )
+    assert_type(removed.of_kind(ConstraintKind.OneHot)[7], RemovedOneHotConstraint)
+    assert_type(removed.of_kind(ConstraintKind.Sos1)[8], RemovedSos1Constraint)

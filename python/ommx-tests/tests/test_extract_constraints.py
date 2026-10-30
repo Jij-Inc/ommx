@@ -129,8 +129,8 @@ def test_duplicate_subscripts_across_every_family_pair_are_rejected(host, left, 
 def test_scalar_labels_missing_names_and_invalid_sample_ids():
     model = make_model(Instance)
     for index, (kind, id_type, _) in enumerate(FAMILIES):
-        model.constraints[id_type(NUMBERS[id_type])].set_name(kind)
-        assert set(model.extract_constraints(kind)) == {()}
+        model.constraints[id_type(NUMBERS[id_type])].set_name(str(kind))
+        assert set(model.extract_constraints(str(kind))) == {()}
     with pytest.raises(KeyError):
         model.extract_constraints("missing")
     with pytest.raises(KeyError):
@@ -169,7 +169,7 @@ def test_constraint_names_match_extraction_on_every_root():
 
     names = ["regular", "", "one_hot", "sos1"]
     for name, (_, id_type, _) in zip(names, FAMILIES):
-        model.constraints[id_type(NUMBERS[id_type])].set_name(name)
+        model.constraints[id_type(NUMBERS[id_type])].set_name(str(name))
     solution = model.evaluate({0: 0, 1: 0})
     samples = model.evaluate_samples({7: {0: 0, 1: 0}})
     roots: tuple[Instance, ParametricInstance, Solution, SampleSet] = (
@@ -216,7 +216,7 @@ def test_constraint_names_deduplicate_without_validating_subscripts():
 def test_constraint_name_scope_tracks_removal_and_retained_results():
     model = make_model(Instance)
     for name, id_type, _ in FAMILIES:
-        model.constraints[id_type(NUMBERS[id_type])].set_name(name)
+        model.constraints[id_type(NUMBERS[id_type])].set_name(str(name))
     remove_all(model)
     for row in model.constraints.values():
         assert isinstance(row, AttachedConstraint)
@@ -226,7 +226,7 @@ def test_constraint_name_scope_tracks_removal_and_retained_results():
     assert parametric.constraint_names == {"generated"}
     solution = model.evaluate({0: 0, 1: 0})
     samples = model.evaluate_samples({7: {0: 0, 1: 0}})
-    expected = {"generated", *(name for name, _, _ in FAMILIES)}
+    expected = {"generated", *(str(name) for name, _, _ in FAMILIES)}
     assert solution.constraint_names == expected
     assert samples.constraint_names == expected
     assert samples.get(7).constraint_names == expected

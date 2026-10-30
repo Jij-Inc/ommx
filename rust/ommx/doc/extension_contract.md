@@ -5,7 +5,7 @@ constraint families. Generic identity, collection, and metadata APIs must keep
 their types when the SDK adds a kind or family. Family-specific constructors
 and accessors retain their precise types. Internal dispatch can remain exhaustive.
 
-`Kind` and `SpecialConstraintKind` are non-exhaustive. Consumers that interpret
+`Kind` and `ConstraintKind` are non-exhaustive. Consumers that interpret
 semantics must handle supported values and explicitly reject the remainder:
 
 ```rust
@@ -32,22 +32,30 @@ fn closed(kind: Kind) {
 ```
 
 ```compile_fail
-use ommx::SpecialConstraintKind;
-fn closed(kind: SpecialConstraintKind) {
+use ommx::ConstraintKind;
+fn closed(kind: ConstraintKind) {
     match kind {
-        SpecialConstraintKind::Indicator | SpecialConstraintKind::OneHot |
-        SpecialConstraintKind::Sos1 => (),
+        ConstraintKind::Regular | ConstraintKind::Indicator | ConstraintKind::OneHot |
+        ConstraintKind::Sos1 => (),
     }
 }
 ```
 
-Python exposes `Kind` and `SpecialConstraintKind` as nominal value classes
+Python exposes `Kind` and `ConstraintKind` as nominal value classes
 with known constants. Their type hints do not define a closed Enum or Literal
 union. Existing comparisons, hashing and `Kind` protobuf conversion remain
 available. Consumers must retain a rejecting fallback even after checking all
 known constants. Mixed constraint collections expose the open
 `ConstraintIDBase` and `ConstraintView` interfaces; concrete ID lookups keep
 their family-specific row types.
+
+`ConstraintKind` includes `Regular`, `Indicator`, `OneHot`, and `Sos1`. The same
+selector is used for Python `constraints.of_kind(ConstraintKind.Sos1)` and
+`constraints_df(kind=ConstraintKind.Sos1)`. Known selector constants carry the
+family's ID type so filtered views retain precise row types, while a generic
+selector retains the common ID and row interfaces. Strings are display labels,
+not family-selector inputs. `active_constraint_kinds` includes regular rows;
+special-constraint lowering rejects `Regular` before applying any conversion.
 
 Transformation provenance follows the same rule: Rust `Provenance` is
 non-exhaustive, with common `kind()` and `original_id()` metadata queries;

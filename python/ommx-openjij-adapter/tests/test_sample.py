@@ -1,3 +1,4 @@
+from ommx import ConstraintKind
 from ommx import ConstraintID
 from types import SimpleNamespace
 from typing import cast
@@ -402,4 +403,4 @@ def test_prepared_instance_evaluation_restores_integer_sos1():
     instance.prepare(input_class, policy)
 
     sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=4, seed=999)
-    assert len(sample_set.constraints_df(kind="sos1")) == 1
+    assert len(sample_set.constraints_df(kind=ConstraintKind.Sos1)) == 1

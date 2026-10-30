@@ -26,7 +26,7 @@
 //!    provide a nonnegative scalar violation. Feasibility is derived by the
 //!    blanket behavior implementations; families cannot supply a separate rule.
 //! 5. Add a `ConstraintCollection<NewConstraint>` field to [`Instance`].
-//! 6. Add a variant to [`SpecialConstraintKind`] and update
+//! 6. Add a variant to [`ConstraintKind`] and update
 //!    `Instance::active_special_constraint_kinds`.
 //! 7. Include the family in heterogeneous Python collections, name enumeration,
 //!    and name-based extraction on models and results. Result extraction uses the family's
@@ -34,7 +34,7 @@
 //!
 //! [`IndicatorConstraint`]: crate::IndicatorConstraint
 //! [`Instance`]: crate::Instance
-//! [`SpecialConstraintKind`]: crate::SpecialConstraintKind
+//! [`ConstraintKind`]: crate::ConstraintKind
 
 use crate::Result;
 use crate::{

@@ -22,7 +22,7 @@ then permits only lowering OneHot constraints to regular equalities:
 ```pycon
 >>> from ommx import (
 ...     PreparationPolicy,
-...     SpecialConstraintKind,
+...     ConstraintKind,
 ...     SpecialConstraintPreparation,
 ... )
 >>> policy = PreparationPolicy()
@@ -35,7 +35,7 @@ then permits only lowering OneHot constraints to regular equalities:
 ...     policy.binary_power_reduction,
 ... ) == (None, None, None, None, None, None)
 >>> policy.special_constraints = SpecialConstraintPreparation.lower_special_constraints(
-...     kinds={SpecialConstraintKind.OneHot}
+...     kinds={ConstraintKind.OneHot}
 ... )
 >>> assert policy.integer_encoding is None
 >>> assert policy.fixed_penalty is None

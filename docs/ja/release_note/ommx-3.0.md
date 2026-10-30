@@ -8,10 +8,13 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ### 種類の追加に対応する公開API ([#1329](https://github.com/Jij-Inc/ommx/pull/1329))
 
-`Kind`、`SpecialConstraintKind`、`ProvenanceKind` の型ヒントを、網羅的な Enum から
+`Kind`、`ConstraintKind`、`ProvenanceKind` の型ヒントを、網羅的な Enum から
 既知の定数を持つ値クラスに変更しました。既存の定数・比較・hash・整数変換と
 Kind の protobuf 変換は引き続き利用できます。種類や制約familyを処理するときは、
 未対応の値を明示的に拒否する分岐を残してください。
+`ConstraintKind` は `Regular` を含み、従来の特殊制約selectorと `"sos1"` などの文字列入力を置き換えます。
+`constraints.of_kind(ConstraintKind.Sos1)` や
+`constraints_df(kind=ConstraintKind.Sos1)` を使ってください。familyビューの具体的な型は維持します。
 V3の数値スカラーの拡張契約は[移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
 
 ### 🆕 finite-domain 決定変数 ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
@@ -22,7 +25,7 @@ V3の数値スカラーの拡張契約は[移行ガイド](../migration/python_s
 作る場合は {meth}`~ommx.DecisionVariable.finite_domain` を使用します。
 
 ```python
-from ommx import DecisionVariable, Instance
+from ommx import ConstraintKind, DecisionVariable, Instance
 
 instance = Instance.minimize()
 x = instance.new_finite_domain([0.1, 0.3, 0.5, 1.0], name="x")
@@ -86,11 +89,11 @@ penaltyによって除去される制約には、エンコード後の式が保�
 所有元に追従する `.constraints` コレクションとして公開します。
 
 ```python
-from ommx import ConstraintID
+from ommx import ConstraintKind, ConstraintID
 
 rows = solution.constraints
 row = rows[ConstraintID(7)]
-frame = solution.constraints_df(kind="regular")
+frame = solution.constraints_df(kind=ConstraintKind.Regular)
 ```
 
 コレクションは所有元を保持し、型付きIDで参照された行だけを取得します。整数キーは拒否します。
@@ -104,7 +107,7 @@ frame = solution.constraints_df(kind="regular")
 `SampleSet.summary_with_constraints`は廃止します。サンプルごとの目的値と全体の実行可能性には
 `summary`を、制約別の結果には`constraints`または`constraints_df(kind=...)`を使います。
 
-`constraints.of_kind("sos1")`は、キーと行の具体型を保持するライブな`ConstraintFamilyView`を
+`constraints.of_kind(ConstraintKind.Sos1)`は、キーと行の具体型を保持するライブな`ConstraintFamilyView`を
 返します。`constraints_df`と同じkind文字列を受け取り、整数の検索キーを選択した種類へ
 自動昇格します。別種類のIDは拒否します。モデルの`removed_constraints`と結果の
 コレクションでも同じ絞り込みを使えます。
@@ -272,8 +275,8 @@ OneHot（ちょうど 1 つの変数が `1`、残りが `0`）と SOS1（非ゼ�
 
 ```python
 solution.total_violation()
-solution.constraint_violation(30, kind="one_hot")  # 既存の OneHot 制約 ID
-solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+solution.constraint_violation(30, kind=ConstraintKind.OneHot)  # 既存の OneHot 制約 ID
+solution.constraints_df(kind=ConstraintKind.Sos1)[["feasible", "violation"]]
 ```
 
 個別の制約では、`EvaluatedConstraint.feasible` を `is_feasible(atol=...)` に
@@ -303,7 +306,7 @@ SampleSet の実行可能性の判定と最良実行可能解の選択でも、
 `x[2] + x[3] <= 1` が通常制約 ID `202` にある場合は次のように指定します。
 
 ```python
-from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
+from ommx import ConstraintKind, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
 
 request = Sos1BigMPromotionRequest({
     202: {
@@ -336,7 +339,7 @@ print(report.rejections)  # 元の制約 ID -> 変換できなかった理由
 たとえば、整数変数について `x + y <= 7` と `y >= 2` から `x <= 5` を導けます。
 
 ```python
-from ommx import DecisionVariable, Instance, Sense
+from ommx import ConstraintKind, DecisionVariable, Instance, Sense
 
 x = DecisionVariable.integer(0, lower=0, upper=10)
 y = DecisionVariable.integer(1, lower=2, upper=10)
@@ -366,7 +369,7 @@ assert changed[0].upper == 5
 目的関数値と実行可能性を確認できるようになりました。
 
 ```python
-from ommx import Instance, State
+from ommx import ConstraintKind, Instance, State
 
 instance = Instance.load_qplib("QPLIB_0018.qplib")
 state = State.load_qplib_solution(
@@ -439,7 +442,7 @@ coordinateを使います。Instanceが既に所有するfixed valueは変更せ
 累乗をPythonから直接構築できます。
 
 ```python
-from ommx import DecisionVariable, Function
+from ommx import ConstraintKind, DecisionVariable, Function
 
 x = Function(DecisionVariable.continuous(1))
 y = Function(DecisionVariable.continuous(2))
@@ -515,7 +518,7 @@ rollbackや逆変換ではありません。promotion checkerは、現在の変�
 十分条件を満たすことを検証します。
 
 ```python
-from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
+from ommx import ConstraintKind, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
 
 request = Sos1BigMPromotionRequest({
     102: {
@@ -545,7 +548,7 @@ removed rowの情報はInstanceから参照できます。
 {meth}`~ommx.Instance.new_semi_continuous` を利用できます。
 
 ```python
-from ommx import Instance
+from ommx import ConstraintKind, Instance
 
 instance = Instance.minimize()
 count = instance.new_integer("count", lower=0, upper=10)
@@ -605,7 +608,7 @@ minimization energyを保持しつつ、`Solution`と`SampleSet`には入力inst
 公開していたobjective semanticsを保持するようになりました。
 
 ```python
-from ommx import DecisionVariable, Instance, Sense
+from ommx import ConstraintKind, DecisionVariable, Instance, Sense
 
 x = DecisionVariable.binary(0)
 instance = Instance.from_components(
@@ -872,7 +875,7 @@ infeasibleが証明された場合に {class}`~ommx.InfeasibleDetected` を送�
 制約は引き続き OMMX の変数 ID を内部に保存し、ID の getter も整数を返します。
 
 ```python
-from ommx import DecisionVariable, OneHotConstraint, Sos1Constraint
+from ommx import ConstraintKind, DecisionVariable, OneHotConstraint, Sos1Constraint
 
 xs = [DecisionVariable.binary(i) for i in range(3)]
 one_hot = OneHotConstraint(variables=xs)
@@ -891,7 +894,7 @@ modeling workflow については {class}`~ommx.IndicatorConstraint`・{class}`~
 {class}`~ommx.Instance` が数値 ID の割り当てを担い、モデルを段階的に構築できるようになりました。{meth}`~ommx.Instance.maximize` または {meth}`~ommx.Instance.minimize` で開始し、{meth}`~ommx.Instance.new_binary` で attached binary 変数を作成した後、目的関数の設定と制約条件の追加を直接行えます。明示的な ID を持つコンポーネントを組み立てる既存の {meth}`~ommx.Instance.from_components` も引き続き利用できます。曖昧な名前を持つ互換 alias `Instance.empty()` は static type checker 上で deprecated になりました。代わりに `Instance.minimize()` を使用してください。
 
 ```python
-from ommx import Instance
+from ommx import ConstraintKind, Instance
 
 instance = Instance.maximize()
 x = instance.new_binary("x")
@@ -937,7 +940,7 @@ feasible sample がなくてもSamplingは `finished` になります。solver�
 {class}`~ommx.experiment.Solve` として記録され、outputは `Solution | None` です。
 
 ```python
-from ommx import SampleSet
+from ommx import ConstraintKind, SampleSet
 from ommx.experiment import Experiment
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
@@ -1111,7 +1114,7 @@ unit-spaced な `float` integer 範囲外の非 point range を拒否します�
 source of truth が混在しないよう、置換前に拒否します。
 
 ```python
-from ommx import DecisionVariable, Instance
+from ommx import ConstraintKind, DecisionVariable, Instance
 
 x = DecisionVariable.integer(0, lower=2, upper=5)
 instance = Instance.from_components(
@@ -1144,7 +1147,7 @@ truncation metadata を持ち、Jupyter では escape 済み HTML を表示す�
 {class}`ommx.display.FunctionDisplay` を返します。
 
 ```python
-from ommx import DecisionVariable, Instance
+from ommx import ConstraintKind, DecisionVariable, Instance
 
 x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(2)]
 instance = Instance.from_components(
@@ -1167,7 +1170,7 @@ preview = instance.display_function(instance.objective)
 SDK の domain class は `ommx.v1` ではなく top-level `ommx` から import します。内部 PyO3 extension module は引き続き `ommx._ommx_rust` ですが、ユーザーコードや adapter は top-level `ommx` を公開 API として扱ってください。
 
 ```python
-from ommx import Instance, DecisionVariable, Function, Solution
+from ommx import ConstraintKind, Instance, DecisionVariable, Function, Solution
 ```
 
 `ommx.v1` は Python SDK の object namespace ではなくなりました。protobuf の wire-format schema/package 名や media type などを指す名前として予約され、`ommx.v1` から SDK domain class を import すると migration error になります。import 移行全体については [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) を参照してください。
@@ -1185,7 +1188,7 @@ Constraint metadata の置き換え操作は `set_*` prefix に統一しまし�
 `annotations` property は read-only な `types.MappingProxyType[str, str]` projection になりました。`obj.annotations[...]` の変更や `obj.annotations = {...}` の代入はエラーになります。OMMX metadata は専用 property で更新し、user annotation は `add_user_annotation`、`add_user_annotations`、`replace_annotations` を使って更新してください。
 
 ```python
-from ommx import Instance
+from ommx import ConstraintKind, Instance
 
 instance = Instance.minimize()
 instance.title = "portfolio"
@@ -1203,7 +1206,7 @@ assert restored.get_user_annotation("owner") == "analytics"
 {meth}`~ommx.Instance.populate_state` を Python SDK から使えるようにしました。部分的な solver state を Instance に対して検証し、Instance が所有する固定変数、irrelevant な変数、dependent variable を補完して、すべての決定変数を含む {class}`~ommx.State` を返します。
 
 ```python
-from ommx import DecisionVariable, Instance
+from ommx import ConstraintKind, DecisionVariable, Instance
 
 x = {i: DecisionVariable.continuous(i) for i in [1, 2, 5, 10, 99]}
 instance = Instance.from_components(
@@ -1451,7 +1454,7 @@ before / after コード例と移行チェックリストは {ref}`Python SDK v2
 ```python
 from ommx.experiment import Experiment
 from ommx_highs_adapter import OMMXHighsAdapter
-from ommx import Instance, Solution
+from ommx import ConstraintKind, Instance, Solution
 
 with Experiment() as experiment:
     with experiment.run() as run:
@@ -1492,7 +1495,7 @@ fork は Artifact Manifest を新しく作りますが、Instance / Solution / a
 {meth}`~ommx.Instance.substitute` と {meth}`~ommx.ParametricInstance.substitute` を Python から使えるようにしました。決定変数 ID から置換後の {class}`~ommx.Function` への辞書を渡すと、目的関数と有効な制約に現れる決定変数を in-place で代数的に書き換えます。`log_encode` の背後にある一般的な置換機構を直接使えるようになったため、unary encoding や one-hot encoding など独自の変数変換を書けます。
 
 ```python
-from ommx import DecisionVariable, Instance
+from ommx import ConstraintKind, DecisionVariable, Instance
 
 x = DecisionVariable.integer(0, lower=0, upper=3)
 b = [DecisionVariable.binary(i) for i in (1, 2)]
@@ -1524,7 +1527,7 @@ assert str(instance.objective) == "Function(x1 + 2*x2)"
 df = solution.constraints_df
 
 # After
-df = solution.constraints_df(kind="regular")
+df = solution.constraints_df(kind=ConstraintKind.Regular)
 ```
 
 ワイドな `*_df` メソッドには `include` 引数が追加され、ラベル系・パラメータ系のカラムをそれぞれ ON/OFF できます。デフォルトの `include=("label", "parameters")` は v2 互換のワイド形を維持します:
@@ -1556,7 +1559,7 @@ v2.5.1 までは {meth}`Solution.constraints_df <ommx.Solution.constraints_df>` 
 df = solution.constraints_df  # 'removed_reason' カラムを含む
 
 # After (3.0.0a3 — `*_df` はメソッドになりました)
-df = solution.constraints_df(kind="regular")  # removed_reason カラムなし
+df = solution.constraints_df(kind=ConstraintKind.Regular)  # removed_reason カラムなし
 df = solution.constraints_df(include=("label", "parameters", "removed_reason"))
 # ↳ removed_reason / removed_reason.{key} が追加（active 行は NA）
 ```
@@ -1633,7 +1636,7 @@ print(render_text_tree(trace))  # convert / solve / decode が所要時間付き
 {class}`~ommx.Function` に {meth}`Function.evaluate_bound <ommx.Function.evaluate_bound>` が追加され、各変数の区間を与えると関数値の範囲を含む {class}`~ommx.Bound` を返せるようになりました。Python 側で実行可能領域の事前解析や簡単な presolve を行う際に利用できます。
 
 ```python
-from ommx import Function, Linear, Bound
+from ommx import ConstraintKind, Function, Linear, Bound
 
 f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3
 b = f.evaluate_bound({1: Bound(0.0, 2.0)})

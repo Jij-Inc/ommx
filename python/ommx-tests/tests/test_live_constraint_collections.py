@@ -8,6 +8,7 @@ import pytest
 from typing_extensions import assert_type
 
 from ommx import (
+    ConstraintKind,
     AttachedConstraint,
     AttachedIndicatorConstraint,
     AttachedOneHotConstraint,
@@ -33,10 +34,10 @@ from ommx import (
 )
 
 FAMILIES = [
-    ("regular", ConstraintID, AttachedConstraint),
-    ("indicator", IndicatorConstraintID, AttachedIndicatorConstraint),
-    ("one_hot", OneHotConstraintID, AttachedOneHotConstraint),
-    ("sos1", Sos1ConstraintID, AttachedSos1Constraint),
+    (ConstraintKind.Regular, ConstraintID, AttachedConstraint),
+    (ConstraintKind.Indicator, IndicatorConstraintID, AttachedIndicatorConstraint),
+    (ConstraintKind.OneHot, OneHotConstraintID, AttachedOneHotConstraint),
+    (ConstraintKind.Sos1, Sos1ConstraintID, AttachedSos1Constraint),
 ]
 
 
@@ -83,8 +84,8 @@ def test_all_families_share_one_live_mapping(host):
         assert set(model.constraints_df(kind=kind).index) == {
             key for key in rows if isinstance(key, id_type)
         }
-        row.set_name(kind)
-        assert rows[id_type(NUMBERS[id_type])].name == kind
+        row.set_name(str(kind))
+        assert rows[id_type(NUMBERS[id_type])].name == str(kind)
     assert len(list(rows.values())) == len(list(rows.items())) == 4
     assert set(dict(rows)) == set(rows)
 

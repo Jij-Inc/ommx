@@ -18,7 +18,7 @@ from ommx import (
     PreparationTargetNotReachedError,
     PolynomialRequirement,
     Sense,
-    SpecialConstraintKind,
+    ConstraintKind,
     SpecialConstraintPreparation,
 )
 
@@ -60,7 +60,7 @@ def test_prepare_mutates_in_place_and_establishes_target_membership() -> None:
 
     policy = PreparationPolicy()
     policy.special_constraints = SpecialConstraintPreparation.lower_special_constraints(
-        kinds={SpecialConstraintKind.OneHot}
+        kinds={ConstraintKind.OneHot}
     )
     policy.objective = ObjectivePreparation(target=Sense.Minimize)
     policy.integer_slack = IntegerSlackPreparation(
@@ -80,13 +80,13 @@ def test_prepare_mutates_in_place_and_establishes_target_membership() -> None:
 
 def test_special_constraint_preparation_stores_bound_atol() -> None:
     preparation = SpecialConstraintPreparation.lower_special_constraints(
-        kinds={SpecialConstraintKind.Indicator}, atol=0.125
+        kinds={ConstraintKind.Indicator}, atol=0.125
     )
     same = SpecialConstraintPreparation.lower_special_constraints(
-        kinds={SpecialConstraintKind.Indicator}, atol=0.125
+        kinds={ConstraintKind.Indicator}, atol=0.125
     )
     different = SpecialConstraintPreparation.lower_special_constraints(
-        kinds={SpecialConstraintKind.Indicator}, atol=0.25
+        kinds={ConstraintKind.Indicator}, atol=0.25
     )
     assert preparation == same
     assert preparation != different

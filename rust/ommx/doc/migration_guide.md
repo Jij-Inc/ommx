@@ -2,9 +2,13 @@
 
 This document covers migration of the OMMX Rust SDK (`ommx` crate) across major versions.
 
-V3 makes `Kind`, `SpecialConstraintKind`, and `Provenance` non-exhaustive. Add explicit rejecting
+V3 makes `Kind`, `ConstraintKind`, and `Provenance` non-exhaustive. Add explicit rejecting
 fallback arms in semantic consumers. See the [extension contract](crate::doc::extension_contract)
 for the variable-domain and constraint-family compatibility boundary.
+
+`ConstraintKind` / `ConstraintKinds` replace the former
+`SpecialConstraintKind` / `SpecialConstraintKinds` selectors. The common family
+type includes `Regular`; selecting it for special-constraint lowering is an error.
 
 - [v3 (Stage Pattern)](#rust-sdk-v3-stage-pattern-migration-guide) — Constraint lifecycle stage parameterization
 - [v3 (Artifact API)](#rust-sdk-v3-artifact-api-migration-guide) — Local registry / archive draft split and renames

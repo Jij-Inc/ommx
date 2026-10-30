@@ -5,7 +5,7 @@ use super::*;
 use crate::constraint_id::{
     ConstraintIDInput, IndicatorConstraintIDInput, OneHotConstraintIDInput, Sos1ConstraintIDInput,
 };
-use crate::constraint_kind::{constraint_kind_collection, ConstraintKind};
+use crate::constraint_kind::{constraint_kind_collection, ConstraintFamilyInput};
 use pyo3::types::PyType;
 
 fn type_variable(name: &str) -> TypeInfo {
@@ -47,20 +47,20 @@ impl PyStubType for FamilyKeyInput {
     }
 }
 impl FamilyKeyInput {
-    fn normalize(self, py: Python<'_>, kind: ConstraintKind) -> PyResult<AnyConstraintID> {
+    fn normalize(self, py: Python<'_>, kind: ConstraintFamilyInput) -> PyResult<AnyConstraintID> {
         let key = self.0.bind(py);
         Ok(match kind {
-            ConstraintKind::Regular => {
+            ConstraintFamilyInput::Regular => {
                 ommx::ConstraintID::from(key.extract::<ConstraintIDInput>()?).into()
             }
-            ConstraintKind::Indicator => {
+            ConstraintFamilyInput::Indicator => {
                 ommx::IndicatorConstraintID::from(key.extract::<IndicatorConstraintIDInput>()?)
                     .into()
             }
-            ConstraintKind::OneHot => {
+            ConstraintFamilyInput::OneHot => {
                 ommx::OneHotConstraintID::from(key.extract::<OneHotConstraintIDInput>()?).into()
             }
-            ConstraintKind::Sos1 => {
+            ConstraintFamilyInput::Sos1 => {
                 ommx::Sos1ConstraintID::from(key.extract::<Sos1ConstraintIDInput>()?).into()
             }
         })
@@ -95,7 +95,7 @@ enum Owner {
 #[pyclass(frozen)]
 pub struct ConstraintFamilyView {
     owner: Owner,
-    kind: ConstraintKind,
+    kind: ConstraintFamilyInput,
 }
 impl PyStubType for ConstraintFamilyView {
     fn type_output() -> TypeInfo {
@@ -375,12 +375,12 @@ macro_rules! of_kind {
         #[pyo3_stub_gen::derive::gen_stub_pymethods]
         #[pymethods]
         impl $collection {
-            /// Return a live view of one family, using the same kind strings as
-            /// constraints_df: "regular", "indicator", "one_hot", or "sos1".
+            /// Return a live view of one family using a ConstraintKind selector,
+            /// including ConstraintKind.Regular for algebraic constraints.
             /// Integer keys are promoted; IDs of another family are rejected.
             /// Rows are fetched on demand with the original collection's lifecycle.
             #[gen_stub(skip)]
-            fn of_kind(slf: Bound<'_, Self>, kind: ConstraintKind) -> ConstraintFamilyView {
+            fn of_kind(slf: Bound<'_, Self>, kind: ConstraintFamilyInput) -> ConstraintFamilyView {
                 ConstraintFamilyView {
                     owner: Owner::$variant(slf.unbind()),
                     kind,
@@ -408,21 +408,24 @@ pyo3_stub_gen::inventory::submit! {
  pyo3_stub_gen::derive::gen_methods_from_python! { r#"
 class ConstraintCollection:
     @overload
-    def of_kind(self, kind: typing.Literal["regular"]) -> ConstraintFamilyView[ConstraintID, AttachedConstraint]:
-        """Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
+    def of_kind(self, kind: ConstraintKind[ConstraintID]) -> ConstraintFamilyView[ConstraintID, AttachedConstraint]:
+        """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
         ...
     @overload
-    def of_kind(self, kind: typing.Literal["indicator"]) -> ConstraintFamilyView[IndicatorConstraintID, AttachedIndicatorConstraint]:
-        """Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
+    def of_kind(self, kind: ConstraintKind[IndicatorConstraintID]) -> ConstraintFamilyView[IndicatorConstraintID, AttachedIndicatorConstraint]:
+        """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
         ...
     @overload
-    def of_kind(self, kind: typing.Literal["one_hot"]) -> ConstraintFamilyView[OneHotConstraintID, AttachedOneHotConstraint]:
-        """Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
+    def of_kind(self, kind: ConstraintKind[OneHotConstraintID]) -> ConstraintFamilyView[OneHotConstraintID, AttachedOneHotConstraint]:
+        """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
         ...
     @overload
-    def of_kind(self, kind: typing.Literal["sos1"]) -> ConstraintFamilyView[Sos1ConstraintID, AttachedSos1Constraint]:
-        """Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
+    def of_kind(self, kind: ConstraintKind[Sos1ConstraintID]) -> ConstraintFamilyView[Sos1ConstraintID, AttachedSos1Constraint]:
+        """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
         ...
+    @overload
+    def of_kind(self, kind: ConstraintKind[_K]) -> ConstraintFamilyView[_K, ConstraintView]: ...
+
 "# }
 }
 
@@ -430,21 +433,24 @@ pyo3_stub_gen::inventory::submit! {
  pyo3_stub_gen::derive::gen_methods_from_python! { r#"
 class RemovedConstraintCollection:
     @overload
-    def of_kind(self, kind: typing.Literal["regular"]) -> ConstraintFamilyView[ConstraintID, RemovedConstraint]:
-        """Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
+    def of_kind(self, kind: ConstraintKind[ConstraintID]) -> ConstraintFamilyView[ConstraintID, RemovedConstraint]:
+        """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
         ...
     @overload
-    def of_kind(self, kind: typing.Literal["indicator"]) -> ConstraintFamilyView[IndicatorConstraintID, RemovedIndicatorConstraint]:
-        """Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
+    def of_kind(self, kind: ConstraintKind[IndicatorConstraintID]) -> ConstraintFamilyView[IndicatorConstraintID, RemovedIndicatorConstraint]:
+        """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
         ...
     @overload
-    def of_kind(self, kind: typing.Literal["one_hot"]) -> ConstraintFamilyView[OneHotConstraintID, RemovedOneHotConstraint]:
-        """Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
+    def of_kind(self, kind: ConstraintKind[OneHotConstraintID]) -> ConstraintFamilyView[OneHotConstraintID, RemovedOneHotConstraint]:
+        """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
         ...
     @overload
-    def of_kind(self, kind: typing.Literal["sos1"]) -> ConstraintFamilyView[Sos1ConstraintID, RemovedSos1Constraint]:
-        """Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
+    def of_kind(self, kind: ConstraintKind[Sos1ConstraintID]) -> ConstraintFamilyView[Sos1ConstraintID, RemovedSos1Constraint]:
+        """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
         ...
+    @overload
+    def of_kind(self, kind: ConstraintKind[_K]) -> ConstraintFamilyView[_K, ConstraintView]: ...
+
 "# }
 }
 
@@ -452,21 +458,24 @@ pyo3_stub_gen::inventory::submit! {
  pyo3_stub_gen::derive::gen_methods_from_python! { r#"
 class EvaluatedConstraintCollection:
     @overload
-    def of_kind(self, kind: typing.Literal["regular"]) -> ConstraintFamilyView[ConstraintID, EvaluatedConstraint]:
-        """Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
+    def of_kind(self, kind: ConstraintKind[ConstraintID]) -> ConstraintFamilyView[ConstraintID, EvaluatedConstraint]:
+        """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
         ...
     @overload
-    def of_kind(self, kind: typing.Literal["indicator"]) -> ConstraintFamilyView[IndicatorConstraintID, EvaluatedIndicatorConstraint]:
-        """Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
+    def of_kind(self, kind: ConstraintKind[IndicatorConstraintID]) -> ConstraintFamilyView[IndicatorConstraintID, EvaluatedIndicatorConstraint]:
+        """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
         ...
     @overload
-    def of_kind(self, kind: typing.Literal["one_hot"]) -> ConstraintFamilyView[OneHotConstraintID, EvaluatedOneHotConstraint]:
-        """Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
+    def of_kind(self, kind: ConstraintKind[OneHotConstraintID]) -> ConstraintFamilyView[OneHotConstraintID, EvaluatedOneHotConstraint]:
+        """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
         ...
     @overload
-    def of_kind(self, kind: typing.Literal["sos1"]) -> ConstraintFamilyView[Sos1ConstraintID, EvaluatedSos1Constraint]:
-        """Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
+    def of_kind(self, kind: ConstraintKind[Sos1ConstraintID]) -> ConstraintFamilyView[Sos1ConstraintID, EvaluatedSos1Constraint]:
+        """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
         ...
+    @overload
+    def of_kind(self, kind: ConstraintKind[_K]) -> ConstraintFamilyView[_K, ConstraintView]: ...
+
 "# }
 }
 
@@ -474,20 +483,23 @@ pyo3_stub_gen::inventory::submit! {
  pyo3_stub_gen::derive::gen_methods_from_python! { r#"
 class SampledConstraintCollection:
     @overload
-    def of_kind(self, kind: typing.Literal["regular"]) -> ConstraintFamilyView[ConstraintID, SampledConstraint]:
-        """Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
+    def of_kind(self, kind: ConstraintKind[ConstraintID]) -> ConstraintFamilyView[ConstraintID, SampledConstraint]:
+        """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
         ...
     @overload
-    def of_kind(self, kind: typing.Literal["indicator"]) -> ConstraintFamilyView[IndicatorConstraintID, SampledIndicatorConstraint]:
-        """Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
+    def of_kind(self, kind: ConstraintKind[IndicatorConstraintID]) -> ConstraintFamilyView[IndicatorConstraintID, SampledIndicatorConstraint]:
+        """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
         ...
     @overload
-    def of_kind(self, kind: typing.Literal["one_hot"]) -> ConstraintFamilyView[OneHotConstraintID, SampledOneHotConstraint]:
-        """Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
+    def of_kind(self, kind: ConstraintKind[OneHotConstraintID]) -> ConstraintFamilyView[OneHotConstraintID, SampledOneHotConstraint]:
+        """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
         ...
     @overload
-    def of_kind(self, kind: typing.Literal["sos1"]) -> ConstraintFamilyView[Sos1ConstraintID, SampledSos1Constraint]:
-        """Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
+    def of_kind(self, kind: ConstraintKind[Sos1ConstraintID]) -> ConstraintFamilyView[Sos1ConstraintID, SampledSos1Constraint]:
+        """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
         ...
+    @overload
+    def of_kind(self, kind: ConstraintKind[_K]) -> ConstraintFamilyView[_K, ConstraintView]: ...
+
 "# }
 }

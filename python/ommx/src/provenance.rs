@@ -2,7 +2,7 @@ use pyo3::prelude::*;
 
 crate::enums::open_kind! {
     /// Source constraint family. Additional provenance families may be added.
-    ProvenanceKind, ommx::SpecialConstraintKind, |kind| kind as i32;
+    ProvenanceKind, ommx::ConstraintKind, |kind| kind as i32;
     IndicatorConstraint => Indicator, OneHotConstraint => OneHot, Sos1Constraint => Sos1
 }
 
@@ -68,10 +68,7 @@ impl Provenance {
     }
 
     pub fn __repr__(&self) -> String {
-        let kind_name = format!(
-            "{:?}Constraint",
-            ommx::SpecialConstraintKind::from(self.kind)
-        );
+        let kind_name = format!("{:?}Constraint", ommx::ConstraintKind::from(self.kind));
         format!("Provenance({}({}))", kind_name, self.original_id)
     }
 }

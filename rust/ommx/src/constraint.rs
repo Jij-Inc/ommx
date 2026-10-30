@@ -99,6 +99,47 @@ impl From<ConstraintID> for u64 {
     }
 }
 
+/// A constraint family, including regular algebraic constraints.
+///
+/// This classifies domain semantics for queries and transformation selection.
+/// It does not declare adapter support or wire reconstruction requirements.
+/// Additional families may be added; consumers must retain a rejecting fallback.
+///
+/// The [`PartialOrd`] / [`Ord`] derives follow variant declaration order
+/// (`Regular < Indicator < OneHot < Sos1`), which is also the order in which
+/// [`ConstraintKinds`] iterates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+#[repr(i32)]
+pub enum ConstraintKind {
+    /// Regular algebraic constraints.
+    Regular = 0,
+    /// Indicator constraints: binvar = 1 → f(x) <= 0
+    Indicator = 1,
+    /// One-hot constraints: exactly one of a set of binary variables must be 1
+    OneHot = 2,
+    /// SOS1 constraints: at most one of a set of variables can be non-zero
+    Sos1 = 3,
+}
+
+/// A set of [`ConstraintKind`] constraint families.
+///
+/// Always represented as a [`std::collections::BTreeSet`] so iteration,
+/// formatting, and comparison are deterministic and sorted by variant order.
+pub type ConstraintKinds = std::collections::BTreeSet<ConstraintKind>;
+
+impl ConstraintKind {
+    /// Stable family label for display and tabular column names.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Regular => "regular",
+            Self::Indicator => "indicator",
+            Self::OneHot => "one_hot",
+            Self::Sos1 => "sos1",
+        }
+    }
+}
+
 /// One step in a constraint's transformation history.
 ///
 /// For example, when an indicator constraint with indicator=1 is propagated,
@@ -114,11 +155,11 @@ pub enum Provenance {
 
 impl Provenance {
     /// Source family, including families added in future SDK versions.
-    pub fn kind(&self) -> crate::SpecialConstraintKind {
+    pub fn kind(&self) -> crate::ConstraintKind {
         match self {
-            Self::IndicatorConstraint(_) => crate::SpecialConstraintKind::Indicator,
-            Self::OneHotConstraint(_) => crate::SpecialConstraintKind::OneHot,
-            Self::Sos1Constraint(_) => crate::SpecialConstraintKind::Sos1,
+            Self::IndicatorConstraint(_) => crate::ConstraintKind::Indicator,
+            Self::OneHotConstraint(_) => crate::ConstraintKind::OneHot,
+            Self::Sos1Constraint(_) => crate::ConstraintKind::Sos1,
         }
     }
     /// Source constraint number. Interpret it together with the source family.

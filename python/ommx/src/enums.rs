@@ -35,6 +35,9 @@ macro_rules! open_kind {
                 }
             }
             fn __repr__(&self) -> String {
+                $(if self.0 == <$core>::$core_variant {
+                    return concat!(stringify!($name), ".", stringify!($variant)).to_string();
+                })+
                 format!("{}.{:?}", stringify!($name), self.0)
             }
         }
@@ -64,15 +67,6 @@ macro_rules! open_kind {
 use pyo3::prelude::*;
 
 pub(crate) use open_kind;
-
-open_kind! {
-    /// Special constraint family selector. Additional families may be added.
-    /// Handle supported values explicitly and reject all other values.
-    /// This selects transformations; adapter input is declared by InstanceClass.
-    SpecialConstraintKind, ommx::SpecialConstraintKind,
-    |kind| kind as i32;
-    Indicator => Indicator, OneHot => OneHot, Sos1 => Sos1
-}
 
 /// How a decision variable obtains its value in an {class}`~ommx.Instance`.
 ///

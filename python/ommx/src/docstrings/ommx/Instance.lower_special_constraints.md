@@ -9,7 +9,7 @@ instance is mutated in place. Kinds omitted from ``kinds_to_lower``
 remain active, and an empty set is a no-op. This does not establish
 {class}`~ommx.InstanceClass` membership; check the resulting input separately.
 
-Returns the set of {class}`~ommx.SpecialConstraintKind` values that were
+Returns the set of {class}`~ommx.ConstraintKind` values that were
 requested and active, and therefore actually lowered. Empty when no
 requested kind was active.
 
@@ -42,7 +42,7 @@ the active SOS1, retains the original OneHot for evaluation, and adds an equalit
 ...     OneHotConstraintID,
 ...     ProvenanceKind,
 ...     Sos1Constraint,
-...     SpecialConstraintKind,
+...     ConstraintKind,
 ... )
 >>> instance = Instance.maximize()
 >>> choices = [instance.new_binary("choice", subscripts=[i]) for i in range(3)]
@@ -50,13 +50,13 @@ the active SOS1, retains the original OneHot for evaluation, and adds an equalit
 >>> original = instance.add_one_hot_constraint(OneHotConstraint(variables=choices))
 >>> _ = instance.add_sos1_constraint(Sos1Constraint(variables=choices))
 >>> assert instance.active_special_constraint_kinds == {
-...     SpecialConstraintKind.OneHot,
-...     SpecialConstraintKind.Sos1,
+...     ConstraintKind.OneHot,
+...     ConstraintKind.Sos1,
 ... }
->>> assert instance.lower_special_constraints({SpecialConstraintKind.OneHot}) == {
-...     SpecialConstraintKind.OneHot,
+>>> assert instance.lower_special_constraints({ConstraintKind.OneHot}) == {
+...     ConstraintKind.OneHot,
 ... }
->>> assert instance.active_special_constraint_kinds == {SpecialConstraintKind.Sos1}
+>>> assert instance.active_special_constraint_kinds == {ConstraintKind.Sos1}
 >>> assert original.constraint_id not in instance.constraints
 >>> removed = instance.removed_constraints[original.constraint_id]
 >>> assert removed.removed_reason == "ommx.Instance.convert_one_hot_to_constraint"
@@ -64,12 +64,12 @@ the active SOS1, retains the original OneHot for evaluation, and adds an equalit
 >>> generated = instance.constraints[ConstraintID(2)]
 >>> assert generated.provenance[-1].kind == ProvenanceKind.OneHotConstraint
 >>> assert generated.provenance[-1].original_id == OneHotConstraintID(0)
->>> rows = instance.constraints_df(kind="one_hot", removed=True)
+>>> rows = instance.constraints_df(kind=ConstraintKind.OneHot, removed=True)
 >>> assert rows.loc[original.constraint_id, "removed_reason"] == removed.removed_reason
 >>> assert instance.evaluate(
 ...     {choices[0].id: 1, choices[1].id: 0, choices[2].id: 0}
 ... ).feasible
->>> assert instance.lower_special_constraints({SpecialConstraintKind.OneHot}) == set()
+>>> assert instance.lower_special_constraints({ConstraintKind.OneHot}) == set()
 >>> assert instance.lower_special_constraints(set()) == set()
 
 ```

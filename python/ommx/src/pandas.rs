@@ -1,7 +1,7 @@
 //! Thin wrapper around `pandas.DataFrame` for type-safe PyO3 bindings,
 //! plus shared helpers for building DataFrames from domain objects.
 
-use crate::constraint_kind::ConstraintKind;
+use crate::constraint_kind::ConstraintFamilyInput;
 use ommx::EvaluatedConstraintBehavior;
 use ommx::SampledConstraintBehavior;
 use std::collections::HashMap;
@@ -138,12 +138,12 @@ const REMOVED_REASON_PREFIX: &str = "removed_reason.";
 /// Index column name for the chosen constraint kind. Each kind has a
 /// distinct ID space, so the qualified name keeps cross-kind joins
 /// visible (`regular_constraint_id` ≠ `indicator_constraint_id` etc.).
-pub fn constraint_id_col(kind: ConstraintKind) -> &'static str {
+pub fn constraint_id_col(kind: ConstraintFamilyInput) -> &'static str {
     match kind {
-        ConstraintKind::Regular => "regular_constraint_id",
-        ConstraintKind::Indicator => "indicator_constraint_id",
-        ConstraintKind::OneHot => "one_hot_constraint_id",
-        ConstraintKind::Sos1 => "sos1_constraint_id",
+        ConstraintFamilyInput::Regular => "regular_constraint_id",
+        ConstraintFamilyInput::Indicator => "indicator_constraint_id",
+        ConstraintFamilyInput::OneHot => "one_hot_constraint_id",
+        ConstraintFamilyInput::Sos1 => "sos1_constraint_id",
     }
 }
 

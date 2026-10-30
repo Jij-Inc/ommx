@@ -65,6 +65,7 @@ pub use constraint::*;
 pub use constraint_id::{
     ConstraintID, IndicatorConstraintID, OneHotConstraintID, Sos1ConstraintID,
 };
+pub use constraint_kind::ConstraintKind;
 pub use constraint_results::{
     EvaluatedIndicatorConstraint, EvaluatedOneHotConstraint, EvaluatedSos1Constraint,
     SampledIndicatorConstraint, SampledOneHotConstraint, SampledSos1Constraint,
@@ -221,7 +222,7 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<DecisionVariable>()?;
     m.add_class::<AttachedDecisionVariable>()?;
     m.add_class::<Parameter>()?;
-    m.add_class::<SpecialConstraintKind>()?;
+    m.add_class::<ConstraintKind>()?;
     m.add_class::<PolynomialRequirement>()?;
     m.add_class::<InstanceClassClause>()?;
     m.add_class::<InstanceClass>()?;
@@ -344,7 +345,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "AttachedDecisionVariable",
     "Parameter",
     // Instance classes and explicit special-constraint lowering
-    "SpecialConstraintKind",
+    "ConstraintKind",
     "PolynomialRequirement",
     "InstanceClassClause",
     "InstanceClass",
