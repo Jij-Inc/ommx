@@ -2,7 +2,7 @@
 
 **共有先の名前でArtifactを作り、認証後に`push()`します。** ファイルで渡す場合と違い、配布先へのアクセス権とネットワーク接続が必要です。
 
-Artifactは、複数のデータとその説明をまとめる入れ物です。ここではGitHub Container Registry（`ghcr.io`）を例に、JSONの小さなメモを共有先へ保存し、受信側で取得します。問題や評価結果も同じArtifactに追加できます。ローカルのファイルだけで十分なら、[ファイル受け渡しTutorial](../tutorial/share_in_ommx_artifact.md)を使ってください。Experimentはこの操作の前提ではありません。
+Artifactは、複数のデータとその説明をまとめる入れ物です。ここではGitHub Container Registry（`ghcr.io`）を例に、JSONの小さなメモを共有先へ保存し、受信側で取得します。問題や評価結果も同じArtifactに追加できます。ローカルのファイルだけで十分なら、{class}`~ommx.artifact.Artifact`のファイル受け渡し例を使ってください。Experimentはこの操作の前提ではありません。
 
 ## 必要な環境と権限
 
@@ -62,7 +62,7 @@ summary = artifact.get_json(layer)
 assert summary == {"trial": 1, "note": "shared record"}
 ```
 
-`load()`はLocal Registryにある参照を優先し、なければリモートから取得して保存します。同じタグの更新を毎回取得する処理ではありません。特定の内容を共有・記録する場合は、マニフェスト（収録データの目録）の内容から計算する識別子digestを使い、配布側が確認した`ghcr.io/.../candidate-notes@sha256:...`形式の参照を渡します。使い分けの詳細は{ref}`名前・タグと内容の識別子 <artifact-identity>`を参照してください。
+`load()`はLocal Registryにある参照を優先し、なければリモートから取得して保存します。同じタグの更新を毎回取得する処理ではありません。特定の内容を共有・記録する場合は、マニフェスト（収録データの目録）の内容から計算する識別子digestを使い、配布側が確認した`ghcr.io/.../candidate-notes@sha256:...`形式の参照を渡します。使い分けの詳細は{class}`Artifactの名前と内容の識別 <ommx.artifact.Artifact>`を参照してください。
 
 ## 取得できない場合
 

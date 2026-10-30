@@ -302,17 +302,211 @@ class ArchiveManifest:
 
 @typing.final
 class Artifact:
-    r"""
-    Reader for OMMX Artifacts.
+    """
+    Read a committed package of optimization data from the Local Registry.
 
-    An artifact is an OCI container image that stores OMMX data
-    (instances, solutions, sample sets, etc.) as layers.
+    An Artifact groups problems, evaluated candidates, tables, and other data with
+    metadata. It is optional: constructing, transforming, evaluating, or solving an
+    {class}`~ommx.Instance` does not require an Artifact. Use
+    {class}`~ommx.experiment.Experiment` when you also want to organize recorded
+    conditions and results into trials.
 
-    This example requires remote registry access and is not executed as a doctest.
+    # Layers, descriptors, and relationships
 
-    >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")  # doctest: +SKIP
-    >>> print(artifact.image_name)  # doctest: +SKIP
-    ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
+    Each data item is a **layer**. A **manifest** lists the layers and their metadata.
+    A layer's {class}`~ommx.artifact.Descriptor` identifies its media type, byte size,
+    content digest, and annotations. Typed methods such as
+    {meth}`~ommx.artifact.ArtifactDraft.add_instance` and {meth}`get_instance` choose
+    and interpret the corresponding serialization format.
+
+    The Artifact does not infer which problem produced a particular result merely
+    because both are present. Record the relationships your application needs. For
+    example, the complete exchange below records the problem and result layer
+    digests in a JSON analysis note. When several layers have the same type, select
+    their descriptors with {meth}`get_layer_descriptor` and pass them to the typed
+    getters. The convenience properties {attr}`instance` and {attr}`solution` return
+    the first layer of the requested type.
+
+    Annotations describe a layer without decoding its data. For JSON, tables, and
+    arrays, annotation keywords such as `title=\"analysis\"` are stored under the
+    default `org.ommx.user.` namespace. They are labels, not uniqueness constraints;
+    the example deliberately assigns distinct titles.
+
+    # Save a problem and candidate, then read them in another process
+
+    This example needs only the Python SDK and its pandas dependency. It evaluates
+    an explicit candidate; it does not run a solver. The sender writes a problem,
+    its evaluated candidate, an analysis note, and a table into one `.ommx` file.
+    Build a mutable {class}`~ommx.artifact.ArtifactDraft`, add the data, and commit
+    its layer list into the Local Registry. Then save the committed Artifact as an
+    archive; committing locally and exporting a transferable file are separate steps.
+
+    ```pycon
+    >>> sender = \"\"\"
+    ... import sys
+    ... import pandas as pd
+    ... from ommx import Instance
+    ... from ommx.artifact import ArtifactDraft
+    ...
+    ... instance = Instance.maximize()
+    ... x = instance.new_binary(\"x\")
+    ... y = instance.new_binary(\"y\")
+    ... instance.objective = 3 * x + 2 * y
+    ... instance.add_constraint(x + y <= 1)
+    ... solution = instance.evaluate({x.id: 1, y.id: 0})
+    ... assert solution.feasible and solution.objective == 3
+    ...
+    ... draft = ArtifactDraft.new_anonymous()
+    ... instance_layer = draft.add_instance(instance)
+    ... solution_layer = draft.add_solution(solution)
+    ... draft.add_json({
+    ...     \"instance_digest\": instance_layer.digest,
+    ...     \"solution_digest\": solution_layer.digest,
+    ...     \"note\": \"An evaluated candidate, not an optimality certificate.\",
+    ... }, title=\"analysis\")
+    ... draft.add_dataframe(pd.DataFrame({
+    ...     \"item\": [\"x\", \"y\"], \"selected\": [True, False],
+    ... }), title=\"selection\")
+    ... artifact = draft.commit()
+    ... artifact.save(sys.argv[1])
+    ... \"\"\"
+
+    ```
+
+    The receiver uses only the transferred file. It retrieves the problem and
+    result identified by the analysis note, reevaluates the saved state, and reads
+    the table. {meth}`import_archive` imports the contents into the receiver's Local
+    Registry; it does not keep reading the sender's registry or Python objects.
+
+    ```pycon
+    >>> receiver = \"\"\"
+    ... import sys
+    ... from ommx.artifact import Artifact
+    ...
+    ... received = Artifact.import_archive(sys.argv[1])
+    ... by_title = {
+    ...     layer.annotations[\"org.ommx.user.title\"]: layer
+    ...     for layer in received.layers
+    ...     if \"org.ommx.user.title\" in layer.annotations
+    ... }
+    ... analysis = received.get_json(by_title[\"analysis\"])
+    ... instance = received.get_instance(
+    ...     received.get_layer_descriptor(analysis[\"instance_digest\"])
+    ... )
+    ... solution = received.get_solution(
+    ...     received.get_layer_descriptor(analysis[\"solution_digest\"])
+    ... )
+    ... checked = instance.evaluate(solution.state)
+    ... assert checked.feasible == solution.feasible
+    ... assert checked.objective == solution.objective
+    ... selection = received.get_dataframe(by_title[\"selection\"])
+    ... print(solution.feasible, solution.objective)
+    ... print(selection.loc[selection[\"selected\"], \"item\"].tolist())
+    ... \"\"\"
+
+    ```
+
+    Run these two programs in separate processes using the same SDK environment.
+    The following executable harness creates two initially empty registries and a
+    temporary shared file. It sets `OMMX_LOCAL_REGISTRY_ROOT` before each child
+    process starts, so it does not write to your normal registry. A real recipient
+    can run the receiver program on the transferred archive in their own environment.
+
+    ```pycon
+    >>> import os
+    >>> import subprocess
+    >>> import sys
+    >>> from pathlib import Path
+    >>> from tempfile import TemporaryDirectory
+    >>> with TemporaryDirectory() as directory:
+    ...     root = Path(directory)
+    ...     sender_registry = root / \"sender-registry\"
+    ...     receiver_registry = root / \"receiver-registry\"
+    ...     sender_registry.mkdir()
+    ...     receiver_registry.mkdir()
+    ...     archive = root / \"candidate.ommx\"
+    ...     sent = subprocess.run(
+    ...         [sys.executable, \"-c\", sender, str(archive)],
+    ...         env={**os.environ, \"OMMX_LOCAL_REGISTRY_ROOT\": str(sender_registry)},
+    ...         capture_output=True,
+    ...         text=True,
+    ...     )
+    ...     assert sent.returncode == 0, sent.stderr
+    ...     assert not list(receiver_registry.iterdir())
+    ...     received = subprocess.run(
+    ...         [sys.executable, \"-c\", receiver, str(archive)],
+    ...         env={**os.environ, \"OMMX_LOCAL_REGISTRY_ROOT\": str(receiver_registry)},
+    ...         capture_output=True,
+    ...         text=True,
+    ...     )
+    ...     assert received.returncode == 0, received.stderr
+    ...     print(received.stdout, end=\"\")
+    True 3.0
+    ['x']
+
+    ```
+
+    The sender's process has exited before the receiver starts, and the receiver's
+    registry begins empty. The archive is sufficient to recover these stored data.
+    This does not prove optimality or reproduce the original computation: source
+    code, solver settings, and environment details are present only if you recorded
+    them explicitly.
+
+    # Local storage, archives, and remote registries
+
+    | Destination | Operation | Meaning |
+    | --- | --- | --- |
+    | Local Registry | {meth}`~ommx.artifact.ArtifactDraft.commit`, {meth}`load` | Store or reopen a named Artifact on this machine |
+    | `.ommx` archive | {meth}`save`, {meth}`import_archive` | Export a file for transfer, or import its contents into the receiver's registry |
+    | Remote OCI registry | {meth}`push`, {meth}`load` | Distribute an Artifact, or retrieve a reference absent from the Local Registry |
+
+    The **Local Registry** is the SDK's persistent local storage. Choose a separate
+    root with `OMMX_LOCAL_REGISTRY_ROOT` when starting the process. Changing the root
+    changes which stored data are visible; it does not move existing data.
+    {meth}`inspect_archive` reads only the manifest and descriptors without importing
+    the archive. Its {class}`~ommx.artifact.ArchiveManifest` does not provide decoded
+    layer contents.
+
+    An OCI registry distributes data using container-registry protocols. An OMMX
+    Artifact is a data package, not an executable container. Remote authentication
+    and access control belong to the registry service. A local commit neither
+    exports a file nor uploads data; those require `save()` or `push()` respectively.
+
+    # Names, tags, and content digests
+
+    A reference such as `ghcr.io/my-team/my-project/candidates:trial-1` identifies a
+    registry, repository, and tag. A tag is a name that can later refer to different
+    content. A **digest** identifies content: a manifest digest identifies the
+    manifest, while each layer has its own digest. The two identify different data.
+    An archive's manifest digest is available from
+    {attr}`~ommx.artifact.ArchiveManifest.manifest_digest`.
+
+    {meth}`load` checks local storage first and retrieves from the remote registry
+    only when the reference is absent locally. Loading an already present tag does
+    not refresh it from the remote server. Use the distributor's digest reference
+    when you need a specific published Artifact.
+
+    {meth}`~ommx.artifact.ArtifactDraft.new_anonymous` generates a local name
+    containing `.ommx.local`; it is suitable for starting without a distribution
+    name and for exporting archives, but is not a remote publishing destination.
+    Use {meth}`~ommx.artifact.ArtifactDraft.new` or
+    {meth}`~ommx.artifact.ArtifactDraft.for_github` when choosing a remote name.
+    Anonymous entries remain in local storage until managed explicitly; see
+    {func}`~ommx.artifact.prune_anonymous` and {func}`~ommx.artifact.gc` for cleanup.
+
+    # Data format and SDK versions
+
+    The Python SDK version, the Message wire-schema version, and the Artifact type
+    are separate. For example, `v1` in `application/org.ommx.v1.artifact` does not mean
+    Python SDK version 1. Typed layer methods handle the payload formats supported by
+    the installed SDK.
+
+    For another language or tool, consult the
+    [Artifact specification](https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/doc/artifact_design.md)
+    and [Message schemas](https://github.com/Jij-Inc/ommx/tree/main/proto).
+    {meth}`~ommx.Instance.save_mps` instead exports a supported mathematical model
+    for MPS-compatible tools; it does not preserve all OMMX labels, evaluation
+    metadata, and recorded data as an Artifact does.
     """
 
     TRACE_OTLP_PROTOBUF_MEDIA_TYPE: builtins.str
@@ -378,6 +572,8 @@ class Artifact:
         For a side-effect-free read that just surfaces the manifest /
         layer descriptors without writing into the registry, use
         {meth}`Artifact.inspect_archive` instead.
+        The {class}`~ommx.artifact.Artifact` example creates and imports a
+        complete archive in separate processes with isolated registries.
 
         If the input lacks an `org.opencontainers.image.ref.name`
         annotation, v3 synthesizes an anonymous Local Registry ref and
@@ -442,6 +638,9 @@ class Artifact:
         Load an artifact stored as a container image in local or remote registry.
 
         If the image is not found in local registry, it will try to pull from remote registry.
+        Loading an already present tag does not refresh it from the remote
+        registry. Use a digest reference to identify a particular published
+        Artifact; see {class}`~ommx.artifact.Artifact` for names and digests.
 
         This example requires remote registry access and is not executed as a doctest.
 
@@ -470,6 +669,8 @@ class Artifact:
         Registry under the same image name; {meth}`Artifact.inspect_archive`
         reads the manifest / layer descriptors without writing into the
         registry.
+        See {class}`~ommx.artifact.Artifact` for a complete save/import example
+        whose receiver starts in a new process with an empty registry.
         """
     def get_layer_descriptor(self, digest: builtins.str) -> Descriptor:
         r"""
@@ -575,14 +776,56 @@ class Artifact:
 @typing.final
 class ArtifactDraft:
     r"""
-    Mutable draft for OMMX Artifacts.
+    Build an Artifact by adding typed data and metadata, then commit it locally.
 
-    This example writes to the persistent Local Registry and is not executed as a doctest.
+    A draft collects the layers and annotations that will become an
+    {class}`~ommx.artifact.Artifact`. The Artifact class contains a complete
+    executable example that creates a problem and candidate, adds JSON and a table,
+    exports an archive, and reads it in a separate process with an empty registry.
 
-    >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
-    >>> artifact = draft.commit()  # doctest: +SKIP
-    >>> print(artifact.image_name)  # doctest: +SKIP
-    ttl.sh/...-...-...-...-...:1h
+    # Choose a name
+
+    | Constructor | Use |
+    | --- | --- |
+    | {meth}`new` | Supply an explicit OCI image reference |
+    | {meth}`new_anonymous` | Generate a local name when you do not need a distribution name |
+    | {meth}`for_github` | Build a GitHub Container Registry reference and record its source repository |
+
+    Every constructor uses the Local Registry. An anonymous name is still a
+    persistent registry entry, not a temporary file. Its timestamp records the
+    sender's local clock without a timezone marker; do not use that part of the name
+    as an absolute timestamp across machines. {meth}`new_anonymous` describes the
+    complete naming convention.
+
+    # Add data and record its meaning
+
+    Use {meth}`add_instance`, {meth}`add_parametric_instance`, {meth}`add_solution`,
+    or {meth}`add_sample_set` for OMMX objects. Their payload formats and OMMX
+    annotations are handled by the SDK. {meth}`add_json`, {meth}`add_dataframe`, and
+    {meth}`add_ndarray` store JSON, pandas tables, and NumPy arrays. Their annotation
+    keywords use `org.ommx.user.` by default; `title="analysis"` becomes the
+    `org.ommx.user.title` annotation. {meth}`add_annotation` adds manifest-level
+    metadata rather than a layer annotation.
+
+    Adding data returns a {class}`~ommx.artifact.Descriptor`. Retain its digest when
+    you need to identify that exact layer in a separate note or application record.
+    Adding several problems and results does not establish their relationships
+    automatically. {meth}`add_layer` is the low-level operation for data with an
+    explicit media type and byte representation.
+
+    # Commit, export, and distribute
+
+    {meth}`commit` finalizes the layer list and creates a registry-resident Artifact.
+    The draft is consumed by this operation; use a new draft for different content.
+    Layer data can already have been written locally while building the draft, so
+    an uncommitted draft does not mean that no disk writes occurred.
+
+    Committing does not write a `.ommx` archive or contact a remote registry. Call
+    {meth}`~ommx.artifact.Artifact.save` on the returned Artifact to export a file, or
+    {meth}`~ommx.artifact.Artifact.push` to distribute it. A receiver imports an
+    archive with {meth}`~ommx.artifact.Artifact.import_archive` before reading its
+    layers. The complete exchange example in {class}`~ommx.artifact.Artifact`
+    demonstrates these boundaries without a solver or remote service.
     """
     @staticmethod
     def new(image_name: builtins.str) -> ArtifactDraft:
@@ -793,6 +1036,10 @@ class ArtifactDraft:
     def commit(self) -> Artifact:
         r"""
         Commit the artifact draft.
+
+        Return a registry-resident {class}`Artifact`; exporting a file and
+        distributing it use {meth}`Artifact.save` and {meth}`Artifact.push`.
+        See {class}`Artifact` for the complete file-exchange example.
 
         Raises {class}`RuntimeError` for registry or storage failures and when
         the draft has already been committed.
@@ -2723,67 +2970,189 @@ class ExactIntegerSlackError(builtins.RuntimeError):
 
 @typing.final
 class Experiment:
-    r"""
-    A collection of optimization experiment records stored as one OMMX Artifact.
+    """
+    A collection of optimization trial records stored as one OMMX Artifact.
 
-    An `Experiment` owns experiment-level attachments and a sequence of
-    closed `Run` records. Each `Run` can store scalar run parameters,
-    run-level attachments, and zero or more `Solve` and `Sampling` records.
+    An Experiment owns shared attachments and a sequence of closed {class}`Run`
+    records. Each Run represents one trial, with scalar parameters, attachments,
+    and zero or more {class}`Solve` or {class}`Sampling` records. Solving,
+    transforming, or evaluating a problem does not require an Experiment.
 
-    Newly created experiments are unsealed. Call `commit()` to write the
-    experiment into the local registry as an OMMX Artifact. After commit, the
-    same object can be used as a read-only view of the committed artifact.
-    `with Experiment(...)` commits on normal exit if the experiment is still
-    unsealed. On exception it does not advance the successful Experiment image
-    reference; instead it tries to publish a local checkpoint with status
-    `"failed"` or `"interrupted"`.
+    # Record two candidates and read them back
 
-    Logging APIs store payload bytes in the Local Registry immediately. The
-    final commit writes an Experiment config and manifest that make those
-    payloads reachable as one immutable Artifact. By default, a closed `Run`
-    also publishes a best-effort `"draft"` checkpoint so a later process can
-    resume from the latest closed Run with
-    `Experiment.restore_from_checkpoint(...)`. Use
-    `set_autosave_policy(...)` to batch, rate-limit, or disable these
-    Run-close checkpoints.
+    This complete example evaluates two supplied candidates without a solver. The
+    shared problem belongs to the Experiment; each Run stores its own condition and
+    result. A temporary Local Registry keeps the example separate from your saved
+    data. Use `Experiment(image_name)` instead when you want a persistent local
+    record that can later be opened by {meth}`load`.
 
-    Use experiment-level attachments for shared context such as dataset or
-    source-problem metadata. Use `Run.log_parameter(...)` for scalar values
-    that should appear in `run_parameters_df()`, and use run attachments or
-    `Run.log_solve(...)` and `Run.log_sample(...)` for payloads that belong to
-    a specific run.
-
-    Attachment lookup by an absent name raises {class}`KeyError`. A caller-side
-    image reference, autosave value, media type, or JSON input that is invalid
-    raises {class}`ValueError`. Registry, archive, storage, and lifecycle-state
-    failures raise {class}`RuntimeError`. Exceptions raised by Python codecs,
-    adapters, tracing hooks, and data libraries pass through unchanged.
-
-    Example:
-
+    ```pycon
+    >>> from ommx import Instance
     >>> from ommx.experiment import Experiment
-    >>> with Experiment.with_temp_local_registry() as exp:
-    ...     exp.log_json("dataset", {"name": "demo"})
-    ...     with exp.run() as run:
-    ...         run.log_parameter("capacity", 10)
-    ...         run.log_json("scenario", {"capacity": 10})
-    >>> len(exp.runs)
-    1
-    >>> len(exp.attachment_names)
-    1
-    >>> exp.run_parameters_df().to_dict()
-    {'capacity': {0: 10}}
+    >>> problem = Instance.maximize()
+    >>> x = problem.new_binary(\"x\")
+    >>> y = problem.new_binary(\"y\")
+    >>> problem.objective = 3 * x + 2 * y
+    >>> _ = problem.add_constraint(x + y <= 1)
+    >>> with Experiment.with_temp_local_registry() as experiment:
+    ...     experiment.log_instance(\"problem\", problem)
+    ...     for label, candidate in [
+    ...         (\"choose-x\", {x.id: 1, y.id: 0}),
+    ...         (\"choose-y\", {x.id: 0, y.id: 1}),
+    ...     ]:
+    ...         with experiment.run() as run:
+    ...             solution = problem.evaluate(candidate)
+    ...             run.log_parameter(\"candidate\", label)
+    ...             run.log_parameter(\"objective\", solution.objective)
+    ...             run.log_parameter(\"feasible\", solution.feasible)
+    ...             run.log_solution(\"evaluation\", solution)
+    >>> experiment.run_parameters_df()[[\"candidate\", \"objective\", \"feasible\"]].to_dict(
+    ...     \"records\"
+    ... )
+    [{'candidate': 'choose-x', 'objective': 3.0, 'feasible': True}, {'candidate': 'choose-y', 'objective': 2.0, 'feasible': True}]
+    >>> [
+    ...     (run.run_id, run.status, run.get_solution(\"evaluation\").objective)
+    ...     for run in experiment.runs
+    ... ]
+    [(0, 'finished', 3.0), (1, 'finished', 2.0)]
 
-    If the experiment has only one run, open the experiment and the run in
-    one `with` statement. On normal exit, the run is finished first and then
-    the experiment is committed. The following workflow uses the caller's
-    persistent Local Registry and a remote registry, so it is not executed by
-    doctest:
+    ```
 
-    >>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP
-    ...     solution = run.log_solve(adapter, instance, time_limit=10.0)
-    >>> exp.rename("ghcr.io/container/name:latest")  # doctest: +SKIP
-    >>> exp.push()  # doctest: +SKIP
+    The table contains only values explicitly passed to {meth}`Run.log_parameter`.
+    A JSON attachment, an Adapter option, and an in-memory Python variable do not
+    automatically become table columns. The saved Solutions also retain their
+    candidate values. They record evaluation, not a proof of optimality.
+
+    Save the committed record to a new `.ommx` file. The following reader runs in a
+    new Python process with an empty Local Registry; it needs only that file, not
+    `experiment`, `problem`, or the sender's registry. It reads the stored results
+    without rerunning either a solver or the candidate evaluation.
+
+    ```pycon
+    >>> import os
+    >>> from pathlib import Path
+    >>> import subprocess
+    >>> import sys
+    >>> from tempfile import TemporaryDirectory
+    >>> reader = \"\"\"
+    ... import sys
+    ... from ommx.experiment import Experiment
+    ... loaded = Experiment.import_archive(sys.argv[1])
+    ... problem = loaded.get_instance(\"problem\")
+    ... assert len(problem.decision_variables) == 2
+    ... for run in loaded.runs:
+    ...     result = run.get_solution(\"evaluation\")
+    ...     print(run.run_id, run.status, result.objective, result.feasible)
+    ... \"\"\"
+    >>> with TemporaryDirectory() as directory:
+    ...     archive = Path(directory) / \"candidate-trials.ommx\"
+    ...     experiment.save(archive)
+    ...     result = subprocess.run(
+    ...         [sys.executable, \"-c\", reader, str(archive)],
+    ...         env={
+    ...             **os.environ,
+    ...             \"OMMX_LOCAL_REGISTRY_ROOT\": str(Path(directory) / \"receiver\"),
+    ...         },
+    ...         check=True,
+    ...         capture_output=True,
+    ...         text=True,
+    ...     )
+    >>> print(result.stdout, end=\"\")
+    0 finished 3.0 True
+    1 finished 2.0 True
+
+    ```
+
+    {meth}`save` does not overwrite an existing archive. Use a new path on each
+    export. {meth}`import_archive` imports the file into the reader's Local Registry
+    and opens a read-only Experiment. Reading stored results does not establish
+    that the original computation can be reproduced: preserve required source data,
+    code, settings, and environment information explicitly for that purpose.
+
+    # Choose a record's scope
+
+    | Record | What it holds | Read it through |
+    | --- | --- | --- |
+    | Experiment | Shared attachments and closed Runs | `attachment_names`, typed getters, `runs` |
+    | Run | Scalar comparison parameters, trial attachments, Solve/Sampling records | `run_parameters_df()`, {class}`SealedRun` |
+    | Solve | Input Instance, Adapter class/options, and a Solution on success | {class}`Solve` |
+    | Sampling | Input Instance, Adapter class/options, and the complete SampleSet on success | {class}`Sampling` |
+
+    {meth}`Run.log_solve` and {meth}`Run.log_sample` execute an Adapter and associate
+    its input with its output. The stored Instance is the one supplied to the
+    logging call. An Adapter's internally prepared copy is not automatically saved.
+    Policy choices, transformation weights, backend settings made through direct
+    model access, Python variables, and package/OS versions are not comprehensively
+    collected. Log additional inputs or explanations when later interpretation needs
+    them. {meth}`Run.open_solve` supports direct backend-model access and explicit
+    option recording.
+
+    The `finished`, `failed`, and `interrupted` statuses describe how recording
+    scopes ended. They do not establish feasibility or optimality. A successful
+    Sampling may contain no feasible candidate. A finished Run may contain a failed
+    Solve if its exception was handled inside the Run. Read candidate feasibility
+    and objectives from the Solution/SampleSet, and backend termination/bounds/gaps
+    from available Adapter diagnostics.
+
+    # Attachments
+
+    Use experiment-level attachments for common inputs and run-level attachments
+    for trial-specific data. Names are local to that scope: two Runs can each have
+    an attachment called `evaluation`. Standard methods include `log_json`,
+    `log_instance`, `log_parametric_instance`, `log_solution`, and `log_sample_set`.
+    {meth}`log_file` gives a complete file-and-model attachment example; it copies
+    bytes at logging time rather than retaining a link to the source file.
+
+    Typed getters reject a mismatched media type. {meth}`get_attachment` dispatches
+    on media type, and {meth}`get_blob` returns bytes. `compression=\"zstd\"` is
+    available for JSON, codec, raw-byte, and file logging: getters and file export
+    return decompressed content and the original logical media type. OMMX marks
+    storage compression with reserved metadata, including when the logical media
+    type itself ends in `+zstd`. Use {meth}`log_with_codec` only for types requiring
+    a custom encoding; concrete codecs belong with the package that owns the type.
+
+    # Commit, recover, or fork
+
+    New Experiments are editable (unsealed). Close each Run as a context manager;
+    {meth}`commit` requires every open Run to be closed. Successful commit writes a
+    config and manifest, publishes the chosen name in the Local Registry, and makes
+    this object read-only. `with Experiment(...)` commits on normal exit. In a
+    Notebook, keep the Experiment open across cells, inspect closed Runs, add the
+    next trial, and commit explicitly when finished.
+
+    Logging writes payload bytes immediately. Payload storage alone does not make
+    a recoverable Experiment. By default, closing a Run also attempts to publish a
+    best-effort `draft` checkpoint containing closed Runs. {class}`AutosavePolicy`
+    controls that schedule. A process that dies with an open Run may have written
+    bytes, but that Run's partial state is not a recoverable closed Run. Runs closed
+    after the latest checkpoint are also absent from that recovery point.
+
+    Exceptional exit from an Experiment context tries to publish a `failed` or
+    `interrupted` checkpoint without advancing its successful image name;
+    `KeyboardInterrupt` uses `interrupted`. The exception propagates. Exceptions
+    outside a non-context-managed Experiment are not automatically captured.
+    Successful commit removes that Experiment's checkpoint.
+
+    - Use {meth}`restore_from_checkpoint` to resume editing the latest saved closed
+      Runs after interruption; this does not resume a backend's search state.
+    - Use {meth}`fork` to add trials while preserving an already committed parent.
+    - Use {func}`list_experiments` for catalog and annotation filtering, and
+      {func}`list_experiment_checkpoints` to discover recovery points.
+
+    An omitted image name creates an anonymous local name containing `.ommx.local`.
+    It can be exported as a file, but must be renamed to a remote registry reference
+    before {meth}`push`. Name/tag references can later point to different contents;
+    the Artifact manifest digest identifies an immutable record. File exchange and
+    remote registry distribution are alternatives, not requirements for recording.
+    {class}`ommx.artifact.Artifact` documents the common storage/identity model.
+
+    # Errors
+
+    Attachment lookup by an absent name raises {class}`KeyError`. Invalid
+    caller-provided image references, autosave values, media types, or JSON inputs
+    raise {class}`ValueError`. Registry, archive, storage, and lifecycle-state
+    failures raise {class}`RuntimeError`. Exceptions raised by Python codecs,
+    Adapters, tracing hooks, and data libraries pass through unchanged.
     """
     @property
     def image_name(self) -> builtins.str:
@@ -2881,16 +3250,73 @@ class Experiment:
         """
     @staticmethod
     def restore_from_checkpoint(image_name: builtins.str) -> Experiment:
-        r"""
-        Restore an unsealed Experiment from its checkpoint.
+        """
+        Restore an unsealed Experiment from its latest checkpoint.
 
-        Pass the original requested Experiment image name, not the generated
-        checkpoint ref. This accepts checkpoint statuses such as `draft`,
-        `failed`, or `interrupted`, and returns a new unsealed Experiment whose
-        image name is the original requested Experiment image name recorded in
-        the checkpoint metadata. Use `list_experiment_checkpoints(...)` to
-        discover recovery points, but pass its `requested_image_name` here
-        rather than its internal `checkpoint_image_name`.
+        Pass the original requested Experiment image name, not the generated internal
+        checkpoint ref. Accepted checkpoint statuses are `draft`, `failed`, and
+        `interrupted`. The result is editable and uses the original requested image
+        name recorded in checkpoint metadata. Discover recovery points with
+        {func}`list_experiment_checkpoints` and pass their `requested_image_name` here.
+
+        A new process must use the same Local Registry as the process that recorded the
+        checkpoint. If `OMMX_LOCAL_REGISTRY_ROOT` was set, give the reader the same value.
+        This self-contained example uses two separate processes and a temporary
+        registry. The first process closes one Run without committing the Experiment;
+        the default autosave policy writes the recovery point. The second process
+        restores that closed Run, adds another, and commits.
+
+        ```pycon
+        >>> import os
+        >>> from pathlib import Path
+        >>> import subprocess
+        >>> import sys
+        >>> from tempfile import TemporaryDirectory
+        >>> writer = \"\"\"
+        ... from ommx.experiment import Experiment
+        ... experiment = Experiment(\"example.com/checkpoint:demo\")
+        ... with experiment.run() as run:
+        ...     run.log_parameter(\"trial\", \"first\")
+        ...     run.log_json(\"result\", {\"value\": 3})
+        ... \"\"\"
+        >>> reader = \"\"\"
+        ... from ommx.experiment import Experiment, list_experiment_checkpoints
+        ... name = \"example.com/checkpoint:demo\"
+        ... checkpoints = list_experiment_checkpoints(name)
+        ... assert len(checkpoints) == 1 and checkpoints[0].status == \"draft\"
+        ... restored = Experiment.restore_from_checkpoint(checkpoints[0].requested_image_name)
+        ... assert restored.runs[0].get_json(\"result\") == {\"value\": 3}
+        ... with restored.run() as run:
+        ...     run.log_parameter(\"trial\", \"second\")
+        ...     run.log_json(\"result\", {\"value\": 2})
+        ... restored.commit()
+        ... assert list_experiment_checkpoints(name) == []
+        ... print(Experiment.load(name).run_parameters_df()[\"trial\"].to_list())
+        ... \"\"\"
+        >>> with TemporaryDirectory() as directory:
+        ...     env = {**os.environ, \"OMMX_LOCAL_REGISTRY_ROOT\": str(Path(directory) / \"registry\")}
+        ...     _ = subprocess.run([sys.executable, \"-c\", writer], env=env, check=True)
+        ...     result = subprocess.run(
+        ...         [sys.executable, \"-c\", reader],
+        ...         env=env,
+        ...         check=True,
+        ...         capture_output=True,
+        ...         text=True,
+        ...     )
+        >>> print(result.stdout, end=\"\")
+        ['first', 'second']
+
+        ```
+
+        Only Runs included in the latest saved checkpoint are recovered. Open Runs are
+        not included; if autosave was throttled, some later closed Runs can also be
+        absent. This operation neither retries failed calls nor resumes a solver's
+        internal search. {meth}`Experiment.commit` publishes the original name and
+        removes its checkpoint. A restored session used as a context manager can publish
+        a new failed/interrupted checkpoint if it ends exceptionally again.
+
+        {class}`AutosavePolicy` belongs to a session and is not persisted. Reapply a
+        nondefault policy to the restored session if needed.
         """
     @staticmethod
     def import_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Experiment:
@@ -2919,28 +3345,44 @@ class Experiment:
         r"""
         Fork this committed Experiment into a new unsealed child Experiment.
 
-        The parent Experiment is not modified. Existing Attachments, Runs,
-        Solves, Samplings, and Run parameters are carried into the child Experiment.
-        When the child is committed, its Artifact manifest records the parent
-        manifest descriptor as OCI `subject`. The child reuses payload blobs
-        already present in the Local Registry; forking creates a new manifest
-        but does not duplicate unchanged Instance, Solution, SampleSet, or
-        Attachment bytes.
+        The parent is unchanged. Existing attachments, Runs, Solves, Samplings, and Run
+        parameters are carried into the child. The child reuses unchanged payload bytes
+        in the Local Registry, and its committed manifest records the parent's manifest
+        as OCI `subject`. An uncommitted parent raises an error.
 
-        If `image_name` is omitted, OMMX generates an anonymous local
-        Experiment name for the child. The returned Experiment can be used as
-        a context manager. This requires an already committed parent in a
-        caller-owned Local Registry, so it is not executed by doctest:
+        If `image_name` is omitted, the child receives an anonymous local name. The
+        returned Experiment can be a context manager. Set `store_trace=True` to store
+        traces for Runs created from that child. The Experiment itself need not be a
+        context manager.
 
-        >>> with parent.fork() as child:  # doctest: +SKIP
+        This complete example needs no solver or remote registry:
+
+        ```pycon
+        >>> from ommx.experiment import Experiment
+        >>> with Experiment.with_temp_local_registry("example.com/fork:parent") as parent:
+        ...     parent.log_json("dataset", {"name": "demo"})
+        ...     with parent.run() as run:
+        ...         run.log_parameter("trial", "baseline")
+        >>> with parent.fork("example.com/fork:child") as child:
         ...     with child.run() as run:
-        ...         run.log_parameter("capacity", 56)
+        ...         run.log_parameter("trial", "additional")
+        >>> len(parent.runs), len(child.runs)
+        (1, 2)
+        >>> child.get_json("dataset")
+        {'name': 'demo'}
+        >>> child.run_parameters_df()["trial"].to_list()
+        ['baseline', 'additional']
 
-        Raises an error if this Experiment has not been committed yet.
+        ```
 
-        Set `store_trace=True` on the returned child to store traces for
-        `Run` context managers created from it. The child Experiment itself
-        does not need to be used as a context manager.
+        A parent opened with {meth}`Experiment.load` or
+        {meth}`Experiment.import_archive` can be forked in the same way. A fork starts
+        new recording; it does not resume a solver's internal search state.
+
+        {meth}`Experiment.save` and {meth}`Experiment.push` share the entire child,
+        including inherited Runs and attachments. The child contains their payload
+        layers, so reading those records does not require separately opening the parent
+        Experiment.
         """
     def __enter__(self) -> Experiment: ...
     def __exit__(
@@ -3068,11 +3510,14 @@ class Experiment:
 
         The returned `Run` must be closed before `commit()`. Use it as a
         context manager to close it automatically on normal or exceptional
-        exit. This requires a caller-owned unsealed Experiment and writes to
-        its Local Registry, so it is not executed by doctest:
+        exit. This complete example uses an isolated temporary Local Registry:
 
-        >>> with experiment.run() as run:  # doctest: +SKIP
-        ...     run.log_parameter("capacity", 47)
+        >>> from ommx.experiment import Experiment
+        >>> with Experiment.with_temp_local_registry() as experiment:
+        ...     with experiment.run() as run:
+        ...         run.log_parameter("capacity", 47)
+        >>> experiment.run_parameters_df()["capacity"].to_list()
+        [47]
 
         Closing a Run records its status as `"finished"`, `"failed"`, or
         `"interrupted"`. It also publishes a best-effort draft checkpoint when
@@ -3108,12 +3553,57 @@ class Experiment:
         r"""
         Attach an existing filesystem file in the experiment space.
 
-        The file bytes are copied into the Local Registry immediately. If
-        `media_type` is omitted, the Rust SDK infers it from file contents and
-        unknown types fall back to `application/octet-stream`. The original
-        source path is not stored; only a basename for later export is stored
-        as attachment metadata. The file is streamed into the Local Registry;
-        set `compression="zstd"` to compress the stored layer transparently.
+        File bytes are streamed into the Local Registry immediately. If `media_type`
+        is omitted, OMMX infers it from the contents and falls back to
+        `application/octet-stream`. Only a basename for export is stored, not the source
+        path. `filename` overrides that basename. `compression="zstd"` compresses the
+        stored layer transparently.
+
+        This example records common input data and a file at Experiment scope, and a
+        candidate evaluation at Run scope. It then retrieves the typed attachments and
+        exports the original file bytes. Changing the source file after logging does
+        not alter the stored attachment.
+
+        ```pycon
+        >>> from pathlib import Path
+        >>> from tempfile import TemporaryDirectory
+        >>> from ommx import Instance
+        >>> from ommx.experiment import Experiment
+        >>> problem = Instance.minimize()
+        >>> x = problem.new_binary("x")
+        >>> problem.objective = x
+        >>> with TemporaryDirectory() as directory:
+        ...     source = Path(directory) / "notes.txt"
+        ...     _ = source.write_bytes(b"candidate evaluated locally\n")
+        ...     with Experiment.with_temp_local_registry() as experiment:
+        ...         experiment.log_json("source-data", {"description": "one binary variable"})
+        ...         experiment.log_instance("problem", problem)
+        ...         experiment.log_file(
+        ...             "notes", source, media_type="text/plain", compression="zstd"
+        ...         )
+        ...         with experiment.run() as run:
+        ...             run.log_solution("evaluation", problem.evaluate({x.id: 0}))
+        ...     _ = source.write_bytes(b"changed later\n")
+        ...     assert experiment.get_blob("notes") == b"candidate evaluated locally\n"
+        ...     output = Path(directory) / "restored-notes.txt"
+        ...     _ = experiment.write_attachment("notes", output)
+        ...     assert output.read_bytes() == b"candidate evaluated locally\n"
+        >>> sorted(experiment.attachment_names)
+        ['notes', 'problem', 'source-data']
+        >>> experiment.get_json("source-data")
+        {'description': 'one binary variable'}
+        >>> saved = experiment.runs[0].get_solution("evaluation")
+        >>> experiment.get_instance("problem").evaluate(saved.state).objective == saved.objective
+        True
+
+        ```
+
+        `write_attachment` rejects an existing file unless `overwrite=True` is explicit.
+        Use {meth}`get_blob` for a binary-file consumer, for example
+        `io.BytesIO(experiment.get_blob("notes"))`. Typed getters reject mismatched media
+        types; {meth}`get_attachment` uses the media type to choose a standard decoder.
+        The {class}`Experiment` example shows saving and reopening all these records
+        without the original Python objects.
         """
     def log_with_codec(
         self,
@@ -3124,12 +3614,51 @@ class Experiment:
         compression: typing.Literal["none", "zstd"] = "none",
     ) -> None:
         r"""
-        Encode a Python object with an attachment codec and attach it in the experiment space.
+        Encode a Python object with an attachment codec and attach it in Experiment scope.
 
-        The codec class must provide `media_type`, `encode(value) -> bytes`,
-        and `decode(bytes) -> object`. OMMX owns only this protocol; concrete
-        codecs should live in the package that owns the payload type. Set
-        `compression="zstd"` to compress the encoded bytes transparently.
+        A codec supplies `media_type`, `encode(value) -> bytes`, and
+        `decode(bytes) -> object`, as described by
+        {class}`ommx.experiment.attachments.AttachmentCodec`. OMMX owns that protocol;
+        a concrete codec should live in the package that owns the payload type.
+        `compression="zstd"` compresses the encoded bytes transparently.
+
+        Prefer the typed logging methods for supported OMMX/JSON values and
+        {meth}`log_file` for an existing file. Use a codec when the Python object needs
+        its own encoding. For example, this codec stores a small application-owned
+        coordinate value:
+
+        ```pycon
+        >>> import json
+        >>> from ommx.experiment import Experiment
+        >>> class PointCodec:
+        ...     media_type = "application/vnd.example.point+json"
+        ...
+        ...     @staticmethod
+        ...     def encode(value):
+        ...         return json.dumps({"x": value[0], "y": value[1]}).encode("utf-8")
+        ...
+        ...     @staticmethod
+        ...     def decode(data):
+        ...         point = json.loads(data)
+        ...         return (point["x"], point["y"])
+        >>> with Experiment.with_temp_local_registry() as experiment:
+        ...     experiment.log_with_codec(PointCodec, "location", (2, 3), compression="zstd")
+        >>> experiment.get_with_codec(PointCodec, "location")
+        (2, 3)
+        >>> experiment.attachment_media_type("location") == PointCodec.media_type
+        True
+
+        ```
+
+        The reader needs the matching codec and its provider package. For an external
+        modeling object, use the owning package's public serialization API and media
+        type/version contract; OMMX does not infer its meaning or guarantee compatibility
+        between provider versions. {meth}`get_with_codec` validates the attachment's
+        logical media type before decoding. Exceptions raised by a codec pass through
+        unchanged.
+
+        {meth}`Run.log_with_codec` and {meth}`SealedRun.get_with_codec` provide the same
+        protocol for a payload associated with one trial.
         """
     def log_json(
         self,
@@ -7256,6 +7785,47 @@ class Instance:
         r"""
         Write the active formulation to an MPS file.
 
+
+        Use MPS to hand the active model to a tool with a compatible MPS reader.
+        Use {class}`~ommx.artifact.Artifact` when you also need to retain OMMX labels,
+        evaluation information, or related results. Writing a file does not run the
+        receiving solver.
+
+        # Export a small model
+
+        This example uses an isolated temporary directory. Choose a persistent path for
+        a file you intend to transfer.
+
+        ```pycon
+        >>> from pathlib import Path
+        >>> from tempfile import TemporaryDirectory
+        >>> from ommx import Instance
+        >>> instance = Instance.maximize()
+        >>> x = instance.new_binary("selected", subscripts=[0])
+        >>> y = instance.new_binary("selected", subscripts=[1])
+        >>> instance.objective = 3 * x + 2 * y
+        >>> _ = instance.add_constraint(x + y <= 1, "at_most_one")
+        >>> with TemporaryDirectory() as directory:
+        ...     path = Path(directory) / "selection.mps"
+        ...     instance.save_mps(str(path), compress=False)
+        ...     assert path.is_file()
+        ...     restored = Instance.load_mps(str(path))
+        ...     assert len(restored.decision_variables) == 2
+        ...     assert len(restored.constraints) == 1
+
+        ```
+
+        The restored model uses generated variable and constraint names, not the
+        `selected` and `at_most_one` labels. Read the information boundary below
+        before choosing this format for storage.
+
+        For active special constraints, consider {meth}`~ommx.Instance.lower_special_constraints`
+        or {meth}`~ommx.Instance.prepare` before exporting. These operations mutate the
+        Instance; copy it first only if you also need the original object. Lowering alone
+        does not establish MPS compatibility: the remaining functions and variable kinds
+        must satisfy the conditions below. Mathematically polynomial expressions can be
+        stored in an unexpanded form; see {meth}`~ommx.Function.powi`.
+
         # Parameters
 
         - ``path``: Destination file. Missing parent directories are created and
@@ -8929,6 +9499,41 @@ class OpenSolve:
     access the backend solver model, run backend-specific APIs, decode the
     solver output, and record adapter options that are set directly on the
     backend model. The Solve entry is finalized when the context exits.
+
+    Most recording uses {meth}`Run.log_solve`. Use this scope when a backend API
+    must be called directly. Options set through the backend do not automatically
+    become stored metadata; record them with {meth}`log_adapter_option`.
+
+    This complete example requires the HiGHS Adapter:
+
+    ```pycon
+    >>> from ommx import Instance
+    >>> from ommx.experiment import Experiment
+    >>> from ommx_highs_adapter import OMMXHighsAdapter
+    >>> problem = Instance.minimize()
+    >>> x = problem.new_binary("x")
+    >>> problem.objective = x
+    >>> with Experiment.with_temp_local_registry() as experiment:
+    ...     with experiment.run() as run:
+    ...         with run.open_solve(OMMXHighsAdapter, problem, verbose=False) as solve:
+    ...             model = solve.solver_input
+    ...             _ = model.setOptionValue("time_limit", 10.0)
+    ...             solve.log_adapter_option("time_limit", 10.0)
+    ...             _ = model.run()
+    ...             solution = solve.decode(model)
+    ...             assert solution.feasible
+    >>> recorded = experiment.runs[0].solves[0]
+    >>> recorded.output.objective
+    0.0
+    >>> recorded.adapter_options["time_limit"]
+    10.0
+
+    ```
+
+    {meth}`decode` stores the decoded Solution as the Solve's output. The context
+    manager finalizes the record on exit; the individual methods document terminal
+    states, diagnostics, tracing, and exceptional exits. A finished recording
+    scope is distinct from a guarantee of candidate feasibility or optimality.
     """
     @property
     def solve_id(self) -> builtins.int:
@@ -10897,6 +11502,60 @@ class Run:
         a failed Solve entry when possible, including diagnostics collected
         before the failure when `store_diagnostics=True`. Failed Solve entries
         have `output=None`.
+
+        # Record a parameter sweep and inspect the Solve records
+
+        Install the HiGHS Adapter for this example. It defines one knapsack problem
+        family, records two capacities, and reads both the comparison table and the
+        stored inputs/results. The Experiment's temporary Local Registry avoids
+        modifying existing records.
+
+        ```pycon
+        >>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
+        >>> from ommx.experiment import Experiment
+        >>> from ommx_highs_adapter import OMMXHighsAdapter
+        >>> values = [10, 13, 18, 31, 7, 15]
+        >>> weights = [11, 25, 20, 35, 10, 33]
+        >>> x = [DecisionVariable.binary(id=i, name="x", subscripts=[i]) for i in range(6)]
+        >>> capacity = Parameter(6, name="capacity")
+        >>> family = ParametricInstance.from_components(
+        ...     decision_variables=x,
+        ...     parameters=[capacity],
+        ...     objective=sum(value * variable for value, variable in zip(values, x)),
+        ...     constraints={
+        ...         0: sum(weight * variable for weight, variable in zip(weights, x)) <= capacity
+        ...     },
+        ...     sense=Sense.Maximize,
+        ... )
+        >>> with Experiment.with_temp_local_registry() as experiment:
+        ...     experiment.log_parametric_instance("problem-family", family)
+        ...     experiment.log_json("source-data", {"values": values, "weights": weights})
+        ...     for limit in [47, 56]:
+        ...         instance = family.with_parameters({capacity.id: limit})
+        ...         with experiment.run() as run:
+        ...             run.log_parameter("capacity", limit)
+        ...             solution = run.log_solve(OMMXHighsAdapter, instance, verbose=False)
+        ...             assert solution.feasible
+        ...             run.log_parameter("objective", solution.objective)
+        >>> experiment.run_parameters_df()[["capacity", "objective"]].to_dict("records")
+        [{'capacity': 47, 'objective': 41.0}, {'capacity': 56, 'objective': 49.0}]
+        >>> for run in experiment.runs:
+        ...     assert len(run.solves) == 1
+        ...     solve = run.solves[0]
+        ...     assert solve.solve_id == 0
+        ...     assert solve.adapter.endswith("OMMXHighsAdapter")
+        ...     assert solve.adapter_options == {"verbose": False}
+        ...     assert solve.output is not None
+        ...     assert solve.input.evaluate(solve.output.state).objective == solve.output.objective
+
+        ```
+
+        The supplied input and options are retained, but an Adapter's internal
+        Preparation history or backend options changed outside this call are not
+        comprehensively collected. Log the source model, formulation choices, or other
+        conditions as separate attachments when they are needed later. Use
+        {class}`Experiment` for archive export and fresh-process reading, and
+        {meth}`Experiment.fork` to add trials without changing the parent record.
         """
     def log_sample(
         self,
@@ -13821,20 +14480,82 @@ def list_artifacts(
     include_internal: builtins.bool = False,
     strict: builtins.bool = False,
 ) -> builtins.list[ArtifactRef]:
-    r"""
-    List Artifact refs using the Local Registry's digest-addressed Manifest
-    cache.
+    """
+    List local Artifact references and their manifest metadata.
 
-    Missing Manifest rows are backfilled from the CAS before records are
-    returned. If `prefix` is given, it is matched against the full image
-    reference string. Internal implementation refs, including Experiment
-    checkpoints, are hidden by default; pass `include_internal=True` for
-    registry diagnostics.
+    The result contains {class}`~ommx.artifact.ArtifactRef` records for both generic
+    Artifacts and Experiments. Each record supplies the full image name, manifest
+    and config digests, update time, Artifact type, manifest annotations, and the
+    parsed OCI manifest as a Python dictionary. Listing does not decode layer
+    payloads or fetch remote data. Use {func}`~ommx.experiment.list_experiments` when
+    you need only Experiments, together with their status, Run counts, and config.
 
-    By default, an invalid cached record is repaired from the CAS when possible.
-    OMMX emits `RuntimeWarning` for repaired or skipped refs and returns the
-    remaining records. Pass `strict=True` to fail on the first invalid ref.
-    Registry, manifest, and storage failures raise {class}`RuntimeError`.
+    `prefix` matches the start of the full image-reference string. It limits both
+    returned records and missing-cache backfill to the selected namespace. `root`
+    selects a Local Registry directory; omitting it uses the default registry.
+    Internal references, including Experiment checkpoints, are hidden by default.
+    `include_internal=True` is a registry diagnostic option; use
+    {func}`~ommx.experiment.list_experiment_checkpoints` to discover recoverable
+    Experiment sessions.
+
+    # Create a local record and inspect its catalog entry
+
+    This complete example creates one Artifact in a child process with a temporary
+    registry, then lists that registry from the current process. The image name
+    selects a local reference; no remote upload or authentication is involved.
+
+    ```pycon
+    >>> import os
+    >>> import subprocess
+    >>> import sys
+    >>> from tempfile import TemporaryDirectory
+    >>> from ommx.artifact import list_artifacts
+    >>> create = \"\"\"
+    ... from ommx.artifact import ArtifactDraft
+    ... draft = ArtifactDraft.new(\"example.com/optimization/candidates:trial-1\")
+    ... draft.add_annotation(\"com.example.study\", \"candidate-evaluation\")
+    ... draft.add_json({\"objective\": 3}, title=\"analysis\")
+    ... draft.commit()
+    ... \"\"\"
+    >>> with TemporaryDirectory() as registry:
+    ...     result = subprocess.run(
+    ...         [sys.executable, \"-c\", create],
+    ...         env={**os.environ, \"OMMX_LOCAL_REGISTRY_ROOT\": registry},
+    ...         capture_output=True,
+    ...         text=True,
+    ...     )
+    ...     assert result.returncode == 0, result.stderr
+    ...     refs = list_artifacts(\"example.com/optimization\", root=registry)
+    ...     assert len(refs) == 1
+    ...     ref = refs[0]
+    ...     print(ref.image_name)
+    ...     print(ref.annotations[\"com.example.study\"])
+    ...     assert ref.manifest_digest.startswith(\"sha256:\")
+    ...     assert ref.config_digest == ref.manifest[\"config\"][\"digest\"]
+    example.com/optimization/candidates:trial-1
+    candidate-evaluation
+
+    ```
+
+    Filter annotations after listing according to the vocabulary your project
+    defines. Manifest annotations apply to the whole Artifact. Run-specific
+    conditions belong to {meth}`~ommx.experiment.Run.log_parameter`, rather than
+    being inferred from Artifact names or annotations.
+
+    # Cache and failure behavior
+
+    The Local Registry lists references through a digest-addressed manifest cache.
+    Missing manifest rows are validated and backfilled from the content-addressed
+    blob store before records are returned; later listings can read the cached
+    manifest without reopening its blob. The content-addressed store remains the
+    source for repairing the listing cache.
+
+    By default, an invalid cached record is repaired from that store when possible.
+    OMMX emits {class}`RuntimeWarning` for repaired or skipped references and returns
+    the remaining records. If the corresponding blob is also unavailable, that
+    reference is skipped. Pass `strict=True` to fail on the first invalid reference.
+    Database-wide schema/query errors and cache-write failures fail the whole
+    listing. Registry, manifest, and storage failures raise {class}`RuntimeError`.
     """
 
 def list_experiment_checkpoints(
@@ -13862,14 +14583,106 @@ def list_experiments(
     root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
     strict: builtins.bool = False,
 ) -> builtins.list[ExperimentRef]:
-    r"""
+    """
     List Experiment refs using the Local Registry's digest-addressed JSON cache.
 
-    Missing Manifest or Config rows are backfilled from the CAS before records
-    are returned. If `prefix` is given, it is matched against the full image
-    reference string. Invalid cache entries are repaired from the CAS when
-    possible; repaired or skipped refs emit `RuntimeWarning`. Pass `strict=True`
-    to fail on the first invalid ref.
+    Each {class}`ExperimentRef` exposes its name, immutable Manifest and Config
+    digests, update time, lifecycle status, Run/Solve/Sampling counts, Manifest
+    annotations, and complete Experiment Config. {func}`ommx.artifact.list_artifacts`
+    also lists non-Experiment Artifacts; use this function for the Experiment
+    projection.
+
+    `prefix` matches the full image-reference string and limits both listing and
+    cache backfill. Missing Manifest or Config rows are validated and backfilled
+    from the content-addressed store (CAS). Invalid entries are repaired when
+    possible; repaired or skipped refs emit {class}`RuntimeWarning`. Pass
+    `strict=True` to fail on the first invalid ref. Database/schema/query and
+    cache-write failures fail the whole listing. `root` selects a nondefault Local
+    Registry; otherwise the process-wide default is used.
+
+    # Record catalog fields, then select trials
+
+    Use project-owned reverse-DNS annotation keys for dimensions shared by an
+    Experiment, such as dataset, formulation, solver, or source revision. Values
+    are strings and `org.ommx.*` keys are reserved. Values that vary between Runs
+    belong in {meth}`Run.log_parameter` instead. The following complete example
+    records two batches and selects one by annotation. A temporary registry in a
+    separate process makes its setup independent of your saved records.
+
+    ```pycon
+    >>> import os
+    >>> from pathlib import Path
+    >>> import subprocess
+    >>> import sys
+    >>> from tempfile import TemporaryDirectory
+    >>> script = \"\"\"
+    ... import pandas as pd
+    ... from ommx.experiment import Experiment, list_experiments
+    ... namespace = \"example.com/study/batches\"
+    ... for dataset in [\"small\", \"large\"]:
+    ...     with Experiment(f\"{namespace}:{dataset}\") as experiment:
+    ...         experiment.set_annotation(\"com.example.study\", \"candidate-comparison\")
+    ...         experiment.set_annotation(\"com.example.dataset\", dataset)
+    ...         experiment.set_annotation(\"com.example.git-revision\", \"a1b2c3d\")
+    ...         with experiment.run() as run:
+    ...             run.log_parameter(\"seed\", 42)
+    ... refs = list_experiments(namespace)
+    ... columns = {\"study\": \"com.example.study\", \"dataset\": \"com.example.dataset\"}
+    ... rows = []
+    ... for ref in refs:
+    ...     row = {
+    ...         \"image_name\": ref.image_name,
+    ...         \"manifest_digest\": ref.manifest_digest,
+    ...         \"config_digest\": ref.config_digest,
+    ...         \"updated_at\": ref.updated_at,
+    ...         \"status\": ref.status,
+    ...         \"run_count\": ref.run_count,
+    ...     }
+    ...     row.update({column: ref.annotations.get(key) for column, key in columns.items()})
+    ...     rows.append(row)
+    ... catalog = pd.DataFrame.from_records(rows, columns=[
+    ...     \"image_name\", \"manifest_digest\", \"config_digest\", \"updated_at\", \"status\", \"run_count\", *columns,
+    ... ])
+    ... catalog[\"updated_at\"] = pd.to_datetime(catalog[\"updated_at\"], utc=True)
+    ... selected = catalog.loc[
+    ...     (catalog[\"status\"] == \"finished\") & (catalog[\"dataset\"] == \"small\")
+    ... ].sort_values(\"updated_at\", ascending=False)
+    ... loaded = [Experiment.load(name) for name in selected[\"image_name\"]]
+    ... assert len(loaded) == 1
+    ... print(loaded[0].run_parameters_df()[\"seed\"].to_list())
+    ... \"\"\"
+    >>> with TemporaryDirectory() as directory:
+    ...     result = subprocess.run(
+    ...         [sys.executable, \"-c\", script],
+    ...         env={
+    ...             **os.environ,
+    ...             \"OMMX_LOCAL_REGISTRY_ROOT\": str(Path(directory) / \"registry\"),
+    ...         },
+    ...         check=True,
+    ...         capture_output=True,
+    ...         text=True,
+    ...     )
+    >>> print(result.stdout, end=\"\")
+    [42]
+
+    ```
+
+    The project owns the annotation vocabulary, column types, and missing-value
+    policy. Missing annotation keys produce `None` in this projection. No registry
+    schema change is required to add a project-specific column.
+
+    `ref.config[\"runs\"]` contains the Run/Solve/Sampling structure. For example,
+    iterate each Run's `solves` list and project `run_id`, `solve_id`, `status`,
+    `adapter`, and `json.loads(solve[\"adapter_options\"])` into a per-Solve table.
+    The config refers to payload layers rather than embedding their values: read
+    scalar Run parameters through {meth}`Experiment.run_parameters_df`, and use the
+    loaded Run's typed getters for inputs/results and attachments.
+
+    An image name is mutable; several names can identify one manifest. Use
+    `manifest_digest` to deduplicate catalog rows and to identify the exact record
+    an analysis used. Loading by a tag later can open changed contents. Recoverable
+    uncommitted sessions are listed separately by
+    {func}`list_experiment_checkpoints`.
     """
 
 def miplib2017_instance_annotations() -> builtins.dict[

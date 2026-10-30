@@ -981,8 +981,7 @@ assert isinstance(output, SampleSet)
 ```
 
 `Run.log_sample(..., store_diagnostics=True)` uses the same adapter diagnostics
-channel as `Run.log_solve`. See the [Experiment management
-tutorial](../tutorial/experiment_management.md) for the Solve and Sampling recording model.
+channel as `Run.log_solve`. See {class}`~ommx.experiment.Experiment` for the Solve and Sampling recording model.
 
 ### 🆕 Transparent attachment compression and streaming writes ([#1054](https://github.com/Jij-Inc/ommx/pull/1054))
 
@@ -1020,7 +1019,7 @@ to another digest.
 `ommx.artifact.prune_anonymous()` now accepts `experiments=True` to include
 anonymous Experiment refs and `older_than="7d"` for age-based retention. The
 CLI exposes the same behavior through `ommx prune-anonymous --experiments
---older-than 7d`. See [Experiment cleanup](../user_guide/experiment.md)
+--older-than 7d`. See {ref}`Local Registry cleanup <experiment-cleanup-workflow>`
 for the complete reachability and GC workflow.
 
 ```python
@@ -1049,7 +1048,7 @@ experiment.set_autosave_policy(AutosavePolicy.every_n_runs(25))
 
 Use `AutosavePolicy.min_interval(seconds)` for time-based rate limiting or
 `AutosavePolicy.disabled()` when Run-close recovery checkpoints are not needed.
-See [Experiment Discovery, Recovery, and Cleanup](../user_guide/experiment.md)
+See {class}`~ommx.experiment.Experiment`
 for the recovery and storage tradeoffs.
 
 ### 🆕 Artifact and Experiment listing from the Local Registry ([#1029](https://github.com/Jij-Inc/ommx/pull/1029))
@@ -1299,7 +1298,7 @@ Artifact and Experiment solve payloads now store these top-level roots as `ommx.
 
 {meth}`~ommx.experiment.Run.open_solve` now opens a manual Solve scope for advanced solver features that are not covered by the Adapter API. Inside the scope, use `solve.solver_input` to operate the backend solver model directly, run the backend optimizer, then call `solve.decode(...)` so the decoded {class}`~ommx.Solution` becomes the Experiment Solve output. Manual adapter options can be recorded with `solve.log_adapter_option(...)`, and `store_diagnostics=True` stores diagnostics recorded through `solve.diagnostics` until the scope exits. After the scope closes, {attr}`~ommx.experiment.OpenSolve.terminal_state` exposes the final outcome plus trace and diagnostics finalization state for advanced debugging.
 
-See the [Experiment management tutorial](../tutorial/experiment_management.md) for the workflow example.
+See {class}`~ommx.experiment.OpenSolve` for the complete manual-solve example.
 
 ## 3.0.0 Alpha 6
 
@@ -1360,7 +1359,7 @@ Descriptor-oriented attachment views from earlier 3.0 alphas, including `Experim
 
 {class}`~ommx.experiment.Experiment` now publishes local checkpoints for partial experiment state. Closing a {class}`~ommx.experiment.Run` writes a best-effort draft checkpoint, and exiting an Experiment with an exception writes a failed or interrupted checkpoint instead of advancing the successful Experiment image reference. Closed Runs keep their attachments, solves, traces, and run parameters, including Runs closed as `"failed"` or `"interrupted"` after exceptions such as `KeyboardInterrupt`.
 
-See [Experiment Discovery, Recovery, and Cleanup](../user_guide/experiment.md) for Experiment catalog filtering, Run close boundaries, checkpoint restoration, and Local Registry cleanup behavior.
+See {func}`~ommx.experiment.list_experiments` for catalog filtering, {class}`~ommx.experiment.Experiment` for Run close boundaries and checkpoint restoration, and {ref}`Local Registry cleanup <experiment-cleanup-workflow>` for storage management.
 
 Use {meth}`~ommx.experiment.Experiment.restore_from_checkpoint` with the original Experiment image name to resume from the latest checkpoint:
 
@@ -1407,7 +1406,7 @@ and return structured report objects for notebook and script use.
 
 The new {class}`ommx.experiment.attachments.AttachmentCodec` protocol lets packages that own Python payload types define how those values are stored as Experiment attachments. A codec class provides a media type plus `encode` / `decode` methods, and OMMX calls it through `log_with_codec` and `get_with_codec` on both Experiment-level and Run-level attachments.
 
-See the {ref}`Attachable Data Formats <experiment-management-attachable-data-formats>` section of the Experiment management tutorial for a JijModeling `Problem` codec example.
+See {meth}`~ommx.experiment.Experiment.log_with_codec` for a complete custom-codec example. Codecs for external modeling objects belong in the package that owns their serialization format.
 
 ```python
 from ommx.experiment import Experiment
@@ -1480,7 +1479,7 @@ See the {ref}`Python SDK v2 to v3 Migration Guide §13 <13-artifact-api-archive-
 
 The new `ommx.experiment` module records experiment inputs, run conditions, and Solver/Sampler results as one OMMX Artifact. Use {class}`~ommx.experiment.Experiment`, {class}`~ommx.experiment.Run`, and {class}`~ommx.experiment.Solve` to store per-run comparison parameters, attachments, and solve input/output data in the Local Registry.
 
-See the [Experiment management tutorial](../tutorial/experiment_management.md) for the basic workflow, sharing an Experiment, loading a committed Experiment, and creating derived experiments with fork.
+See {class}`~ommx.experiment.Experiment` for the basic workflow, sharing an Experiment, loading a committed Experiment, and creating derived experiments with fork.
 
 ### 🆕 `Run.log_solve` records solve input/output and adapter options ([#902](https://github.com/Jij-Inc/ommx/pull/902))
 
