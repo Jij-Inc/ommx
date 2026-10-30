@@ -34,7 +34,6 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.doctest",
     "sphinx.ext.intersphinx",
-    "sphinx_fontawesome",
     "sphinxcontrib.katex",
     "autoapi.extension",
     "pyo3_stub_gen_ext",

@@ -59,7 +59,6 @@ docs = [
   "sphinx>=7.4.7",
   "sphinx-autoapi>=3.5.0",
   "sphinx-book-theme>=1.1.4",
-  "sphinx-fontawesome>=0.0.6",
   "sphinxcontrib-katex>=0.9.11",
   "tomlkit>=0.13.2",
 ]

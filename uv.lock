@@ -50,7 +50,6 @@ dev = [
     { name = "sphinx", specifier = ">=7.4.7" },
     { name = "sphinx-autoapi", specifier = ">=3.5.0" },
     { name = "sphinx-book-theme", specifier = ">=1.1.4" },
-    { name = "sphinx-fontawesome", specifier = ">=0.0.6" },
     { name = "sphinxcontrib-katex", specifier = ">=0.9.11" },
     { name = "syrupy", specifier = ">=4.7.2" },
     { name = "tomlkit", specifier = ">=0.13.2" },
@@ -63,7 +62,6 @@ docs = [
     { name = "sphinx", specifier = ">=7.4.7" },
     { name = "sphinx-autoapi", specifier = ">=3.5.0" },
     { name = "sphinx-book-theme", specifier = ">=1.1.4" },
-    { name = "sphinx-fontawesome", specifier = ">=0.0.6" },
     { name = "sphinxcontrib-katex", specifier = ">=0.9.11" },
     { name = "tomlkit", specifier = ">=0.13.2" },
 ]
@@ -4839,18 +4837,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/e9/8a/cb008736682b3974c
 wheels = [
     { url = "https://files.pythonhosted.org/packages/00/5e/6c41ee74f0a4caef53f224c3e6c3869b577dade1a283767bdc874f11e51c/sphinx_book_theme-1.4.0-py3-none-any.whl", hash = "sha256:10fd57d667ee0b565928c3ce95562e281c5d1b94bd5a2aafc5cd41a5d498dcd0", size = 458862, upload-time = "2026-07-19T21:23:52.852Z" },
 ]
-
-[[package]]
-name = "sphinx-fontawesome"
-version = "0.0.6"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "sphinx", version = "8.1.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "sphinx", version = "9.0.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
-    { name = "sphinx", version = "9.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.12.*'" },
-    { name = "sphinx", version = "9.2.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/e0/c5/9c14765c7f4721a7df3dc3710e3ce041b0042f91c8c75991434405657c30/sphinx_fontawesome-0.0.6.tar.gz", hash = "sha256:fa38d32f1654ad61f442096965f4069c074f37d7f2fadfa37f46b393938a5bdb", size = 22385, upload-time = "2017-09-24T10:41:17.113Z" }
 
 [[package]]
 name = "sphinxcontrib-applehelp"
