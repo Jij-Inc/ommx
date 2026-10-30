@@ -6,7 +6,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-### 🛠 QUBO/HUBO変換で微小な係数を保持 ([#1301](https://github.com/Jij-Inc/ommx/issues/1301))
+### 🛠 QUBO/HUBO変換で微小な係数を保持 ([#1320](https://github.com/Jij-Inc/ommx/pull/1320))
 
 `Instance.as_qubo_format()` と `as_hubo_format()` は、大きさによらず非ゼロの
 係数と定数オフセットを保持します。同じ二値キーにまとめた係数も、厳密にゼロに
