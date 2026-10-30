@@ -3,7 +3,7 @@
   "title": "OMMX Book 概念とページの依存台帳",
   "created_at": "2026-10-26",
   "language": "ja",
-  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。日英の候補評価章と変換・解法選択章、変数復元・保持情報・特殊制約・InstanceClass・Preparation・Adapterの共有Reference移管を含む。日英の保存・共有章とArtifact/Experiment/MPSの共有Reference、日英のCLI/Registry運用Referenceへの移管を含む。日英の基本求解・特殊制約のnative実行・HiGHSの自動準備・OpenJijの小さなsampling例の共有Adapter Referenceへの移管を含む。その他の英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。 3.0.0安定版のリリースまではBookとAPI Referenceがともにmainを説明し、導入方法として最新の公開prereleaseとmainの両方を案内する。 日英のAdapter比較手順は共通AdapterモジュールのReferenceへ統合する。",
+  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。日英の候補評価章と変換・解法選択章、変数復元・保持情報・特殊制約・InstanceClass・Preparation・Adapterの共有Reference移管を含む。日英の保存・共有章とArtifact/Experiment/MPSの共有Reference、日英のCLI/Registry運用Referenceへの移管を含む。日英の基本求解・特殊制約のnative実行・HiGHSの自動準備・OpenJijの小さなsampling例の共有Adapter Referenceへの移管を含む。その他の英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。 3.0.0安定版のリリースまではBookとAPI Referenceがともにmainを説明し、導入方法として最新の公開prereleaseとmainの両方を案内する。 日英のAdapter比較手順は共通AdapterモジュールのReferenceへ統合する。 日英のAdapter診断手順・保存済み進捗図を共有Analyzer Referenceへ統合する。",
   "baseline": {
     "repository": "Jij-Inc/ommx",
     "source_revision": "0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2",
@@ -262,6 +262,23 @@
         "DEV_A"
       ],
       "note": "日英のAdapter比較の旧2原稿を共通AdapterモジュールのReferenceへ統合する。同じモデルの構築からHiGHS/SCIP求解、報告目的値・sense・実行可能性・最適性の表、名前による変数抽出と図示、DataFrame結合まで自己完結したdoctest例を所有する。P2をR_API.adapter.comparisonへ改称し、基本求解Referenceの既読を要求しない直接入口にする。比較基準と変換後の結果解釈は既存Book第3章に残す。日英Home・導入・評価章とAdapter一覧から使用例へ接続し、既存診断・実装ページはリンクだけを更新する。歴史的baselineと過去の編集記録を保持し、本文レビュー記録はチャットに残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "abab1660a3718eb5ff83cb7e2a4d4d09975a84ee",
+      "target_revision": "codex/adapter-diagnostics-reference",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "B_EVALUATE",
+        "R_ADAPTERS",
+        "R_API.adapter.scip_diagnostics",
+        "R_API.adapter.highs_diagnostics",
+        "R_API.adapter.diagnostics_record",
+        "R_API.adapter.diagnostics_plot",
+        "RELEASE"
+      ],
+      "note": "日英の旧診断2原稿と重複PNGを共有Referenceへ統合。SCIP/HiGHSの自己完結した収集・終了報告・失敗時の例を各Analyzerが所有し、Experiment保存はSCIP側の任意節へ移す。air05を一度取得して実測診断と条件を保存し、求解不要の図再生成と図・データ・スクリプトの同期検査を用意する。Book第3章は用途とbound/gapの解釈を保持し、日英Home/Releaseから実在するReferenceへ接続する。過去baselineと履歴は保持し、本文レビュー記録はチャットに残す。"
     }
   ],
   "interpretation": {
@@ -1121,7 +1138,7 @@
     {
       "id": "adapter.diagnostics",
       "label": "bound・gap・終了理由の対象を読む",
-      "owner": "P4",
+      "owner": "R_API.adapter.scip_diagnostics",
       "requires": [
         "adapter.basic",
         "optimality.limit"
@@ -4364,54 +4381,82 @@
       ]
     },
     {
-      "id": "P4",
-      "title": "終了理由と進捗を読む",
-      "slice": "J",
-      "role": "how-to",
+      "id": "R_API.adapter.scip_diagnostics",
+      "title": "SCIP Analyzer Reference：診断の収集・終了報告・進捗・失敗時の読出し",
+      "slice": "Adapter diagnostics Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/inspect_adapter_diagnostics.md"
+        "python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/adapter_diagnostics.md"
-      ],
+      "source_urls": [],
       "requires": [
+        "ext.math",
         "ext.python",
-        "sdk.environment",
-        "adapter.basic",
-        "solution.read",
-        "feasibility.basic",
-        "optimality.limit"
+        "ext.table",
+        "sdk.environment"
       ],
       "sections": [
         {
-          "id": "diagnostics",
+          "id": "model-and-collection",
           "introduces": [
+            "instance.model",
+            "variable.basics",
+            "expression.basics",
+            "constraint.basics",
+            "sense",
+            "instance.build",
+            "adapter.basic"
+          ],
+          "uses": [
+            "instance.build",
+            "adapter.basic"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "results-and-diagnostics",
+          "introduces": [
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit",
             "adapter.diagnostics"
           ],
           "uses": [
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit",
             "adapter.diagnostics"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "progress-and-failure",
+          "introduces": [],
+          "uses": [
+            "adapter.diagnostics",
+            "ext.table"
           ],
           "mentions": []
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "小さな求解で終了理由を読むところを最初の成功とする。進捗図の前にprimal/dual boundとgapの意味と対象を局所説明する。callback/memberの網羅は実在するAnalyzer/report APIへ送り、変換された定式化のboundを元の問題へ無条件に移さない注意と失敗時の調査手順は残す。Experiment連携は任意節P4.experimentに分離する。",
+      "parent_page": "R_API.adapter",
+      "notes": "日英の診断ページをSCIP Analyzerの自己完結した小問題の収集例、終了報告と途中観測の区別、bound/gapの意味と対象、decode失敗時の報告読出しへ移す。変換の保証やExperimentの通読を直接取得の前提にしない。記録データの図示は任意節R_API.adapter.diagnostics_plot、保存はR_API.adapter.diagnostics_recordに分ける。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/inspect_adapter_diagnostics.md"
+        "python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py"
       ]
     },
     {
-      "id": "P4.experiment",
-      "title": "Adapter diagnosticsを実験に記録する",
+      "id": "R_API.adapter.diagnostics_record",
+      "title": "SCIP Analyzer Reference：Experimentに保存した診断を読む",
       "slice": "J",
-      "role": "how-to-section",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/inspect_adapter_diagnostics.md"
+        "python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py"
       ],
       "source_urls": [],
       "requires": [
@@ -4432,12 +4477,12 @@
         }
       ],
       "deferred": [],
-      "parent_page": "P4",
-      "notes": "最初の小さなInstanceをlog_solveで実行し、保存したdiagnosticsをAnalyzerで読む任意節。Experiment Tutorialを前提とし、診断の直接取得にはこの節を要求しない。",
+      "parent_page": "R_API.adapter.scip_diagnostics",
+      "notes": "SCIP Analyzer末尾の任意節。小さなモデルをtemporary Local RegistryのExperimentへlog_solveで記録し、保存された辞書をAnalyzerで読む。store_diagnosticsと予約keyword、失敗時best-effortはlog_solve/log_sampleの既存契約へ接続する。直接収集の入口では必修にしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/inspect_adapter_diagnostics.md"
+        "python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py"
       ]
     },
     {
@@ -6280,7 +6325,7 @@
         "variables.roles"
       ],
       "parent_page": null,
-      "notes": "日英で構造を揃え、数理最適化の基礎から直接入れる第3章。クラスやAPIの操作を順番に教えず、短い数学例と説明から評価対象・値の出所・比較基準の判断へ進む。リンクだけからAPI操作能力を付与しない。",
+      "notes": "日英で構造を揃え、数理最適化の基礎から直接入れる第3章。クラスやAPIの操作を順番に教えず、短い数学例と説明から評価対象・値の出所・比較基準の判断へ進む。リンクだけからAPI操作能力を付与しない。 診断の用途とmin/maxでのprimal/dual boundの向き、gapと観測点の解釈を日英で説明し、操作と記録済み図はAnalyzerへ案内する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -6434,6 +6479,117 @@
       "source_paths_existing": [
         "docs/ja/user_guide/record_and_share.md",
         "docs/en/user_guide/record_and_share.md"
+      ]
+    },
+    {
+      "id": "R_API.adapter.highs_diagnostics",
+      "title": "HiGHS Analyzer Reference：診断を独立に収集・図示する",
+      "slice": "Adapter diagnostics Reference migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx-highs-adapter/ommx_highs_adapter/adapter.py"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "model-and-collection",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "expression.basics",
+            "constraint.basics",
+            "sense",
+            "instance.build",
+            "adapter.basic"
+          ],
+          "uses": [
+            "instance.build",
+            "adapter.basic"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "results-and-diagnostics",
+          "introduces": [
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit",
+            "adapter.diagnostics"
+          ],
+          "uses": [
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit",
+            "adapter.diagnostics"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "progress-and-failure",
+          "introduces": [],
+          "uses": [
+            "adapter.diagnostics",
+            "ext.table"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API.adapter",
+      "notes": "HiGHSだけの環境から小問題の構築・収集・終了報告の読出し・空履歴でも使える図示・unbounded時の報告確認へ進める。SCIPと異なりhistoryへtermination行を追加しない点とmip固有の終了値名を明示する。SCIPの既読やMIPLIB取得を前提にしない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx-highs-adapter/ommx_highs_adapter/adapter.py"
+      ]
+    },
+    {
+      "id": "R_API.adapter.diagnostics_plot",
+      "title": "SCIP Analyzer Reference：保存済み診断からboundとgapを描画する",
+      "slice": "Adapter diagnostics Reference migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py",
+        "docs/api/examples/adapter_diagnostics.py",
+        "docs/api/examples/scip_air05.json",
+        "docs/api/assets/adapter_diagnostics_bounds.png"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "ext.table",
+        "sdk.environment",
+        "adapter.diagnostics"
+      ],
+      "sections": [
+        {
+          "id": "saved-history-plot",
+          "introduces": [],
+          "uses": [
+            "adapter.diagnostics",
+            "ext.table"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API.adapter.scip_diagnostics",
+      "notes": "記録済みの実測SCIP診断と取得条件、完全な描画/再取得スクリプト、生成図を共有Referenceで管理する。通常の再描画とCI検査はネットワークや求解を実行せず、明示--recordだけがMIPLIB取得・求解を行う。非有限値とSCIPのinfinity sentinelを図から除外し、途中観測と終端値を区別する。一回の図から性能優劣は主張しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py",
+        "docs/api/examples/adapter_diagnostics.py",
+        "docs/api/examples/scip_air05.json",
+        "docs/api/assets/adapter_diagnostics_bounds.png"
       ]
     }
   ],
@@ -6745,8 +6901,7 @@
       ],
       "steps": [
         "SETUP",
-        "R_API.adapter.solve",
-        "P4"
+        "R_API.adapter.scip_diagnostics"
       ]
     },
     {
@@ -6775,10 +6930,9 @@
       ],
       "steps": [
         "SETUP",
-        "R_API.adapter.solve",
-        "P4",
+        "R_API.adapter.scip_diagnostics",
         "R_API.experiment.example",
-        "P4.experiment"
+        "R_API.adapter.diagnostics_record"
       ]
     },
     {
@@ -7371,6 +7525,35 @@
             ]
           ]
         }
+      ]
+    },
+    {
+      "id": "highs_diagnostics_direct",
+      "title": "HiGHS診断への独立入口",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "R_API.adapter.highs_diagnostics"
+      ]
+    },
+    {
+      "id": "diagnostics_plot",
+      "title": "保存済みSCIP診断を再描画する",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "R_API.adapter.scip_diagnostics",
+        "R_API.adapter.diagnostics_plot"
       ]
     }
   ],

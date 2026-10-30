@@ -35,7 +35,11 @@ For example, replace the constraint $x=1$ in a binary minimization of $x$ with t
 
 Candidate evaluation also does not establish optimality. A solver may stop at a time limit with a feasible candidate; a candidate selected from many samples may be the best observed without being globally optimal. A solver's optimality claim concerns the formulation it solved, and transporting that claim requires the relevant transformation guarantees. See {meth}`optimality transport <ommx.Instance.map_active_optimality>`.
 
-Backend diagnostics answer another question: why did the solver stop, and what progress did it report? Bounds constrain the optimum of the solver's formulation, and a gap reports a separation according to that backend's definition. Neither is automatically on the scale of the reported output objective after sign, scale, or penalty changes. For concrete report formats, see the {class}`SCIP <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>` and {class}`HiGHS <ommx_highs_adapter.HighsDiagnosticsAnalyzer>` diagnostic references.
+Backend diagnostics answer another question: why did the solver stop, and what progress did it report? Bounds constrain the optimum of the solver's formulation, and a gap reports a separation according to that backend's definition. Neither is automatically on the scale of the reported output objective after sign, scale, or penalty changes.
+
+For example, in minimization, a best feasible objective of 120 and a proven lower bound of 100 place the optimum between 100 and 120. These are the primal and dual bounds respectively; for maximization, their upper/lower roles reverse. A progress graph shows how the search narrows this interval. A solver can stop before the bounds meet, and finite bounds may be unavailable before it finds a candidate. The reported relative gap follows the backend's definition, so it is not simply the interval width.
+
+For collection, field meanings, and executable examples, see the {class}`SCIP <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>` and {class}`HiGHS <ommx_highs_adapter.HighsDiagnosticsAnalyzer>` diagnostic references. The SCIP Reference includes a bound/gap graph with its recorded data and drawing code. Intermediate records are observations; use the termination report to read the final outcome.
 
 ## Compare candidates using the same criteria
 
