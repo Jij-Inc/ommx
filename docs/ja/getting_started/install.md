@@ -84,7 +84,7 @@ main：
 uv sync --locked --package ommx-highs-adapter --no-default-groups --inexact
 ```
 
-{class}`~ommx_highs_adapter.OMMXHighsAdapter`のReferenceに、特殊制約を準備して解く完全な使用例があります。モデルをその場で作るため、HiGHSとSDKだけで実行できます。[複数のAdapterで結果を比較する](../how_to/compare_adapters.md)場合は、両方のAdapterと、後述の手順でmatplotlibを用意します。
+{class}`~ommx_highs_adapter.OMMXHighsAdapter`のReferenceに、特殊制約を準備して解く完全な使用例があります。モデルをその場で作るため、HiGHSとSDKだけで実行できます。{mod}`Adapter比較の使用例 <ommx.adapter>`を実行する場合は、両方のAdapterと、後述の手順でmatplotlibを用意します。
 
 (install-openjij-adapter)=
 ### OpenJij Adapter

@@ -84,7 +84,7 @@ main:
 uv sync --locked --package ommx-highs-adapter --no-default-groups --inexact
 ```
 
-The {class}`~ommx_highs_adapter.OMMXHighsAdapter` Reference includes a complete example of preparing special constraints and solving the resulting model. It constructs its own input and needs only HiGHS and the SDK. To [compare adapters](../tutorial/switching_adapters.md), install both HiGHS and PySCIPOpt, then add matplotlib as described below.
+The {class}`~ommx_highs_adapter.OMMXHighsAdapter` Reference includes a complete example of preparing special constraints and solving the resulting model. It constructs its own input and needs only HiGHS and the SDK. To run the {mod}`Adapter comparison example <ommx.adapter>`, install both HiGHS and PySCIPOpt, then add matplotlib as described below.
 
 (install-openjij-adapter)=
 ### OpenJij Adapter
