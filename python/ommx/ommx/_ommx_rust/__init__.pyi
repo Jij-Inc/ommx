@@ -1218,6 +1218,11 @@ class AttachedDecisionVariable:
     @property
     def bound(self) -> Bound: ...
     @property
+    def values(self) -> typing.Optional[builtins.list[builtins.float]]:
+        r"""
+        Explicit feasible values for a finite-domain variable.
+        """
+    @property
     def substituted_value(self) -> typing.Optional[builtins.float]: ...
     @property
     def name(self) -> builtins.str: ...
@@ -2197,10 +2202,13 @@ class DecisionVariable:
     Decision variable in an optimization problem.
 
     This class represents a variable that will be optimized in a mathematical programming problem.
-    It supports various types (binary, integer, continuous, semi-integer, semi-continuous) and
-    can be used in arithmetic expressions to build objective functions and constraints.
+    It supports binary, integer, continuous, semi-integer, semi-continuous,
+    and finite-domain variables, and can be used in arithmetic expressions to
+    build objective functions and constraints.
     Construction requires a {class}`~ommx.Kind` and raises ValueError when the
     requested bound cannot be normalized for the selected variable kind.
+    Use {meth}`~ommx.DecisionVariable.finite_domain` for an explicitly enumerated
+    domain instead of an interval bound.
 
     Note that this object overloads `==` for creating a constraint, not for equality comparison.
 
@@ -2237,12 +2245,23 @@ class DecisionVariable:
     r"""
     Compatibility alias for {attr}`Kind.SemiContinuous`.
     """
+    FINITE_DOMAIN: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.FiniteDomain`.
+    """
     @property
     def id(self) -> builtins.int: ...
     @property
     def kind(self) -> Kind: ...
     @property
     def bound(self) -> Bound: ...
+    @property
+    def values(self) -> typing.Optional[builtins.list[builtins.float]]:
+        r"""
+        Explicit feasible values for a finite-domain variable.
+
+        Returns `None` for interval-domain variable kinds.
+        """
     @property
     def name(self) -> builtins.str: ...
     @property
@@ -2357,6 +2376,51 @@ class DecisionVariable:
         parameters: typing.Mapping[builtins.str, builtins.str] = {},
         description: typing.Optional[builtins.str] = None,
     ) -> DecisionVariable: ...
+    @staticmethod
+    def finite_domain(
+        id: builtins.int,
+        values: typing.Sequence[builtins.float],
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> DecisionVariable:
+        r"""
+        Create a decision variable whose feasible values are explicitly enumerated.
+
+        ```pycon
+        >>> from ommx import DecisionVariable, Instance, Kind
+        >>> dose = DecisionVariable.finite_domain(0, [1.0, 0.1, 0.5, 0.3], name="dose")
+        >>> assert dose.kind == Kind.FiniteDomain
+        >>> dose.values
+        [0.1, 0.3, 0.5, 1.0]
+        >>> assert (dose.bound.lower, dose.bound.upper) == (0.1, 1.0)
+
+        ```
+
+        `values` is the exact feasible set. It must be non-empty and contain unique,
+        finite numbers; OMMX stores the values in ascending order. Values between the
+        minimum and maximum that are not listed remain infeasible. This domain does
+        not approximate a continuous interval.
+
+        The {attr}`~ommx.DecisionVariable.bound` property and the `lower` and `upper`
+        columns in {meth}`~ommx.Instance.decision_variables_df` are derived from the
+        minimum and maximum of `values`. They do not independently define the domain.
+        The DataFrame's `values` column contains the exact set for finite-domain
+        variables and a missing value for interval-domain kinds.
+
+        For incremental construction with automatically assigned IDs, use
+        {meth}`~ommx.Instance.new_finite_domain`:
+
+        ```pycon
+        >>> instance = Instance.minimize()
+        >>> dose = instance.new_finite_domain([0.1, 0.3, 0.5, 1.0], "dose")
+        >>> instance.objective = dose
+        >>> assert instance.evaluate({dose.id: 0.3}).feasible
+        >>> assert not instance.evaluate({dose.id: 0.4}).feasible
+
+        ```
+        """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> DecisionVariable: ...
     def __deepcopy__(self, _memo: typing.Any) -> DecisionVariable: ...
@@ -2695,6 +2759,11 @@ class EvaluatedDecisionVariable:
     def upper_bound(self) -> builtins.float:
         r"""
         Get the upper bound
+        """
+    @property
+    def values(self) -> typing.Optional[builtins.list[builtins.float]]:
+        r"""
+        Explicit feasible values for a finite-domain variable.
         """
     @property
     def name(self) -> typing.Optional[builtins.str]:
@@ -5717,6 +5786,32 @@ class Instance:
         automatic ID can be assigned. On failure, no variable or modeling label
         is added to the instance.
         """
+    def new_finite_domain(
+        self,
+        values: typing.Sequence[builtins.float],
+        name: typing.Optional[builtins.str] = None,
+        *,
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: collections.abc.Mapping[str, str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> AttachedDecisionVariable:
+        r"""
+        Create and add a finite-domain decision variable with an automatically assigned ID.
+
+        `values` is the exact feasible set, rather than a discretization of an
+        interval. Values must be non-empty, finite, and unique; OMMX stores them
+        in ascending order.
+
+        **Args:**
+        - `values`: Exact feasible values of the variable.
+        - `name`: Optional human-readable modeling name. Names need not be unique.
+        - `subscripts`: Optional integer indices from the source model.
+        - `parameters`: Optional string-valued indices from the source model.
+        - `description`: Optional human-readable description.
+
+        Raises {class}`ValueError` if `values` does not define a valid finite
+        domain or if no larger automatic ID can be assigned.
+        """
     def attached_decision_variable(
         self, variable_id: builtins.int
     ) -> AttachedDecisionVariable:
@@ -7469,7 +7564,8 @@ class Instance:
                     "integer": int,
                     "continuous": int,
                     "semi_integer": int,
-                    "semi_continuous": int
+                    "semi_continuous": int,
+                    "finite_domain": int
                 },
                 "by_usage": {
                     "used_in_objective": int,
@@ -12432,6 +12528,11 @@ class SampledDecisionVariable:
         Get the decision variable bound
         """
     @property
+    def values(self) -> typing.Optional[builtins.list[builtins.float]]:
+        r"""
+        Explicit feasible values for a finite-domain variable.
+        """
+    @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
         Get the decision variable name
@@ -14283,6 +14384,10 @@ class Kind(enum.Enum):
     SemiContinuous = ...
     r"""
     Semi-continuous decision variable (continuous in range or zero)
+    """
+    FiniteDomain = ...
+    r"""
+    Finite-domain decision variable (one of explicitly enumerated values)
     """
 
     def __hash__(self) -> builtins.int: ...

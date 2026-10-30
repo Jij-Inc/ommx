@@ -1670,6 +1670,29 @@
               },
               "is_property": true,
               "is_readonly": true
+            },
+            {
+              "name": "values",
+              "doc": "Explicit feasible values for a finite-domain variable.",
+              "type_": {
+                "display": "Optional[list[float]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "list[float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
             }
           ],
           "deprecated": null
@@ -5879,7 +5902,7 @@
         {
           "kind": "Class",
           "name": "DecisionVariable",
-          "doc": "Decision variable in an optimization problem.\n\nThis class represents a variable that will be optimized in a mathematical programming problem.\nIt supports various types (binary, integer, continuous, semi-integer, semi-continuous) and\ncan be used in arithmetic expressions to build objective functions and constraints.\nConstruction requires a {class}`~ommx.Kind` and raises ValueError when the\nrequested bound cannot be normalized for the selected variable kind.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n>>> x = DecisionVariable.integer(1)\n>>> x == 1  # Returns Constraint, not bool\nConstraint(...)\n\nFor object equality comparison, use the ``equals_to()`` method or compare IDs:\n\n>>> y = DecisionVariable.integer(2)\n>>> x.id == y.id\nFalse",
+          "doc": "Decision variable in an optimization problem.\n\nThis class represents a variable that will be optimized in a mathematical programming problem.\nIt supports binary, integer, continuous, semi-integer, semi-continuous,\nand finite-domain variables, and can be used in arithmetic expressions to\nbuild objective functions and constraints.\nConstruction requires a {class}`~ommx.Kind` and raises ValueError when the\nrequested bound cannot be normalized for the selected variable kind.\nUse {meth}`~ommx.DecisionVariable.finite_domain` for an explicitly enumerated\ndomain instead of an interval bound.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n>>> x = DecisionVariable.integer(1)\n>>> x == 1  # Returns Constraint, not bool\nConstraint(...)\n\nFor object equality comparison, use the ``equals_to()`` method or compare IDs:\n\n>>> y = DecisionVariable.integer(2)\n>>> x.id == y.id\nFalse",
           "bases": [],
           "methods": [
             {
@@ -7015,6 +7038,124 @@
               "deprecated": null
             },
             {
+              "name": "finite_domain",
+              "doc": "Create a decision variable whose feasible values are explicitly enumerated.\n\n```pycon\n>>> from ommx import DecisionVariable, Instance, Kind\n>>> dose = DecisionVariable.finite_domain(0, [1.0, 0.1, 0.5, 0.3], name=\"dose\")\n>>> assert dose.kind == Kind.FiniteDomain\n>>> dose.values\n[0.1, 0.3, 0.5, 1.0]\n>>> assert (dose.bound.lower, dose.bound.upper) == (0.1, 1.0)\n\n```\n\n`values` is the exact feasible set. It must be non-empty and contain unique,\nfinite numbers; OMMX stores the values in ascending order. Values between the\nminimum and maximum that are not listed remain infeasible. This domain does\nnot approximate a continuous interval.\n\nThe {attr}`~ommx.DecisionVariable.bound` property and the `lower` and `upper`\ncolumns in {meth}`~ommx.Instance.decision_variables_df` are derived from the\nminimum and maximum of `values`. They do not independently define the domain.\nThe DataFrame's `values` column contains the exact set for finite-domain\nvariables and a missing value for interval-domain kinds.\n\nFor incremental construction with automatically assigned IDs, use\n{meth}`~ommx.Instance.new_finite_domain`:\n\n```pycon\n>>> instance = Instance.minimize()\n>>> dose = instance.new_finite_domain([0.1, 0.3, 0.5, 1.0], \"dose\")\n>>> instance.objective = dose\n>>> assert instance.evaluate({dose.id: 0.3}).feasible\n>>> assert not instance.evaluate({dose.id: 0.4}).feasible\n\n```",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "values",
+                      "type_": {
+                        "display": "Sequence[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "[]"
+                      }
+                    },
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "{}"
+                      }
+                    },
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "integer",
               "doc": "",
               "signatures": [
@@ -7416,6 +7557,15 @@
               }
             },
             {
+              "name": "FINITE_DOMAIN",
+              "doc": "Compatibility alias for {attr}`Kind.FiniteDomain`.",
+              "type_": {
+                "display": "Kind",
+                "link_target": null,
+                "children": []
+              }
+            },
+            {
               "name": "INTEGER",
               "doc": "Compatibility alias for {attr}`Kind.Integer`.",
               "type_": {
@@ -7530,6 +7680,29 @@
                     "display": "int",
                     "link_target": null,
                     "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "values",
+              "doc": "Explicit feasible values for a finite-domain variable.\n\nReturns `None` for interval-domain variable kinds.",
+              "type_": {
+                "display": "Optional[list[float]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "list[float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               },
@@ -8884,6 +9057,29 @@
                 "display": "float",
                 "link_target": null,
                 "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "values",
+              "doc": "Explicit feasible values for a finite-domain variable.",
+              "type_": {
+                "display": "Optional[list[float]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "list[float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
               },
               "is_property": true,
               "is_readonly": true
@@ -15312,6 +15508,115 @@
               "deprecated": null
             },
             {
+              "name": "new_finite_domain",
+              "doc": "Create and add a finite-domain decision variable with an automatically assigned ID.\n\n`values` is the exact feasible set, rather than a discretization of an\ninterval. Values must be non-empty, finite, and unique; OMMX stores them\nin ascending order.\n\n**Args:**\n- `values`: Exact feasible values of the variable.\n- `name`: Optional human-readable modeling name. Names need not be unique.\n- `subscripts`: Optional integer indices from the source model.\n- `parameters`: Optional string-valued indices from the source model.\n- `description`: Optional human-readable description.\n\nRaises {class}`ValueError` if `values` does not define a valid finite\ndomain or if no larger automatic ID can be assigned.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "values",
+                      "type_": {
+                        "display": "Sequence[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "[]"
+                      }
+                    },
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "{}"
+                      }
+                    },
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "new_integer",
               "doc": "Create and add an integer decision variable with an automatically assigned ID.\n\nThe bounds default to `(-inf, inf)`. Each finite side is normalized to\nthe least or greatest integer value that satisfies the original bound\nunder `atol`; an infinite side remains unbounded. Bound membership uses\nthe same inequality-residual tolerance semantics as constraint\nfeasibility. Returns an\n{class}`~ommx.AttachedDecisionVariable` that can be used directly in\nexpressions.\n\n**Args:**\n- `name`: Optional human-readable modeling name. Names need not be unique.\n- `lower`: Lower bound of the variable.\n- `upper`: Upper bound of the variable.\n- `subscripts`: Optional integer indices from the source model.\n- `parameters`: Optional string-valued indices from the source model.\n- `description`: Optional human-readable description.\n- `atol`: Absolute tolerance for integer-bound normalization. If\n  omitted, the current default returned by\n  {func}`~ommx.get_default_atol` is used.\n\nRaises {class}`ValueError` if the bounds are invalid or normalization\nyields no integer value, or if no larger automatic ID can be assigned.\nOn failure, no variable or modeling label is added to the instance.",
               "signatures": [
@@ -16363,7 +16668,7 @@
             },
             {
               "name": "stats",
-              "doc": "Get statistics about the instance.\n\nReturns a dictionary containing counts of decision variables and constraints\ncategorized by kind, usage, and status.\n\n**Returns:**\nA dictionary with the following structure:\n\n```text\n{\n    \"decision_variables\": {\n        \"total\": int,\n        \"by_kind\": {\n            \"binary\": int,\n            \"integer\": int,\n            \"continuous\": int,\n            \"semi_integer\": int,\n            \"semi_continuous\": int\n        },\n        \"by_usage\": {\n            \"used_in_objective\": int,\n            \"used_in_constraints\": int,\n            \"used\": int,\n            \"fixed\": int,\n            \"dependent\": int,\n            \"irrelevant\": int\n        }\n    },\n    \"constraints\": {\n        \"total\": int,\n        \"active\": int,\n        \"removed\": int\n    }\n}\n```\n\n# Examples\n\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> stats = instance.stats()\n>>> stats[\"decision_variables\"][\"total\"]\n0\n>>> stats[\"constraints\"][\"total\"]\n0",
+              "doc": "Get statistics about the instance.\n\nReturns a dictionary containing counts of decision variables and constraints\ncategorized by kind, usage, and status.\n\n**Returns:**\nA dictionary with the following structure:\n\n```text\n{\n    \"decision_variables\": {\n        \"total\": int,\n        \"by_kind\": {\n            \"binary\": int,\n            \"integer\": int,\n            \"continuous\": int,\n            \"semi_integer\": int,\n            \"semi_continuous\": int,\n            \"finite_domain\": int\n        },\n        \"by_usage\": {\n            \"used_in_objective\": int,\n            \"used_in_constraints\": int,\n            \"used\": int,\n            \"fixed\": int,\n            \"dependent\": int,\n            \"irrelevant\": int\n        }\n    },\n    \"constraints\": {\n        \"total\": int,\n        \"active\": int,\n        \"removed\": int\n    }\n}\n```\n\n# Examples\n\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> stats = instance.stats()\n>>> stats[\"decision_variables\"][\"total\"]\n0\n>>> stats[\"constraints\"][\"total\"]\n0",
               "signatures": [
                 {
                   "parameters": [],
@@ -18213,6 +18518,11 @@
             {
               "name": "Continuous",
               "doc": "Continuous decision variable (real-valued)",
+              "type_": null
+            },
+            {
+              "name": "FiniteDomain",
+              "doc": "Finite-domain decision variable (one of explicitly enumerated values)",
               "type_": null
             },
             {
@@ -31883,6 +32193,29 @@
                     "display": "int",
                     "link_target": null,
                     "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "values",
+              "doc": "Explicit feasible values for a finite-domain variable.",
+              "type_": {
+                "display": "Optional[list[float]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "list[float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               },

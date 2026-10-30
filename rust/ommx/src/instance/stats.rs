@@ -14,6 +14,8 @@ pub struct VariableStatsByKind {
     pub semi_integer: usize,
     /// Number of semi-continuous variables
     pub semi_continuous: usize,
+    /// Number of finite-domain variables
+    pub finite_domain: usize,
 }
 
 /// Statistics about decision variables categorized by usage.
@@ -36,7 +38,7 @@ pub struct VariableStatsByUsage {
 /// Statistics about decision variables in an instance.
 ///
 /// This struct provides counts of decision variables categorized by:
-/// - Kind: binary, integer, continuous, semi-integer, semi-continuous
+/// - Kind: binary, integer, continuous, semi-integer, semi-continuous, finite-domain
 /// - Usage: used (in objective or constraints), fixed, dependent, irrelevant
 ///
 /// Note on usage categories:
@@ -124,6 +126,11 @@ impl super::Instance {
                 .decision_variables()
                 .values()
                 .filter(|dv| dv.kind() == crate::Kind::SemiContinuous)
+                .count(),
+            finite_domain: self
+                .decision_variables()
+                .values()
+                .filter(|dv| dv.kind() == crate::Kind::FiniteDomain)
                 .count(),
         };
 
@@ -307,9 +314,12 @@ mod tests {
             VariableID::from(3) => DecisionVariable::integer(),
             VariableID::from(4) => DecisionVariable::continuous(),
             VariableID::from(5) => DecisionVariable::semi_integer(),
+            VariableID::from(6) => DecisionVariable::new_finite_domain(vec![0.1, 0.5, 1.0]).unwrap(),
         };
 
-        let objective = (linear!(1) + linear!(2)).into();
+        let objective = ((linear!(1) + linear!(2)).unwrap() + linear!(6))
+            .unwrap()
+            .into();
 
         let instance = Instance::new(
             Sense::Minimize,

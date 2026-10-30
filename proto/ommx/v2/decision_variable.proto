@@ -11,21 +11,30 @@ import "ommx/v2/common.proto";
 // The enclosing DecisionVariableTable owns VariableID and modeling labels.
 message DecisionVariable {
   ommx.v1.DecisionVariable.Kind kind = 1;
+  // Required for interval-domain kinds and absent for KIND_FINITE_DOMAIN.
   ommx.v1.Bound bound = 2;
+  // Required for KIND_FINITE_DOMAIN and absent for interval-domain kinds.
+  ommx.v1.FiniteDomain finite_domain = 3;
 }
 
 // Evaluated-stage decision-variable row.
 message EvaluatedDecisionVariable {
   ommx.v1.DecisionVariable.Kind kind = 1;
+  // Required for interval-domain kinds and absent for KIND_FINITE_DOMAIN.
   ommx.v1.Bound bound = 2;
   double value = 3;
+  // Required for KIND_FINITE_DOMAIN and absent for interval-domain kinds.
+  ommx.v1.FiniteDomain finite_domain = 4;
 }
 
 // Sampled-stage decision-variable row.
 message SampledDecisionVariable {
   ommx.v1.DecisionVariable.Kind kind = 1;
+  // Required for interval-domain kinds and absent for KIND_FINITE_DOMAIN.
   ommx.v1.Bound bound = 2;
   ommx.v1.SampledValues samples = 3;
+  // Required for KIND_FINITE_DOMAIN and absent for interval-domain kinds.
+  ommx.v1.FiniteDomain finite_domain = 4;
 }
 
 // Definition-stage decision-variable table.

@@ -12,10 +12,13 @@ use std::collections::HashMap;
 /// Decision variable in an optimization problem.
 ///
 /// This class represents a variable that will be optimized in a mathematical programming problem.
-/// It supports various types (binary, integer, continuous, semi-integer, semi-continuous) and
-/// can be used in arithmetic expressions to build objective functions and constraints.
+/// It supports binary, integer, continuous, semi-integer, semi-continuous,
+/// and finite-domain variables, and can be used in arithmetic expressions to
+/// build objective functions and constraints.
 /// Construction requires a {class}`~ommx.Kind` and raises ValueError when the
 /// requested bound cannot be normalized for the selected variable kind.
+/// Use {meth}`~ommx.DecisionVariable.finite_domain` for an explicitly enumerated
+/// domain instead of an interval bound.
 ///
 /// Note that this object overloads `==` for creating a constraint, not for equality comparison.
 ///
@@ -179,6 +182,16 @@ impl DecisionVariable {
         VariableBound(self.1.bound())
     }
 
+    /// Explicit feasible values for a finite-domain variable.
+    ///
+    /// Returns `None` for interval-domain variable kinds.
+    #[getter]
+    pub fn values(&self) -> Option<Vec<f64>> {
+        self.1
+            .finite_domain()
+            .map(|domain| domain.values().to_vec())
+    }
+
     #[getter]
     pub fn name(&self) -> String {
         self.2.name.clone().unwrap_or_default()
@@ -311,7 +324,38 @@ impl DecisionVariable {
         )
     }
 
+    #[doc = include_str!("docstrings/ommx/DecisionVariable.finite_domain.md")]
+    #[staticmethod]
+    #[pyo3(signature = (id, values, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
+    pub fn finite_domain(
+        id: u64,
+        values: Vec<f64>,
+        name: Option<String>,
+        subscripts: Vec<i64>,
+        parameters: HashMap<String, String>,
+        description: Option<String>,
+    ) -> OmmxPyResult<Self> {
+        let variable_id = VariableID::from(id);
+        let decision_variable = ommx::DecisionVariable::new_finite_domain(values)?;
+        let label = ommx::DecisionVariableLabel {
+            name,
+            subscripts,
+            parameters: parameters.into_iter().collect(),
+            description,
+        };
+        Ok(Self(variable_id, decision_variable, label))
+    }
+
     pub fn __repr__(&self) -> String {
+        if let Some(domain) = self.1.finite_domain() {
+            return format!(
+                "DecisionVariable(id={}, kind=Kind.{:?}, name=\"{}\", values={:?})",
+                self.id(),
+                self.1.kind(),
+                self.name(),
+                domain.values()
+            );
+        }
         format!(
             "DecisionVariable(id={}, kind=Kind.{:?}, name=\"{}\", bound=[{}, {}])",
             self.id(),
@@ -372,6 +416,13 @@ impl DecisionVariable {
         Kind::SemiContinuous
     }
 
+    /// Compatibility alias for {attr}`Kind.FiniteDomain`.
+    #[classattr]
+    #[pyo3(name = "FINITE_DOMAIN")]
+    fn class_finite_domain() -> Kind {
+        Kind::FiniteDomain
+    }
+
     // =====================
     // Comparison for equality (not constraint creation)
     // =====================
@@ -381,7 +432,7 @@ impl DecisionVariable {
     /// This is different from `__eq__` which creates a Constraint.
     /// Use this method when you want to check if two variables represent the same variable.
     pub fn equals_to(&self, other: &DecisionVariable) -> bool {
-        self.0 == other.0 && self.1.kind() == other.1.kind() && self.1.bound() == other.1.bound()
+        self.0 == other.0 && self.1 == other.1
     }
 
     // =====================
@@ -821,6 +872,26 @@ impl AttachedDecisionVariable {
         }
     }
 
+    /// Explicit feasible values for a finite-domain variable.
+    #[getter]
+    pub fn values(&self, py: Python<'_>) -> PyResult<Option<Vec<f64>>> {
+        let with = |variable: &ommx::DecisionVariable| {
+            variable
+                .finite_domain()
+                .map(|domain| domain.values().to_vec())
+        };
+        match &self.host {
+            crate::ConstraintHost::Instance(p) => {
+                let inst = p.borrow(py);
+                Ok(with(lookup_variable(&inst.inner, self.id)?))
+            }
+            crate::ConstraintHost::Parametric(p) => {
+                let inst = p.borrow(py);
+                Ok(with(lookup_variable_parametric(&inst.inner, self.id)?))
+            }
+        }
+    }
+
     #[getter]
     pub fn substituted_value(&self, py: Python<'_>) -> PyResult<Option<f64>> {
         match &self.host {
@@ -840,6 +911,15 @@ impl AttachedDecisionVariable {
     pub fn __repr__(&self, py: Python<'_>) -> String {
         let render =
             |id: ommx::VariableID, v: &ommx::DecisionVariable, name: Option<&str>| -> String {
+                if let Some(domain) = v.finite_domain() {
+                    return format!(
+                        "AttachedDecisionVariable(id={}, kind=Kind.{:?}, name=\"{}\", values={:?})",
+                        id.into_inner(),
+                        v.kind(),
+                        name.unwrap_or(""),
+                        domain.values()
+                    );
+                }
                 format!(
                     "AttachedDecisionVariable(id={}, kind=Kind.{:?}, name=\"{}\", bound=[{}, {}])",
                     id.into_inner(),

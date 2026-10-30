@@ -1255,6 +1255,39 @@ impl Instance {
         Ok(Self::attach_decision_variable(slf, id))
     }
 
+    /// Create and add a finite-domain decision variable with an automatically assigned ID.
+    ///
+    /// `values` is the exact feasible set, rather than a discretization of an
+    /// interval. Values must be non-empty, finite, and unique; OMMX stores them
+    /// in ascending order.
+    ///
+    /// **Args:**
+    /// - `values`: Exact feasible values of the variable.
+    /// - `name`: Optional human-readable modeling name. Names need not be unique.
+    /// - `subscripts`: Optional integer indices from the source model.
+    /// - `parameters`: Optional string-valued indices from the source model.
+    /// - `description`: Optional human-readable description.
+    ///
+    /// Raises {class}`ValueError` if `values` does not define a valid finite
+    /// domain or if no larger automatic ID can be assigned.
+    #[pyo3(signature = (values, name=None, *, subscripts=Vec::new(), parameters=StringMapping::default(), description=None))]
+    fn new_finite_domain(
+        slf: Bound<'_, Self>,
+        values: Vec<f64>,
+        name: Option<String>,
+        subscripts: Vec<i64>,
+        parameters: StringMapping,
+        description: Option<String>,
+    ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
+        let label = Self::decision_variable_label(name, subscripts, parameters, description);
+        let id = {
+            slf.borrow_mut()
+                .inner
+                .new_finite_domain(values, label, None, ommx::ATol::default())?
+        };
+        Ok(Self::attach_decision_variable(slf, id))
+    }
+
     /// Return an {class}`~ommx.AttachedDecisionVariable` bound to the
     /// given id — a write-through handle whose label setters update
     /// this instance's SoA store. The handle also participates in
@@ -3079,7 +3112,8 @@ impl Instance {
     ///             "integer": int,
     ///             "continuous": int,
     ///             "semi_integer": int,
-    ///             "semi_continuous": int
+    ///             "semi_continuous": int,
+    ///             "finite_domain": int
     ///         },
     ///         "by_usage": {
     ///             "used_in_objective": int,

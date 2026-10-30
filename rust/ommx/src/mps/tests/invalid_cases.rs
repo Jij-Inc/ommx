@@ -64,3 +64,28 @@ fn test_nonlinear_constraint_error() {
     "###);
     assert_eq!(buffer, b"unchanged");
 }
+
+#[test]
+fn test_finite_domain_variable_error() {
+    let decision_variables = btreemap! {
+        VariableID::from(0) => DecisionVariable::new_finite_domain(vec![0.1, 0.5, 1.0]).unwrap(),
+    };
+    let instance = Instance::new(
+        Sense::Minimize,
+        Function::from(crate::linear!(0)),
+        decision_variables,
+        BTreeMap::new(),
+    )
+    .unwrap();
+
+    let mut buffer = b"unchanged".to_vec();
+    let error = format::format(&instance, &mut buffer).unwrap_err();
+
+    insta::assert_snapshot!(error.to_string(), @r###"
+    Instance is outside the MPS input class:
+    Instance does not belong to any clause:
+    - clause 0 (`MPS`):
+      - variable kind FiniteDomain for IDs {VariableID(0)} is not allowed; allowed kinds are {Continuous, Integer, Binary}
+    "###);
+    assert_eq!(buffer, b"unchanged");
+}

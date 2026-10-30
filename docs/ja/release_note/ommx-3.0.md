@@ -6,6 +6,28 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 🆕 finite-domain 決定変数 ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
+
+{class}`~ommx.DecisionVariable` で、明示的に列挙した数値の集合を正確な
+定義域として表現できるようになりました。Instance を段階的に構築する場合は
+{meth}`~ommx.Instance.new_finite_domain`、明示的な ID を持つコンポーネントを
+作る場合は {meth}`~ommx.DecisionVariable.finite_domain` を使用します。
+
+```python
+from ommx import DecisionVariable, Instance
+
+instance = Instance.minimize()
+x = instance.new_finite_domain([0.1, 0.3, 0.5, 1.0], name="x")
+
+assert x.kind == DecisionVariable.FINITE_DOMAIN
+assert x.values == [0.1, 0.3, 0.5, 1.0]
+```
+
+値の集合は空ではなく、重複のない有限な数値を含む必要があります。OMMX は
+評価、サンプリング、v1/v2 serialization を通してこの集合を正確に保持します。
+これは連続区間の離散化ではありません。定義域と DataFrame での表現については
+{meth}`~ommx.DecisionVariable.finite_domain` を参照してください。
+
 ## 3.0.0 Beta 8
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b8-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b8)

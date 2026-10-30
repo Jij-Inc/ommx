@@ -386,6 +386,10 @@ fn decision_variable_error_to_pyerr(error: &ommx::DecisionVariableError, message
     if matches!(
         error,
         ommx::DecisionVariableError::BoundInconsistentToKind { .. }
+            | ommx::DecisionVariableError::EmptyFiniteDomain
+            | ommx::DecisionVariableError::NonFiniteDomainValue { .. }
+            | ommx::DecisionVariableError::DuplicateFiniteDomainValue { .. }
+            | ommx::DecisionVariableError::UnexpectedFiniteDomain { .. }
             | ommx::DecisionVariableError::DuplicateID { .. }
             | ommx::DecisionVariableError::NoAvailableID
             | ommx::DecisionVariableError::NonFiniteValue { .. }

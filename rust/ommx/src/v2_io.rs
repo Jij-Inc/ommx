@@ -17,6 +17,7 @@ pub fn required_features(
     has_indicator_constraints: bool,
     has_one_hot_constraints: bool,
     has_sos1_constraints: bool,
+    has_finite_domain_variables: bool,
 ) -> Vec<i32> {
     let mut features = Vec::new();
     if has_indicator_constraints {
@@ -27,6 +28,9 @@ pub fn required_features(
     }
     if has_sos1_constraints {
         features.push(Feature::ConstraintSos1 as i32);
+    }
+    if has_finite_domain_variables {
+        features.push(Feature::DecisionVariableFiniteDomain as i32);
     }
     features
 }
@@ -221,6 +225,7 @@ mod required_features_tests {
                 Feature::ConstraintOneHot as i32,
                 Feature::ConstraintSos1 as i32,
                 Feature::OutputObjective as i32,
+                Feature::DecisionVariableFiniteDomain as i32,
             ],
             "test.Message",
         )

@@ -31,6 +31,8 @@ enum Feature {
   // The Instance or ParametricInstance payload explicitly carries
   // output-objective semantics separately from the active solver formulation.
   FEATURE_OUTPUT_OBJECTIVE = 4;
+  // The payload contains a decision variable with an explicitly enumerated finite domain.
+  FEATURE_DECISION_VARIABLE_FINITE_DOMAIN = 5;
 }
 
 // Human-authored modeling notation for one table or collection row.

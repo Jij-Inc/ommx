@@ -72,7 +72,9 @@ impl Instance {
     /// boundary calculation is non-finite. Other candidates from that row are
     /// still processed. Unbounded variable domains remain infinite. Semi-variable
     /// domains include zero when deriving bounds on other variables, but their
-    /// own bounds are not changed. Fixed and dependent variables are not changed.
+    /// own bounds are not changed. Finite-domain variables supply their tolerated
+    /// interval envelope, but their exact set of values is not changed. Fixed
+    /// and dependent variables are not changed.
     /// This is a conservative propagation pass, not a complete infeasibility
     /// detector or a fixed-point presolver.
     ///
@@ -107,8 +109,10 @@ fn infer_bounds_simultaneously_once(
         .decision_variables()
         .iter()
         .filter_map(|(id, variable)| {
-            (matches!(variable.kind(), Kind::SemiContinuous | Kind::SemiInteger)
-                || instance.fixed_decision_variable_values().contains_key(id)
+            (matches!(
+                variable.kind(),
+                Kind::SemiContinuous | Kind::SemiInteger | Kind::FiniteDomain
+            ) || instance.fixed_decision_variable_values().contains_key(id)
                 || instance.decision_variable_dependency.get(id).is_some())
             .then_some(*id)
         })
@@ -299,6 +303,27 @@ mod tests {
                 .collect(),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn finite_domains_supply_residual_bounds_without_being_changed() {
+        let finite = DecisionVariable::new_finite_domain(vec![1.0, 2.0]).unwrap();
+        let mut problem = instance(
+            vec![finite.clone(), continuous(0.0, 10.0)],
+            vec![Constraint::less_than_or_equal_to_zero(
+                ((linear!(0) + linear!(1)).unwrap() - coeff!(3.0))
+                    .unwrap()
+                    .into(),
+            )],
+        );
+        let bounds = problem
+            .tighten_bounds_simultaneously_once(32, ATol::new(0.125).unwrap())
+            .unwrap();
+        assert_eq!(
+            bounds,
+            Bounds::from_iter([(1.into(), Bound::new(0.0, 2.125).unwrap())])
+        );
+        assert_eq!(problem.decision_variables()[&0.into()], finite);
     }
 
     #[test]

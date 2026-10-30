@@ -40,6 +40,14 @@ impl SampledDecisionVariable {
         crate::VariableBound(*self.1.bound())
     }
 
+    /// Explicit feasible values for a finite-domain variable.
+    #[getter]
+    pub fn values(&self) -> Option<Vec<f64>> {
+        self.1
+            .finite_domain()
+            .map(|domain| domain.values().to_vec())
+    }
+
     /// Get the decision variable name
     #[getter]
     pub fn name(&self) -> Option<String> {

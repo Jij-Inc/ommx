@@ -14,6 +14,7 @@ impl Parse for v1::decision_variable::Kind {
             Binary => Ok(Kind::Binary),
             SemiContinuous => Ok(Kind::SemiContinuous),
             SemiInteger => Ok(Kind::SemiInteger),
+            FiniteDomain => Ok(Kind::FiniteDomain),
             _ => Err(RawParseError::UnknownEnumValue {
                 enum_name: "ommx.v1.decision_variable.Kind",
                 value: self as i32,
@@ -39,6 +40,7 @@ impl From<Kind> for v1::decision_variable::Kind {
             Kind::Binary => Binary,
             Kind::SemiContinuous => SemiContinuous,
             Kind::SemiInteger => SemiInteger,
+            Kind::FiniteDomain => FiniteDomain,
         }
     }
 }
@@ -62,25 +64,70 @@ pub struct ParsedDecisionVariable {
     pub fixed_value: Option<f64>,
 }
 
+/// Parse only the wire domain so `Bound` extraction can share decision-variable
+/// validation without interpreting labels or a substituted/evaluated value.
+pub(crate) fn parse_domain(
+    id: VariableID,
+    kind: v1::decision_variable::Kind,
+    bound: Option<v1::Bound>,
+    finite_domain: Option<v1::FiniteDomain>,
+) -> Result<DecisionVariable, ParseError> {
+    let message = "ommx.v1.DecisionVariable";
+    let kind = kind.parse_as(&(), message, "kind")?;
+    match kind {
+        Kind::FiniteDomain => {
+            if let Some(bound) = bound {
+                return Err(ParseError::new(DecisionVariableError::InvalidDefinition {
+                    id,
+                    source: Box::new(DecisionVariableError::BoundInconsistentToKind {
+                        kind,
+                        bound: bound.parse(&())?,
+                    }),
+                })
+                .context(message, "bound"));
+            }
+            let values = finite_domain
+                .ok_or(RawParseError::MissingField {
+                    message,
+                    field: "finite_domain",
+                })?
+                .values;
+            DecisionVariable::new_finite_domain(values).map_err(|source| {
+                ParseError::new(DecisionVariableError::InvalidDefinition {
+                    id,
+                    source: Box::new(source),
+                })
+                .context(message, "finite_domain")
+            })
+        }
+        _ => {
+            if finite_domain.is_some() {
+                return Err(ParseError::new(DecisionVariableError::InvalidDefinition {
+                    id,
+                    source: Box::new(DecisionVariableError::UnexpectedFiniteDomain { kind }),
+                })
+                .context(message, "finite_domain"));
+            }
+            let bound = bound.unwrap_or_default().parse_as(&(), message, "bound")?;
+            DecisionVariable::new(kind, bound, ATol::default()) // FIXME: user should provide this
+                .map_err(|source| {
+                    ParseError::new(DecisionVariableError::InvalidDefinition {
+                        id,
+                        source: Box::new(source),
+                    })
+                    .context(message, "bound")
+                })
+        }
+    }
+}
+
 impl Parse for v1::DecisionVariable {
     type Output = ParsedDecisionVariable;
     type Context = ();
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.DecisionVariable";
-        let kind = self.kind().parse_as(&(), message, "kind")?;
-        let bound = self
-            .bound
-            .unwrap_or_default()
-            .parse_as(&(), message, "bound")?;
         let id = VariableID::from(self.id);
-        let dv = DecisionVariable::new(kind, bound, ATol::default()) // FIXME: user should provide this
-            .map_err(|source| {
-                ParseError::new(DecisionVariableError::InvalidDefinition {
-                    id,
-                    source: Box::new(source),
-                })
-                .context(message, "bound")
-            })?;
+        let dv = parse_domain(id, self.kind(), self.bound, self.finite_domain)?;
         let fixed_value = self.substituted_value;
         if let Some(value) = fixed_value {
             dv.check_value_consistency(id, value, ATol::default())
@@ -269,6 +316,54 @@ mod tests {
                 .and_then(|source| source.downcast_ref::<DecisionVariableError>()),
             Some(DecisionVariableError::DuplicateID { id })
                 if *id == VariableID::from(1)
+        ));
+    }
+
+    #[test]
+    fn finite_kind_requires_finite_domain() {
+        let dv = v1::DecisionVariable {
+            id: 1,
+            kind: v1::decision_variable::Kind::FiniteDomain as i32,
+            ..Default::default()
+        };
+
+        let error = dv.parse(&()).unwrap_err().to_string();
+        assert!(error.contains("Field finite_domain in ommx.v1.DecisionVariable is missing"));
+    }
+
+    #[test]
+    fn finite_kind_rejects_bound() {
+        let dv = v1::DecisionVariable {
+            id: 1,
+            kind: v1::decision_variable::Kind::FiniteDomain as i32,
+            bound: Some(v1::Bound {
+                lower: 0.0,
+                upper: 1.0,
+            }),
+            finite_domain: Some(v1::FiniteDomain {
+                values: vec![0.0, 1.0],
+            }),
+            ..Default::default()
+        };
+
+        let error = dv.parse(&()).unwrap_err().to_string();
+        assert!(error.contains("Bound is inconsistent to kind: kind=FiniteDomain"));
+    }
+
+    #[test]
+    fn interval_kind_rejects_finite_domain() {
+        let dv = v1::DecisionVariable {
+            id: 1,
+            kind: v1::decision_variable::Kind::Continuous as i32,
+            finite_domain: Some(v1::FiniteDomain {
+                values: vec![0.0, 1.0],
+            }),
+            ..Default::default()
+        };
+
+        let error = dv.parse(&()).unwrap_err().to_string();
+        assert!(error.contains(
+            "Finite domain is only valid for Kind::FiniteDomain, but kind is Continuous"
         ));
     }
 

@@ -36,6 +36,10 @@ impl From<Solution> for v2::Solution {
             !value.evaluated_indicator_constraints.is_empty(),
             !value.evaluated_one_hot_constraints.is_empty(),
             !value.evaluated_sos1_constraints.is_empty(),
+            value
+                .decision_variables
+                .values()
+                .any(|variable| *variable.kind() == crate::Kind::FiniteDomain),
         );
         let feasible = value.feasible();
         let feasible_relaxed = value.feasible_relaxed();
@@ -89,6 +93,103 @@ mod tests {
         RemovedReason, SampleID, SampleSet, Sampled,
     };
     use proptest::prelude::*;
+
+    fn assert_finite_domain_v2_roundtrip(
+        variable: DecisionVariable,
+        candidates: &[(u64, f64, bool)],
+        atol: ATol,
+    ) {
+        let variable_id = VariableID::from(17);
+        let expected_values = variable.finite_domain().unwrap().values().to_vec();
+        let expected_bound = variable.bound();
+        let expected_features = vec![v2::Feature::DecisionVariableFiniteDomain as i32];
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(crate::linear!(17)))
+            .decision_variables(BTreeMap::from([(variable_id, variable)]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let states = Sampled::new_no_dedup(candidates.iter().map(|&(id, value, _)| {
+            (
+                SampleID::from(id),
+                v1::State {
+                    entries: [(17, value)].into(),
+                },
+            )
+        }));
+        let samples = instance.evaluate_samples(&states, atol).unwrap();
+        let bytes = samples.to_v2_bytes();
+        let wire = v2::SampleSet::decode(bytes.as_slice()).unwrap();
+        assert_eq!(wire.required_features, expected_features);
+        let row = &wire.decision_variables.as_ref().unwrap().entries[&17];
+        assert!(row.bound.is_none());
+        assert_eq!(row.finite_domain.as_ref().unwrap().values, expected_values);
+
+        let restored_samples = SampleSet::from_v2_bytes(&bytes).unwrap();
+        assert_eq!(restored_samples.feasibility_atol(), atol);
+        let row = &restored_samples.decision_variables()[&variable_id];
+        assert_eq!(row.finite_domain().unwrap().values(), expected_values);
+        assert_eq!(*row.bound(), expected_bound);
+        assert_eq!(row.samples().ids(), states.ids());
+        assert_eq!(restored_samples.feasible(), samples.feasible());
+        assert_eq!(
+            restored_samples.feasible_relaxed(),
+            samples.feasible_relaxed()
+        );
+
+        for &(id, value, expected_feasible) in candidates {
+            let sample_id = SampleID::from(id);
+            let solution = instance
+                .evaluate(states.get(sample_id).unwrap(), atol)
+                .unwrap();
+            let bytes = solution.to_v2_bytes();
+            let wire = v2::Solution::decode(bytes.as_slice()).unwrap();
+            assert_eq!(wire.required_features, expected_features);
+            let row = &wire.decision_variables.as_ref().unwrap().entries[&17];
+            assert!(row.bound.is_none());
+            assert_eq!(row.finite_domain.as_ref().unwrap().values, expected_values);
+            assert_eq!(row.value, value);
+
+            let restored = Solution::from_v2_bytes(&bytes).unwrap();
+            let extracted = restored_samples.get(sample_id).unwrap();
+            for result in [&restored, &extracted] {
+                assert_eq!(result, &solution);
+                assert_eq!(result.feasibility_atol(), atol);
+                assert_eq!(result.feasible(), expected_feasible);
+                assert_eq!(result.feasible_relaxed(), expected_feasible);
+                let row = &result.decision_variables()[&variable_id];
+                assert_eq!(row.finite_domain().unwrap().values(), expected_values);
+                assert_eq!(*row.bound(), expected_bound);
+                assert_eq!(*row.value(), value);
+            }
+            assert_eq!(
+                restored_samples.feasible_ids().contains(&sample_id),
+                expected_feasible
+            );
+            assert_eq!(
+                restored_samples.feasible_relaxed_ids().contains(&sample_id),
+                expected_feasible
+            );
+        }
+    }
+
+    #[test]
+    fn v2_roundtrip_preserves_finite_domain_and_sample_feasibility() {
+        assert_finite_domain_v2_roundtrip(
+            DecisionVariable::new_finite_domain(vec![1.0, 0.1, 0.5]).unwrap(),
+            &[
+                (7, 0.1, true),
+                (11, 0.5, true),
+                // Membership at the inclusive boundary uses the saved tolerance.
+                (23, 0.625, true),
+                // A value inside the hull need not belong to the exact domain.
+                (29, 0.75, false),
+                (31, 1.0, true),
+            ],
+            ATol::new(0.125).unwrap(),
+        );
+    }
 
     #[test]
     fn v1_roundtrip_normalizes_constraint_and_variable_feasibility() {
@@ -284,6 +385,22 @@ mod tests {
     }
 
     proptest! {
+        #[test]
+        fn v2_roundtrip_preserves_arbitrary_finite_domains(
+            variable in DecisionVariable::arbitrary_with(
+                crate::KindParameters::new(&[crate::Kind::FiniteDomain]).unwrap()
+            ),
+        ) {
+            let mut candidates: Vec<_> = variable.finite_domain().unwrap().values()
+                .iter()
+                .enumerate()
+                .map(|(id, &value)| (id as u64, value, true))
+                .collect();
+            // The existing finite-domain strategy samples only [-10, 10].
+            candidates.push((candidates.len() as u64, 20.0, false));
+            assert_finite_domain_v2_roundtrip(variable, &candidates, ATol::new(1e-6).unwrap());
+        }
+
         #[test]
         fn v1_roundtrip_preserves_the_retained_projection(
             (instance, state) in Instance::arbitrary().prop_flat_map(|instance| {

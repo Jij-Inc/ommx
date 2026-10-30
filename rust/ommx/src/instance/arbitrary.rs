@@ -3,9 +3,9 @@ use crate::{
     arbitrary_constraints, arbitrary_decision_variables, arbitrary_named_functions, linear,
     random::{arbitrary_samples, SamplesParameters},
     v1::State,
-    Bounds, ConstraintIDParameters, Equality, Evaluate, FunctionParameters, IndicatorConstraintID,
-    Kind, KindParameters, NamedFunctionIDParameters, OneHotConstraintID, PolynomialParameters,
-    Sampled, Sos1ConstraintID,
+    Bounds, ConstraintIDParameters, Equality, Evaluate, FiniteDomain, FunctionParameters,
+    IndicatorConstraintID, Kind, KindParameters, NamedFunctionIDParameters, OneHotConstraintID,
+    PolynomialParameters, Sampled, Sos1ConstraintID,
 };
 use fnv::FnvHashSet;
 use proptest::prelude::*;
@@ -73,6 +73,20 @@ fn arbitrary_semi_continuous_state(bounds: &Bounds, max_abs: f64) -> BoxedStrate
     strategy.prop_map(|state| state.into()).boxed()
 }
 
+fn arbitrary_finite_state(domains: &BTreeMap<VariableID, &FiniteDomain>) -> BoxedStrategy<State> {
+    let mut strategy = Just(HashMap::new()).boxed();
+    for (id, domain) in domains {
+        let raw_id = id.into_inner();
+        strategy = (strategy, proptest::sample::select(domain.values().to_vec()))
+            .prop_map(move |(mut state, value)| {
+                state.insert(raw_id, value);
+                state
+            })
+            .boxed();
+    }
+    strategy.prop_map(|state| state.into()).boxed()
+}
+
 impl Instance {
     pub fn arbitrary_state(&self) -> BoxedStrategy<State> {
         let usage = self.decision_variable_usage();
@@ -83,15 +97,17 @@ impl Instance {
             arbitrary_semi_integer_state(&usage.used_semi_integer(), 100),
             arbitrary_continuous_state(&usage.used_continuous(), 100.0),
             arbitrary_semi_continuous_state(&usage.used_semi_continuous(), 100.0),
+            arbitrary_finite_state(&usage.used_finite_domain()),
         )
             .prop_map(
-                |(binary, integer, semi_integer, continuous, semi_continuous)| {
+                |(binary, integer, semi_integer, continuous, semi_continuous, finite)| {
                     let mut state = HashMap::new();
                     state.extend(binary);
                     state.extend(integer);
                     state.extend(semi_integer);
                     state.extend(continuous);
                     state.extend(semi_continuous);
+                    state.extend(finite);
                     state.into()
                 },
             )
@@ -169,6 +185,7 @@ impl InstanceParameters {
                 Kind::Continuous,
                 Kind::SemiInteger,
                 Kind::SemiContinuous,
+                Kind::FiniteDomain,
             ])
             .unwrap(),
             max_irrelevant_ids: 5,

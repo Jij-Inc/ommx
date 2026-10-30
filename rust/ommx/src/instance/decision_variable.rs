@@ -166,6 +166,25 @@ impl Instance {
         self.new_decision_variable(Kind::Continuous, bound, label, fixed_value, atol)
     }
 
+    /// Create and atomically add a decision variable whose feasible set is exactly `values`.
+    ///
+    /// The values are validated and stored in ascending order. They must be
+    /// non-empty, finite, and unique. The label and optional fixed value are
+    /// validated and inserted together, following [`Self::new_decision_variable`].
+    pub fn new_finite_domain(
+        &mut self,
+        values: Vec<f64>,
+        label: DecisionVariableLabel,
+        fixed_value: Option<f64>,
+        atol: ATol,
+    ) -> Result<VariableID, DecisionVariableError> {
+        let variable = DecisionVariable::new_finite_domain(values)?;
+        let id = self.next_variable_id()?;
+        self.decision_variables
+            .insert(id, variable, label, fixed_value, atol)?;
+        Ok(id)
+    }
+
     /// Create and atomically add a semi-integer decision variable.
     ///
     /// Each finite side is normalized to the least or greatest integer value
@@ -372,6 +391,58 @@ mod tests {
         assert_eq!(var2, VariableID::from(1));
 
         assert_eq!(instance.next_variable_id().unwrap(), VariableID::from(2));
+    }
+
+    #[test]
+    fn new_finite_adds_exact_domain() {
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let label = DecisionVariableLabel {
+            name: Some("finite".to_string()),
+            ..Default::default()
+        };
+        let id = instance
+            .new_finite_domain(
+                vec![1.0, 0.1, 0.5],
+                label.clone(),
+                Some(0.5),
+                ATol::default(),
+            )
+            .unwrap();
+        let variable = &instance.decision_variables()[&id];
+
+        assert_eq!(variable.kind(), Kind::FiniteDomain);
+        assert_eq!(variable.finite_domain().unwrap().values(), &[0.1, 0.5, 1.0]);
+        assert_eq!(instance.variable_labels().collect_for(id), label);
+        assert_eq!(instance.fixed_decision_variable_value(id), Some(0.5));
+    }
+
+    #[test]
+    fn new_finite_domain_rejects_invalid_fixed_value_atomically() {
+        let mut instance = Instance::default();
+        let before = instance.clone();
+        let error = instance
+            .new_finite_domain(
+                vec![0.1, 0.5, 1.0],
+                DecisionVariableLabel {
+                    name: Some("invalid".to_string()),
+                    ..Default::default()
+                },
+                Some(0.3),
+                ATol::default(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            DecisionVariableError::SubstitutedValueInconsistent { .. }
+        ));
+        assert_eq!(instance, before);
     }
 
     #[test]

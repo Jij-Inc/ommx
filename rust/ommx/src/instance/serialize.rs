@@ -171,6 +171,10 @@ impl From<Instance> for v2::Instance {
             created_collection_has_payload(&value.indicator_constraint_collection),
             created_collection_has_payload(&value.one_hot_constraint_collection),
             created_collection_has_payload(&value.sos1_constraint_collection),
+            value
+                .decision_variables
+                .values()
+                .any(|variable| variable.kind() == crate::Kind::FiniteDomain),
         );
         if value.output_objective.is_some() {
             required_features.push(v2::Feature::OutputObjective as i32);
@@ -229,6 +233,10 @@ impl From<ParametricInstance> for v2::ParametricInstance {
             created_collection_has_payload(&value.indicator_constraint_collection),
             created_collection_has_payload(&value.one_hot_constraint_collection),
             created_collection_has_payload(&value.sos1_constraint_collection),
+            value
+                .decision_variables
+                .values()
+                .any(|variable| variable.kind() == crate::Kind::FiniteDomain),
         );
         if value.output_objective.is_some() {
             required_features.push(v2::Feature::OutputObjective as i32);
@@ -391,6 +399,19 @@ mod tests {
             v2::Feature::ConstraintOneHot as i32,
             v2::Feature::ConstraintSos1 as i32,
         ]
+    }
+
+    fn instance_with_finite_domain() -> Instance {
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(
+                VariableID::from(1),
+                DecisionVariable::new_finite_domain(vec![0.1, 0.5, 1.0]).unwrap(),
+            )]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap()
     }
 
     fn instance_with_output_objective() -> Instance {
@@ -628,6 +649,35 @@ mod tests {
                 && err.to_string().contains("Undefined variable ID"),
             "unexpected error: {err}",
         );
+    }
+
+    #[test]
+    fn v2_instance_roundtrips_finite_domain_with_required_feature() {
+        let instance = instance_with_finite_domain();
+        let proto = v2::Instance::from(instance.clone());
+
+        assert_eq!(
+            proto.required_features,
+            vec![v2::Feature::DecisionVariableFiniteDomain as i32]
+        );
+        let row = &proto.decision_variables.as_ref().unwrap().entries[&1];
+        assert!(row.bound.is_none());
+        assert_eq!(
+            row.finite_domain.as_ref().unwrap().values,
+            vec![0.1, 0.5, 1.0]
+        );
+        assert_eq!(Instance::try_from(proto).unwrap(), instance);
+    }
+
+    #[test]
+    fn v2_instance_preserves_finite_domain_without_required_feature() {
+        let instance = instance_with_finite_domain();
+        let mut proto = v2::Instance::from(instance.clone());
+        proto.required_features.clear();
+
+        // Known payloads are decoded independently of the feature declaration,
+        // matching the v2 read contract for all supported features.
+        assert_eq!(Instance::try_from(proto).unwrap(), instance);
     }
 
     #[test]

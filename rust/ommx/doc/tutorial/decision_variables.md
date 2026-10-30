@@ -21,5 +21,15 @@ assert_eq!(integer_var.bound(), Bound::new(0.0, 3.0)?);
 let continuous_var = DecisionVariable::continuous();
 assert_eq!(continuous_var.kind(), Kind::Continuous);
 assert_eq!(continuous_var.bound(), Bound::unbounded()); // Default is unbounded (-inf, inf)
+
+// Finite-domain variable with an exact enumerated feasible set
+let finite_var = DecisionVariable::new_finite_domain(vec![1.0, 0.1, 0.5])?;
+assert_eq!(finite_var.kind(), Kind::FiniteDomain);
+assert_eq!(finite_var.finite_domain().unwrap().values(), &[0.1, 0.5, 1.0]);
+assert_eq!(finite_var.bound(), Bound::new(0.1, 1.0)?); // Derived convex hull
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
+
+A [`FiniteDomain`](crate::FiniteDomain) is the exact feasible set, not a
+discretization of a continuous interval. Its values must be non-empty, finite,
+and unique.

@@ -1204,6 +1204,7 @@ mod tests {
             subscripts: label.subscripts,
             parameters: label.parameters.into_iter().collect(),
             description: label.description,
+            finite_domain: None,
         }
     }
 

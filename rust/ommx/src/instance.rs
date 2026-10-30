@@ -613,8 +613,9 @@ impl Instance {
     ///
     /// The instance owns the complete domain information: a fixed value takes
     /// precedence over the row's kind and bound. Otherwise, continuous bounds
-    /// expand to `[lower - atol, upper + atol]`, discrete kinds use their canonical
-    /// endpoints, and semi kinds include the zero alternative. Unbounded sides
+    /// and finite-domain bounds expand to `[lower - atol, upper + atol]`,
+    /// integer kinds use their canonical endpoints, and semi kinds include
+    /// the zero alternative. Unbounded sides
     /// remain infinite; they are not replaced by finite evaluation endpoints.
     ///
     /// This does not invert floating-point bound membership or infer ranges
@@ -631,7 +632,7 @@ impl Instance {
             return Some((value, value));
         }
         let (mut lower, mut upper) = match variable.kind() {
-            crate::Kind::Continuous | crate::Kind::SemiContinuous => {
+            crate::Kind::Continuous | crate::Kind::SemiContinuous | crate::Kind::FiniteDomain => {
                 let bound = variable.bound();
                 (
                     bound.lower() - atol.into_inner(),
