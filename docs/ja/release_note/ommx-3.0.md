@@ -943,7 +943,7 @@ assert isinstance(output, SampleSet)
 
 `Run.log_sample(..., store_diagnostics=True)` では `Run.log_solve` と同じ adapter
 diagnostics channel を利用できます。SolveとSamplingの記録モデルは
-[ExperimentのGuide](../user_guide/experiment.md) を参照してください。
+{class}`~ommx.experiment.Experiment` を参照してください。
 
 ### 🆕 Attachment の透過圧縮と streaming write ([#1054](https://github.com/Jij-Inc/ommx/pull/1054))
 
@@ -981,7 +981,7 @@ atomic に削除した Manifest digest、ref が存在しなければ `None` で
 Experiment refs も対象になり、`older_than="7d"` で経過時間に基づく retention を
 設定できます。CLI では `ommx prune-anonymous --experiments --older-than 7d` が
 同じ操作に対応します。到達可能性と GC を含む全体の workflow は
-[Experiment cleanup](../user_guide/experiment.md) を参照してください。
+{ref}`Local Registryの整理 <experiment-cleanup-workflow>` を参照してください。
 
 ```python
 from ommx.artifact import prune_anonymous, remove_image, restore_image
@@ -1009,7 +1009,7 @@ experiment.set_autosave_policy(AutosavePolicy.every_n_runs(25))
 
 時間で頻度を制限する場合は `AutosavePolicy.min_interval(seconds)`、Run-close 時の
 復帰用 checkpoint が不要な場合は `AutosavePolicy.disabled()` を使います。復帰可能性と
-保存量の tradeoff は [Experiment の検索・復帰・cleanup](../user_guide/experiment.md) を
+保存量の tradeoff は {class}`~ommx.experiment.Experiment` を
 参照してください。
 
 ### 🆕 Local Registry からの Artifact/Experiment 一覧 ([#1029](https://github.com/Jij-Inc/ommx/pull/1029))
@@ -1314,7 +1314,7 @@ for name in loaded.attachment_names:
 
 {class}`~ommx.experiment.Experiment` が途中状態を Local Registry の checkpoint として保存するようになりました。{class}`~ommx.experiment.Run` を close すると best-effort に draft checkpoint を書き、Experiment が例外で終了した場合は成功用の Experiment image reference を進めず、failed または interrupted checkpoint を書きます。close 済みの Run は attachment、solve、trace、run parameter を保持し、`KeyboardInterrupt` などで中断された Run も `"failed"` または `"interrupted"` の status として残ります。
 
-Experiment catalog の filter、Run close の境界、checkpoint からの復帰、Local Registry cleanup の挙動については [Experiment の検索・復帰・cleanup](../user_guide/experiment.md) を参照してください。
+catalogの絞り込みは {func}`~ommx.experiment.list_experiments`、Run closeの境界とcheckpointからの復帰は {class}`~ommx.experiment.Experiment`、保存領域の管理は {ref}`Local Registryの整理 <experiment-cleanup-workflow>` を参照してください。
 
 最新の checkpoint から再開するには、元の Experiment image name を {meth}`~ommx.experiment.Experiment.restore_from_checkpoint` に渡します:
 
@@ -1361,7 +1361,7 @@ registry を変更し、notebook や script で扱いやすい structured report
 
 新しい {class}`ommx.experiment.attachments.AttachmentCodec` protocol により、Python payload 型を所有するパッケージ側で、その値を Experiment attachment として保存・復元する方法を定義できるようになりました。Codec class は media type と `encode` / `decode` を提供し、OMMX は Experiment-level / Run-level の `log_with_codec` と `get_with_codec` からそれを呼び出します。
 
-JijModeling `Problem` 用の codec 例は、Experiment management tutorial の {ref}`添付できるデータ形式 <experiment-management-attachable-data-formats>` を参照してください。
+独自codecの完全な例は {meth}`~ommx.experiment.Experiment.log_with_codec` を参照してください。外部モデラーのオブジェクト用codecは、その保存形式を所有するパッケージが提供します。
 
 ```python
 from ommx.experiment import Experiment
@@ -1434,7 +1434,7 @@ before / after コード例と移行チェックリストは {ref}`Python SDK v2
 
 実験の入力データ、実行条件、Solver/Sampler の結果を 1 つの OMMX Artifact として記録する `ommx.experiment` モジュールを追加しました。{class}`~ommx.experiment.Experiment`、{class}`~ommx.experiment.Run`、{class}`~ommx.experiment.Solve` を使って、Run ごとの比較パラメータ、attachment、solve 入出力を Local Registry に保存できます。
 
-基本的な記録と保存済み Experiment の読み込みは [実験管理チュートリアル](../tutorial/experiment_management)、fork による派生実験の作り方は [継続・復帰のHow-to](../how_to/continue_experiment.md) を参照してください。
+基本的な記録と保存済み Experiment の読み込みは {class}`~ommx.experiment.Experiment`、fork による派生実験の作り方は {meth}`~ommx.experiment.Experiment.fork` を参照してください。
 
 ### 🆕 `Run.log_solve` で solve 入出力と adapter options を記録 ([#902](https://github.com/Jij-Inc/ommx/pull/902))
 

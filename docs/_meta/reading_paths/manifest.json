@@ -3,7 +3,7 @@
   "title": "OMMX Book 概念とページの依存台帳",
   "created_at": "2026-10-26",
   "language": "ja",
-  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。日英の候補評価章と変換・解法選択章、変数復元・保持情報・特殊制約・InstanceClass・Preparation・Adapterの共有Reference移管を含む。その他の英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。 3.0.0安定版のリリースまではBookとAPI Referenceがともにmainを説明し、導入方法として最新の公開prereleaseとmainの両方を案内する。",
+  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。日英の候補評価章と変換・解法選択章、変数復元・保持情報・特殊制約・InstanceClass・Preparation・Adapterの共有Reference移管を含む。日英の保存・共有章とArtifact/Experiment/MPSの共有Reference、日英のCLI/Registry運用Referenceへの移管を含む。その他の英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。 3.0.0安定版のリリースまではBookとAPI Referenceがともにmainを説明し、導入方法として最新の公開prereleaseとmainの両方を案内する。",
   "baseline": {
     "repository": "Jij-Inc/ommx",
     "source_revision": "0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2",
@@ -203,6 +203,32 @@
         "R_API.instance.named_values"
       ],
       "note": "日英の導入ページに最新の公開prereleaseとmainの二つの経路を併記し、README・Book入口・Adapter一覧も両方へ案内する。BookとAPI Referenceの説明対象は3.0.0安定版までmainのままとし、未公開の機能を使う場合はmainを選ぶ。特定のプレビュー版には固定せず、導入方法の選択と個別APIの学習前提を区別する。既存の環境関連注記を選択したSDK環境に揃えるが、各ページの操作全体をprereleaseで実行確認したとはみなさない。歴史的baselineと従前の編集記録を保持し、本文照合記録はチャットに残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "281888ac93f49a13acc03847c04f3ce3ff66da91",
+      "target_revision": "codex/record-share-book",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "B_RECORD_SHARE",
+        "R_API.artifact",
+        "R_API.artifact.roundtrip",
+        "R_API.artifact.identity",
+        "R_API.artifact.catalog",
+        "R_API.experiment",
+        "R_API.experiment.example",
+        "R_API.experiment.reproducibility",
+        "R_API.experiment.resume",
+        "R_API.experiment.attachments",
+        "R_API.experiment.codec",
+        "R_API.experiment.catalog",
+        "R_API.instance.mps_export",
+        "P8",
+        "P9",
+        "R_CODEC"
+      ],
+      "note": "2次案の第4章を日英で追加し、Artifact/Experiment/MPSの旧10原稿を共有APIへ移管する。保存先・記録範囲・受信者の独立性・読出しと再実行の判断をBookに残し、基本モデルと完全な使用例は各APIへ集約する。標準添付から任意Codecへの道にOMMX wire schemaの不要な前提を置かず、汎用の試行記録にInstance/Solution操作の既読を要求しない。CLIと認証の運用説明は日英の独立Referenceで維持する。歴史的baselineと過去の編集記録は保持し、今回の本文レビュー記録はチャットに残す。"
     }
   ],
   "interpretation": {
@@ -1179,7 +1205,7 @@
     {
       "id": "artifact.basics",
       "label": "Artifactを複数型のデータと説明をまとめる単位として理解する",
-      "owner": "G13",
+      "owner": "R_API.artifact",
       "requires": [],
       "external": false,
       "aliases": [
@@ -1190,22 +1216,22 @@
     {
       "id": "artifact.roundtrip",
       "label": "Artifactにデータをまとめ保存して読む",
-      "owner": "G13",
+      "owner": "R_API.artifact.roundtrip",
       "requires": [
         "artifact.basics"
       ],
       "external": false,
       "aliases": [
         "ArtifactDraft",
-        "save_archive",
-        "load_archive"
+        "save",
+        "import_archive"
       ],
-      "scope": ""
+      "scope": "Draftに型付きのデータと関係を追加し、commit後にarchiveへ書き出す。別プロセスと独立したLocal Registryでファイルからデータを取り出す。"
     },
     {
       "id": "artifact.lifecycle",
       "label": "draftとcommit後の状態を区別する",
-      "owner": "G13",
+      "owner": "R_API.artifact",
       "requires": [
         "artifact.basics"
       ],
@@ -1219,7 +1245,7 @@
     {
       "id": "artifact.identity",
       "label": "name・tag・digestを使い分ける",
-      "owner": "G13.identity",
+      "owner": "R_API.artifact.identity",
       "requires": [
         "artifact.basics"
       ],
@@ -1267,7 +1293,7 @@
     {
       "id": "attachment.standard",
       "label": "標準の添付データを記録して読む",
-      "owner": "P10",
+      "owner": "R_API.experiment.attachments",
       "requires": [],
       "external": false,
       "aliases": [
@@ -1283,8 +1309,8 @@
       "label": "独自データのCodec契約を実装する",
       "owner": "R_CODEC",
       "requires": [
-        "attachment.standard",
-        "wire.serialization"
+        "ext.python",
+        "attachment.standard"
       ],
       "external": false,
       "aliases": [
@@ -1292,27 +1318,24 @@
         "encode",
         "decode"
       ],
-      "scope": ""
+      "scope": "独自型のmedia type、encode(value)とdecode(bytes)を実装し、保存・取得時の照合を理解する。OMMX Messageのwire schema知識を一般のCodec実装の前提にしない。"
     },
     {
       "id": "experiment.record",
       "label": "ExperimentとRunで試行の条件・データをまとめる",
-      "owner": "G12",
-      "requires": [
-        "instance.model",
-        "solution.read"
-      ],
+      "owner": "R_API.experiment",
+      "requires": [],
       "external": false,
       "aliases": [
         "Experiment",
         "Run"
       ],
-      "scope": "ExperimentとRunの基本的な記録単位と、共有データ・試行ごとのデータの対応。Solve/SamplingによるAdapter呼び出しの記録はG12の発展的な説明であり、最初の記録Tutorialの前提ではない。"
+      "scope": "ExperimentとRunの基本的な記録単位、共有データ・試行ごとのデータを対応づける。数学モデルやAdapterの構築・求解を必要条件にしない。Solve/Samplingの利用と詳細な入力・結果の解釈は各APIが所有する。"
     },
     {
       "id": "experiment.conditions",
       "label": "試行条件としてparameterを記録する",
-      "owner": "G12",
+      "owner": "R_API.experiment",
       "requires": [
         "experiment.record"
       ],
@@ -1325,7 +1348,7 @@
     {
       "id": "experiment.persist",
       "label": "実験を保存し別プロセスで読み直す",
-      "owner": "G12",
+      "owner": "R_API.experiment.example",
       "requires": [
         "experiment.record"
       ],
@@ -1341,7 +1364,7 @@
     {
       "id": "experiment.resume",
       "label": "再開・継続・forkを選択する",
-      "owner": "P7",
+      "owner": "R_API.experiment.resume",
       "requires": [
         "experiment.persist"
       ],
@@ -1357,7 +1380,7 @@
     {
       "id": "experiment.reproduce",
       "label": "保存結果の読出しと計算の再実行を区別する",
-      "owner": "G12.reproducibility",
+      "owner": "R_API.experiment.reproducibility",
       "requires": [
         "experiment.persist"
       ],
@@ -1489,7 +1512,7 @@
     {
       "id": "mps.export",
       "label": "SDKだけで小さなモデルをMPSファイルへ出力する",
-      "owner": "P16",
+      "owner": "R_API.instance.mps_export",
       "requires": [
         "ext.math",
         "ext.python",
@@ -1505,7 +1528,7 @@
     {
       "id": "mps.information-boundary",
       "label": "MPSで渡す現在のモデルとOMMX保存の情報境界を読む",
-      "owner": "P16",
+      "owner": "R_API.instance.mps_export",
       "requires": [
         "mps.export"
       ],
@@ -1684,6 +1707,51 @@
       "external": false,
       "aliases": [],
       "scope": "入力条件・許容する意味の変化・設定・結果の情報を比較する。変換できない場合のBackend変更、boundやモデルの再検討、許可する変換の見直しを選ぶ。"
+    },
+    {
+      "id": "records.choice",
+      "label": "受け手と必要な関係から保存・交換の方法を選ぶ",
+      "requires": [
+        "ext.math"
+      ],
+      "scope": "外部ツールへモデルを渡すMPS、複数データをまとめるArtifact、試行の関係を記録するExperimentの用途を選ぶ。詳細なクラス構造や保存API操作は含めない。",
+      "owner": "B_RECORD_SHARE",
+      "external": false,
+      "aliases": []
+    },
+    {
+      "id": "records.scope",
+      "label": "後で答えたい問いから記録範囲を決める",
+      "requires": [
+        "records.choice"
+      ],
+      "scope": "結果の確認・比較・設定の説明・再実行で必要なデータと条件を選び、暗黙の設定や環境が自動収集されると仮定しない。",
+      "owner": "B_RECORD_SHARE",
+      "external": false,
+      "aliases": []
+    },
+    {
+      "id": "records.identity",
+      "label": "受信者が取り出せるデータと対応関係を残す",
+      "requires": [
+        "records.choice",
+        "records.scope"
+      ],
+      "scope": "ローカル確定とファイル/remote配布を区別し、送信者のメモリに依存しない受け渡しと、内容の識別・入力結果の関係を計画する。APIのタグ更新やload詳細はReferenceが所有する。",
+      "owner": "B_RECORD_SHARE",
+      "external": false,
+      "aliases": []
+    },
+    {
+      "id": "records.reexecution",
+      "label": "読出し・記録の継続・計算の再実行を区別する",
+      "requires": [
+        "records.scope"
+      ],
+      "scope": "保存結果を読むこと、試行を追加・復帰すること、ソルバーを再実行することを区別する。保存されたデータだけで再実行や同じ結果が保証されるとは考えない。",
+      "owner": "B_RECORD_SHARE",
+      "external": false,
+      "aliases": []
     }
   ],
   "pages": [
@@ -1838,13 +1906,17 @@
             "results.evaluation_scope",
             "transform.structure",
             "transform.preparation_choice",
-            "transform.backend_choice"
+            "transform.backend_choice",
+            "records.choice",
+            "records.scope",
+            "records.identity",
+            "records.reexecution"
           ]
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、候補評価とOneHotの等式化で具体化する。コードは意味を読む小例で、Instance全体やState・evaluateの一般的な操作能力を付与しない。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。",
+      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、候補評価とOneHotの等式化で具体化する。コードは意味を読む小例で、Instance全体やState・evaluateの一般的な操作能力を付与しない。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -1943,13 +2015,17 @@
             "results.evaluation_scope",
             "transform.structure",
             "transform.preparation_choice",
-            "transform.backend_choice"
+            "transform.backend_choice",
+            "records.choice",
+            "records.scope",
+            "records.identity",
+            "records.reexecution"
           ]
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、候補評価と特殊制約の例、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。",
+      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、候補評価と特殊制約の例、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2308,56 +2384,24 @@
       ]
     },
     {
-      "id": "T5",
-      "title": "二つの試行を記録し保存後に読み直す",
-      "slice": "F",
-      "role": "tutorial",
+      "id": "R_API.experiment.example",
+      "title": "Experiment API Reference：二つの試行と保存後の独立読出し",
+      "slice": "Storage and recording Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/tutorial/experiment_management.ipynb"
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.md",
+        "python/ommx/src/experiment.rs",
+        "docs/api/_items/ommx.experiment.Experiment.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/experiment_management.md"
-      ],
+      "source_urls": [],
       "requires": [
         "ext.math",
         "ext.python",
-        "sdk.environment"
+        "sdk.environment",
+        "ext.table"
       ],
       "sections": [
-        {
-          "id": "minimal_problem",
-          "introduces": [
-            "instance.model",
-            "variable.basics",
-            "expression.basics",
-            "constraint.basics",
-            "sense",
-            "instance.build"
-          ],
-          "uses": [
-            "instance.build"
-          ],
-          "mentions": []
-        },
-        {
-          "id": "run",
-          "introduces": [
-            "state.values",
-            "evaluation.basic",
-            "solution.read",
-            "feasibility.basic",
-            "optimality.limit"
-          ],
-          "uses": [
-            "state.values",
-            "evaluation.basic",
-            "solution.read",
-            "feasibility.basic",
-            "optimality.limit"
-          ],
-          "mentions": []
-        },
         {
           "id": "record",
           "introduces": [
@@ -2368,10 +2412,16 @@
             "experiment.record",
             "experiment.conditions"
           ],
-          "mentions": []
+          "mentions": [
+            "instance.model",
+            "evaluation.basic",
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit"
+          ]
         },
         {
-          "id": "reopen",
+          "id": "read-and-reopen",
           "introduces": [
             "experiment.persist",
             "experiment.reproduce"
@@ -2392,34 +2442,36 @@
         "artifact.registry",
         "class.qubo"
       ],
-      "parent_page": null,
-      "notes": "F/T5は小さなInstanceと二つの候補を局所的に用意し、評価した条件・入力・結果をExperiment/Runに記録する。Adapter、外部データ、独自Codec、別Tutorialの実行状態は不要。ファイル保存後は新しいプロセス/kernelでRun・入力・結果を取り出し、保存結果の読出しと計算再実行の違いを短く説明する。source_urlsは統合前の歴史的baselineを指す。",
+      "parent_page": "R_API.experiment",
+      "notes": "Record two candidates and read them back節で、独立した小モデルと二候補の条件・評価結果をExperiment/Runへ記録する。表の列は明示的なlog_parameterだけであると説明し、保存後は別プロセス・空RegistryでRunと入力・保存結果を読み出す。保存結果の読出しを再評価や求解の再実行と区別する。数学APIの小例だけからInstance全体の操作能力を付与しない。Adapter・ネットワーク・別Tutorialの実行状態は不要。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/tutorial/experiment_management.ipynb"
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.md",
+        "python/ommx/src/experiment.rs",
+        "docs/api/_items/ommx.experiment.Experiment.rst"
       ]
     },
     {
-      "id": "T6",
-      "title": "Artifactで問題と結果を受け渡す",
-      "slice": "G",
-      "role": "tutorial",
+      "id": "R_API.artifact.roundtrip",
+      "title": "Artifact API Reference：別プロセス・別Registryでの送受信",
+      "slice": "Storage and recording Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/tutorial/share_in_ommx_artifact.md"
+        "python/ommx/src/docstrings/ommx/artifact/Artifact.md",
+        "docs/api/_items/ommx.artifact.Artifact.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/share_in_ommx_artifact.md"
-      ],
+      "source_urls": [],
       "requires": [
         "ext.math",
         "ext.python",
-        "sdk.environment"
+        "sdk.environment",
+        "ext.table"
       ],
       "sections": [
         {
-          "id": "artifact",
+          "id": "package",
           "introduces": [
             "artifact.basics"
           ],
@@ -2429,46 +2481,32 @@
           "mentions": []
         },
         {
-          "id": "data",
+          "id": "sender",
           "introduces": [
+            "artifact.lifecycle",
+            "artifact.roundtrip"
+          ],
+          "uses": [
+            "artifact.lifecycle",
+            "artifact.roundtrip"
+          ],
+          "mentions": [
             "instance.model",
-            "variable.basics",
-            "constraint.basics",
-            "sense",
             "state.values",
             "evaluation.basic",
             "solution.read",
             "feasibility.basic",
             "optimality.limit"
-          ],
-          "uses": [
-            "evaluation.basic"
-          ],
-          "mentions": []
+          ]
         },
         {
-          "id": "save",
-          "introduces": [
-            "artifact.lifecycle",
-            "artifact.roundtrip"
-          ],
-          "uses": [
-            "artifact.lifecycle",
-            "artifact.roundtrip"
-          ],
-          "mentions": []
-        },
-        {
-          "id": "read",
+          "id": "receiver",
           "introduces": [],
           "uses": [
-            "artifact.roundtrip",
-            "solution.read",
-            "feasibility.basic"
+            "artifact.roundtrip"
           ],
           "mentions": [
             "artifact.identity",
-            "artifact.format",
             "attachment.standard"
           ]
         }
@@ -2479,12 +2517,13 @@
         "artifact.registry",
         "attachment.codec"
       ],
-      "parent_page": null,
-      "notes": "G/T6はArtifactの基本理解を局所導入し、小さなInstanceと候補の評価結果、JSONを一つのファイルで受け渡す。送信・受信は別スクリプトと別Local Registryを使い、受信側では配布ファイルだけから取り出して再評価する。Adapter・Experiment・別Tutorialの実行状態は不要。source_urlsは統合前の歴史的baselineを指す。",
+      "parent_page": "R_API.artifact",
+      "notes": "ArtifactのSave a problem and candidate, then read them in another process節に自己完結したsender/receiverと実行harnessを置く。問題・評価結果・JSON・DataFrameを保存し、受信側は別プロセスと空のLocal Registryでファイルだけから復元する。Instanceの小例や再評価から一般の構築・変換・最適性の能力まで付与しない。Artifact作成・commit・export/importの具体的な操作を、Bookの保存目的の判断と分ける。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/tutorial/share_in_ommx_artifact.md"
+        "python/ommx/src/docstrings/ommx/artifact/Artifact.md",
+        "docs/api/_items/ommx.artifact.Artifact.rst"
       ]
     },
     {
@@ -3776,57 +3815,94 @@
       ]
     },
     {
-      "id": "G12",
-      "title": "Experimentの記録とライフサイクル",
-      "slice": "F",
-      "role": "guide",
+      "id": "R_API.experiment",
+      "title": "Experiment API Reference：試行の記録単位と保存・生命周期",
+      "slice": "Storage and recording Reference migration",
+      "role": "reference",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/experiment.md"
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.md",
+        "python/ommx/src/experiment.rs",
+        "docs/api/_items/ommx.experiment.Experiment.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/experiment.md"
-      ],
-      "requires": [
-        "instance.model",
-        "solution.read"
-      ],
+      "source_urls": [],
+      "requires": [],
       "sections": [
         {
           "id": "records",
           "introduces": [
-            "experiment.record",
-            "experiment.conditions",
-            "experiment.persist"
+            "experiment.record"
+          ],
+          "uses": [
+            "experiment.record"
+          ],
+          "mentions": [
+            "artifact.basics"
+          ]
+        },
+        {
+          "id": "run-conditions",
+          "introduces": [
+            "experiment.conditions"
           ],
           "uses": [
             "experiment.record",
-            "experiment.conditions",
-            "experiment.persist"
+            "experiment.conditions"
           ],
           "mentions": [
+            "experiment.persist"
+          ]
+        },
+        {
+          "id": "explicit-recording-scope",
+          "introduces": [],
+          "uses": [
+            "experiment.record",
+            "experiment.conditions"
+          ],
+          "mentions": [
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit",
+            "adapter.basic"
+          ]
+        },
+        {
+          "id": "attachments-and-lifecycle",
+          "introduces": [],
+          "uses": [
+            "experiment.record"
+          ],
+          "mentions": [
+            "attachment.standard",
+            "attachment.codec",
+            "experiment.persist",
             "experiment.resume",
             "experiment.reproduce"
           ]
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "F/G12はExperiment/RunとSolve/Samplingの関係、明示的な記録と自動記録の範囲、処理状態と数学的な結果の違いを説明する。編集中・確定・checkpoint・forkを概念として整理し、実際の継続/復帰と添付操作はP7/P10へ分ける。読出しと再実行の境界は同じページの該当節にあり、G12.reproducibilityで別に追跡する。",
+      "parent_page": "R_API",
+      "notes": "日英のExperiment Guide/Tutorialから記録単位・明示的な記録の範囲・結果と終了状態の区別・commit/checkpointを共有APIへ統合。冒頭は任意の試行記録として直接読め、Instance/Solutionの全API習得を要求しない。具体的な保存・別プロセス読出し、復帰、添付は各下位契約で追跡し、概要のリンクだけから実行能力を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/experiment.md"
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.md",
+        "python/ommx/src/experiment.rs",
+        "docs/api/_items/ommx.experiment.Experiment.rst"
       ]
     },
     {
-      "id": "G12.reproducibility",
-      "title": "記録と計算再現の境界",
-      "slice": "F",
-      "role": "guide-section",
+      "id": "R_API.experiment.reproducibility",
+      "title": "Experiment API Reference：記録の読出しと再実行の境界",
+      "slice": "Storage and recording Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/experiment.md"
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.md",
+        "python/ommx/src/experiment.rs",
+        "docs/api/_items/ommx.experiment.Experiment.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -3845,78 +3921,102 @@
         }
       ],
       "deferred": [],
-      "parent_page": "G12",
-      "notes": "「ファイルを読むことと、計算をやり直すこと」の短い境界説明。コピー操作、実験計画、性能評価方法論は要求しない。親ページとの概念の重複追跡を避けるため、この節を独立した契約として扱う。",
+      "parent_page": "R_API.experiment",
+      "notes": "独立した読出し例の後の説明に対応する。保存結果の取得は計算を再現した証拠ではなく、コード・設定・環境等は明示的に記録する。第4章の利用判断と重なる短い境界説明だが、再現性方法論を教える契約ではない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/experiment.md"
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.md",
+        "python/ommx/src/experiment.rs",
+        "docs/api/_items/ommx.experiment.Experiment.rst"
       ]
     },
     {
-      "id": "G13",
-      "title": "Artifactの保存と受け渡しモデル",
-      "slice": "G",
-      "role": "guide",
+      "id": "R_API.artifact",
+      "title": "Artifact API Reference：データ・保存先・Draftの意味",
+      "slice": "Storage and recording Reference migration",
+      "role": "reference",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/artifact.md"
+        "python/ommx/src/docstrings/ommx/artifact/Artifact.md",
+        "python/ommx/src/docstrings/ommx/artifact/ArtifactDraft.md",
+        "python/ommx/src/artifact.rs",
+        "docs/api/_items/ommx.artifact.Artifact.rst",
+        "docs/api/_items/ommx.artifact.ArtifactDraft.rst"
       ],
       "source_urls": [],
       "requires": [],
       "sections": [
         {
-          "id": "choose-output",
-          "introduces": [],
-          "uses": [],
+          "id": "layers-and-relationships",
+          "introduces": [
+            "artifact.basics"
+          ],
+          "uses": [
+            "artifact.basics"
+          ],
           "mentions": [
-            "mps.export",
-            "mps.information-boundary"
+            "attachment.standard"
           ]
         },
         {
-          "id": "basics",
-          "introduces": [
-            "artifact.basics"
-          ],
-          "uses": [
-            "artifact.basics"
-          ],
-          "mentions": []
+          "id": "independent-exchange",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "artifact.roundtrip",
+            "evaluation.basic",
+            "solution.read"
+          ]
         },
         {
-          "id": "storage",
+          "id": "draft-and-storage",
           "introduces": [
-            "artifact.roundtrip",
             "artifact.lifecycle"
           ],
           "uses": [
-            "artifact.roundtrip",
+            "artifact.basics",
             "artifact.lifecycle"
           ],
           "mentions": [
+            "artifact.registry",
             "artifact.identity",
             "artifact.format"
+          ]
+        },
+        {
+          "id": "data-formats",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "wire.serialization",
+            "wire.compatibility",
+            "mps.information-boundary"
           ]
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "G/G13は直接入口としてArtifactの基本理解を導入し、データと関係、Draftと確定後、Local Registry・ファイル・remote registryの違いを説明する。InstanceやExperimentの操作を前提にしない。「名前・タグ・内容の識別子」の契約は同じファイルのG13.identityで追跡する。",
+      "parent_page": "R_API",
+      "notes": "日英の共有Tutorialと日本語Artifact Guideを共有Referenceへ統合する。Artifact本文がlayer/manifest/descriptorと関係の明示、Local Registry・archive・remoteの境界を説明し、ArtifactDraftが追加・commit・書込みの生命周期を補う。送受信例と名前・同一性は同じAPIにある下位契約で扱う。別のBook章の既読は要求せず、APIのリンクだけで操作能力を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/artifact.md"
+        "python/ommx/src/docstrings/ommx/artifact/Artifact.md",
+        "python/ommx/src/docstrings/ommx/artifact/ArtifactDraft.md",
+        "python/ommx/src/artifact.rs",
+        "docs/api/_items/ommx.artifact.Artifact.rst",
+        "docs/api/_items/ommx.artifact.ArtifactDraft.rst"
       ]
     },
     {
-      "id": "G13.identity",
-      "title": "Artifactの名前と同一性",
-      "slice": "G",
-      "role": "guide-section",
+      "id": "R_API.artifact.identity",
+      "title": "Artifact API Reference：名前・タグと内容の識別子",
+      "slice": "Storage and recording Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/artifact.md"
+        "python/ommx/src/docstrings/ommx/artifact/Artifact.md",
+        "docs/api/_items/ommx.artifact.Artifact.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -3935,12 +4035,13 @@
         }
       ],
       "deferred": [],
-      "parent_page": "G13",
-      "notes": "G13の実在する「名前・タグ・内容の識別子」節を指す。人が選ぶ名前・タグと内容のdigest、manifestとlayerの識別子、ローカル優先のloadを区別する。ファイル往復の実行経験は不要。",
+      "parent_page": "R_API.artifact",
+      "notes": "Names, tags, and content digests節を指す。可変のタグと内容digest、manifest/layerそれぞれの識別子、ローカル優先のloadとremote再取得の違いを説明する。送受信例の実行は前提にしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/artifact.md"
+        "python/ommx/src/docstrings/ommx/artifact/Artifact.md",
+        "docs/api/_items/ommx.artifact.Artifact.rst"
       ]
     },
     {
@@ -4131,13 +4232,15 @@
       ]
     },
     {
-      "id": "P16",
-      "title": "InstanceをMPSファイルで外部ツールへ渡す",
-      "slice": "M",
-      "role": "how-to",
+      "id": "R_API.instance.mps_export",
+      "title": "Instance.save_mps API Reference：モデル出力と情報境界",
+      "slice": "Storage and recording Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/export_mps.md"
+        "python/ommx/src/docstrings/ommx/Instance.save_mps.md",
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -4174,12 +4277,14 @@
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "SETUPで選んだSDK環境だけの独立したBinaryモデルとsave_mpsの例。ファイルを渡す準備で終了し外部ツールの実行や候補取り込みを前提にしない。出力APIの受付範囲と情報境界、二次式の受け手側での確認はBookに要約し、正確な一覧・係数規約はsave_mps APIへ送る。lowering手順とArtifact保存はリンク先を訪問した場合だけ習得する。",
+      "parent_page": "R_API.instance",
+      "notes": "旧MPS出力How-toの自己完結した小モデルと出力例をsave_mpsへ統合。対応モデル、圧縮/上書き/失敗時、二次係数、保持されない情報を同じAPIに置く。Bookは相手・保存目的から形式を選ぶ判断に限定し、loweringや外部ツールの実行手順はこの例から習得しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/export_mps.md"
+        "python/ommx/src/docstrings/ommx/Instance.save_mps.md",
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ]
     },
     {
@@ -4459,17 +4564,19 @@
       ]
     },
     {
-      "id": "P7",
-      "title": "実験を再開・継続・forkする",
-      "slice": "F",
-      "role": "how-to",
+      "id": "R_API.experiment.resume",
+      "title": "Experiment API Reference：checkpoint復帰と確定済み記録からのfork",
+      "slice": "Storage and recording Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/continue_experiment.md"
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.restore_from_checkpoint.md",
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.fork.md",
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.md",
+        "python/ommx/src/experiment.rs",
+        "docs/api/_items/ommx.experiment.Experiment.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/experiment.md"
-      ],
+      "source_urls": [],
       "requires": [
         "ext.python",
         "sdk.environment",
@@ -4477,7 +4584,7 @@
       ],
       "sections": [
         {
-          "id": "resume",
+          "id": "checkpoint-and-fork",
           "introduces": [
             "experiment.resume"
           ],
@@ -4488,26 +4595,29 @@
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "F/P7はExperimentの保存済み記録を知る読者向け。閉じたRunのcheckpointからの復帰、確定済み記録からのfork、自動保存頻度の選択を自己完結した例で扱う。checkpoint復帰には同じLocal Registryが必要で、ソルバー内部の探索状態の再開とは区別する。",
+      "parent_page": "R_API.experiment",
+      "notes": "restore_from_checkpointは別プロセスが同じLocal Registryの閉じたRunから編集を再開する完全例、forkは既存の記録を変えず新しい試行を足す完全例を所有する。保存時点・autosave・親子のデータ範囲を説明し、ソルバー探索状態の再開とは区別する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/continue_experiment.md"
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.restore_from_checkpoint.md",
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.fork.md",
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.md",
+        "python/ommx/src/experiment.rs",
+        "docs/api/_items/ommx.experiment.Experiment.rst"
       ]
     },
     {
       "id": "P8",
       "title": "registryでArtifactを共有する",
       "slice": "G",
-      "role": "how-to",
+      "role": "operational-reference",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/share_artifact_registry.md"
+        "docs/ja/how_to/share_artifact_registry.md",
+        "docs/en/how_to/share_artifact_registry.md"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/share_in_ommx_artifact.md"
-      ],
+      "source_urls": [],
       "requires": [
         "ext.python",
         "ext.cli",
@@ -4549,25 +4659,25 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "G/P8はPython・CLI・SDK環境から直接読めるJSON共有の操作ガイド。送信前に参照名とタグを短く説明し、Artifactの基本理解、commitによるローカル確定とpushによる送信の違いから、認証・送信・別環境での読出しまで扱う。名前・タグ・digest全体の使い分けは受信例の後で導入し、共有操作の前提にしない。T6のファイル往復とInstance・Experimentの操作は任意。source_urlsは統合前の歴史的baselineを指す。",
+      "notes": "日英の運用Referenceとして認証・公開範囲・送受信を説明する。短いJSON例でArtifact基本・commitとpush・ローカル優先のloadとdigestを局所的に導入する。ファイル往復、Instance、Experimentは前提でない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/share_artifact_registry.md"
+        "docs/ja/how_to/share_artifact_registry.md",
+        "docs/en/how_to/share_artifact_registry.md"
       ]
     },
     {
       "id": "P9",
       "title": "保存したデータをCLIで調査・整理する",
       "slice": "J",
-      "role": "how-to",
+      "role": "operational-reference",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/manage_local_registry.md"
+        "docs/ja/how_to/manage_local_registry.md",
+        "docs/en/how_to/manage_local_registry.md"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/cli.md"
-      ],
+      "source_urls": [],
       "requires": [
         "ext.cli"
       ],
@@ -4576,17 +4686,21 @@
           "id": "inspect",
           "introduces": [
             "artifact.basics",
-            "artifact.identity",
-            "cli.operations"
+            "artifact.identity"
           ],
           "uses": [
-            "cli.operations"
+            "artifact.basics",
+            "artifact.identity"
           ],
-          "mentions": []
+          "mentions": [
+            "cli.operations"
+          ]
         },
         {
           "id": "cleanup",
-          "introduces": [],
+          "introduces": [
+            "cli.operations"
+          ],
           "uses": [
             "artifact.identity",
             "cli.operations"
@@ -4598,21 +4712,24 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "CLIの導入とPython同梱版・Rustからの導入の選択はSETUPの任意節へ集約する。受け取ったArtifactを調べる読者に作成・ファイル往復・Python SDKの習得は要求せず、Artifactの基本と可変の名前/タグ・内容のdigestを局所説明する。削除/復元とデータ回収の区別、報告のみの確認から明示削除へ進む手順、blobの経過時間による猶予期間は安全な操作のためBookに残す。Python検索とExperiment検索はそれぞれP9.python/P9.experimentの任意節とする。",
+      "notes": "日英の運用ReferenceとしてCLIのinspect/list/size、名前とdigest、削除/復元とblob回収の違いを説明する。SETUPの導入経路に対応するCLI環境を使い、受信者にPython APIやArtifact作成を必須にしない。Python検索操作はR_API.artifact.catalog/R_API.experiment.catalogが所有し、この本文では導線のみを置く。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/manage_local_registry.md"
+        "docs/ja/how_to/manage_local_registry.md",
+        "docs/en/how_to/manage_local_registry.md"
       ]
     },
     {
-      "id": "P9.python",
-      "title": "Pythonで保存済みArtifactを一覧する",
-      "slice": "J",
-      "role": "how-to-section",
+      "id": "R_API.artifact.catalog",
+      "title": "list_artifacts API Reference：保存済みデータの一覧と識別",
+      "slice": "Storage and recording Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/manage_local_registry.md"
+        "python/ommx/src/docstrings/ommx/artifact/list_artifacts.md",
+        "python/ommx/src/artifact.rs",
+        "docs/api/_items/ommx.artifact.list_artifacts.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -4633,22 +4750,26 @@
         }
       ],
       "deferred": [],
-      "parent_page": "P9",
-      "notes": "main SDKのlist_artifactsでrefとdigestを読み、空のRegistryでは空の結果になる任意例。CLI操作の知識とPython API操作は区別する。",
+      "parent_page": "R_API.artifact",
+      "notes": "list_artifactsで名前・manifest digest・annotation等のcatalogを読む操作は共有APIが所有する。運用Referenceからはリンクで案内し、CLI本文にPython操作の習得を混在させない。空のRegistryの結果と、一覧の識別子から実データを開く境界を説明する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/manage_local_registry.md"
+        "python/ommx/src/docstrings/ommx/artifact/list_artifacts.md",
+        "python/ommx/src/artifact.rs",
+        "docs/api/_items/ommx.artifact.list_artifacts.rst"
       ]
     },
     {
-      "id": "P9.experiment",
-      "title": "保存したExperimentを条件で探す",
-      "slice": "J",
-      "role": "how-to-section",
+      "id": "R_API.experiment.catalog",
+      "title": "list_experiments API Reference：記録条件による検索",
+      "slice": "Storage and recording Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/manage_local_registry.md"
+        "python/ommx/src/docstrings/ommx/experiment/list_experiments.md",
+        "python/ommx/src/experiment.rs",
+        "docs/api/_items/ommx.experiment.list_experiments.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -4656,7 +4777,8 @@
         "sdk.environment",
         "artifact.identity",
         "experiment.record",
-        "experiment.conditions"
+        "experiment.conditions",
+        "ext.table"
       ],
       "sections": [
         {
@@ -4671,22 +4793,27 @@
         }
       ],
       "deferred": [],
-      "parent_page": "P9",
-      "notes": "Experiment Tutorialで記録方法を学んだ読者だけの検索例。実験全体のannotationとRunごとのparameterを区別し、Artifactだけを調べる主導線からは飛ばせる。",
+      "parent_page": "R_API.experiment",
+      "notes": "Experiment全体のannotationとRunごとのparameterを区別する検索・読出しは共有APIへ置く。運用ReferenceはこのAPIへ案内する。名前は可変なので、調べた内容を指すにはmanifest digestも残す。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/manage_local_registry.md"
+        "python/ommx/src/docstrings/ommx/experiment/list_experiments.md",
+        "python/ommx/src/experiment.rs",
+        "docs/api/_items/ommx.experiment.list_experiments.rst"
       ]
     },
     {
-      "id": "P10",
-      "title": "標準の添付データを扱う",
-      "slice": "F",
-      "role": "how-to",
+      "id": "R_API.experiment.attachments",
+      "title": "Experiment API Reference：標準データ・ファイルの記録と読出し",
+      "slice": "Storage and recording Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/attach_experiment_data.md"
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.log_file.md",
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.md",
+        "python/ommx/src/experiment.rs",
+        "docs/api/_items/ommx.experiment.Experiment.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -4712,28 +4839,34 @@
       "deferred": [
         "attachment.codec"
       ],
-      "parent_page": null,
-      "notes": "F/P10はExperiment/Runの基本記録を前提に、共通入力と試行ごとの結果へJSON・Instance・Solution・ファイルを添付して取り出す。Artifact Tutorial、Adapter、独自Codecは不要。Codecは任意のP10.codec節として分離し、標準添付の理解に含めない。",
+      "parent_page": "R_API.experiment",
+      "notes": "ExperimentのAttachments節とlog_fileの完全例に集約する。共有入力とRun結果の名前の範囲、JSON/型付きデータ/ファイルの保存と取得、media type、圧縮、元ファイル変更からの独立性を説明する。独自Codecは関連APIへ分け、標準データの利用に必須としない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/attach_experiment_data.md"
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.log_file.md",
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.md",
+        "python/ommx/src/experiment.rs",
+        "docs/api/_items/ommx.experiment.Experiment.rst"
       ]
     },
     {
-      "id": "P10.codec",
-      "title": "独自データのCodecを使う",
-      "slice": "F",
-      "role": "how-to-section",
+      "id": "R_API.experiment.codec",
+      "title": "Experiment API Reference：独自型のCodecによる添付",
+      "slice": "Storage and recording Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/attach_experiment_data.md"
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.log_with_codec.md",
+        "python/ommx/ommx/experiment/attachments.py",
+        "python/ommx/src/experiment.rs",
+        "docs/api/_items/ommx.experiment.Experiment.rst"
       ],
       "source_urls": [],
       "requires": [
         "ext.python",
-        "attachment.standard",
-        "wire.serialization"
+        "sdk.environment",
+        "attachment.standard"
       ],
       "sections": [
         {
@@ -4748,12 +4881,15 @@
         }
       ],
       "deferred": [],
-      "parent_page": "P10",
-      "notes": "",
+      "parent_page": "R_API.experiment.attachments",
+      "notes": "log_with_codecの自己完結した例とAttachmentCodecの型契約へ接続する。media typeとencode/decodeを実装する一般のbytes契約であり、OMMX Messageのwire schemaを読むことを前提にしない。標準添付の説明と任意の独自型対応を分ける。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/attach_experiment_data.md"
+        "python/ommx/src/docstrings/ommx/experiment/Experiment.log_with_codec.md",
+        "python/ommx/ommx/experiment/attachments.py",
+        "python/ommx/src/experiment.rs",
+        "docs/api/_items/ommx.experiment.Experiment.rst"
       ]
     },
     {
@@ -5418,8 +5554,8 @@
       "source_paths": [],
       "source_urls": [],
       "requires": [
-        "attachment.standard",
-        "wire.serialization"
+        "ext.python",
+        "attachment.standard"
       ],
       "sections": [
         {
@@ -5435,7 +5571,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "AttachmentCodecは型の所有packageが具体的なencode/decodeを提供する契約。標準添付を理解してから読むが、任意のデータ形式を使えるためOMMX Messageのwire schemaは必須でない。実行可能な完全例はR_API.experiment.codecにある。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": []
@@ -6116,6 +6252,102 @@
       "source_paths_existing": [
         "python/ommx/ommx/adapter.py"
       ]
+    },
+    {
+      "id": "B_RECORD_SHARE",
+      "title": "問題・結果・試行を保存して共有する / Save and share problems, results, and trials",
+      "slice": "Storage and recording migration",
+      "role": "book-chapter",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/record_and_share.md",
+        "docs/en/user_guide/record_and_share.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math"
+      ],
+      "sections": [
+        {
+          "id": "choose-format",
+          "introduces": [
+            "records.choice"
+          ],
+          "uses": [],
+          "mentions": [
+            "artifact.basics",
+            "experiment.record",
+            "mps.information-boundary"
+          ]
+        },
+        {
+          "id": "record-scope",
+          "introduces": [
+            "records.scope"
+          ],
+          "uses": [
+            "records.choice"
+          ],
+          "mentions": [
+            "results.comparison",
+            "solution.read",
+            "experiment.conditions"
+          ]
+        },
+        {
+          "id": "recipient-and-identity",
+          "introduces": [
+            "records.identity"
+          ],
+          "uses": [
+            "records.choice",
+            "records.scope"
+          ],
+          "mentions": [
+            "artifact.identity",
+            "artifact.lifecycle",
+            "artifact.registry"
+          ]
+        },
+        {
+          "id": "reading-continuing-rerunning",
+          "introduces": [
+            "records.reexecution"
+          ],
+          "uses": [
+            "records.scope"
+          ],
+          "mentions": [
+            "experiment.persist",
+            "experiment.resume",
+            "experiment.reproduce"
+          ]
+        },
+        {
+          "id": "procedures-and-formats",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "artifact.roundtrip",
+            "experiment.record",
+            "mps.export",
+            "cli.operations",
+            "artifact.format",
+            "wire.compatibility"
+          ]
+        }
+      ],
+      "deferred": [
+        "attachment.codec"
+      ],
+      "parent_page": null,
+      "notes": "数理最適化の基礎だけから独立して入れる日英第4章。受け手・保持したい関係で形式を選び、後の確認/比較/再実行の問いから記録範囲を決め、共有先と内容の識別、読出しと継続・再実行の違いへ進む。操作・クラス構造・生命周期の網羅的な説明はReferenceへ送り、章2/3やArtifact/Experimentの実行経験を必修にしない。リンクだけからAPI操作の習得は付与しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/record_and_share.md",
+        "docs/en/user_guide/record_and_share.md"
+      ]
     }
   ],
   "routes": [
@@ -6225,7 +6457,7 @@
     },
     {
       "id": "artifact",
-      "title": "Artifactの独立往復",
+      "title": "Artifact Referenceから独立した送受信へ",
       "initial": [
         "ext.math",
         "ext.python",
@@ -6234,12 +6466,12 @@
       ],
       "steps": [
         "SETUP",
-        "T6"
+        "R_API.artifact.roundtrip"
       ]
     },
     {
       "id": "experiment",
-      "title": "Experimentの独立往復",
+      "title": "Experiment Referenceから二試行の記録・独立読出しへ",
       "initial": [
         "ext.math",
         "ext.python",
@@ -6248,7 +6480,7 @@
       ],
       "steps": [
         "SETUP",
-        "T5"
+        "R_API.experiment.example"
       ]
     },
     {
@@ -6324,7 +6556,7 @@
         "SETUP",
         "T4",
         "P6",
-        "T5",
+        "R_API.experiment.example",
         "P6.experiment"
       ]
     },
@@ -6355,10 +6587,9 @@
       ],
       "steps": [
         "SETUP",
-        "T5",
-        "P10",
-        "R_WIRE",
-        "P10.codec"
+        "R_API.experiment.example",
+        "R_API.experiment.attachments",
+        "R_API.experiment.codec"
       ]
     },
     {
@@ -6372,7 +6603,7 @@
       ],
       "steps": [
         "SETUP",
-        "T6",
+        "R_API.artifact.roundtrip",
         "P8"
       ]
     },
@@ -6399,7 +6630,7 @@
       ],
       "steps": [
         "SETUP",
-        "T6",
+        "R_API.artifact.roundtrip",
         "P9"
       ]
     },
@@ -6414,8 +6645,8 @@
       ],
       "steps": [
         "SETUP",
-        "T5",
-        "P7"
+        "R_API.experiment.example",
+        "R_API.experiment.resume"
       ]
     },
     {
@@ -6461,7 +6692,7 @@
         "SETUP",
         "T1",
         "P4",
-        "T5",
+        "R_API.experiment.example",
         "P4.experiment"
       ]
     },
@@ -6502,10 +6733,10 @@
       ],
       "steps": [
         "SETUP",
-        "T5",
-        "P9",
-        "P9.python",
-        "P9.experiment"
+        "R_API.experiment.example",
+        "R_API.artifact",
+        "R_API.artifact.identity",
+        "R_API.experiment.catalog"
       ]
     },
     {
@@ -6620,7 +6851,7 @@
             ]
           ]
         },
-        "T6"
+        "R_API.artifact.roundtrip"
       ]
     },
     {
@@ -6639,14 +6870,14 @@
     },
     {
       "id": "mps_export_direct",
-      "title": "独立したMPS出力How-toからファイルを作る",
+      "title": "save_mps Referenceからモデルを書き出す",
       "initial": [
         "ext.math",
         "ext.python"
       ],
       "steps": [
         "SETUP",
-        "P16"
+        "R_API.instance.mps_export"
       ]
     },
     {
@@ -6659,20 +6890,20 @@
       "steps": [
         "SETUP",
         "P3",
-        "P16"
+        "R_API.instance.mps_export"
       ]
     },
     {
       "id": "mps_export_from_artifact_guide",
-      "title": "Artifactとの使い分けからMPS出力へ進む",
+      "title": "保存目的の選択からMPS Referenceへ進む",
       "initial": [
         "ext.math",
         "ext.python"
       ],
       "steps": [
+        "B_RECORD_SHARE",
         "SETUP",
-        "G13",
-        "P16"
+        "R_API.instance.mps_export"
       ]
     },
     {
@@ -6952,6 +7183,60 @@
         "R_API.special_constraints",
         "R_API.special_constraints.evaluate"
       ]
+    },
+    {
+      "id": "record_share_book_direct",
+      "title": "保存・共有の目的を選ぶ章へ直接入る",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        "B_RECORD_SHARE"
+      ]
+    },
+    {
+      "id": "record_share_from_home",
+      "title": "日英Homeから保存範囲と共有方法を選ぶ",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        {
+          "alternatives": [
+            [
+              "HOME"
+            ],
+            [
+              "HOME_EN"
+            ]
+          ]
+        },
+        "B_RECORD_SHARE"
+      ]
+    },
+    {
+      "id": "record_share_to_api",
+      "title": "保存の判断からArtifactまたはExperimentの実行例へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.cli",
+        "ext.table"
+      ],
+      "steps": [
+        "B_RECORD_SHARE",
+        "SETUP",
+        {
+          "alternatives": [
+            [
+              "R_API.artifact.roundtrip"
+            ],
+            [
+              "R_API.experiment.example"
+            ]
+          ]
+        }
+      ]
     }
   ],
   "environment_requirements": [
@@ -6972,15 +7257,15 @@
       "observed": "HiGHS Adapterを任意追加する。Experimentと外部OTel exporterは不要。"
     },
     {
-      "page": "P9.python",
-      "observed": "SETUPで選んだSDK環境を使う。CLIの操作とは独立した任意のPython検索例。"
+      "page": "R_API.artifact.catalog",
+      "observed": "SETUPで選んだSDK環境。Pythonによるcatalog操作は共有API Referenceで扱い、CLI運用とは別の入口とする。"
     },
     {
-      "page": "T6",
+      "page": "R_API.artifact.roundtrip",
       "observed": "SETUPで選んだSDK環境のみ。送受信を別プロセス、受信を空のLocal Registryで実行する。ソルバー準備を要求しない。"
     },
     {
-      "page": "P16",
+      "page": "R_API.instance.mps_export",
       "observed": "SETUPで選んだSDK環境のみ。小さなモデルを本文で作る。Adapter・ソルバー・ネットワークは出力例に不要。外部ツール自身のMPS拡張対応は受け手側で確認する。"
     },
     {
@@ -6994,6 +7279,14 @@
     {
       "page": "P15",
       "observed": "SETUPで選んだSDK環境だけで自己完結する。一回分の更新を明示的に呼び、一般presolve統合を前提にしない。"
+    },
+    {
+      "page": "R_API.experiment.example",
+      "observed": "SETUPで選んだSDKだけの二候補評価と記録。保存後の読み手は別プロセス・空Local Registryを使い、Adapterや外部サービスは不要。"
+    },
+    {
+      "page": "B_RECORD_SHARE",
+      "observed": "解説の章であり、Python環境や実行状態は前提にしない。実行可能な例の要件はリンク先のReferenceとSETUPが所有する。"
     }
   ],
   "review_notes": [

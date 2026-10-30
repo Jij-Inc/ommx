@@ -91,11 +91,9 @@ DOCTESTS = tuple(
 # archive, remote registry, or the caller's persistent Local Registry. Every
 # example from that boundary onward must carry an explicit doctest SKIP.
 NON_HERMETIC_SETUP_EXAMPLES = {
-    "ommx.artifact.Artifact": 0,
     "ommx.artifact.Artifact.import_archive": 0,
     "ommx.artifact.Artifact.inspect_archive": 0,
     "ommx.artifact.Artifact.load": 0,
-    "ommx.artifact.ArtifactDraft": 0,
     "ommx.artifact.ArtifactDraft.new": 5,
     "ommx.artifact.ArtifactDraft.new_anonymous": 3,
     "ommx.artifact.ArtifactDraft.temp": 0,
@@ -107,9 +105,6 @@ NON_HERMETIC_SETUP_EXAMPLES = {
     "ommx.artifact.prune_anonymous": 1,
     "ommx.dataset.miplib2017": 1,
     "ommx.dataset.qplib": 1,
-    "ommx.experiment.Experiment": 5,
-    "ommx.experiment.Experiment.fork": 0,
-    "ommx.experiment.Experiment.run": 0,
 }
 
 

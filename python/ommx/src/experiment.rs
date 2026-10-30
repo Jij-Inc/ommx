@@ -334,66 +334,7 @@ impl PyAutosavePolicy {
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Experiment")]
-/// A collection of optimization experiment records stored as one OMMX Artifact.
-///
-/// An `Experiment` owns experiment-level attachments and a sequence of
-/// closed `Run` records. Each `Run` can store scalar run parameters,
-/// run-level attachments, and zero or more `Solve` and `Sampling` records.
-///
-/// Newly created experiments are unsealed. Call `commit()` to write the
-/// experiment into the local registry as an OMMX Artifact. After commit, the
-/// same object can be used as a read-only view of the committed artifact.
-/// `with Experiment(...)` commits on normal exit if the experiment is still
-/// unsealed. On exception it does not advance the successful Experiment image
-/// reference; instead it tries to publish a local checkpoint with status
-/// `"failed"` or `"interrupted"`.
-///
-/// Logging APIs store payload bytes in the Local Registry immediately. The
-/// final commit writes an Experiment config and manifest that make those
-/// payloads reachable as one immutable Artifact. By default, a closed `Run`
-/// also publishes a best-effort `"draft"` checkpoint so a later process can
-/// resume from the latest closed Run with
-/// `Experiment.restore_from_checkpoint(...)`. Use
-/// `set_autosave_policy(...)` to batch, rate-limit, or disable these
-/// Run-close checkpoints.
-///
-/// Use experiment-level attachments for shared context such as dataset or
-/// source-problem metadata. Use `Run.log_parameter(...)` for scalar values
-/// that should appear in `run_parameters_df()`, and use run attachments or
-/// `Run.log_solve(...)` and `Run.log_sample(...)` for payloads that belong to
-/// a specific run.
-///
-/// Attachment lookup by an absent name raises {class}`KeyError`. A caller-side
-/// image reference, autosave value, media type, or JSON input that is invalid
-/// raises {class}`ValueError`. Registry, archive, storage, and lifecycle-state
-/// failures raise {class}`RuntimeError`. Exceptions raised by Python codecs,
-/// adapters, tracing hooks, and data libraries pass through unchanged.
-///
-/// Example:
-///
-/// >>> from ommx.experiment import Experiment
-/// >>> with Experiment.with_temp_local_registry() as exp:
-/// ...     exp.log_json("dataset", {"name": "demo"})
-/// ...     with exp.run() as run:
-/// ...         run.log_parameter("capacity", 10)
-/// ...         run.log_json("scenario", {"capacity": 10})
-/// >>> len(exp.runs)
-/// 1
-/// >>> len(exp.attachment_names)
-/// 1
-/// >>> exp.run_parameters_df().to_dict()
-/// {'capacity': {0: 10}}
-///
-/// If the experiment has only one run, open the experiment and the run in
-/// one `with` statement. On normal exit, the run is finished first and then
-/// the experiment is committed. The following workflow uses the caller's
-/// persistent Local Registry and a remote registry, so it is not executed by
-/// doctest:
-///
-/// >>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP
-/// ...     solution = run.log_solve(adapter, instance, time_limit=10.0)
-/// >>> exp.rename("ghcr.io/container/name:latest")  # doctest: +SKIP
-/// >>> exp.push()  # doctest: +SKIP
+#[doc = include_str!("docstrings/ommx/experiment/Experiment.md")]
 pub struct PyExperiment {
     inner: ommx::experiment::ExperimentDyn,
     store_trace: bool,
@@ -467,15 +408,7 @@ impl PyExperiment {
         })
     }
 
-    /// Restore an unsealed Experiment from its checkpoint.
-    ///
-    /// Pass the original requested Experiment image name, not the generated
-    /// checkpoint ref. This accepts checkpoint statuses such as `draft`,
-    /// `failed`, or `interrupted`, and returns a new unsealed Experiment whose
-    /// image name is the original requested Experiment image name recorded in
-    /// the checkpoint metadata. Use `list_experiment_checkpoints(...)` to
-    /// discover recovery points, but pass its `requested_image_name` here
-    /// rather than its internal `checkpoint_image_name`.
+    #[doc = include_str!("docstrings/ommx/experiment/Experiment.restore_from_checkpoint.md")]
     #[staticmethod]
     pub fn restore_from_checkpoint(py: Python<'_>, image_name: &str) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -513,30 +446,7 @@ impl PyExperiment {
         })
     }
 
-    /// Fork this committed Experiment into a new unsealed child Experiment.
-    ///
-    /// The parent Experiment is not modified. Existing Attachments, Runs,
-    /// Solves, Samplings, and Run parameters are carried into the child Experiment.
-    /// When the child is committed, its Artifact manifest records the parent
-    /// manifest descriptor as OCI `subject`. The child reuses payload blobs
-    /// already present in the Local Registry; forking creates a new manifest
-    /// but does not duplicate unchanged Instance, Solution, SampleSet, or
-    /// Attachment bytes.
-    ///
-    /// If `image_name` is omitted, OMMX generates an anonymous local
-    /// Experiment name for the child. The returned Experiment can be used as
-    /// a context manager. This requires an already committed parent in a
-    /// caller-owned Local Registry, so it is not executed by doctest:
-    ///
-    /// >>> with parent.fork() as child:  # doctest: +SKIP
-    /// ...     with child.run() as run:
-    /// ...         run.log_parameter("capacity", 56)
-    ///
-    /// Raises an error if this Experiment has not been committed yet.
-    ///
-    /// Set `store_trace=True` on the returned child to store traces for
-    /// `Run` context managers created from it. The child Experiment itself
-    /// does not need to be used as a context manager.
+    #[doc = include_str!("docstrings/ommx/experiment/Experiment.fork.md")]
     #[pyo3(signature = (image_name = None, *, store_trace = false))]
     pub fn fork(&self, image_name: Option<&str>, store_trace: bool) -> OmmxPyResult<Self> {
         Ok(Self {
@@ -823,11 +733,14 @@ impl PyExperiment {
     ///
     /// The returned `Run` must be closed before `commit()`. Use it as a
     /// context manager to close it automatically on normal or exceptional
-    /// exit. This requires a caller-owned unsealed Experiment and writes to
-    /// its Local Registry, so it is not executed by doctest:
+    /// exit. This complete example uses an isolated temporary Local Registry:
     ///
-    /// >>> with experiment.run() as run:  # doctest: +SKIP
-    /// ...     run.log_parameter("capacity", 47)
+    /// >>> from ommx.experiment import Experiment
+    /// >>> with Experiment.with_temp_local_registry() as experiment:
+    /// ...     with experiment.run() as run:
+    /// ...         run.log_parameter("capacity", 47)
+    /// >>> experiment.run_parameters_df()["capacity"].to_list()
+    /// [47]
     ///
     /// Closing a Run records its status as `"finished"`, `"failed"`, or
     /// `"interrupted"`. It also publishes a best-effort draft checkpoint when
@@ -867,14 +780,7 @@ impl PyExperiment {
         )?)
     }
 
-    /// Attach an existing filesystem file in the experiment space.
-    ///
-    /// The file bytes are copied into the Local Registry immediately. If
-    /// `media_type` is omitted, the Rust SDK infers it from file contents and
-    /// unknown types fall back to `application/octet-stream`. The original
-    /// source path is not stored; only a basename for later export is stored
-    /// as attachment metadata. The file is streamed into the Local Registry;
-    /// set `compression="zstd"` to compress the stored layer transparently.
+    #[doc = include_str!("docstrings/ommx/experiment/Experiment.log_file.md")]
     #[pyo3(signature = (name, path, media_type = None, *, filename = None, compression = AttachmentCompression::None))]
     pub fn log_file(
         &mut self,
@@ -896,12 +802,7 @@ impl PyExperiment {
         )?)
     }
 
-    /// Encode a Python object with an attachment codec and attach it in the experiment space.
-    ///
-    /// The codec class must provide `media_type`, `encode(value) -> bytes`,
-    /// and `decode(bytes) -> object`. OMMX owns only this protocol; concrete
-    /// codecs should live in the package that owns the payload type. Set
-    /// `compression="zstd"` to compress the encoded bytes transparently.
+    #[doc = include_str!("docstrings/ommx/experiment/Experiment.log_with_codec.md")]
     #[pyo3(signature = (codec, name, value, *, compression = AttachmentCompression::None))]
     pub fn log_with_codec(
         &mut self,
@@ -1053,13 +954,7 @@ impl PyExperiment {
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (prefix = None, *, root = None, strict = false))]
-/// List Experiment refs using the Local Registry's digest-addressed JSON cache.
-///
-/// Missing Manifest or Config rows are backfilled from the CAS before records
-/// are returned. If `prefix` is given, it is matched against the full image
-/// reference string. Invalid cache entries are repaired from the CAS when
-/// possible; repaired or skipped refs emit `RuntimeWarning`. Pass `strict=True`
-/// to fail on the first invalid ref.
+#[doc = include_str!("docstrings/ommx/experiment/list_experiments.md")]
 pub fn list_experiments(
     py: Python<'_>,
     prefix: Option<&str>,
@@ -2106,34 +2001,7 @@ impl PyRun {
         )?)
     }
 
-    /// Solve an Instance with an OMMX SolverAdapter and log a Solve entry.
-    ///
-    /// The input Instance is cloned before calling the Adapter's easy
-    /// ``solve()`` API. That API may prepare another isolated copy with the
-    /// Adapter's recommended Policy, so neither step mutates the caller's
-    /// object. The original caller input, before any recommended Preparation,
-    /// is always stored as the Solve input.
-    ///
-    /// `adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword
-    /// arguments are passed to `adapter.solve(...)` and recorded as
-    /// `Solve.adapter_options`. The adapter class name is stored in
-    /// `Solve.adapter`.
-    ///
-    /// Adapter options are solve-scoped metadata, not run parameters. They do
-    /// not appear in `Experiment.run_parameters_df()`.
-    ///
-    /// Adapter diagnostics are disabled by default. Set
-    /// `store_diagnostics=True` to pass a diagnostics sink to the adapter and
-    /// store recorded diagnostics with the Solve entry. Diagnostics persistence
-    /// is best-effort. If diagnostics cannot be serialized or stored after the
-    /// adapter returns a solution, the Solve entry is still recorded without
-    /// diagnostics. `store_diagnostics` controls Experiment logging and is not
-    /// recorded in `Solve.adapter_options`.
-    ///
-    /// If the adapter raises before returning a Solution, this method records
-    /// a failed Solve entry when possible, including diagnostics collected
-    /// before the failure when `store_diagnostics=True`. Failed Solve entries
-    /// have `output=None`.
+    #[doc = include_str!("docstrings/ommx/experiment/Run.log_solve.md")]
     #[pyo3(signature = (adapter, instance, *, store_diagnostics = false, **kwargs))]
     pub fn log_solve(
         &mut self,
@@ -2408,12 +2276,7 @@ impl PyRun {
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "OpenSolve")]
-/// Context manager for a manually executed Solve inside a Run.
-///
-/// `OpenSolve` is returned by `Run.open_solve(...)`. Use `solver_input` to
-/// access the backend solver model, run backend-specific APIs, decode the
-/// solver output, and record adapter options that are set directly on the
-/// backend model. The Solve entry is finalized when the context exits.
+#[doc = include_str!("docstrings/ommx/experiment/OpenSolve.md")]
 pub struct PyOpenSolve {
     run: Py<PyRun>,
     adapter: Py<PyType>,

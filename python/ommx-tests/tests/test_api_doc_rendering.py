@@ -173,32 +173,57 @@ def test_generated_reference_context_and_type_links(
         "Instance.prepare",
         "FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight",
         "Instance.partial_evaluate",
+        "Instance.save_mps",
+        "artifact.Artifact",
+        "artifact.ArtifactDraft",
+        "artifact.list_artifacts",
+        "experiment.Experiment",
+        "experiment.Experiment.fork",
+        "experiment.Experiment.restore_from_checkpoint",
+        "experiment.Experiment.log_file",
+        "experiment.Experiment.log_with_codec",
+        "experiment.Run.log_solve",
+        "experiment.OpenSolve",
+        "experiment.list_experiments",
     ],
 )
 def test_runtime_and_reference_share_canonical_documentation(api_name: str) -> None:
-    import ommx
-
     project_root = API_DOCS_DIR.parents[1]
+    reference = json.loads((API_DOCS_DIR / "api_reference.json").read_text())
+    qualified_name = f"ommx.{api_name}"
+    module_name = max(
+        (
+            name
+            for name in reference["modules"]
+            if qualified_name.startswith(f"{name}.")
+        ),
+        key=len,
+    )
+    local_name = qualified_name.removeprefix(f"{module_name}.")
     source = (
-        (project_root / f"python/ommx/src/docstrings/ommx/{api_name}.md")
+        (
+            project_root
+            / "python/ommx/src/docstrings"
+            / Path(*module_name.split("."))
+            / f"{local_name}.md"
+        )
         .read_text()
         .strip()
     )
-    reference = json.loads((API_DOCS_DIR / "api_reference.json").read_text())
-    class_name, _, member_name = api_name.partition(".")
-    api_class = next(
+    owner_name, _, member_name = local_name.partition(".")
+    api_owner = next(
         item
-        for item in reference["modules"]["ommx"]["items"]
-        if item["name"] == class_name
+        for item in reference["modules"][module_name]["items"]
+        if item["name"] == owner_name
     )
 
-    runtime_owner = getattr(ommx, class_name)
-    reference_owner = api_class
+    runtime_owner = getattr(importlib.import_module(module_name), owner_name)
+    reference_owner = api_owner
     if member_name:
         runtime_owner = getattr(runtime_owner, member_name)
         reference_owner = next(
             item
-            for item in api_class["methods"] + api_class["attributes"]
+            for item in api_owner["methods"] + api_owner["attributes"]
             if item["name"] == member_name
         )
     runtime_doc = runtime_owner.__doc__
@@ -209,16 +234,16 @@ def test_runtime_and_reference_share_canonical_documentation(api_name: str) -> N
     stub = ast.parse(
         (project_root / "python/ommx/ommx/_ommx_rust/__init__.pyi").read_text()
     )
-    stub_class = next(
+    stub_item = next(
         node
         for node in stub.body
-        if isinstance(node, ast.ClassDef) and node.name == class_name
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef)) and node.name == owner_name
     )
-    stub_owner: ast.ClassDef | ast.FunctionDef = stub_class
+    stub_owner: ast.ClassDef | ast.FunctionDef = stub_item
     if member_name:
         stub_owner = next(
             node
-            for node in stub_class.body
+            for node in stub_item.body
             if isinstance(node, ast.FunctionDef) and node.name == member_name
         )
     assert ast.get_docstring(stub_owner) == source
