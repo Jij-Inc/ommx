@@ -1,3 +1,145 @@
+"""Common interfaces for solving and sampling an OMMX Instance.
+
+.. rubric:: Compare results from multiple adapters
+
+Use the same :class:`~ommx.Instance` with different adapters to compare their
+returned :class:`~ommx.Solution` objects. This complete example needs the SDK,
+``ommx-highs-adapter``, ``ommx-pyscipopt-adapter``, pandas, and matplotlib; follow
+the :doc:`installation guide </getting_started/install>` to install compatible
+versions. No external data or previous example state is needed.
+
+.. rubric:: Build one problem and solve it twice
+
+Choose items to maximize their total value without exceeding a weight capacity
+of 47. Each binary variable is 1 when the corresponding item is selected. The
+variable name ``x`` and its subscript ``i`` retain that correspondence for result
+extraction later. OMMX also assigns each variable an ID within the Instance;
+names and subscripts are labels, not those IDs. The Instance holds the variables,
+objective expression, and capacity constraint together.
+
+>>> from ommx import Instance
+>>> values = [10, 13, 18, 31, 7, 15]
+>>> weights = [11, 25, 20, 35, 10, 33]
+>>> instance = Instance.maximize()
+>>> x = [instance.new_binary("x", subscripts=[i]) for i in range(len(values))]
+>>> instance.objective = sum(value * var for value, var in zip(values, x))
+>>> _ = instance.add_constraint(
+...     sum(weight * var for weight, var in zip(weights, x)) <= 47,
+...     "weight capacity",
+... )
+
+Both HiGHS and SCIP can directly accept this linear binary model. Each adapter's
+``solve`` prepares an isolated copy, so the same source Instance can be reused.
+Other models can require different preparation for each backend. See
+:class:`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter` for explicit policy selection
+and :doc:`Adapter packages and input contracts </api/adapters>` for other backends.
+
+>>> from ommx_highs_adapter import OMMXHighsAdapter
+>>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+>>> adapters = {"highs": OMMXHighsAdapter, "scip": OMMXPySCIPOptAdapter}
+>>> solutions = {name: adapter.solve(instance) for name, adapter in adapters.items()}
+
+.. rubric:: Compare reported values and guarantees
+
+The reported objective is OMMX's evaluated value; the optimization direction
+(``sense``) tells you whether larger or smaller is better. Feasibility includes
+variable domains and constraints. A feasible candidate, matching objective
+values, and a proven optimum are separate observations. In this small example,
+both adapters return an optimal feasible solution with objective 41.
+
+>>> import pandas as pd
+>>> comparison = pd.DataFrame([
+...     {
+...         "adapter": name,
+...         "sense": repr(solution.sense),
+...         "objective": solution.objective,
+...         "feasible": solution.feasible,
+...         "optimality": repr(solution.optimality),
+...     }
+...     for name, solution in solutions.items()
+... ]).set_index("adapter")
+>>> print(comparison.to_string())  # doctest: +NORMALIZE_WHITESPACE
+                  sense  objective  feasible          optimality
+adapter
+highs    Sense.Maximize       41.0      True  Optimality.Optimal
+scip     Sense.Maximize       41.0      True  Optimality.Optimal
+
+This demonstrates a comparison procedure, not which solver is generally better.
+Align the following conditions before drawing conclusions:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Information
+     - Conditions for comparison
+   * - Reported objective and sense
+     - Same problem and objective meaning.
+   * - Feasibility for the original problem
+     - Same evaluated conditions and numerical tolerances.
+   * - Optimality
+     - Check the problem and guarantee represented by each adapter's result.
+   * - Backend bounds, gaps, and termination reasons
+     - Check the solved formulation, solver-facing objective, and backend definitions.
+   * - Runtime
+     - Measure separately with defined data, settings, environment, and repetitions.
+
+If you explicitly solve a transformed Instance, evaluate the candidate against
+the original Instance as needed. Reconstructed values and membership in an
+adapter's input class alone do not establish original feasibility or global
+optimality. See :doc:`Transform problems and choose a solving method
+</user_guide/transform_and_solve>` and :doc:`Evaluate candidates and interpret
+results </user_guide/evaluate_and_interpret>` for choosing the evaluation target.
+
+The :class:`~ommx_highs_adapter.HighsDiagnosticsAnalyzer` and
+:class:`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` references explain backend
+reports. A bound on a sign-changed or penalized objective is not automatically a
+bound on the original objective. :class:`~ommx.experiment.Experiment` can organize
+repeated runs, but is not required for this comparison.
+
+.. rubric:: Plot and tabulate the selected items
+
+:meth:`~ommx.Solution.extract_decision_variables` selects variables named ``x``
+and returns their values keyed by subscript tuples. Here ``(i,)`` corresponds to
+item ``i``; sort these keys to put the items in model order. Variables without
+the requested name are omitted. Duplicate subscript tuples under that name are
+an error rather than silently overwriting a value; use distinct labels or inspect
+the ID-indexed DataFrame when labels are not unique.
+
+>>> selected = solutions["highs"].extract_decision_variables("x")
+>>> [selected[(i,)] for i in range(len(values))]
+[1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+>>> from matplotlib import pyplot as plt
+>>> fig, ax = plt.subplots()
+>>> marks = {"highs": "o", "scip": "+"}
+>>> for name, solution in solutions.items():
+...     selected = solution.extract_decision_variables("x")
+...     keys = sorted(selected)
+...     _ = ax.plot(
+...         [key[0] for key in keys], [selected[key] for key in keys],
+...         marks[name], label=name,
+...     )
+>>> _ = ax.set(xlabel="Item", ylabel="Selected (1) or not selected (0)")
+>>> _ = ax.legend()
+>>> len(ax.lines)
+2
+
+Display ``fig`` in a notebook or call ``plt.show()`` interactively. Close the
+figure when finished to release its resources.
+
+>>> plt.close(fig)
+
+For tabular analysis, :meth:`~ommx.Solution.decision_variables_df` provides one
+row per variable. Add a solver column before concatenating the tables so the
+origin of each row remains explicit; variable IDs can repeat across solutions.
+
+>>> decision_variables = pd.concat([
+...     solution.decision_variables_df().assign(solver=name)
+...     for name, solution in solutions.items()
+... ])
+>>> decision_variables.groupby("solver").size().to_dict()
+{'highs': 6, 'scip': 6}
+"""
+
 from __future__ import annotations
 
 import copy

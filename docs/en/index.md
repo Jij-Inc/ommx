@@ -83,7 +83,7 @@ If you already have a problem and candidate values, begin with [Evaluate candida
 
 After [installing the SDK and an Adapter](./getting_started/install.md), choose a complete example from its Reference. {class}`PySCIPOpt <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` covers a knapsack model, native special constraints, and explicit preparation. {class}`HiGHS <ommx_highs_adapter.OMMXHighsAdapter>` shows how OMMX can lower special constraints for a backend that does not accept them directly. {class}`OpenJij SA <ommx_openjij_adapter.OMMXOpenJijSAAdapter>` covers caller-chosen penalty weights, sampling, and selecting among returned candidates. Each example supplies its own model. The {doc}`Adapter packages and input contracts </api/adapters>` page lists the available integrations.
 
-To compare solvers, use [Solve with multiple adapters and compare the results](./tutorial/switching_adapters.md). The [OpenJij TSP example](./tutorial/tsp_sampling_with_openjij_adapter) is an optional application that includes route visualization.
+To compare solvers, use the {mod}`complete Adapter comparison example <ommx.adapter>` in the API Reference. The [OpenJij TSP example](./tutorial/tsp_sampling_with_openjij_adapter) is an optional application that includes route visualization.
 
 If you are connecting your own solving tool, the [adapter implementation guide](./tutorial/implement_adapter.md) explains how to translate its input and output through OMMX's common interface.
 
@@ -123,7 +123,6 @@ getting_started/install
 :hidden:
 
 tutorial/tsp_sampling_with_openjij_adapter
-tutorial/switching_adapters
 tutorial/download_miplib_instance
 tutorial/download_qplib_instance
 tutorial/implement_adapter
