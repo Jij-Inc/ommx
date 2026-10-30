@@ -177,6 +177,7 @@ def test_rejects_quadratic_indicator_body_without_mutating_input():
 @pytest.mark.parametrize(
     ("variable", "kind"),
     [
+        (DecisionVariable.finite_domain(0, [0.1, 0.5, 1.0]), Kind.FiniteDomain),
         (DecisionVariable.semi_integer(0, lower=1, upper=3), Kind.SemiInteger),
         (
             DecisionVariable.semi_continuous(0, lower=1, upper=3),

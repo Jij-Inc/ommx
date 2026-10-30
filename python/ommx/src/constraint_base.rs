@@ -22,7 +22,7 @@ use std::collections::HashMap;
 /// APIs whose argument already fixes a family promote integer inputs to that
 /// family's ID: for example, ``constraints={1: constraint}`` in
 /// {meth}`~ommx.Instance.from_components`, or
-/// ``instance.constraints.of_kind("regular")[1]``. They reject IDs of another
+/// ``instance.constraints.of_kind(ConstraintKind.Regular)[1]``. They reject IDs of another
 /// family. Such mapping inputs reject ``1`` and ``ConstraintID(1)`` together
 /// with ``ValueError``, because the keys normalize to the same identity.
 /// Mixed-family collections and ``constraint_violation(id)`` require typed
@@ -35,7 +35,7 @@ use std::collections::HashMap;
 ///
 /// >>> import copy
 /// >>> import pickle
-/// >>> from ommx import ConstraintID, OneHotConstraintID
+/// >>> from ommx import ConstraintKind, ConstraintID, OneHotConstraintID
 /// >>> cid = ConstraintID(7)
 /// >>> assert cid != 7 and cid != OneHotConstraintID(7)
 /// >>> assert copy.copy(cid) is cid
@@ -59,7 +59,7 @@ use std::collections::HashMap;
 /// unsupported kinds. For example, a consumer requiring regular rows can
 /// validate the complete collection before processing it:
 ///
-/// >>> from ommx import ConstraintID, Instance, OneHotConstraint
+/// >>> from ommx import ConstraintKind, ConstraintID, Instance, OneHotConstraint
 /// >>> def regular_rows(model):
 /// ...     rows = []
 /// ...     for cid in model.constraints:

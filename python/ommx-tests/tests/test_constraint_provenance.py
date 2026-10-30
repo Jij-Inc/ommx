@@ -1,5 +1,7 @@
 """Tests for Constraint.provenance context (issue #819)."""
 
+from ommx import ConstraintKind
+
 from ommx import IndicatorConstraintID, OneHotConstraintID, Sos1ConstraintID
 
 from ommx import (
@@ -27,7 +29,7 @@ def test_user_authored_constraint_has_empty_provenance():
         },
         sense=Sense.Minimize,
     )
-    c = instance.constraints.of_kind("regular")[5]
+    c = instance.constraints.of_kind(ConstraintKind.Regular)[5]
     assert c.provenance == []
 
 

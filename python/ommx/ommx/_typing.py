@@ -8,3 +8,5 @@ if TYPE_CHECKING:
 _T = TypeVar("_T")
 _K = TypeVar("_K", bound="ConstraintIDBase")
 _V_co = TypeVar("_V_co", bound="ConstraintView", covariant=True)
+
+_C_co = TypeVar("_C_co", bound="ConstraintIDBase", covariant=True)

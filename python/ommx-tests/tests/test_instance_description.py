@@ -1,5 +1,7 @@
 """Tests for Instance description property."""
 
+from ommx import ConstraintKind
+
 import pytest
 
 from ommx import (
@@ -130,7 +132,7 @@ def test_instance_annotations_do_not_serialize_structural_constraints():
     assert annotations["org.ommx.v1.instance.title"] == "Structural Instance"
     assert annotations["org.ommx.v1.instance.constraints"] == "1"
     assert instance.num_constraints == 1
-    assert len(instance.constraints_df(kind="one_hot")) == 1
+    assert len(instance.constraints_df(kind=ConstraintKind.OneHot)) == 1
 
 
 def test_instance_add_user_annotation_rejects_reserved_namespace():
@@ -222,12 +224,12 @@ def test_solution_annotations_preserve_structural_constraint_evaluations():
     )
     solution = instance.evaluate({1: 0.0, 2: 1.0, 3: 0.0})
 
-    assert len(solution.constraints_df(kind="one_hot")) == 1
+    assert len(solution.constraints_df(kind=ConstraintKind.OneHot)) == 1
 
     solution.solver = {"name": "unit-solver"}
 
     assert solution.solver == {"name": "unit-solver"}
-    assert len(solution.constraints_df(kind="one_hot")) == 1
+    assert len(solution.constraints_df(kind=ConstraintKind.OneHot)) == 1
 
 
 def test_solution_add_user_annotation_rejects_reserved_namespace():
@@ -337,9 +339,9 @@ def test_sample_set_annotations_preserve_structural_constraint_samples():
         }
     )
 
-    assert len(sample_set.constraints_df(kind="one_hot")) == 1
+    assert len(sample_set.constraints_df(kind=ConstraintKind.OneHot)) == 1
 
     sample_set.solver = {"name": "unit-sampler"}
 
     assert sample_set.solver == {"name": "unit-sampler"}
-    assert len(sample_set.constraints_df(kind="one_hot")) == 1
+    assert len(sample_set.constraints_df(kind=ConstraintKind.OneHot)) == 1

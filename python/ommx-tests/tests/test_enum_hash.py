@@ -10,14 +10,14 @@ from ommx import (
     Kind,
     ProvenanceKind,
     Sense,
-    SpecialConstraintKind,
+    ConstraintKind,
 )
 
 
 @pytest.mark.parametrize(
     ("member", "value"),
     [
-        (SpecialConstraintKind.Indicator, 1),
+        (ConstraintKind.Indicator, 1),
         (DecisionVariableRole.Used, 1),
         (Sense.Minimize, 1),
         (Sense.Maximize, 2),

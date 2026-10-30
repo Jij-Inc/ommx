@@ -6,6 +6,19 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### Extensible kind APIs ([#1329](https://github.com/Jij-Inc/ommx/pull/1329))
+
+`Kind`, `ConstraintKind`, and `ProvenanceKind` now have nominal value
+class type hints instead of exhaustive Enum hints. Known constants, comparisons,
+hashing, integer conversion, and Kind protobuf conversion remain available.
+Keep an explicit rejecting fallback when handling kinds or constraint families.
+`ConstraintKind` includes `Regular` and replaces both the former special-family
+selector and string inputs such as `"sos1"`. Use
+`constraints.of_kind(ConstraintKind.Sos1)` or
+`constraints_df(kind=ConstraintKind.Sos1)`; filtered views keep their precise types.
+See [the migration guide](../migration/python_sdk_v2_to_v3.md)
+for the V3 numeric scalar extension contract.
+
 ### 🆕 Finite-domain decision variables ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
 
 {class}`~ommx.DecisionVariable` can now represent an exact, explicitly
@@ -14,7 +27,7 @@ building an Instance incrementally, or {meth}`~ommx.DecisionVariable.finite_doma
 when constructing components with explicit IDs.
 
 ```python
-from ommx import DecisionVariable, Instance
+from ommx import ConstraintKind, DecisionVariable, Instance
 
 instance = Instance.minimize()
 x = instance.new_finite_domain([0.1, 0.3, 0.5, 1.0], name="x")
@@ -81,11 +94,11 @@ if it contains duplicate numbers. See {class}`~ommx.Instance`.
 constraint families through a live `.constraints` collection:
 
 ```python
-from ommx import ConstraintID
+from ommx import ConstraintKind, ConstraintID
 
 rows = solution.constraints
 row = rows[ConstraintID(7)]
-frame = solution.constraints_df(kind="regular")
+frame = solution.constraints_df(kind=ConstraintKind.Regular)
 ```
 
 Collections retain their owner and fetch a row only when indexed by a typed ID.
@@ -101,7 +114,7 @@ on every root. There is no `get_constraints` method.
 `SampleSet.summary_with_constraints` is removed. Use `summary` for sample objectives
 and overall feasibility, and `constraints` or `constraints_df(kind=...)` for constraint results.
 
-`constraints.of_kind("sos1")` returns a live `ConstraintFamilyView` with concrete
+`constraints.of_kind(ConstraintKind.Sos1)` returns a live `ConstraintFamilyView` with concrete
 key and row types. It accepts the same kind strings as `constraints_df`, promotes
 integer lookups to the selected family, and rejects IDs of another family.
 The same filtering is available on model `removed_constraints` and result collections.
@@ -279,8 +292,8 @@ violations of regular, Indicator, OneHot, SOS1, and removed constraints.
 
 ```python
 solution.total_violation()
-solution.constraint_violation(30, kind="one_hot")  # existing OneHot constraint ID
-solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+solution.constraint_violation(30, kind=ConstraintKind.OneHot)  # existing OneHot constraint ID
+solution.constraints_df(kind=ConstraintKind.Sos1)[["feasible", "violation"]]
 ```
 
 For individual constraints, replace `EvaluatedConstraint.feasible` with
@@ -310,7 +323,7 @@ constraint limiting the sum of selectors. For an existing formulation
 `x[2] + x[3] <= 1` with binary members and regular constraint ID `202`:
 
 ```python
-from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
+from ommx import ConstraintKind, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
 
 request = Sos1BigMPromotionRequest({
     202: {
@@ -345,7 +358,7 @@ constraints. For example, for integer variables, `x + y <= 7` and `y >= 2`
 imply `x <= 5`:
 
 ```python
-from ommx import DecisionVariable, Instance, Sense
+from ommx import ConstraintKind, DecisionVariable, Instance, Sense
 
 x = DecisionVariable.integer(0, lower=0, upper=10)
 y = DecisionVariable.integer(1, lower=2, upper=10)
@@ -376,7 +389,7 @@ Load a published `.sol` file and evaluate it against the matching problem to
 check its objective value and feasibility:
 
 ```python
-from ommx import Instance, State
+from ommx import ConstraintKind, Instance, State
 
 instance = Instance.load_qplib("QPLIB_0018.qplib")
 state = State.load_qplib_solution(
@@ -457,7 +470,7 @@ compact polynomials. Python users can construct absolute values, sign
 functions, minima, maxima, divisions, and signed 32-bit integer powers directly:
 
 ```python
-from ommx import DecisionVariable, Function
+from ommx import ConstraintKind, DecisionVariable, Function
 
 x = Function(DecisionVariable.continuous(1))
 y = Function(DecisionVariable.continuous(2))
@@ -539,7 +552,7 @@ current variables, domains, and rows satisfy sufficient conditions that justify
 replacing the claimed formulation rows with a first-class SOS1 constraint.
 
 ```python
-from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
+from ommx import ConstraintKind, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
 
 request = Sos1BigMPromotionRequest({
     102: {
@@ -569,7 +582,7 @@ variable kind while assigning numeric IDs automatically. In addition to
 {meth}`~ommx.Instance.new_semi_continuous`:
 
 ```python
-from ommx import Instance
+from ommx import ConstraintKind, Instance
 
 instance = Instance.minimize()
 count = instance.new_integer("count", lower=0, upper=10)
@@ -633,7 +646,7 @@ energy used by a solver, while `Solution` and `SampleSet` retain the objective
 semantics exposed by the input instance:
 
 ```python
-from ommx import DecisionVariable, Instance, Sense
+from ommx import ConstraintKind, DecisionVariable, Instance, Sense
 
 x = DecisionVariable.binary(0)
 instance = Instance.from_components(
@@ -915,7 +928,7 @@ constraints still store OMMX variable IDs internally, and their ID getters
 continue to return integers.
 
 ```python
-from ommx import DecisionVariable, OneHotConstraint, Sos1Constraint
+from ommx import ConstraintKind, DecisionVariable, OneHotConstraint, Sos1Constraint
 
 xs = [DecisionVariable.binary(i) for i in range(3)]
 one_hot = OneHotConstraint(variables=xs)
@@ -941,7 +954,7 @@ The ambiguous `Instance.empty()` compatibility alias is deprecated for static
 type checkers; use `Instance.minimize()` instead.
 
 ```python
-from ommx import Instance
+from ommx import ConstraintKind, Instance
 
 instance = Instance.maximize()
 x = instance.new_binary("x")
@@ -990,7 +1003,7 @@ contains no feasible samples. Solver calls remain {class}`~ommx.experiment.Solve
 records whose output is `Solution | None`.
 
 ```python
-from ommx import SampleSet
+from ommx import ConstraintKind, SampleSet
 from ommx.experiment import Experiment
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
@@ -1170,7 +1183,7 @@ Passing an explicit fixed decision-variable ID is rejected before substitution,
 so fixed values and dependent-variable assignments remain disjoint.
 
 ```python
-from ommx import DecisionVariable, Instance
+from ommx import ConstraintKind, DecisionVariable, Instance
 
 x = DecisionVariable.integer(0, lower=2, upper=5)
 instance = Instance.from_components(
@@ -1203,7 +1216,7 @@ For notebook previews, use {meth}`~ommx.Instance.display_function` or
 renders escaped HTML in Jupyter.
 
 ```python
-from ommx import DecisionVariable, Instance
+from ommx import ConstraintKind, DecisionVariable, Instance
 
 x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(2)]
 instance = Instance.from_components(
@@ -1226,7 +1239,7 @@ preview = instance.display_function(instance.objective)
 SDK domain classes are now imported from top-level `ommx`, not from `ommx.v1`. The internal PyO3 extension remains `ommx._ommx_rust`, but users and adapters should treat top-level `ommx` as the public API surface.
 
 ```python
-from ommx import Instance, DecisionVariable, Function, Solution
+from ommx import ConstraintKind, Instance, DecisionVariable, Function, Solution
 ```
 
 `ommx.v1` is no longer the Python SDK object namespace. It is reserved for protobuf wire-format concepts such as schema/package names and media types, and importing SDK domain classes from `ommx.v1` now raises a migration error. See the [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for the broader import migration.
@@ -1244,7 +1257,7 @@ Annotations on {class}`~ommx.Instance`, {class}`~ommx.ParametricInstance`, {clas
 The `annotations` property is now a read-only `types.MappingProxyType[str, str]` projection. Mutating `obj.annotations[...]` or assigning `obj.annotations = {...}` now raises an error; update OMMX metadata through dedicated properties and update user annotations with `add_user_annotation`, `add_user_annotations`, or `replace_annotations`.
 
 ```python
-from ommx import Instance
+from ommx import ConstraintKind, Instance
 
 instance = Instance.minimize()
 instance.title = "portfolio"
@@ -1262,7 +1275,7 @@ assert restored.get_user_annotation("owner") == "analytics"
 {meth}`~ommx.Instance.populate_state` is now exposed in the Python SDK. It validates a partial solver state against an Instance and returns a {class}`~ommx.State` containing every decision variable by filling fixed variables, irrelevant variables, and dependent variables owned by the Instance.
 
 ```python
-from ommx import DecisionVariable, Instance
+from ommx import ConstraintKind, DecisionVariable, Instance
 
 x = {i: DecisionVariable.continuous(i) for i in [1, 2, 5, 10, 99]}
 instance = Instance.from_components(
@@ -1510,7 +1523,7 @@ See {class}`~ommx.experiment.Experiment` for the basic workflow, sharing an Expe
 ```python
 from ommx.experiment import Experiment
 from ommx_highs_adapter import OMMXHighsAdapter
-from ommx import Instance, Solution
+from ommx import ConstraintKind, Instance, Solution
 
 with Experiment() as experiment:
     with experiment.run() as run:
@@ -1551,7 +1564,7 @@ Forking creates a new Artifact Manifest, but Instance / Solution / attachment pa
 {meth}`~ommx.Instance.substitute` and {meth}`~ommx.ParametricInstance.substitute` are now available from Python. Pass a dictionary from decision-variable IDs to replacement {class}`~ommx.Function` expressions; OMMX rewrites those variables in the objective and active constraints in-place. This exposes the general substitution mechanism behind `log_encode`, so users can implement custom variable transformations such as unary or one-hot encodings.
 
 ```python
-from ommx import DecisionVariable, Instance
+from ommx import ConstraintKind, DecisionVariable, Instance
 
 x = DecisionVariable.integer(0, lower=0, upper=3)
 b = [DecisionVariable.binary(i) for i in (1, 2)]
@@ -1583,7 +1596,7 @@ Every `*_df` accessor on `Instance` / `ParametricInstance` / `Solution` / `Sampl
 df = solution.constraints_df
 
 # After
-df = solution.constraints_df(kind="regular")
+df = solution.constraints_df(kind=ConstraintKind.Regular)
 ```
 
 The wide `*_df` methods take an `include` argument that gates the label / parameters column families. The default `include=("label", "parameters")` preserves the v2-equivalent wide shape:
@@ -1615,7 +1628,7 @@ In v2.5.1 {meth}`Solution.constraints_df <ommx.Solution.constraints_df>` carried
 df = solution.constraints_df  # contains a 'removed_reason' column
 
 # After (3.0.0a3 — `*_df` are now methods)
-df = solution.constraints_df(kind="regular")  # no removed_reason column
+df = solution.constraints_df(kind=ConstraintKind.Regular)  # no removed_reason column
 df = solution.constraints_df(include=("label", "parameters", "removed_reason"))
 # ↳ adds removed_reason / removed_reason.{key} (NA for active rows)
 ```
@@ -1692,7 +1705,7 @@ Spans are emitted through the standard OpenTelemetry API, so they are a no-op wh
 {meth}`Function.evaluate_bound <ommx.Function.evaluate_bound>` is now exposed on {class}`~ommx.Function`. Given per-variable bounds, it returns a {class}`~ommx.Bound` that contains the range of the function value — useful when deriving feasibility bounds or doing simple presolve on the Python side.
 
 ```python
-from ommx import Function, Linear, Bound
+from ommx import ConstraintKind, Function, Linear, Bound
 
 f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3
 b = f.evaluate_bound({1: Bound(0.0, 2.0)})

@@ -17,7 +17,7 @@ v3 では、v2 で始まった PyO3 移行が完了しました。SDK の domain
 2. `Constraint` は `id` を持たなくなりました。制約IDは `Instance.from_components(..., constraints={id: constraint})` に渡す `dict` の key が所有します。
 3. 全所有元の `.constraints` は型付きIDで参照する専用コレクションです。`decision_variables` は `list` のままです。
 4. `.raw`、`.from_raw()`、`.from_protobuf()`、`.to_protobuf()` など、protobuf 層を露出する bridge API は削除されました。
-5. `*_df` accessor は property ではなく method です。`instance.constraints_df(kind="regular")` のように呼び出してください。
+5. `*_df` accessor は property ではなく method です。`instance.constraints_df(kind=ConstraintKind.Regular)` のように呼び出してください。
 6. `instance.constraints[id]` や `instance.decision_variables` は、snapshot ではなく書き込みが host に反映される `AttachedX` handle を返します。
 
 ## 1. import の変更
@@ -34,7 +34,7 @@ from ommx.v1.linear_pb2 import Linear
 from ommx.v1.solution_pb2 import State
 
 # v3
-from ommx import Constraint, Equality, Function, Linear, Sense, State
+from ommx import ConstraintKind, Constraint, Equality, Function, Linear, Sense, State
 ```
 
 `.from_protobuf()` / `.to_protobuf()` は、protobuf object と一緒に削除されています。`Instance` / `Solution` / `SampleSet` など全体をシリアライズする場合は、protobuf version を名前に含む bytes API を使います。新しく byte 列を作る場合は `to_v2_bytes()` / `from_v2_bytes(...)` を使い、legacy な v1 payload との互換が必要な場合だけ `to_v1_bytes()` / `from_v1_bytes(...)` を使ってください。
@@ -50,7 +50,7 @@ legacy v1 の `ConstraintHints` は、v3 で読み込む際も advisory metadata
 from ommx.v1 import OneHot, Sos1, ConstraintHints, Parameters
 
 # v3
-from ommx import OneHotConstraint, Sos1Constraint, IndicatorConstraint
+from ommx import ConstraintKind, OneHotConstraint, Sos1Constraint, IndicatorConstraint
 
 # Parameters wrapper の代わりに plain dict を渡します
 parametric_instance.with_parameters({parameter_id: 1.0})
@@ -169,7 +169,7 @@ for c in instance.constraints:
     print(c.id, c.function)
 
 # v3
-from ommx import ConstraintID
+from ommx import ConstraintKind, ConstraintID
 
 for cid in instance.constraints:
     if isinstance(cid, ConstraintID):
@@ -264,10 +264,10 @@ preparation-free methodだけに公開できます。Adapter inputに
 removed 制約とすべての特殊制約を含めます。通常の等式・不等式の違反量の定義は変わりません。
 
 ```python
-from ommx import OneHotConstraintID
+from ommx import ConstraintKind, OneHotConstraintID
 solution.total_violation()
 solution.constraint_violation(OneHotConstraintID(30))
-solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+solution.constraints_df(kind=ConstraintKind.Sos1)[["feasible", "violation"]]
 ```
 
 Indicator は有効時の内部制約の違反量、無効時は 0 です。OneHot は一つを 1、残りを 0 にする
@@ -295,7 +295,7 @@ Solution/SampleSet の feasibility プロパティは引き続き利用できま
 `feasibility_atol` プロパティから、取り出した制約にも同じ判定条件を渡せます。
 
 ```python
-from ommx import ConstraintID
+from ommx import ConstraintKind, ConstraintID
 evaluated = solution.constraints[ConstraintID(1)]
 evaluated.is_feasible(atol=solution.feasibility_atol)
 evaluated.is_feasible(atol=1e-8)  # 保存済みの同じ違反量に対する別の問い合わせ
@@ -358,7 +358,7 @@ evaluated、sampled の各 decision variable で top-level の `Kind` enum を�
 新しいコードでは `Equality.*` と `Sense.*` を使います。
 
 ```python
-from ommx import Bound, DecisionVariable, Kind
+from ommx import ConstraintKind, Bound, DecisionVariable, Kind
 
 variable = DecisionVariable(0, Kind.Binary, Bound(0, 1))
 assert variable.kind == Kind.Binary
@@ -443,7 +443,7 @@ applicationがそのmagnitudeを選ぶ必要があります。v3はv2の暗黙�
 使用しません。customizeしたPolicyをInstanceへ適用し、preparation-free methodを呼びます。
 
 ```python
-from ommx import FixedPenaltyPreparation
+from ommx import ConstraintKind, FixedPenaltyPreparation
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
@@ -467,16 +467,16 @@ Preparation前に`source`が公開していたものです（§5.6）。Policy�
 df = instance.constraints_df
 
 # v3
-df = instance.constraints_df(kind="regular")
+df = instance.constraints_df(kind=ConstraintKind.Regular)
 ```
 
 kind 別や removed / active 別の DataFrame accessor は、`constraints_df(kind=..., removed=...)` に統合されています。
 
 ```python
-instance.constraints_df(kind="regular")
-instance.constraints_df(kind="one_hot")
-instance.constraints_df(kind="sos1", removed=True)
-solution.constraints_df(kind="indicator")
+instance.constraints_df(kind=ConstraintKind.Regular)
+instance.constraints_df(kind=ConstraintKind.OneHot)
+instance.constraints_df(kind=ConstraintKind.Sos1, removed=True)
+solution.constraints_df(kind=ConstraintKind.Indicator)
 ```
 
 ## 9. metadata と annotation
@@ -496,7 +496,7 @@ instance.replace_annotations({"team": "optimization"})
 `instance.constraints[id]` や `instance.decision_variables` は、host に書き戻す `AttachedX` handle を返します。
 
 ```python
-from ommx import ConstraintID
+from ommx import ConstraintKind, ConstraintID
 c = instance.constraints[ConstraintID(5)]
 c.set_name("balance")
 assert instance.constraints[ConstraintID(5)].name == "balance"
@@ -505,7 +505,7 @@ assert instance.constraints[ConstraintID(5)].name == "balance"
 detached snapshot が必要な場合は `detach()` を使います。
 
 ```python
-from ommx import ConstraintID
+from ommx import ConstraintKind, ConstraintID
 snapshot = instance.constraints[ConstraintID(5)].detach()
 ```
 
@@ -653,9 +653,9 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 `get_constraints` メソッドはありません。
 
 ```python
-row = instance.constraints.of_kind("regular")[5]  # AttachedConstraint
+row = instance.constraints.of_kind(ConstraintKind.Regular)[5]  # AttachedConstraint
 snapshot = row.detach()  # 独立したConstraintのコピーを明示的に取得
-removed = instance.removed_constraints.of_kind("regular")[7]  # RemovedConstraintのスナップショット
+removed = instance.removed_constraints.of_kind(ConstraintKind.Regular)[7]  # RemovedConstraintのスナップショット
 ```
 
 メタデータの`constraint_context_df`・`constraint_parameters_df`・`constraint_provenance_df`・
@@ -670,7 +670,7 @@ removed = instance.removed_constraints.of_kind("regular")[7]  # RemovedConstrain
 プロパティ取得時には制約を収集せず、モデルへのアクセスは `Attached*`、結果へのアクセスは
 個別のスナップショットを返します。保持したコレクションは所有元の変更を反映します。
 独立した辞書が必要な場合は `dict(owner.constraints)` を使います。1種類だけ調べる場合は、
-`constraints.of_kind("sos1")`で絞ります。`constraints_df(*, kind=...)` はすべての所有元で
+`constraints.of_kind(ConstraintKind.Sos1)`で絞ります。`constraints_df(*, kind=...)` はすべての所有元で
 `kind` が必須です。モデルは有効な行を選び、`removed=True` で削除済みも含めます。
 結果は保持された削除済みも含めます。詳細は{class}`コレクションの意味 <ommx.ConstraintCollection>`を参照してください。
 
@@ -693,3 +693,25 @@ removed = instance.removed_constraints.of_kind("regular")[7]  # RemovedConstrain
 抽出と同様にparametersは無視し、種類をまたぐ添字の重複は`ValueError`にします。
 
 通常制約の符号付き評価値には`solution.get_constraint_value(id)`か`row.evaluated_value`を使います。詳しくは{meth}`名前と添字による取得 <ommx.Solution.extract_constraints>`を参照してください。
+
+## 変数・制約の種類の拡張
+
+`Kind`、`ConstraintKind`、`ProvenanceKind` は、既知の定数を持つ不変な値クラスです。
+型ヒントは全種類を列挙する Enum を表しません。現在の全定数を処理した場合も、
+未対応の値を明示的に拒否する分岐を残してください。`assert_never` では対応の網羅性を保証できません。
+比較・hash・整数への変換と `Kind.from_pb()` / `to_pb()` は引き続き利用できます。
+未知の protobuf kind は拒否します。
+
+共通の制約コレクションは `ConstraintIDBase` と `ConstraintView` を返し、
+具体的な family の ID による取得では具体的な戻り値型を維持します。
+種類や family が追加されても、既存の adapter や変換がその意味に対応するとは限りません。
+V3 の拡張契約は数値スカラーのドメインを対象とし、非スカラー値の格納・評価は別途設計します。
+
+通常制約も含めたすべてのfamilyに `ConstraintKind` を使います。
+従来の `SpecialConstraintKind` と文字列selectorは、
+`collection.of_kind(ConstraintKind.Sos1)` や
+`model.constraints_df(kind=ConstraintKind.Sos1)` に置き換えてください。
+既知の定数が持つID型によって、familyビューの戻り値型の精度を維持します。
+通常、利用側で型引数を記述する必要はありません。
+`active_constraint_kinds` は `Regular` を含み、`active_special_constraint_kinds` は含みません。
+`lower_special_constraints` に `Regular` を指定すると、変換を適用する前に拒否します。

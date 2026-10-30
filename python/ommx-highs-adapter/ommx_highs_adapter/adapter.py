@@ -22,7 +22,7 @@ from ommx import (
     PreparationPolicy,
     Sense,
     Solution,
-    SpecialConstraintKind,
+    ConstraintKind,
     SpecialConstraintPreparation,
     State,
 )
@@ -454,7 +454,7 @@ class OMMXHighsAdapter(SolverAdapter):
     This example is self-contained; it uses the same model that
     :class:`ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter` can encode natively.
 
-    >>> from ommx import Instance, Sos1Constraint, SpecialConstraintKind
+    >>> from ommx import Instance, Sos1Constraint, ConstraintKind
     >>> from ommx_highs_adapter import OMMXHighsAdapter
     >>> source = Instance.maximize()
     >>> enabled = source.new_binary("enabled")
@@ -471,7 +471,7 @@ class OMMXHighsAdapter(SolverAdapter):
     >>> assert solution.feasible
     >>> assert abs(solution.objective - 20.0) < 1e-6
     >>> assert source.active_special_constraint_kinds == {
-    ...     SpecialConstraintKind.Indicator, SpecialConstraintKind.Sos1,
+    ...     ConstraintKind.Indicator, ConstraintKind.Sos1,
     ... }
     >>> assert not source.removed_constraints
 
@@ -653,9 +653,9 @@ class OMMXHighsAdapter(SolverAdapter):
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(
                 kinds={
-                    SpecialConstraintKind.Indicator,
-                    SpecialConstraintKind.OneHot,
-                    SpecialConstraintKind.Sos1,
+                    ConstraintKind.Indicator,
+                    ConstraintKind.OneHot,
+                    ConstraintKind.Sos1,
                 }
             )
         )

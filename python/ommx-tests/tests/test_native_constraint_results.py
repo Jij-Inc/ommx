@@ -1,5 +1,7 @@
 """Identity survives every family, evaluation stage and wire round trip."""
 
+from ommx import ConstraintKind
+
 import operator
 import subprocess
 import sys
@@ -32,15 +34,25 @@ from ommx import (
 )
 
 FAMILIES = [
-    ("regular", ConstraintID, EvaluatedConstraint, SampledConstraint),
+    (ConstraintKind.Regular, ConstraintID, EvaluatedConstraint, SampledConstraint),
     (
-        "indicator",
+        ConstraintKind.Indicator,
         IndicatorConstraintID,
         EvaluatedIndicatorConstraint,
         SampledIndicatorConstraint,
     ),
-    ("one_hot", OneHotConstraintID, EvaluatedOneHotConstraint, SampledOneHotConstraint),
-    ("sos1", Sos1ConstraintID, EvaluatedSos1Constraint, SampledSos1Constraint),
+    (
+        ConstraintKind.OneHot,
+        OneHotConstraintID,
+        EvaluatedOneHotConstraint,
+        SampledOneHotConstraint,
+    ),
+    (
+        ConstraintKind.Sos1,
+        Sos1ConstraintID,
+        EvaluatedSos1Constraint,
+        SampledSos1Constraint,
+    ),
 ]
 
 
@@ -96,7 +108,7 @@ def test_reject_wrong_family_before_mutation_and_ambiguous_integer():
         Sos1ConstraintID(7),
     ]:
         with pytest.raises(TypeError):
-            instance.constraints.of_kind("regular")[wrong]
+            instance.constraints.of_kind(ConstraintKind.Regular)[wrong]
         with pytest.raises(TypeError):
             instance.relax_constraint(wrong, "manual")
         solution = instance.evaluate({0: 1, 1: 0})
@@ -167,7 +179,7 @@ def test_removed_context_provenance_and_owned_snapshots():
         assert removed.removed_reason_parameters == {"phase": "test"}
         assert rows[generated].provenance[0].original_id == OneHotConstraintID(9)
         assert root.constraints[OneHotConstraintID(9)].removed_reason is not None
-        frame = root.constraint_provenance_df(kind="regular")
+        frame = root.constraint_provenance_df(kind=ConstraintKind.Regular)
         assert frame.iloc[0]["source_id"] == OneHotConstraintID(9)
         assert isinstance(frame.iloc[0]["regular_constraint_id"], ConstraintID)
     solution = samples.get(3)
@@ -190,7 +202,7 @@ def test_kind_required_keyword_only_and_invalid_kind():
                 method()
             with pytest.raises(TypeError):
                 method("regular")
-            with pytest.raises(ValueError, match="unknown constraint kind"):
+            with pytest.raises(TypeError, match="ConstraintKind"):
                 method(kind="typo")
 
 
@@ -202,19 +214,19 @@ def test_native_query_does_not_import_pandas():
             """
 import sys
 sys.modules['pandas'] = None
-from ommx import Instance
+from ommx import ConstraintKind, Instance
 instance = Instance.empty()
 x = instance.new_binary("x")
 c = instance.add_constraint(x == 1)
-regular = instance.constraints.of_kind("regular")
+regular = instance.constraints.of_kind(ConstraintKind.Regular)
 assert regular[c.constraint_id] == c
 assert list(regular.values()) == [c]
 solution = instance.evaluate({x.id: 1})
 assert solution.constraints[c.constraint_id].violation() == 0
-assert solution.constraints.of_kind("regular")[c.constraint_id].violation() == 0
+assert solution.constraints.of_kind(ConstraintKind.Regular)[c.constraint_id].violation() == 0
 samples = instance.evaluate_samples({4: {x.id: 1}})
 assert samples.constraints[c.constraint_id].violations == {4: 0}
-assert samples.constraints.of_kind("regular")[c.constraint_id].violations == {4: 0}
+assert samples.constraints.of_kind(ConstraintKind.Regular)[c.constraint_id].violations == {4: 0}
 """,
         ],
         check=True,

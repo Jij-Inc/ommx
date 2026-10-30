@@ -1,5 +1,7 @@
 """Promote integers only when the API argument fixes a constraint family."""
 
+from ommx import ConstraintKind
+
 import pytest
 from typing import Any
 from types import MappingProxyType
@@ -83,7 +85,7 @@ def test_integer_and_typed_keys_promote_to_the_same_family(host):
         # Returned dictionaries retain normal Python equality with typed keys.
         assert NUMBERS[id_type] not in rows
     assert (
-        instance.constraints.of_kind("regular")[7].equality
+        instance.constraints.of_kind(ConstraintKind.Regular)[7].equality
         == instance.constraints[ConstraintID(7)].equality
     )
 
@@ -120,7 +122,10 @@ def test_regular_integer_lookup_mutation_and_solution_queries():
     instance = Instance.from_components(**components())
     instance.relax_constraint(7, "manual")
     assert set(instance.removed_constraints) == {ConstraintID(7)}
-    assert instance.removed_constraints.of_kind("regular")[7].removed_reason == "manual"
+    assert (
+        instance.removed_constraints.of_kind(ConstraintKind.Regular)[7].removed_reason
+        == "manual"
+    )
     instance.restore_constraint(7)
     assert {key for key in instance.constraints if isinstance(key, ConstraintID)} == {
         ConstraintID(7)
@@ -244,7 +249,10 @@ def test_homogeneous_mapping_variables_are_valid_inputs():
             constraints=rows,
         )
         assert_type(instance.constraints, ConstraintCollection)
-        assert instance.constraints.of_kind("regular")[7].equality == (x == 1).equality
+        assert (
+            instance.constraints.of_kind(ConstraintKind.Regular)[7].equality
+            == (x == 1).equality
+        )
 
 
 @pytest.mark.parametrize(

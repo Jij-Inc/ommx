@@ -369,9 +369,9 @@ with {meth}`~ommx.Instance.prepare`, then pass that Instance to
 
 A recommendation can enable special-constraint lowering with these family selectors:
 
-- `SpecialConstraintKind.Indicator`: Indicator constraints (`binvar = 1 → f(x) <= 0`)
-- `SpecialConstraintKind.OneHot`: Exactly one of a set of binary variables is 1
-- `SpecialConstraintKind.Sos1`: At most one of a set of variables is non-zero
+- `ConstraintKind.Indicator`: Indicator constraints (`binvar = 1 → f(x) <= 0`)
+- `ConstraintKind.OneHot`: Exactly one of a set of binary variables is 1
+- `ConstraintKind.Sos1`: At most one of a set of variables is non-zero
 
 Use {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` to inspect the currently active families. The selected Preparation phase delegates to {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>`, which converts each selected active family into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot). The owner operation still defines its validation and mathematical meaning.
 
@@ -395,7 +395,7 @@ from ommx import (
     PolynomialRequirement,
     PreparationPolicy,
     Sense,
-    SpecialConstraintKind,
+    ConstraintKind,
     SpecialConstraintPreparation,
 )
 
@@ -424,7 +424,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     def recommended_preparation_policy(cls) -> PreparationPolicy:
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(
-                kinds={SpecialConstraintKind.OneHot}
+                kinds={ConstraintKind.OneHot}
             )
         )
 

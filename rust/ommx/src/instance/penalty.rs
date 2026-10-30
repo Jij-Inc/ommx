@@ -690,7 +690,7 @@ mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
     #[derive(Clone, Copy, PartialEq, Eq)]
-    enum SpecialConstraintKind {
+    enum ConstraintKind {
         Indicator,
         OneHot,
         Sos1,
@@ -729,12 +729,12 @@ mod tests {
         Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap()
     }
 
-    fn create_test_instance_with_special_constraints(kinds: &[SpecialConstraintKind]) -> Instance {
+    fn create_test_instance_with_special_constraints(kinds: &[ConstraintKind]) -> Instance {
         let variable = VariableID::from(1);
         let regular_constraint = Constraint::equal_to_zero(Function::from(linear!(variable)));
         let has_kind = |kind| kinds.contains(&kind);
 
-        let indicator_constraints = has_kind(SpecialConstraintKind::Indicator)
+        let indicator_constraints = has_kind(ConstraintKind::Indicator)
             .then(|| {
                 (
                     crate::IndicatorConstraintID::from(2),
@@ -747,7 +747,7 @@ mod tests {
             })
             .into_iter()
             .collect();
-        let one_hot_constraints = has_kind(SpecialConstraintKind::OneHot)
+        let one_hot_constraints = has_kind(ConstraintKind::OneHot)
             .then(|| {
                 (
                     crate::OneHotConstraintID::from(3),
@@ -756,7 +756,7 @@ mod tests {
             })
             .into_iter()
             .collect();
-        let sos1_constraints = has_kind(SpecialConstraintKind::Sos1)
+        let sos1_constraints = has_kind(ConstraintKind::Sos1)
             .then(|| {
                 (
                     crate::Sos1ConstraintID::from(4),
@@ -1506,9 +1506,9 @@ mod tests {
     #[test]
     fn fixed_weight_penalty_rejects_each_active_special_constraint_atomically() {
         for kind in [
-            SpecialConstraintKind::Indicator,
-            SpecialConstraintKind::OneHot,
-            SpecialConstraintKind::Sos1,
+            ConstraintKind::Indicator,
+            ConstraintKind::OneHot,
+            ConstraintKind::Sos1,
         ] {
             let before = create_test_instance_with_special_constraints(&[kind]);
             let weights = before.constraints().keys().map(|id| (*id, 2.0)).collect();
@@ -1530,9 +1530,9 @@ mod tests {
     #[test]
     fn uniform_fixed_penalty_rejects_special_constraints_without_regular_constraints() {
         for kind in [
-            SpecialConstraintKind::Indicator,
-            SpecialConstraintKind::OneHot,
-            SpecialConstraintKind::Sos1,
+            ConstraintKind::Indicator,
+            ConstraintKind::OneHot,
+            ConstraintKind::Sos1,
         ] {
             let mut instance = create_test_instance_with_special_constraints(&[kind]);
             instance
@@ -1554,9 +1554,9 @@ mod tests {
     #[test]
     fn fixed_weight_penalty_success_leaves_every_constraint_family_removed() {
         let mut lowered = create_test_instance_with_special_constraints(&[
-            SpecialConstraintKind::Indicator,
-            SpecialConstraintKind::OneHot,
-            SpecialConstraintKind::Sos1,
+            ConstraintKind::Indicator,
+            ConstraintKind::OneHot,
+            ConstraintKind::Sos1,
         ]);
         lowered
             .convert_indicator_to_constraint(crate::IndicatorConstraintID::from(2), ATol::default())

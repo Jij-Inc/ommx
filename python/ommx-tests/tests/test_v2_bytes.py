@@ -1,3 +1,4 @@
+from ommx import ConstraintKind
 from ommx import OneHotConstraintID
 import pytest
 
@@ -59,7 +60,7 @@ def test_solution_v2_bytes_roundtrip_special_constraints():
     restored = type(solution).from_v2_bytes(solution.to_v2_bytes())
 
     assert restored.feasible
-    assert len(restored.constraints_df(kind="one_hot")) == 1
+    assert len(restored.constraints_df(kind=ConstraintKind.OneHot)) == 1
     assert restored.to_v2_bytes() == solution.to_v2_bytes()
 
 
@@ -73,5 +74,5 @@ def test_sample_set_v2_bytes_roundtrip_special_constraints():
 
     restored = type(sample_set).from_v2_bytes(sample_set.to_v2_bytes())
 
-    assert len(restored.constraints_df(kind="one_hot")) == 1
+    assert len(restored.constraints_df(kind=ConstraintKind.OneHot)) == 1
     assert restored.to_v2_bytes() == sample_set.to_v2_bytes()

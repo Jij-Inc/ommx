@@ -1,4 +1,4 @@
-use super::{ExactIntegerSlackUnavailable, Instance, SpecialConstraintKinds};
+use super::{ConstraintKinds, ExactIntegerSlackUnavailable, Instance};
 use crate::{ATol, ConstraintID, Equality, InstanceClass, InstanceClassMembershipReport, Sense};
 use std::collections::BTreeMap;
 
@@ -12,7 +12,7 @@ pub enum SpecialConstraintPreparation {
     /// Invoke [`Instance::lower_special_constraints`].
     LowerSpecialConstraints {
         /// Special-constraint kinds passed to the owner operation.
-        kinds: SpecialConstraintKinds,
+        kinds: ConstraintKinds,
         /// Absolute tolerance used when bounding tolerance-sensitive Indicator bodies.
         atol: ATol,
     },
@@ -229,9 +229,9 @@ impl PreparationPolicy {
         Self {
             special_constraints: Some(SpecialConstraintPreparation::LowerSpecialConstraints {
                 kinds: [
-                    super::SpecialConstraintKind::Indicator,
-                    super::SpecialConstraintKind::OneHot,
-                    super::SpecialConstraintKind::Sos1,
+                    super::ConstraintKind::Indicator,
+                    super::ConstraintKind::OneHot,
+                    super::ConstraintKind::Sos1,
                 ]
                 .into_iter()
                 .collect(),
@@ -543,10 +543,10 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, linear, quadratic, Bound, Constraint, DecisionVariable, DecisionVariableRole,
-        Evaluate, ExactIntegerSlackUnavailable, Function, InfeasibleDetected, InstanceClassClause,
-        Kind, MonomialDyn, OneHotConstraint, OneHotConstraintID, Polynomial, PolynomialRequirement,
-        Sense, SpecialConstraintKind, VariableID,
+        coeff, linear, quadratic, Bound, Constraint, ConstraintKind, DecisionVariable,
+        DecisionVariableRole, Evaluate, ExactIntegerSlackUnavailable, Function, InfeasibleDetected,
+        InstanceClassClause, Kind, MonomialDyn, OneHotConstraint, OneHotConstraintID, Polynomial,
+        PolynomialRequirement, Sense, VariableID,
     };
     use std::collections::BTreeSet;
 
@@ -947,7 +947,7 @@ mod tests {
         );
         let policy = PreparationPolicy {
             special_constraints: Some(SpecialConstraintPreparation::LowerSpecialConstraints {
-                kinds: BTreeSet::from([SpecialConstraintKind::OneHot]),
+                kinds: BTreeSet::from([ConstraintKind::OneHot]),
                 atol: ATol::default(),
             }),
             objective: Some(ObjectivePreparation {

@@ -25,7 +25,7 @@ from ommx import (
     PreparationPolicy,
     Sense,
     Solution,
-    SpecialConstraintKind,
+    ConstraintKind,
     SpecialConstraintPreparation,
     State,
 )
@@ -68,9 +68,9 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(
                 kinds={
-                    SpecialConstraintKind.Indicator,
-                    SpecialConstraintKind.OneHot,
-                    SpecialConstraintKind.Sos1,
+                    ConstraintKind.Indicator,
+                    ConstraintKind.OneHot,
+                    ConstraintKind.Sos1,
                 }
             )
         )

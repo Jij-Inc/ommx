@@ -3,7 +3,7 @@ use crate::constraint_id::{
     Sos1ConstraintIDInput,
 };
 use crate::{
-    constraint_kind::{constraint_kind_collection, ConstraintKind},
+    constraint_kind::{constraint_kind_collection, ConstraintFamilyInput},
     error::OmmxPyResult,
     pandas::{constraint_id_col, entries_to_dataframe, PyDataFrame, ToPandasEntry},
     Constraint, DecisionVariable, Function, Instance, NamedFunction, OutputObjective, Parameter,
@@ -951,7 +951,7 @@ impl ParametricInstance {
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
         include: Option<Vec<String>>,
         removed: bool,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
@@ -1080,7 +1080,7 @@ impl ParametricInstance {
     pub fn constraint_context_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
@@ -1108,7 +1108,7 @@ impl ParametricInstance {
     pub fn constraint_parameters_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
@@ -1136,7 +1136,7 @@ impl ParametricInstance {
     pub fn constraint_provenance_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
@@ -1164,7 +1164,7 @@ impl ParametricInstance {
     pub fn constraint_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(

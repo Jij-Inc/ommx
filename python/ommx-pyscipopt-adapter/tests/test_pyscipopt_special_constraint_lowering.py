@@ -11,7 +11,7 @@ from ommx import (
     ProvenanceKind,
     Sense,
     Sos1Constraint,
-    SpecialConstraintKind,
+    ConstraintKind,
 )
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 from ommx.adapter import AdapterNotApplicableError
@@ -51,8 +51,8 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
         (cid for cid in instance.constraints if isinstance(cid, OneHotConstraintID))
     ) == {OneHotConstraintID(10)}
     assert prepared.active_special_constraint_kinds == {
-        SpecialConstraintKind.Indicator,
-        SpecialConstraintKind.Sos1,
+        ConstraintKind.Indicator,
+        ConstraintKind.Sos1,
     }
     assert not any(isinstance(cid, OneHotConstraintID) for cid in prepared.constraints)
     assert set(
