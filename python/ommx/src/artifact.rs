@@ -120,17 +120,7 @@ impl PyArtifactRef {
 // PyArtifact
 // ---------------------------------------------------------------------------
 
-/// Reader for OMMX Artifacts.
-///
-/// An artifact is an OCI container image that stores OMMX data
-/// (instances, solutions, sample sets, etc.) as layers.
-///
-/// This example requires remote registry access and is not executed as a doctest.
-///
-/// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")  # doctest: +SKIP
-/// >>> print(artifact.image_name)  # doctest: +SKIP
-/// ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
-///
+#[doc = include_str!("docstrings/ommx/artifact/Artifact.md")]
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Artifact")]
@@ -173,6 +163,8 @@ impl PyArtifact {
     /// For a side-effect-free read that just surfaces the manifest /
     /// layer descriptors without writing into the registry, use
     /// {meth}`Artifact.inspect_archive` instead.
+    /// The {class}`~ommx.artifact.Artifact` example creates and imports a
+    /// complete archive in separate processes with isolated registries.
     ///
     /// If the input lacks an `org.opencontainers.image.ref.name`
     /// annotation, v3 synthesizes an anonymous Local Registry ref and
@@ -254,7 +246,11 @@ impl PyArtifact {
 
     /// Load an artifact stored as a container image in local or remote registry.
     ///
-    /// If the image is not found in local registry, it will try to pull from remote registry.
+    /// A complete local copy is used without contacting the remote registry.
+    /// If the reference or required manifest, config, or layer data is missing,
+    /// this attempts a fresh remote pull. A tag with a complete local copy is
+    /// not refreshed. Use a digest reference to identify a particular published
+    /// Artifact; see {class}`~ommx.artifact.Artifact` for names and digests.
     ///
     /// This example requires remote registry access and is not executed as a doctest.
     ///
@@ -292,6 +288,8 @@ impl PyArtifact {
     /// Registry under the same image name; {meth}`Artifact.inspect_archive`
     /// reads the manifest / layer descriptors without writing into the
     /// registry.
+    /// See {class}`~ommx.artifact.Artifact` for a complete save/import example
+    /// whose receiver starts in a new process with an empty registry.
     pub fn save(&mut self, py: Python<'_>, path: PathBuf) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(self.inner.save(&path)?)
@@ -1395,15 +1393,7 @@ impl DraftInner {
 // PyArtifactDraft
 // ---------------------------------------------------------------------------
 
-/// Mutable draft for OMMX Artifacts.
-///
-/// This example writes to the persistent Local Registry and is not executed as a doctest.
-///
-/// >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
-/// >>> artifact = draft.commit()  # doctest: +SKIP
-/// >>> print(artifact.image_name)  # doctest: +SKIP
-/// ttl.sh/...-...-...-...-...:1h
-///
+#[doc = include_str!("docstrings/ommx/artifact/ArtifactDraft.md")]
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "ArtifactDraft")]
@@ -1688,6 +1678,10 @@ impl PyArtifactDraft {
 
     /// Commit the artifact draft.
     ///
+    /// Return a registry-resident {class}`Artifact`; exporting a file and
+    /// distributing it use {meth}`Artifact.save` and {meth}`Artifact.push`.
+    /// See {class}`Artifact` for the complete file-exchange example.
+    ///
     /// Raises {class}`RuntimeError` for registry or storage failures and when
     /// the draft has already been committed.
     pub fn commit(&mut self, py: Python<'_>) -> OmmxPyResult<PyArtifact> {
@@ -1726,19 +1720,7 @@ fn build_annotations(
 // Module-level functions
 // ---------------------------------------------------------------------------
 
-/// List Artifact refs using the Local Registry's digest-addressed Manifest
-/// cache.
-///
-/// Missing Manifest rows are backfilled from the CAS before records are
-/// returned. If `prefix` is given, it is matched against the full image
-/// reference string. Internal implementation refs, including Experiment
-/// checkpoints, are hidden by default; pass `include_internal=True` for
-/// registry diagnostics.
-///
-/// By default, an invalid cached record is repaired from the CAS when possible.
-/// OMMX emits `RuntimeWarning` for repaired or skipped refs and returns the
-/// remaining records. Pass `strict=True` to fail on the first invalid ref.
-/// Registry, manifest, and storage failures raise {class}`RuntimeError`.
+#[doc = include_str!("docstrings/ommx/artifact/list_artifacts.md")]
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (prefix = None, *, root = None, include_internal = false, strict = false))]

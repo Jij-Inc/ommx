@@ -72,8 +72,7 @@ The development direction is to combine these techniques and select or repeat th
 | Compare multiple candidates | {class}`~ommx.SampleSet` | Read sample evaluations and select among the candidates obtained |
 | Sample a QUBO with OpenJij | [TSP sampling example](./tutorial/tsp_sampling_with_openjij_adapter) | Follow a QUBO sampling application and inspect its results |
 | Obtain existing problems | [MIPLIB](./tutorial/download_miplib_instance.md) or [QPLIB](./tutorial/download_qplib_instance.md) | Download a problem as an OMMX Instance |
-| Record and compare experiments | [Experiment management](./tutorial/experiment_management.md) | Associate settings with results |
-| Save and share problems and results | [Sharing an Artifact](./tutorial/share_in_ommx_artifact.md) | Package data together with metadata |
+| Save and share problems, results, and trials | [Choose what to record](./user_guide/record_and_share.md) | Select a transfer format and the information needed to inspect or rerun work |
 | Connect your own solving tool | [Implement an Adapter](./tutorial/implement_adapter.md) | Translate backend inputs and outputs through the common adapter interface |
 
 This Book explains what OMMX can do, why and when to use it, what to choose, and how to interpret results. Use small examples to understand the meaning, then consult the {doc}`API Reference <api/index>` for detailed calls, arguments, preconditions, and guarantees. You do not need to read every page in order.
@@ -126,8 +125,6 @@ getting_started/install
 tutorial/solve_with_ommx_adapter
 tutorial/tsp_sampling_with_openjij_adapter
 tutorial/switching_adapters
-tutorial/experiment_management
-tutorial/share_in_ommx_artifact
 tutorial/download_miplib_instance
 tutorial/download_qplib_instance
 tutorial/implement_adapter
@@ -150,15 +147,24 @@ user_guide/evaluate_and_interpret
 ```
 
 ```{toctree}
+:caption: Save and share problems, results, and trials
+:maxdepth: 1
+:hidden:
+
+user_guide/record_and_share
+```
+
+```{toctree}
 :caption: User Guide
 :maxdepth: 1
 :hidden:
 
 user_guide/cli
+how_to/manage_local_registry
+how_to/share_artifact_registry
 user_guide/agent_skills
 user_guide/adapter_diagnostics
 user_guide/adapter_initial_state
-user_guide/experiment
 user_guide/tracing
 ```
 

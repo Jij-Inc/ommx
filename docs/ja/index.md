@@ -74,9 +74,8 @@ assert solution.objective == 1
 | 変換後の結果を解釈する | [候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md) | activeな問題と、元の条件を使った評価の違い |
 | 複数の候補を比較する | {class}`~ommx.SampleSet` | サンプルごとの評価と、得られた候補の中からの選択 |
 | 既存の問題を入手する | [既存の問題をInstanceとして読み込む](./how_to/load_existing_instance.md) | MIPLIB/QPLIBや手元のファイルから問題を読み込む |
-| 外部ツールへモデルを渡す | [InstanceをMPSファイルで出力する](./how_to/export_mps.md) | 出力できるモデルと、OMMXとして保存する場合との違い |
-| 実験を記録・比較する | [実験管理Tutorial](./tutorial/experiment_management) | 条件と結果を対応づけた記録 |
-| 問題や結果を保存・共有する | [Artifact共有Tutorial](./tutorial/share_in_ommx_artifact.md) | メタデータとともに受け渡す |
+| 外部ツールへモデルを渡す | {meth}`~ommx.Instance.save_mps` | 出力できるモデルと、OMMXとして保存する場合との違い |
+| 問題・結果・試行を保存して共有する | [記録する内容と方法を選ぶ](./user_guide/record_and_share.md) | 受け渡しと、後で結果や条件を調べるために残す情報 |
 
 このBookでは、何ができるか、なぜ・いつ使うか、何を選び、結果をどう読むかを説明します。小さな例で意味をつかみ、実装に必要な詳しい呼び出し方や引数・前提条件・保証は{doc}`API Reference <api/index>`で確認してください。全ページを順に読む必要はありません。
 
@@ -135,8 +134,6 @@ tutorial/solve_with_ommx_adapter
 tutorial/solve_special_constraints_with_pyscipopt_adapter
 tutorial/prepare_instance_for_adapter
 tutorial/tsp_sampling_with_openjij_adapter
-tutorial/experiment_management
-tutorial/share_in_ommx_artifact
 ```
 
 ```{toctree}
@@ -156,9 +153,6 @@ how_to/compare_adapters
 how_to/sample_with_openjij_adapter
 how_to/load_existing_instance
 how_to/tighten_bounds
-how_to/export_mps
-how_to/continue_experiment
-how_to/attach_experiment_data
 how_to/share_artifact_registry
 ```
 
@@ -188,12 +182,18 @@ how_to/use_initial_state
 ```
 
 ```{toctree}
+:caption: 問題・結果・試行を保存して共有する
+:maxdepth: 1
+:hidden:
+
+user_guide/record_and_share
+```
+
+```{toctree}
 :caption: User Guide：記録と運用
 :maxdepth: 1
 :hidden:
 
-user_guide/experiment
-user_guide/artifact
 how_to/trace_execution
 how_to/manage_local_registry
 user_guide/agent_skills

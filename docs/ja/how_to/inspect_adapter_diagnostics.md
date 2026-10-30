@@ -144,7 +144,7 @@ except UnboundedDetected:
 ## 任意：Experimentに記録する
 
 ここまでの調査にはExperimentは必要ありません。記録も残したい場合は
-[Experiment Tutorial](../tutorial/experiment_management)で記録先の作り方を確認してください。
+{class}`~ommx.experiment.Experiment`で記録先の作り方を確認してください。
 
 {py:meth}`~ommx.experiment.Run.log_solve` または
 {py:meth}`~ommx.experiment.Run.log_sample` を使う場合、ユーザー側から `diagnostics` keyword を

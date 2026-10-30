@@ -107,7 +107,7 @@ instance = artifact.instance
 ## 入手後に進む先
 
 - 名前や説明を整える：{class}`~ommx.Instance`のAPI Referenceにあるメタデータ編集例。
-- MPS入力に対応する外部ツールへ渡す：[InstanceをMPSファイルで出力する](./export_mps.md)。現在のモデルを出力する形式であり、OMMXのラベルや評価用情報のすべては保持されません。
+- MPS入力に対応する外部ツールへ渡す：{meth}`~ommx.Instance.save_mps`。現在のモデルを出力する形式であり、OMMXのラベルや評価用情報のすべては保持されません。
 - 手元の候補を検査する：[既存の問題と候補解を評価する](../tutorial/evaluate_existing_candidate)。
 - 表現を変えて検査する：{meth}`~ommx.Instance.prepare`。
 - ソルバーへ渡す：{doc}`Adapterの一覧と入力契約 </api/adapters>`から使うAdapterを選ぶ。
