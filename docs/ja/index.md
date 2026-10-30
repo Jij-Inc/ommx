@@ -6,7 +6,7 @@ OMMX（Open Mathematical prograMming eXchange; オミキス）は、**数理最�
 
 ## いまOMMXを使う理由
 
-現在のv3開発版では、次のような作業を共通の問題表現に対して行えます。対応バージョンと導入方法は[インストール](./getting_started/install.md)を参照してください。
+3.0.0 stable releaseまでは、このBookとAPI Referenceはともに`main`の内容を説明します。[インストール手順](./getting_started/install.md)で、SDKとAdapterを同じcheckoutから導入できます。現在の実装では、次の作業を共通の問題表現に対して行えます。
 
 | 利用者の目的 | OMMXに任せられること | 利用者が決めること |
 |---|---|---|

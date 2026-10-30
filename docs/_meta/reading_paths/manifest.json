@@ -3,7 +3,7 @@
   "title": "OMMX Book 概念とページの依存台帳",
   "created_at": "2026-10-26",
   "language": "ja",
-  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。日英の候補評価章と変換・解法選択章、変数復元・保持情報・特殊制約・InstanceClass・Preparation・Adapterの共有Reference移管を含む。その他の英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。",
+  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。日英の候補評価章と変換・解法選択章、変数復元・保持情報・特殊制約・InstanceClass・Preparation・Adapterの共有Reference移管を含む。その他の英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。 3.0.0安定版のリリースまではBookとAPI Referenceがともにmainを説明し、SDK・Adapter・CLIもその共通環境を使用する。",
   "baseline": {
     "repository": "Jij-Inc/ommx",
     "source_revision": "0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2",
@@ -166,9 +166,16 @@
         "T8",
         "DEV_A",
         "MIG3",
-        "RELEASE"
+        "RELEASE",
+        "README",
+        "SETUP.common",
+        "P5.named",
+        "P9",
+        "P9.python",
+        "T6",
+        "R_API.instance.named_values"
       ],
-      "note": "2次案第2章を日英で追加し、旧special_constraints/capability_model/instance_class/preparation_policy/transformation_guarantees/supported_ommx_adaptersと日本語の明示Preparation二手順を共有Referenceへ統合。旧G3/G9/G10/G11/P1/P11/G7系を意味的な所有先へ移し、未実装だったencoding節は既存API本文へ割り当てる。新章は数学読者の独立入口とし、API操作能力をリンクだけで付与しない。transformation.guaranteesは数学的な判断として再評価し、固定・penalty・boundの操作契約と分離する。歴史的baselineと過去の編集記録を保持し、本文照合の証拠はチャットに残す。 HOME/HOME_ENは目的別入口を新章とReferenceへ接続する。SETUP/T2/T3/P2/P3/P4/P12/P15/P16/T8/DEV_A/MIG3/RELEASEは削除ページから実在する移管先への導線と対応する案内文の変更のみを対象とし、既存の各ページ全体の学習契約を再監査したものではない。未台帳化の英語release noteとswitching_adaptersもリンク・案内文の限定変更であり、章全体は今回のレビュー範囲外。台帳化済みのP12/T8のNotebookは参照リンクのみを変更し、コードセル・出力・実行結果全体を再検証した扱いにしない。 Ready前レビューで、SETUPの固定b7向け案内と開発版Referenceの実行例の版を分け、削除済みHow-toへの実行確認範囲の言及を解消する。",
+      "note": "2次案第2章を日英で追加し、旧special_constraints/capability_model/instance_class/preparation_policy/transformation_guarantees/supported_ommx_adaptersと日本語の明示Preparation二手順を共有Referenceへ統合。旧G3/G9/G10/G11/P1/P11/G7系を意味的な所有先へ移し、未実装だったencoding節は既存API本文へ割り当てる。新章は数学読者の独立入口とし、API操作能力をリンクだけで付与しない。transformation.guaranteesは数学的な判断として再評価し、固定・penalty・boundの操作契約と分離する。歴史的baselineと過去の編集記録を保持し、本文照合の証拠はチャットに残す。 HOME/HOME_ENは目的別入口を新章とReferenceへ接続する。T2/T3/P2/P3/P4/P12/P15/P16/T8/DEV_A/MIG3/RELEASEは移管先への導線とmainを共通前提にする案内文の変更を対象とし、既存の各ページ全体の学習契約を再監査したものではない。未台帳化の英語release noteとswitching_adaptersもリンク・案内文の限定変更であり、章全体は今回のレビュー範囲外。台帳化済みのP12/T8のNotebookは実行環境の案内と参照リンクのみを変更し、コードセル・出力・実行結果全体を再検証した扱いにしない。 3.0.0安定版のリリースまではREADME・日英Book・API Referenceともmainを説明する方針に合わせ、SETUPを同じcheckoutのSDK・Adapter・CLIへ統一する。特定の公開プレビュー版を基準にした案内と、名前照合だけ別の開発環境を要求する分岐を廃止する。操作の学習前提は保持し、環境の統一だけからAPI能力を付与しない。 英語版SETUPを新設して日英の導入節・ソースコマンドを揃え、README・HOME・HOME_EN・Adapter一覧からそれぞれの言語の導入先へ接続する。",
       "untracked_source_paths": [
         "docs/en/release_note/ommx-3.0.md",
         "docs/en/tutorial/switching_adapters.md"
@@ -1098,17 +1105,17 @@
     },
     {
       "id": "sdk.environment",
-      "label": "SDK・依存・実行環境の版を揃える",
-      "owner": "SETUP.common",
+      "label": "mainのSDK・Adapterと実行環境を揃える",
+      "owner": "SETUP",
       "requires": [],
       "external": false,
       "aliases": [
-        "pip install",
-        "3.0.0b7",
+        "uv sync",
+        "main",
         "virtualenv",
         "venv"
       ],
-      "scope": ""
+      "scope": "3.0.0安定版のリリースまではBookとAPI Referenceがmainを説明する。同じcheckoutからSDKと必要なAdapterを導入し、その環境で例を実行する。環境構築は個別APIの意味・操作・数学的保証の習得を含まない。"
     },
     {
       "id": "wire.serialization",
@@ -1555,7 +1562,7 @@
       "aliases": [
         "state_from_named_values"
       ],
-      "scope": "Referenceに対応する開発版SDK環境で、名前照合による対象IDへの対応付けと値・実行可能性の検査を区別する。公開b7向けの環境や結果抽出だけから利用可能性を推定しない。"
+      "scope": "名前照合による対象IDへの対応付けと、値・実行可能性の検査を区別する。BookとReferenceで共通のmain SDK環境を使う。結果抽出だけから名前照合の操作や検証済み候補が得られるとはみなさない。"
     },
     {
       "id": "bounds.tighten",
@@ -1583,19 +1590,6 @@
         "tighten_bounds_simultaneously_once"
       ],
       "scope": "in-placeで一回実行し、戻り値の変更ID・新boundとInstanceの更新を読む。必要な追加呼出しは利用者が行う。厳密な対象・数値条件はAPI Referenceが所有する。"
-    },
-    {
-      "id": "sdk.development_environment",
-      "label": "Referenceと同じリビジョンの開発版SDK環境を既に持つ",
-      "owner": null,
-      "requires": [
-        "sdk.environment"
-      ],
-      "external": true,
-      "aliases": [
-        "開発版環境"
-      ],
-      "scope": "Bookの公開SDKインストールとは別に読者が用意した環境。このBook内のリンクや公開環境の導入だけから、その準備能力や実行環境があるとはみなさない。"
     },
     {
       "id": "results.evaluation_scope",
@@ -1938,12 +1932,13 @@
     },
     {
       "id": "SETUP",
-      "title": "対応バージョンと実行環境",
+      "title": "mainのSDK・Adapterと実行環境 / Install the Python SDK and adapters",
       "slice": "K",
       "role": "setup",
       "status": "existing",
       "source_paths": [
-        "docs/ja/getting_started/install.md"
+        "docs/ja/getting_started/install.md",
+        "docs/en/getting_started/install.md"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/getting_started/install.md"
@@ -1965,11 +1960,12 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "PR #1159のレビュー修正で、最初のPySCIPOpt実行にHiGHSを要求せず、必要な時点で追加する手順にする。公開b7は残るTutorial・How-toの実行基準であり、全Book共通の互換性記録やK-acceptanceの完了ではない。 PR #1284（I1）はSDKのみで止められる導入を先に置き、必要なAdapterだけ後で追加する。Cで追加したNotebookカーネル手順は保持する。 PR #1319では、開発版Referenceへ移した操作例に対応するSDK・Adapter版が必要なことを入口で明示する。削除したInstance変換How-toと独自Policy How-toを公開b7で実行確認済みの現行ページとして列挙しない。",
+      "notes": "日英の同じ節構造で、3.0.0安定版のリリースまではBookとAPI Referenceがともにmainを説明することを入口で示す。同じcheckoutからSDKを導入し、必要なAdapterだけ同じ環境へ追加する。Notebookのカーネル設定とmainの更新手順もここへ集約する。CLIはSDK同梱版とPython不要のRustからの導入を選べる。導入は個別APIの能力を付与せず、全Bookの実行確認を示すものでもない。source_urlsは日本語版の歴史的baselineであり、新しい英語版の現行本文はsource_pathsで追跡する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/getting_started/install.md"
+        "docs/ja/getting_started/install.md",
+        "docs/en/getting_started/install.md"
       ]
     },
     {
@@ -1995,7 +1991,7 @@
       ],
       "deferred": [],
       "parent_page": "SETUP",
-      "notes": "Rust/他言語読者がPython環境構築を前提にしないための案内。親SETUPを読む必要はない。",
+      "notes": "Rust/他言語読者がPython環境構築を前提にしないための将来の独立案内。現在のBookとReferenceがmainを説明する方針はSETUPとREADMEの入口で明示する。別の公開版を学習する分岐にはしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": []
@@ -4153,7 +4149,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "SDK b7だけの独立したBinaryモデルとsave_mpsの例。ファイルを渡す準備で終了し外部ツールの実行や候補取り込みを前提にしない。出力APIの受付範囲と情報境界、二次式の受け手側での確認はBookに要約し、正確な一覧・係数規約はsave_mps APIへ送る。lowering手順とArtifact保存はリンク先を訪問した場合だけ習得する。",
+      "notes": "共通のmain SDK環境だけの独立したBinaryモデルとsave_mpsの例。ファイルを渡す準備で終了し外部ツールの実行や候補取り込みを前提にしない。出力APIの受付範囲と情報境界、二次式の受け手側での確認はBookに要約し、正確な一覧・係数規約はsave_mps APIへ送る。lowering手順とArtifact保存はリンク先を訪問した場合だけ習得する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -4312,7 +4308,7 @@
       ],
       "deferred": [],
       "parent_page": "P5",
-      "notes": "名前とtuple添字をStateへ照合する参考例。公開SDKの実行可能範囲とは区別し、厳密な照合・例外契約はstate_from_named_values APIへ送る。",
+      "notes": "名前とtuple添字をStateへ照合する例。ID指定と同じmain SDK環境を使い、厳密な照合・例外契約はstate_from_named_values APIへ送る。環境を共通化しても、名前照合の操作の理解をID指定の能力から自動的に付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -4576,7 +4572,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "CLIの導入と版の選択はSETUPの任意節へ集約する。受け取ったArtifactを調べる読者に作成・ファイル往復・Python SDKの習得は要求せず、Artifactの基本と可変の名前/タグ・内容のdigestを局所説明する。削除/復元とデータ回収の区別、報告のみの確認から明示削除へ進む手順、blobの経過時間による猶予期間は安全な操作のためBookに残す。Python検索とExperiment検索はそれぞれP9.python/P9.experimentの任意節とする。",
+      "notes": "mainのCLIの導入とPython同梱版・Rustからの導入の選択はSETUPの任意節へ集約する。受け取ったArtifactを調べる読者に作成・ファイル往復・Python SDKの習得は要求せず、Artifactの基本と可変の名前/タグ・内容のdigestを局所説明する。削除/復元とデータ回収の区別、報告のみの確認から明示削除へ進む手順、blobの経過時間による猶予期間は安全な操作のためBookに残す。Python検索とExperiment検索はそれぞれP9.python/P9.experimentの任意節とする。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -4612,7 +4608,7 @@
       ],
       "deferred": [],
       "parent_page": "P9",
-      "notes": "公開SDKのlist_artifactsでrefとdigestを読み、空のRegistryでは空の結果になる任意例。",
+      "notes": "main SDKのlist_artifactsでrefとdigestを読み、空のRegistryでは空の結果になる任意例。CLI操作の知識とPython API操作は区別する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -4979,7 +4975,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "P12相当の概念前提は明示し、コード実行状態は引き継がない。TSP固有の定式化と可視化は局所説明。公開b7のSDK/OpenJij Adapterと追加matplotlibへ導入を接続する。任意応用だが本文と出力の検証対象。copyや手動State評価は前提にしない。",
+      "notes": "P12相当の概念前提は明示し、コード実行状態は引き継がない。TSP固有の定式化と可視化は局所説明。mainの共通SDK/OpenJij Adapter環境と追加matplotlibへ導入を接続する。任意応用だが本文と出力の検証対象。copyや手動State評価は前提にしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -5892,7 +5888,7 @@
         "solution.extract",
         "state.values",
         "instance.model",
-        "sdk.development_environment"
+        "sdk.environment"
       ],
       "sections": [
         {
@@ -5908,7 +5904,7 @@
       ],
       "deferred": [],
       "parent_page": "R_API.instance",
-      "notes": "state_from_named_valuesの完全例で抽出元と受取先を構築し、IDが異なっても名前・添字で照合できることと、新しいboundへの違反を示す。照合は値・実行可能性の検査ではなく、入力にない値を埋めない。公開b7向けSETUPだけからこの操作を実行できると約束せず、Referenceに対応する開発版環境を用意した経路を独立して追跡する。",
+      "notes": "state_from_named_valuesの完全例で抽出元と受取先を構築し、IDが異なっても名前・添字で照合できることと、新しいboundへの違反を示す。照合は値・実行可能性の検査ではなく、入力にない値を埋めない。実行環境はSETUPで用意する共通のmain SDK環境であり、別の開発環境を既に持つことを前提にしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -6764,15 +6760,14 @@
       ]
     },
     {
-      "id": "named_values_development",
-      "title": "既に開発版環境がある読者が別Instanceへ対応付けて評価する",
+      "id": "named_values_reuse",
+      "title": "共通のmain環境から別Instanceへ値を対応付けて評価する",
       "initial": [
         "ext.math",
-        "ext.python",
-        "sdk.environment",
-        "sdk.development_environment"
+        "ext.python"
       ],
       "steps": [
+        "SETUP",
         "R_API.instance",
         "R_API.solution",
         "R_API.solution.named_values",
@@ -6936,15 +6931,15 @@
   "environment_requirements": [
     {
       "page": "SETUP",
-      "observed": "残るTutorial・How-toには公開SDK 3.0.0b7を案内。Adapterは任意追加。開発版API Referenceの例には閲覧中のReferenceに対応するSDK・Adapter版を別途用意し、b7で動作するとはみなさない。"
+      "observed": "日英で同じ手順により、mainの同じcheckoutからSDKと必要なAdapterを一つの環境へ導入する。BookとAPI Referenceで実行環境を分けず、Notebookにはその環境のカーネルを使う。"
     },
     {
       "page": "P9",
-      "observed": "SETUPの任意CLI節で公開Rust CLI 3.0.0-beta.7を別導入する。単体CLIではPython SDK不要。Python同梱CLIは対応する開発環境をすでに持つ場合だけ。"
+      "observed": "SETUPの任意CLI節からmainのCLIを使う。SDK同梱版は共通環境のuv run --no-sync ommxで実行し、Python不要の場合は同じcheckoutからRust CLIをcargo installで導入する。"
     },
     {
       "page": "P5.named",
-      "observed": "state_from_named_valuesを含む開発SDKを用意済みの場合だけの参考例。公開SDK b7の実行手順には含めない。"
+      "observed": "ID指定の例と同じmain SDK・PySCIPOpt Adapter環境で名前照合を使う。別の開発環境への切替は前提にしない。"
     },
     {
       "page": "P6.adapter",
@@ -6952,27 +6947,27 @@
     },
     {
       "page": "P9.python",
-      "observed": "公開SDK b7。CLIの導入とは独立した任意の検索例。"
+      "observed": "共通のmain SDK環境を使う。CLIの操作とは独立した任意のPython検索例。"
     },
     {
       "page": "T6",
-      "observed": "SDK b7のみ。送受信を別プロセス、受信を空のLocal Registryで実行。hidden solver preparationは削除。"
+      "observed": "共通のmain SDK環境のみ。送受信を別プロセス、受信を空のLocal Registryで実行する。ソルバー準備を要求しない。"
     },
     {
       "page": "P16",
-      "observed": "SDK b7のみ。小さなモデルを本文で作る。Adapter・ソルバー・ネットワークは出力例に不要。外部ツール自身のMPS拡張対応は受け手側で確認する。"
+      "observed": "共通のmain SDK環境のみ。小さなモデルを本文で作る。Adapter・ソルバー・ネットワークは出力例に不要。外部ツール自身のMPS拡張対応は受け手側で確認する。"
     },
     {
-      "page": "P13",
-      "observed": "公開SDKの共通環境のみ。登録・単候補/複数候補の指標取得とIntegerの省略/明示値例。"
+      "page": "R_API.named_function",
+      "observed": "共通のmain SDK環境のみ。指標の登録・単候補/複数候補の取得とIntegerの省略/明示値の例を扱う。"
     },
     {
-      "page": "P14",
-      "observed": "通常の3セルは公開SDK環境。任意子節P14.reuseのstate_from_named_valuesは開発版SDKだけで実行する別範囲。"
+      "page": "R_API.instance.named_values",
+      "observed": "結果抽出と別Instanceへの名前照合は共通のmain SDK環境で実行する。照合と値・実行可能性の検査という意味上の違いは各APIの本文で説明する。"
     },
     {
       "page": "P15",
-      "observed": "公開SDKの共通環境だけで自己完結する。一回分の更新を明示的に呼び、一般presolve統合を前提にしない。"
+      "observed": "共通のmain SDK環境だけで自己完結する。一回分の更新を明示的に呼び、一般presolve統合を前提にしない。"
     }
   ],
   "review_notes": [

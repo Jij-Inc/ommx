@@ -9,17 +9,18 @@ instructions.
 Obtain the agent plugin or skill bundled with your installed OMMX, then install
 it in your coding agent. First follow
 [Install and Run the OMMX CLI](cli.md) to set up the `ommx` command.
-The commands below use the Python package's CLI through `uv run`; if you installed
-the standalone executable with cargo-binstall, use `ommx` in place of `uv run ommx`.
+The commands below use the Python package's CLI through `uv run --no-sync`.
+If you built the standalone executable from the same checkout, use `ommx` in
+place of `uv run --no-sync ommx`.
 
 These shell examples use a POSIX shell.
 
 ## Obtain the plugin, marketplace, or skill path
 
 ```bash
-uv run ommx plugin path
-uv run ommx plugin marketplace path
-uv run ommx skill path
+uv run --no-sync ommx plugin path
+uv run --no-sync ommx plugin marketplace path
+uv run --no-sync ommx skill path
 ```
 
 Each command prints one absolute directory path to stdout:
@@ -33,8 +34,8 @@ Each command prints one absolute directory path to stdout:
 Plugin and skill names are optional positional arguments:
 
 ```bash
-uv run ommx plugin path ommx
-uv run ommx skill path ommx
+uv run --no-sync ommx plugin path ommx
+uv run --no-sync ommx skill path ommx
 ```
 
 `plugin path ommx` returns the same plugin as `plugin path`. `skill path ommx`
@@ -48,7 +49,7 @@ manifest and Claude Code metadata. Install it through Claude Code's local
 marketplace with local scope:
 
 ```bash
-claude plugin marketplace add --scope local "$(uv run ommx plugin marketplace path)"
+claude plugin marketplace add --scope local "$(uv run --no-sync ommx plugin marketplace path)"
 claude plugin install --scope local ommx@ommx
 ```
 
@@ -58,13 +59,13 @@ enablement in `.claude/settings.local.json`, for your use in this project.
 For one Claude Code session, pass the plugin directory at startup instead:
 
 ```bash
-claude --plugin-dir "$(uv run ommx plugin path)"
+claude --plugin-dir "$(uv run --no-sync ommx plugin path)"
 ```
 
 Cursor CLI can also load the plugin for one session:
 
 ```bash
-agent --plugin-dir "$(uv run ommx plugin path)"
+agent --plugin-dir "$(uv run --no-sync ommx plugin path)"
 ```
 
 Confirm in a new session that the agent discovers the OMMX skill from the
@@ -78,7 +79,7 @@ For an agent that discovers `.agents/skills`, link the skill from your project r
 
 ```bash
 mkdir -p .agents/skills
-ln -s "$(uv run ommx skill path ommx)" .agents/skills/ommx
+ln -s "$(uv run --no-sync ommx skill path ommx)" .agents/skills/ommx
 ```
 
 Start a new session and confirm that `ommx` is listed with this project's
@@ -86,14 +87,14 @@ Start a new session and confirm that `ommx` is listed with this project's
 
 ```bash
 mkdir -p .agents/skills
-cp -R "$(uv run ommx skill path ommx)" .agents/skills/ommx
+cp -R "$(uv run --no-sync ommx skill path ommx)" .agents/skills/ommx
 ```
 
 Run this with no existing `.agents/skills/ommx` directory. Skill managers that
 expect the parent directory can use `skill path`, for example:
 
 ```bash
-gh skill install "$(uv run ommx skill path)" ommx --from-local --scope project
+gh skill install "$(uv run --no-sync ommx skill path)" ommx --from-local --scope project
 ```
 
 Choose the agent when prompted. Confirm the skill's project scope and source
@@ -122,7 +123,7 @@ version is unchanged:
 
 ```bash
 claude plugin marketplace remove --scope local ommx
-claude plugin marketplace add --scope local "$(uv run ommx plugin marketplace path)"
+claude plugin marketplace add --scope local "$(uv run --no-sync ommx plugin marketplace path)"
 claude plugin install --scope local ommx@ommx
 ```
 

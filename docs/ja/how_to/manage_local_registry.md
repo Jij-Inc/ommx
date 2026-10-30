@@ -4,9 +4,10 @@ Artifactは、InstanceやSolutionなどをまとめて保存・受け渡しす�
 ここでは`ommx`コマンドで内容を調べ、OMMXのローカル保存領域（Local Registry）を整理します。
 求解やAdapter比較のために、この操作を覚える必要はありません。
 
-まず{ref}`CLIの導入手順 <install-cli>`を確認してください。以降は単体CLIの`ommx`で示します。
-Python SDKに付属するCLIを使う場合は`uv run ommx`に置き換えます。
-利用できるコマンドやオプションは`ommx --help`と各サブコマンドの`--help`で確認できます。
+まず{ref}`CLIの導入手順 <install-cli>`を確認してください。以降はSDKに付属するCLIを
+checkoutのルートから`uv run --no-sync ommx`で呼び出します。
+単体CLIを導入した場合は`uv run --no-sync ommx`を`ommx`に置き換えます。
+利用できるコマンドやオプションは`uv run --no-sync ommx --help`と各サブコマンドの`--help`で確認できます。
 
 ## ファイルや保存済みの名前を調べる
 
@@ -15,16 +16,16 @@ Python SDKに付属するCLIを使う場合は`uv run ommx`に置き換えます
 [Artifact Tutorial](../tutorial/share_in_ommx_artifact.md)を参照してください。
 
 ```sh
-ommx inspect shared.ommx
-ommx list
+uv run --no-sync ommx inspect shared.ommx
+uv run --no-sync ommx list
 ```
 
 `list`は現在のLocal Registry内の名前を一覧します。名前が分かれば、その参照先や
 論理サイズを調べられます。以下の名前は自分が保存した名前に置き換えてください。
 
 ```sh
-ommx inspect example.com/team/result:trial-1
-ommx size example.com/team/result:trial-1
+uv run --no-sync ommx inspect example.com/team/result:trial-1
+uv run --no-sync ommx size example.com/team/result:trial-1
 ```
 
 末尾の`trial-1`はタグです。名前やタグは別の内容を指すように更新できますが、
@@ -80,8 +81,8 @@ Local Registry はOMMXのローカル保存領域です。ArtifactやExperiment�
 ### まず対象を確認する
 
 ```bash
-ommx prune-anonymous --root ./local-registry --experiments --older-than 7d
-ommx gc --root ./local-registry
+uv run --no-sync ommx prune-anonymous --root ./local-registry --experiments --older-than 7d
+uv run --no-sync ommx gc --root ./local-registry
 ```
 
 どちらも既定では報告のみで、名前やデータを削除しません。
@@ -96,12 +97,12 @@ ommx gc --root ./local-registry
 **`rm`は直ちに名前を削除します。** データ本体はこの操作では削除しません。
 
 ```bash
-ommx rm example.com/team/experiment:obsolete --root ./local-registry
+uv run --no-sync ommx rm example.com/team/experiment:obsolete --root ./local-registry
 ```
 
 出力の`Rollback`行には、削除した名前と、その内容を識別するManifest digestを含む
 `ommx restore-ref ...`コマンドが表示されます。復元するときは、そのコマンドを
-実行してください。Pythonに付属するCLIを使う場合は先頭に`uv run`を付けます。
+実行してください。Pythonに付属するCLIを使う場合は先頭に`uv run --no-sync`を付けます。
 `--root`も出力に含まれるため、同じ保存先へ復元できます。
 同じ名前が既に別の内容を指している場合は、上書きせずエラーになります。
 
@@ -114,13 +115,13 @@ ommx rm example.com/team/experiment:obsolete --root ./local-registry
 削除した名前ごとに復元用コマンドが表示されます。
 
 ```bash
-ommx prune-anonymous --root ./local-registry --experiments --older-than 7d --delete
+uv run --no-sync ommx prune-anonymous --root ./local-registry --experiments --older-than 7d --delete
 ```
 
 データ本体の回収は、別途`gc --delete`で行います。
 
 ```bash
-ommx gc --root ./local-registry --delete
+uv run --no-sync ommx gc --root ./local-registry --delete
 ```
 
 残る名前やExperimentのcheckpointから参照されているデータは回収しません。

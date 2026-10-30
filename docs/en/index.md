@@ -6,7 +6,7 @@ For example, developing a new solving method becomes harder if you must also rei
 
 ## Why use OMMX today?
 
-The current v3 development line supports the following tasks on a common problem representation. Its examples require a v3 preview of the SDK and, when needed, matching adapter packages. Use the [versioned installation guide (Japanese)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/getting_started/install.html). Unversioned installation commands in older tutorials select the stable v2 series. This Book and the [v3 release notes](./release_note/ommx-3.0.md) also describe development features that may not yet be in a published package; check the selected release's availability before using them.
+Until the 3.0.0 stable release, both this Book and the API Reference describe `main`. The [installation guide](./getting_started/install.md) sets up the SDK and adapters from the same checkout. The current implementation supports the following tasks on a common problem representation.
 
 | Your goal | What OMMX can handle | What you decide |
 |---|---|---|
@@ -82,7 +82,7 @@ If you already have a problem and candidate values, begin with [Evaluate candida
 
 ## Use or implement an Adapter
 
-After the versioned setup above, start with the small knapsack model in [Solve with an OMMX Adapter](./tutorial/solve_with_ommx_adapter.md). The {doc}`Adapter packages and input contracts </api/adapters>` page lists the available integrations. Continue to {class}`~ommx.IndicatorConstraint`, {class}`~ommx.OneHotConstraint`, {class}`~ommx.Sos1Constraint` for constraints that a backend can handle directly, or {meth}`~ommx.Instance.lower_special_constraints` for conversions and their conditions.
+After the setup above, start with the small knapsack model in [Solve with an OMMX Adapter](./tutorial/solve_with_ommx_adapter.md). The {doc}`Adapter packages and input contracts </api/adapters>` page lists the available integrations. Continue to {class}`~ommx.IndicatorConstraint`, {class}`~ommx.OneHotConstraint`, {class}`~ommx.Sos1Constraint` for constraints that a backend can handle directly, or {meth}`~ommx.Instance.lower_special_constraints` for conversions and their conditions.
 
 To compare solvers, use [Solve with multiple adapters and compare the results](./tutorial/switching_adapters.md). To try sampling, use the [OpenJij TSP example](./tutorial/tsp_sampling_with_openjij_adapter). Each has its own model; you do not need the runtime state of a previous tutorial.
 
@@ -109,6 +109,14 @@ Connect software through a common representation of problems and results.
 ```
 
 Alongside problems and results, Artifacts can record what was solved and with which settings. They use [OCI standards](https://opencontainers.org/), so they can also be distributed through existing registries such as GitHub Container Registry. OMMX uses this mechanism to publish [MIPLIB](./tutorial/download_miplib_instance.md) and [QPLIB](./tutorial/download_qplib_instance.md) problems. The [Artifact format specification](https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/doc/artifact_design.md) defines manifests, layers, and media types for tools that need to read or write the format directly.
+
+```{toctree}
+:caption: Get started
+:maxdepth: 1
+:hidden:
+
+getting_started/install
+```
 
 ```{toctree}
 :caption: Tutorial

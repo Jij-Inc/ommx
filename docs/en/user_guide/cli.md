@@ -4,61 +4,44 @@ The `ommx` command lets you inspect and exchange Artifacts, manage the Local
 Registry, and obtain bundled agent plugins and skills. You can run it as a
 standalone executable or from the OMMX Python package.
 
-If your uv project already has a Python SDK version that includes the CLI, run
-this from the project root:
-
-```bash
-uv run ommx --help
-```
-
-## Install the standalone executable with cargo-binstall
-
-Install [cargo-binstall](https://github.com/cargo-bins/cargo-binstall#installation),
-then select a v3 version from the
-[Rust SDK releases](https://github.com/Jij-Inc/ommx/releases?q=rust-3.0).
-For example, the published `3.0.0-beta.6` release provides CLI archives:
-
-```bash
-cargo binstall ommx@3.0.0-beta.6
-ommx --help
-```
-
-OMMX's release metadata lets cargo-binstall select the archive for your platform.
-The standalone executable can be used without a Python environment.
-
-To select the latest stable release, use `cargo binstall ommx`. During v3
-prerelease development, specify a v3 version explicitly; an unversioned install
-selects the stable v2 series. Choose a release whose notes include the commands
-you need. The agent plugin and skill commands described in this documentation
-are newer than `3.0.0-beta.6`; see the
-[Rust SDK release notes](https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/doc/release_note/3.0.md)
-and the [Python SDK release notes](../release_note/ommx-3.0.md) for availability.
+Until the 3.0.0 stable release, this Book and the API Reference describe `main`.
+Use the [installation guide](../getting_started/install.md)
+to obtain the checkout and its Python SDK environment.
 
 ## Use the CLI included in the Python package
 
-The Python `ommx` package includes the `ommx` console command starting with
-`3.0.0b8`. Add that package to your uv project, then run the command in the
-project's environment:
+The Python SDK includes the `ommx` console command. From the checkout root, run
+it in the environment prepared by the installation guide:
 
 ```bash
-uv add 'ommx>=3.0.0b8'
-uv run ommx --help
+uv run --no-sync ommx --help
 ```
 
-The CLI uses the OMMX version selected by the project's dependencies. If the
-project already depends on a compatible `ommx`, no separate CLI installation is
-needed. The command syntax is the same for the same CLI version. Available
-commands depend on the installed version.
+The command uses the same SDK checkout as your Python code. No separate CLI
+installation is needed.
+
+## Install the standalone executable from main
+
+To use the CLI without a Python environment, install the Rust toolchain and
+build it from the same checkout. Run this from the repository root:
+
+```bash
+cargo install --locked --path rust/ommx --features cli
+ommx --help
+```
+
+The standalone executable provides the same commands as the Python package's
+CLI built from that revision.
 
 ## Check the version and available commands
 
 ```bash
-uv run ommx --version
-uv run ommx --help
-uv run ommx inspect --help
+uv run --no-sync ommx --version
+uv run --no-sync ommx --help
+uv run --no-sync ommx inspect --help
 ```
 
-For the standalone executable, use `ommx` in place of `uv run ommx`.
+For the standalone executable, use `ommx` in place of `uv run --no-sync ommx`.
 OMMX manages Rust and Python SDK versions independently; `ommx --version`
 reports the Rust CLI version, including when invoked from Python.
 

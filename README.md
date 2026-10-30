@@ -32,11 +32,11 @@ The **Book** explains OMMX's concepts, capabilities, and choices, with examples 
 | Purpose | Start here |
 |:--------|:-----------|
 | Understand OMMX and explore its capabilities | [English Book](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/) · [日本語Book](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/) |
-| Choose a solver or sampler integration | [Supported Adapters](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/supported_ommx_adapters.html) |
-| Install the Python SDK and an optional adapter | [Installation guide (日本語)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/getting_started/install.html) |
+| Choose a solver or sampler integration | [Adapter packages and input contracts](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/api/adapters.html) |
+| Install the Python SDK and an optional adapter | [Installation guide](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/getting_started/install.html) · [日本語](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/getting_started/install.html) |
 | Inspect and exchange saved data from the command line | [OMMX CLI](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/cli.html) |
 
-This repository and the `latest` Book document v3 development, including features that may not yet be in a published package. Follow the versioned installation instructions and [release notes](https://github.com/Jij-Inc/ommx/releases) for the capabilities available in your environment. Rust and Python SDK versions are managed independently.
+Until the 3.0.0 stable release, both the Book and API Reference describe `main`. Follow the installation guide to use the SDK and adapters from the same checkout. Rust and Python SDK versions are managed independently.
 
 | SDK | Package | API Reference |
 |:----|:--------|:--------------|

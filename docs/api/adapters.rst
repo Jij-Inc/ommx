@@ -19,9 +19,9 @@ without further preparation.
 Packages developed in this repository
 -------------------------------------
 
-Use compatible SDK and Adapter releases. This Reference describes the same
-development revision as the Book; use the matching release's API and package
-requirements when installing a published version.
+Until the 3.0.0 stable release, this Reference and the Book both describe
+``main``. Follow the :doc:`installation guide </getting_started/install>` to
+install the SDK and adapters from the same checkout.
 
 .. list-table::
    :header-rows: 1
