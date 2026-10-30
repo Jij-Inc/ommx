@@ -16,7 +16,7 @@ kernelspec:
 
 OMMX Adapterで問題を解けるようになったら、同じInstanceを複数のAdapterへ渡して結果を比較できます。このページでは、HiGHSとPySCIPOptのどちらにも変換なしで渡せる簡単なモデルを使います。[Python SDKとAdapterのインストール](../getting_started/install.md)に従い、v3のSDK・両Adapterとmatplotlibを用意してください。
 
-`solve()`は元のInstanceを変更しないため、1つのInstanceを再利用できます。Adapterによって必要な変換が異なる場合も、それぞれが独立したcopyを準備します。独自のPolicyを使う方法は[Preparationで変換する制約族を選ぶ](./customize_preparation.md)を参照してください。
+`solve()`は元のInstanceを変更しないため、1つのInstanceを再利用できます。Adapterによって必要な変換が異なる場合も、それぞれが独立したcopyを準備します。独自のPolicyを使う方法は{class}`明示的なPreparationと求解の例 <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`を参照してください。
 
 ここでは、HiGHSとSCIPのどちらも直接受け取れる簡単なナップザック問題を考えましょう：
 
@@ -48,7 +48,7 @@ instance.add_constraint(
 ## 複数のソルバーで問題を解く
 
 HiGHSとSCIPのAdapterを使って、先ほど作ったInstanceを解きます。
-ほかの選択肢は[Adapterの選び方](../user_guide/supported_ommx_adapters.md)を参照してください。
+ほかの選択肢は{doc}`Adapterの一覧と入力契約 </api/adapters>`を参照してください。
 
 ```{code-cell} ipython3
 from ommx_highs_adapter import OMMXHighsAdapter
@@ -105,7 +105,7 @@ comparison
 
 別の変換済みInstanceを明示的に解く場合は、必要に応じて候補を元のInstanceでも評価します。
 値の復元や変換後のclass membershipだけでは、元の問題の実行可能性や大域的最適性は
-保証されません。[変換の保証](../user_guide/transformation_guarantees.md)と
+保証されません。[問題を変換して解法へ渡す](../user_guide/transform_and_solve.md)と
 [変換後の結果](../user_guide/evaluate_and_interpret.md)で評価対象を確認してください。
 
 boundやgapを調べる場合は[diagnosticsのHow-to](inspect_adapter_diagnostics.md)へ進みます。

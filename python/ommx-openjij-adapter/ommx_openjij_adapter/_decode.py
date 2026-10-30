@@ -55,6 +55,6 @@ def _decode_for_instance(response: oj.Response, instance: Instance) -> SampleSet
 
 def decode_to_samples(response: oj.Response) -> Samples:
     """
-    Convert `openjij.Response <https://openjij.github.io/OpenJij/reference/openjij/index.html#openjij.Response>`_ to :class:`Samples`
+    Convert `openjij.Response <https://openjij.github.io/OpenJij/reference/openjij/index.html#openjij.Response>`_ to :class:`ommx.Samples`
     """
     return _decode_response(response)

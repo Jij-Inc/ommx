@@ -1,129 +1,163 @@
 # Python SDKとAdapterのインストール
 
-ここから案内する例では、**OMMX Python SDK v3のプレビュー版**を使います。まずSDKを導入し、ソルバーを使う場合だけ必要なAdapterを追加してください。
+**3.0.0 stable releaseまでは、BookとAPI Referenceはともに`main`の内容を説明します。** 導入方法は、公開済みの最新prereleaseと、`main`のソースから選べます。
 
-バージョンを指定せずにインストールすると、安定版のv2が選ばれるため、Tutorialのv3 APIを使えません。ここでは、公開済みの`3.0.0b7`で実行を確認した手順を示します。
+| 導入方法 | 選ぶ場面 |
+|---|---|
+| 最新prerelease | 公開パッケージですぐに使い始めたい場合。対応するwheelがあれば、SDKを手元でビルドする必要はありません。 |
+| `main` | 未リリースの変更が必要な場合や、現在のドキュメントと同じソースを使いたい場合。 |
 
-## 1. 仮想環境を作る
+prereleaseには、ドキュメントに記載された変更がまだ含まれていない場合があります。必要なAPIが導入した版にない場合は、`main`を使ってください。まずSDKを用意し、ソルバーを使う場合だけ必要なAdapterを追加します。
 
-Python 3.12を用意し、作業用のディレクトリで次を実行します。動作確認環境はmacOS（Apple Silicon）・Python 3.12.12です。
-
-```{note}
-`3.0.0b7`にはIntel Mac向けのwheelがありません。配布対象は[PyPIのファイル一覧](https://pypi.org/project/ommx/3.0.0b7/#files)で確認できます。
-```
-
-```sh
-python -m venv .venv
-```
-
-macOS・Linuxでは、次のコマンドで仮想環境を有効にします。
-
-```sh
-source .venv/bin/activate
-```
-
-WindowsのPowerShellでは、代わりに次を実行します。
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-以降のインストールとサンプルコードの実行には、この仮想環境を使ってください。
-
-Notebookを使う場合は、この仮想環境に実行カーネルも追加します。
-
-```sh
-python -m pip install ipykernel
-```
-
-お使いのJupyter対応エディターで、この仮想環境のPythonを実行カーネルに指定してください。既存のJupyter環境へカーネルを登録する場合は、有効化した仮想環境で次を実行し、Notebook側で「OMMX Book」を選びます。
-
-```sh
-python -m ipykernel install --user --name ommx-book --display-name "OMMX Book"
-```
+[uv](https://docs.astral.sh/uv/getting-started/installation/)を用意してください。以下ではPython 3.12を使い、uvが必要に応じて用意します。
 
 (install-python-sdk)=
-## 2. Python SDKをインストールする
+## 1. Python SDKをインストールする
+
+### 最新prerelease
+
+OMMXリポジトリの外に作業用プロジェクトを作ります。
 
 ```sh
-python -m pip install "ommx==3.0.0b7"
+uv init --bare --python 3.12 ommx-work
+cd ommx-work
+uv add --python 3.12 --prerelease=allow ommx
 ```
 
-[Instanceを変換して結果を確認する](../how_to/transform_instance_without_solver.md)場合は、ここまでで準備が完了です。[InstanceClassの説明](../user_guide/instance_class.md)のmembership例もSDKだけで実行できます。
+prereleaseを含む、互換性のある最新の公開版が選ばれ、依存関係は`pyproject.toml`と`uv.lock`に記録されます。こちらを選んだ場合、以降のコマンドは`ommx-work`で実行してください。
 
-[既存の問題と候補解を評価する](../tutorial/evaluate_existing_candidate)場合も、ここまでで準備が完了です。[既存の問題の入手](../how_to/load_existing_instance.md)と候補評価にAdapterは使いません。それぞれのページに記載した公開データの初回取得には、ネットワーク接続が必要です。
+### main
+
+[Git](https://git-scm.com/)、[Rustのstable toolchain](https://www.rust-lang.org/tools/install)と、利用OSのC/C++ビルドツールも用意してください。こちらはSDKのRust拡張をソースからビルドします。
+
+```sh
+git clone --branch main https://github.com/Jij-Inc/ommx.git
+cd ommx
+uv sync --locked --package ommx --no-default-groups --python 3.12
+```
+
+こちらを選んだ場合、以降のコマンドはcheckoutのルートで実行してください。uvはcheckoutのSDKと、リポジトリの`uv.lock`に記録された依存関係を導入します。Adapterも同じcheckoutから追加します。
+
+### 環境を確認する
+
+どちらの方法でも`.venv`が作られます。選んだ方法の作業ディレクトリで、次を実行してください。
+
+```sh
+uv run --no-sync python -c "from importlib.metadata import version; from ommx import Instance; print(version('ommx')); print(Instance.minimize())"
+```
+
+サンプルをスクリプトとして保存したら、`uv run --no-sync python example.py`で実行できます。{meth}`~ommx.Instance.prepare`による問題の変換、{class}`~ommx.InstanceClass`への所属判定、[既存の問題と候補解の評価](../tutorial/evaluate_existing_candidate)にはSDKだけを使います。[既存問題の入手](../how_to/load_existing_instance.md)で公開データを初めて取得するときは、ネットワーク接続が必要です。
 
 (install-adapters)=
-## 3. ソルバーを使う場合だけAdapterを追加する
+## 2. ソルバーを使う場合だけAdapterを追加する
+
+SDKと同じ導入方法のコマンドを使ってください。prereleaseでは、`uv add`が作業用プロジェクト内でSDKとAdapterの依存関係をまとめて解決します。`main`では、`--inexact`がすでに追加した別のAdapterやNotebook用パッケージを残します。
 
 ### PySCIPOpt Adapter
 
+最新prerelease：
+
 ```sh
-python -m pip install "ommx-pyscipopt-adapter==3.0.0b7"
+uv add --prerelease=allow ommx-pyscipopt-adapter
 ```
 
-このAdapterで、最初の二つのTutorialと[独自Policyの操作ガイド](../how_to/customize_preparation.md)を実行できます。
+main：
 
-1. [PySCIPOpt Adapterで0-1ナップサック問題を解く](../tutorial/solve_with_ommx_adapter)：変換せずに求解し、結果を読む。
-2. [PySCIPOpt Adapterで特殊制約をそのまま解く](../tutorial/solve_special_constraints_with_pyscipopt_adapter.md)：IndicatorとSOS1を使う。
+```sh
+uv sync --locked --package ommx-pyscipopt-adapter --no-default-groups --inexact
+```
+
+[0-1ナップサック問題を解く例](../tutorial/solve_with_ommx_adapter)と[特殊制約をそのまま解く例](../tutorial/solve_special_constraints_with_pyscipopt_adapter.md)を参照してください。独自の変換方針を使う手順は、Referenceの{class}`明示的なPreparationと求解の例 <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`にあります。
 
 (install-highs-adapter)=
 ### HiGHS Adapter
 
-```sh
-python -m pip install "ommx-highs-adapter==3.0.0b7"
-```
-
-このAdapterで、3つ目のTutorial[Adapter向けにInstanceを準備する](../tutorial/prepare_instance_for_adapter.md)を実行できます。ページ内でモデルを作り直すため、前のTutorialの実行状態やPySCIPOpt Adapterは必要ありません。
-
-[複数のAdapterで結果を比較する](../how_to/compare_adapters.md)では、両方のAdapterと、グラフ描画用のmatplotlibを用意してください。
+最新prerelease：
 
 ```sh
-python -m pip install matplotlib
+uv add --prerelease=allow ommx-highs-adapter
 ```
+
+main：
+
+```sh
+uv sync --locked --package ommx-highs-adapter --no-default-groups --inexact
+```
+
+[Adapter向けにInstanceを準備する例](../tutorial/prepare_instance_for_adapter.md)を参照してください。この例はモデルをその場で作るため、前のTutorialの実行状態やPySCIPOpt Adapterは不要です。[複数のAdapterで結果を比較する](../how_to/compare_adapters.md)場合は、両方のAdapterと、後述の手順でmatplotlibを用意します。
 
 (install-openjij-adapter)=
 ### OpenJij Adapter
 
-手順1・2で用意したSDKの`3.0.0b7`の環境に、同じバージョンのAdapterを追加します。
+最新prerelease：
 
 ```sh
-python -m pip install "ommx-openjij-adapter==3.0.0b7"
+uv add --prerelease=allow ommx-openjij-adapter
 ```
 
-[OpenJij Adapterで小さな問題をサンプリングする](../how_to/sample_with_openjij_adapter)ための環境です。OpenJij本体も依存関係として導入されるため、別途の導入やソルバーのライセンス設定は必要ありません。PySCIPOptやHiGHSなど、ほかのAdapterは使いません。
-
-任意の応用例である[TSPのNotebook](../tutorial/tsp_sampling_with_openjij_adapter)では、図を描くためにmatplotlibも追加します。
+main：
 
 ```sh
-python -m pip install matplotlib
+uv sync --locked --package ommx-openjij-adapter --no-default-groups --inexact
 ```
 
-```{note}
-このBookはv3の開発版に対応しており、API Referenceなどには未公開の機能が含まれる場合があります。上記のバージョンで実行を確認した範囲は、ここから案内するInstance変換How-toとmembership例、既存問題の入手How-toと候補評価Tutorial、3つのAdapter Tutorialと2つのAdapter How-to、およびOpenJijの小さなサンプリングHow-toとTSPのNotebookです。ほかの機能や外部ツールの導入条件は、それぞれのページを確認してください。
+OpenJij本体も依存関係として導入されます。ほかのAdapterやソルバーのライセンス設定は不要です。[小さな問題のサンプリング](../how_to/sample_with_openjij_adapter)を参照してください。任意の応用例である[TSPのNotebook](../tutorial/tsp_sampling_with_openjij_adapter)では、経路の描画にmatplotlibを使います。
+
+## 3. 必要に応じてNotebook・描画用ツールを追加する
+
+prereleaseのプロジェクトでは、追加するツールも依存関係として記録します。
+
+```sh
+uv add ipykernel
 ```
+
+`main`のcheckoutでは、その環境に追加します。
+
+```sh
+uv pip install ipykernel
+```
+
+Jupyter対応エディターで、選んだ作業ディレクトリの`.venv`をカーネルに指定してください。既存のJupyter環境にカーネルを登録する場合は、次を実行し、Notebook側で「OMMX Book」を選びます。
+
+```sh
+uv run --no-sync python -m ipykernel install --user --name ommx-book --display-name "OMMX Book"
+```
+
+グラフ描画には、prereleaseのプロジェクトでは`uv add matplotlib`、`main`のcheckoutでは`uv pip install matplotlib`を使います。
+
+## 環境を更新する
+
+最新prereleaseでは、プロジェクトに記録したSDKとすべてのAdapterをまとめて更新します。
+
+```sh
+uv sync --upgrade --prerelease=allow
+```
+
+`main`では、次を実行します。
+
+```sh
+git pull --ff-only
+uv sync --locked --package ommx --no-default-groups --inexact
+```
+
+利用するAdapterの`main`向け追加コマンドも再実行し、SDKとAdapterを同じcheckoutに揃えます。どちらの環境でも、更新後は使っているNotebookカーネルを再起動してください。
 
 (install-cli)=
 ## 任意：Artifactを管理するCLI
 
-[保存したArtifactの調査・整理](../how_to/manage_local_registry.md)には、単体の`ommx`コマンドを使えます。
-単体CLIの利用にPython SDKや仮想環境は不要です。求解やPython SDKの利用にもCLIは不要です。
-公開Python SDKの上記の環境にはCLIが同梱されないため、
-その環境を更新せず、別にRust CLIを導入します。
-
-[cargo-binstall](https://github.com/cargo-bins/cargo-binstall#installation)を用意し、
-[Rust SDKのリリース](https://github.com/Jij-Inc/ommx/releases?q=rust-3.0)から
-利用環境向けのCLIバイナリがある版を選びます。次の版にはバイナリが添付されています。
+[保存したArtifactの調査・整理](../how_to/manage_local_registry.md)には、SDKに同梱されるCLIを使えます。どちらの環境でも、次を実行できます。
 
 ```sh
-cargo binstall ommx@3.0.0-beta.7
+uv run --no-sync ommx --version
+uv run --no-sync ommx --help
+```
+
+Python SDKを使わずCLIだけを導入する場合は、上記の手順で`main`のソースを取得し、checkoutのルートでRustからビルドします。
+
+```sh
+cargo install --locked --path rust/ommx --features cli
 ommx --version
 ommx --help
 ```
 
-プレリリースを使う間はバージョンを明示します。省略すると安定版が選ばれ、
-このBookで説明するコマンドが含まれない場合があります。
-
-CLI同梱の開発版Python SDKをすでに利用している場合は、代わりに`uv run ommx`で起動できます。
-Python経由でも`ommx --version`はRust CLIのバージョンを表示します。
-Rust SDKとPython SDKのバージョンは独立して管理されています。
+CLIはRust SDKのバージョンを表示します。Rust SDKとPython SDKのバージョンは独立して管理されています。

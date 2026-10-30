@@ -506,6 +506,108 @@ def _dataframe(
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
+    """Solve OMMX problems with SCIP through PySCIPOpt.
+
+    Install the ``ommx-pyscipopt-adapter`` package alongside a compatible OMMX
+    SDK to use these examples. :attr:`INPUT_CLASS` defines the exact supported
+    input. Nonconstant linear Indicator bodies and SOS1 constraints use SCIP's
+    native ``addConsIndicator`` and ``addConsSOS1`` operations. A nonconstant
+    equality indicator becomes two inequality indicators. A constant body is
+    simplified: a satisfied body needs no row, while an unsatisfied body forces
+    its indicator to zero. OneHot constraints are lowered to regular equalities
+    by the recommended preparation policy.
+
+    :meth:`solve` prepares an isolated copy, leaving the caller's Instance
+    unchanged. :meth:`solve_without_preparation` and the constructor require
+    the input to satisfy :attr:`INPUT_CLASS` already.
+
+    **Native Indicator constraints**
+
+    An active binary indicator makes the bound on ``x`` apply. The additional
+    regular constraint forces that indicator to one:
+
+    >>> from ommx import Instance
+    >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+    >>> indicator_model = Instance.maximize()
+    >>> z = indicator_model.new_binary("z")
+    >>> x = indicator_model.new_continuous("x", lower=0, upper=10)
+    >>> indicator_model.objective = x
+    >>> _ = indicator_model.add_constraint(z == 1)
+    >>> _ = indicator_model.add_indicator_constraint((x <= 5).with_indicator(z))
+    >>> solution = OMMXPySCIPOptAdapter.solve(indicator_model)
+    >>> assert solution.feasible
+    >>> assert abs(solution.objective - 5.0) < 1e-6
+
+    **OneHot preparation without changing the source**
+
+    Exactly one of the three binary variables must be one. The easy solve path
+    lowers the OneHot constraint on its copy before encoding SCIP input:
+
+    >>> from ommx import Instance, OneHotConstraint, SpecialConstraintKind
+    >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+    >>> choice_model = Instance.maximize()
+    >>> choices = [choice_model.new_binary("choice", subscripts=[i]) for i in range(3)]
+    >>> choice_model.objective = 5 * choices[0] + 10 * choices[1] + 3 * choices[2]
+    >>> _ = choice_model.add_one_hot_constraint(OneHotConstraint(variables=choices))
+    >>> assert not OMMXPySCIPOptAdapter.INPUT_CLASS.contains(choice_model)
+    >>> solution = OMMXPySCIPOptAdapter.solve(choice_model)
+    >>> assert solution.feasible
+    >>> assert abs(solution.objective - 10.0) < 1e-6
+    >>> assert choice_model.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
+    >>> assert not choice_model.removed_constraints
+
+    **Native SOS1 constraints**
+
+    At most one continuous variable may be nonzero; all may be zero. SCIP can
+    handle this structure directly:
+
+    >>> from ommx import Instance, Sos1Constraint
+    >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+    >>> sparse_model = Instance.maximize()
+    >>> ys = [sparse_model.new_continuous("y", lower=0, upper=10, subscripts=[i]) for i in range(3)]
+    >>> sparse_model.objective = sum(ys)
+    >>> _ = sparse_model.add_sos1_constraint(Sos1Constraint(variables=ys))
+    >>> solution = OMMXPySCIPOptAdapter.solve(sparse_model)
+    >>> assert solution.feasible
+    >>> assert abs(solution.objective - 10.0) < 1e-6
+
+    **Select a policy and use the strict solve path**
+
+    Here the application permits only OneHot lowering and keeps SOS1 native.
+    Constructing the policy does not change the model. ``prepare`` changes the
+    Instance in place and stops when the target class is reached; an enabled
+    operation need not run if the input already belongs to that class.
+
+    >>> from ommx import (
+    ...     Instance, OneHotConstraint, PreparationPolicy, Sos1Constraint,
+    ...     SpecialConstraintKind, SpecialConstraintPreparation,
+    ... )
+    >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+    >>> model = Instance.maximize()
+    >>> primary = [model.new_binary("primary", subscripts=[i]) for i in range(2)]
+    >>> optional = [model.new_binary("optional", subscripts=[i]) for i in range(2)]
+    >>> model.objective = 10 * primary[0] + 8 * primary[1] + 4 * optional[0] + 3 * optional[1]
+    >>> _ = model.add_one_hot_constraint(OneHotConstraint(variables=primary))
+    >>> _ = model.add_sos1_constraint(Sos1Constraint(variables=optional))
+    >>> policy = PreparationPolicy(
+    ...     special_constraints=SpecialConstraintPreparation.lower_special_constraints(
+    ...         kinds={SpecialConstraintKind.OneHot}
+    ...     )
+    ... )
+    >>> model.prepare(OMMXPySCIPOptAdapter.INPUT_CLASS, policy)
+    >>> assert OMMXPySCIPOptAdapter.check_applicability(model).is_member
+    >>> assert model.active_special_constraint_kinds == {SpecialConstraintKind.Sos1}
+    >>> solution = OMMXPySCIPOptAdapter.solve_without_preparation(model)
+    >>> assert solution.feasible
+    >>> assert abs(solution.objective - 14.0) < 1e-6
+    >>> assert len(solution.decision_variables_df()) == 4
+
+    The strict call applies no additional preparation. Calling ``solve`` instead
+    obtains a fresh recommended policy; it does not reuse the local ``policy``
+    variable. A recommendation is an editable starting point, not a guarantee
+    that every model can reach :attr:`INPUT_CLASS`.
+    """
+
     INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
         [
             InstanceClassClause(

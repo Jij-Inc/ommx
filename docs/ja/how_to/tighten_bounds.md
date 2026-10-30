@@ -71,4 +71,4 @@ assert y.bound == Bound(0, 2)
 
 戻り値が空の辞書`{}`でも、分かるのは**この一回の操作ではboundが更新されなかった**ことだけです。別の操作でもう絞れないことや、実行可能な候補が存在することの証明ではありません。この操作は、すべての実行不可能性を検出するものでもありません。
 
-制約の選択、項数上限、許容誤差、数値境界、失敗時の契約は{meth}`~ommx.Instance.tighten_bounds_simultaneously_once_using_constraints`で確認できます。ほかの変換との保証の違いは[変換の保証](../user_guide/transformation_guarantees.md)を参照してください。
+制約の選択、項数上限、許容誤差、数値境界、失敗時の契約は{meth}`~ommx.Instance.tighten_bounds_simultaneously_once_using_constraints`で確認できます。ほかの変換との保証の違いは[問題を変換して解法へ渡す](../user_guide/transform_and_solve.md)を参照してください。

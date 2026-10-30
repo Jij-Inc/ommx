@@ -63,15 +63,8 @@ assert solution.feasible
 (named-initial-state)=
 ## 名前と添字から値を対応付ける
 
-```{note}
-この節は、対応する開発版SDKをすでに用意している人向けの参考例です。
-[インストール手順](../getting_started/install.md)の公開版にはこの機能がないため、
-上のIDによる手順を使ってください。この節のためだけに環境を更新する必要はありません。
-```
-
 モデルを作り直すとIDが変わる場合は、{py:meth}`~ommx.Instance.state_from_named_values`で
-名前と添字から`State`を作れます。このBookのAPI Referenceは開発リビジョンに対応するため、
-手元のSDKにメソッドがあることを確認してから利用してください。
+名前と添字から`State`を作れます。上の例と同じSDK・Adapterの環境を使います。
 スカラーの添字は`()`、1次元は`(i,)`です。
 
 ```python

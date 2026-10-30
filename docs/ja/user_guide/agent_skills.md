@@ -9,18 +9,18 @@
 インストールした OMMX に付属するプラグインやスキルを取得し、
 コーディングエージェントに導入します。まず
 [OMMX CLI のインストールと実行](../how_to/manage_local_registry.md) に従って、`ommx` コマンドを利用できる
-状態にしてください。以下では Python パッケージに付属する CLI を `uv run` で
-実行します。cargo-binstall で単体の実行ファイルをインストールした場合は、
-`uv run ommx` を `ommx` に置き換えます。
+状態にしてください。以下では Python パッケージに付属する CLI を `uv run --no-sync` で
+実行します。`main`から単体の実行ファイルを導入した場合は、
+`uv run --no-sync ommx` を `ommx` に置き換えます。
 
 以下のシェル例は POSIX 系シェルを想定しています。
 
 ## プラグイン・マーケットプレイス・スキルのパスを取得する
 
 ```bash
-uv run ommx plugin path
-uv run ommx plugin marketplace path
-uv run ommx skill path
+uv run --no-sync ommx plugin path
+uv run --no-sync ommx plugin marketplace path
+uv run --no-sync ommx skill path
 ```
 
 いずれも絶対ディレクトリパスを標準出力に 1 行で表示します。
@@ -34,8 +34,8 @@ uv run ommx skill path
 プラグイン名・スキル名は省略可能な位置引数です。
 
 ```bash
-uv run ommx plugin path ommx
-uv run ommx skill path ommx
+uv run --no-sync ommx plugin path ommx
+uv run --no-sync ommx skill path ommx
 ```
 
 `plugin path ommx` は `plugin path` と同じプラグインを返します。
@@ -49,7 +49,7 @@ uv run ommx skill path ommx
 経由で `local` スコープに導入するには、次のように実行します。
 
 ```bash
-claude plugin marketplace add --scope local "$(uv run ommx plugin marketplace path)"
+claude plugin marketplace add --scope local "$(uv run --no-sync ommx plugin marketplace path)"
 claude plugin install --scope local ommx@ommx
 ```
 
@@ -59,13 +59,13 @@ claude plugin install --scope local ommx@ommx
 Claude Code の 1 セッションだけで使う場合は、起動時にプラグインのパスを指定します。
 
 ```bash
-claude --plugin-dir "$(uv run ommx plugin path)"
+claude --plugin-dir "$(uv run --no-sync ommx plugin path)"
 ```
 
 Cursor CLI でも、1 セッションの起動時にプラグインを指定できます。
 
 ```bash
-agent --plugin-dir "$(uv run ommx plugin path)"
+agent --plugin-dir "$(uv run --no-sync ommx plugin path)"
 ```
 
 新しいセッションで、設定したプラグインから OMMX スキルが検出されることを確認します。
@@ -79,7 +79,7 @@ Claude Code では `/ommx:ommx` という名前になります。マーケット
 
 ```bash
 mkdir -p .agents/skills
-ln -s "$(uv run ommx skill path ommx)" .agents/skills/ommx
+ln -s "$(uv run --no-sync ommx skill path ommx)" .agents/skills/ommx
 ```
 
 新しいセッションを開始し、`ommx` がスキル一覧に表示され、読み込み元がこのプロジェクトの
@@ -87,7 +87,7 @@ ln -s "$(uv run ommx skill path ommx)" .agents/skills/ommx
 
 ```bash
 mkdir -p .agents/skills
-cp -R "$(uv run ommx skill path ommx)" .agents/skills/ommx
+cp -R "$(uv run --no-sync ommx skill path ommx)" .agents/skills/ommx
 ```
 
 既存の `.agents/skills/ommx` ディレクトリがない状態で実行してください。
@@ -95,7 +95,7 @@ cp -R "$(uv run ommx skill path ommx)" .agents/skills/ommx
 例えば次のように実行します。
 
 ```bash
-gh skill install "$(uv run ommx skill path)" ommx --from-local --scope project
+gh skill install "$(uv run --no-sync ommx skill path)" ommx --from-local --scope project
 ```
 
 選択を求められたら利用するエージェントを選び、新しいセッションでプロジェクトスコープと
@@ -125,7 +125,7 @@ OMMX を更新したらパスを再取得します。リンク先が変わった
 
 ```bash
 claude plugin marketplace remove --scope local ommx
-claude plugin marketplace add --scope local "$(uv run ommx plugin marketplace path)"
+claude plugin marketplace add --scope local "$(uv run --no-sync ommx plugin marketplace path)"
 claude plugin install --scope local ommx@ommx
 ```
 

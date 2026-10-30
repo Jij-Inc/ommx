@@ -267,42 +267,7 @@ impl pyo3_stub_gen::PyStubType for Sos1BigMPromotionMode {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Instance {
-    /// Validate and promote a batch of claimed SOS1 Big-M formulations.
-    ///
-    /// The batch request is keyed by regular cardinality constraint ID.
-    /// The Rust {class}`Instance` checks every formulation against the same
-    /// unchanged instance and reconciles conflicts before applying the plan.
-    /// Bounds are inferred using only each formulation's claimed Big-M links.
-    /// Successful entries apply their prepared bounds together with promotion;
-    /// rejected entries contribute no bound changes, and strict rejection
-    /// leaves the entire instance unchanged.
-    /// Both modes return one {class}`~ommx.Sos1BigMPromotion` batch report:
-    ///
-    /// - ``mode="best_effort"`` (default) applies independent valid formulations.
-    ///   The report's ``promoted`` map associates each successful cardinality
-    ///   ID with its allocated SOS1 ID; ``rejections`` maps rejected
-    ///   cardinality IDs to diagnostic strings.
-    /// - ``mode="strict"`` requires every formulation to be valid. Any
-    ///   rejection raises {class}`~ommx.Sos1BigMPromotionBatchRejectedError`
-    ///   before mutation. The exception's ``request_count`` is the batch
-    ///   size and ``rejections`` contains all rejected cardinality IDs and
-    ///   their diagnostics. A successful strict report has no rejections.
-    ///
-    /// Overlapping formulation rows are rejected; independent formulations
-    /// may share SOS1 members. An empty request returns an empty report.
-    /// Planning and application do not clone the instance.
-    ///
-    /// Promotion preserves the objective and mathematical feasible region on
-    /// original members after projecting out fresh selectors. Positive link
-    /// scaling is allowed; Big-M must cover the prepared member bounds exactly.
-    /// Bounds are derived directly from exact link-coefficient ratios without
-    /// tolerance expansion. Integer limits are rounded inward; conversion to
-    /// floating-point bounds rounds outward. Exact clipping retains even
-    /// sub-tolerance updates and does not read the default tolerance.
-    /// Coverage validation is exact.
-    /// Promotion does not promise identical
-    /// violations or feasibility classification at finite tolerance.
-    /// Unknown mode strings raise {class}`ValueError` before planning.
+    #[doc = include_str!("docstrings/ommx/Instance.promote_sos1_big_m.md")]
     #[pyo3(signature = (request, *, mode=Sos1BigMPromotionMode::BestEffort))]
     pub fn promote_sos1_big_m(
         &mut self,

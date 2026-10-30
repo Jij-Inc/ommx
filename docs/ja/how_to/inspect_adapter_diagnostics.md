@@ -56,7 +56,7 @@ boundやgapは、探索がどこまで進んだかを読む手がかりです。
 これらはソルバーが実際に解いた定式化に関する値です。変換で目的関数の符号や
 スケール、ペナルティが変わる場合、OMMXの報告目的値とそのまま比較しないでください。
 比較の軸は[Adapterの比較](compare_adapters.md)、対応関係の判断は
-[変換の保証](../user_guide/transformation_guarantees.md)を参照してください。
+[問題を変換して解法へ渡す](../user_guide/transform_and_solve.md)を参照してください。
 
 ## 進捗を図にする
 
@@ -121,7 +121,7 @@ print(analysis.termination_result)
 
 直接取得は、OMMX Solution への decode が失敗する場合にも有用です。PySCIPOpt Adapter と
 HiGHS Adapter は decode の前に termination report を記録するため、
-{exc}`~ommx.adapter.InfeasibleDetected` や {exc}`~ommx.adapter.UnboundedDetected` などの
+{class}`~ommx.InfeasibleDetected` や {exc}`~ommx.adapter.UnboundedDetected` などの
 adapter exception が発生しても、collector には solver の最終 status や bound が残ります。
 
 ```python
