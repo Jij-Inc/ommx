@@ -3,7 +3,7 @@
   "title": "OMMX Book 概念とページの依存台帳",
   "created_at": "2026-10-26",
   "language": "ja",
-  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。日英の候補評価章と変換・解法選択章、変数復元・保持情報・特殊制約・InstanceClass・Preparation・Adapterの共有Reference移管を含む。日英の保存・共有章とArtifact/Experiment/MPSの共有Reference、日英のCLI/Registry運用Referenceへの移管を含む。その他の英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。 3.0.0安定版のリリースまではBookとAPI Referenceがともにmainを説明し、導入方法として最新の公開prereleaseとmainの両方を案内する。",
+  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。日英の候補評価章と変換・解法選択章、変数復元・保持情報・特殊制約・InstanceClass・Preparation・Adapterの共有Reference移管を含む。日英の保存・共有章とArtifact/Experiment/MPSの共有Reference、日英のCLI/Registry運用Referenceへの移管を含む。日英の基本求解・特殊制約のnative実行・HiGHSの自動準備・OpenJijの小さなsampling例の共有Adapter Referenceへの移管を含む。その他の英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。 3.0.0安定版のリリースまではBookとAPI Referenceがともにmainを説明し、導入方法として最新の公開prereleaseとmainの両方を案内する。",
   "baseline": {
     "repository": "Jij-Inc/ommx",
     "source_revision": "0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2",
@@ -229,6 +229,22 @@
         "R_CODEC"
       ],
       "note": "2次案の第4章を日英で追加し、Artifact/Experiment/MPSの旧10原稿を共有APIへ移管する。保存先・記録範囲・受信者の独立性・読出しと再実行の判断をBookに残し、基本モデルと完全な使用例は各APIへ集約する。標準添付から任意Codecへの道にOMMX wire schemaの不要な前提を置かず、汎用の試行記録にInstance/Solution操作の既読を要求しない。CLIと認証の運用説明は日英の独立Referenceで維持する。歴史的baselineと過去の編集記録は保持し、今回の本文レビュー記録はチャットに残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "c9a9feea3c659976e26e2420c11bb4885ae52366",
+      "target_revision": "codex/adapter-workflow-reference",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "SETUP",
+        "R_API.adapter.solve",
+        "R_API.adapter.native",
+        "R_API.adapter.highs_preparation",
+        "R_API.adapter.openjij_sampling",
+        "T8"
+      ],
+      "note": "日英solve_with_ommx_adapter、日本語のnative特殊制約求解・HiGHS向けPreparation・小さなOpenJij samplingの旧5原稿を共有Adapter Referenceへ統合する。基本例・モデル構築・求解/サンプリング・結果読出しを所有クラス内で完結させる。旧T1/T2/T3/P12をReferenceの意味的な所有先へ移し、HiGHSとOpenJijは他のAdapterを前提としない直接入口を持つ。日英Home/導入と旧ページへの導線を実在する使用例へ接続し、Bookの紹介だけからAPI操作能力を付与しない。比較・診断・初期値・Adapter実装契約の全文移管は後続のまとまりとして保持する。歴史的baselineと過去の編集記録は保持し、本文レビュー記録はチャットに残す。"
     }
   ],
   "interpretation": {
@@ -1916,7 +1932,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、候補評価とOneHotの等式化で具体化する。コードは意味を読む小例で、Instance全体やState・evaluateの一般的な操作能力を付与しない。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。",
+      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、候補評価とOneHotの等式化で具体化する。コードは意味を読む小例で、Instance全体やState・evaluateの一般的な操作能力を付与しない。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。 基本求解・native特殊制約・HiGHSのcopy上の準備・OpenJijの重み付きsamplingは、共有Adapter Referenceの完結した例へ案内する。ナビゲーションからAPI操作の習得を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2025,7 +2041,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、候補評価と特殊制約の例、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。",
+      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、候補評価と特殊制約の例、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。 基本求解・native特殊制約・HiGHSのcopy上の準備・OpenJijの重み付きsamplingは、共有Adapter Referenceの完結した例へ案内する。ナビゲーションからAPI操作の習得を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2062,7 +2078,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "日英の同じ節構造で、3.0.0安定版まではBookとAPI Referenceがともにmainを説明することと、最新の公開prerelease・mainの導入経路の違いを入口で示す。prereleaseはリポジトリ外のuvプロジェクト、mainはcheckoutのルートで作業する。SDKと必要なAdapterを選んだ経路で揃え、未公開の機能を使う場合はmainを選ぶ。Notebookのカーネル設定と各経路の更新方法もここへ集約する。CLIはSDK同梱版とPython不要のRustからの導入を選べる。導入は個別APIの能力を付与せず、全Bookの実行確認を示すものでもない。source_urlsは日本語版の歴史的baselineであり、新しい英語版の現行本文はsource_pathsで追跡する。",
+      "notes": "日英の同じ節構造で、3.0.0安定版まではBookとAPI Referenceがともにmainを説明することと、最新の公開prerelease・mainの導入経路の違いを入口で示す。prereleaseはリポジトリ外のuvプロジェクト、mainはcheckoutのルートで作業する。SDKと必要なAdapterを選んだ経路で揃え、未公開の機能を使う場合はmainを選ぶ。Notebookのカーネル設定と各経路の更新方法もここへ集約する。CLIはSDK同梱版とPython不要のRustからの導入を選べる。導入は個別APIの能力を付与せず、全Bookの実行確認を示すものでもない。source_urlsは日本語版の歴史的baselineであり、新しい英語版の現行本文はsource_pathsで追跡する。 各Adapterの導入節から、PySCIPOptの基本求解・HiGHSの自動準備・OpenJijの明示penalty samplingを所有する共有Referenceへ直接進める。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2099,17 +2115,15 @@
       "source_paths_existing": []
     },
     {
-      "id": "T1",
-      "title": "最初の問題を解き結果を読む",
-      "slice": "C",
-      "role": "tutorial",
+      "id": "R_API.adapter.solve",
+      "title": "PySCIPOpt Adapter Reference：モデル構築から求解・結果確認へ",
+      "slice": "Adapter workflow Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/tutorial/solve_with_ommx_adapter.ipynb"
+        "python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/solve_with_ommx_adapter.ipynb"
-      ],
+      "source_urls": [],
       "requires": [
         "ext.math",
         "ext.python",
@@ -2170,26 +2184,24 @@
         "variables.recovery",
         "variables.defaults"
       ],
-      "parent_page": null,
-      "notes": "出力中のused_ids/removed_constraints等は、読解を要求しなければexposureのみ。",
+      "parent_page": "R_API.adapter",
+      "notes": "日英のsolve_with_ommx_adapterをPySCIPOptクラスの基本例へ統合する。小さなナップサックの変数・目的・制約をその場で作り、solveからSolutionの変数値・目的値・制約の余裕を読む。実行可能性と最適性は別に確認する。別Tutorialや外部データは前提にせず、native特殊制約と明示Policyの例は同じReferenceの任意の続きとする。Bookやpackage一覧のリンクだけから操作能力を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/tutorial/solve_with_ommx_adapter.ipynb"
+        "python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py"
       ]
     },
     {
-      "id": "T2",
-      "title": "特殊制約をそのまま使って解く",
-      "slice": "C",
-      "role": "tutorial",
+      "id": "R_API.adapter.native",
+      "title": "PySCIPOpt Adapter Reference：Indicator・SOS1を直接渡す",
+      "slice": "Adapter workflow Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/tutorial/solve_special_constraints_with_pyscipopt_adapter.md"
+        "python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/solve_special_constraints_with_pyscipopt_adapter.md"
-      ],
+      "source_urls": [],
       "requires": [
         "ext.python",
         "sdk.environment",
@@ -2228,52 +2240,82 @@
         "policy.select",
         "class.declare"
       ],
-      "parent_page": null,
-      "notes": "",
+      "parent_page": "R_API.adapter",
+      "notes": "日英共有のPySCIPOpt ReferenceでIndicatorの含意とSOS1の高々一つ非ゼロを局所説明し、native対応を使った構築→求解→結果確認を示す。基本求解の知識を使う節として分け、loweringの数式やBig-Mの条件まで習得したとはみなさない。別バックエンドの例を実行前提にしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/tutorial/solve_special_constraints_with_pyscipopt_adapter.md"
+        "python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py"
       ]
     },
     {
-      "id": "T3",
-      "title": "別のAdapterで自動Preparationを使う",
-      "slice": "C",
-      "role": "tutorial",
+      "id": "R_API.adapter.highs_preparation",
+      "title": "HiGHS Adapter Reference：特殊制約を持つ入力をcopy上で準備する",
+      "slice": "Adapter workflow Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/tutorial/prepare_instance_for_adapter.md"
+        "python/ommx-highs-adapter/ommx_highs_adapter/adapter.py"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/prepare_instance_for_adapter.md"
-      ],
+      "source_urls": [],
       "requires": [
+        "ext.math",
         "ext.python",
-        "sdk.environment",
-        "instance.build",
-        "adapter.basic",
-        "solution.read",
-        "feasibility.basic",
-        "special.indicator",
-        "special.sos1"
+        "sdk.environment"
       ],
       "sections": [
+        {
+          "id": "basic-model",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "expression.basics",
+            "constraint.basics",
+            "sense",
+            "instance.build"
+          ],
+          "uses": [
+            "instance.build"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "basic-solve",
+          "introduces": [
+            "adapter.basic",
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "uses": [
+            "adapter.basic",
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "special-model",
+          "introduces": [
+            "special.indicator",
+            "special.sos1"
+          ],
+          "uses": [
+            "instance.build",
+            "special.indicator",
+            "special.sos1"
+          ],
+          "mentions": []
+        },
         {
           "id": "automatic",
           "introduces": [
             "adapter.auto_prepare"
           ],
           "uses": [
+            "adapter.basic",
             "adapter.auto_prepare",
-            "adapter.basic"
-          ],
-          "mentions": []
-        },
-        {
-          "id": "read",
-          "introduces": [],
-          "uses": [
             "solution.read",
             "feasibility.basic"
           ],
@@ -2289,12 +2331,12 @@
         "adapter.strict",
         "bigm.contract"
       ],
-      "parent_page": null,
-      "notes": "",
+      "parent_page": "R_API.adapter",
+      "notes": "HiGHSクラスの線形モデルの基本求解例で構築・実行・Solutionの読み方を導入してから、独立した4変数モデルの例でIndicator/SOS1の意味、easy solveによるcopy上のlowering、元Instanceが変わらないことを説明する。PySCIPOpt例のコード実行・既読は不要。INPUT_CLASSによる適用判定と推奨方針は紹介し、class宣言・個別loweringの厳密な条件やPolicy編集まで習得したとはみなさない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/tutorial/prepare_instance_for_adapter.md"
+        "python/ommx-highs-adapter/ommx_highs_adapter/adapter.py"
       ]
     },
     {
@@ -4988,13 +5030,13 @@
       ]
     },
     {
-      "id": "P12",
-      "title": "OpenJij Adapterで小さな問題をサンプリングする",
-      "slice": "D",
-      "role": "how-to",
+      "id": "R_API.adapter.openjij_sampling",
+      "title": "OpenJij SA Adapter Reference：penaltyを選びサンプリング結果を読む",
+      "slice": "Adapter workflow Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/sample_with_openjij_adapter.ipynb"
+        "python/ommx-openjij-adapter/ommx_openjij_adapter/__init__.py"
       ],
       "source_urls": [],
       "requires": [
@@ -5055,10 +5097,21 @@
           ]
         },
         {
-          "id": "choose",
+          "id": "inspect",
           "introduces": [
             "solution.read",
+            "variables.metadata"
+          ],
+          "uses": [
+            "solution.read",
             "variables.metadata",
+            "sampling.reported_results"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "choose",
+          "introduces": [
             "sampleset.read",
             "optimality.limit"
           ],
@@ -5075,12 +5128,12 @@
         "encoding.integer",
         "artifact.format"
       ],
-      "parent_page": null,
-      "notes": "D/P12は初見読者向けの独立Notebook。実際のINPUT_CLASSとfreshな推奨Policyへ重みを追加し、同一Instanceをprepareしてstrict samplingする。重み変更時はモデル構築からやり直す。手動のState/evaluate、Samples自作、copy、一般の変換保証の習得を主張しない。出力を含む本文検査と実行記録はPRに分離し、歴史的baselineは書き換えない。",
+      "parent_page": "R_API.adapter",
+      "notes": "日英から同じOpenJij SAクラスの完全な例へ進む。OneHotの小モデルをその場で作り、INPUT_CLASSとfreshな推奨Policyへ重みを追加し、in-place prepare→strict sampling→報告目的値と実行可能性→得られた候補の選択までをまとめる。energyと報告値を区別し、重み変更時はsourceから作り直す。TSPや別Tutorial、外部データは前提でなく、手動State/evaluateや一般の変換保証の習得を付与しない。 公開クラスの正本は__init__.pyに置く。候補ごとの検査で名前・添字の辞書を説明してから、best_feasibleで候補を選ぶ。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/sample_with_openjij_adapter.ipynb"
+        "python/ommx-openjij-adapter/ommx_openjij_adapter/__init__.py"
       ]
     },
     {
@@ -5137,7 +5190,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "P12相当の概念前提は明示し、コード実行状態は引き継がない。TSP固有の定式化と可視化は局所説明。SETUPで選んだSDK/OpenJij Adapter環境と追加matplotlibへ導入を接続する。任意応用だが本文と出力の検証対象。copyや手動State評価は前提にしない。",
+      "notes": "R_API.adapter.openjij_sampling相当の概念前提は明示し、コード実行状態は引き継がない。TSP固有の定式化と可視化は局所説明。SETUPで選んだSDK/OpenJij Adapter環境と追加matplotlibへ導入を接続する。任意応用だが本文と出力の検証対象。copyや手動State評価は前提にしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -6395,7 +6448,7 @@
     },
     {
       "id": "solve",
-      "title": "最初の求解から別Adapterまで",
+      "title": "PySCIPOpt Referenceの基本求解からnative特殊制約へ",
       "initial": [
         "ext.math",
         "ext.python",
@@ -6404,9 +6457,8 @@
       ],
       "steps": [
         "SETUP",
-        "T1",
-        "T2",
-        "T3"
+        "R_API.adapter.solve",
+        "R_API.adapter.native"
       ]
     },
     {
@@ -6452,7 +6504,7 @@
       ],
       "steps": [
         "SETUP",
-        "P12"
+        "R_API.adapter.openjij_sampling"
       ]
     },
     {
@@ -6494,7 +6546,7 @@
       ],
       "steps": [
         "SETUP",
-        "T1",
+        "R_API.adapter.solve",
         "R_API.adapter.custom_policy"
       ]
     },
@@ -6509,7 +6561,7 @@
       ],
       "steps": [
         "SETUP",
-        "T1",
+        "R_API.adapter.solve",
         "P2"
       ]
     },
@@ -6524,7 +6576,7 @@
       ],
       "steps": [
         "SETUP",
-        "P12",
+        "R_API.adapter.openjij_sampling",
         "T8"
       ]
     },
@@ -6660,7 +6712,7 @@
       ],
       "steps": [
         "SETUP",
-        "T1",
+        "R_API.adapter.solve",
         "P4"
       ]
     },
@@ -6675,7 +6727,7 @@
       ],
       "steps": [
         "SETUP",
-        "T1",
+        "R_API.adapter.solve",
         "P5"
       ]
     },
@@ -6690,7 +6742,7 @@
       ],
       "steps": [
         "SETUP",
-        "T1",
+        "R_API.adapter.solve",
         "P4",
         "R_API.experiment.example",
         "P4.experiment"
@@ -6707,7 +6759,7 @@
       ],
       "steps": [
         "SETUP",
-        "T1",
+        "R_API.adapter.solve",
         "P5",
         "P5.named"
       ]
@@ -6844,7 +6896,7 @@
         {
           "alternatives": [
             [
-              "T1"
+              "R_API.adapter.solve"
             ],
             [
               "T4"
@@ -7237,6 +7289,56 @@
           ]
         }
       ]
+    },
+    {
+      "id": "highs_preparation_direct",
+      "title": "HiGHS Referenceへ直接入り自動準備を使う",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.cli",
+        "ext.table"
+      ],
+      "steps": [
+        "SETUP",
+        "R_API.adapter.highs_preparation"
+      ]
+    },
+    {
+      "id": "adapter_examples_from_home",
+      "title": "日英Homeから目的に応じたAdapter Referenceの実行例へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.cli",
+        "ext.table"
+      ],
+      "steps": [
+        {
+          "alternatives": [
+            [
+              "HOME"
+            ],
+            [
+              "HOME_EN"
+            ]
+          ]
+        },
+        "SETUP",
+        {
+          "alternatives": [
+            [
+              "R_API.adapter.solve"
+            ],
+            [
+              "R_API.adapter.highs_preparation"
+            ],
+            [
+              "R_API.adapter.openjij_sampling"
+            ]
+          ]
+        }
+      ]
     }
   ],
   "environment_requirements": [
@@ -7287,6 +7389,22 @@
     {
       "page": "B_RECORD_SHARE",
       "observed": "解説の章であり、Python環境や実行状態は前提にしない。実行可能な例の要件はリンク先のReferenceとSETUPが所有する。"
+    },
+    {
+      "page": "R_API.adapter.solve",
+      "observed": "SETUPで選んだSDKとPySCIPOpt Adapterの環境でモデルをその場で作る。pandasによる結果表はSDK依存に含まれる。外部データ・別Tutorialの実行状態は不要。"
+    },
+    {
+      "page": "R_API.adapter.native",
+      "observed": "PySCIPOptの基本例と同じSDK・Adapter環境。HiGHSやOpenJijは不要。"
+    },
+    {
+      "page": "R_API.adapter.highs_preparation",
+      "observed": "SETUPで選んだSDKとHiGHS Adapterだけで自己完結する。PySCIPOptの環境や先行実行は不要。"
+    },
+    {
+      "page": "R_API.adapter.openjij_sampling",
+      "observed": "SETUPで選んだSDKとOpenJij Adapterだけで自己完結する。候補の内訳・表示順は確定出力として仮定せず、比較する報告値の意味を説明する。TSP用のmatplotlibや外部データは不要。"
     }
   ],
   "review_notes": [
