@@ -529,7 +529,9 @@ pub struct DecisionVariable {
     #[prost(enumeration = "decision_variable::Kind", tag = "2")]
     pub kind: i32,
     /// Bound of the decision variable
-    /// If the bound is not specified, the decision variable is considered as unbounded.
+    /// When omitted, binary variables have bound \[0, 1\] and other interval-domain
+    /// kinds are unbounded. For KIND_FINITE_DOMAIN, this field must be absent and
+    /// the convex-hull bound is derived from finite_domain.values.
     #[prost(message, optional, tag = "3")]
     pub bound: ::core::option::Option<Bound>,
     /// Name of the decision variable. e.g. `x`

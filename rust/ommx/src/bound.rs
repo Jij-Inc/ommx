@@ -138,13 +138,26 @@ impl TryFrom<v1::Bound> for Bound {
     }
 }
 
+/// Extract an interval bound or the hull of a validated finite domain.
+///
+/// Invalid wire domains produce [`ParseError`]. Labels and substituted values
+/// do not affect this domain-only conversion.
 impl TryFrom<&v1::DecisionVariable> for Bound {
-    type Error = BoundError;
+    type Error = ParseError;
     fn try_from(v: &v1::DecisionVariable) -> Result<Self, Self::Error> {
+        if v.kind() == v1::decision_variable::Kind::FiniteDomain || v.finite_domain.is_some() {
+            return crate::decision_variable::parse::parse_domain(
+                v.id.into(),
+                v.kind(),
+                v.bound.clone(),
+                v.finite_domain.clone(),
+            )
+            .map(|variable| variable.bound());
+        }
         if let Some(bound) = &v.bound {
-            Self::try_from(bound.clone())
+            bound.clone().parse(&())
         } else if v.kind() == v1::decision_variable::Kind::Binary {
-            Self::new(0.0, 1.0)
+            Ok(Self::of_binary())
         } else {
             Ok(Self::default())
         }
@@ -629,6 +642,118 @@ mod tests {
     use approx::assert_abs_diff_eq;
 
     use super::*;
+
+    fn finite_domain_wire(values: Vec<f64>) -> v1::DecisionVariable {
+        v1::DecisionVariable {
+            kind: v1::decision_variable::Kind::FiniteDomain.into(),
+            finite_domain: Some(v1::FiniteDomain { values }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn finite_domain_wire_bound_is_the_validated_hull() {
+        for (values, lower, upper) in [
+            (vec![0.1, 0.5, 1.0], 0.1, 1.0),
+            (vec![1.0, 0.1, 0.5], 0.1, 1.0),
+            (vec![0.5], 0.5, 0.5),
+            (vec![-f64::MAX, f64::MAX], -f64::MAX, f64::MAX),
+        ] {
+            let wire = finite_domain_wire(values);
+            assert_eq!(
+                Bound::try_from(&wire).unwrap(),
+                Bound::new(lower, upper).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn finite_domain_wire_bound_rejects_invalid_values() {
+        for values in [
+            vec![],
+            vec![0.1, 0.1],
+            vec![-0.0, 0.0],
+            vec![f64::NAN],
+            vec![f64::NEG_INFINITY],
+            vec![f64::INFINITY],
+        ] {
+            assert!(Bound::try_from(&finite_domain_wire(values)).is_err());
+        }
+    }
+
+    #[test]
+    fn finite_domain_wire_bound_rejects_inconsistent_representations() {
+        let valid = finite_domain_wire(vec![0.1, 0.5, 1.0]);
+        let mut missing = valid.clone();
+        missing.finite_domain = None;
+        let mut both = valid.clone();
+        both.bound = Some(Bound::new(0.1, 1.0).unwrap().into());
+        let mut wrong_kind = valid;
+        wrong_kind.kind = v1::decision_variable::Kind::Continuous.into();
+        for wire in [missing, both, wrong_kind] {
+            assert!(Bound::try_from(&wire).is_err());
+        }
+    }
+
+    #[test]
+    fn finite_domain_wire_bound_does_not_validate_evaluated_values() {
+        let mut wire = finite_domain_wire(vec![0.1, 0.5, 1.0]);
+        wire.substituted_value = Some(0.75);
+        assert_eq!(
+            Bound::try_from(&wire).unwrap(),
+            Bound::new(0.1, 1.0).unwrap()
+        );
+    }
+
+    #[test]
+    fn wire_bound_parse_error_preserves_validation_source() {
+        let error = Bound::try_from(&finite_domain_wire(vec![])).unwrap_err();
+        assert!(matches!(
+            error.source().and_then(|e| e.downcast_ref::<crate::DecisionVariableError>()),
+            Some(crate::DecisionVariableError::InvalidDefinition { source, .. })
+                if matches!(source.as_ref(), crate::DecisionVariableError::EmptyFiniteDomain)
+        ));
+
+        let wire = v1::DecisionVariable {
+            kind: v1::decision_variable::Kind::Continuous.into(),
+            bound: Some(v1::Bound {
+                lower: 2.0,
+                upper: 1.0,
+            }),
+            ..Default::default()
+        };
+        let error = Bound::try_from(&wire).unwrap_err();
+        assert!(matches!(
+            error.source().and_then(|e| e.downcast_ref::<BoundError>()),
+            Some(BoundError::UpperSmallerThanLower { .. })
+        ));
+    }
+
+    #[test]
+    fn wire_bound_preserves_interval_and_binary_defaults() {
+        for kind in [
+            v1::decision_variable::Kind::Continuous,
+            v1::decision_variable::Kind::Integer,
+            v1::decision_variable::Kind::SemiContinuous,
+            v1::decision_variable::Kind::SemiInteger,
+            v1::decision_variable::Kind::Binary,
+        ] {
+            let mut wire = v1::DecisionVariable {
+                kind: kind.into(),
+                ..Default::default()
+            };
+            let expected = if kind == v1::decision_variable::Kind::Binary {
+                Bound::of_binary()
+            } else {
+                Bound::unbounded()
+            };
+            assert_eq!(Bound::try_from(&wire).unwrap(), expected);
+
+            let explicit = Bound::new(0.25, 0.75).unwrap();
+            wire.bound = Some(explicit.into());
+            assert_eq!(Bound::try_from(&wire).unwrap(), explicit);
+        }
+    }
 
     #[test]
     fn parse_preserves_bound_error() {

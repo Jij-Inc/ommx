@@ -779,6 +779,16 @@ impl SampledDecisionVariable {
         &self.samples
     }
 
+    /// Borrowed validity query for `SampleSetBuilder` to derive feasibility
+    /// without materializing an evaluated row. Missing samples are invalid.
+    pub(crate) fn is_valid_for(&self, id: VariableID, sample_id: SampleID, atol: ATol) -> bool {
+        self.samples.get(sample_id).is_some_and(|&value| {
+            self.decision_variable
+                .check_value_consistency(id, value, atol)
+                .is_ok()
+        })
+    }
+
     /// Get a specific evaluated decision variable by sample ID.
     ///
     /// Returns [`None`] if `sample_id` is not present in the sampled data.
@@ -1296,13 +1306,63 @@ mod tests {
     #[test]
     fn test_sampled_decision_variable_rejects_non_finite_values() {
         let id = VariableID::from(1);
-        let dv = DecisionVariable::continuous();
-        let samples = Sampled::new([vec![crate::SampleID::from(0)]], [f64::NAN]).unwrap();
+        for dv in [
+            DecisionVariable::continuous(),
+            DecisionVariable::new_finite_domain(vec![1.0, 3.0]).unwrap(),
+        ] {
+            for value in [f64::NAN, f64::NEG_INFINITY, f64::INFINITY] {
+                let samples = Sampled::from((SampleID::from(0), value));
+                assert!(matches!(
+                    SampledDecisionVariable::new(id, dv.clone(), samples),
+                    Err(DecisionVariableError::NonFiniteValue { .. })
+                ));
+            }
+        }
+    }
 
-        assert!(matches!(
-            SampledDecisionVariable::new(id, dv, samples),
-            Err(DecisionVariableError::NonFiniteValue { .. })
-        ));
+    #[test]
+    fn borrowed_sample_validity_matches_evaluated_rows() {
+        let id = VariableID::from(1);
+        let sample_id = SampleID::from(4);
+        let missing_id = SampleID::from(5);
+        for variable in [
+            DecisionVariable::binary(),
+            DecisionVariable::integer(),
+            DecisionVariable::continuous(),
+            DecisionVariable::semi_integer(),
+            DecisionVariable::semi_continuous(),
+            DecisionVariable::new_finite_domain(vec![1.0, 3.0]).unwrap(),
+            DecisionVariable::new_finite_domain(vec![-f64::MAX, f64::MAX]).unwrap(),
+        ] {
+            for value in [
+                -f64::MAX,
+                -1.0,
+                0.0,
+                0.75,
+                1.0,
+                1.25,
+                1.25_f64.next_up(),
+                2.0,
+                3.0,
+                f64::MAX,
+            ] {
+                let sampled = SampledDecisionVariable::new(
+                    id,
+                    variable.clone(),
+                    Sampled::from((sample_id, value)),
+                )
+                .unwrap();
+                for tolerance in [f64::EPSILON, 0.25, f64::INFINITY] {
+                    let atol = ATol::new(tolerance).unwrap();
+                    assert_eq!(
+                        sampled.is_valid_for(id, sample_id, atol),
+                        sampled.get(id, sample_id).unwrap().is_valid(atol),
+                        "variable={variable:?}, value={value}, atol={atol:?}"
+                    );
+                    assert!(!sampled.is_valid_for(id, missing_id, atol));
+                }
+            }
+        }
     }
 
     #[test]
