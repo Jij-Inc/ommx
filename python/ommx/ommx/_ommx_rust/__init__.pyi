@@ -458,7 +458,7 @@ class Artifact:
     | --- | --- | --- |
     | Local Registry | {meth}`~ommx.artifact.ArtifactDraft.commit`, {meth}`load` | Store or reopen a named Artifact on this machine |
     | `.ommx` archive | {meth}`save`, {meth}`import_archive` | Export a file for transfer, or import its contents into the receiver's registry |
-    | Remote OCI registry | {meth}`push`, {meth}`load` | Distribute an Artifact, or retrieve a reference absent from the Local Registry |
+    | Remote OCI registry | {meth}`push`, {meth}`load` | Distribute an Artifact, or retrieve a missing or incomplete local copy |
 
     The **Local Registry** is the SDK's persistent local storage. Choose a separate
     root with `OMMX_LOCAL_REGISTRY_ROOT` when starting the process. Changing the root
@@ -481,10 +481,11 @@ class Artifact:
     An archive's manifest digest is available from
     {attr}`~ommx.artifact.ArchiveManifest.manifest_digest`.
 
-    {meth}`load` checks local storage first and retrieves from the remote registry
-    only when the reference is absent locally. Loading an already present tag does
-    not refresh it from the remote server. Use the distributor's digest reference
-    when you need a specific published Artifact.
+    {meth}`load` uses a complete local copy without contacting the remote registry.
+    If the reference or any required manifest, config, or layer data is missing, it
+    attempts a fresh remote pull. A tag with a complete local copy is not refreshed
+    from the remote server. Use the distributor's digest reference when you need a
+    specific published Artifact.
 
     {meth}`~ommx.artifact.ArtifactDraft.new_anonymous` generates a local name
     containing `.ommx.local`; it is suitable for starting without a distribution
@@ -637,9 +638,10 @@ class Artifact:
         r"""
         Load an artifact stored as a container image in local or remote registry.
 
-        If the image is not found in local registry, it will try to pull from remote registry.
-        Loading an already present tag does not refresh it from the remote
-        registry. Use a digest reference to identify a particular published
+        A complete local copy is used without contacting the remote registry.
+        If the reference or required manifest, config, or layer data is missing,
+        this attempts a fresh remote pull. A tag with a complete local copy is
+        not refreshed. Use a digest reference to identify a particular published
         Artifact; see {class}`~ommx.artifact.Artifact` for names and digests.
 
         This example requires remote registry access and is not executed as a doctest.

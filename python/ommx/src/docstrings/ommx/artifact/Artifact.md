@@ -153,7 +153,7 @@ them explicitly.
 | --- | --- | --- |
 | Local Registry | {meth}`~ommx.artifact.ArtifactDraft.commit`, {meth}`load` | Store or reopen a named Artifact on this machine |
 | `.ommx` archive | {meth}`save`, {meth}`import_archive` | Export a file for transfer, or import its contents into the receiver's registry |
-| Remote OCI registry | {meth}`push`, {meth}`load` | Distribute an Artifact, or retrieve a reference absent from the Local Registry |
+| Remote OCI registry | {meth}`push`, {meth}`load` | Distribute an Artifact, or retrieve a missing or incomplete local copy |
 
 The **Local Registry** is the SDK's persistent local storage. Choose a separate
 root with `OMMX_LOCAL_REGISTRY_ROOT` when starting the process. Changing the root
@@ -176,10 +176,11 @@ manifest, while each layer has its own digest. The two identify different data.
 An archive's manifest digest is available from
 {attr}`~ommx.artifact.ArchiveManifest.manifest_digest`.
 
-{meth}`load` checks local storage first and retrieves from the remote registry
-only when the reference is absent locally. Loading an already present tag does
-not refresh it from the remote server. Use the distributor's digest reference
-when you need a specific published Artifact.
+{meth}`load` uses a complete local copy without contacting the remote registry.
+If the reference or any required manifest, config, or layer data is missing, it
+attempts a fresh remote pull. A tag with a complete local copy is not refreshed
+from the remote server. Use the distributor's digest reference when you need a
+specific published Artifact.
 
 {meth}`~ommx.artifact.ArtifactDraft.new_anonymous` generates a local name
 containing `.ommx.local`; it is suitable for starting without a distribution

@@ -62,7 +62,7 @@ summary = artifact.get_json(layer)
 assert summary == {"trial": 1, "note": "shared record"}
 ```
 
-`load()`はLocal Registryにある参照を優先し、なければリモートから取得して保存します。同じタグの更新を毎回取得する処理ではありません。特定の内容を共有・記録する場合は、マニフェスト（収録データの目録）の内容から計算する識別子digestを使い、配布側が確認した`ghcr.io/.../candidate-notes@sha256:...`形式の参照を渡します。使い分けの詳細は{class}`Artifactの名前と内容の識別 <ommx.artifact.Artifact>`を参照してください。
+`load()`はLocal Registryに必要なデータがすべてあれば、リモートへ接続せずに読み出します。参照や必要なデータが欠けている場合は、リモートからの再取得を試みます。完全なデータがローカルにあるタグの更新を毎回取得する処理ではありません。特定の内容を共有・記録する場合は、マニフェスト（収録データの目録）の内容から計算する識別子digestを使い、配布側が確認した`ghcr.io/.../candidate-notes@sha256:...`形式の参照を渡します。使い分けの詳細は{class}`Artifactの名前と内容の識別 <ommx.artifact.Artifact>`を参照してください。
 
 ## 取得できない場合
 

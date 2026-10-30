@@ -76,9 +76,10 @@ summary = artifact.get_json(layer)
 assert summary == {"trial": 1, "note": "shared record"}
 ```
 
-`load()` prefers a local reference and fetches remotely only when it is absent.
-It does not refresh an existing tag on every call. To identify an exact
-publication, use a manifest-digest reference such as
+`load()` uses a complete local copy without contacting the remote registry. If
+the reference or required data is missing, it attempts a fresh remote pull. A
+tag with a complete local copy is not refreshed on every call. To identify an
+exact publication, use a manifest-digest reference such as
 `ghcr.io/.../candidate-notes@sha256:...`, verified by the publisher.
 {class}`~ommx.artifact.Artifact` explains names, tags, and content identity.
 

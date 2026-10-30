@@ -246,9 +246,10 @@ impl PyArtifact {
 
     /// Load an artifact stored as a container image in local or remote registry.
     ///
-    /// If the image is not found in local registry, it will try to pull from remote registry.
-    /// Loading an already present tag does not refresh it from the remote
-    /// registry. Use a digest reference to identify a particular published
+    /// A complete local copy is used without contacting the remote registry.
+    /// If the reference or required manifest, config, or layer data is missing,
+    /// this attempts a fresh remote pull. A tag with a complete local copy is
+    /// not refreshed. Use a digest reference to identify a particular published
     /// Artifact; see {class}`~ommx.artifact.Artifact` for names and digests.
     ///
     /// This example requires remote registry access and is not executed as a doctest.
