@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from ommx import DecisionVariable, Instance
+from ommx import DecisionVariable, Instance, Kind
 
 
 def test_create_finite_domain_variable():
@@ -13,6 +13,9 @@ def test_create_finite_domain_variable():
     )
 
     assert x.kind == DecisionVariable.FINITE_DOMAIN
+    assert isinstance(x.kind, Kind)
+    assert isinstance(DecisionVariable.FINITE_DOMAIN, Kind)
+    assert x.kind == Kind.FiniteDomain
     assert x.values == [0.1, 0.3, 0.5, 1.0]
     assert x.bound.lower == 0.1
     assert x.bound.upper == 1.0
@@ -31,6 +34,11 @@ def test_create_finite_domain_variable():
 def test_reject_invalid_finite_domains(values, match):
     with pytest.raises(ValueError, match=match):
         DecisionVariable.finite_domain(1, values)
+
+    instance = Instance.minimize()
+    with pytest.raises(ValueError, match=match):
+        instance.new_finite_domain(values)
+    assert len(instance.decision_variables) == 0
 
 
 def test_finite_domain_evaluation_and_wire_roundtrip():

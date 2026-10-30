@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+import copy
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Protocol, runtime_checkable
 
 from ommx._ommx_rust import DiagnosticCollector as DiagnosticCollector
-from ommx import Instance, Solution, SampleSet, AdditionalCapability
+from ommx import (
+    InfeasibleDetected as InfeasibleDetected,
+    Instance,
+    InstanceClass,
+    InstanceClassMembershipReport,
+    PreparationPolicy,
+    SampleSet,
+    Solution,
+)
 
 
 SolverInput = Any
@@ -42,51 +51,98 @@ class DiagnosticsSink(Protocol):
         """
 
 
+class AdapterNotApplicableError(ValueError):
+    """Raised when an instance is not applicable to an adapter."""
+
+    adapter: str
+    report: InstanceClassMembershipReport
+
+    def __init__(self, adapter: str, report: InstanceClassMembershipReport):
+        self.adapter = adapter
+        self.report = report
+        super().__init__(f"{adapter} is not applicable:\n{report}")
+
+
 class SolverAdapter(ABC):
     """
     An abstract interface for OMMX Solver Adapters, defining how solvers should be used with OMMX.
 
-    See the `implementation guide <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html>`_ for more details.
+    See the `Adapter implementation tutorial <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html>`_
+    for the complete implementation contract and reference implementation.
 
-    Subclasses should set ``ADDITIONAL_CAPABILITIES`` to declare which non-standard
-    constraint types they can handle. Standard constraints are always supported.
+    Subclasses declare ``INPUT_CLASS`` as the OMMX-defined structural class of
+    exact inputs they can encode. Membership in that class is the complete
+    applicability condition: ``check_applicability`` only checks membership and
+    does not mutate the input. A subclass should call ``require_applicable``
+    before constructing backend input.
 
-    Available capabilities:
+    The easy :meth:`solve` API prepares an isolated copy with the Adapter's
+    recommended policy. Use :meth:`solve_without_preparation` when the caller
+    has prepared an exact input explicitly and wants the Adapter to require
+    ``INPUT_CLASS`` membership without applying preparation.
 
-    - ``AdditionalCapability.Indicator``: binvar = 1 → f(x) <= 0
-    - ``AdditionalCapability.OneHot``: exactly one of a set of binary variables is 1
-    - ``AdditionalCapability.Sos1``: at most one of a set of variables is non-zero
-
-    The default is an empty set (standard constraints only).
-    Subclasses must call ``super().__init__(ommx_instance)`` so that any
-    constraint types the adapter does not support are automatically converted
-    into regular constraints (Big-M for indicator / SOS1, linear equality for
-    one-hot). Conversions mutate ``ommx_instance`` in place and are emitted
-    at ``INFO`` level as ``tracing`` events from the Rust SDK; configure a
-    Python OpenTelemetry ``TracerProvider`` before the first call to observe
-    them via ``pyo3-tracing-opentelemetry``.
+    When encoding OMMX decision variables, use
+    ``ommx_instance.used_decision_variables`` rather than the complete decision
+    variable table. Backend-only auxiliary variables may be added separately.
+    Preserve the correspondence between each used OMMX variable ID and its
+    backend representation. Decoding must recover a value for every used OMMX
+    variable, construct a :class:`ommx.State`, and evaluate it against an
+    unchanged :class:`ommx.Instance` snapshot that is mathematically identical
+    to the exact input encoded for the backend. The Instance owns population of
+    fixed, dependent, and irrelevant variables and construction of the final
+    :class:`ommx.Solution`.
     """
 
-    ADDITIONAL_CAPABILITIES: frozenset[AdditionalCapability] = frozenset()
-
-    def __init__(self, ommx_instance: Instance):
-        """Reduce the instance to the adapter's supported capabilities.
-
-        Subclasses must call ``super().__init__()``. Any constraint type not in
-        ``ADDITIONAL_CAPABILITIES`` is converted to regular constraints in place
-        on ``ommx_instance``.
-        """
-        ommx_instance.reduce_capabilities(set(self.ADDITIONAL_CAPABILITIES))
+    INPUT_CLASS: ClassVar[InstanceClass]
+    """Required condition for an exact Adapter input."""
 
     @classmethod
-    @abstractmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        """Return a fresh policy recommended for this Adapter's ``INPUT_CLASS``.
+
+        The easy APIs apply it to an isolated copy. Advanced callers may edit
+        and apply it explicitly before using a preparation-free API. This
+        method itself neither prepares an instance nor guarantees
+        applicability. The default policy is empty.
+        """
+        return PreparationPolicy()
+
+    @classmethod
+    def check_applicability(
+        cls, ommx_instance: Instance
+    ) -> InstanceClassMembershipReport:
+        """Check ``INPUT_CLASS`` membership without mutation."""
+        input_class: InstanceClass | None = getattr(cls, "INPUT_CLASS", None)
+        if input_class is None:
+            raise TypeError(
+                f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
+            )
+
+        return input_class.check_membership(ommx_instance)
+
+    @classmethod
+    def require_applicable(
+        cls, ommx_instance: Instance
+    ) -> InstanceClassMembershipReport:
+        """Return the membership report or raise ``AdapterNotApplicableError``."""
+        report = cls.check_applicability(ommx_instance)
+        if not report.is_member:
+            adapter = f"{cls.__module__}.{cls.__qualname__}"
+            raise AdapterNotApplicableError(adapter, report)
+        return report
+
+    @classmethod
     def solve(
         cls,
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
-        """Solve an OMMX instance.
+        """Prepare and solve an isolated copy of an OMMX instance.
+
+        The input ``ommx_instance`` is never modified. The copy is prepared for
+        ``INPUT_CLASS`` with :meth:`recommended_preparation_policy`, then passed
+        to :meth:`solve_without_preparation`.
 
         ``Run.log_solve`` owns the reserved ``diagnostics`` keyword. When
         called with ``store_diagnostics=True``, it passes a sink to the adapter
@@ -94,6 +150,24 @@ class SolverAdapter(ABC):
         record adapter-defined dataclass diagnostics into the sink during the
         solve; ``None`` means diagnostics are disabled. Adapters do not need to
         catch exceptions raised by a non-conforming diagnostics sink.
+        """
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.solve_without_preparation(prepared, diagnostics=diagnostics)
+
+    @classmethod
+    @abstractmethod
+    def solve_without_preparation(
+        cls,
+        ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> Solution:
+        """Solve an exact Adapter input without running ``Instance.prepare``.
+
+        ``ommx_instance`` must belong to ``INPUT_CLASS``. Implementations must
+        reject non-members with :class:`AdapterNotApplicableError` and must not
+        prepare or otherwise modify the input instance.
         """
         pass
 
@@ -111,24 +185,80 @@ class SamplerAdapter(SolverAdapter):
     """
     An abstract interface for OMMX Sampler Adapters, defining how samplers should be used with OMMX.
 
-    See the `implementation guide <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html>`_ for more details.
+    See the `Adapter implementation tutorial <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html>`_
+    for the complete implementation contract and reference implementations.
+
+    The exact-input, easy-API preparation, strict preparation-free API, and
+    used-variable contracts of :class:`SolverAdapter` also apply to sampler
+    adapters. A sampler whose
+    backend labels are the OMMX variable IDs may preserve that identity directly;
+    other representations need an explicit correspondence. In either case, each
+    decoded sample must contain a value for every variable in
+    ``ommx_instance.used_decision_variables`` before ``evaluate_samples`` is
+    called against an unchanged :class:`ommx.Instance` snapshot mathematically
+    identical to the encoded exact input. Backend formats that omit a
+    zero-interaction variable therefore need an adapter-owned decoding default
+    consistent with that format.
     """
 
     @classmethod
-    @abstractmethod
     def sample(
         cls,
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
     ) -> SampleSet:
-        """Sample an OMMX instance.
+        """Prepare and sample an isolated copy of an OMMX instance.
+
+        The input ``ommx_instance`` is never modified. The copy is prepared for
+        ``INPUT_CLASS`` with :meth:`recommended_preparation_policy`, then passed
+        to :meth:`sample_without_preparation`.
 
         ``Run.log_sample`` owns the reserved ``diagnostics`` keyword and uses
         it the same way as ``Run.log_solve``. ``None`` means diagnostics are
         disabled.
         """
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.sample_without_preparation(prepared, diagnostics=diagnostics)
+
+    @classmethod
+    @abstractmethod
+    def sample_without_preparation(
+        cls,
+        ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> SampleSet:
+        """Sample an exact Adapter input without running ``Instance.prepare``.
+
+        ``ommx_instance`` must belong to ``INPUT_CLASS``. Implementations must
+        reject non-members with :class:`AdapterNotApplicableError` and must not
+        prepare or otherwise modify the input instance.
+        """
         pass
+
+    @classmethod
+    def solve_without_preparation(
+        cls,
+        ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> Solution:
+        """Return the best feasible result from :meth:`sample_without_preparation`."""
+        return cls.sample_without_preparation(
+            ommx_instance,
+            diagnostics=diagnostics,
+        ).best_feasible
+
+    @property
+    def solver_input(self) -> SolverInput:
+        """Expose :attr:`sampler_input` through the SolverAdapter interface."""
+        return self.sampler_input
+
+    def decode(self, data: SolverOutput) -> Solution:
+        """Decode sampler output and return its best feasible solution."""
+        return self.decode_to_sampleset(data).best_feasible
 
     @property
     @abstractmethod
@@ -138,18 +268,6 @@ class SamplerAdapter(SolverAdapter):
     @abstractmethod
     def decode_to_sampleset(self, data: SamplerOutput) -> SampleSet:
         pass
-
-
-class InfeasibleDetected(Exception):
-    """
-    Raised when the problem is proven to be infeasible.
-
-    This corresponds to ``Optimality.OPTIMALITY_INFEASIBLE`` and indicates that
-    the mathematical model itself has no feasible solution.
-    Should not be used when infeasibility cannot be proven (e.g., heuristic solvers).
-    """
-
-    pass
 
 
 class UnboundedDetected(Exception):

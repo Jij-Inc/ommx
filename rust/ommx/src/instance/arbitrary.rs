@@ -3,9 +3,9 @@ use crate::{
     arbitrary_constraints, arbitrary_decision_variables, arbitrary_named_functions, linear,
     random::{arbitrary_samples, SamplesParameters},
     v1::State,
-    Bounds, ConstraintIDParameters, Equality, Evaluate, FiniteDomain, IndicatorConstraintID, Kind,
-    KindParameters, NamedFunctionIDParameters, OneHotConstraintID, PolynomialParameters, Sampled,
-    Sos1ConstraintID,
+    Bounds, ConstraintIDParameters, Equality, Evaluate, FiniteDomain, FunctionParameters,
+    IndicatorConstraintID, Kind, KindParameters, NamedFunctionIDParameters, OneHotConstraintID,
+    PolynomialParameters, Sampled, Sos1ConstraintID,
 };
 use fnv::FnvHashSet;
 use proptest::prelude::*;
@@ -148,9 +148,9 @@ pub enum InstanceSpace {
 pub struct InstanceParameters {
     pub space: InstanceSpace,
     pub constraint_ids: ConstraintIDParameters,
-    pub objective: PolynomialParameters,
-    pub constraint: PolynomialParameters,
-    pub named_function: PolynomialParameters,
+    pub objective: FunctionParameters,
+    pub constraint: FunctionParameters,
+    pub named_function: FunctionParameters,
     pub named_function_ids: NamedFunctionIDParameters,
     pub kinds: KindParameters,
     pub max_irrelevant_ids: usize,
@@ -159,12 +159,15 @@ pub struct InstanceParameters {
 impl InstanceParameters {
     /// Parameters for the full V3 [`Instance`] space. This is the default.
     ///
-    /// The objective, regular constraints, named functions, and decision
-    /// variables are sampled from strategies. The V3-specific structure —
+    /// The objective, regular constraints, and named functions use the default
+    /// [`crate::Function`] strategy, including composed expressions, and
+    /// decision variables are sampled from their strategies. The V3-specific structure —
     /// fixed and dependent variables, removed constraints, indicator,
     /// one-hot, and SOS1 families, parameters, description, and annotations
-    /// — is injected deterministically, so each of those dimensions is
-    /// exercised at a single representative point (smoke coverage) rather
+    /// plus an output objective with an active-independent function and no
+    /// optimality-preservation guarantee — is injected deterministically, so
+    /// each of those dimensions is exercised at a single representative point
+    /// (smoke coverage) rather
     /// than sampled. Every generated instance contains all V3 features;
     /// feature-absent combinations are covered by the narrower spaces such
     /// as [`Self::regular_only`].
@@ -173,9 +176,9 @@ impl InstanceParameters {
             space: InstanceSpace::FullV3,
             constraint_ids: ConstraintIDParameters::default(),
             named_function_ids: NamedFunctionIDParameters::default(),
-            objective: PolynomialParameters::default(),
-            constraint: PolynomialParameters::default(),
-            named_function: PolynomialParameters::default(),
+            objective: FunctionParameters::default(),
+            constraint: FunctionParameters::default(),
+            named_function: FunctionParameters::default(),
             kinds: KindParameters::new(&[
                 Kind::Binary,
                 Kind::Integer,
@@ -191,14 +194,16 @@ impl InstanceParameters {
 
     /// Parameters for the regular-constraint subspace: no special constraint
     /// families, no removed constraints, and no fixed or dependent variables.
+    /// Function-valued components still use the full composed-function space;
+    /// this constructor restricts instance structure, not function algebra.
     pub fn regular_only() -> Self {
         Self {
             space: InstanceSpace::RegularOnly,
             constraint_ids: ConstraintIDParameters::default(),
             named_function_ids: NamedFunctionIDParameters::default(),
-            objective: PolynomialParameters::default(),
-            constraint: PolynomialParameters::default(),
-            named_function: PolynomialParameters::default(),
+            objective: FunctionParameters::default(),
+            constraint: FunctionParameters::default(),
+            named_function: FunctionParameters::default(),
             kinds: KindParameters::default(),
             max_irrelevant_ids: 5,
         }
@@ -229,9 +234,11 @@ impl InstanceParameters {
             space: InstanceSpace::RegularOnly,
             constraint_ids: ConstraintIDParameters::default(),
             named_function_ids: NamedFunctionIDParameters::default(),
-            named_function: PolynomialParameters::default_linear(),
-            objective: PolynomialParameters::default_linear(),
-            constraint: PolynomialParameters::default_linear(),
+            named_function: FunctionParameters::polynomial_only(
+                PolynomialParameters::default_linear(),
+            ),
+            objective: FunctionParameters::polynomial_only(PolynomialParameters::default_linear()),
+            constraint: FunctionParameters::polynomial_only(PolynomialParameters::default_linear()),
             kinds: KindParameters::default(),
             max_irrelevant_ids: 5,
         }
@@ -243,9 +250,13 @@ impl InstanceParameters {
             space: InstanceSpace::RegularOnly,
             constraint_ids: ConstraintIDParameters::default(),
             named_function_ids: NamedFunctionIDParameters::default(),
-            objective: PolynomialParameters::default_quadratic(),
-            constraint: PolynomialParameters::default_linear(),
-            named_function: PolynomialParameters::default_linear(),
+            objective: FunctionParameters::polynomial_only(
+                PolynomialParameters::default_quadratic(),
+            ),
+            constraint: FunctionParameters::polynomial_only(PolynomialParameters::default_linear()),
+            named_function: FunctionParameters::polynomial_only(
+                PolynomialParameters::default_linear(),
+            ),
             kinds: KindParameters::default(),
             max_irrelevant_ids: 5,
         }
@@ -257,9 +268,15 @@ impl InstanceParameters {
             space: InstanceSpace::RegularOnly,
             constraint_ids: ConstraintIDParameters::default(),
             named_function_ids: NamedFunctionIDParameters::default(),
-            objective: PolynomialParameters::default_quadratic(),
-            constraint: PolynomialParameters::default_quadratic(),
-            named_function: PolynomialParameters::default_quadratic(),
+            objective: FunctionParameters::polynomial_only(
+                PolynomialParameters::default_quadratic(),
+            ),
+            constraint: FunctionParameters::polynomial_only(
+                PolynomialParameters::default_quadratic(),
+            ),
+            named_function: FunctionParameters::polynomial_only(
+                PolynomialParameters::default_quadratic(),
+            ),
             kinds: KindParameters::default(),
             max_irrelevant_ids: 5,
         }
@@ -393,6 +410,11 @@ impl Arbitrary for Instance {
                                     constraint_context.set_name(id, "arbitrary_constraint");
                                 }
 
+                                let first_extra_id = if space == InstanceSpace::FullV3 {
+                                    next_constraint_id(&constraints).into_inner()
+                                } else {
+                                    0
+                                };
                                 if let Some(ids) = full_v3_ids {
                                     let fixed_id = ids[0];
                                     let dependent_id = ids[1];
@@ -433,7 +455,7 @@ impl Arbitrary for Instance {
                                         decision_variables.insert(id, DecisionVariable::binary());
                                     }
 
-                                    let removed_id = next_constraint_id(&constraints);
+                                    let removed_id = ConstraintID::from(first_extra_id);
                                     removed_constraints.insert(
                                         removed_id,
                                         (
@@ -444,7 +466,8 @@ impl Arbitrary for Instance {
                                     constraint_context
                                         .set_name(removed_id, "arbitrary_removed_constraint");
 
-                                    let indicator_id = IndicatorConstraintID::from(0);
+                                    let indicator_id =
+                                        IndicatorConstraintID::from(first_extra_id + 1);
                                     indicator_constraints.insert(
                                         indicator_id,
                                         IndicatorConstraint::new(
@@ -458,7 +481,8 @@ impl Arbitrary for Instance {
                                     indicator_constraint_context
                                         .set_name(indicator_id, "arbitrary_indicator");
 
-                                    let removed_indicator_id = IndicatorConstraintID::from(1);
+                                    let removed_indicator_id =
+                                        IndicatorConstraintID::from(first_extra_id + 2);
                                     removed_indicator_constraints.insert(
                                         removed_indicator_id,
                                         (
@@ -477,7 +501,7 @@ impl Arbitrary for Instance {
                                         "arbitrary_removed_indicator",
                                     );
 
-                                    let one_hot_id = OneHotConstraintID::from(0);
+                                    let one_hot_id = OneHotConstraintID::from(first_extra_id + 3);
                                     one_hot_constraints.insert(
                                         one_hot_id,
                                         OneHotConstraint::new(BTreeSet::from([
@@ -489,7 +513,8 @@ impl Arbitrary for Instance {
                                     one_hot_constraint_context
                                         .set_name(one_hot_id, "arbitrary_one_hot");
 
-                                    let removed_one_hot_id = OneHotConstraintID::from(1);
+                                    let removed_one_hot_id =
+                                        OneHotConstraintID::from(first_extra_id + 4);
                                     one_hot_constraints.insert(
                                         removed_one_hot_id,
                                         OneHotConstraint::new(BTreeSet::from([
@@ -506,7 +531,7 @@ impl Arbitrary for Instance {
                                     // generated instances cover variables that
                                     // belong to more than one special
                                     // constraint family.
-                                    let sos1_id = Sos1ConstraintID::from(0);
+                                    let sos1_id = Sos1ConstraintID::from(first_extra_id + 5);
                                     sos1_constraints.insert(
                                         sos1_id,
                                         Sos1Constraint::new(BTreeSet::from([
@@ -517,7 +542,8 @@ impl Arbitrary for Instance {
                                     );
                                     sos1_constraint_context.set_name(sos1_id, "arbitrary_sos1");
 
-                                    let removed_sos1_id = Sos1ConstraintID::from(1);
+                                    let removed_sos1_id =
+                                        Sos1ConstraintID::from(first_extra_id + 6);
                                     sos1_constraints.insert(
                                         removed_sos1_id,
                                         Sos1Constraint::new(BTreeSet::from([
@@ -554,10 +580,14 @@ impl Arbitrary for Instance {
 
                                 if space == InstanceSpace::FullV3 {
                                     instance
-                                        .convert_one_hot_to_constraint(OneHotConstraintID::from(1))
+                                        .convert_one_hot_to_constraint(OneHotConstraintID::from(
+                                            first_extra_id + 4,
+                                        ))
                                         .expect("arbitrary removed one-hot conversion must work");
                                     instance
-                                        .convert_sos1_to_constraints(Sos1ConstraintID::from(1))
+                                        .convert_sos1_to_constraints(Sos1ConstraintID::from(
+                                            first_extra_id + 6,
+                                        ))
                                         .expect("arbitrary removed SOS1 conversion must work");
                                     let mut parameters = v1::Parameters {
                                         entries: HashMap::new(),
@@ -577,6 +607,20 @@ impl Arbitrary for Instance {
                                         "org.ommx.user.arbitrary".to_string(),
                                         "true".to_string(),
                                     );
+                                    let output_only_id = *instance
+                                        .fixed_decision_variable_values()
+                                        .keys()
+                                        .next()
+                                        .expect("FullV3 instances contain a fixed variable");
+                                    let output_sense = match instance.sense() {
+                                        Sense::Minimize => Sense::Maximize,
+                                        Sense::Maximize => Sense::Minimize,
+                                    };
+                                    instance.output_objective = Some(OutputObjective::new(
+                                        output_sense,
+                                        Function::from(linear!(output_only_id.into_inner())),
+                                        false,
+                                    ));
                                 }
 
                                 instance
@@ -595,16 +639,17 @@ mod tests {
     proptest! {
         #[test]
         fn test_variable_id_is_defined(instance in Instance::arbitrary()) {
-            for ids in instance.objective.keys() {
-                for id in ids {
+            for id in instance.objective.required_ids() {
+                prop_assert!(instance.decision_variables.contains_key(&id));
+            }
+            if let Some(output) = instance.output_objective() {
+                for id in output.function().required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
             for c in instance.constraints().values() {
-                for ids in c.function().keys() {
-                    for id in ids {
-                        prop_assert!(instance.decision_variables.contains_key(&id));
-                    }
+                for id in c.function().required_ids() {
+                    prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
             for (c, _) in instance.removed_constraints().values() {
@@ -672,6 +717,16 @@ mod tests {
             prop_assert!(instance.parameters.is_some());
             prop_assert!(instance.description.is_some());
             prop_assert!(!instance.annotations.is_empty());
+            let output = instance.output_objective().unwrap();
+            prop_assert!(!output.preserves_optimality());
+            let output_only_ids = output.function().required_ids();
+            prop_assert!(!output_only_ids.is_empty());
+            let solver_used_ids = instance.used_decision_variable_ids();
+            let usage = instance.decision_variable_usage();
+            for id in output_only_ids {
+                prop_assert!(!solver_used_ids.contains(&id));
+                prop_assert!(usage.get(id).is_none());
+            }
             prop_assert!(
                 instance
                     .indicator_constraints()

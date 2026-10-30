@@ -1,3 +1,4 @@
+use crate::constraint_base::ConstraintView;
 use pyo3::{exceptions::PyKeyError, prelude::*};
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use std::collections::{BTreeSet, HashMap};
@@ -43,7 +44,7 @@ impl OneHotConstraint {
         subscripts: Vec<i64>,
         description: Option<String>,
         parameters: HashMap<String, String>,
-    ) -> PyResult<Self> {
+    ) -> crate::error::OmmxPyResult<Self> {
         let vars: BTreeSet<ommx::VariableID> =
             variables.into_iter().map(|variable| variable.0).collect();
         let context = ommx::ConstraintContext {
@@ -55,8 +56,7 @@ impl OneHotConstraint {
             },
             provenance: Vec::new(),
         };
-        let constraint = ommx::OneHotConstraint::new(vars)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+        let constraint = ommx::OneHotConstraint::new(vars)?;
         Ok(Self(constraint, context))
     }
 
@@ -129,13 +129,17 @@ impl OneHotConstraint {
 
 /// A removed one-hot constraint together with the reason it was removed.
 #[gen_stub_pyclass]
-#[pyclass]
-#[derive(Clone)]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(Clone, PartialEq)]
 pub struct RemovedOneHotConstraint {
     pub constraint: ommx::OneHotConstraint,
     pub context: ommx::ConstraintContext,
     pub removed_reason: ommx::RemovedReason,
 }
+crate::constraint_base::constraint_subclass!(
+    RemovedOneHotConstraint,
+    crate::constraint_base::ConstraintView
+);
 
 impl RemovedOneHotConstraint {
     pub fn from_parts(
@@ -194,6 +198,11 @@ impl RemovedOneHotConstraint {
     }
 
     #[getter]
+    pub fn provenance(&self) -> Vec<crate::Provenance> {
+        crate::provenance_list(&self.context)
+    }
+
+    #[getter]
     pub fn removed_reason(&self) -> String {
         self.removed_reason.reason.clone()
     }
@@ -229,14 +238,19 @@ impl RemovedOneHotConstraint {
 ///
 /// Returned by `Instance.add_one_hot_constraint` /
 /// `ParametricInstance.add_one_hot_constraint` and by their
-/// `one_hot_constraints[id]` getters. Reads pull live data from the parent
+/// `constraints[OneHotConstraintID(...)]` lookups. Reads pull live data from the parent
 /// host and context setters write through to its SoA context store.
 #[gen_stub_pyclass]
-#[pyclass]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(PartialEq)]
 pub struct AttachedOneHotConstraint {
     pub(crate) host: ConstraintHost,
     pub(crate) id: ommx::OneHotConstraintID,
 }
+crate::constraint_base::constraint_subclass!(
+    AttachedOneHotConstraint,
+    crate::constraint_base::ConstraintView
+);
 
 impl AttachedOneHotConstraint {
     pub fn new(host: ConstraintHost, id: ommx::OneHotConstraintID) -> Self {
@@ -290,8 +304,8 @@ fn lookup_one_hot_parametric(
 impl AttachedOneHotConstraint {
     /// The id this handle points at.
     #[getter]
-    pub fn constraint_id(&self) -> u64 {
-        self.id.into_inner()
+    pub fn constraint_id(&self) -> crate::OneHotConstraintID {
+        self.id.into()
     }
 
     /// The parent host this constraint lives in.

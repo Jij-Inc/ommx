@@ -4,22 +4,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ommx_highs_adapter"
-version = "3.0.0b2"
+version = "3.0.0b9"
 description = "An adapter between OMMX and HiGHS"
 authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
 readme = "README.md"
-requires-python = ">=3.10, <3.14"
+requires-python = ">=3.10"
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "License :: OSI Approved :: Apache Software License",
   "License :: OSI Approved :: MIT License",
 ]
 
-dependencies = ["ommx >= 3.0.0b2, < 4.0.0","highspy>=1.9.0", "numpy>=1.17.3"]
+dependencies = ["ommx >= 3.0.0b9, < 4.0.0","highspy>=1.9.0", "numpy>=1.17.3"]
 
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"

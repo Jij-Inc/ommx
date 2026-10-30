@@ -1,9 +1,18 @@
 use super::*;
 
 fn validate_one_hot_non_empty(constraint: &crate::OneHotConstraint) -> crate::Result<()> {
-    if constraint.variables.is_empty() {
-        crate::bail!("One-hot constraint must contain at least one variable");
-    }
+    crate::ensure!(
+        !constraint.variables.is_empty(),
+        crate::OneHotConstraintError::EmptyVariables
+    );
+    Ok(())
+}
+
+fn validate_sos1_non_empty(constraint: &crate::Sos1Constraint) -> crate::Result<()> {
+    crate::ensure!(
+        !constraint.variables.is_empty(),
+        crate::Sos1ConstraintError::EmptyVariables
+    );
     Ok(())
 }
 
@@ -66,11 +75,44 @@ impl Instance {
         )
     }
 
-    /// Set the objective function
+    /// Set the objective function and rebase output semantics.
+    ///
+    /// # Postconditions
+    ///
+    /// Setting the objective makes it the new active and output semantics.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     coeff, linear, v1::State, ATol, DecisionVariable, Evaluate, Function,
+    ///     Instance, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(1);
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    ///
+    /// instance
+    ///     .set_objective(Function::from((coeff!(2.0) * linear!(1)).unwrap()))
+    ///     .unwrap();
+    /// assert_eq!(instance.sense(), Sense::Minimize);
+    /// assert!(instance.output_objective().is_none());
+    /// let state = State::from(HashMap::from([(1, 1.0)]));
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Minimize));
+    /// assert_eq!(*solution.objective(), 2.0);
+    /// ```
     pub fn set_objective(&mut self, objective: Function) -> crate::Result<()> {
         // Validate that all variables in the objective are defined
         self.validate_required_ids(objective.required_ids())?;
         self.objective = objective;
+        self.output_objective = None;
         Ok(())
     }
 
@@ -90,7 +132,7 @@ impl Instance {
         context: crate::ConstraintContext,
     ) -> crate::Result<ConstraintID> {
         self.validate_required_ids(constraint.required_ids())?;
-        let id = self.constraint_collection.unused_id();
+        let id = self.next_constraint_number()?.into();
         self.constraint_collection
             .insert_active_with_context(id, constraint, context)?;
         Ok(id)
@@ -127,7 +169,7 @@ impl Instance {
     ) -> crate::Result<crate::IndicatorConstraintID> {
         self.validate_required_ids(constraint.required_ids())?;
         self.require_binary_variable(constraint.indicator_variable)?;
-        let id = self.indicator_constraint_collection.unused_id();
+        let id = self.next_constraint_number()?.into();
         self.indicator_constraint_collection
             .insert_active_with_context(id, constraint, context)?;
         Ok(id)
@@ -149,7 +191,7 @@ impl Instance {
         for var_id in &constraint.variables {
             self.require_binary_variable(*var_id)?;
         }
-        let id = self.one_hot_constraint_collection.unused_id();
+        let id = self.next_constraint_number()?.into();
         self.one_hot_constraint_collection
             .insert_active_with_context(id, constraint, context)?;
         Ok(id)
@@ -165,11 +207,9 @@ impl Instance {
         constraint: crate::Sos1Constraint,
         context: crate::ConstraintContext,
     ) -> crate::Result<crate::Sos1ConstraintID> {
-        if constraint.variables.is_empty() {
-            crate::bail!("SOS1 constraint must contain at least one variable");
-        }
+        validate_sos1_non_empty(&constraint)?;
         self.validate_required_ids(constraint.required_ids())?;
-        let id = self.sos1_constraint_collection.unused_id();
+        let id = self.next_constraint_number()?.into();
         self.sos1_constraint_collection
             .insert_active_with_context(id, constraint, context)?;
         Ok(id)
@@ -180,16 +220,21 @@ impl Instance {
     /// The table key must not collide with any existing variable and must not
     /// be a substitution-dependency key. Returns the inserted variable's id for
     /// symmetry with `add_constraint`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error whose chain contains
+    /// [`crate::DecisionVariableError::DuplicateID`] when `id` is already
+    /// owned by a decision variable.
     pub fn add_decision_variable(
         &mut self,
         id: crate::VariableID,
         variable: crate::DecisionVariable,
         label: crate::DecisionVariableLabel,
     ) -> crate::Result<crate::VariableID> {
-        if self.decision_variables.contains_key(&id) {
-            crate::bail!({ ?id }, "Duplicate decision variable ID: {id:?}");
-        }
-        if self.decision_variable_dependency.keys().any(|k| k == id) {
+        if !self.decision_variables.contains_key(&id)
+            && self.decision_variable_dependency.keys().any(|k| k == id)
+        {
             crate::bail!(
                 { ?id },
                 "Variable id {id:?} is currently used as a substitution-dependency key",
@@ -236,6 +281,7 @@ impl Instance {
     ) -> crate::Result<Option<Constraint>> {
         // Validate that all variables in the constraints are defined
         self.validate_required_ids(constraint.required_ids())?;
+        self.validate_regular_constraint_number(id)?;
         self.apply_validated_constraint_insert(id, constraint)
     }
 
@@ -269,7 +315,8 @@ impl Instance {
             .collect();
 
         // Validate all constraints first (atomic: fail before any insertion)
-        for (_, constraint) in &constraints {
+        for (id, constraint) in &constraints {
+            self.validate_regular_constraint_number(*id)?;
             let required_ids = constraint.required_ids();
             Self::validate_required_ids_with_sets(
                 &required_ids,
@@ -290,27 +337,17 @@ impl Instance {
         Ok(replaced)
     }
 
-    /// Returns the next available ConstraintID.
+    /// Return the next regular constraint ID from the instance-wide number space.
     ///
-    /// Finds the maximum ID from both active constraints and removed constraints,
-    /// then adds 1. If there are no constraints, returns ConstraintID(0).
+    /// Includes active and removed constraints of every family. This does not
+    /// reserve the number: repeated calls return the same ID until insertion.
     ///
-    /// Note: This method does not track which IDs have been allocated.
-    /// Consecutive calls will return the same ID until a constraint is actually added.
+    /// # Panics
+    /// Panics when no number above the current maximum remains.
     pub fn next_constraint_id(&self) -> ConstraintID {
-        let max_in_constraints = self
-            .constraints()
-            .last_key_value()
-            .map(|(id, _)| id.into_inner());
-        let max_in_removed = self
-            .removed_constraints()
-            .last_key_value()
-            .map(|(id, _)| id.into_inner());
-
-        max_in_constraints
-            .max(max_in_removed)
-            .map(|max| ConstraintID::from(max + 1))
-            .unwrap_or(ConstraintID::from(0))
+        self.next_constraint_number()
+            .expect("no constraint number larger than the current maximum remains")
+            .into()
     }
 }
 
@@ -371,7 +408,7 @@ impl ParametricInstance {
         context: crate::ConstraintContext,
     ) -> crate::Result<ConstraintID> {
         self.validate_required_ids(constraint.required_ids())?;
-        let id = self.constraint_collection.unused_id();
+        let id = self.next_constraint_number()?.into();
         self.constraint_collection
             .insert_active_with_context(id, constraint, context)?;
         Ok(id)
@@ -445,7 +482,7 @@ impl ParametricInstance {
         // call's only added contribution for the indicator variable is the
         // dependency-key check.
         self.validate_required_ids(constraint.required_ids())?;
-        let id = self.indicator_constraint_collection.unused_id();
+        let id = self.next_constraint_number()?.into();
         self.indicator_constraint_collection
             .insert_active_with_context(id, constraint, context)?;
         Ok(id)
@@ -466,7 +503,7 @@ impl ParametricInstance {
             self.require_binary_variable(*var_id)?;
         }
         self.validate_required_ids(constraint.required_ids())?;
-        let id = self.one_hot_constraint_collection.unused_id();
+        let id = self.next_constraint_number()?.into();
         self.one_hot_constraint_collection
             .insert_active_with_context(id, constraint, context)?;
         Ok(id)
@@ -483,13 +520,11 @@ impl ParametricInstance {
         constraint: crate::Sos1Constraint,
         context: crate::ConstraintContext,
     ) -> crate::Result<crate::Sos1ConstraintID> {
-        if constraint.variables.is_empty() {
-            crate::bail!("SOS1 constraint must contain at least one variable");
-        }
+        validate_sos1_non_empty(&constraint)?;
         let required_ids = constraint.required_ids();
         self.require_decision_variables(required_ids.clone())?;
         self.validate_required_ids(required_ids)?;
-        let id = self.sos1_constraint_collection.unused_id();
+        let id = self.next_constraint_number()?.into();
         self.sos1_constraint_collection
             .insert_active_with_context(id, constraint, context)?;
         Ok(id)
@@ -499,22 +534,25 @@ impl ParametricInstance {
     ///
     /// The table key must not collide with any existing decision
     /// variable, parameter, or substitution-dependency key.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error whose chain contains
+    /// [`crate::DecisionVariableError::DuplicateID`] when `id` is already
+    /// owned by a decision variable, or
+    /// [`crate::ParameterIDCollision`] when it is already owned by a
+    /// parameter.
     pub fn add_decision_variable(
         &mut self,
         id: crate::VariableID,
         variable: crate::DecisionVariable,
         label: crate::DecisionVariableLabel,
     ) -> crate::Result<crate::VariableID> {
-        if self.decision_variables().contains_key(&id) {
-            crate::bail!({ ?id }, "Duplicate decision variable ID: {id:?}");
+        let has_decision_variable = self.decision_variables().contains_key(&id);
+        if !has_decision_variable && self.parameters().contains_key(&id) {
+            return Err(crate::ParameterIDCollision { id }.into());
         }
-        if self.parameters().contains_key(&id) {
-            crate::bail!(
-                { ?id },
-                "Variable id {id:?} collides with an existing parameter id",
-            );
-        }
-        if self.decision_variable_dependency().keys().any(|k| k == id) {
+        if !has_decision_variable && self.decision_variable_dependency().keys().any(|k| k == id) {
             crate::bail!(
                 { ?id },
                 "Variable id {id:?} is currently used as a substitution-dependency key",
@@ -534,7 +572,7 @@ mod tests {
         constraint::{Constraint, ConstraintID},
         linear,
         polynomial_base::{Linear, LinearMonomial},
-        DecisionVariable, Function, VariableID,
+        DecisionVariable, Function, ParameterIDCollision, ParameterTable, Substitute, VariableID,
     };
 
     use maplit::btreemap;
@@ -545,6 +583,103 @@ mod tests {
             variables: BTreeSet::new(),
             stage: crate::OneHotCreatedData,
         }
+    }
+
+    fn empty_sos1_constraint() -> crate::Sos1Constraint {
+        crate::Sos1Constraint {
+            variables: BTreeSet::new(),
+            stage: crate::Sos1CreatedData,
+        }
+    }
+
+    #[test]
+    fn add_decision_variable_preserves_duplicate_id_signal() {
+        let id = VariableID::from(7);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            btreemap! { id => DecisionVariable::binary() },
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let error = instance
+            .add_decision_variable(
+                id,
+                DecisionVariable::binary(),
+                crate::DecisionVariableLabel::default(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            error.downcast_ref::<crate::DecisionVariableError>(),
+            Some(crate::DecisionVariableError::DuplicateID { id: duplicate }) if *duplicate == id
+        ));
+        assert_eq!(instance.decision_variables().len(), 1);
+    }
+
+    #[test]
+    fn parametric_add_decision_variable_preserves_substituted_duplicate_signal() {
+        let independent = VariableID::from(0);
+        let dependent = VariableID::from(7);
+        let instance = ParametricInstance::new(
+            Sense::Minimize,
+            Function::from(linear!(dependent.into_inner())),
+            btreemap! {
+                independent => DecisionVariable::binary(),
+                dependent => DecisionVariable::binary(),
+            },
+            ParameterTable::default(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let mut instance = instance
+            .substitute_one(
+                dependent,
+                &Function::from(linear!(independent.into_inner())),
+            )
+            .unwrap();
+
+        let error = instance
+            .add_decision_variable(
+                dependent,
+                DecisionVariable::binary(),
+                crate::DecisionVariableLabel::default(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            error.downcast_ref::<crate::DecisionVariableError>(),
+            Some(crate::DecisionVariableError::DuplicateID { id }) if id == &dependent
+        ));
+        assert_eq!(instance.decision_variables().len(), 2);
+    }
+
+    #[test]
+    fn add_decision_variable_preserves_parameter_id_collision_signal() {
+        let parameter = VariableID::from(100);
+        let mut instance = ParametricInstance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::new(),
+            ParameterTable::from_ids(BTreeSet::from([parameter])),
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let error = instance
+            .add_decision_variable(
+                parameter,
+                DecisionVariable::binary(),
+                crate::DecisionVariableLabel::default(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            error.downcast_ref::<ParameterIDCollision>(),
+            Some(ParameterIDCollision { id }) if *id == parameter
+        ));
+        assert!(instance.decision_variables().is_empty());
     }
 
     #[test]
@@ -784,6 +919,10 @@ mod tests {
             )
             .unwrap_err();
 
+        assert!(matches!(
+            err.downcast_ref::<crate::OneHotConstraintError>(),
+            Some(crate::OneHotConstraintError::EmptyVariables)
+        ));
         assert!(
             err.to_string().contains("at least one variable"),
             "unexpected error: {err}"
@@ -809,11 +948,58 @@ mod tests {
             )
             .unwrap_err();
 
+        assert!(matches!(
+            err.downcast_ref::<crate::OneHotConstraintError>(),
+            Some(crate::OneHotConstraintError::EmptyVariables)
+        ));
         assert!(
             err.to_string().contains("at least one variable"),
             "unexpected error: {err}"
         );
         assert!(instance.one_hot_constraints().is_empty());
+    }
+
+    #[test]
+    fn test_add_sos1_constraint_rejects_empty_variable_set() {
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let err = instance
+            .add_sos1_constraint(empty_sos1_constraint(), crate::ConstraintContext::default())
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<crate::Sos1ConstraintError>(),
+            Some(crate::Sos1ConstraintError::EmptyVariables)
+        ));
+        assert!(instance.sos1_constraints().is_empty());
+    }
+
+    #[test]
+    fn test_parametric_add_sos1_constraint_rejects_empty_variable_set() {
+        let mut instance = ParametricInstance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::new(),
+            crate::ParameterTable::default(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let err = instance
+            .add_sos1_constraint(empty_sos1_constraint(), crate::ConstraintContext::default())
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<crate::Sos1ConstraintError>(),
+            Some(crate::Sos1ConstraintError::EmptyVariables)
+        ));
+        assert!(instance.sos1_constraints().is_empty());
     }
 
     #[test]

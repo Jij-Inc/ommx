@@ -64,7 +64,7 @@ mod remote_transport;
 mod save;
 pub use config::*;
 pub use digest::sha256_digest;
-pub use image_ref::ImageRef;
+pub use image_ref::{ImageRef, ImageRefParseError};
 pub(crate) use manifest::stable_json_bytes;
 pub(crate) use manifest::{
     anonymous_artifact_image_name, anonymous_local_image_name, anonymous_local_repository_key,
@@ -187,6 +187,11 @@ pub fn fetch_remote_manifest(image_name: &ImageRef) -> Result<ImageManifest> {
 }
 
 /// Get all images stored in the local registry.
+///
+/// If a persisted ref is corrupted, the returned error retains an
+/// [`local_registry::InvalidLocalRegistryImageRef`] signal. This distinguishes
+/// invalid stored state from an invalid image reference supplied by the current
+/// caller.
 pub fn get_images() -> Result<Vec<ImageRef>> {
     let root = get_local_registry_root();
     let registry = local_registry::LocalRegistry::open(root)?;

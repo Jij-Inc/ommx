@@ -1,36 +1,36 @@
 # serializer version: 1
-# name: test_constraint_context_df_default_kind_is_regular
+# name: test_regular_kind_context_df
   '''
                             name subscripts         description
   regular_constraint_id                                        
-  10                     balance     [0, 1]  demand-balance row
+  ConstraintID(10)       balance     [0, 1]  demand-balance row
   '''
 # ---
 # name: test_constraint_parameters_df
   '''
-     regular_constraint_id     key    value
-  0                     10  region  us-east
-  1                     10    tier     gold
+    regular_constraint_id     key    value
+  0      ConstraintID(10)  region  us-east
+  1      ConstraintID(10)    tier     gold
   '''
 # ---
 # name: test_indicator_kind_context_df
   '''
-                           name subscripts description
-  indicator_constraint_id                             
-  5                        <NA>         []        <NA>
+                            name subscripts description
+  indicator_constraint_id                              
+  IndicatorConstraintID(5)  <NA>         []        <NA>
   '''
 # ---
 # name: test_one_hot_kind_context_df
   '''
                          name subscripts description
   one_hot_constraint_id                             
-  6                      <NA>         []        <NA>
+  OneHotConstraintID(6)  <NA>         []        <NA>
   '''
 # ---
 # name: test_provenance_after_one_hot_conversion
   '''
-     regular_constraint_id  step       source_kind  source_id
-  0                      0     0  OneHotConstraint          7
+    regular_constraint_id  step       source_kind              source_id
+  0       ConstraintID(8)     0  OneHotConstraint  OneHotConstraintID(7)
   '''
 # ---
 # name: test_provenance_empty_when_no_chain
@@ -42,21 +42,21 @@
 # ---
 # name: test_removed_reasons_df_after_relax
   '''
-     regular_constraint_id       reason   key value
-  0                     10  test_reason  <NA>  <NA>
+    regular_constraint_id       reason   key value
+  0      ConstraintID(10)  test_reason  <NA>  <NA>
   '''
 # ---
 # name: test_removed_reasons_df_with_parameters_after_one_hot_conversion
   '''
      one_hot_constraint_id                                       reason            key value
-  0                      7  ommx.Instance.convert_one_hot_to_constraint  constraint_id     0
+  0  OneHotConstraintID(7)  ommx.Instance.convert_one_hot_to_constraint  constraint_id     8
   '''
 # ---
 # name: test_sos1_kind_context_df
   '''
-                      name subscripts description
-  sos1_constraint_id                             
-  7                   <NA>         []        <NA>
+                       name subscripts description
+  sos1_constraint_id                              
+  Sos1ConstraintID(7)  <NA>         []        <NA>
   '''
 # ---
 # name: test_variable_labels_df

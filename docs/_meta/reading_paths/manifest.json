@@ -1,0 +1,6710 @@
+{
+  "schema_version": 1,
+  "title": "OMMX Book 概念とページの依存台帳",
+  "created_at": "2026-10-26",
+  "language": "ja",
+  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。日英の候補評価章と変数復元・保持情報のReference移管を含む。その他の英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。",
+  "baseline": {
+    "repository": "Jij-Inc/ommx",
+    "source_revision": "0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2",
+    "source_pr": 1284,
+    "main_revision": "027b9b2e9e0e605a4f46977438a920a9c63533f6",
+    "issue": "https://github.com/Jij-Inc/ommx/issues/1283",
+    "issue_updated_at": "2026-10-26T07:15:10Z",
+    "note": "Historical source baseline for proposed contracts; not the current main or a claim that the Book implements them. Resolve the live review revision separately."
+  },
+  "editorial_updates": [
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "521aea0ad30d936598e2ff2b423a714ff5cb960b",
+      "target_revision": "codex/readme-book-purpose",
+      "affected_pages": [
+        "README",
+        "HOME",
+        "HOME_EN"
+      ],
+      "note": "2次案に沿ったREADMEと日英Book冒頭の改訂。目的・現在の採用価値・利用者の判断を導入する。既存ページ全体の所有権・主目次・Referenceへの移管は後続の変更で扱う。baselineは旧契約の設計入力として保持し、今回の本文照合記録はチャットに残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "8b620d20ac6222a73274ccbb2d451d88db698143",
+      "target_revision": "codex/instance-api-reference",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "R_API.instance",
+        "R_API.instance.model",
+        "R_API.instance.names",
+        "R_API.instance.metadata-edit",
+        "G2",
+        "G2.display",
+        "G6",
+        "P3",
+        "DEV_A",
+        "P13",
+        "P14"
+      ],
+      "untracked_source_paths": [
+        "docs/en/user_guide/solution.md"
+      ],
+      "note": "更新された2次案の最初の移管。日英Instance Guideを削除し、基本概念と実行例を共有APIへ統合する。旧G1の概念IDは保持し所有先・代表経路を改訂。英語Solutionは前節への暗黙依存を除去しevaluateのAPIへリンクする限定変更で、同章全体の契約監査は対象外。歴史的baselineを変更せず本文照合記録はチャットに残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "e208f7466f69016b138ef2e1c6a53f43af7fdfd9",
+      "target_revision": "codex/solution-api-reference",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "R_API.solution",
+        "R_API.solution.model",
+        "R_API.evaluation.numeric",
+        "R_API.solution.extract",
+        "T4",
+        "G2",
+        "G3",
+        "R_API.sampleset",
+        "G6",
+        "G7",
+        "G8",
+        "G12",
+        "P14",
+        "MIG3",
+        "RELEASE",
+        "R_API.samples",
+        "R_API.parametric",
+        "P13",
+        "P13.samples",
+        "P12",
+        "T8"
+      ],
+      "untracked_source_paths": [
+        "docs/en/migration/python_sdk_v2_to_v3.md",
+        "docs/en/release_note/ommx-3.0.md",
+        "docs/en/release_note/ommx-1.7.md"
+      ],
+      "note": "日英Solution・SampleSet・ParametricInstance Guideを削除し、各クラスの意味と実行例を共有Referenceへ移管。入力のState・Samplesと共通のCollection/FamilyView/ID契約もReferenceに置く。意味的な概念IDを保持し旧G4S/G4M/G5系の所有先と代表経路を更新。samples.countsは現行公開APIのsample IDと候補数の意味に合わせ、内部圧縮や存在しないnum_occurrences属性を要求しない。共有collectionの詳細は本文照合で確認し、APIごとの前提ノードを増やさない。日英homeに固定構造の数値条件を変える入口を加える。未台帳化の英語移行ガイド・release noteはリンクの限定変更で各章全体の監査は対象外。歴史的baselineを変更せずレビュー記録はチャットに残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "3153113617fd4e2979a31f5bcfa99deb2c82b6d3",
+      "target_revision": "codex/function-api-reference",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "R_API.function",
+        "R_API.named_function",
+        "R_API.named_function.samples",
+        "R_API.named_function.values",
+        "R_API.instance.display",
+        "R_API.solution.extract",
+        "R_API.solution.named_values",
+        "R_API.instance.named_values",
+        "RELEASE"
+      ],
+      "untracked_source_paths": [
+        "docs/en/release_note/ommx-3.0.md"
+      ],
+      "note": "日英Function Guideと日本語の指標評価・名前付き抽出How-toを共有Referenceへ統合。既存のFunction説明と各所有APIを補い、基本操作の旧ページは残さない。意味的な概念IDを再利用しG2・P13・P14系の所有先を更新する。表現の契約と式評価、ラベル表示、報告用指標、結果抽出、別Instanceへの値の照合は実際の説明先を分け、リンクだけから習得を付与しない。日英の目的別入口を揃える。歴史的baselineと過去の編集記録は保持し、本文レビューの記録はチャットへ残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "4f04acc81eb4f49b761d1b8ad559a5fa25fc6a8a",
+      "target_revision": "codex/result-interpretation-book",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "B_EVALUATE",
+        "R_API.instance.population",
+        "R_API.instance.retained_results",
+        "R_API.instance.retained_results.population",
+        "G7",
+        "G9",
+        "G10",
+        "G12",
+        "P11",
+        "DEV_A",
+        "RELEASE",
+        "P1",
+        "P2",
+        "G3",
+        "P12"
+      ],
+      "note": "2次案の候補評価章を日英で追加し、日本語variable_roles/removed_constraintsのAPI手順を共有Referenceへ統合する。概念IDを保持してG6/G8の所有先を変更し、新しいBook章はAPI操作と区別した判断能力を契約にする。関連ページの変更は移管先への導線に限定し、各ページ全体の再編集ではない。歴史的baselineを更新せず、本文照合の証拠はチャットに残す。"
+    }
+  ],
+  "interpretation": {
+    "knowledge_unit": "概念名ではなく読者の学習成果。solution.readとevaluation.basic等を分ける。",
+    "introduces": "その節で必要な意味・操作・結果の読み方を説明し、その能力を習得できるという編集上の宣言。",
+    "uses": "理解を前提に操作・判断・結果読解を要求する。",
+    "mentions": "名称、見取り図、参照リンク、説明を要求しないコード/出力の露出。既習に加えない。",
+    "requires": "ページへの明示的な概念前提。単なるリンクや推奨順は代用しない。",
+    "owner": "詳しい説明を統括する正本。唯一の初出ページや必読ページではない。",
+    "optional_sections": "親ページと別ID。親を読んでも任意節の知識は付与しない。",
+    "route_join": "別々の経路が合流したら保証される既知概念は共通部分。",
+    "validation_limit": "検査は明示注釈間の整合性を調べる。自然言語本文の正確性・理解度・SDK実行は証明しない。"
+  },
+  "concepts": [
+    {
+      "id": "ext.math",
+      "label": "数理最適化の基礎（変数・目的・制約）",
+      "owner": null,
+      "requires": [],
+      "external": true,
+      "aliases": [],
+      "scope": ""
+    },
+    {
+      "id": "ext.python",
+      "label": "Pythonの基礎",
+      "owner": null,
+      "requires": [],
+      "external": true,
+      "aliases": [],
+      "scope": ""
+    },
+    {
+      "id": "ext.table",
+      "label": "表とDataFrameの基礎",
+      "owner": null,
+      "requires": [],
+      "external": true,
+      "aliases": [],
+      "scope": ""
+    },
+    {
+      "id": "ext.cli",
+      "label": "コマンドラインの基礎",
+      "owner": null,
+      "requires": [],
+      "external": true,
+      "aliases": [],
+      "scope": ""
+    },
+    {
+      "id": "ext.rust",
+      "label": "Rustの基礎",
+      "owner": null,
+      "requires": [],
+      "external": true,
+      "aliases": [],
+      "scope": ""
+    },
+    {
+      "id": "ommx.purpose",
+      "label": "共通の問題表現に前処理・変換技術を蓄積する目的を理解する",
+      "owner": "HOME",
+      "requires": [
+        "ext.math"
+      ],
+      "external": false,
+      "aliases": [],
+      "scope": "共通の問題表現に対して前処理や変換を実装し、モデラーや解法をまたいで蓄積・再利用する狙いを理解する。現在の機能と将来の自動選択・組合せの区別は各入口の後半で説明する。"
+    },
+    {
+      "id": "ommx.adoption",
+      "label": "現在の用途と、共通処理に任せる仕事・利用者に残る判断を選ぶ",
+      "owner": "HOME",
+      "requires": [
+        "ext.math"
+      ],
+      "external": false,
+      "aliases": [],
+      "scope": "候補評価、構造を保持した問題変換、Adapter接続、任意の保存・記録を利用目的に結びつける。モデル化・解法・変換方針・結果の採否は利用者が選ぶ。APIの操作手順や一般の変換保証を習得したとはみなさない。"
+    },
+    {
+      "id": "instance.model",
+      "label": "Instanceが表す問題と共通の意味",
+      "owner": "R_API.instance",
+      "requires": [
+        "ext.math"
+      ],
+      "external": false,
+      "aliases": [
+        "Instance"
+      ],
+      "scope": "変数の定義域、目的関数、通常制約と特殊制約、最大化・最小化をまとめる共通の問題モデル。特殊制約もソルバー固有の指示でなくOMMXが意味を定める条件であり、その種類は今後も拡張していく前提を含む。個々の特殊制約の成立条件や追加・評価操作の習得までは付与しない。"
+    },
+    {
+      "id": "variable.basics",
+      "label": "変数ID・種類・定義域を読む",
+      "owner": "R_API.instance",
+      "requires": [
+        "ext.math"
+      ],
+      "external": false,
+      "aliases": [
+        "DecisionVariable",
+        "Kind.Binary",
+        "Kind.Integer",
+        "Kind.Continuous",
+        "決定変数"
+      ],
+      "scope": "基本的なID・種類・定義域の知識。個々の型の詳細は使用箇所までに本文で導入する。Binaryの例だけからSemiInteger・SemiContinuousの知識を付与しない。"
+    },
+    {
+      "id": "variables.metadata",
+      "label": "変数のname・subscriptsとIDを区別する",
+      "owner": "R_API.instance.names",
+      "requires": [
+        "variable.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "name",
+        "subscripts"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "expression.basics",
+      "label": "ID・演算子・係数から式を構成する",
+      "owner": "R_API.function",
+      "requires": [
+        "variable.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "Function",
+        "Polynomial",
+        "Linear",
+        "Quadratic",
+        "式木"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "expression.evaluate",
+      "label": "Function単体に値を与えて評価する",
+      "owner": "R_API.function",
+      "requires": [
+        "expression.basics",
+        "state.values"
+      ],
+      "external": false,
+      "aliases": [
+        "Function.evaluate"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "expression.form",
+      "label": "数学的な式と格納表現の違いを読む",
+      "owner": "R_API.function",
+      "requires": [
+        "expression.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "Expr",
+        "polynomial representation",
+        "格納表現"
+      ],
+      "scope": "数学的に同じ式でも保持する表現が異なり、表現を要求するclassへの適合結果が変わり得ることを理解する。各演算がどの表現を生成するかや整数冪・展開の正確な規則はFunctionのAPI Referenceで別に確認する。"
+    },
+    {
+      "id": "constraint.basics",
+      "label": "通常制約の関係と充足を読む",
+      "owner": "R_API.instance",
+      "requires": [
+        "variable.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "Constraint",
+        "EqualToZero",
+        "LessThanOrEqualToZero",
+        "通常制約"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "sense",
+      "label": "最小化と最大化の向きを読む",
+      "owner": "R_API.instance",
+      "requires": [
+        "ext.math"
+      ],
+      "external": false,
+      "aliases": [
+        "Sense",
+        "Minimize",
+        "Maximize",
+        "最小化",
+        "最大化"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "instance.build",
+      "label": "変数・目的・制約からInstanceを構成する",
+      "owner": "R_API.instance",
+      "requires": [
+        "instance.model",
+        "variable.basics",
+        "expression.basics",
+        "constraint.basics",
+        "sense"
+      ],
+      "external": false,
+      "aliases": [
+        "Instance.minimize",
+        "Instance.maximize",
+        "Instance.from_components"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "state.values",
+      "label": "Stateを変数IDから値への割当てとして読む",
+      "owner": "R_API.solution",
+      "requires": [
+        "variable.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "State",
+        "state="
+      ],
+      "scope": ""
+    },
+    {
+      "id": "evaluation.basic",
+      "label": "与えた候補をInstanceで評価する",
+      "owner": "R_API.solution",
+      "requires": [
+        "instance.model",
+        "state.values"
+      ],
+      "external": false,
+      "aliases": [
+        "evaluate",
+        "候補解の評価"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "solution.read",
+      "label": "Solutionの変数値と目的値を読む",
+      "owner": "R_API.solution",
+      "requires": [
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "Solution",
+        "decision_variables_df",
+        "objective"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "solution.extract",
+      "label": "nameとsubscriptsで変数値を抽出する",
+      "owner": "R_API.solution.named_values",
+      "requires": [
+        "solution.read",
+        "variables.metadata"
+      ],
+      "external": false,
+      "aliases": [
+        "extract_decision_variables"
+      ],
+      "scope": "Solutionの変数値をname・subscriptsで辞書化し、IDによる識別との違い、tupleキー、名前なしの除外・重複時のエラー、DataFrameとの使い分けを理解する。別Instanceへの再入力やSampleSet全般の習得は含めない。"
+    },
+    {
+      "id": "feasibility.basic",
+      "label": "候補の実行可能性と違反を読む",
+      "owner": "R_API.solution",
+      "requires": [
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "feasible",
+        "violation",
+        "実行可能性"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "optimality.limit",
+      "label": "候補評価と最適性保証を区別する",
+      "owner": "R_API.solution",
+      "requires": [
+        "sense",
+        "feasibility.basic"
+      ],
+      "external": false,
+      "aliases": [
+        "optimality",
+        "最適性",
+        "最適解"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "samples.counts",
+      "label": "Samplesの候補IDと出現回数を読む",
+      "owner": "R_API.samples",
+      "requires": [
+        "state.values"
+      ],
+      "external": false,
+      "aliases": [
+        "Samples",
+        "num_samples",
+        "sample_ids",
+        "shots"
+      ],
+      "scope": "変数IDとsample IDを区別し、同じ値の候補にも別sample IDがあり得ることと、num_samplesが異なるassignment数ではなくsample ID数を数えることを理解する。num_occurrencesという公開属性や内部の圧縮形式の習得は含めない。"
+    },
+    {
+      "id": "sampleset.read",
+      "label": "SampleSetから実行可能な候補を選ぶ",
+      "owner": "R_API.sampleset",
+      "requires": [
+        "instance.model",
+        "solution.read",
+        "feasibility.basic",
+        "sense"
+      ],
+      "external": false,
+      "aliases": [
+        "SampleSet",
+        "best_feasible",
+        "SampleSet.summary"
+      ],
+      "scope": "既存のSampleSetから候補を読む能力。Samples/Stateを自作することや出現回数の内部表現は前提にしない。"
+    },
+    {
+      "id": "sampling.reported_results",
+      "label": "サンプラーのenergyとOMMXの報告目的値・実行可能性を区別する",
+      "owner": "R_API.instance.retained_results",
+      "requires": [
+        "instance.model",
+        "constraint.basics",
+        "sense"
+      ],
+      "external": false,
+      "aliases": [
+        "backend energy",
+        "reported objective"
+      ],
+      "scope": "具体例でサンプラーの探索値とOMMXの報告値を区別する。Stateを使った手動評価、output_objectiveの全仕様、feasible_relaxed、一般の変換保証の習得とは区別する。"
+    },
+    {
+      "id": "numeric.tolerance",
+      "label": "許容誤差を含む評価規則を判断する",
+      "owner": "R_API.evaluation.numeric",
+      "requires": [
+        "evaluation.basic",
+        "feasibility.basic"
+      ],
+      "external": false,
+      "aliases": [
+        "atol",
+        "ATol",
+        "許容誤差"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "named.outputs",
+      "label": "評価用の名前付き式を読む",
+      "owner": "R_API.named_function",
+      "requires": [
+        "expression.basics",
+        "evaluation.basic"
+      ],
+      "external": false,
+      "aliases": [
+        "NamedFunction",
+        "named_functions"
+      ],
+      "scope": "目的関数・制約とは別に候補ごとの指標をInstanceへ保持できると理解する。登録・取得と省略値の解釈はNamedFunction内の各実行例で扱い、他APIのリンクだけから習得を付与しない。"
+    },
+    {
+      "id": "variables.roles",
+      "label": "retainedとusedの変数を区別する",
+      "owner": "R_API.instance.population",
+      "requires": [
+        "instance.model",
+        "variable.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "used_decision_variables",
+        "retained",
+        "required_ids",
+        "used_ids"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "variables.recovery",
+      "label": "固定値と依存変数の復元を読む",
+      "owner": "R_API.instance.population",
+      "requires": [
+        "variables.roles",
+        "state.values"
+      ],
+      "external": false,
+      "aliases": [
+        "fixed",
+        "dependent",
+        "dependency",
+        "復元"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "variables.defaults",
+      "label": "不要な変数へのdefault補完を区別する",
+      "owner": "R_API.instance.population",
+      "requires": [
+        "variables.roles",
+        "state.values"
+      ],
+      "external": false,
+      "aliases": [
+        "irrelevant",
+        "default_fill",
+        "default",
+        "不要な変数"
+      ],
+      "scope": "irrelevantな変数の省略時に補われる値と、元の候補から復元した値を区別する。特定候補の値が重要なら明示する。変数kindごとの既定値選択規則の習得は含めず、Instance.populate_stateのAPI Referenceが所有する。"
+    },
+    {
+      "id": "special.indicator",
+      "label": "Indicatorの含意を読む",
+      "owner": "G3",
+      "requires": [
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "Indicator",
+        "indicator",
+        "指示制約"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "special.onehot",
+      "label": "OneHotの意味を読む",
+      "owner": "G3",
+      "requires": [
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "OneHot",
+        "one_hot",
+        "One-hot"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "special.sos1",
+      "label": "SOS1の意味を読む",
+      "owner": "G3",
+      "requires": [
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "Sos1",
+        "SOS1",
+        "sos1"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "constraints.lifecycle",
+      "label": "activeとremovedの制約を区別する",
+      "owner": "R_API.instance.retained_results",
+      "requires": [
+        "instance.model",
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "removed_constraints",
+        "active_constraints",
+        "removed constraint"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "objective.views",
+      "label": "active objectiveとoutput objectiveを区別する",
+      "owner": "R_API.instance.retained_results",
+      "requires": [
+        "evaluation.basic",
+        "expression.basics",
+        "sense"
+      ],
+      "external": false,
+      "aliases": [
+        "output_objective",
+        "active objective",
+        "output objective"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "feasibility.views",
+      "label": "activeのみとremovedを含む実行可能性を区別する",
+      "owner": "R_API.instance.retained_results",
+      "requires": [
+        "constraints.lifecycle",
+        "feasibility.basic"
+      ],
+      "external": false,
+      "aliases": [
+        "feasible_relaxed",
+        "feasible"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "evaluation.snapshot",
+      "label": "候補を対応するInstanceで評価する",
+      "owner": "R_API.instance.retained_results",
+      "requires": [
+        "evaluation.basic"
+      ],
+      "external": false,
+      "aliases": [
+        "prepared Instance",
+        "snapshot"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "class.membership",
+      "label": "InstanceClassへの所属を判定する",
+      "owner": "G9",
+      "requires": [
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "InstanceClass",
+        "contains",
+        "check_membership",
+        "membership"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "class.declare",
+      "label": "構造条件でtarget classを宣言する",
+      "owner": "G9",
+      "requires": [
+        "class.membership",
+        "variable.basics",
+        "expression.form",
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "InstanceClassClause",
+        "PolynomialRequirement",
+        "allowed_variable_kinds"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "class.scope",
+      "label": "所属判定のactive・usedの対象範囲を読む",
+      "owner": "G9.scope",
+      "requires": [
+        "class.membership",
+        "variables.roles",
+        "constraints.lifecycle",
+        "objective.views"
+      ],
+      "external": false,
+      "aliases": [
+        "used variables",
+        "active constraints",
+        "active objective"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "class.qubo",
+      "label": "QUBOを問題クラスの一例として読む",
+      "owner": "G9",
+      "requires": [
+        "class.membership",
+        "expression.basics",
+        "constraint.basics",
+        "sense"
+      ],
+      "external": false,
+      "aliases": [
+        "InstanceClass.qubo",
+        "QUBO",
+        "qubo"
+      ],
+      "scope": "QUBOをInstanceClassの一例として読み、classへの適合・Preparationと、Backend向けの係数整形を区別する。係数と定数項だけでは、Instanceが持つ変数の復元規則やremoved制約の評価情報を運べない。"
+    },
+    {
+      "id": "adapter.basic",
+      "label": "Adapterで問題を実行し候補を受け取る",
+      "owner": "G11",
+      "requires": [
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "Adapter",
+        "solve",
+        "sample"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "adapter.auto_prepare",
+      "label": "Adapterがcopyに必要な変換を行うことを読む",
+      "owner": "G10",
+      "requires": [
+        "adapter.basic"
+      ],
+      "external": false,
+      "aliases": [
+        "automatic Preparation",
+        "自動Preparation",
+        "自動的"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "preparation.target",
+      "label": "targetに向けたPreparationと停止条件を読む",
+      "owner": "G10",
+      "requires": [
+        "class.membership"
+      ],
+      "external": false,
+      "aliases": [
+        "prepare",
+        "Preparation",
+        "target"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "policy.select",
+      "label": "変換方針を選択し編集する",
+      "owner": "G10",
+      "requires": [
+        "preparation.target"
+      ],
+      "external": false,
+      "aliases": [
+        "PreparationPolicy",
+        "recommended_preparation_policy",
+        "Policy"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "mutation.copy",
+      "label": "copyとin-place変更の責任を区別する",
+      "owner": "G10",
+      "requires": [
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "copy.copy",
+        "in-place",
+        "rollback"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "adapter.strict",
+      "label": "準備済み入力をstrict APIで実行する",
+      "owner": "G10",
+      "requires": [
+        "adapter.basic",
+        "preparation.target"
+      ],
+      "external": false,
+      "aliases": [
+        "solve_without_preparation",
+        "sample_without_preparation"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "penalty.choice",
+      "label": "penaltyとweightの選択を読む",
+      "owner": "G7.penalty",
+      "requires": [
+        "constraint.basics",
+        "expression.basics",
+        "sense"
+      ],
+      "external": false,
+      "aliases": [
+        "FixedPenaltyPreparation",
+        "penalty_weights",
+        "uniform_penalty_weight",
+        "penalty",
+        "ペナルティ"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "encoding.integer",
+      "label": "整数からBinaryへの対応を読む",
+      "owner": "G7.encoding",
+      "requires": [
+        "variable.basics",
+        "state.values"
+      ],
+      "external": false,
+      "aliases": [
+        "IntegerEncoding",
+        "log_encode",
+        "encoding"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "slack.variable",
+      "label": "不等式へのslack導入を読む",
+      "owner": "G7.encoding",
+      "requires": [
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "IntegerSlack",
+        "slack",
+        "スラック"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "transformation.guarantees",
+      "label": "状態・実行可能性・目的・最適性の対応を区別する",
+      "owner": "G7",
+      "requires": [
+        "evaluation.basic",
+        "feasibility.basic",
+        "optimality.limit"
+      ],
+      "external": false,
+      "aliases": [
+        "同値",
+        "equivalence",
+        "projection",
+        "relaxation"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "conditioning",
+      "label": "変数固定を部分問題への制限として読む",
+      "owner": "G7.conditioning",
+      "requires": [
+        "transformation.guarantees",
+        "variable.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "partial_evaluate",
+        "conditioning",
+        "部分問題"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "bigm.contract",
+      "label": "Big-M変換の式と成立条件を確認する",
+      "owner": "R_API.transform",
+      "requires": [
+        "constraint.basics",
+        "variable.basics",
+        "transformation.guarantees"
+      ],
+      "external": false,
+      "aliases": [
+        "Big-M",
+        "BigM",
+        "big_m"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "function.support",
+      "label": "式を評価できることとAdapterの入力対応を区別する",
+      "owner": "R_API.function",
+      "requires": [
+        "expression.basics",
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "入力対応",
+        "対応範囲"
+      ],
+      "scope": "Functionとして式を構築・評価できることと、Adapterがその表現を直接受け取れることは別だと理解する。格納表現・対応演算の詳細はFunctionのAPI Reference、membership判定はG9、変換の選択はG10へ送り、参照リンクだけからそれらの能力を付与しない。"
+    },
+    {
+      "id": "function.representation",
+      "label": "式の内部表現とwireとの対応を読む",
+      "owner": "R_WIRE.function",
+      "requires": [
+        "expression.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "RPN",
+        "reverse Polish",
+        "wire"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "parametric.materialize",
+      "label": "固定構造にparameterを与えてInstanceにする",
+      "owner": "R_API.parametric",
+      "requires": [
+        "instance.model",
+        "expression.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "ParametricInstance",
+        "Parameter",
+        "with_parameters"
+      ],
+      "scope": "固定した変数・制約構造へパラメータを指定し、具体的なInstanceを作って再利用する。基本例はParametricInstanceクラス、必要なID集合・余分なキー・値の検査条件はwith_parametersが所有する。クラス本文からすべての検査契約の習得を付与しない。"
+    },
+    {
+      "id": "adapter.diagnostics",
+      "label": "bound・gap・終了理由の対象を読む",
+      "owner": "P4",
+      "requires": [
+        "adapter.basic",
+        "optimality.limit"
+      ],
+      "external": false,
+      "aliases": [
+        "Diagnostics",
+        "diagnostics",
+        "bound",
+        "gap",
+        "termination"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "adapter.initial_state",
+      "label": "初期候補を実行系へ渡す",
+      "owner": "P5",
+      "requires": [
+        "adapter.basic",
+        "state.values"
+      ],
+      "external": false,
+      "aliases": [
+        "initial_state",
+        "warm start",
+        "初期解"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "trace.events",
+      "label": "実行区間のトレースを読む",
+      "owner": "P6",
+      "requires": [
+        "evaluation.basic"
+      ],
+      "external": false,
+      "aliases": [
+        "tracing",
+        "traced",
+        "Trace",
+        "ChromeTrace"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "model.import",
+      "label": "外部モデルやデータからInstanceを得る",
+      "owner": "P3",
+      "requires": [
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "MIPLIB",
+        "QPLIB",
+        "MPS",
+        "JijModeling",
+        "dataset"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "sdk.environment",
+      "label": "SDK・依存・実行環境の版を揃える",
+      "owner": "SETUP.common",
+      "requires": [],
+      "external": false,
+      "aliases": [
+        "pip install",
+        "3.0.0b7",
+        "virtualenv",
+        "venv"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "wire.serialization",
+      "label": "問題や候補をシリアライズする",
+      "owner": "R_WIRE",
+      "requires": [
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "to_bytes",
+        "from_bytes",
+        "to_v2_bytes",
+        "from_v2_bytes",
+        "protobuf"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "wire.compatibility",
+      "label": "SDK版とwire版を区別する",
+      "owner": "R_WIRE",
+      "requires": [
+        "wire.serialization",
+        "sdk.environment"
+      ],
+      "external": false,
+      "aliases": [
+        "wire-schema",
+        "wire format",
+        "schema version"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "artifact.basics",
+      "label": "Artifactを複数型のデータと説明をまとめる単位として理解する",
+      "owner": "G13",
+      "requires": [],
+      "external": false,
+      "aliases": [
+        "Artifact"
+      ],
+      "scope": "問題・結果・JSONなどのデータと説明をまとめる基本理解。InstanceやExperimentの操作、ファイルへの保存・読出しを必須前提にしない。"
+    },
+    {
+      "id": "artifact.roundtrip",
+      "label": "Artifactにデータをまとめ保存して読む",
+      "owner": "G13",
+      "requires": [
+        "artifact.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "ArtifactDraft",
+        "save_archive",
+        "load_archive"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "artifact.lifecycle",
+      "label": "draftとcommit後の状態を区別する",
+      "owner": "G13",
+      "requires": [
+        "artifact.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "commit",
+        "draft"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "artifact.identity",
+      "label": "name・tag・digestを使い分ける",
+      "owner": "G13.identity",
+      "requires": [
+        "artifact.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "digest",
+        "tag",
+        "name"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "artifact.registry",
+      "label": "registryにpush/pullして共有する",
+      "owner": "P8",
+      "requires": [
+        "artifact.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "registry",
+        "push",
+        "pull",
+        "authentication"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "artifact.format",
+      "label": "Artifactの相互運用仕様を読む",
+      "owner": "R_ARTIFACT",
+      "requires": [
+        "artifact.identity",
+        "wire.serialization"
+      ],
+      "external": false,
+      "aliases": [
+        "OCI",
+        "manifest",
+        "descriptor",
+        "mediaType"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "attachment.standard",
+      "label": "標準の添付データを記録して読む",
+      "owner": "P10",
+      "requires": [],
+      "external": false,
+      "aliases": [
+        "Attachment",
+        "attach",
+        "add_json",
+        "add_file"
+      ],
+      "scope": "名前を付けて標準型やファイルを保存し、同じスコープから取り出す共通操作。ExperimentとArtifactのどちらからも導入でき、一方の往復操作を他方の必須前提にしない。"
+    },
+    {
+      "id": "attachment.codec",
+      "label": "独自データのCodec契約を実装する",
+      "owner": "R_CODEC",
+      "requires": [
+        "attachment.standard",
+        "wire.serialization"
+      ],
+      "external": false,
+      "aliases": [
+        "Codec",
+        "encode",
+        "decode"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "experiment.record",
+      "label": "ExperimentとRunで試行の条件・データをまとめる",
+      "owner": "G12",
+      "requires": [
+        "instance.model",
+        "solution.read"
+      ],
+      "external": false,
+      "aliases": [
+        "Experiment",
+        "Run"
+      ],
+      "scope": "ExperimentとRunの基本的な記録単位と、共有データ・試行ごとのデータの対応。Solve/SamplingによるAdapter呼び出しの記録はG12の発展的な説明であり、最初の記録Tutorialの前提ではない。"
+    },
+    {
+      "id": "experiment.conditions",
+      "label": "試行条件としてparameterを記録する",
+      "owner": "G12",
+      "requires": [
+        "experiment.record"
+      ],
+      "external": false,
+      "aliases": [
+        "log_parameter"
+      ],
+      "scope": "ParametricInstanceの数学的なParameterとは別の概念。"
+    },
+    {
+      "id": "experiment.persist",
+      "label": "実験を保存し別プロセスで読み直す",
+      "owner": "G12",
+      "requires": [
+        "experiment.record"
+      ],
+      "external": false,
+      "aliases": [
+        "Experiment.load",
+        "loaded_experiment",
+        "save",
+        "reopen"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "experiment.resume",
+      "label": "再開・継続・forkを選択する",
+      "owner": "P7",
+      "requires": [
+        "experiment.persist"
+      ],
+      "external": false,
+      "aliases": [
+        "resume",
+        "fork",
+        "checkpoint",
+        "restore"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "experiment.reproduce",
+      "label": "保存結果の読出しと計算の再実行を区別する",
+      "owner": "G12.reproducibility",
+      "requires": [
+        "experiment.persist"
+      ],
+      "external": false,
+      "aliases": [
+        "reproducibility",
+        "再現性",
+        "再現"
+      ],
+      "scope": "保存した入力・結果を読み直せることは、同じ計算を再実行できることの保証ではないという境界。再実行には目的に応じたコード・設定・環境情報が別途必要であり、コピー操作や再現性方法論の習得は前提にしない。"
+    },
+    {
+      "id": "cli.operations",
+      "label": "保存データをCLIで調査・整理する",
+      "owner": "P9",
+      "requires": [
+        "artifact.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "ommx artifact",
+        "ommx experiment",
+        "cleanup",
+        "catalog",
+        "gc"
+      ],
+      "scope": "受け取ったArtifactや保存済みrefをCLIで調査し、名前の削除・復元とデータ回収を安全に分ける。Artifactの作成・ファイル往復やPython SDK操作の習得は不要。"
+    },
+    {
+      "id": "adapter.contract",
+      "label": "Adapterのexact inputと評価snapshotを守る",
+      "owner": "DEV_A",
+      "requires": [
+        "adapter.basic",
+        "class.membership",
+        "evaluation.basic",
+        "variables.roles"
+      ],
+      "external": false,
+      "aliases": [
+        "INPUT_CLASS",
+        "require_applicable",
+        "snapshot",
+        "unchanged"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "adapter.encode_decode",
+      "label": "使用変数とbackend表現の対応を実装する",
+      "owner": "DEV_A",
+      "requires": [
+        "adapter.contract",
+        "variables.recovery"
+      ],
+      "external": false,
+      "aliases": [
+        "encode",
+        "decode",
+        "used_decision_variables"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "integration.language",
+      "label": "他言語・他ツールの入出力を接続する",
+      "owner": "DEV_X",
+      "requires": [
+        "instance.model",
+        "evaluation.basic",
+        "wire.serialization"
+      ],
+      "external": false,
+      "aliases": [
+        "Rust",
+        "Rustdoc",
+        "interoperability",
+        "相互運用"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "migration.api",
+      "label": "旧SDKのAPIを現行APIへ対応付ける",
+      "owner": "MIG3",
+      "requires": [
+        "sdk.environment",
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "migration",
+        "ommx.v1",
+        "移行"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "aux.agent_skills",
+      "label": "補助的なAgent skillsを導入する",
+      "owner": "AUX",
+      "requires": [
+        "sdk.environment"
+      ],
+      "external": false,
+      "aliases": [
+        "agent skills",
+        "skill installer"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "metadata.edit",
+      "label": "Attached handleでメタデータを編集しsnapshot・表と区別する",
+      "owner": "R_API.instance.metadata-edit",
+      "requires": [
+        "instance.model",
+        "variables.metadata",
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "AttachedDecisionVariable",
+        "AttachedConstraint",
+        "detach"
+      ],
+      "scope": "既存IDの変数・通常制約の名前や説明をInstanceに反映する操作。数学的な条件の変更とは区別し、detachしたコピーやDataFrameの編集は書き戻されないと理解する。"
+    },
+    {
+      "id": "mps.export",
+      "label": "SDKだけで小さなモデルをMPSファイルへ出力する",
+      "owner": "P16",
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "external": false,
+      "aliases": [
+        "save_mps",
+        "MPS"
+      ],
+      "scope": "小さなBinaryモデルを作る例からsave_mpsでプレーンテキストまたはgzipを出力し、MPS入力対応の外部ツールへ渡せる。求解・外部候補の取り込みまで習得したとはみなさない。"
+    },
+    {
+      "id": "mps.information-boundary",
+      "label": "MPSで渡す現在のモデルとOMMX保存の情報境界を読む",
+      "owner": "P16",
+      "requires": [
+        "mps.export"
+      ],
+      "external": false,
+      "aliases": [
+        "information loss",
+        "model export"
+      ],
+      "scope": "二次以下の多項式・変数種の受付範囲、特殊制約の事前lowering、ラベル・removed・NamedFunction等の情報損失を理解して保存形式を選ぶ。二次拡張に対応した外部ツールでも係数の解釈が一致するとは限らず、取り込み後の式を確認する。厳密な出力・係数契約、lowering操作やArtifactの保存手順の習得までは付与しない。"
+    },
+    {
+      "id": "expression.labels",
+      "label": "Instanceのラベルを使って式を表示する",
+      "owner": "R_API.instance.display",
+      "requires": [
+        "expression.basics",
+        "variables.metadata"
+      ],
+      "external": false,
+      "aliases": [
+        "format_function",
+        "display_function"
+      ],
+      "scope": "Function単体はID、Instance経由では名前・添字で式を読む。文字列とNotebook用プレビューを区別し、表示上限の引数・既定値はAPI Referenceへ送る。表示先InstanceのIDを使い、名前照合はしない。プレビューは省略され得るため、全体の文字列を得る操作と区別する。"
+    },
+    {
+      "id": "named.evaluate",
+      "label": "名前付き評価式を登録しSolutionから値を取得する",
+      "owner": "R_API.named_function",
+      "requires": [
+        "named.outputs",
+        "solution.read"
+      ],
+      "external": false,
+      "aliases": [
+        "named_functions_df",
+        "extract_named_functions"
+      ],
+      "scope": "自己完結した例で登録→候補評価→辞書・DataFrameで取得する。指標の登録は目的値・実行可能性の判定条件を変えない。"
+    },
+    {
+      "id": "named.samples",
+      "label": "複数候補からサンプルIDを指定して指標を取得する",
+      "owner": "R_API.named_function.samples",
+      "requires": [
+        "named.evaluate",
+        "state.values"
+      ],
+      "external": false,
+      "aliases": [
+        "SampleSet.extract_named_functions"
+      ],
+      "scope": "候補IDから値の割当てへの辞書をまとめて評価し、同じ登録式の指標を取り出す。一般の候補選択・出現回数・変換後の結果の習得は付与しない。"
+    },
+    {
+      "id": "named.values",
+      "label": "評価用の式だけに使う変数の値を明示する",
+      "owner": "R_API.named_function.values",
+      "requires": [
+        "named.outputs",
+        "state.values",
+        "variable.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "reporting-only variable"
+      ],
+      "scope": "現在の目的・制約に使わず固定値・依存式もないInteger変数の例で、省略時は既定値の指標になり、特定候補の指標にはその値を明示する必要を理解する。全変数kindの復元・補完規則の習得とは分ける。"
+    },
+    {
+      "id": "state.named_reuse",
+      "label": "別Instanceの名前・添字へ照合し候補を再評価する",
+      "owner": "R_API.instance.named_values",
+      "requires": [
+        "solution.extract",
+        "state.values",
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "state_from_named_values"
+      ],
+      "scope": "Referenceに対応する開発版SDK環境で、名前照合による対象IDへの対応付けと値・実行可能性の検査を区別する。公開b7向けの環境や結果抽出だけから利用可能性を推定しない。"
+    },
+    {
+      "id": "bounds.tighten",
+      "label": "制約から導ける範囲の反映と一回更新の限界を理解する",
+      "owner": "G7.bounds",
+      "requires": [
+        "variable.basics",
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "bound tightening"
+      ],
+      "scope": "制約から導くbound更新を任意の変数固定と分ける。開始時boundを参照する一回分の操作であり、収束・完全な実行不可能性検出や実行可能性の証明を約束しない。浮動小数点境界付近の候補判定の保存は無条件に約束しない。"
+    },
+    {
+      "id": "bounds.inspect_once",
+      "label": "一回のbound更新と変更された変数を確認する",
+      "owner": "P15",
+      "requires": [
+        "bounds.tighten"
+      ],
+      "external": false,
+      "aliases": [
+        "tighten_bounds_simultaneously_once"
+      ],
+      "scope": "in-placeで一回実行し、戻り値の変更ID・新boundとInstanceの更新を読む。必要な追加呼出しは利用者が行う。厳密な対象・数値条件はAPI Referenceが所有する。"
+    },
+    {
+      "id": "sdk.development_environment",
+      "label": "Referenceと同じリビジョンの開発版SDK環境を既に持つ",
+      "owner": null,
+      "requires": [
+        "sdk.environment"
+      ],
+      "external": true,
+      "aliases": [
+        "開発版環境"
+      ],
+      "scope": "Bookの公開SDKインストールとは別に読者が用意した環境。このBook内のリンクや公開環境の導入だけから、その準備能力や実行環境があるとはみなさない。"
+    },
+    {
+      "id": "results.evaluation_scope",
+      "label": "共通の問題で候補を評価し、判定の対象を選ぶ",
+      "requires": [
+        "ext.math"
+      ],
+      "scope": "手元の候補も共通に評価できる価値と、探索に課した条件・保持して検査する条件の違いを理解する。APIクラスの構築や個別プロパティの契約全体の習得ではない。",
+      "owner": "B_EVALUATE",
+      "external": false,
+      "aliases": []
+    },
+    {
+      "id": "results.reconstruction",
+      "label": "復元・補完と実行可能性・最適性の違いを判断する",
+      "requires": [
+        "results.evaluation_scope"
+      ],
+      "scope": "記録された関係から戻る値と省略値の補完を区別し、補完値を元候補の値とみなさない。変数の四役割の全仕様や数値規則はReferenceが所有する。",
+      "owner": "B_EVALUATE",
+      "external": false,
+      "aliases": []
+    },
+    {
+      "id": "results.comparison",
+      "label": "候補を比較する問題・目的・条件と保証を揃える",
+      "requires": [
+        "results.evaluation_scope",
+        "results.reconstruction"
+      ],
+      "scope": "backendの探索値・終了理由・bound・gapと、保持した目的や条件による候補評価を区別する。報告指標と名前付き抽出の用途を知り、具体的な操作はReferenceへ進む。",
+      "owner": "B_EVALUATE",
+      "external": false,
+      "aliases": []
+    }
+  ],
+  "pages": [
+    {
+      "id": "README",
+      "title": "OMMXの目的と採用価値から次の入口を選ぶ",
+      "role": "orientation",
+      "status": "revise",
+      "source_paths": [
+        "README.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math"
+      ],
+      "sections": [
+        {
+          "id": "purpose",
+          "introduces": [
+            "ommx.purpose"
+          ],
+          "uses": [],
+          "mentions": []
+        },
+        {
+          "id": "why-use-ommx",
+          "introduces": [
+            "ommx.adoption"
+          ],
+          "uses": [
+            "ommx.purpose"
+          ],
+          "mentions": [
+            "evaluation.basic",
+            "special.sos1",
+            "transformation.guarantees",
+            "adapter.basic",
+            "artifact.roundtrip",
+            "experiment.record"
+          ]
+        },
+        {
+          "id": "next-step",
+          "introduces": [],
+          "uses": [
+            "ommx.adoption"
+          ],
+          "mentions": [
+            "sdk.environment"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "数理最適化の基礎から、採用目的と次に読む先を選べる入口。SOS1の局所例は構造保持と変換の用途を説明し、追加・評価・loweringのAPI能力は付与しない。CLIの導入手順はリンク先の運用Referenceが所有する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "README.md"
+      ]
+    },
+    {
+      "id": "HOME",
+      "title": "Bookの入口と目的別案内",
+      "slice": "K",
+      "role": "orientation",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/index.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math"
+      ],
+      "sections": [
+        {
+          "id": "purpose",
+          "introduces": [
+            "ommx.purpose"
+          ],
+          "uses": [],
+          "mentions": []
+        },
+        {
+          "id": "current-adoption",
+          "introduces": [
+            "ommx.adoption"
+          ],
+          "uses": [
+            "ommx.purpose"
+          ],
+          "mentions": [
+            "adapter.basic",
+            "artifact.roundtrip",
+            "experiment.record"
+          ]
+        },
+        {
+          "id": "candidate-example",
+          "introduces": [],
+          "uses": [
+            "ommx.adoption"
+          ],
+          "mentions": [
+            "instance.model",
+            "evaluation.basic",
+            "optimality.limit"
+          ]
+        },
+        {
+          "id": "structure-and-transformation",
+          "introduces": [],
+          "uses": [
+            "ommx.adoption"
+          ],
+          "mentions": [
+            "special.onehot",
+            "special.indicator",
+            "special.sos1",
+            "transformation.guarantees"
+          ]
+        },
+        {
+          "id": "development-direction",
+          "introduces": [],
+          "uses": [
+            "ommx.purpose"
+          ],
+          "mentions": [
+            "bounds.tighten"
+          ]
+        },
+        {
+          "id": "purpose-based-entry-and-exchange",
+          "introduces": [],
+          "uses": [
+            "ommx.adoption"
+          ],
+          "mentions": [
+            "adapter.basic",
+            "class.membership",
+            "preparation.target",
+            "artifact.roundtrip",
+            "experiment.record",
+            "class.qubo",
+            "bigm.contract",
+            "parametric.materialize",
+            "expression.basics",
+            "named.outputs",
+            "solution.extract",
+            "expression.labels",
+            "results.evaluation_scope"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、候補評価とOneHotの等式化で具体化する。コードは意味を読む小例で、Instance全体やState・evaluateの一般的な操作能力を付与しない。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/index.md"
+      ]
+    },
+    {
+      "id": "HOME_EN",
+      "title": "英語Bookの入口と目的別案内",
+      "role": "orientation",
+      "status": "revise",
+      "source_paths": [
+        "docs/en/index.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math"
+      ],
+      "sections": [
+        {
+          "id": "purpose",
+          "introduces": [
+            "ommx.purpose"
+          ],
+          "uses": [],
+          "mentions": []
+        },
+        {
+          "id": "current-adoption",
+          "introduces": [
+            "ommx.adoption"
+          ],
+          "uses": [
+            "ommx.purpose"
+          ],
+          "mentions": [
+            "adapter.basic",
+            "artifact.roundtrip",
+            "experiment.record"
+          ]
+        },
+        {
+          "id": "candidate-example",
+          "introduces": [],
+          "uses": [
+            "ommx.adoption"
+          ],
+          "mentions": [
+            "instance.model",
+            "evaluation.basic",
+            "optimality.limit"
+          ]
+        },
+        {
+          "id": "structure-and-transformation",
+          "introduces": [],
+          "uses": [
+            "ommx.adoption"
+          ],
+          "mentions": [
+            "special.onehot",
+            "special.indicator",
+            "special.sos1",
+            "transformation.guarantees"
+          ]
+        },
+        {
+          "id": "development-direction",
+          "introduces": [],
+          "uses": [
+            "ommx.purpose"
+          ],
+          "mentions": [
+            "bounds.tighten"
+          ]
+        },
+        {
+          "id": "purpose-based-entry-and-exchange",
+          "introduces": [],
+          "uses": [
+            "ommx.adoption"
+          ],
+          "mentions": [
+            "adapter.basic",
+            "class.membership",
+            "preparation.target",
+            "artifact.roundtrip",
+            "experiment.record",
+            "class.qubo",
+            "bigm.contract",
+            "parametric.materialize",
+            "expression.basics",
+            "named.outputs",
+            "solution.extract",
+            "expression.labels",
+            "results.evaluation_scope"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、候補評価と特殊制約の例、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/en/index.md"
+      ]
+    },
+    {
+      "id": "SETUP",
+      "title": "対応バージョンと実行環境",
+      "slice": "K",
+      "role": "setup",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/getting_started/install.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/getting_started/install.md"
+      ],
+      "requires": [
+        "ext.python"
+      ],
+      "sections": [
+        {
+          "id": "environment",
+          "introduces": [
+            "sdk.environment"
+          ],
+          "uses": [
+            "sdk.environment"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "PR #1159のレビュー修正で、最初のPySCIPOpt実行にHiGHSを要求せず、必要な時点で追加する手順にする。公開b7の3 Tutorial・2 How-to用の環境であり、全Book共通の互換性記録やK-acceptanceの完了ではない。 PR #1284（I1）はSDKのみで止められる導入を先に置き、必要なAdapterだけ後で追加する。Cで追加したNotebookカーネル手順は保持する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/getting_started/install.md"
+      ]
+    },
+    {
+      "id": "SETUP.common",
+      "title": "言語共通のバージョン対応",
+      "slice": "K",
+      "role": "setup-section",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [],
+      "sections": [
+        {
+          "id": "versions",
+          "introduces": [
+            "sdk.environment"
+          ],
+          "uses": [
+            "sdk.environment"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "SETUP",
+      "notes": "Rust/他言語読者がPython環境構築を前提にしないための案内。親SETUPを読む必要はない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "T1",
+      "title": "最初の問題を解き結果を読む",
+      "slice": "C",
+      "role": "tutorial",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/tutorial/solve_with_ommx_adapter.ipynb"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/solve_with_ommx_adapter.ipynb"
+      ],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "model",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "expression.basics",
+            "constraint.basics",
+            "sense",
+            "instance.build"
+          ],
+          "uses": [
+            "instance.build"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "execute",
+          "introduces": [
+            "adapter.basic"
+          ],
+          "uses": [
+            "adapter.basic"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "result",
+          "introduces": [
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "uses": [
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "mentions": [
+            "constraints.lifecycle",
+            "variables.roles",
+            "named.outputs"
+          ]
+        }
+      ],
+      "deferred": [
+        "class.membership",
+        "class.declare",
+        "policy.select",
+        "adapter.strict",
+        "bigm.contract",
+        "artifact.format",
+        "variables.recovery",
+        "variables.defaults"
+      ],
+      "parent_page": null,
+      "notes": "出力中のused_ids/removed_constraints等は、読解を要求しなければexposureのみ。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/tutorial/solve_with_ommx_adapter.ipynb"
+      ]
+    },
+    {
+      "id": "T2",
+      "title": "特殊制約をそのまま使って解く",
+      "slice": "C",
+      "role": "tutorial",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/tutorial/solve_special_constraints_with_pyscipopt_adapter.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/solve_special_constraints_with_pyscipopt_adapter.md"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.build",
+        "constraint.basics",
+        "adapter.basic",
+        "solution.read",
+        "feasibility.basic"
+      ],
+      "sections": [
+        {
+          "id": "special",
+          "introduces": [
+            "special.indicator",
+            "special.sos1"
+          ],
+          "uses": [
+            "special.indicator",
+            "special.sos1"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "solve",
+          "introduces": [],
+          "uses": [
+            "adapter.basic",
+            "solution.read",
+            "feasibility.basic"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [
+        "bigm.contract",
+        "policy.select",
+        "class.declare"
+      ],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/tutorial/solve_special_constraints_with_pyscipopt_adapter.md"
+      ]
+    },
+    {
+      "id": "T3",
+      "title": "別のAdapterで自動Preparationを使う",
+      "slice": "C",
+      "role": "tutorial",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/tutorial/prepare_instance_for_adapter.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/prepare_instance_for_adapter.md"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.build",
+        "adapter.basic",
+        "solution.read",
+        "feasibility.basic",
+        "special.indicator",
+        "special.sos1"
+      ],
+      "sections": [
+        {
+          "id": "automatic",
+          "introduces": [
+            "adapter.auto_prepare"
+          ],
+          "uses": [
+            "adapter.auto_prepare",
+            "adapter.basic"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "read",
+          "introduces": [],
+          "uses": [
+            "solution.read",
+            "feasibility.basic"
+          ],
+          "mentions": [
+            "class.membership",
+            "policy.select"
+          ]
+        }
+      ],
+      "deferred": [
+        "class.declare",
+        "policy.select",
+        "adapter.strict",
+        "bigm.contract"
+      ],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/tutorial/prepare_instance_for_adapter.md"
+      ]
+    },
+    {
+      "id": "T4",
+      "title": "既存の問題と候補を評価する",
+      "slice": "E",
+      "role": "tutorial",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/tutorial/evaluate_existing_candidate.ipynb"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "given",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "constraint.basics",
+            "sense",
+            "model.import",
+            "state.values"
+          ],
+          "uses": [
+            "model.import",
+            "state.values"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "evaluate",
+          "introduces": [
+            "evaluation.basic",
+            "solution.read",
+            "feasibility.basic",
+            "numeric.tolerance"
+          ],
+          "uses": [
+            "evaluation.basic",
+            "solution.read",
+            "feasibility.basic",
+            "numeric.tolerance"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "inspect",
+          "introduces": [],
+          "uses": [
+            "variable.basics",
+            "state.values",
+            "solution.read",
+            "evaluation.basic",
+            "feasibility.basic",
+            "numeric.tolerance"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "limits",
+          "introduces": [
+            "optimality.limit"
+          ],
+          "uses": [
+            "optimality.limit"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [
+        "adapter.basic",
+        "instance.build",
+        "policy.select",
+        "artifact.format"
+      ],
+      "parent_page": null,
+      "notes": "E/T4の独立Notebookは公式QPLIB_0018の問題と公開候補を読み、evaluateと変数/制約の表を示す。全変数0の別候補でFalseの制約行を抽出する。初回は公式サイトへの接続が必要だが、モデル自作・Adapter・Artifact/Experiment・別Tutorialの実行状態は不要。表だけの判定と候補全体のfeasible、許容誤差、最適性の限界を局所説明する。歴史的baselineとproposed statusは保持する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/tutorial/evaluate_existing_candidate.ipynb"
+      ]
+    },
+    {
+      "id": "T5",
+      "title": "二つの試行を記録し保存後に読み直す",
+      "slice": "F",
+      "role": "tutorial",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/tutorial/experiment_management.ipynb"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/experiment_management.md"
+      ],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "minimal_problem",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "expression.basics",
+            "constraint.basics",
+            "sense",
+            "instance.build"
+          ],
+          "uses": [
+            "instance.build"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "run",
+          "introduces": [
+            "state.values",
+            "evaluation.basic",
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "uses": [
+            "state.values",
+            "evaluation.basic",
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "record",
+          "introduces": [
+            "experiment.record",
+            "experiment.conditions"
+          ],
+          "uses": [
+            "experiment.record",
+            "experiment.conditions"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "reopen",
+          "introduces": [
+            "experiment.persist",
+            "experiment.reproduce"
+          ],
+          "uses": [
+            "experiment.persist",
+            "experiment.reproduce"
+          ],
+          "mentions": [
+            "attachment.standard"
+          ]
+        }
+      ],
+      "deferred": [
+        "parametric.materialize",
+        "attachment.codec",
+        "artifact.format",
+        "artifact.registry",
+        "class.qubo"
+      ],
+      "parent_page": null,
+      "notes": "F/T5は小さなInstanceと二つの候補を局所的に用意し、評価した条件・入力・結果をExperiment/Runに記録する。Adapter、外部データ、独自Codec、別Tutorialの実行状態は不要。ファイル保存後は新しいプロセス/kernelでRun・入力・結果を取り出し、保存結果の読出しと計算再実行の違いを短く説明する。source_urlsは統合前の歴史的baselineを指す。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/tutorial/experiment_management.ipynb"
+      ]
+    },
+    {
+      "id": "T6",
+      "title": "Artifactで問題と結果を受け渡す",
+      "slice": "G",
+      "role": "tutorial",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/tutorial/share_in_ommx_artifact.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/share_in_ommx_artifact.md"
+      ],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "artifact",
+          "introduces": [
+            "artifact.basics"
+          ],
+          "uses": [
+            "artifact.basics"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "data",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "constraint.basics",
+            "sense",
+            "state.values",
+            "evaluation.basic",
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "uses": [
+            "evaluation.basic"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "save",
+          "introduces": [
+            "artifact.lifecycle",
+            "artifact.roundtrip"
+          ],
+          "uses": [
+            "artifact.lifecycle",
+            "artifact.roundtrip"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "read",
+          "introduces": [],
+          "uses": [
+            "artifact.roundtrip",
+            "solution.read",
+            "feasibility.basic"
+          ],
+          "mentions": [
+            "artifact.identity",
+            "artifact.format",
+            "attachment.standard"
+          ]
+        }
+      ],
+      "deferred": [
+        "adapter.basic",
+        "artifact.format",
+        "artifact.registry",
+        "attachment.codec"
+      ],
+      "parent_page": null,
+      "notes": "G/T6はArtifactの基本理解を局所導入し、小さなInstanceと候補の評価結果、JSONを一つのファイルで受け渡す。送信・受信は別スクリプトと別Local Registryを使い、受信側では配布ファイルだけから取り出して再評価する。Adapter・Experiment・別Tutorialの実行状態は不要。source_urlsは統合前の歴史的baselineを指す。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/tutorial/share_in_ommx_artifact.md"
+      ]
+    },
+    {
+      "id": "R_API.instance",
+      "title": "Instance API Reference：問題の構築・参照と評価用情報",
+      "slice": "Instance Reference migration",
+      "role": "reference",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math",
+        "ext.python"
+      ],
+      "sections": [
+        {
+          "id": "problem-components",
+          "introduces": [
+            "instance.model",
+            "sense"
+          ],
+          "uses": [
+            "instance.model"
+          ],
+          "mentions": [
+            "special.indicator",
+            "special.onehot",
+            "special.sos1"
+          ]
+        },
+        {
+          "id": "build-and-evaluate",
+          "introduces": [
+            "variable.basics",
+            "expression.basics",
+            "constraint.basics",
+            "instance.build"
+          ],
+          "uses": [
+            "instance.build"
+          ],
+          "mentions": [
+            "state.values",
+            "evaluation.basic",
+            "solution.read",
+            "optimality.limit"
+          ]
+        },
+        {
+          "id": "domains-and-constraint-access",
+          "introduces": [],
+          "uses": [
+            "variable.basics",
+            "constraint.basics"
+          ],
+          "mentions": [
+            "variables.metadata"
+          ]
+        },
+        {
+          "id": "retained-variables-and-output",
+          "introduces": [],
+          "uses": [
+            "instance.model"
+          ],
+          "mentions": [
+            "variables.roles",
+            "variables.recovery",
+            "variables.defaults",
+            "named.outputs",
+            "constraints.lifecycle",
+            "objective.views",
+            "transformation.guarantees"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API",
+      "notes": "日英のInstance Guideを共有API Referenceへ統合。冒頭で構成要素とsolver非依存の意味を説明し、構築→候補評価の完全例、明示IDの構築例へ進む。domain、全familyで一意な制約番号と型付きID、Attachedとsnapshot、保持変数と出力用情報を同じAPIページで説明する。メタデータの意味と編集は下位契約で追跡する。候補評価や変換保証への短い説明・リンクから各詳細全体の習得を付与しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ]
+    },
+    {
+      "id": "R_API.instance.model",
+      "title": "Instance APIの共通問題モデル（説明のみ）",
+      "slice": "Instance Reference migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math"
+      ],
+      "sections": [
+        {
+          "id": "components-and-identity",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "constraint.basics",
+            "sense"
+          ],
+          "uses": [
+            "instance.model"
+          ],
+          "mentions": [
+            "special.indicator",
+            "special.onehot",
+            "special.sos1"
+          ]
+        }
+      ],
+      "deferred": [
+        "instance.build"
+      ],
+      "parent_page": "R_API.instance",
+      "notes": "Python以外の利用者が、API冒頭の構成要素・条件とdomain/IDの説明だけを参照する部分経路。Pythonの構築・評価・編集例の実行能力は付与しない。クラスページ全体を読むR_API.instanceとは区別する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ]
+    },
+    {
+      "id": "R_API.instance.names",
+      "title": "Instance API：変数・制約のラベルとID",
+      "slice": "Instance Reference migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "variable.basics"
+      ],
+      "sections": [
+        {
+          "id": "names",
+          "introduces": [
+            "variables.metadata"
+          ],
+          "uses": [
+            "variables.metadata"
+          ],
+          "mentions": [
+            "solution.extract",
+            "expression.labels"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API.instance",
+      "notes": "APIクラス説明のVariable domains and modeling labels節。name・subscripts・parameters・descriptionとIDによる識別を区別する。表示と名前付き抽出へのAPIリンクだけでは操作能力を付与しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ]
+    },
+    {
+      "id": "R_API.instance.metadata-edit",
+      "title": "Instance API：Attached handleでラベルを編集する",
+      "slice": "Instance Reference migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "instance.model",
+        "variable.basics",
+        "constraint.basics",
+        "variables.metadata"
+      ],
+      "sections": [
+        {
+          "id": "attached-edit-and-independent-snapshots",
+          "introduces": [
+            "metadata.edit"
+          ],
+          "uses": [
+            "variables.metadata",
+            "metadata.edit"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API.instance",
+      "notes": "APIクラス説明のEdit the Instance through attached handles節。節内でモデルを用意し、変数・制約のAttached handleで名前と説明を変更して再取得で確認する。続くdetach・DataFrameの例はこの節内のモデルを使い、編集が書き戻されないことを示す。Guideへの参照なしで手順が完結する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ]
+    },
+    {
+      "id": "G3",
+      "title": "特殊制約の意味",
+      "slice": "B",
+      "role": "guide",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/special_constraints.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/special_constraints.md"
+      ],
+      "requires": [
+        "ext.math",
+        "variable.basics",
+        "constraint.basics"
+      ],
+      "sections": [
+        {
+          "id": "families",
+          "introduces": [
+            "special.indicator",
+            "special.onehot",
+            "special.sos1"
+          ],
+          "uses": [
+            "special.indicator",
+            "special.onehot",
+            "special.sos1"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [
+        "adapter.basic",
+        "bigm.contract",
+        "policy.select"
+      ],
+      "parent_page": null,
+      "notes": "意味の説明と評価例の前提を分離する提案。評価例はG3.evaluateの契約で扱う。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/special_constraints.md"
+      ]
+    },
+    {
+      "id": "G3.evaluate",
+      "title": "特殊制約の候補を評価する例",
+      "slice": "B",
+      "role": "guide-section",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/user_guide/special_constraints.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/special_constraints.md"
+      ],
+      "requires": [
+        "special.indicator",
+        "special.onehot",
+        "special.sos1",
+        "state.values",
+        "evaluation.basic",
+        "feasibility.basic"
+      ],
+      "sections": [
+        {
+          "id": "examples",
+          "introduces": [],
+          "uses": [
+            "special.indicator",
+            "special.onehot",
+            "special.sos1",
+            "state.values",
+            "evaluation.basic",
+            "feasibility.basic"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G3",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/special_constraints.md"
+      ]
+    },
+    {
+      "id": "R_API.solution",
+      "title": "Solution API Reference：候補評価と結果の解釈",
+      "slice": "Solution Reference migration",
+      "role": "reference",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math",
+        "instance.model",
+        "variable.basics",
+        "constraint.basics",
+        "sense",
+        "ext.python"
+      ],
+      "sections": [
+        {
+          "id": "candidate",
+          "introduces": [
+            "state.values",
+            "evaluation.basic",
+            "solution.read"
+          ],
+          "uses": [
+            "evaluation.basic",
+            "solution.read"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "interpretation",
+          "introduces": [
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "uses": [
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "mentions": [
+            "numeric.tolerance"
+          ]
+        },
+        {
+          "id": "inspect-evaluated-values",
+          "introduces": [],
+          "uses": [
+            "solution.read",
+            "feasibility.basic"
+          ],
+          "mentions": [
+            "variables.metadata",
+            "solution.extract",
+            "named.outputs"
+          ]
+        },
+        {
+          "id": "evaluate-transformed-problem",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "variables.recovery",
+            "variables.defaults",
+            "constraints.lifecycle",
+            "objective.views",
+            "evaluation.snapshot"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API",
+      "notes": "日英Solution Guideを共有Referenceへ統合。Stateと評価結果の違いから、完全な候補評価例、実行可能性・目的値・最適性の区別、評価値と違反量、変換後のInstanceでの評価へ進む。共通collection契約はConstraintCollection・EvaluatedConstraintCollection・ConstraintFamilyView・ConstraintIDBaseに置き、各メソッドに完全な実行例を用意する。クラス本文の短い導入やリンクだけから表操作・名前抽出・復元・変換保証の詳細全体の習得は付与しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst"
+      ]
+    },
+    {
+      "id": "R_API.solution.model",
+      "title": "Solution APIの候補評価と結果の意味（説明のみ）",
+      "slice": "Solution Reference migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math",
+        "instance.model",
+        "variable.basics",
+        "constraint.basics",
+        "sense"
+      ],
+      "sections": [
+        {
+          "id": "candidate-and-evaluated-result",
+          "introduces": [
+            "state.values",
+            "evaluation.basic",
+            "solution.read"
+          ],
+          "uses": [
+            "evaluation.basic",
+            "solution.read"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "feasibility-objective-optimality",
+          "introduces": [
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "uses": [
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "mentions": [
+            "numeric.tolerance"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API.solution",
+      "notes": "Python以外の利用者が、クラス冒頭と「Read feasibility, objective, and optimality separately」の説明・表を参照する部分経路。evaluation.basicは候補を対応する問題で検査する入力・結果の意味として扱い、Pythonのコード構築・実行能力や操作別の契約は付与しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst"
+      ]
+    },
+    {
+      "id": "R_API.evaluation.numeric",
+      "title": "候補評価APIの許容誤差と値の正規化",
+      "slice": "Solution Reference migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst",
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "evaluation.basic",
+        "feasibility.basic"
+      ],
+      "sections": [
+        {
+          "id": "numeric",
+          "introduces": [
+            "numeric.tolerance"
+          ],
+          "uses": [
+            "numeric.tolerance"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API.solution",
+      "notes": "Solutionクラスの許容誤差の段落からInstance.populate_stateの実際の説明まで読む契約。保存された許容誤差はSolution.feasibility_atolで確認する。クラス本文でatolが言及されるだけでは習得扱いにしない。正規化、固定・依存値の整合性検査、無関係な変数の既定値と許容誤差の規則はpopulate_stateが所有する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst",
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ]
+    },
+    {
+      "id": "R_API.solution.extract",
+      "title": "Solutionから後処理のReferenceを選ぶ",
+      "slice": "Solution Reference migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "solution.read",
+        "variable.basics"
+      ],
+      "sections": [
+        {
+          "id": "destinations",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "solution.extract",
+            "named.outputs"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API.solution",
+      "notes": "クラスの「Inspect evaluated values」から抽出・DataFrameの所有メソッドへ案内する部分経路。リンクだけでは操作を習得扱いにせず、実行例と契約を読むR_API.solution.named_valuesで追跡する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst"
+      ]
+    },
+    {
+      "id": "R_API.samples",
+      "title": "Samples API Reference：ID付き候補の入力",
+      "slice": "Result and problem-family Reference migration",
+      "role": "reference",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/samples.rs",
+        "python/ommx/src/docstrings/ommx/Samples.md",
+        "docs/api/_items/ommx.Samples.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "state.values"
+      ],
+      "sections": [
+        {
+          "id": "candidate-ids-and-multiplicity",
+          "introduces": [
+            "samples.counts"
+          ],
+          "uses": [
+            "samples.counts"
+          ],
+          "mentions": [
+            "sampleset.read"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API",
+      "notes": "明示sample IDと自動付番、同じassignmentを持つ複数ID、num_samplesの意味をSamplesの実際の説明と例で読む。sample IDと変数IDを区別し、非公開の圧縮形式やnum_occurrencesという属性の存在を前提にしない。評価結果の比較はSampleSetが所有する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/samples.rs",
+        "python/ommx/src/docstrings/ommx/Samples.md",
+        "docs/api/_items/ommx.Samples.rst"
+      ]
+    },
+    {
+      "id": "R_API.sampleset",
+      "title": "SampleSet API Reference：複数候補の評価と選択",
+      "slice": "Result and problem-family Reference migration",
+      "role": "reference",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/sample_set.rs",
+        "docs/api/_items/ommx.SampleSet.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "instance.model",
+        "sense",
+        "state.values",
+        "evaluation.basic",
+        "solution.read",
+        "feasibility.basic",
+        "optimality.limit",
+        "ext.python"
+      ],
+      "sections": [
+        {
+          "id": "evaluate-and-select-candidates",
+          "introduces": [
+            "sampleset.read"
+          ],
+          "uses": [
+            "sampleset.read"
+          ],
+          "mentions": [
+            "samples.counts"
+          ]
+        },
+        {
+          "id": "transformed-preview",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "constraints.lifecycle",
+            "objective.views",
+            "feasibility.views",
+            "evaluation.snapshot",
+            "named.outputs",
+            "solution.extract"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API",
+      "notes": "日英SampleSet Guideを共有Referenceへ統合。候補を評価し、summary、get、best_feasibleで結果を比較する完全例を置く。候補中の最良と大域最適を区別し、変換後Instanceでの評価と報告目的値・removed制約を説明する。入力のSamplesとsample ID・重複候補の個数はR_API.samplesの契約として別に追跡し、結果を読むだけの読者に入力作成を要求しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/sample_set.rs",
+        "docs/api/_items/ommx.SampleSet.rst"
+      ]
+    },
+    {
+      "id": "R_API.parametric",
+      "title": "ParametricInstance API Reference：固定構造の問題の具体化",
+      "slice": "Result and problem-family Reference migration",
+      "role": "reference",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/parametric_instance.rs",
+        "docs/api/_items/ommx.ParametricInstance.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "instance.model",
+        "expression.basics",
+        "ext.python"
+      ],
+      "sections": [
+        {
+          "id": "parameters",
+          "introduces": [
+            "parametric.materialize"
+          ],
+          "uses": [
+            "parametric.materialize"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API",
+      "notes": "日英ParametricInstance Guideを共有Referenceへ統合。Parameterと決定変数の違い、共通ID空間、係数や定数を具体化してInstanceを再利用する例をクラスで説明し、ID集合と値の検査はwith_parameters、表はparameters_dfへ置く。構造の生成はモデラー側の責務であり、Experimentを必須にしない。候補の評価例は数値条件による結果の違いを示し、Solution全体の操作習得を付与するものではない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/parametric_instance.rs",
+        "docs/api/_items/ommx.ParametricInstance.rst"
+      ]
+    },
+    {
+      "id": "R_API.instance.population",
+      "title": "Instance.populate_state API Reference：役割による復元と補完",
+      "slice": "Result interpretation migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/docstrings/ommx/Instance.populate_state.md",
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/enums.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "instance.model",
+        "variable.basics",
+        "state.values",
+        "evaluation.basic"
+      ],
+      "sections": [
+        {
+          "id": "roles",
+          "introduces": [
+            "variables.roles"
+          ],
+          "uses": [
+            "variables.roles"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "population",
+          "introduces": [
+            "variables.recovery",
+            "variables.defaults"
+          ],
+          "uses": [
+            "variables.recovery",
+            "variables.defaults"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API.instance",
+      "notes": "旧variable_rolesの操作・四役割・固定値と依存式・irrelevantの補完と明示値をpopulate_stateの完全な実行例へ統合する。数値契約と復元規則の整合性もこのAPIが所有する。復元できることと問題の等価性を区別し、Bookは判断に必要な意味だけを扱う。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/docstrings/ommx/Instance.populate_state.md",
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/enums.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ]
+    },
+    {
+      "id": "G7",
+      "title": "変換によって何が保持されるか",
+      "slice": "I",
+      "role": "guide",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "evaluation.basic",
+        "feasibility.basic",
+        "optimality.limit"
+      ],
+      "sections": [
+        {
+          "id": "guarantees",
+          "introduces": [
+            "transformation.guarantees"
+          ],
+          "uses": [
+            "transformation.guarantees"
+          ],
+          "mentions": [
+            "penalty.choice",
+            "conditioning",
+            "encoding.integer",
+            "bigm.contract",
+            "bounds.tighten"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "候補評価・実行可能性・最適性の区別を前提に、操作の目的と七つの問い、複数操作の接続、評価対象の選択を説明する。固定と不等式penaltyの実在する反例節はG7.conditioningとG7.penaltyで個別に追跡し、子節の知識を親から暗黙に継承させない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ]
+    },
+    {
+      "id": "G7.penalty",
+      "title": "ペナルティ化の対応と保証",
+      "slice": "I",
+      "role": "guide-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "transformation.guarantees",
+        "constraint.basics",
+        "expression.basics",
+        "sense"
+      ],
+      "sections": [
+        {
+          "id": "penalty",
+          "introduces": [
+            "penalty.choice"
+          ],
+          "uses": [
+            "penalty.choice",
+            "transformation.guarantees"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G7",
+      "notes": "実在する「不等式の本体を二乗すると、実行可能候補の順序も変わり得る」節。不等式本体の二乗と違反量の二乗を区別し、重みだけでは不適切なpenaltyを補えない反例から、slack・個別操作の条件を確認する必要を説明する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ]
+    },
+    {
+      "id": "G7.encoding",
+      "title": "補助変数と符号化の対応",
+      "slice": "I",
+      "role": "guide-section",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "transformation.guarantees",
+        "variable.basics",
+        "state.values",
+        "constraint.basics"
+      ],
+      "sections": [
+        {
+          "id": "encoding",
+          "introduces": [
+            "encoding.integer",
+            "slack.variable"
+          ],
+          "uses": [
+            "encoding.integer",
+            "slack.variable",
+            "transformation.guarantees"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G7",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "G7.conditioning",
+      "title": "変数固定と部分問題",
+      "slice": "I",
+      "role": "guide-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "transformation.guarantees",
+        "variable.basics"
+      ],
+      "sections": [
+        {
+          "id": "condition",
+          "introduces": [
+            "conditioning"
+          ],
+          "uses": [
+            "conditioning"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G7",
+      "notes": "実在する「固定した部分問題と、元の問題全体を分ける」節。Binaryの二候補から部分問題の最適値と元の最適値を区別し、候補を評価したこと自体は最適性判定でないと説明する。元の制約から導ける固定との違いも扱う。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ]
+    },
+    {
+      "id": "R_API.instance.retained_results",
+      "title": "InstanceとSolution API Reference：保持した制約・目的と評価結果",
+      "slice": "Result interpretation migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/docstrings/ommx/Instance.removed_constraints.md",
+        "python/ommx/src/docstrings/ommx/Instance.relax_constraint.md",
+        "python/ommx/src/docstrings/ommx/Instance.convert_active_objective.md",
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/solution.rs",
+        "python/ommx/src/sample_set.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "instance.model",
+        "constraint.basics",
+        "expression.basics",
+        "sense",
+        "evaluation.basic",
+        "feasibility.basic",
+        "optimality.limit"
+      ],
+      "sections": [
+        {
+          "id": "retained-conditions",
+          "introduces": [
+            "constraints.lifecycle",
+            "feasibility.views",
+            "evaluation.snapshot"
+          ],
+          "uses": [
+            "constraints.lifecycle",
+            "feasibility.views"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "active-and-output-objective",
+          "introduces": [
+            "objective.views",
+            "sampling.reported_results"
+          ],
+          "uses": [
+            "objective.views",
+            "sampling.reported_results"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "limits-and-optimality",
+          "introduces": [],
+          "uses": [
+            "optimality.limit"
+          ],
+          "mentions": [
+            "transformation.guarantees",
+            "penalty.choice"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API.instance",
+      "notes": "旧removed_constraintsのデータモデルと操作を共有Referenceへ移管。removed_constraintsの概説からrelax_constraintの緩和→候補評価→理由の表→復帰を一連で読む。output_objectiveとconvert_active_objectiveは符号反転の完全例、map_active_optimalityは保証の範囲を所有する。SolutionとSampleSetの実行可能性プロパティはactive/removedとdomainの正確な判定を所有する。保持情報を参照するだけで元問題の保証は付与しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/docstrings/ommx/Instance.removed_constraints.md",
+        "python/ommx/src/docstrings/ommx/Instance.relax_constraint.md",
+        "python/ommx/src/docstrings/ommx/Instance.convert_active_objective.md",
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/solution.rs",
+        "python/ommx/src/sample_set.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ]
+    },
+    {
+      "id": "R_API.instance.retained_results.population",
+      "title": "保持した結果の評価と補完値の関係",
+      "slice": "B/I",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/docstrings/ommx/Instance.removed_constraints.md",
+        "python/ommx/src/docstrings/ommx/Instance.relax_constraint.md",
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/solution.rs",
+        "python/ommx/src/sample_set.rs",
+        "docs/api/_items/ommx.Instance.rst",
+        "python/ommx/src/docstrings/ommx/Instance.populate_state.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "variables.roles",
+        "variables.recovery",
+        "variables.defaults",
+        "evaluation.snapshot",
+        "feasibility.views"
+      ],
+      "sections": [
+        {
+          "id": "population",
+          "introduces": [],
+          "uses": [
+            "variables.roles",
+            "variables.recovery",
+            "variables.defaults",
+            "evaluation.snapshot",
+            "feasibility.views"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API.instance.retained_results",
+      "notes": "removed_constraintsの注意とpopulate_stateのreporting-only変数の説明を対応づける部分経路。旧Bookページへの依存は残さない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/docstrings/ommx/Instance.removed_constraints.md",
+        "python/ommx/src/docstrings/ommx/Instance.relax_constraint.md",
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/solution.rs",
+        "python/ommx/src/sample_set.rs",
+        "docs/api/_items/ommx.Instance.rst",
+        "python/ommx/src/docstrings/ommx/Instance.populate_state.md"
+      ]
+    },
+    {
+      "id": "G9",
+      "title": "InstanceClassと入力条件",
+      "slice": "I",
+      "role": "guide",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/instance_class.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/instance_class.md"
+      ],
+      "requires": [
+        "instance.model",
+        "variable.basics",
+        "expression.basics",
+        "constraint.basics",
+        "sense"
+      ],
+      "sections": [
+        {
+          "id": "membership",
+          "introduces": [
+            "class.membership"
+          ],
+          "uses": [
+            "class.membership"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "declaration",
+          "introduces": [
+            "expression.form",
+            "class.declare"
+          ],
+          "uses": [
+            "expression.form",
+            "class.declare"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "examples",
+          "introduces": [
+            "class.qubo"
+          ],
+          "uses": [
+            "class.qubo"
+          ],
+          "mentions": [
+            "adapter.basic",
+            "preparation.target"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "OneHotの数学的な条件と専用表現を局所的に区別する。数学的な式と保持表現の違いは概念だけを説明し、整数冪・展開の具体的な契約は実在するFunction.powiのAPI Referenceへ直接送る。QUBOをclassの一例として局所導入し、Preparationによるclass適合とBackend向け係数整形、および係数だけではInstanceの復元・removed情報を運べないことを区別する。active/usedの詳細やAdapter適用は基本のmembership例の後に置く。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/instance_class.md"
+      ]
+    },
+    {
+      "id": "G9.scope",
+      "title": "InstanceClassが検査する対象範囲",
+      "slice": "I",
+      "role": "guide-section",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/user_guide/instance_class.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/instance_class.md"
+      ],
+      "requires": [
+        "class.membership",
+        "variables.roles",
+        "constraints.lifecycle",
+        "objective.views"
+      ],
+      "sections": [
+        {
+          "id": "scope",
+          "introduces": [
+            "class.scope"
+          ],
+          "uses": [
+            "class.scope"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G9",
+      "notes": "containsの基本操作と、active/used/removed-only/output-onlyの厳密な対象範囲を区別する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/instance_class.md"
+      ]
+    },
+    {
+      "id": "G10",
+      "title": "PreparationとPolicy",
+      "slice": "I",
+      "role": "guide",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/preparation_policy.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/preparation_policy.md"
+      ],
+      "requires": [
+        "instance.model",
+        "class.membership"
+      ],
+      "sections": [
+        {
+          "id": "target",
+          "introduces": [
+            "preparation.target",
+            "policy.select",
+            "mutation.copy"
+          ],
+          "uses": [
+            "preparation.target",
+            "policy.select",
+            "mutation.copy"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "adapter_application",
+          "introduces": [
+            "adapter.basic",
+            "adapter.auto_prepare",
+            "adapter.strict"
+          ],
+          "uses": [
+            "adapter.auto_prepare",
+            "adapter.strict"
+          ],
+          "mentions": [
+            "penalty.choice",
+            "bigm.contract"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "target・Policy・prepareの共通モデルをAdapter適用より先に置き、直入読者向けにOneHot/loweringと使用を許す操作の選択を局所説明する。固定実行順序・適用回数・停止判定の詳細と例外・診断属性・変更残存の厳密な契約はInstance.prepareのAPI Referenceが所有する。Bookはtarget到達時の停止と明示的prepareの失敗で変更が残る場合の安全な利用に必要な注意を残す。候補・実行可能性・目的・最適性の保証はG7へ送る。QUBO向けPolicy作成、明示的Preparation、係数整形を分け、変換前のInstance本体を後で使う必要がある場合のみcopyを説明する。Adapter easy API内部のcopy契約とは区別する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/preparation_policy.md"
+      ]
+    },
+    {
+      "id": "G11",
+      "title": "Adapterを選ぶ",
+      "slice": "J",
+      "role": "guide",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/supported_ommx_adapters.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/supported_ommx_adapters.md"
+      ],
+      "requires": [
+        "instance.model"
+      ],
+      "sections": [
+        {
+          "id": "selection",
+          "introduces": [
+            "adapter.basic",
+            "adapter.auto_prepare"
+          ],
+          "uses": [
+            "adapter.basic"
+          ],
+          "mentions": [
+            "class.membership",
+            "policy.select",
+            "class.qubo"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "Jの選択入口。入力条件・変換の選択・ユーザー設定・結果の保証を分け、solve/sampleが元のInstanceを変更せず内部copyを準備することを局所説明する。classへの所属判定の操作はG9へ送り、このページだけから判定能力を付与しない。具体的な版と導入条件はSETUPへ集約し、実際に存在するAdapter APIと基準版実装へリンクする。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/supported_ommx_adapters.md"
+      ]
+    },
+    {
+      "id": "G12",
+      "title": "Experimentの記録とライフサイクル",
+      "slice": "F",
+      "role": "guide",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/experiment.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/experiment.md"
+      ],
+      "requires": [
+        "instance.model",
+        "solution.read"
+      ],
+      "sections": [
+        {
+          "id": "records",
+          "introduces": [
+            "experiment.record",
+            "experiment.conditions",
+            "experiment.persist"
+          ],
+          "uses": [
+            "experiment.record",
+            "experiment.conditions",
+            "experiment.persist"
+          ],
+          "mentions": [
+            "experiment.resume",
+            "experiment.reproduce"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "F/G12はExperiment/RunとSolve/Samplingの関係、明示的な記録と自動記録の範囲、処理状態と数学的な結果の違いを説明する。編集中・確定・checkpoint・forkを概念として整理し、実際の継続/復帰と添付操作はP7/P10へ分ける。読出しと再実行の境界は同じページの該当節にあり、G12.reproducibilityで別に追跡する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/experiment.md"
+      ]
+    },
+    {
+      "id": "G12.reproducibility",
+      "title": "記録と計算再現の境界",
+      "slice": "F",
+      "role": "guide-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/experiment.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "experiment.persist"
+      ],
+      "sections": [
+        {
+          "id": "reproduce",
+          "introduces": [
+            "experiment.reproduce"
+          ],
+          "uses": [
+            "experiment.reproduce"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G12",
+      "notes": "「ファイルを読むことと、計算をやり直すこと」の短い境界説明。コピー操作、実験計画、性能評価方法論は要求しない。親ページとの概念の重複追跡を避けるため、この節を独立した契約として扱う。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/experiment.md"
+      ]
+    },
+    {
+      "id": "G13",
+      "title": "Artifactの保存と受け渡しモデル",
+      "slice": "G",
+      "role": "guide",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/artifact.md"
+      ],
+      "source_urls": [],
+      "requires": [],
+      "sections": [
+        {
+          "id": "choose-output",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "mps.export",
+            "mps.information-boundary"
+          ]
+        },
+        {
+          "id": "basics",
+          "introduces": [
+            "artifact.basics"
+          ],
+          "uses": [
+            "artifact.basics"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "storage",
+          "introduces": [
+            "artifact.roundtrip",
+            "artifact.lifecycle"
+          ],
+          "uses": [
+            "artifact.roundtrip",
+            "artifact.lifecycle"
+          ],
+          "mentions": [
+            "artifact.identity",
+            "artifact.format"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "G/G13は直接入口としてArtifactの基本理解を導入し、データと関係、Draftと確定後、Local Registry・ファイル・remote registryの違いを説明する。InstanceやExperimentの操作を前提にしない。「名前・タグ・内容の識別子」の契約は同じファイルのG13.identityで追跡する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/artifact.md"
+      ]
+    },
+    {
+      "id": "G13.identity",
+      "title": "Artifactの名前と同一性",
+      "slice": "G",
+      "role": "guide-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/artifact.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "artifact.basics"
+      ],
+      "sections": [
+        {
+          "id": "identity",
+          "introduces": [
+            "artifact.identity"
+          ],
+          "uses": [
+            "artifact.identity"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G13",
+      "notes": "G13の実在する「名前・タグ・内容の識別子」節を指す。人が選ぶ名前・タグと内容のdigest、manifestとlayerの識別子、ローカル優先のloadを区別する。ファイル往復の実行経験は不要。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/artifact.md"
+      ]
+    },
+    {
+      "id": "P1",
+      "title": "Policyを選んで明示的に準備する",
+      "slice": "C",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/customize_preparation.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/how_to/customize_preparation.md"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.model",
+        "instance.build",
+        "constraint.basics",
+        "adapter.basic",
+        "solution.read",
+        "feasibility.basic"
+      ],
+      "sections": [
+        {
+          "id": "source",
+          "introduces": [
+            "special.onehot",
+            "special.sos1"
+          ],
+          "uses": [
+            "special.onehot",
+            "special.sos1"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "policy",
+          "introduces": [
+            "class.membership",
+            "preparation.target",
+            "policy.select"
+          ],
+          "uses": [
+            "policy.select"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "execute",
+          "introduces": [
+            "adapter.strict"
+          ],
+          "uses": [
+            "preparation.target",
+            "adapter.strict",
+            "solution.read"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "PR #1159のレビュー修正では、推奨Policyを部分的に上書きするのではなく、OneHot loweringだけを有効にした新規Policyを作る。「許可する変換を固定する」という説明と実行を一致させる。 同じInstanceをin-placeに準備し、そのままstrict実行する。元のInstanceの保存やcopyはこの操作の前提にしない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/customize_preparation.md"
+      ]
+    },
+    {
+      "id": "P2",
+      "title": "同じ問題の結果をAdapter間で比較する",
+      "slice": "J",
+      "role": "how-to",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/how_to/compare_adapters.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/how_to/compare_adapters.md"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.build",
+        "variable.basics",
+        "constraint.basics",
+        "adapter.basic",
+        "solution.read",
+        "feasibility.basic",
+        "optimality.limit"
+      ],
+      "sections": [
+        {
+          "id": "execute",
+          "introduces": [
+            "adapter.auto_prepare"
+          ],
+          "uses": [
+            "adapter.basic",
+            "solution.read"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "compare",
+          "introduces": [],
+          "uses": [
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "mentions": [
+            "adapter.diagnostics"
+          ]
+        },
+        {
+          "id": "extract",
+          "introduces": [
+            "variables.metadata",
+            "solution.extract"
+          ],
+          "uses": [
+            "solution.extract"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "Jでは変換不要の共通Instanceを2つのAdapterへ渡し、報告目的値・報告sense・実行可能性・最適性を先に比較する。特殊制約の習得を付与しない。図示の直前にnameによる抽出とsubscriptsのtupleの対応を局所説明する。backendのbound/gapと元の問題の評価を混同しない解釈はBookに残し、exact契約はAPIへ送る。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/compare_adapters.md"
+      ]
+    },
+    {
+      "id": "P3",
+      "title": "モデルとデータセットを取り込む",
+      "slice": "E",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/load_existing_instance.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/download_miplib_instance.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/download_qplib_instance.md"
+      ],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "load",
+          "introduces": [
+            "instance.model",
+            "model.import"
+          ],
+          "uses": [
+            "model.import"
+          ],
+          "mentions": [
+            "wire.serialization",
+            "artifact.roundtrip"
+          ]
+        },
+        {
+          "id": "next-steps",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "metadata.edit",
+            "mps.export",
+            "mps.information-boundary"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "E/P3はMIPLIBとQPLIBの入手を統合し、求解を必須にしない。手元MPS/QPLIB/Artifactとモデラーからの入口を分ける。配布名前空間・SDK版・wire schemaを後段で区別し、Artifact取り込みの永続副作用を明示。入手の選択肢を説明するが、Artifact作成/共有やモデラー互換性の習得・完了は主張しない。source_urlsは統合前の歴史的baselineを指す。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/load_existing_instance.md"
+      ]
+    },
+    {
+      "id": "P16",
+      "title": "InstanceをMPSファイルで外部ツールへ渡す",
+      "slice": "M",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/export_mps.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "write",
+          "introduces": [
+            "mps.export"
+          ],
+          "uses": [
+            "mps.export"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "supported-models-and-loss",
+          "introduces": [
+            "mps.information-boundary"
+          ],
+          "uses": [
+            "mps.information-boundary"
+          ],
+          "mentions": [
+            "special.indicator",
+            "special.onehot",
+            "special.sos1",
+            "artifact.basics",
+            "artifact.roundtrip"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "SDK b7だけの独立したBinaryモデルとsave_mpsの例。ファイルを渡す準備で終了し外部ツールの実行や候補取り込みを前提にしない。出力APIの受付範囲と情報境界、二次式の受け手側での確認はBookに要約し、正確な一覧・係数規約はsave_mps APIへ送る。lowering手順とArtifact保存はリンク先を訪問した場合だけ習得する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/export_mps.md"
+      ]
+    },
+    {
+      "id": "P4",
+      "title": "終了理由と進捗を読む",
+      "slice": "J",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/inspect_adapter_diagnostics.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/adapter_diagnostics.md"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "adapter.basic",
+        "solution.read",
+        "feasibility.basic",
+        "optimality.limit"
+      ],
+      "sections": [
+        {
+          "id": "diagnostics",
+          "introduces": [
+            "adapter.diagnostics"
+          ],
+          "uses": [
+            "adapter.diagnostics"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "小さな求解で終了理由を読むところを最初の成功とする。進捗図の前にprimal/dual boundとgapの意味と対象を局所説明する。callback/memberの網羅は実在するAnalyzer/report APIへ送り、変換された定式化のboundを元の問題へ無条件に移さない注意と失敗時の調査手順は残す。Experiment連携は任意節P4.experimentに分離する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/inspect_adapter_diagnostics.md"
+      ]
+    },
+    {
+      "id": "P4.experiment",
+      "title": "Adapter diagnosticsを実験に記録する",
+      "slice": "J",
+      "role": "how-to-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/inspect_adapter_diagnostics.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "adapter.basic",
+        "adapter.diagnostics",
+        "experiment.record"
+      ],
+      "sections": [
+        {
+          "id": "record",
+          "introduces": [],
+          "uses": [
+            "adapter.basic",
+            "adapter.diagnostics",
+            "experiment.record"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "P4",
+      "notes": "最初の小さなInstanceをlog_solveで実行し、保存したdiagnosticsをAnalyzerで読む任意節。Experiment Tutorialを前提とし、診断の直接取得にはこの節を要求しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/inspect_adapter_diagnostics.md"
+      ]
+    },
+    {
+      "id": "P5",
+      "title": "初期候補を渡す",
+      "slice": "J",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/use_initial_state.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/adapter_initial_state.md"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.model",
+        "adapter.basic",
+        "variable.basics",
+        "solution.read",
+        "feasibility.basic"
+      ],
+      "sections": [
+        {
+          "id": "initial",
+          "introduces": [
+            "state.values",
+            "evaluation.basic",
+            "adapter.initial_state"
+          ],
+          "uses": [
+            "adapter.initial_state"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "IDから値への辞書を候補として局所作成・評価し、solveへ渡して返ったSolutionと区別する。初期候補による高速化は保証しない。Stateへの包み方までを公開版の主導線とし、名前付き入力は対応開発環境をすでに持つ読者向けの任意節P5.namedへ分離する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/use_initial_state.md"
+      ]
+    },
+    {
+      "id": "P5.named",
+      "title": "名前と添字から初期候補を対応付ける",
+      "slice": "J",
+      "role": "how-to-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/use_initial_state.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "variable.basics",
+        "state.values",
+        "adapter.initial_state"
+      ],
+      "sections": [
+        {
+          "id": "named",
+          "introduces": [
+            "variables.metadata"
+          ],
+          "uses": [
+            "variables.metadata",
+            "state.values",
+            "adapter.initial_state"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "P5",
+      "notes": "名前とtuple添字をStateへ照合する参考例。公開SDKの実行可能範囲とは区別し、厳密な照合・例外契約はstate_from_named_values APIへ送る。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/use_initial_state.md"
+      ]
+    },
+    {
+      "id": "P6",
+      "title": "変換と実行の時間を調べる",
+      "slice": "J",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/trace_execution.ipynb"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/tracing.ipynb"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "evaluation.basic"
+      ],
+      "sections": [
+        {
+          "id": "trace",
+          "introduces": [
+            "trace.events"
+          ],
+          "uses": [
+            "trace.events"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [
+        "experiment.record",
+        "class.qubo"
+      ],
+      "parent_page": null,
+      "notes": "SDKだけの最初の出力は囲んだ区間の時間を読む例。内部の処理がすべて自動でスパンになるとは約束しない。Adapterのconvert/call/decode内訳は独立した任意節P6.adapter、Experiment保存はP6.experimentへ分ける。実測出力をipynbに保持し、性能比較の根拠としない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/trace_execution.ipynb"
+      ]
+    },
+    {
+      "id": "P6.adapter",
+      "title": "Adapter実行の内訳をトレースする",
+      "slice": "J",
+      "role": "how-to-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/trace_execution.ipynb"
+      ],
+      "source_urls": [],
+      "requires": [
+        "trace.events",
+        "instance.model"
+      ],
+      "sections": [
+        {
+          "id": "breakdown",
+          "introduces": [
+            "adapter.basic"
+          ],
+          "uses": [
+            "trace.events",
+            "adapter.basic"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [
+        "experiment.record"
+      ],
+      "parent_page": "P6",
+      "notes": "HiGHSを直接capture_traceで実行する。Experimentを前提にせず、記録されたconvert/call/decodeの親子区間を解釈する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/trace_execution.ipynb"
+      ]
+    },
+    {
+      "id": "P6.experiment",
+      "title": "トレースを実験に記録する",
+      "slice": "J/F",
+      "role": "how-to-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/trace_execution.ipynb"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/tracing.ipynb"
+      ],
+      "requires": [
+        "trace.events",
+        "evaluation.basic",
+        "experiment.record"
+      ],
+      "sections": [
+        {
+          "id": "attach",
+          "introduces": [],
+          "uses": [
+            "trace.events",
+            "evaluation.basic",
+            "experiment.record"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "P6",
+      "notes": "候補評価をlog_solutionで記録するRunのトレースを保存・読出しする。P6.adapterを飛ばしてもよく、Adapterの知識や導入は要求しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/trace_execution.ipynb"
+      ]
+    },
+    {
+      "id": "P7",
+      "title": "実験を再開・継続・forkする",
+      "slice": "F",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/continue_experiment.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/experiment.md"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "experiment.persist"
+      ],
+      "sections": [
+        {
+          "id": "resume",
+          "introduces": [
+            "experiment.resume"
+          ],
+          "uses": [
+            "experiment.resume"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "F/P7はExperimentの保存済み記録を知る読者向け。閉じたRunのcheckpointからの復帰、確定済み記録からのfork、自動保存頻度の選択を自己完結した例で扱う。checkpoint復帰には同じLocal Registryが必要で、ソルバー内部の探索状態の再開とは区別する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/continue_experiment.md"
+      ]
+    },
+    {
+      "id": "P8",
+      "title": "registryでArtifactを共有する",
+      "slice": "G",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/share_artifact_registry.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/share_in_ommx_artifact.md"
+      ],
+      "requires": [
+        "ext.python",
+        "ext.cli",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "basics",
+          "introduces": [
+            "artifact.basics"
+          ],
+          "uses": [
+            "artifact.basics"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "remote",
+          "introduces": [
+            "artifact.lifecycle",
+            "artifact.registry"
+          ],
+          "uses": [
+            "artifact.lifecycle",
+            "artifact.registry"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "identity",
+          "introduces": [
+            "artifact.identity"
+          ],
+          "uses": [
+            "artifact.identity"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "G/P8はPython・CLI・SDK環境から直接読めるJSON共有の操作ガイド。送信前に参照名とタグを短く説明し、Artifactの基本理解、commitによるローカル確定とpushによる送信の違いから、認証・送信・別環境での読出しまで扱う。名前・タグ・digest全体の使い分けは受信例の後で導入し、共有操作の前提にしない。T6のファイル往復とInstance・Experimentの操作は任意。source_urlsは統合前の歴史的baselineを指す。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/share_artifact_registry.md"
+      ]
+    },
+    {
+      "id": "P9",
+      "title": "保存したデータをCLIで調査・整理する",
+      "slice": "J",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/manage_local_registry.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/cli.md"
+      ],
+      "requires": [
+        "ext.cli"
+      ],
+      "sections": [
+        {
+          "id": "inspect",
+          "introduces": [
+            "artifact.basics",
+            "artifact.identity",
+            "cli.operations"
+          ],
+          "uses": [
+            "cli.operations"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "cleanup",
+          "introduces": [],
+          "uses": [
+            "artifact.identity",
+            "cli.operations"
+          ],
+          "mentions": [
+            "experiment.record"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "CLIの導入と版の選択はSETUPの任意節へ集約する。受け取ったArtifactを調べる読者に作成・ファイル往復・Python SDKの習得は要求せず、Artifactの基本と可変の名前/タグ・内容のdigestを局所説明する。削除/復元とデータ回収の区別、報告のみの確認から明示削除へ進む手順、blobの経過時間による猶予期間は安全な操作のためBookに残す。Python検索とExperiment検索はそれぞれP9.python/P9.experimentの任意節とする。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/manage_local_registry.md"
+      ]
+    },
+    {
+      "id": "P9.python",
+      "title": "Pythonで保存済みArtifactを一覧する",
+      "slice": "J",
+      "role": "how-to-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/manage_local_registry.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "artifact.basics",
+        "artifact.identity"
+      ],
+      "sections": [
+        {
+          "id": "list",
+          "introduces": [],
+          "uses": [
+            "artifact.basics",
+            "artifact.identity"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "P9",
+      "notes": "公開SDKのlist_artifactsでrefとdigestを読み、空のRegistryでは空の結果になる任意例。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/manage_local_registry.md"
+      ]
+    },
+    {
+      "id": "P9.experiment",
+      "title": "保存したExperimentを条件で探す",
+      "slice": "J",
+      "role": "how-to-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/manage_local_registry.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "artifact.identity",
+        "experiment.record",
+        "experiment.conditions"
+      ],
+      "sections": [
+        {
+          "id": "find",
+          "introduces": [],
+          "uses": [
+            "artifact.identity",
+            "experiment.record",
+            "experiment.conditions"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "P9",
+      "notes": "Experiment Tutorialで記録方法を学んだ読者だけの検索例。実験全体のannotationとRunごとのparameterを区別し、Artifactだけを調べる主導線からは飛ばせる。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/manage_local_registry.md"
+      ]
+    },
+    {
+      "id": "P10",
+      "title": "標準の添付データを扱う",
+      "slice": "F",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/attach_experiment_data.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "experiment.record"
+      ],
+      "sections": [
+        {
+          "id": "attach",
+          "introduces": [
+            "attachment.standard"
+          ],
+          "uses": [
+            "attachment.standard",
+            "experiment.record"
+          ],
+          "mentions": [
+            "attachment.codec"
+          ]
+        }
+      ],
+      "deferred": [
+        "attachment.codec"
+      ],
+      "parent_page": null,
+      "notes": "F/P10はExperiment/Runの基本記録を前提に、共通入力と試行ごとの結果へJSON・Instance・Solution・ファイルを添付して取り出す。Artifact Tutorial、Adapter、独自Codecは不要。Codecは任意のP10.codec節として分離し、標準添付の理解に含めない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/attach_experiment_data.md"
+      ]
+    },
+    {
+      "id": "P10.codec",
+      "title": "独自データのCodecを使う",
+      "slice": "F",
+      "role": "how-to-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/attach_experiment_data.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "attachment.standard",
+        "wire.serialization"
+      ],
+      "sections": [
+        {
+          "id": "custom",
+          "introduces": [
+            "attachment.codec"
+          ],
+          "uses": [
+            "attachment.codec"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "P10",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/attach_experiment_data.md"
+      ]
+    },
+    {
+      "id": "P11",
+      "title": "Instanceを変換し、結果を確認する",
+      "slice": "I",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/transform_instance_without_solver.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/how_to/transform_instance_without_solver.md"
+      ],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "source",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "expression.basics",
+            "constraint.basics",
+            "sense",
+            "instance.build",
+            "special.onehot",
+            "state.values",
+            "evaluation.basic"
+          ],
+          "uses": [
+            "instance.build",
+            "special.onehot"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "target",
+          "introduces": [
+            "class.membership",
+            "expression.form",
+            "class.declare",
+            "preparation.target",
+            "policy.select"
+          ],
+          "uses": [
+            "class.declare",
+            "policy.select",
+            "preparation.target"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "evaluate",
+          "introduces": [
+            "constraints.lifecycle",
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit",
+            "feasibility.views",
+            "evaluation.snapshot",
+            "transformation.guarantees"
+          ],
+          "uses": [
+            "constraints.lifecycle",
+            "evaluation.basic",
+            "feasibility.views",
+            "evaluation.snapshot",
+            "transformation.guarantees"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [
+        "adapter.basic",
+        "adapter.strict",
+        "experiment.record"
+      ],
+      "parent_page": null,
+      "notes": "局所導入を備える独立入口。source本文の観察と上記設計契約は別記録。 I1の修正ではactive/removedをこのページで短く定義する。実行例が確認するのは指定したOneHot loweringと手元の候補に限る。一般の変換保証や全feasibility viewの習得・I全体の完了とはみなさない。 ユーザー方針によりcopyは使わず同じInstanceへprepareする。比較用に保存するのは変換前の評価結果だけであるため、基本の候補評価を変換より前に導入する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/transform_instance_without_solver.md"
+      ]
+    },
+    {
+      "id": "P12",
+      "title": "OpenJij Adapterで小さな問題をサンプリングする",
+      "slice": "D",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/sample_with_openjij_adapter.ipynb"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "model",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "expression.basics",
+            "constraint.basics",
+            "sense",
+            "instance.build",
+            "special.onehot",
+            "adapter.basic",
+            "class.membership"
+          ],
+          "uses": [
+            "instance.build",
+            "special.onehot",
+            "class.membership"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "prepare",
+          "introduces": [
+            "preparation.target",
+            "policy.select",
+            "penalty.choice"
+          ],
+          "uses": [
+            "policy.select",
+            "penalty.choice",
+            "preparation.target"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "samples",
+          "introduces": [
+            "adapter.strict",
+            "feasibility.basic",
+            "sampling.reported_results"
+          ],
+          "uses": [
+            "adapter.strict",
+            "sampling.reported_results"
+          ],
+          "mentions": [
+            "constraints.lifecycle",
+            "objective.views",
+            "transformation.guarantees"
+          ]
+        },
+        {
+          "id": "choose",
+          "introduces": [
+            "solution.read",
+            "variables.metadata",
+            "sampleset.read",
+            "optimality.limit"
+          ],
+          "uses": [
+            "sampleset.read",
+            "variables.metadata",
+            "optimality.limit"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [
+        "bigm.contract",
+        "encoding.integer",
+        "artifact.format"
+      ],
+      "parent_page": null,
+      "notes": "D/P12は初見読者向けの独立Notebook。実際のINPUT_CLASSとfreshな推奨Policyへ重みを追加し、同一Instanceをprepareしてstrict samplingする。重み変更時はモデル構築からやり直す。手動のState/evaluate、Samples自作、copy、一般の変換保証の習得を主張しない。出力を含む本文検査と実行記録はPRに分離し、歴史的baselineは書き換えない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/sample_with_openjij_adapter.ipynb"
+      ]
+    },
+    {
+      "id": "T8",
+      "title": "TSPをサンプラーで扱う任意の応用例",
+      "slice": "D",
+      "role": "application",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/tutorial/tsp_sampling_with_openjij_adapter.ipynb"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/tsp_sampling_with_openjij_adapter.ipynb"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.build",
+        "constraint.basics",
+        "adapter.basic",
+        "class.membership",
+        "preparation.target",
+        "policy.select",
+        "penalty.choice",
+        "adapter.strict",
+        "solution.read",
+        "feasibility.basic",
+        "optimality.limit",
+        "sampleset.read",
+        "variables.metadata",
+        "sampling.reported_results"
+      ],
+      "sections": [
+        {
+          "id": "tsp",
+          "introduces": [],
+          "uses": [
+            "instance.build",
+            "constraint.basics"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "sample",
+          "introduces": [],
+          "uses": [
+            "policy.select",
+            "penalty.choice",
+            "adapter.strict",
+            "sampleset.read"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "P12相当の概念前提は明示し、コード実行状態は引き継がない。TSP固有の定式化と可視化は局所説明。公開b7のSDK/OpenJij Adapterと追加matplotlibへ導入を接続する。任意応用だが本文と出力の検証対象。copyや手動State評価は前提にしない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/tutorial/tsp_sampling_with_openjij_adapter.ipynb"
+      ]
+    },
+    {
+      "id": "DEV_A",
+      "title": "Adapterを実装する",
+      "slice": "C",
+      "role": "developer",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/developer_guide/adapter.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/developer_guide/adapter.md"
+      ],
+      "requires": [
+        "ext.python",
+        "instance.model",
+        "variable.basics",
+        "state.values",
+        "evaluation.basic",
+        "adapter.basic",
+        "class.membership"
+      ],
+      "sections": [
+        {
+          "id": "variables",
+          "introduces": [
+            "variables.roles",
+            "variables.recovery",
+            "variables.defaults"
+          ],
+          "uses": [
+            "variables.roles",
+            "variables.recovery"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "contract",
+          "introduces": [
+            "adapter.contract",
+            "adapter.encode_decode"
+          ],
+          "uses": [
+            "adapter.contract",
+            "adapter.encode_decode"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "PR #1159のレビュー修正で、encodeからdecode完了まで入力を不変に保つ契約、最適性情報のmapping、revisionを固定した参照実装を明記する。PySCIPOptの入力参照保持をisolated snapshotの保証と混同しない。変数の詳細の概念所有はInstance/G6側に残す。 同じ入力をencodeからdecodeまで変更せず保持する契約を先に示し、private copyを既定の実装手順として勧めない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/developer_guide/adapter.md"
+      ]
+    },
+    {
+      "id": "DEV_X",
+      "title": "別のツールと言語を接続する",
+      "slice": "K",
+      "role": "developer",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "instance.model",
+        "evaluation.basic",
+        "wire.serialization"
+      ],
+      "sections": [
+        {
+          "id": "integration",
+          "introduces": [
+            "integration.language"
+          ],
+          "uses": [
+            "integration.language"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "R_API",
+      "title": "Python API Referenceの入口",
+      "slice": "A/K",
+      "role": "reference",
+      "status": "existing",
+      "source_paths": [
+        "docs/api/index.rst"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/api/index.rst"
+      ],
+      "requires": [
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "index",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "instance.model",
+            "class.membership",
+            "preparation.target"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "Referenceへのリンクだけで概念を既習にしない。個別APIは必要なsectionへ粒度を下げる。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/api/index.rst"
+      ]
+    },
+    {
+      "id": "R_API.function",
+      "title": "Functionの意味・構築・演算・評価と表現の契約",
+      "slice": "Function and named results Reference migration",
+      "role": "reference-entry",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/docstrings/ommx/Function.md",
+        "python/ommx/src/function.rs",
+        "python/ommx/src/linear.rs",
+        "python/ommx/src/quadratic.rs",
+        "python/ommx/src/polynomial.rs",
+        "docs/api/_items/ommx.Function.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "instance.model",
+        "variable.basics",
+        "constraint.basics"
+      ],
+      "sections": [
+        {
+          "id": "expression",
+          "introduces": [
+            "expression.basics"
+          ],
+          "uses": [
+            "expression.basics"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "evaluate",
+          "introduces": [
+            "state.values",
+            "expression.evaluate",
+            "evaluation.basic",
+            "feasibility.basic"
+          ],
+          "uses": [
+            "expression.evaluate",
+            "evaluation.basic",
+            "feasibility.basic"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "representation",
+          "introduces": [
+            "expression.form"
+          ],
+          "uses": [
+            "expression.form"
+          ],
+          "mentions": [
+            "function.representation"
+          ]
+        },
+        {
+          "id": "solver-support",
+          "introduces": [
+            "function.support"
+          ],
+          "uses": [
+            "function.support"
+          ],
+          "mentions": [
+            "class.membership",
+            "preparation.target"
+          ]
+        },
+        {
+          "id": "related-operations",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "expression.labels",
+            "named.outputs"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API",
+      "notes": "日英Function Guideを共有Referenceへ統合する。式のID参照、構築・演算、格納表現、式単体と問題全体の評価の違いを本文と実行例で説明する。Linear・Quadratic・Polynomialの係数からの構築は各クラスの完全例へ接続する。評価可能性はAdapterの入力対応を保証しない。表示と指標の操作は所有APIへ送り、リンクだけから習得を付与しない。RPNの符号化はR_WIRE.functionが所有する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/docstrings/ommx/Function.md",
+        "python/ommx/src/function.rs",
+        "python/ommx/src/linear.rs",
+        "python/ommx/src/quadratic.rs",
+        "python/ommx/src/polynomial.rs",
+        "docs/api/_items/ommx.Function.rst"
+      ]
+    },
+    {
+      "id": "R_API.transform",
+      "title": "変換APIの厳密な条件",
+      "slice": "A",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/instance.rs"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/python/ommx/src/instance.rs"
+      ],
+      "requires": [
+        "constraint.basics",
+        "variable.basics",
+        "transformation.guarantees"
+      ],
+      "sections": [
+        {
+          "id": "contracts",
+          "introduces": [
+            "bigm.contract"
+          ],
+          "uses": [
+            "bigm.contract"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/instance.rs"
+      ]
+    },
+    {
+      "id": "R_RUST",
+      "title": "Rust API Referenceへの入口",
+      "slice": "K",
+      "role": "reference",
+      "status": "external",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "ext.rust",
+        "instance.model"
+      ],
+      "sections": [
+        {
+          "id": "index",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "integration.language"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "バージョン対応Rustdoc。全項目の内容監査は別対象。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "R_WIRE",
+      "title": "Messageのwire仕様",
+      "slice": "K",
+      "role": "reference",
+      "status": "external",
+      "source_paths": [
+        "proto/ommx/v1/instance.proto"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/proto/ommx/v1/instance.proto"
+      ],
+      "requires": [
+        "instance.model",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "wire",
+          "introduces": [
+            "wire.serialization",
+            "wire.compatibility"
+          ],
+          "uses": [
+            "wire.serialization",
+            "wire.compatibility"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "proto/ommx/v1/instance.proto"
+      ]
+    },
+    {
+      "id": "R_WIRE.function",
+      "title": "Functionのwire表現",
+      "slice": "I/K",
+      "role": "reference-section",
+      "status": "external",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "expression.basics"
+      ],
+      "sections": [
+        {
+          "id": "function",
+          "introduces": [
+            "function.representation"
+          ],
+          "uses": [
+            "function.representation"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_WIRE",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "R_ARTIFACT",
+      "title": "Artifact形式の相互運用仕様",
+      "slice": "G/K",
+      "role": "reference",
+      "status": "external",
+      "source_paths": [
+        "rust/ommx/doc/artifact_design.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/rust/ommx/doc/artifact_design.md"
+      ],
+      "requires": [
+        "artifact.identity",
+        "wire.serialization"
+      ],
+      "sections": [
+        {
+          "id": "format",
+          "introduces": [
+            "artifact.format"
+          ],
+          "uses": [
+            "artifact.format"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "rust/ommx/doc/artifact_design.md"
+      ]
+    },
+    {
+      "id": "R_CODEC",
+      "title": "Codecの契約",
+      "slice": "F/K",
+      "role": "reference",
+      "status": "external",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "attachment.standard",
+        "wire.serialization"
+      ],
+      "sections": [
+        {
+          "id": "codec",
+          "introduces": [
+            "attachment.codec"
+          ],
+          "uses": [
+            "attachment.codec"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "MIG3",
+      "title": "Python SDK v2からv3への移行",
+      "slice": "K",
+      "role": "migration",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/migration/python_sdk_v2_to_v3.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/migration/python_sdk_v2_to_v3.md"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.model"
+      ],
+      "sections": [
+        {
+          "id": "migration",
+          "introduces": [
+            "migration.api"
+          ],
+          "uses": [
+            "migration.api"
+          ],
+          "mentions": [
+            "wire.compatibility",
+            "class.membership",
+            "preparation.target"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "旧版経験者向け。旧namespaceの出現を現在APIの導入とみなさない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/migration/python_sdk_v2_to_v3.md"
+      ]
+    },
+    {
+      "id": "MIG2",
+      "title": "Python SDK v1からv2への移行",
+      "slice": "K",
+      "role": "historical",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/migration/python_sdk_v1_to_v2.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/migration/python_sdk_v1_to_v2.md"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.model"
+      ],
+      "sections": [
+        {
+          "id": "historical",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "migration.api",
+            "wire.serialization"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "歴史的内容。現行経路へ知識を自動exportしない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/migration/python_sdk_v1_to_v2.md"
+      ]
+    },
+    {
+      "id": "RELEASE",
+      "title": "リリース情報",
+      "slice": "K",
+      "role": "release",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/release_note/ommx-1.5.md",
+        "docs/ja/release_note/ommx-1.6.md",
+        "docs/ja/release_note/ommx-1.7.md",
+        "docs/ja/release_note/ommx-1.8.md",
+        "docs/ja/release_note/ommx-1.9.md",
+        "docs/ja/release_note/ommx-2.0.md",
+        "docs/ja/release_note/ommx-2.1.md",
+        "docs/ja/release_note/ommx-2.2.md",
+        "docs/ja/release_note/ommx-2.3.md",
+        "docs/ja/release_note/ommx-2.4.md",
+        "docs/ja/release_note/ommx-2.5.md",
+        "docs/ja/release_note/ommx-3.0.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-1.5.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-1.6.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-1.7.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-1.8.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-1.9.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-2.0.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-2.1.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-2.2.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-2.3.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-2.4.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-2.5.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-3.0.md"
+      ],
+      "requires": [
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "release",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "migration.api",
+            "class.membership",
+            "preparation.target"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "各リリース記事は実出現一覧に個別収録。本文の既習前提にはしない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/release_note/ommx-1.5.md",
+        "docs/ja/release_note/ommx-1.6.md",
+        "docs/ja/release_note/ommx-1.7.md",
+        "docs/ja/release_note/ommx-1.8.md",
+        "docs/ja/release_note/ommx-1.9.md",
+        "docs/ja/release_note/ommx-2.0.md",
+        "docs/ja/release_note/ommx-2.1.md",
+        "docs/ja/release_note/ommx-2.2.md",
+        "docs/ja/release_note/ommx-2.3.md",
+        "docs/ja/release_note/ommx-2.4.md",
+        "docs/ja/release_note/ommx-2.5.md",
+        "docs/ja/release_note/ommx-3.0.md"
+      ]
+    },
+    {
+      "id": "AUX",
+      "title": "補助的なAgent skills",
+      "slice": "K",
+      "role": "auxiliary",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/agent_skills.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/agent_skills.md"
+      ],
+      "requires": [
+        "sdk.environment",
+        "ext.cli"
+      ],
+      "sections": [
+        {
+          "id": "skills",
+          "introduces": [
+            "aux.agent_skills"
+          ],
+          "uses": [
+            "aux.agent_skills"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/agent_skills.md"
+      ]
+    },
+    {
+      "id": "R_API.instance.display",
+      "title": "Instanceのラベルを使った式の文字列化とNotebook表示",
+      "slice": "Function and named results Reference migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/parametric_instance.rs",
+        "docs/api/_items/ommx.Instance.rst",
+        "docs/api/_items/ommx.ParametricInstance.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "instance.model",
+        "expression.basics",
+        "variable.basics"
+      ],
+      "sections": [
+        {
+          "id": "labels",
+          "introduces": [
+            "variables.metadata",
+            "expression.labels"
+          ],
+          "uses": [
+            "expression.labels"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API.instance",
+      "notes": "format_function・display_functionの実行例で名前・添字を導入し、Function単体のID表示とモデル側のラベル表示を区別する。表示先のIDを使い、別モデルの名前照合はしない。全体の文字列と省略され得るNotebookプレビューを分ける。ParametricInstanceの例はパラメータ名も表示するが、表示経路から問題族全体の操作習得は付与しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/parametric_instance.rs",
+        "docs/api/_items/ommx.Instance.rst",
+        "docs/api/_items/ommx.ParametricInstance.rst"
+      ]
+    },
+    {
+      "id": "G7.bounds",
+      "title": "制約から導ける変数の範囲を反映する",
+      "slice": "L",
+      "role": "guide-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "variable.basics",
+        "constraint.basics"
+      ],
+      "sections": [
+        {
+          "id": "meaning",
+          "introduces": [
+            "bounds.tighten"
+          ],
+          "uses": [
+            "bounds.tighten"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G7",
+      "notes": "「制約から分かる変数の範囲を反映する」が意味・保証への入口。P15はこれを局所的にも説明するためG7全体の事前読了は不要。数式・数値条件は実在するAPIへ送る。数値境界の注意を残し、正確な数値・失敗時契約の参照先をtighten_bounds_simultaneously_once_using_constraintsにする。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ]
+    },
+    {
+      "id": "R_API.named_function",
+      "title": "NamedFunctionの意味と指標の登録・評価・取得",
+      "slice": "Function and named results Reference migration",
+      "role": "reference-entry",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/docstrings/ommx/NamedFunction.md",
+        "python/ommx/src/named_function.rs",
+        "docs/api/_items/ommx.NamedFunction.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.model",
+        "variable.basics",
+        "expression.basics",
+        "state.values",
+        "evaluation.basic",
+        "solution.read",
+        "constraint.basics",
+        "sense"
+      ],
+      "sections": [
+        {
+          "id": "reporting-expression",
+          "introduces": [
+            "named.outputs"
+          ],
+          "uses": [
+            "named.outputs"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "register-and-read",
+          "introduces": [
+            "named.evaluate"
+          ],
+          "uses": [
+            "named.evaluate"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API",
+      "notes": "NamedFunctionの冒頭で目的関数・制約と異なる報告用指標の意味を説明し、登録→候補評価→辞書とDataFrameによる取得を一つの完全例にする。空tuple、評価式のIDと表のindex/valueを局所説明する。複数候補と省略変数の解釈は後続の任意節で追跡する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/docstrings/ommx/NamedFunction.md",
+        "python/ommx/src/named_function.rs",
+        "docs/api/_items/ommx.NamedFunction.rst"
+      ]
+    },
+    {
+      "id": "R_API.named_function.samples",
+      "title": "複数候補の名前付き指標をサンプルIDで取得する",
+      "slice": "Function and named results Reference migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/docstrings/ommx/NamedFunction.md",
+        "python/ommx/src/named_function.rs",
+        "docs/api/_items/ommx.NamedFunction.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "named.evaluate",
+        "state.values"
+      ],
+      "sections": [
+        {
+          "id": "samples",
+          "introduces": [
+            "named.samples"
+          ],
+          "uses": [
+            "named.samples"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API.named_function",
+      "notes": "NamedFunctionの複数候補の実行例で候補IDを説明し、同じ式の指標をID付きで取り出す。費用を最小にする候補と距離を最小にする候補は異なり得る。指標追加はSampleSetの並べ替えやbest_feasibleの選択基準を変えない。一般の候補選択・変換後の解釈の習得は付与しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/docstrings/ommx/NamedFunction.md",
+        "python/ommx/src/named_function.rs",
+        "docs/api/_items/ommx.NamedFunction.rst"
+      ]
+    },
+    {
+      "id": "R_API.named_function.values",
+      "title": "報告用の式だけに現れる変数の値を明示する",
+      "slice": "Function and named results Reference migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/docstrings/ommx/NamedFunction.md",
+        "python/ommx/src/named_function.rs",
+        "docs/api/_items/ommx.NamedFunction.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "named.outputs",
+        "state.values",
+        "variable.basics"
+      ],
+      "sections": [
+        {
+          "id": "explicit-values",
+          "introduces": [
+            "named.values"
+          ],
+          "uses": [
+            "named.values"
+          ],
+          "mentions": [
+            "variables.roles",
+            "variables.recovery",
+            "variables.defaults"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API.named_function",
+      "notes": "NamedFunctionの省略値と明示値を比較する実行例で、報告用の式だけに使う変数はusedとはならず、特定候補の指標にはその値が必要と説明する。指標は制約ではないが、与えた変数値の定義域は候補評価で検査される。全変数役割・補完規則はG6とpopulate_stateに委ねる。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/docstrings/ommx/NamedFunction.md",
+        "python/ommx/src/named_function.rs",
+        "docs/api/_items/ommx.NamedFunction.rst"
+      ]
+    },
+    {
+      "id": "R_API.solution.named_values",
+      "title": "Solutionの値を名前・添字やDataFrameで取得する",
+      "slice": "Function and named results Reference migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.model",
+        "variable.basics",
+        "state.values",
+        "evaluation.basic",
+        "solution.read"
+      ],
+      "sections": [
+        {
+          "id": "extract",
+          "introduces": [
+            "variables.metadata",
+            "solution.extract"
+          ],
+          "uses": [
+            "solution.extract"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "table",
+          "introduces": [],
+          "uses": [
+            "solution.extract"
+          ],
+          "mentions": [
+            "state.named_reuse"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API.solution",
+      "notes": "extract_decision_variablesの完全例からtupleキー、全名前の辞書、名前なしと重複ラベル、decision_variables_dfへ進む。各メソッドの例は必要な問題と候補を自分で用意する。IDは変数の識別、名前・添字はモデル上のラベルという違いを説明する。SampleSetでの抽出は候補IDを必要とする別API、別Instanceへの入力はstate_from_named_valuesに送る。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst"
+      ]
+    },
+    {
+      "id": "R_API.instance.named_values",
+      "title": "名前・添字で別InstanceのIDへ値を対応付ける",
+      "slice": "Function and named results Reference migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "solution.extract",
+        "state.values",
+        "instance.model",
+        "sdk.development_environment"
+      ],
+      "sections": [
+        {
+          "id": "match-and-evaluate",
+          "introduces": [
+            "state.named_reuse"
+          ],
+          "uses": [
+            "state.named_reuse"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API.instance",
+      "notes": "state_from_named_valuesの完全例で抽出元と受取先を構築し、IDが異なっても名前・添字で照合できることと、新しいboundへの違反を示す。照合は値・実行可能性の検査ではなく、入力にない値を埋めない。公開b7向けSETUPだけからこの操作を実行できると約束せず、Referenceに対応する開発版環境を用意した経路を独立して追跡する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ]
+    },
+    {
+      "id": "P15",
+      "title": "制約から変数の上下限を絞る",
+      "slice": "L",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/tighten_bounds.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "model",
+          "introduces": [
+            "variable.basics",
+            "constraint.basics"
+          ],
+          "uses": [
+            "variable.basics",
+            "constraint.basics"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "once",
+          "introduces": [
+            "bounds.tighten",
+            "bounds.inspect_once"
+          ],
+          "uses": [
+            "bounds.inspect_once"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "limits",
+          "introduces": [],
+          "uses": [
+            "bounds.inspect_once"
+          ],
+          "mentions": [
+            "numeric.tolerance"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "上下限と通常制約を知る読者へ、自己完結した二変数例で開始時bound→一回の更新→変更結果を先に示す。二回目で更新伝播を説明するが、自動反復/収束APIを追加しない。空辞書と対象外・数値条件の読み方を後段へ置く。同じatolでも丸め・計算順序で境界付近の判定が変わる場合を局所説明する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/tighten_bounds.md"
+      ]
+    },
+    {
+      "id": "B_EVALUATE",
+      "title": "候補を評価して結果を判断する / Evaluate candidates and interpret results",
+      "slice": "Result interpretation migration",
+      "role": "book-chapter",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/evaluate_and_interpret.md",
+        "docs/en/user_guide/evaluate_and_interpret.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math"
+      ],
+      "sections": [
+        {
+          "id": "common-evaluation",
+          "introduces": [
+            "results.evaluation_scope"
+          ],
+          "uses": [],
+          "mentions": [
+            "evaluation.basic",
+            "solution.read"
+          ]
+        },
+        {
+          "id": "reconstructed-and-completed-values",
+          "introduces": [
+            "results.reconstruction"
+          ],
+          "uses": [
+            "results.evaluation_scope"
+          ],
+          "mentions": [
+            "variables.recovery",
+            "variables.defaults"
+          ]
+        },
+        {
+          "id": "objectives-optimality-and-comparison",
+          "introduces": [
+            "results.comparison"
+          ],
+          "uses": [
+            "results.evaluation_scope",
+            "results.reconstruction"
+          ],
+          "mentions": [
+            "objective.views",
+            "optimality.limit",
+            "named.outputs",
+            "solution.extract"
+          ]
+        }
+      ],
+      "deferred": [
+        "variables.roles"
+      ],
+      "parent_page": null,
+      "notes": "日英で構造を揃え、数理最適化の基礎から直接入れる第3章。クラスやAPIの操作を順番に教えず、短い数学例と説明から評価対象・値の出所・比較基準の判断へ進む。リンクだけからAPI操作能力を付与しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/evaluate_and_interpret.md",
+        "docs/en/user_guide/evaluate_and_interpret.md"
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "adoption-from-readme",
+      "title": "READMEからOMMXの採用目的と日本語Bookの入口を選ぶ",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        "README",
+        "HOME"
+      ]
+    },
+    {
+      "id": "adoption-from-book",
+      "title": "Bookへ直接入り、目的・現在の用途・開発方向を理解する",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        "HOME"
+      ]
+    },
+    {
+      "id": "adoption-from-readme-en",
+      "title": "READMEからOMMXの採用目的と英語Bookの入口を選ぶ",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        "README",
+        "HOME_EN"
+      ]
+    },
+    {
+      "id": "adoption-from-book-en",
+      "title": "英語Bookへ直接入り、目的・現在の用途・開発方向を理解する",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        "HOME_EN"
+      ]
+    },
+    {
+      "id": "solve",
+      "title": "最初の求解から別Adapterまで",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T1",
+        "T2",
+        "T3"
+      ]
+    },
+    {
+      "id": "candidate",
+      "title": "候補評価への独立入口",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T4"
+      ]
+    },
+    {
+      "id": "transform",
+      "title": "Instanceの変換と結果確認",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "P11"
+      ]
+    },
+    {
+      "id": "sampler",
+      "title": "サンプラーへの独立入口",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "P12"
+      ]
+    },
+    {
+      "id": "artifact",
+      "title": "Artifactの独立往復",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T6"
+      ]
+    },
+    {
+      "id": "experiment",
+      "title": "Experimentの独立往復",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T5"
+      ]
+    },
+    {
+      "id": "policy",
+      "title": "既知の基本モデルからPolicy編集",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T1",
+        "P1"
+      ]
+    },
+    {
+      "id": "comparison",
+      "title": "同じ問題を別Adapterで比較",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T1",
+        "P2"
+      ]
+    },
+    {
+      "id": "tsp",
+      "title": "サンプリングからTSPへ",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "P12",
+        "T8"
+      ]
+    },
+    {
+      "id": "tracing",
+      "title": "評価処理のトレース",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T4",
+        "P6"
+      ]
+    },
+    {
+      "id": "trace_record",
+      "title": "任意の実験連携節",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T4",
+        "P6",
+        "T5",
+        "P6.experiment"
+      ]
+    },
+    {
+      "id": "trace_adapter",
+      "title": "実験記録なしでAdapterの時間内訳を読む",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T4",
+        "P6",
+        "P6.adapter"
+      ]
+    },
+    {
+      "id": "custom_data",
+      "title": "標準添付から独自Codecへ",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T5",
+        "P10",
+        "R_WIRE",
+        "P10.codec"
+      ]
+    },
+    {
+      "id": "registry",
+      "title": "ローカル受け渡しからremoteへ",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T6",
+        "P8"
+      ]
+    },
+    {
+      "id": "registry_direct",
+      "title": "SDK導入からregistry共有へ直接進む",
+      "initial": [
+        "ext.python",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "P8"
+      ]
+    },
+    {
+      "id": "cli",
+      "title": "ArtifactからCLI操作へ",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T6",
+        "P9"
+      ]
+    },
+    {
+      "id": "resume",
+      "title": "保存済み実験を再開する",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T5",
+        "P7"
+      ]
+    },
+    {
+      "id": "diagnostics",
+      "title": "候補評価とsolver診断の区別",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T1",
+        "P4"
+      ]
+    },
+    {
+      "id": "initial",
+      "title": "初期候補を渡す",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T1",
+        "P5"
+      ]
+    },
+    {
+      "id": "diagnostics_record",
+      "title": "候補評価と診断を区別して実験へ記録する",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T1",
+        "P4",
+        "T5",
+        "P4.experiment"
+      ]
+    },
+    {
+      "id": "initial_named",
+      "title": "初期候補から開発版の名前付き入力へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T1",
+        "P5",
+        "P5.named"
+      ]
+    },
+    {
+      "id": "cli_direct",
+      "title": "受け取ったArtifactをCLIで直接調査する",
+      "initial": [
+        "ext.cli"
+      ],
+      "steps": [
+        "P9"
+      ]
+    },
+    {
+      "id": "registry_search",
+      "title": "記録済みの実験をPythonで探す",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T5",
+        "P9",
+        "P9.python",
+        "P9.experiment"
+      ]
+    },
+    {
+      "id": "adapter_author",
+      "title": "Adapter著者",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "R_API.instance",
+        "R_API.solution",
+        "G9",
+        "G11",
+        "DEV_A"
+      ]
+    },
+    {
+      "id": "rust_reader",
+      "title": "Rust利用者",
+      "initial": [
+        "ext.math",
+        "ext.rust"
+      ],
+      "steps": [
+        "SETUP.common",
+        "R_API.instance.model",
+        "R_API.solution.model",
+        "R_RUST"
+      ]
+    },
+    {
+      "id": "language_integration",
+      "title": "他言語の入出力接続",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        "SETUP.common",
+        "R_API.instance.model",
+        "R_API.solution.model",
+        "R_WIRE",
+        "DEV_X"
+      ]
+    },
+    {
+      "id": "variable_recovery_guarantees",
+      "title": "候補評価から変数の復元と変換の保証へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "R_API.instance",
+        "R_API.solution",
+        "R_API.instance.population",
+        "G7",
+        "G7.conditioning",
+        "G7.penalty"
+      ]
+    },
+    {
+      "id": "function_parametric",
+      "title": "問題モデルからFunctionと固定構造の問題族へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "R_API.instance",
+        "R_API.function",
+        "R_API.parametric"
+      ]
+    },
+    {
+      "id": "function_api_contract",
+      "title": "Function Referenceで式の意味から表現・数値契約まで読む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "R_API.instance",
+        "R_API.function"
+      ]
+    },
+    {
+      "id": "both_entries",
+      "title": "二つの入口からの合流",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        {
+          "alternatives": [
+            [
+              "T1"
+            ],
+            [
+              "T4"
+            ]
+          ]
+        },
+        "T6"
+      ]
+    },
+    {
+      "id": "metadata_edit",
+      "title": "Instanceのラベルを整え、反映先を確認する",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "R_API.instance",
+        "R_API.instance.names",
+        "R_API.instance.metadata-edit"
+      ]
+    },
+    {
+      "id": "mps_export_direct",
+      "title": "独立したMPS出力How-toからファイルを作る",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "P16"
+      ]
+    },
+    {
+      "id": "mps_export_after_import",
+      "title": "既存問題の読み込みからMPS出力へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "P3",
+        "P16"
+      ]
+    },
+    {
+      "id": "mps_export_from_artifact_guide",
+      "title": "Artifactとの使い分けからMPS出力へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "G13",
+        "P16"
+      ]
+    },
+    {
+      "id": "named_metrics",
+      "title": "問題と候補評価から名前付き指標を登録・取得する",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "R_API.instance",
+        "R_API.solution",
+        "R_API.named_function",
+        "R_API.named_function.samples",
+        "R_API.named_function.values"
+      ]
+    },
+    {
+      "id": "named_result_extraction",
+      "title": "問題と候補評価から名前・添字による後処理へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "R_API.instance",
+        "R_API.solution",
+        "R_API.solution.extract",
+        "R_API.solution.named_values"
+      ]
+    },
+    {
+      "id": "named_metrics_direct",
+      "title": "Instanceと候補評価を知る読者がNamedFunctionへ直接入る",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "instance.model",
+        "variable.basics",
+        "expression.basics",
+        "state.values",
+        "evaluation.basic",
+        "solution.read",
+        "constraint.basics",
+        "sense"
+      ],
+      "steps": [
+        "SETUP",
+        "R_API.named_function"
+      ]
+    },
+    {
+      "id": "named_values_direct",
+      "title": "評価結果を持つ読者が名前・添字の抽出へ直接入る",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "instance.model",
+        "variable.basics",
+        "state.values",
+        "evaluation.basic",
+        "solution.read"
+      ],
+      "steps": [
+        "SETUP",
+        "R_API.solution.named_values"
+      ]
+    },
+    {
+      "id": "labeled_function",
+      "title": "式の基本からラベルを使った表示へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "R_API.instance",
+        "R_API.function",
+        "R_API.instance.display"
+      ]
+    },
+    {
+      "id": "tighten_bounds_direct",
+      "title": "SDK導入から一回のbound更新へ直接進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "P15"
+      ]
+    },
+    {
+      "id": "tighten_bounds_guide",
+      "title": "変換の意味からbound更新へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "R_API.instance",
+        "R_API.solution",
+        "G7",
+        "G7.bounds",
+        "P15"
+      ]
+    },
+    {
+      "id": "named_values_development",
+      "title": "既に開発版環境がある読者が別Instanceへ対応付けて評価する",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment",
+        "sdk.development_environment"
+      ],
+      "steps": [
+        "R_API.instance",
+        "R_API.solution",
+        "R_API.solution.named_values",
+        "R_API.instance.named_values"
+      ]
+    },
+    {
+      "id": "instance_api_direct",
+      "title": "日英のInstance入口またはAPI直接入口から基本モデルを読む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "R_API.instance"
+      ]
+    },
+    {
+      "id": "solution_api_direct",
+      "title": "日英の候補評価入口からSolution Referenceで結果を読む",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "instance.model",
+        "variable.basics",
+        "constraint.basics",
+        "sense"
+      ],
+      "steps": [
+        "R_API.solution"
+      ]
+    },
+    {
+      "id": "sampleset_api_direct",
+      "title": "候補評価の意味を知る読者がSampleSetから候補を選ぶ",
+      "initial": [
+        "instance.model",
+        "sense",
+        "state.values",
+        "evaluation.basic",
+        "solution.read",
+        "feasibility.basic",
+        "optimality.limit",
+        "ext.python"
+      ],
+      "steps": [
+        "R_API.sampleset"
+      ]
+    },
+    {
+      "id": "samples_input_evaluation",
+      "title": "ID付き候補を作り複数候補を評価する",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "R_API.instance",
+        "R_API.solution",
+        "R_API.samples",
+        "R_API.sampleset"
+      ]
+    },
+    {
+      "id": "parametric_api_direct",
+      "title": "問題と式を知る読者が固定構造の問題を具体化する",
+      "initial": [
+        "instance.model",
+        "expression.basics",
+        "ext.python"
+      ],
+      "steps": [
+        "R_API.parametric"
+      ]
+    },
+    {
+      "id": "function_api_direct",
+      "title": "問題モデルを知る読者がFunction Referenceへ直接入る",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "instance.model",
+        "variable.basics",
+        "constraint.basics"
+      ],
+      "steps": [
+        "R_API.function"
+      ]
+    },
+    {
+      "id": "evaluate_interpret_direct",
+      "title": "日英の候補評価章へ直接入り、判断基準を得る",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        "B_EVALUATE"
+      ]
+    },
+    {
+      "id": "retained_results_reference",
+      "title": "APIから保持制約・目的と候補復元の実行例へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "R_API.instance",
+        "R_API.solution",
+        "R_API.instance.population",
+        "R_API.instance.retained_results",
+        "R_API.instance.retained_results.population"
+      ]
+    }
+  ],
+  "environment_requirements": [
+    {
+      "page": "SETUP",
+      "observed": "公開SDK 3.0.0b7を案内。Adapterは任意追加。"
+    },
+    {
+      "page": "P9",
+      "observed": "SETUPの任意CLI節で公開Rust CLI 3.0.0-beta.7を別導入する。単体CLIではPython SDK不要。Python同梱CLIは対応する開発環境をすでに持つ場合だけ。"
+    },
+    {
+      "page": "P5.named",
+      "observed": "state_from_named_valuesを含む開発SDKを用意済みの場合だけの参考例。公開SDK b7の実行手順には含めない。"
+    },
+    {
+      "page": "P6.adapter",
+      "observed": "HiGHS Adapterを任意追加する。Experimentと外部OTel exporterは不要。"
+    },
+    {
+      "page": "P9.python",
+      "observed": "公開SDK b7。CLIの導入とは独立した任意の検索例。"
+    },
+    {
+      "page": "T6",
+      "observed": "SDK b7のみ。送受信を別プロセス、受信を空のLocal Registryで実行。hidden solver preparationは削除。"
+    },
+    {
+      "page": "P16",
+      "observed": "SDK b7のみ。小さなモデルを本文で作る。Adapter・ソルバー・ネットワークは出力例に不要。外部ツール自身のMPS拡張対応は受け手側で確認する。"
+    },
+    {
+      "page": "P13",
+      "observed": "公開SDKの共通環境のみ。登録・単候補/複数候補の指標取得とIntegerの省略/明示値例。"
+    },
+    {
+      "page": "P14",
+      "observed": "通常の3セルは公開SDK環境。任意子節P14.reuseのstate_from_named_valuesは開発版SDKだけで実行する別範囲。"
+    },
+    {
+      "page": "P15",
+      "observed": "公開SDKの共通環境だけで自己完結する。一回分の更新を明示的に呼び、一般presolve統合を前提にしない。"
+    }
+  ],
+  "review_notes": [
+    {
+      "topic": "annotation_scope",
+      "status": "open",
+      "note": "Imported proposed contracts are not a certification of the current Book. Review the affected source and concept granularity before relying on a declared introduction."
+    },
+    {
+      "topic": "semi_variable_domains",
+      "status": "addressed_in_B",
+      "note": "PR #1280's reader-order correction introduces variable kinds/domains before type-specific default rules. This resolves that source-order defect by reordering, not by treating a Binary example as proof of semi-domain knowledge. The historical baseline URLs are unchanged."
+    },
+    {
+      "topic": "direct_entries",
+      "status": "open",
+      "note": "The 21 initial routes are representative, not exhaustive: audit homepage-to-Guide entries as well as the declared routes. Homepage cognitive load is not covered by the set-based checker. PR #1280 reduces the homepage's unexplained transformation-name catalogue; the remaining whole-Book entry/route audit is still open."
+    },
+    {
+      "topic": "transformed_evaluation",
+      "status": "open",
+      "note": "Recheck early removed/output-objective references, named-function prerequisites, and source-observation omissions against the reviewed revision rather than treating mention annotations as accepted judgments. PR #1280 postpones and locally glosses these details in Instance/Solution/SampleSet; other Guides and the historical observation inventory remain unverified."
+    }
+  ]
+}

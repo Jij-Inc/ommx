@@ -3,13 +3,15 @@ resolver = "2"
 members = [
     "rust/ommx",
     "rust/ommx-derive",
+    "rust/ommx-pyo3-bridge",
+    "rust/ommx-pyo3-bridge/fixture",
     "rust/protogen",
     "rust/dataset",
     "python/ommx",
 ]
 
 [workspace.package]
-version = "3.0.0-beta.2"
+version = "3.0.0-beta.9"
 edition = "2021"
 rust-version = "1.89"
 license = "MIT OR Apache-2.0"
@@ -18,7 +20,7 @@ readme = "README.md"
 [workspace.dependencies]
 anyhow = "1.0.100"
 approx = "0.5.1"
-base64 = "0.22.1"
+base64 = "0.23.0"
 built = { version = "0.8.1", features = ["git2"] }
 chrono = "0.4.43"
 clap = { version = "4.6.1", features = ["derive"] }
@@ -37,14 +39,15 @@ glob = "0.3.3"
 http = "1.4.0"
 indexmap = "2.14.0"
 indoc = "2.0.6"
-infer = "0.19.0"
+infer = "0.22.0"
 insta = { version = "1.46.1", features = ["yaml"] }
 itertools = "0.15.0"
 katexit = "0.1.5"
 maplit = "1.0.2"
 num = "0.4.3"
-oci-client = { version = "0.17.0", default-features = false, features = ["rustls-tls"] }
-oci-spec = "0.9.0"
+oci-client = { version = "0.18.0", default-features = false, features = ["rustls-tls"] }
+# Match oci-client's oci-spec version so ImageRef can borrow its Reference.
+oci-spec = "0.10.0"
 ordered-float = { version = "5.1.0", features = ["serde"] }
 petgraph = "0.8.3"
 proc-macro2 = "1.0.95"
@@ -52,9 +55,9 @@ proptest = "1.8.0"
 prost = "0.12.0"
 prost-build = "0.12.0"
 quote = "1.0.40"
-pyo3 = { version = "0.27.2", features = ["anyhow", "multiple-pymethods"] }
-pyo3-stub-gen = "0.23.0"
-pyo3-tracing-opentelemetry = "0.3.0"
+pyo3 = { version = "0.27.2", features = ["multiple-pymethods"] }
+pyo3-stub-gen = "0.23.2"
+pyo3-tracing-opentelemetry = "0.3.1"
 rusqlite = { version = "0.39.0", features = ["bundled"] }
 rmpv = "1.3.0"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -63,8 +66,8 @@ serde_json = "1.0.150"
 sha2 = "0.11.0"
 similar = "3.1.1"
 smallvec = "1.15.1"
-serial_test = "3.4.0"
-syn = "2.0.101"
+serial_test = "4.0.1"
+syn = "3.0.2"
 tar = { version = "0.4.46", default-features = false }
 tempfile = "3.27.0"
 testcontainers = { version = "0.27.3", features = ["blocking"] }
@@ -75,8 +78,8 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 url = "2.5.8"
 uuid = { version = "1.23.1", features = ["v4"] }
-zip = "8.6.0"
-zstd = "0.13.3"
+zip = "9.0.4"
+zstd = "0.14.0"
 
 [workspace.lints.clippy]
 approx_constant = "allow"

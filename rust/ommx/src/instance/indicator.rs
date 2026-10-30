@@ -2,7 +2,7 @@ use super::Instance;
 use crate::{
     constraint::{ConstraintContext, ConstraintID, Equality, Provenance, RemovedReason},
     indicator_constraint::IndicatorConstraintID,
-    Bounds, Coefficient, Constraint, Evaluate, Kind, Linear, LinearMonomial,
+    ATol, Bounds, Coefficient, Constraint, Evaluate, Kind, Linear, LinearMonomial,
 };
 use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
@@ -56,39 +56,50 @@ impl Instance {
     /// [`Kind::SemiInteger`] or [`Kind::SemiContinuous`]: their split domain
     /// $\{0\} \cup [l, u]$ is not uniformly implemented across the codebase, and
     /// [`Function::evaluate_bound`] over $[l, u]$ alone can under-bound $\sup f$
-    /// when $0 \notin [l, u]$. The instance is not mutated on error — all validation
+    /// when $0 \notin [l, u]$. Insufficient regular-constraint ID capacity also
+    /// returns an error. The instance is not mutated on error — all validation
     /// happens before any constraints are inserted.
     ///
     /// If the indicator variable $y$ itself appears in $f(x)$, the interval bound
     /// treats it as a free binary in $[0, 1]$; the resulting Big-M is still a valid
     /// (possibly loose) over-approximation and the implication is preserved.
+    /// `atol` controls zero-sensitive operations in that interval bound. The
+    /// Big-M identities assume that $y$ is exactly 0 or 1; this operation does
+    /// not canonicalize an approximate solver value near either endpoint.
     ///
     /// The original indicator constraint is moved to
     /// [`Instance::removed_indicator_constraints`] with
     /// `reason = "ommx.Instance.convert_indicator_to_constraint"` and a
     /// `constraint_ids` parameter listing the new regular constraint IDs
     /// (comma-separated in insertion order; empty when nothing is emitted).
+    /// To trace a generated solver row back to the original model, read its
+    /// [`Provenance::IndicatorConstraint`] entry in [`Self::constraint_context`];
+    /// it names the original indicator ID.
     pub fn convert_indicator_to_constraint(
         &mut self,
         id: IndicatorConstraintID,
+        atol: ATol,
     ) -> Result<Vec<ConstraintID>> {
-        let plan = self.plan_indicator_conversion(id)?;
+        let plan = self.plan_indicator_conversion(id, atol)?;
+        self.ensure_constraint_id_capacity(plan.generated_constraints.len())?;
         self.apply_indicator_conversion(id, plan)
     }
 
     /// Convert every active indicator constraint to regular constraints using Big-M.
     ///
     /// See [`Self::convert_indicator_to_constraint`] for the conversion rule.
+    /// `atol` has the same meaning as in the single-constraint conversion.
     ///
-    /// This is atomic: every active indicator is validated up front, and only once
-    /// all validations succeed are the conversions applied. If any indicator fails
-    /// validation (non-finite bound on a required side), no mutation happens and
-    /// the instance is left untouched.
+    /// This is atomic: every active indicator and the total generated-ID
+    /// capacity are validated before any conversion. If validation fails, for
+    /// example because a required bound is non-finite or the ID capacity is
+    /// insufficient, the instance is left unchanged.
     ///
     /// Returns a map from each original [`IndicatorConstraintID`] to the IDs of the
     /// regular constraints it produced.
     pub fn convert_all_indicators_to_constraints(
         &mut self,
+        atol: ATol,
     ) -> Result<BTreeMap<IndicatorConstraintID, Vec<ConstraintID>>> {
         let ids: Vec<_> = self
             .indicator_constraint_collection
@@ -99,9 +110,22 @@ impl Instance {
         let mut all_plans: Vec<(IndicatorConstraintID, IndicatorPlan)> =
             Vec::with_capacity(ids.len());
         for id in ids {
-            let plan = self.plan_indicator_conversion(id)?;
+            let plan = self.plan_indicator_conversion(id, atol)?;
             all_plans.push((id, plan));
         }
+        let generated_constraint_count =
+            all_plans
+                .iter()
+                .try_fold(0usize, |total, (_, plan)| -> Result<usize> {
+                    total
+                        .checked_add(plan.generated_constraints.len())
+                        .ok_or_else(|| {
+                            crate::error!(
+                                "Indicator conversion would generate too many regular constraints"
+                            )
+                        })
+                })?;
+        self.ensure_constraint_id_capacity(generated_constraint_count)?;
         let mut result = BTreeMap::new();
         for (id, plan) in all_plans {
             result.insert(id, self.apply_indicator_conversion(id, plan)?);
@@ -114,7 +138,11 @@ impl Instance {
     /// Read-only: never mutates `self`. Errors before producing any plan if the
     /// indicator is missing or if `Function::evaluate_bound` returns a non-finite
     /// bound on a side that would need to be emitted.
-    fn plan_indicator_conversion(&self, id: IndicatorConstraintID) -> Result<IndicatorPlan> {
+    fn plan_indicator_conversion(
+        &self,
+        id: IndicatorConstraintID,
+        atol: ATol,
+    ) -> Result<IndicatorPlan> {
         let ic = self
             .indicator_constraint_collection
             .active()
@@ -150,7 +178,7 @@ impl Instance {
             .iter()
             .map(|(v, dv)| (*v, dv.bound()))
             .collect();
-        let fbound = function.evaluate_bound(&bounds);
+        let fbound = function.evaluate_bound(&bounds, atol)?;
 
         // Upper side is always considered. Require a finite upper bound.
         let upper_val = fbound.upper();
@@ -248,14 +276,17 @@ impl Instance {
         indicator_id: IndicatorConstraintID,
         constraint: Constraint,
     ) -> ConstraintID {
-        let new_id = self.constraint_collection.unused_id();
+        let new_id = self
+            .next_constraint_number()
+            .expect("batch ID capacity was validated before mutation")
+            .into();
         let context = ConstraintContext {
             provenance: vec![Provenance::IndicatorConstraint(indicator_id)],
             ..Default::default()
         };
         self.constraint_collection
             .insert_active_with_context(new_id, constraint, context)
-            .expect("new_id was allocated from this collection");
+            .expect("new_id was allocated by the instance");
         new_id
     }
 }
@@ -264,8 +295,8 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, indicator_constraint::IndicatorConstraint, linear, Bound, DecisionVariable,
-        Function, Kind, Sense, VariableID,
+        coeff, indicator_constraint::IndicatorConstraint, linear, v1::State, Bound,
+        DecisionVariable, Function, Kind, Sense, VariableID,
     };
     use ::approx::assert_abs_diff_eq;
     use maplit::btreemap;
@@ -309,7 +340,7 @@ mod tests {
         );
 
         let new_ids = instance
-            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7), ATol::default())
             .unwrap();
         assert_eq!(new_ids.len(), 1);
 
@@ -361,7 +392,7 @@ mod tests {
             single_indicator_instance(Bound::new(0.0, 5.0).unwrap(), Equality::EqualToZero, f);
 
         let new_ids = instance
-            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7), ATol::default())
             .unwrap();
         assert_eq!(new_ids.len(), 2);
 
@@ -391,6 +422,32 @@ mod tests {
     }
 
     #[test]
+    fn equality_bound_uses_the_same_atol_as_evaluation() {
+        // With this tolerance, signum(1e-8) is zero and the Indicator body is
+        // -0.5. The lower Big-M side must therefore be emitted. Computing the
+        // bound with exact-zero signum semantics would emit only the upper side,
+        // which accepts this state after evaluation classifies signum(1e-8) as 0.
+        let atol = ATol::new(1e-6).unwrap();
+        let f = (Function::from(linear!(1)).signum() + coeff!(-0.5)).unwrap();
+        let mut instance =
+            single_indicator_instance(Bound::new(1e-8, 1e-8).unwrap(), Equality::EqualToZero, f);
+
+        let new_ids = instance
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7), atol)
+            .unwrap();
+        assert_eq!(new_ids.len(), 1);
+
+        let state = State::from_iter([(1, 1e-8), (10, 1.0)]);
+        let evaluated = instance
+            .constraints()
+            .get(&new_ids[0])
+            .unwrap()
+            .evaluate(&state, atol)
+            .unwrap();
+        assert!(!evaluated.is_feasible(atol));
+    }
+
+    #[test]
     fn redundant_side_is_skipped() {
         // y=1 → x - 10 <= 0 with x in [0, 5]: upper = -5 <= 0, so constraint is
         // always satisfied by bounds. No big-M emitted; indicator simply relaxed.
@@ -403,7 +460,7 @@ mod tests {
         let before_constraints = instance.constraints().clone();
 
         let new_ids = instance
-            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7), ATol::default())
             .unwrap();
         assert!(
             new_ids.is_empty(),
@@ -452,7 +509,7 @@ mod tests {
         let before_indicators = instance.indicator_constraints().clone();
 
         let err = instance
-            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7), ATol::default())
             .unwrap_err();
         assert!(err.to_string().contains("non-finite"));
 
@@ -479,7 +536,7 @@ mod tests {
         let before_indicators = instance.indicator_constraints().clone();
 
         let err = instance
-            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7), ATol::default())
             .unwrap_err();
         assert!(err.to_string().contains("Coefficient must be finite"));
 
@@ -528,7 +585,7 @@ mod tests {
         let before_constraints = instance.constraints().clone();
 
         let err = instance
-            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7), ATol::default())
             .unwrap_err();
         let msg = err.to_string();
         assert!(
@@ -554,7 +611,7 @@ mod tests {
         let before_constraints = instance.constraints().clone();
 
         let err = instance
-            .convert_indicator_to_constraint(IndicatorConstraintID::from(999))
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(999), ATol::default())
             .unwrap_err();
         assert!(err.to_string().contains("999"));
 
@@ -594,7 +651,9 @@ mod tests {
             .build()
             .unwrap();
 
-        let result = instance.convert_all_indicators_to_constraints().unwrap();
+        let result = instance
+            .convert_all_indicators_to_constraints(ATol::default())
+            .unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[&IndicatorConstraintID::from(1)].len(), 1);
         assert_eq!(result[&IndicatorConstraintID::from(2)].len(), 2);
@@ -645,12 +704,194 @@ mod tests {
         let before_constraints = instance.constraints().clone();
 
         let err = instance
-            .convert_all_indicators_to_constraints()
+            .convert_all_indicators_to_constraints(ATol::default())
             .unwrap_err();
         assert!(err.to_string().contains("non-finite"));
 
         assert_eq!(instance.indicator_constraints(), &before_indicators);
         assert_eq!(instance.constraints(), &before_constraints);
         assert!(instance.removed_indicator_constraints().is_empty());
+    }
+
+    fn indicator_instance_with_constraint_id(
+        regular_id: u64,
+        regular_is_removed: bool,
+        indicators: BTreeMap<IndicatorConstraintID, IndicatorConstraint>,
+    ) -> Instance {
+        let constraint_id = ConstraintID::from(regular_id);
+        let constraint = Constraint::equal_to_zero(Function::Zero);
+        let (constraints, removed_constraints) = if regular_is_removed {
+            (
+                BTreeMap::new(),
+                BTreeMap::from([(
+                    constraint_id,
+                    (
+                        constraint,
+                        RemovedReason {
+                            reason: "test".to_string(),
+                            parameters: Default::default(),
+                        },
+                    ),
+                )]),
+            )
+        } else {
+            (
+                BTreeMap::from([(constraint_id, constraint)]),
+                BTreeMap::new(),
+            )
+        };
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                VariableID::from(1) => DecisionVariable::new(
+                    Kind::Continuous,
+                    Bound::new(-1.0, 1.0).unwrap(),
+                    ATol::default(),
+                ).unwrap(),
+                VariableID::from(10) => DecisionVariable::binary(),
+            })
+            .constraints(constraints)
+            .removed_constraints(removed_constraints)
+            .indicator_constraints(indicators)
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn equality_conversion_is_atomic_when_only_one_constraint_id_remains() {
+        let id = IndicatorConstraintID::from(7);
+        let indicator = IndicatorConstraint::new(
+            VariableID::from(10),
+            Equality::EqualToZero,
+            Function::from(linear!(1)),
+        );
+        let mut instance = indicator_instance_with_constraint_id(
+            u64::MAX - 1,
+            false,
+            BTreeMap::from([(id, indicator)]),
+        );
+        let before = instance.clone();
+
+        let error = instance
+            .convert_indicator_to_constraint(id, ATol::default())
+            .unwrap_err();
+
+        assert!(error.to_string().contains("Cannot allocate"));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn bulk_conversion_is_atomic_when_combined_constraint_ids_do_not_fit() {
+        let indicator = IndicatorConstraint::new(
+            VariableID::from(10),
+            Equality::LessThanOrEqualToZero,
+            Function::from(linear!(1)),
+        );
+        let mut instance = indicator_instance_with_constraint_id(
+            u64::MAX - 1,
+            false,
+            BTreeMap::from([
+                (IndicatorConstraintID::from(7), indicator.clone()),
+                (IndicatorConstraintID::from(8), indicator),
+            ]),
+        );
+        let before = instance.clone();
+
+        let error = instance
+            .convert_all_indicators_to_constraints(ATol::default())
+            .unwrap_err();
+
+        assert!(error.to_string().contains("Cannot allocate"));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn conversion_rejects_exhausted_active_and_removed_constraint_ids_without_mutation() {
+        let id = IndicatorConstraintID::from(7);
+        for regular_is_removed in [false, true] {
+            let indicator = IndicatorConstraint::new(
+                VariableID::from(10),
+                Equality::LessThanOrEqualToZero,
+                Function::from(linear!(1)),
+            );
+            let mut instance = indicator_instance_with_constraint_id(
+                u64::MAX,
+                regular_is_removed,
+                BTreeMap::from([(id, indicator)]),
+            );
+            let before = instance.clone();
+
+            let error = instance
+                .convert_indicator_to_constraint(id, ATol::default())
+                .unwrap_err();
+
+            assert!(error.to_string().contains("Cannot allocate"));
+            assert_eq!(instance, before);
+        }
+    }
+
+    #[test]
+    fn equality_conversion_can_use_the_last_two_constraint_ids() {
+        let id = IndicatorConstraintID::from(7);
+        let indicator = IndicatorConstraint::new(
+            VariableID::from(10),
+            Equality::EqualToZero,
+            Function::from(linear!(1)),
+        );
+        let mut instance = indicator_instance_with_constraint_id(
+            u64::MAX - 2,
+            false,
+            BTreeMap::from([(id, indicator)]),
+        );
+
+        let generated = instance
+            .convert_indicator_to_constraint(id, ATol::default())
+            .unwrap();
+
+        assert_eq!(
+            generated,
+            vec![
+                ConstraintID::from(u64::MAX - 1),
+                ConstraintID::from(u64::MAX)
+            ],
+        );
+        assert!(instance.indicator_constraints().is_empty());
+        assert!(instance.removed_indicator_constraints().contains_key(&id));
+    }
+
+    #[test]
+    fn redundant_conversion_needs_no_constraint_ids_even_when_exhausted() {
+        let id = IndicatorConstraintID::from(7);
+        let indicator =
+            IndicatorConstraint::new(VariableID::from(10), Equality::EqualToZero, Function::Zero);
+        let mut instance = indicator_instance_with_constraint_id(
+            u64::MAX,
+            false,
+            BTreeMap::from([(id, indicator)]),
+        );
+        let before_constraints = instance.constraints().clone();
+
+        let generated = instance
+            .convert_indicator_to_constraint(id, ATol::default())
+            .unwrap();
+
+        assert!(generated.is_empty());
+        assert_eq!(instance.constraints(), &before_constraints);
+        assert!(instance.indicator_constraints().is_empty());
+        assert!(instance.removed_indicator_constraints().contains_key(&id));
+    }
+
+    #[test]
+    fn empty_bulk_conversion_needs_no_constraint_ids_even_when_exhausted() {
+        let mut instance = indicator_instance_with_constraint_id(u64::MAX, false, BTreeMap::new());
+        let before = instance.clone();
+
+        let generated = instance
+            .convert_all_indicators_to_constraints(ATol::default())
+            .unwrap();
+
+        assert!(generated.is_empty());
+        assert_eq!(instance, before);
     }
 }

@@ -1,6 +1,7 @@
-use crate::{Constraint, Function, Linear, Polynomial, Quadratic, VariableBound};
-use anyhow::Result;
-use ommx::{v1, ATol, LinearMonomial, VariableID};
+use crate::{
+    error::OmmxPyResult, Constraint, Function, Kind, Linear, Polynomial, Quadratic, VariableBound,
+};
+use ommx::{ATol, LinearMonomial, VariableID};
 use pyo3::{
     prelude::*,
     types::{PyBool, PyInt},
@@ -14,24 +15,24 @@ use std::collections::HashMap;
 /// It supports binary, integer, continuous, semi-integer, semi-continuous,
 /// and finite-domain variables, and can be used in arithmetic expressions to
 /// build objective functions and constraints.
+/// Construction requires a {class}`~ommx.Kind` and raises ValueError when the
+/// requested bound cannot be normalized for the selected variable kind.
+/// Use {meth}`~ommx.DecisionVariable.finite_domain` for an explicitly enumerated
+/// domain instead of an interval bound.
 ///
 /// Note that this object overloads `==` for creating a constraint, not for equality comparison.
 ///
 /// # Examples
 ///
-/// ```python
 /// >>> x = DecisionVariable.integer(1)
 /// >>> x == 1  # Returns Constraint, not bool
 /// Constraint(...)
-/// ```
 ///
 /// For object equality comparison, use the ``equals_to()`` method or compare IDs:
 ///
-/// ```python
 /// >>> y = DecisionVariable.integer(2)
 /// >>> x.id == y.id
 /// False
-/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
@@ -45,6 +46,28 @@ impl DecisionVariable {
     /// Helper to create a Linear term from this decision variable with coefficient 1
     fn as_linear(&self) -> ommx::Linear {
         ommx::Linear::single_term(LinearMonomial::Variable(self.0), ommx::coeff!(1.0))
+    }
+
+    fn try_new(
+        id: u64,
+        kind: ommx::Kind,
+        bound: VariableBound,
+        name: Option<String>,
+        subscripts: Vec<i64>,
+        parameters: HashMap<String, String>,
+        description: Option<String>,
+    ) -> OmmxPyResult<Self> {
+        let variable_id = VariableID::from(id);
+        let decision_variable = ommx::DecisionVariable::new(kind, bound.0, ATol::default())?;
+
+        let label = ommx::DecisionVariableLabel {
+            name,
+            subscripts,
+            parameters: parameters.into_iter().collect(),
+            description,
+        };
+
+        Ok(Self(variable_id, decision_variable, label))
     }
 
     pub fn from_parts(
@@ -126,26 +149,22 @@ impl DecisionVariable {
     #[pyo3(signature = (id, kind, bound, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
     pub fn new(
         id: u64,
-        kind: i32,
+        kind: Kind,
         bound: VariableBound,
         name: Option<String>,
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
-    ) -> Result<Self> {
-        let variable_id = VariableID::from(id);
-        let kind = v1::decision_variable::Kind::try_from(kind)?.try_into()?;
-
-        let decision_variable = ommx::DecisionVariable::new(kind, bound.0, ATol::default())?;
-
-        let label = ommx::DecisionVariableLabel {
+    ) -> OmmxPyResult<Self> {
+        Self::try_new(
+            id,
+            kind.into(),
+            bound,
             name,
             subscripts,
-            parameters: parameters.into_iter().collect(),
+            parameters,
             description,
-        };
-
-        Ok(Self(variable_id, decision_variable, label))
+        )
     }
 
     #[getter]
@@ -154,9 +173,8 @@ impl DecisionVariable {
     }
 
     #[getter]
-    pub fn kind(&self) -> i32 {
-        let kind: v1::decision_variable::Kind = self.1.kind().into();
-        kind as i32
+    pub fn kind(&self) -> Kind {
+        self.1.kind().into()
     }
 
     #[getter]
@@ -206,10 +224,10 @@ impl DecisionVariable {
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
-    ) -> Result<Self> {
-        Self::new(
+    ) -> OmmxPyResult<Self> {
+        Self::try_new(
             id,
-            1, // KIND_BINARY
+            ommx::Kind::Binary,
             VariableBound(ommx::Bound::of_binary()),
             name,
             subscripts,
@@ -228,10 +246,10 @@ impl DecisionVariable {
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
-    ) -> Result<Self> {
-        Self::new(
+    ) -> OmmxPyResult<Self> {
+        Self::try_new(
             id,
-            2, // KIND_INTEGER
+            ommx::Kind::Integer,
             VariableBound(ommx::Bound::new(lower, upper)?),
             name,
             subscripts,
@@ -250,10 +268,10 @@ impl DecisionVariable {
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
-    ) -> Result<Self> {
-        Self::new(
+    ) -> OmmxPyResult<Self> {
+        Self::try_new(
             id,
-            3, // KIND_CONTINUOUS
+            ommx::Kind::Continuous,
             VariableBound(ommx::Bound::new(lower, upper)?),
             name,
             subscripts,
@@ -272,10 +290,10 @@ impl DecisionVariable {
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
-    ) -> Result<Self> {
-        Self::new(
+    ) -> OmmxPyResult<Self> {
+        Self::try_new(
             id,
-            4, // KIND_SEMI_INTEGER
+            ommx::Kind::SemiInteger,
             VariableBound(ommx::Bound::new(lower, upper)?),
             name,
             subscripts,
@@ -294,10 +312,10 @@ impl DecisionVariable {
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
-    ) -> Result<Self> {
-        Self::new(
+    ) -> OmmxPyResult<Self> {
+        Self::try_new(
             id,
-            5, // KIND_SEMI_CONTINUOUS
+            ommx::Kind::SemiContinuous,
             VariableBound(ommx::Bound::new(lower, upper)?),
             name,
             subscripts,
@@ -306,11 +324,7 @@ impl DecisionVariable {
         )
     }
 
-    /// Create a finite-domain decision variable.
-    ///
-    /// `values` is the exact feasible set, not a discretization of a
-    /// continuous interval. Values must be non-empty, finite, and unique;
-    /// they are stored in ascending order.
+    #[doc = include_str!("docstrings/ommx/DecisionVariable.finite_domain.md")]
     #[staticmethod]
     #[pyo3(signature = (id, values, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
     pub fn finite_domain(
@@ -320,10 +334,9 @@ impl DecisionVariable {
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
-    ) -> PyResult<Self> {
+    ) -> OmmxPyResult<Self> {
         let variable_id = VariableID::from(id);
-        let decision_variable = ommx::DecisionVariable::new_finite_domain(values)
-            .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+        let decision_variable = ommx::DecisionVariable::new_finite_domain(values)?;
         let label = ommx::DecisionVariableLabel {
             name,
             subscripts,
@@ -336,17 +349,17 @@ impl DecisionVariable {
     pub fn __repr__(&self) -> String {
         if let Some(domain) = self.1.finite_domain() {
             return format!(
-                "DecisionVariable(id={}, kind={}, name=\"{}\", values={:?})",
+                "DecisionVariable(id={}, kind=Kind.{:?}, name=\"{}\", values={:?})",
                 self.id(),
-                self.kind(),
+                self.1.kind(),
                 self.name(),
                 domain.values()
             );
         }
         format!(
-            "DecisionVariable(id={}, kind={}, name=\"{}\", bound=[{}, {}])",
+            "DecisionVariable(id={}, kind=Kind.{:?}, name=\"{}\", bound=[{}, {}])",
             self.id(),
-            self.kind(),
+            self.1.kind(),
             self.name(),
             self.1.bound().lower(),
             self.1.bound().upper()
@@ -365,26 +378,50 @@ impl DecisionVariable {
     }
 
     // =====================
-    // Class-level constants for variable kinds
+    // Compatibility aliases for variable kinds
     // =====================
 
+    /// Compatibility alias for {attr}`Kind.Binary`.
     #[classattr]
-    const BINARY: i32 = 1;
+    #[pyo3(name = "BINARY")]
+    fn class_binary() -> Kind {
+        Kind::Binary
+    }
 
+    /// Compatibility alias for {attr}`Kind.Integer`.
     #[classattr]
-    const INTEGER: i32 = 2;
+    #[pyo3(name = "INTEGER")]
+    fn class_integer() -> Kind {
+        Kind::Integer
+    }
 
+    /// Compatibility alias for {attr}`Kind.Continuous`.
     #[classattr]
-    const CONTINUOUS: i32 = 3;
+    #[pyo3(name = "CONTINUOUS")]
+    fn class_continuous() -> Kind {
+        Kind::Continuous
+    }
 
+    /// Compatibility alias for {attr}`Kind.SemiInteger`.
     #[classattr]
-    const SEMI_INTEGER: i32 = 4;
+    #[pyo3(name = "SEMI_INTEGER")]
+    fn class_semi_integer() -> Kind {
+        Kind::SemiInteger
+    }
 
+    /// Compatibility alias for {attr}`Kind.SemiContinuous`.
     #[classattr]
-    const SEMI_CONTINUOUS: i32 = 5;
+    #[pyo3(name = "SEMI_CONTINUOUS")]
+    fn class_semi_continuous() -> Kind {
+        Kind::SemiContinuous
+    }
 
+    /// Compatibility alias for {attr}`Kind.FiniteDomain`.
     #[classattr]
-    const FINITE_DOMAIN: i32 = 6;
+    #[pyo3(name = "FINITE_DOMAIN")]
+    fn class_finite_domain() -> Kind {
+        Kind::FiniteDomain
+    }
 
     // =====================
     // Comparison for equality (not constraint creation)
@@ -414,151 +451,144 @@ impl DecisionVariable {
     /// (see `crate::FunctionInput`).
     #[gen_stub(skip)]
     #[pyo3(name = "__add__")]
-    pub fn py_add(&self, py: Python<'_>, rhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
+    pub fn py_add(&self, py: Python<'_>, rhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
         let self_linear = self.as_linear();
         Ok(match rhs {
             crate::FunctionInput::Scalar(None) => {
                 Linear(self_linear).into_pyobject(py)?.into_any().unbind()
             }
-            crate::FunctionInput::Scalar(Some(c)) => {
-                Linear((&self_linear + c).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Linear(l) => {
-                Linear((&self_linear + &l).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Quadratic(q) => {
-                Quadratic((&q + &self_linear).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Polynomial(p) => {
-                Polynomial((&p + &self_linear).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Function(f) => Function(
-                (ommx::Function::from(self_linear) + f)
-                    .map_err(crate::coefficient_error_to_pyerr)?,
-            )
-            .into_pyobject(py)?
-            .into_any()
-            .unbind(),
+            crate::FunctionInput::Scalar(Some(c)) => Linear((&self_linear + c)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Linear(l) => Linear((&self_linear + &l)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Quadratic(q) => Quadratic((&q + &self_linear)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Polynomial(p) => Polynomial((&p + &self_linear)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Function(f) => Function((ommx::Function::from(self_linear) + f)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
         })
     }
 
     /// Reverse addition (lhs + self)
     #[gen_stub(skip)]
-    pub fn __radd__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
-        self.py_add(py, lhs) // Addition is commutative
+    pub fn __radd__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs + ommx::Function::from(self.as_linear()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => self.py_add(py, lhs),
+        }
     }
 
     /// Polymorphic subtraction. See `py_add`.
     #[gen_stub(skip)]
     #[pyo3(name = "__sub__")]
-    pub fn py_sub(&self, py: Python<'_>, rhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
+    pub fn py_sub(&self, py: Python<'_>, rhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
         let self_linear = self.as_linear();
         Ok(match rhs {
             crate::FunctionInput::Scalar(None) => {
                 Linear(self_linear).into_pyobject(py)?.into_any().unbind()
             }
-            crate::FunctionInput::Scalar(Some(c)) => {
-                Linear((&self_linear - c).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Linear(l) => {
-                Linear((&self_linear - &l).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Quadratic(q) => {
-                Quadratic((-q + &self_linear).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Polynomial(p) => {
-                Polynomial((-p + &self_linear).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Function(f) => Function(
-                (ommx::Function::from(self_linear) - f)
-                    .map_err(crate::coefficient_error_to_pyerr)?,
-            )
-            .into_pyobject(py)?
-            .into_any()
-            .unbind(),
+            crate::FunctionInput::Scalar(Some(c)) => Linear((&self_linear - c)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Linear(l) => Linear((&self_linear - &l)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Quadratic(q) => Quadratic((-q + &self_linear)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Polynomial(p) => Polynomial((-p + &self_linear)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Function(f) => Function((ommx::Function::from(self_linear) - f)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
         })
     }
 
     /// Reverse subtraction (lhs - self)
     #[gen_stub(skip)]
-    pub fn __rsub__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
-        // lhs - self = -self + lhs
-        let neg = self.__neg__();
-        neg.py_add(py, lhs)
+    pub fn __rsub__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs - ommx::Function::from(self.as_linear()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => {
+                // lhs - self = -self + lhs for compact polynomial inputs.
+                let neg = self.__neg__();
+                neg.py_add(py, lhs)
+            }
+        }
     }
 
     /// Polymorphic multiplication. See `py_add`.
     #[gen_stub(skip)]
     #[pyo3(name = "__mul__")]
-    pub fn py_mul(&self, py: Python<'_>, rhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
+    pub fn py_mul(&self, py: Python<'_>, rhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
         let self_linear = self.as_linear();
         Ok(match rhs {
             crate::FunctionInput::Scalar(None) => Linear(ommx::Linear::default())
                 .into_pyobject(py)?
                 .into_any()
                 .unbind(),
-            crate::FunctionInput::Scalar(Some(c)) => {
-                Linear((self_linear * c).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Linear(l) => {
-                Quadratic((&self_linear * &l).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Quadratic(q) => {
-                Polynomial((&self_linear * &q).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Polynomial(p) => {
-                Polynomial((&self_linear * &p).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Function(f) => Function(
-                (ommx::Function::from(self_linear) * f)
-                    .map_err(crate::coefficient_error_to_pyerr)?,
-            )
-            .into_pyobject(py)?
-            .into_any()
-            .unbind(),
+            crate::FunctionInput::Scalar(Some(c)) => Linear((self_linear * c)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Linear(l) => Quadratic((&self_linear * &l)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Quadratic(q) => Polynomial((&self_linear * &q)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Polynomial(p) => Polynomial((&self_linear * &p)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Function(f) => Function((ommx::Function::from(self_linear) * f)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
         })
     }
 
     /// Reverse multiplication (lhs * self)
     #[gen_stub(skip)]
-    pub fn __rmul__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
-        self.py_mul(py, lhs) // Multiplication is commutative
+    pub fn __rmul__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs * ommx::Function::from(self.as_linear()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => self.py_mul(py, lhs),
+        }
     }
 
     // =====================
@@ -568,13 +598,13 @@ impl DecisionVariable {
     /// Create an equality constraint: self == other → Constraint with EqualToZero
     #[gen_stub(type_ignore = ["override"])]
     #[pyo3(name = "__eq__")]
-    pub fn py_eq(&self, other: Function) -> PyResult<Constraint> {
+    pub fn py_eq(&self, other: Function) -> OmmxPyResult<Constraint> {
         crate::comparison_constraint(-other.0 + &self.as_linear(), ommx::Equality::EqualToZero)
     }
 
     /// Create a less-than-or-equal constraint: self <= other → Constraint
     #[pyo3(name = "__le__")]
-    pub fn py_le(&self, other: Function) -> PyResult<Constraint> {
+    pub fn py_le(&self, other: Function) -> OmmxPyResult<Constraint> {
         crate::comparison_constraint(
             -other.0 + &self.as_linear(),
             ommx::Equality::LessThanOrEqualToZero,
@@ -583,7 +613,7 @@ impl DecisionVariable {
 
     /// Create a greater-than-or-equal constraint: self >= other → Constraint
     #[pyo3(name = "__ge__")]
-    pub fn py_ge(&self, other: Function) -> PyResult<Constraint> {
+    pub fn py_ge(&self, other: Function) -> OmmxPyResult<Constraint> {
         crate::comparison_constraint(
             other.0 - &self.as_linear(),
             ommx::Equality::LessThanOrEqualToZero,
@@ -810,11 +840,8 @@ impl AttachedDecisionVariable {
     }
 
     #[getter]
-    pub fn kind(&self, py: Python<'_>) -> PyResult<i32> {
-        let with = |v: &ommx::DecisionVariable| -> i32 {
-            let kind: ommx::v1::decision_variable::Kind = v.kind().into();
-            kind as i32
-        };
+    pub fn kind(&self, py: Python<'_>) -> PyResult<Kind> {
+        let with = |v: &ommx::DecisionVariable| -> Kind { v.kind().into() };
         match &self.host {
             crate::ConstraintHost::Instance(p) => {
                 let inst = p.borrow(py);
@@ -884,20 +911,19 @@ impl AttachedDecisionVariable {
     pub fn __repr__(&self, py: Python<'_>) -> String {
         let render =
             |id: ommx::VariableID, v: &ommx::DecisionVariable, name: Option<&str>| -> String {
-                let kind: ommx::v1::decision_variable::Kind = v.kind().into();
                 if let Some(domain) = v.finite_domain() {
                     return format!(
-                        "AttachedDecisionVariable(id={}, kind={}, name=\"{}\", values={:?})",
+                        "AttachedDecisionVariable(id={}, kind=Kind.{:?}, name=\"{}\", values={:?})",
                         id.into_inner(),
-                        kind as i32,
+                        v.kind(),
                         name.unwrap_or(""),
                         domain.values()
                     );
                 }
                 format!(
-                    "AttachedDecisionVariable(id={}, kind={}, name=\"{}\", bound=[{}, {}])",
+                    "AttachedDecisionVariable(id={}, kind=Kind.{:?}, name=\"{}\", bound=[{}, {}])",
                     id.into_inner(),
-                    kind as i32,
+                    v.kind(),
                     name.unwrap_or(""),
                     v.bound().lower(),
                     v.bound().upper()
@@ -954,145 +980,138 @@ impl AttachedDecisionVariable {
     /// the dispatch on `crate::FunctionInput` is identical.
     #[gen_stub(skip)]
     #[pyo3(name = "__add__")]
-    pub fn py_add(&self, py: Python<'_>, rhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
+    pub fn py_add(&self, py: Python<'_>, rhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
         let self_linear = self.as_linear();
         Ok(match rhs {
             crate::FunctionInput::Scalar(None) => {
                 Linear(self_linear).into_pyobject(py)?.into_any().unbind()
             }
-            crate::FunctionInput::Scalar(Some(c)) => {
-                Linear((&self_linear + c).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Linear(l) => {
-                Linear((&self_linear + &l).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Quadratic(q) => {
-                Quadratic((&q + &self_linear).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Polynomial(p) => {
-                Polynomial((&p + &self_linear).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Function(f) => Function(
-                (ommx::Function::from(self_linear) + f)
-                    .map_err(crate::coefficient_error_to_pyerr)?,
-            )
-            .into_pyobject(py)?
-            .into_any()
-            .unbind(),
+            crate::FunctionInput::Scalar(Some(c)) => Linear((&self_linear + c)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Linear(l) => Linear((&self_linear + &l)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Quadratic(q) => Quadratic((&q + &self_linear)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Polynomial(p) => Polynomial((&p + &self_linear)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Function(f) => Function((ommx::Function::from(self_linear) + f)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
         })
     }
 
     #[gen_stub(skip)]
-    pub fn __radd__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
-        self.py_add(py, lhs)
+    pub fn __radd__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs + ommx::Function::from(self.as_linear()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => self.py_add(py, lhs),
+        }
     }
 
     #[gen_stub(skip)]
     #[pyo3(name = "__sub__")]
-    pub fn py_sub(&self, py: Python<'_>, rhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
+    pub fn py_sub(&self, py: Python<'_>, rhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
         let self_linear = self.as_linear();
         Ok(match rhs {
             crate::FunctionInput::Scalar(None) => {
                 Linear(self_linear).into_pyobject(py)?.into_any().unbind()
             }
-            crate::FunctionInput::Scalar(Some(c)) => {
-                Linear((&self_linear - c).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Linear(l) => {
-                Linear((&self_linear - &l).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Quadratic(q) => {
-                Quadratic((-q + &self_linear).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Polynomial(p) => {
-                Polynomial((-p + &self_linear).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Function(f) => Function(
-                (ommx::Function::from(self_linear) - f)
-                    .map_err(crate::coefficient_error_to_pyerr)?,
-            )
-            .into_pyobject(py)?
-            .into_any()
-            .unbind(),
+            crate::FunctionInput::Scalar(Some(c)) => Linear((&self_linear - c)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Linear(l) => Linear((&self_linear - &l)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Quadratic(q) => Quadratic((-q + &self_linear)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Polynomial(p) => Polynomial((-p + &self_linear)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Function(f) => Function((ommx::Function::from(self_linear) - f)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
         })
     }
 
     #[gen_stub(skip)]
-    pub fn __rsub__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
-        let neg = self.__neg__();
-        neg.py_add(py, lhs)
+    pub fn __rsub__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs - ommx::Function::from(self.as_linear()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => {
+                let neg = self.__neg__();
+                neg.py_add(py, lhs)
+            }
+        }
     }
 
     #[gen_stub(skip)]
     #[pyo3(name = "__mul__")]
-    pub fn py_mul(&self, py: Python<'_>, rhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
+    pub fn py_mul(&self, py: Python<'_>, rhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
         let self_linear = self.as_linear();
         Ok(match rhs {
             crate::FunctionInput::Scalar(None) => Linear(ommx::Linear::default())
                 .into_pyobject(py)?
                 .into_any()
                 .unbind(),
-            crate::FunctionInput::Scalar(Some(c)) => {
-                Linear((self_linear * c).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Linear(l) => {
-                Quadratic((&self_linear * &l).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Quadratic(q) => {
-                Polynomial((&self_linear * &q).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Polynomial(p) => {
-                Polynomial((&self_linear * &p).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Function(f) => Function(
-                (ommx::Function::from(self_linear) * f)
-                    .map_err(crate::coefficient_error_to_pyerr)?,
-            )
-            .into_pyobject(py)?
-            .into_any()
-            .unbind(),
+            crate::FunctionInput::Scalar(Some(c)) => Linear((self_linear * c)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Linear(l) => Quadratic((&self_linear * &l)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Quadratic(q) => Polynomial((&self_linear * &q)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Polynomial(p) => Polynomial((&self_linear * &p)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Function(f) => Function((ommx::Function::from(self_linear) * f)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
         })
     }
 
     #[gen_stub(skip)]
-    pub fn __rmul__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
-        self.py_mul(py, lhs)
+    pub fn __rmul__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs * ommx::Function::from(self.as_linear()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => self.py_mul(py, lhs),
+        }
     }
 
     // =====================
@@ -1102,13 +1121,13 @@ impl AttachedDecisionVariable {
     /// Create an equality constraint: `self == other` → `Constraint` with `EqualToZero`.
     #[gen_stub(type_ignore = ["override"])]
     #[pyo3(name = "__eq__")]
-    pub fn py_eq(&self, other: Function) -> PyResult<Constraint> {
+    pub fn py_eq(&self, other: Function) -> OmmxPyResult<Constraint> {
         crate::comparison_constraint(-other.0 + &self.as_linear(), ommx::Equality::EqualToZero)
     }
 
     /// Create a less-than-or-equal constraint.
     #[pyo3(name = "__le__")]
-    pub fn py_le(&self, other: Function) -> PyResult<Constraint> {
+    pub fn py_le(&self, other: Function) -> OmmxPyResult<Constraint> {
         crate::comparison_constraint(
             -other.0 + &self.as_linear(),
             ommx::Equality::LessThanOrEqualToZero,
@@ -1117,7 +1136,7 @@ impl AttachedDecisionVariable {
 
     /// Create a greater-than-or-equal constraint.
     #[pyo3(name = "__ge__")]
-    pub fn py_ge(&self, other: Function) -> PyResult<Constraint> {
+    pub fn py_ge(&self, other: Function) -> OmmxPyResult<Constraint> {
         crate::comparison_constraint(
             other.0 - &self.as_linear(),
             ommx::Equality::LessThanOrEqualToZero,

@@ -1,5 +1,7 @@
 """Tests for AttachedIndicatorConstraint write-through wrapper."""
 
+from ommx import IndicatorConstraintID
+
 import copy
 
 import pytest
@@ -20,7 +22,7 @@ from ommx import (
 
 def _empty_instance() -> Instance:
     return Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=Function.from_linear(Linear.constant(0.0)),
         decision_variables=[
             DecisionVariable.binary(0),
@@ -123,7 +125,7 @@ def test_setter_writes_through_to_instance():
     attached.set_description("updated")
     attached.set_parameters({"a": "1"})
 
-    fresh = instance.indicator_constraints[cid]
+    fresh = instance.constraints[cid]
     assert fresh.name == "demand"
     assert fresh.subscripts == [1, 2]
     assert fresh.description == "updated"
@@ -135,19 +137,23 @@ def test_two_handles_share_state():
     same data."""
     instance = _empty_instance()
     a = instance.add_indicator_constraint(_make_indicator(name="balance"))
-    b = instance.indicator_constraints[a.constraint_id]
+    b = instance.constraints[a.constraint_id]
 
     a.set_name("demand")
     assert b.name == "demand"
 
 
 def test_indicator_constraints_getter_returns_attached():
-    """instance.indicator_constraints values are AttachedIndicatorConstraint."""
+    """Indicator IDs retrieve AttachedIndicatorConstraint handles."""
     instance = _empty_instance()
     a = instance.add_indicator_constraint(_make_indicator(name="c1"))
     b = instance.add_indicator_constraint(_make_indicator(name="c2"))
 
-    constraints = instance.indicator_constraints
+    constraints = {
+        cid: instance.constraints[cid]
+        for cid in instance.constraints
+        if isinstance(cid, IndicatorConstraintID)
+    }
     assert set(constraints.keys()) == {a.constraint_id, b.constraint_id}
     assert all(isinstance(c, AttachedIndicatorConstraint) for c in constraints.values())
 
@@ -191,7 +197,9 @@ def test_add_rejects_undefined_indicator_variable():
     with pytest.raises(Exception, match="99"):
         instance.add_indicator_constraint(bad)
 
-    assert instance.indicator_constraints == {}
+    assert not any(
+        isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
+    )
 
 
 def test_copy_and_deepcopy_share_parent_instance():
@@ -237,7 +245,7 @@ def test_setter_writes_through_on_parametric_host():
     attached.set_name("demand")
     attached.set_subscripts([1, 2, 3])
 
-    fresh = parametric.indicator_constraints[cid]
+    fresh = parametric.constraints[cid]
     assert fresh.name == "demand"
     assert fresh.subscripts == [1, 2, 3]
 
@@ -274,7 +282,9 @@ def test_add_indicator_rejects_parameter_in_indicator_variable_position():
     with pytest.raises(Exception, match="(structural|parameter)"):
         parametric.add_indicator_constraint(bad)
 
-    assert parametric.indicator_constraints == {}
+    assert not any(
+        isinstance(cid, IndicatorConstraintID) for cid in parametric.constraints
+    )
 
 
 def test_parametric_from_components_preserves_indicator_id():
@@ -307,9 +317,18 @@ def test_parametric_from_components_preserves_indicator_id():
         },
     )
 
-    assert set(parametric.indicator_constraints.keys()) == {5, 10}
-    assert parametric.indicator_constraints[5].name == "ic_at_5"
-    assert parametric.indicator_constraints[10].name == "ic_at_10"
+    assert set(
+        {
+            cid
+            for cid in parametric.constraints
+            if isinstance(cid, IndicatorConstraintID)
+        }
+    ) == {
+        IndicatorConstraintID(5),
+        IndicatorConstraintID(10),
+    }
+    assert parametric.constraints[IndicatorConstraintID(5)].name == "ic_at_5"
+    assert parametric.constraints[IndicatorConstraintID(10)].name == "ic_at_10"
 
 
 def test_add_indicator_rejects_non_binary_indicator_variable():
@@ -318,7 +337,7 @@ def test_add_indicator_rejects_non_binary_indicator_variable():
     post-construction add_indicator_constraint(c) with an integer indicator
     would leave the instance in an invalid state."""
     instance = Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=Function.from_linear(Linear.constant(0.0)),
         decision_variables=[
             DecisionVariable.binary(0),
@@ -340,4 +359,6 @@ def test_add_indicator_rejects_non_binary_indicator_variable():
     with pytest.raises(Exception, match="binary"):
         instance.add_indicator_constraint(bad)
 
-    assert instance.indicator_constraints == {}
+    assert not any(
+        isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
+    )

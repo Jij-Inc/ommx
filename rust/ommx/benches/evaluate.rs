@@ -1,6 +1,8 @@
-//! Persistent scaling guardrails for expression and Instance evaluation.
+//! Persistent scaling guardrails for Function and Instance evaluation.
 //!
 //! The expression families vary term count and should remain O(N). The
+//! compact-Function family keeps the function support fixed while unrelated
+//! state entries grow, so its evaluation cost should remain O(1). The
 //! Instance families reproduce the evaluate/evaluate_samples boundary from
 //! issue #336, using synthetic one-variable constraints so Rust-internal
 //! scaling is measured without the heavy MIPLIB profiling fixture. Both
@@ -62,6 +64,29 @@ fn evaluate_polynomial(c: &mut Criterion) {
         PolynomialParameters::new(num_terms, 3.into(), VariableID::from(10 * num_terms as u64))
             .unwrap()
     });
+}
+
+/// Keep compact Function evaluation independent of unrelated state entries.
+fn evaluate_compact_function_with_unrelated_state(c: &mut Criterion) {
+    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
+    let mut group = c.benchmark_group("evaluate-compact-function-unrelated-state");
+    group.plot_config(plot_config);
+    let function = Function::from(linear!(0));
+    let atol = ommx::ATol::default();
+    for num_state_entries in [100, 1_000, 10_000] {
+        let state = (0..num_state_entries as u64)
+            .map(|id| (id, 0.0))
+            .collect::<ommx::v1::State>();
+        group.bench_with_input(
+            BenchmarkId::new(
+                "evaluate-compact-function-unrelated-state",
+                num_state_entries.to_string(),
+            ),
+            &state,
+            |b, state| b.iter(|| function.evaluate(state, atol).unwrap()),
+        );
+    }
+    group.finish();
 }
 
 fn instance_evaluation_fixture(
@@ -142,6 +167,7 @@ criterion_group!(
     evaluate_linear,
     evaluate_quadratic,
     evaluate_polynomial,
+    evaluate_compact_function_with_unrelated_state,
     evaluate_instance_single_state,
     evaluate_instance_single_sample,
 );

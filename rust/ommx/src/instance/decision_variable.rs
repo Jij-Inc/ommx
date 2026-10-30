@@ -47,13 +47,13 @@ impl Instance {
         })
     }
 
-    /// Returns the next available [`VariableID`].
+    /// Returns the next automatically assigned [`VariableID`].
     ///
     /// Finds the maximum ID from decision variables, then adds 1.
     /// If there are no variables, returns `Ok(VariableID(0))`.
     ///
-    /// Note: This method does not track which IDs have been allocated.
-    /// Consecutive calls will return the same ID until a variable is actually added.
+    /// This allocator does not reuse gaps below the current maximum ID.
+    /// Consecutive calls return the same ID until a variable is actually added.
     ///
     /// # Errors
     ///
@@ -87,23 +87,28 @@ impl Instance {
         Ok(())
     }
 
+    /// Create and atomically add a fully configured decision variable.
+    ///
+    /// The variable's `kind` and `bound` are normalized into a
+    /// [`DecisionVariable`] row, while `label` and `fixed_value` are stored in
+    /// the same [`crate::DecisionVariableTable`] entry under a newly allocated
+    /// [`VariableID`]. `fixed_value`, when present, must satisfy the normalized
+    /// kind and bound under `atol`.
+    ///
+    /// All validation completes before the instance is mutated. If this method
+    /// returns an error, the decision-variable row, label store, fixed-value
+    /// column, and next available ID are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecisionVariableError::BoundInconsistentToKind`] when `bound`
+    /// cannot be normalized to a domain consistent with `kind` under `atol`,
+    /// [`DecisionVariableError::NoAvailableID`] when the largest existing ID is
+    /// `u64::MAX` and no larger automatic ID can be assigned,
+    /// [`DecisionVariableError::NonFiniteValue`] when `fixed_value` is not
+    /// finite, or [`DecisionVariableError::SubstitutedValueInconsistent`] when
+    /// it does not belong to the normalized variable domain.
     pub fn new_decision_variable(
-        &mut self,
-        kind: Kind,
-        bound: Bound,
-        fixed_value: Option<f64>,
-        atol: ATol,
-    ) -> Result<VariableID, DecisionVariableError> {
-        self.new_decision_variable_with_label(
-            kind,
-            bound,
-            DecisionVariableLabel::default(),
-            fixed_value,
-            atol,
-        )
-    }
-
-    pub(super) fn new_decision_variable_with_label(
         &mut self,
         kind: Kind,
         bound: Bound,
@@ -111,61 +116,102 @@ impl Instance {
         fixed_value: Option<f64>,
         atol: ATol,
     ) -> Result<VariableID, DecisionVariableError> {
-        let id = self.next_variable_id()?;
         let dv = DecisionVariable::new(kind, bound, atol)?;
+        let id = self.next_variable_id()?;
         self.decision_variables
             .insert(id, dv, label, fixed_value, atol)?;
         Ok(id)
     }
 
-    pub fn new_binary(&mut self) -> VariableID {
-        self.new_decision_variable(Kind::Binary, Bound::of_binary(), None, ATol::default())
-            .unwrap()
+    /// Create and atomically add a binary decision variable.
+    ///
+    /// `bound` is normalized to the allowed binary values. See
+    /// [`Self::new_decision_variable`] for the insertion and error contract.
+    pub fn new_binary(
+        &mut self,
+        bound: Bound,
+        label: DecisionVariableLabel,
+        fixed_value: Option<f64>,
+        atol: ATol,
+    ) -> Result<VariableID, DecisionVariableError> {
+        self.new_decision_variable(Kind::Binary, bound, label, fixed_value, atol)
     }
 
-    pub fn new_integer(&mut self) -> VariableID {
-        self.new_decision_variable(Kind::Integer, Bound::default(), None, ATol::default())
-            .unwrap()
+    /// Create and atomically add an integer decision variable.
+    ///
+    /// Each finite side is normalized to the least or greatest integer value
+    /// satisfying the original bound under `atol`; an unbounded side remains
+    /// unbounded. See
+    /// [`Self::new_decision_variable`] for the insertion and error contract.
+    pub fn new_integer(
+        &mut self,
+        bound: Bound,
+        label: DecisionVariableLabel,
+        fixed_value: Option<f64>,
+        atol: ATol,
+    ) -> Result<VariableID, DecisionVariableError> {
+        self.new_decision_variable(Kind::Integer, bound, label, fixed_value, atol)
     }
 
-    pub fn new_continuous(&mut self) -> VariableID {
-        self.new_decision_variable(Kind::Continuous, Bound::default(), None, ATol::default())
-            .unwrap()
+    /// Create and atomically add a continuous decision variable.
+    ///
+    /// See [`Self::new_decision_variable`] for the insertion and error contract.
+    pub fn new_continuous(
+        &mut self,
+        bound: Bound,
+        label: DecisionVariableLabel,
+        fixed_value: Option<f64>,
+        atol: ATol,
+    ) -> Result<VariableID, DecisionVariableError> {
+        self.new_decision_variable(Kind::Continuous, bound, label, fixed_value, atol)
     }
 
-    /// Create a decision variable whose feasible set is exactly `values`.
+    /// Create and atomically add a decision variable whose feasible set is exactly `values`.
     ///
     /// The values are validated and stored in ascending order. They must be
-    /// non-empty, finite, and unique.
+    /// non-empty, finite, and unique. The label and optional fixed value are
+    /// validated and inserted together, following [`Self::new_decision_variable`].
     pub fn new_finite_domain(
         &mut self,
         values: Vec<f64>,
+        label: DecisionVariableLabel,
+        fixed_value: Option<f64>,
+        atol: ATol,
     ) -> Result<VariableID, DecisionVariableError> {
-        let id = self.next_variable_id()?;
         let variable = DecisionVariable::new_finite_domain(values)?;
-        self.decision_variables.insert(
-            id,
-            variable,
-            DecisionVariableLabel::default(),
-            None,
-            ATol::default(),
-        )?;
+        let id = self.next_variable_id()?;
+        self.decision_variables
+            .insert(id, variable, label, fixed_value, atol)?;
         Ok(id)
     }
 
-    pub fn new_semi_integer(&mut self) -> VariableID {
-        self.new_decision_variable(Kind::SemiInteger, Bound::default(), None, ATol::default())
-            .unwrap()
+    /// Create and atomically add a semi-integer decision variable.
+    ///
+    /// Each finite side is normalized to the least or greatest integer value
+    /// satisfying the original bound under `atol`; an unbounded side remains
+    /// unbounded. The semi-integer zero alternative is preserved. See
+    /// [`Self::new_decision_variable`] for the insertion and error contract.
+    pub fn new_semi_integer(
+        &mut self,
+        bound: Bound,
+        label: DecisionVariableLabel,
+        fixed_value: Option<f64>,
+        atol: ATol,
+    ) -> Result<VariableID, DecisionVariableError> {
+        self.new_decision_variable(Kind::SemiInteger, bound, label, fixed_value, atol)
     }
 
-    pub fn new_semi_continuous(&mut self) -> VariableID {
-        self.new_decision_variable(
-            Kind::SemiContinuous,
-            Bound::default(),
-            None,
-            ATol::default(),
-        )
-        .unwrap()
+    /// Create and atomically add a semi-continuous decision variable.
+    ///
+    /// See [`Self::new_decision_variable`] for the insertion and error contract.
+    pub fn new_semi_continuous(
+        &mut self,
+        bound: Bound,
+        label: DecisionVariableLabel,
+        fixed_value: Option<f64>,
+        atol: ATol,
+    ) -> Result<VariableID, DecisionVariableError> {
+        self.new_decision_variable(Kind::SemiContinuous, bound, label, fixed_value, atol)
     }
 }
 
@@ -175,6 +221,86 @@ mod tests {
     use crate::{coeff, linear, Function, Sense};
     use maplit::btreemap;
     use std::collections::BTreeMap;
+
+    #[test]
+    fn domain_bounds_respect_kind_bound_and_zero_alternatives() {
+        let atol = ATol::new(0.125).unwrap();
+        let mut instance = Instance::default();
+        for (kind, bound, expected) in [
+            (
+                Kind::Continuous,
+                Bound::new(2.0, 3.0).unwrap(),
+                (1.875, 3.125),
+            ),
+            (Kind::Integer, Bound::new(2.0, 3.0).unwrap(), (2.0, 3.0)),
+            (Kind::Binary, Bound::of_binary(), (0.0, 1.0)),
+            (
+                Kind::Continuous,
+                Bound::new(-f64::MAX, f64::MAX).unwrap(),
+                (-f64::MAX, f64::MAX),
+            ),
+            (
+                Kind::SemiContinuous,
+                Bound::new(2.0, 3.0).unwrap(),
+                (0.0, 3.125),
+            ),
+            (
+                Kind::SemiInteger,
+                Bound::new(-3.0, -2.0).unwrap(),
+                (-3.0, 0.0),
+            ),
+            (
+                Kind::Continuous,
+                Bound::unbounded(),
+                (f64::NEG_INFINITY, f64::INFINITY),
+            ),
+            (
+                Kind::Integer,
+                Bound::unbounded(),
+                (f64::NEG_INFINITY, f64::INFINITY),
+            ),
+            (
+                Kind::Continuous,
+                Bound::new(2.0, f64::INFINITY).unwrap(),
+                (1.875, f64::INFINITY),
+            ),
+            (
+                Kind::Continuous,
+                Bound::new(f64::NEG_INFINITY, -2.0).unwrap(),
+                (f64::NEG_INFINITY, -1.875),
+            ),
+        ] {
+            let id = instance
+                .new_decision_variable(kind, bound, Default::default(), None, atol)
+                .unwrap();
+            assert_eq!(
+                instance.decision_variable_domain_bounds(id, atol),
+                Some(expected)
+            );
+            assert_eq!(instance.decision_variables()[&id].bound(), bound);
+        }
+        assert_eq!(
+            instance.decision_variable_domain_bounds(999.into(), atol),
+            None
+        );
+    }
+
+    #[test]
+    fn domain_bounds_use_instance_fixed_value_without_tolerance_or_semi_zero() {
+        let atol = ATol::new(0.125).unwrap();
+        let mut instance = Instance::default();
+        let bound = Bound::new(2.0, 3.0).unwrap();
+        for kind in [Kind::Continuous, Kind::SemiContinuous] {
+            let id = instance
+                .new_decision_variable(kind, bound, Default::default(), Some(2.5), atol)
+                .unwrap();
+            assert_eq!(
+                instance.decision_variable_domain_bounds(id, atol),
+                Some((2.5, 2.5))
+            );
+            assert_eq!(instance.decision_variables()[&id].bound(), bound);
+        }
+    }
 
     #[test]
     fn test_next_variable_id() {
@@ -244,10 +370,24 @@ mod tests {
         )
         .unwrap();
 
-        let var1 = instance.new_binary();
+        let var1 = instance
+            .new_binary(
+                Bound::of_binary(),
+                DecisionVariableLabel::default(),
+                None,
+                ATol::default(),
+            )
+            .unwrap();
         assert_eq!(var1, VariableID::from(0));
 
-        let var2 = instance.new_binary();
+        let var2 = instance
+            .new_binary(
+                Bound::of_binary(),
+                DecisionVariableLabel::default(),
+                None,
+                ATol::default(),
+            )
+            .unwrap();
         assert_eq!(var2, VariableID::from(1));
 
         assert_eq!(instance.next_variable_id().unwrap(), VariableID::from(2));
@@ -263,10 +403,255 @@ mod tests {
         )
         .unwrap();
 
-        let id = instance.new_finite_domain(vec![1.0, 0.1, 0.5]).unwrap();
+        let label = DecisionVariableLabel {
+            name: Some("finite".to_string()),
+            ..Default::default()
+        };
+        let id = instance
+            .new_finite_domain(
+                vec![1.0, 0.1, 0.5],
+                label.clone(),
+                Some(0.5),
+                ATol::default(),
+            )
+            .unwrap();
         let variable = &instance.decision_variables()[&id];
 
         assert_eq!(variable.kind(), Kind::FiniteDomain);
         assert_eq!(variable.finite_domain().unwrap().values(), &[0.1, 0.5, 1.0]);
+        assert_eq!(instance.variable_labels().collect_for(id), label);
+        assert_eq!(instance.fixed_decision_variable_value(id), Some(0.5));
+    }
+
+    #[test]
+    fn new_finite_domain_rejects_invalid_fixed_value_atomically() {
+        let mut instance = Instance::default();
+        let before = instance.clone();
+        let error = instance
+            .new_finite_domain(
+                vec![0.1, 0.5, 1.0],
+                DecisionVariableLabel {
+                    name: Some("invalid".to_string()),
+                    ..Default::default()
+                },
+                Some(0.3),
+                ATol::default(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            DecisionVariableError::SubstitutedValueInconsistent { .. }
+        ));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn new_decision_variable_commits_row_label_and_fixed_value_together() {
+        let mut instance = Instance::default();
+        let mut label = DecisionVariableLabel {
+            name: Some("x".to_string()),
+            subscripts: vec![1, 2],
+            description: Some("bounded integer".to_string()),
+            ..Default::default()
+        };
+        label
+            .parameters
+            .insert("region".to_string(), "east".to_string());
+
+        let id = instance
+            .new_integer(
+                Bound::new(0.2, 3.8).unwrap(),
+                label.clone(),
+                Some(2.0),
+                ATol::default(),
+            )
+            .unwrap();
+
+        assert_eq!(id, VariableID::from(0));
+        assert_eq!(
+            instance.decision_variables()[&id].bound(),
+            Bound::new(1.0, 3.0).unwrap()
+        );
+        assert_eq!(instance.variable_labels().collect_for(id), label);
+        assert_eq!(instance.fixed_decision_variable_value(id), Some(2.0));
+        assert_eq!(instance.next_variable_id().unwrap(), VariableID::from(1));
+    }
+
+    #[test]
+    fn typed_new_decision_variables_set_kind_and_normalized_bound() {
+        let mut instance = Instance::default();
+        let atol = ATol::default();
+
+        let binary = instance
+            .new_binary(
+                Bound::new(-1.0, 2.0).unwrap(),
+                DecisionVariableLabel::default(),
+                None,
+                atol,
+            )
+            .unwrap();
+        let integer = instance
+            .new_integer(
+                Bound::new(0.2, 3.8).unwrap(),
+                DecisionVariableLabel::default(),
+                None,
+                atol,
+            )
+            .unwrap();
+        let continuous = instance
+            .new_continuous(
+                Bound::new(0.2, 3.8).unwrap(),
+                DecisionVariableLabel::default(),
+                None,
+                atol,
+            )
+            .unwrap();
+        let semi_integer = instance
+            .new_semi_integer(
+                Bound::new(1.1, 1.9).unwrap(),
+                DecisionVariableLabel::default(),
+                None,
+                atol,
+            )
+            .unwrap();
+        let semi_continuous = instance
+            .new_semi_continuous(
+                Bound::new(0.5, 4.0).unwrap(),
+                DecisionVariableLabel::default(),
+                None,
+                atol,
+            )
+            .unwrap();
+
+        let variables = instance.decision_variables();
+        assert_eq!(variables[&binary].kind(), Kind::Binary);
+        assert_eq!(variables[&binary].bound(), Bound::of_binary());
+        assert_eq!(variables[&integer].kind(), Kind::Integer);
+        assert_eq!(variables[&integer].bound(), Bound::new(1.0, 3.0).unwrap());
+        assert_eq!(variables[&continuous].kind(), Kind::Continuous);
+        assert_eq!(
+            variables[&continuous].bound(),
+            Bound::new(0.2, 3.8).unwrap()
+        );
+        assert_eq!(variables[&semi_integer].kind(), Kind::SemiInteger);
+        assert_eq!(
+            variables[&semi_integer].bound(),
+            Bound::new(0.0, 0.0).unwrap()
+        );
+        assert_eq!(variables[&semi_continuous].kind(), Kind::SemiContinuous);
+        assert_eq!(
+            variables[&semi_continuous].bound(),
+            Bound::new(0.5, 4.0).unwrap()
+        );
+    }
+
+    #[test]
+    fn new_decision_variable_rejects_inconsistent_bound_atomically() {
+        let mut instance = Instance::default();
+        let before = instance.clone();
+
+        let err = instance
+            .new_integer(
+                Bound::new(1.1, 1.9).unwrap(),
+                DecisionVariableLabel {
+                    name: Some("invalid".to_string()),
+                    ..Default::default()
+                },
+                None,
+                ATol::default(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            DecisionVariableError::BoundInconsistentToKind {
+                kind: Kind::Integer,
+                ..
+            }
+        ));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn new_decision_variable_rejects_inconsistent_fixed_value_atomically() {
+        let mut instance = Instance::default();
+        let before = instance.clone();
+
+        let err = instance
+            .new_integer(
+                Bound::new(0.0, 2.0).unwrap(),
+                DecisionVariableLabel {
+                    name: Some("invalid".to_string()),
+                    ..Default::default()
+                },
+                Some(0.5),
+                ATol::default(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            DecisionVariableError::SubstitutedValueInconsistent {
+                id,
+                substituted_value: 0.5,
+                ..
+            } if id == VariableID::from(0)
+        ));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn new_decision_variable_rejects_non_finite_fixed_value_atomically() {
+        let mut instance = Instance::default();
+        let before = instance.clone();
+
+        let err = instance
+            .new_continuous(
+                Bound::default(),
+                DecisionVariableLabel {
+                    name: Some("invalid".to_string()),
+                    ..Default::default()
+                },
+                Some(f64::NAN),
+                ATol::default(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            DecisionVariableError::NonFiniteValue { id, value }
+                if id == VariableID::from(0) && value.is_nan()
+        ));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn new_decision_variable_rejects_exhausted_id_atomically() {
+        let decision_variables = btreemap! {
+            VariableID::from(u64::MAX) => DecisionVariable::binary(),
+        };
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let before = instance.clone();
+
+        let err = instance
+            .new_binary(
+                Bound::of_binary(),
+                DecisionVariableLabel {
+                    name: Some("overflow".to_string()),
+                    ..Default::default()
+                },
+                None,
+                ATol::default(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(err, DecisionVariableError::NoAvailableID));
+        assert_eq!(instance, before);
     }
 }

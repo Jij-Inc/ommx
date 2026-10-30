@@ -25,7 +25,13 @@ The examples below use the PySCIPOpt Adapter, as in [Solving optimization proble
 pip install ommx-pyscipopt-adapter
 ```
 
-The PySCIPOpt Adapter declares support for Indicator and SOS1 constraints and passes them through to SCIP's `addConsIndicator` / `addConsSOS1` (equality indicators are split into two inequality indicators). OneHot is not declared as supported, so the adapter automatically converts it into a regular equality constraint before handing it to SCIP. For more on adapter capability declarations and conversions, see [Adapter Capability Model and Conversions](./capability_model.md).
+The PySCIPOpt Adapter passes Indicator and SOS1 constraints through to SCIP's
+`addConsIndicator` / `addConsSOS1` (equality indicators are split into two
+inequality indicators). Its `solve()` API copies the input and uses the
+recommended Preparation policy to lower OneHot constraints to regular
+equalities. Callers using `solve_without_preparation()` must perform that lowering on the
+Instance first. See [Adapter Input Classes and Explicit Constraint
+Lowering](./capability_model.md).
 
 ## IndicatorConstraint
 
@@ -34,7 +40,7 @@ An **indicator constraint** enforces a constraint $f(x) \leq 0$ (or $f(x) = 0$) 
 Create an {class}`~ommx.IndicatorConstraint` from an existing {class}`~ommx.Constraint` by calling {meth}`Constraint.with_indicator() <ommx.Constraint.with_indicator>`. The indicator argument accepts a variable ID, a standalone {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable, Equality
+from ommx import ConstraintID, IndicatorConstraintID, DecisionVariable, Equality, Instance, Sense
 
 z = DecisionVariable.binary(0, name="z")
 x = DecisionVariable.continuous(1, lower=0, upper=10, name="x")
@@ -46,19 +52,21 @@ assert ic.equality == Equality.LessThanOrEqualToZero
 ```
 
 Add it to an instance by passing a `dict[int, IndicatorConstraint]` to the `indicator_constraints=` argument of {meth}`Instance.from_components <ommx.Instance.from_components>`.
+Use a different ID from the regular constraint: all constraint kinds share
+[one numeric ID space](#constraint-numbering) within an instance.
 
 ```{code-cell} ipython3
 instance = Instance.from_components(
     decision_variables=[z, x],
     objective=x,
     constraints={0: z == 1},       # fix z = 1
-    indicator_constraints={0: ic}, # z = 1 => x <= 5
-    sense=Instance.MAXIMIZE,
+    indicator_constraints={1: ic}, # z = 1 => x <= 5
+    sense=Sense.Maximize,
 )
-assert set(instance.indicator_constraints.keys()) == {0}
+assert set(instance.constraints) == {ConstraintID(0), IndicatorConstraintID(1)}
 ```
 
-The PySCIPOpt Adapter declares support for indicator constraints, so we can solve this directly.
+The PySCIPOpt Adapter accepts Indicator constraints and passes them directly to SCIP.
 
 ```{code-cell} ipython3
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
@@ -73,7 +81,7 @@ assert abs(solution.objective - 5.0) < 1e-6
 A **one-hot constraint** over a set of binary variables $\{x_1, \ldots, x_n\}$ requires $\sum_i x_i = 1$ — i.e. exactly one of them is 1.
 
 ```{code-cell} ipython3
-from ommx import OneHotConstraint
+from ommx import OneHotConstraint, OneHotConstraintID
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
 oh = OneHotConstraint(variables=xs)
@@ -89,12 +97,14 @@ instance_oh = Instance.from_components(
     objective=sum(v * x for v, x in zip(values, xs)),
     constraints={},
     one_hot_constraints={0: oh},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
-assert set(instance_oh.one_hot_constraints.keys()) == {0}
+assert set(instance_oh.constraints.keys()) == {OneHotConstraintID(0)}
 ```
 
-The PySCIPOpt Adapter does not declare OneHot support, so inside `solve` the constraint is automatically converted to the regular equality $x_0 + x_1 + x_2 - 1 = 0$ before being handed to SCIP.
+Pass the original Instance to the easy `solve()` API. Its recommended
+Preparation lowers the OneHot constraint to the regular equality
+$x_0 + x_1 + x_2 - 1 = 0$ only on the Adapter's private copy.
 
 ```{code-cell} ipython3
 solution = OMMXPySCIPOptAdapter.solve(instance_oh)
@@ -102,14 +112,19 @@ solution = OMMXPySCIPOptAdapter.solve(instance_oh)
 assert abs(solution.objective - 10.0) < 1e-6
 ```
 
-`instance_oh` is mutated in place by `solve`, so after the call the OneHot constraint is removed and a record of the conversion remains in `removed_one_hot_constraints`.
+The caller-owned `instance_oh` remains unchanged:
 
 ```{code-cell} ipython3
-assert instance_oh.one_hot_constraints == {}
-assert len(instance_oh.constraints) == 1
-assert set(instance_oh.removed_one_hot_constraints.keys()) == {0}
+assert set(instance_oh.constraints.keys()) == {OneHotConstraintID(0)}
+assert instance_oh.removed_constraints == {}
 ```
 
+Callers using `solve_without_preparation()` must instead lower OneHot in place
+before solving. That explicit conversion removes the active OneHot constraint,
+adds the equivalent regular constraint, and records the original in
+`removed_constraints`.
+
+(sos1-constraint)=
 ## Sos1Constraint
 
 An **SOS1 (Special Ordered Set type 1)** constraint over a set of variables $\{x_1, \ldots, x_n\}$ requires that **at most one** of them be non-zero. It differs from one-hot in the following ways:
@@ -119,7 +134,7 @@ An **SOS1 (Special Ordered Set type 1)** constraint over a set of variables $\{x
 - SOS1 variables are not necessarily binary — continuous variables work too.
 
 ```{code-cell} ipython3
-from ommx import Sos1Constraint
+from ommx import Sos1Constraint, Sos1ConstraintID
 
 ys = [DecisionVariable.continuous(i, lower=0, upper=10, name="y", subscripts=[i]) for i in range(3, 6)]
 s1 = Sos1Constraint(variables=ys)
@@ -134,12 +149,12 @@ instance_s1 = Instance.from_components(
     objective=sum(ys),
     constraints={},
     sos1_constraints={0: s1},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
-assert set(instance_s1.sos1_constraints.keys()) == {0}
+assert set(instance_s1.constraints.keys()) == {Sos1ConstraintID(0)}
 ```
 
-The PySCIPOpt Adapter declares support for SOS1, so we can solve this directly.
+The PySCIPOpt Adapter accepts SOS1 constraints and passes them directly to SCIP.
 
 ```{code-cell} ipython3
 solution = OMMXPySCIPOptAdapter.solve(instance_s1)
@@ -147,11 +162,113 @@ solution = OMMXPySCIPOptAdapter.solve(instance_s1)
 assert abs(solution.objective - 10.0) < 1e-6
 ```
 
-## Independent ID spaces per constraint type
+(sos1-big-m-formulation)=
+### SOS1 Big-M formulations
 
-In OMMX, each of the four constraint collections — regular / Indicator / OneHot / SOS1 — has an **independent ID space**. The four dicts passed to {meth}`Instance.from_components <ommx.Instance.from_components>` are keyed independently, so using the same integer ID across different constraint types does not cause a collision.
+A **Big-M formulation** represents the SOS1 condition with regular
+constraints. For each member $x_i$, introduce a binary selector $y_i$ and
+finite coefficients $M_i^+$ and $M_i^-$ large enough to cover the member's
+upper and lower domain values:
 
-For example, "regular constraint ID=1" and "Indicator constraint ID=1" coexist as distinct constraints.
+$$
+x_i - M_i^+ y_i \leq 0, \qquad
+-x_i - M_i^- y_i \leq 0, \qquad
+\sum_i y_i \leq 1.
+$$
+
+When $y_i = 0$, the link constraints force $x_i = 0$. The cardinality
+constraint then allows at most one member to be non-zero, so the Big-M rows
+imply SOS1. Conversely, when the coefficients cover the complete member
+domains, every SOS1-feasible member assignment can set the selector of its
+non-zero member to one and every other selector to zero, or set all selectors
+to zero when all members are zero. The two formulations therefore have the same
+feasible member assignments after fresh selectors are projected out. A
+binary member can be reused as its own selector, and a link whose
+side is already implied by the member's domain can be omitted.
+
+Promotion first prepares tighter bounds using only the claimed Big-M links.
+For example, `x <= 3z` with binary `z` can reduce a stored upper bound of `100`
+to `3`. All rows read the original domains; cardinality rows and unrelated
+constraints do not participate. Only successful promotions commit their bounds.
+Strict rejection leaves the entire Instance unchanged, including its bounds.
+
+Promotion checks mathematical equivalence using the prepared member bounds.
+Positive scaling of link rows is allowed, and tight Big-M values `U` and `-L`
+are sufficient. Bounds are derived directly from the exact link-coefficient
+ratios, without tolerance expansion. Integer limits are rounded inward, and
+conversion to floating-point bounds rounds outward. Exact clipping retains
+even sub-tolerance updates; planning and application do not read the default
+tolerance. Any remaining Big-M shortfall is rejected. Equal per-row
+violations and identical feasibility classification at a finite evaluation
+tolerance are not guaranteed. A narrowed fresh selector is accepted only when
+its domain permits the canonical indicator for every possible member value.
+
+{meth}`~ommx.Instance.promote_sos1_big_m` takes one
+{class}`~ommx.Sos1BigMPromotionRequest` for the entire batch and returns one
+{class}`~ommx.Sos1BigMPromotion` report. The request maps each regular
+cardinality constraint ID to the member-to-selector claims for that formulation.
+For example, given matching existing formulation rows:
+
+```python
+from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
+
+request = Sos1BigMPromotionRequest({
+    102: {
+        0: Sos1BigMSelectorClaim.reused(),
+        1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101),
+    },
+    202: {
+        2: Sos1BigMSelectorClaim.reused(),
+        3: Sos1BigMSelectorClaim.reused(),
+    },
+})
+report = instance.promote_sos1_big_m(request)  # mode="best_effort"
+print(report.promoted)    # cardinality constraint ID -> SOS1 constraint ID
+print(report.rejections)  # cardinality constraint ID -> diagnostic string
+```
+
+The default `mode="best_effort"` applies every independent valid formulation.
+The report has exactly one outcome per requested cardinality ID. Its
+`promoted` and `rejections` dictionaries are snapshots of successful and
+rejected outcomes from the same map: their keys are disjoint and together equal
+the request's keys. `request_count` is the number of formulations in the batch.
+Members and retained formulation history can be queried from the mutated
+Instance using the returned SOS1 IDs and the original regular IDs.
+
+Choose `mode="strict"` when every formulation must be promoted. It returns
+the same report type with no rejections on success. If any formulation is
+rejected, it raises {class}`~ommx.Sos1BigMPromotionBatchRejectedError` before
+mutation. The exception's `request_count` is the batch size and `rejections`
+maps every rejected cardinality constraint ID to its diagnostic. Formulations
+absent from that map were accepted by planning, but none are applied when the
+strict batch fails:
+
+```python
+from ommx import Sos1BigMPromotionBatchRejectedError
+
+try:
+    report = instance.promote_sos1_big_m(request, mode="strict")
+except Sos1BigMPromotionBatchRejectedError as error:
+    for cardinality_id, message in error.rejections.items():
+        print(f"cardinality constraint {cardinality_id}: {message}")
+    # The instance is unchanged.
+```
+
+Both modes check all formulations against the same unchanged Instance and
+reject overlapping row claims. Independent formulations may share SOS1
+members. A cardinality ID can occur only once in the request map.
+An empty batch returns an empty report. The Rust plan retains an exclusive
+borrow until application, so neither rollback nor an Instance clone is needed.
+The transformation validates the current rows independently; it does not
+require them to originate from {meth}`~ommx.Instance.convert_sos1_to_constraints`.
+
+(constraint-numbering)=
+## Unique constraint numbers within an instance
+
+All regular, Indicator, OneHot, and SOS1 constraints in an instance share one
+numeric ID space, including removed constraints. Supply distinct numbers across
+all four dictionaries passed to
+{meth}`Instance.from_components <ommx.Instance.from_components>`.
 
 ```{code-cell} ipython3
 z2 = DecisionVariable.binary(10, name="z2")
@@ -160,21 +277,30 @@ x2 = DecisionVariable.continuous(11, lower=0, upper=10, name="x2")
 instance_mix = Instance.from_components(
     decision_variables=[z2, x2] + xs + ys,
     objective=x2,
-    constraints={1: z2 == 1},                                        # regular ID=1
-    indicator_constraints={1: (x2 <= 5).with_indicator(z2)},         # Indicator ID=1
-    one_hot_constraints={1: OneHotConstraint(variables=xs)},         # OneHot ID=1
-    sos1_constraints={1: Sos1Constraint(variables=ys)},              # SOS1 ID=1
-    sense=Instance.MAXIMIZE,
+    constraints={1: z2 == 1},
+    indicator_constraints={2: (x2 <= 5).with_indicator(z2)},
+    one_hot_constraints={3: OneHotConstraint(variables=xs)},
+    sos1_constraints={4: Sos1Constraint(variables=ys)},
+    sense=Sense.Maximize,
 )
 
-# Each of the four dicts holds its own ID=1 constraint independently
-assert set(instance_mix.constraints.keys()) == {1}
-assert set(instance_mix.indicator_constraints.keys()) == {1}
-assert set(instance_mix.one_hot_constraints.keys()) == {1}
-assert set(instance_mix.sos1_constraints.keys()) == {1}
+# All four constraint families use distinct numbers.
+assert set(instance_mix.constraints) == {
+    ConstraintID(1), IndicatorConstraintID(2),
+    OneHotConstraintID(3), Sos1ConstraintID(4),
+}
 ```
 
-When a special constraint is converted to a regular constraint (see [Capability Model and Conversions](./capability_model.md)), the generated regular constraint is allocated from the `Constraint` ID space. Only regular constraint IDs can collide after conversion.
+The instance assigns new numbers above the maximum across all active and removed
+constraint families. [Constraint lowering](./capability_model.md) and promotion
+assign fresh numbers to generated constraints; originals retain their numbers
+when moved to removed collections. Provenance and removal reasons record the
+relationship between source and generated constraints.
+
+`ParametricInstance` follows the same rule, and evaluation preserves these
+identities in `Solution` and `SampleSet`. Protobuf input containing duplicate
+numbers across families is rejected without automatic renumbering. This also
+applies to data created during the 3.0.0 beta period under independent ID spaces.
 
 ## Accessing evaluation results
 
@@ -188,7 +314,7 @@ The {class}`~ommx.Solution` or {class}`~ommx.SampleSet` obtained after solving e
 | SOS1 | `"sos1"` |
 
 ```python
-solution.constraints_df()                  # regular (default)
+solution.constraints_df(kind="regular")                  # regular
 solution.constraints_df(kind="indicator")  # indicator
 sample_set.constraints_df(kind="one_hot")  # one-hot
 ```
@@ -202,7 +328,7 @@ The Indicator DataFrame includes an `indicator_active` column that disambiguates
 `removed_reason` is no longer a default column of {meth}`~ommx.Solution.constraints_df`. Pass `"removed_reason"` in `include=` to fold the reason name and the `removed_reason.{key}` parameter columns back in (rows whose constraint was not removed before evaluation get NA in those columns):
 
 ```python
-df = solution.constraints_df(
+df = solution.constraints_df(kind="regular",
     include=("label", "parameters", "removed_reason"),
 )
 ```
@@ -213,7 +339,7 @@ The same applies to Indicator, OneHot, and SOS1: pass the corresponding `kind=` 
 
 {class}`~ommx.IndicatorConstraint` supports the same relax / restore workflow as regular constraints.
 
-- {meth}`Instance.relax_indicator_constraint() <ommx.Instance.relax_indicator_constraint>`: relax (deactivate) an indicator constraint and record a reason string. The relaxed constraint is moved into `removed_indicator_constraints`.
+- {meth}`Instance.relax_indicator_constraint() <ommx.Instance.relax_indicator_constraint>`: relax (deactivate) an indicator constraint and record a reason string. The relaxed constraint is moved into `removed_constraints`.
 - {meth}`Instance.restore_indicator_constraint() <ommx.Instance.restore_indicator_constraint>`: restore a previously relaxed indicator constraint. Fails if the indicator variable has already been substituted or fixed.
 
-For OneHot and SOS1, movement into `removed_one_hot_constraints` / `removed_sos1_constraints` happens via the conversion APIs covered in [Capability Model and Conversions](./capability_model.md).
+For OneHot and SOS1, movement into `removed_constraints` happens via the conversion APIs covered in [Explicit Constraint Lowering](./capability_model.md).

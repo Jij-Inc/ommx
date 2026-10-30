@@ -1,0 +1,371 @@
+"""End-to-end tests for the bridge's independently built consumer fixture."""
+
+import importlib
+import importlib.machinery
+import json
+from pathlib import Path
+import subprocess
+import sys
+import textwrap
+
+import ommx
+import ommx._ommx_rust
+import ommx_pyo3_bridge_fixture as fixture
+
+
+V2_CONTRACT_PATH = Path(__file__).parents[2] / "tests/data/protobuf_v2.json"
+V2_CONTRACT = json.loads(V2_CONTRACT_PATH.read_text())
+
+
+def assert_component_function(value: ommx.Function) -> None:
+    assert type(value) is ommx.Function
+    assert value.linear_terms == {7: 1.0}
+    assert value.constant_term == -3.0
+
+
+def assert_component_constraint(value: ommx.Constraint) -> None:
+    assert type(value) is ommx.Constraint
+    assert type(value.equality) is ommx.Equality
+    assert value.equality == ommx.Equality.LessThanOrEqualToZero
+    assert value.function.linear_terms == {7: 1.0}
+    assert value.function.constant_term == -3.0
+    assert value.name == "capacity"
+    assert value.subscripts == [2, 5]
+    assert value.parameters == {"axis": "row"}
+    assert value.description == "bridge fixture"
+    assert len(value.provenance) == 1
+    assert value.provenance[0].kind == ommx.ProvenanceKind.OneHotConstraint
+    assert value.provenance[0].original_id == ommx.OneHotConstraintID(23)
+
+
+def assert_component_decision_variable(value: ommx.DecisionVariable) -> None:
+    assert type(value) is ommx.DecisionVariable
+    assert value.id == 7
+    assert type(value.kind) is ommx.Kind
+    assert value.kind == ommx.Kind.Integer
+    assert value.bound.lower == -2.0
+    assert value.bound.upper == 8.0
+    assert value.name == "x"
+    assert value.subscripts == [2, 5]
+    assert value.parameters == {"axis": "row"}
+    assert value.description == "bridge fixture"
+
+
+def assert_component_instance(value: ommx.Instance) -> None:
+    assert type(value) is ommx.Instance
+    assert type(value.sense) is ommx.Sense
+    assert value.sense == ommx.Sense.Minimize
+    assert value.objective.linear_terms == {7: 1.0}
+    assert value.objective.constant_term == -3.0
+    assert len(value.decision_variables) == 1
+    variable = value.decision_variables[0]
+    assert variable.id == 7
+    assert type(variable.kind) is ommx.Kind
+    assert variable.kind == ommx.Kind.Integer
+    assert variable.bound.lower == -2.0
+    assert variable.bound.upper == 8.0
+    assert variable.name == "instance_x"
+    assert variable.subscripts == [9]
+
+
+def assert_component_parametric_instance(value: ommx.ParametricInstance) -> None:
+    assert type(value) is ommx.ParametricInstance
+    assert type(value.sense) is ommx.Sense
+    assert value.sense == ommx.Sense.Minimize
+    assert value.objective.linear_terms == {7: 1.0}
+    assert value.objective.constant_term == -3.0
+    assert len(value.decision_variables) == 1
+    assert type(value.decision_variables[0].kind) is ommx.Kind
+    assert value.decision_variables[0].name == "instance_x"
+
+
+def assert_component_solution(value: ommx.Solution) -> None:
+    assert type(value) is ommx.Solution
+    assert type(value.sense) is ommx.Sense
+    assert value.sense == ommx.Sense.Minimize
+    assert type(value.decision_variables[0].kind) is ommx.Kind
+    assert value.objective == 1.0
+    assert value.state.entries == {7: 4.0}
+    assert value.feasible
+
+
+def assert_component_sample_set(value: ommx.SampleSet) -> None:
+    assert type(value) is ommx.SampleSet
+    assert type(value.sense) is ommx.Sense
+    assert value.sense == ommx.Sense.Minimize
+    assert type(value.decision_variables[0].kind) is ommx.Kind
+    assert value.sample_ids() == {0}
+    assert_component_solution(value.get(0))
+
+
+def test_reconstruction_endpoints_stay_binding_private() -> None:
+    endpoints = (
+        "_bridge_protobuf_v2_function_from_bytes",
+        "_bridge_protobuf_v2_constraint_from_bytes",
+        "_bridge_protobuf_v2_decision_variable_from_bytes",
+    )
+
+    for endpoint in endpoints:
+        assert hasattr(ommx._ommx_rust, endpoint)
+        assert not hasattr(ommx, endpoint)
+
+    unversioned_endpoints = (
+        "_pyo3_bridge_function_from_bytes",
+        "_pyo3_bridge_constraint_from_bytes",
+        "_pyo3_bridge_decision_variable_from_bytes",
+    )
+    for endpoint in unversioned_endpoints:
+        assert not hasattr(ommx._ommx_rust, endpoint)
+    for kind in ("function", "constraint", "decision_variable"):
+        assert not hasattr(ommx._ommx_rust, f"_pyo3_bridge_v0_{kind}_from_bytes")
+
+
+def test_fixture_and_ommx_are_distinct_extension_modules() -> None:
+    fixture_native = importlib.import_module(
+        "ommx_pyo3_bridge_fixture.ommx_pyo3_bridge_fixture"
+    )
+    fixture_path = Path(fixture_native.__file__).resolve()
+    ommx_path = Path(ommx._ommx_rust.__file__).resolve()
+
+    assert fixture_path != ommx_path
+    assert any(
+        str(fixture_path).endswith(suffix)
+        for suffix in importlib.machinery.EXTENSION_SUFFIXES
+    )
+    assert any(
+        str(ommx_path).endswith(suffix)
+        for suffix in importlib.machinery.EXTENSION_SUFFIXES
+    )
+
+
+def test_function_is_canonical_and_preserves_terms() -> None:
+    assert_component_function(fixture.function())
+
+
+def test_composed_function_crosses_the_extension_boundary() -> None:
+    value = fixture.composed_function()
+
+    assert type(value) is ommx.Function
+    assert value.degree() is None
+    assert value.evaluate({7: 4.0}) == 1.0 / 3.0
+
+
+def test_constraint_is_canonical_and_preserves_context() -> None:
+    assert_component_constraint(fixture.constraint())
+
+
+def test_composed_constraint_crosses_the_extension_boundary() -> None:
+    value = fixture.composed_constraint()
+
+    assert type(value) is ommx.Constraint
+    assert value.function.degree() is None
+    assert value.function.evaluate({7: 4.0}) == 1.0 / 3.0
+
+
+def test_decision_variable_is_canonical_and_preserves_owner_side_data() -> None:
+    assert_component_decision_variable(fixture.decision_variable())
+
+
+def test_instance_is_canonical_and_preserves_root_owned_data() -> None:
+    assert_component_instance(fixture.instance())
+
+
+def test_parametric_instance_is_canonical_and_preserves_root_owned_data() -> None:
+    assert_component_parametric_instance(fixture.parametric_instance())
+
+
+def test_solution_is_canonical_and_preserves_evaluated_data() -> None:
+    assert_component_solution(fixture.solution())
+
+
+def test_sample_set_is_canonical_and_preserves_sampled_data() -> None:
+    assert_component_sample_set(fixture.sample_set())
+
+
+def test_protobuf_v2_payloads_reconstruct_canonical_values() -> None:
+    function = V2_CONTRACT["function"]
+    assert_component_function(
+        getattr(ommx._ommx_rust, function["endpoint"])(
+            bytes.fromhex(function["payload"])
+        )
+    )
+
+    constraint = V2_CONTRACT["constraint"]
+    assert_component_constraint(
+        getattr(ommx._ommx_rust, constraint["endpoint"])(
+            bytes.fromhex(constraint["constraint"]),
+            bytes.fromhex(constraint["context"]),
+        )
+    )
+
+    decision_variable = V2_CONTRACT["decision_variable"]
+    assert_component_decision_variable(
+        getattr(ommx._ommx_rust, decision_variable["endpoint"])(
+            decision_variable["id"],
+            bytes.fromhex(decision_variable["decision_variable"]),
+            bytes.fromhex(decision_variable["label"]),
+        )
+    )
+
+    instance = V2_CONTRACT["instance"]
+    assert_component_instance(
+        getattr(ommx._ommx_rust, instance["endpoint"])(
+            bytes.fromhex(instance["payload"])
+        )
+    )
+
+
+def test_sender_matches_protobuf_v2_endpoint_signatures_and_payloads() -> None:
+    program = textwrap.dedent(
+        """
+        import json
+        from pathlib import Path
+        import sys
+        import types
+
+        contract = json.loads(Path(sys.argv[1]).read_text())
+        fake_ommx = types.ModuleType("ommx")
+        fake_ommx.__path__ = []
+        fake_rust = types.ModuleType("ommx._ommx_rust")
+        fake_rust.BridgeError = type("BridgeError", (RuntimeError,), {})
+        fake_ommx._ommx_rust = fake_rust
+        fake_rust._bridge_supported_protocols = lambda: [2]
+
+        function = contract["function"]
+        def receive_function(payload):
+            assert payload.hex() == function["payload"]
+            return "function"
+        setattr(fake_rust, function["endpoint"], receive_function)
+
+        constraint = contract["constraint"]
+        def receive_constraint(payload, context):
+            assert payload.hex() == constraint["constraint"]
+            assert context.hex() == constraint["context"]
+            return "constraint"
+        setattr(fake_rust, constraint["endpoint"], receive_constraint)
+
+        decision_variable = contract["decision_variable"]
+        def receive_decision_variable(id, payload, label):
+            assert id == decision_variable["id"]
+            assert payload.hex() == decision_variable["decision_variable"]
+            assert label.hex() == decision_variable["label"]
+            return "decision_variable"
+        setattr(
+            fake_rust,
+            decision_variable["endpoint"],
+            receive_decision_variable,
+        )
+
+        instance = contract["instance"]
+        def receive_instance(payload):
+            assert payload.hex() == instance["payload"]
+            return "instance"
+        setattr(fake_rust, instance["endpoint"], receive_instance)
+
+        sys.modules["ommx"] = fake_ommx
+        sys.modules["ommx._ommx_rust"] = fake_rust
+
+        import ommx_pyo3_bridge_fixture as fixture
+
+        assert fixture.function() == "function"
+        assert fixture.constraint() == "constraint"
+        assert fixture.decision_variable() == "decision_variable"
+        assert fixture.instance() == "instance"
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", program, str(V2_CONTRACT_PATH)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_generated_stub_uses_canonical_ommx_types() -> None:
+    stub = (
+        Path(__file__).parents[1].joinpath("ommx_pyo3_bridge_fixture.pyi").read_text()
+    )
+
+    assert "import ommx" in stub
+    assert "def function() -> ommx.Function:" in stub
+    assert "def constraint() -> ommx.Constraint:" in stub
+    assert "def decision_variable() -> ommx.DecisionVariable:" in stub
+    assert "def instance() -> ommx.Instance:" in stub
+    assert "def parametric_instance() -> ommx.ParametricInstance:" in stub
+    assert "def solution() -> ommx.Solution:" in stub
+    assert "def sample_set() -> ommx.SampleSet:" in stub
+    assert "typing.Any" not in stub
+    assert "override_return_type" not in stub
+
+
+def test_missing_python_bridge_endpoint_has_a_clear_error() -> None:
+    program = textwrap.dedent(
+        """
+        import sys
+        import types
+
+        import ommx_pyo3_bridge_fixture as fixture
+
+        fake_ommx = types.ModuleType("ommx")
+        fake_ommx.__path__ = []
+        fake_rust = types.ModuleType("ommx._ommx_rust")
+        fake_rust.BridgeError = type("BridgeError", (RuntimeError,), {})
+        fake_ommx._ommx_rust = fake_rust
+        fake_rust._bridge_supported_protocols = lambda: [2]
+        fake_ommx.Instance = type("Instance", (), {})
+        fake_ommx.ParametricInstance = type("ParametricInstance", (), {})
+        fake_ommx.Solution = type("Solution", (), {})
+        fake_ommx.SampleSet = type("SampleSet", (), {})
+        sys.modules["ommx"] = fake_ommx
+        sys.modules["ommx._ommx_rust"] = fake_rust
+
+        def assert_missing_receiver(call, python_type, endpoint):
+            try:
+                call()
+            except ImportError as error:
+                message = str(error)
+                assert "ProtobufV2" in message
+                assert python_type in message
+                assert "unavailable" in message
+                assert isinstance(error.__cause__, AttributeError)
+                assert endpoint in str(error.__cause__)
+            else:
+                raise AssertionError("bridge conversion unexpectedly succeeded")
+
+        assert_missing_receiver(
+            fixture.function, "ommx.Function",
+            "_bridge_protobuf_v2_function_from_bytes",
+        )
+        assert_missing_receiver(
+            fixture.constraint, "ommx.Constraint",
+            "_bridge_protobuf_v2_constraint_from_bytes",
+        )
+        assert_missing_receiver(
+            fixture.decision_variable, "ommx.DecisionVariable",
+            "_bridge_protobuf_v2_decision_variable_from_bytes",
+        )
+        assert_missing_receiver(
+            fixture.instance, "ommx.Instance", "_bridge_protobuf_v2_instance_from_bytes",
+        )
+        assert_missing_receiver(
+            fixture.parametric_instance, "ommx.ParametricInstance",
+            "_bridge_protobuf_v2_parametric_instance_from_bytes",
+        )
+        assert_missing_receiver(
+            fixture.solution, "ommx.Solution", "_bridge_protobuf_v2_solution_from_bytes",
+        )
+        assert_missing_receiver(
+            fixture.sample_set, "ommx.SampleSet", "_bridge_protobuf_v2_sample_set_from_bytes",
+        )
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", program],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr

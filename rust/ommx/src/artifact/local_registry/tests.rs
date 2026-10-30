@@ -66,6 +66,42 @@ fn has_table(conn: &rusqlite::Connection, table: &str) -> Result<bool> {
     .map_err(Into::into)
 }
 
+#[test]
+fn list_image_refs_preserves_registry_corruption_owner() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let connection = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    let invalid_name = "ghcr.io/INVALID";
+    let reference = "latest";
+    let manifest_digest = format!("sha256:{}", "0".repeat(64));
+    connection.execute(
+        r#"
+        INSERT INTO refs (name, reference, manifest_digest, updated_at)
+        VALUES (?1, ?2, ?3, ?4)
+        "#,
+        [
+            invalid_name,
+            reference,
+            manifest_digest.as_str(),
+            "2026-01-01T00:00:00Z",
+        ],
+    )?;
+
+    let error = registry.list_image_refs().unwrap_err();
+    let signal = error
+        .downcast_ref::<InvalidLocalRegistryImageRef>()
+        .expect("invalid persisted refs must preserve the Local Registry owner");
+    assert_eq!(signal.name(), invalid_name);
+    assert_eq!(signal.reference(), reference);
+    assert!(
+        error.chain().any(|cause| cause
+            .downcast_ref::<crate::artifact::ImageRefParseError>()
+            .is_some()),
+        "registry corruption must retain the underlying image-ref parser signal"
+    );
+    Ok(())
+}
+
 fn query_plan(conn: &rusqlite::Connection, sql: &str) -> Result<Vec<String>> {
     let mut stmt = conn.prepare(sql)?;
     let rows = stmt.query_map([], |row| row.get(3))?;

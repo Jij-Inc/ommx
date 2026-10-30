@@ -1,4 +1,3 @@
-use anyhow::Result;
 use pyo3::prelude::*;
 
 /// Variable bound wrapper for Python
@@ -14,7 +13,7 @@ pub struct VariableBound(pub ommx::Bound);
 #[pymethods]
 impl VariableBound {
     #[new]
-    pub fn new(lower: f64, upper: f64) -> Result<Self> {
+    pub fn new(lower: f64, upper: f64) -> crate::error::OmmxPyResult<Self> {
         Ok(Self(ommx::Bound::new(lower, upper)?))
     }
 
@@ -56,8 +55,17 @@ impl VariableBound {
         self.0.is_finite()
     }
 
-    pub fn contains(&self, value: f64, atol: f64) -> Result<bool> {
-        Ok(self.0.contains(value, ommx::ATol::new(atol)?))
+    /// Return whether ``value`` satisfies this bound under ``atol``.
+    ///
+    /// Membership treats the bound as the two inequality residuals
+    /// ``lower - value <= 0`` and ``value - upper <= 0``. Both use the same
+    /// tolerance semantics as regular inequality constraints after finite
+    /// evaluation. An infinite endpoint leaves that side unconstrained;
+    /// non-finite values and finite-endpoint residual overflow are not
+    /// contained.
+    pub fn contains(&self, value: f64, atol: f64) -> crate::error::OmmxPyResult<bool> {
+        let atol = ommx::ATol::new(atol)?;
+        Ok(self.0.contains(value, atol))
     }
 
     pub fn nearest_to_zero(&self) -> f64 {

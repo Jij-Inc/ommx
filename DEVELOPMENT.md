@@ -54,6 +54,7 @@ task proto
 | Directory | crates.io | Description |
 |:----------|:---------:|:------------|
 | [`rust/ommx/`](./rust/ommx/) | [![ommx](https://img.shields.io/crates/v/ommx)](https://crates.io/crates/ommx) | OMMX Rust SDK |
+| [`rust/ommx-pyo3-bridge/`](./rust/ommx-pyo3-bridge/) | [![ommx-pyo3-bridge](https://img.shields.io/crates/v/ommx-pyo3-bridge)](https://crates.io/crates/ommx-pyo3-bridge) | Typed conversion from Rust OMMX values to canonical Python OMMX classes |
 | [`rust/protogen/`](./rust/protogen/) | Not for release | Rust code generator from `*.proto` |
 | [`rust/dataset/`](./rust/dataset/) | Not for release | CLI tool for creating and uploading OMMX Artifact for dataset, e.g. MIPLIB2017 |
 
@@ -77,7 +78,9 @@ Note that this only tests the Rust SDK, not the Rust codes in Python SDK.
 
 ### Versioning
 
-The version of Rust SDK is [semantic versioning](https://semver.org/).
+The published Rust SDK crates use the same workspace version and follow
+[semantic versioning](https://semver.org/). This includes `ommx`,
+`ommx-derive`, and `ommx-pyo3-bridge`.
 Note that the version of Rust SDK is independent from the schema version `ommx.v1` and that of Python SDK.
 
 ```shell
@@ -90,10 +93,21 @@ Note that this requires [cargo-edit](https://github.com/killercup/cargo-edit).
 
 The Rust SDK is released to [crates.io](https://crates.io/) from the [GitHub Actions workflow](https://github.com/Jij-Inc/ommx/actions/workflows/release_rust.yml). What you have to do is just to push a tag in a format `rust-x.y.z`. Be sure that actual version is determined by `Cargo.toml` not by the tag name.
 
-There are two mechanism to keep the version of `main` branch is kept latest:
+`ommx-pyo3-bridge` requires a one-time release bootstrap because crates.io
+trusted publishing can only be configured after a crate's first release. After
+the first Rust tag workflow publishes the same-version `ommx` crate, publish
+`ommx-pyo3-bridge` manually from that tag with a regular crates.io token. Then
+configure `.github/workflows/release_rust.yml` as its trusted publisher and add
+the bridge back to the workflow's `publish` job. Until this first published
+bridge version provides a registry baseline, the required Rust semver job
+checks `ommx` only. Add `ommx-pyo3-bridge` to that job after the bootstrap.
+
+Two mechanisms normally keep the version on the `main` branch current:
 
 - When Rust SDK is released, the patch version is automatically bumped up via a Pull Request.
-- When a pull request contains breaking change, `cargo-semver-check` on GitHub Action will fail. So, this pull request should be merged with bumping up the version.
+- The required `cargo-semver-checks` job checks published Rust crates. A pull
+  request containing a breaking change should be merged together with the
+  required version bump.
 
 [`python/`](./python/)
 ----------------------

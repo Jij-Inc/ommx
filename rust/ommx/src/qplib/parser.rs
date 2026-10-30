@@ -1,3 +1,4 @@
+use super::QplibParseError;
 use crate::Result;
 use std::collections::HashMap;
 use std::{
@@ -12,44 +13,6 @@ use std::{
 // `fs::File::open` origin below. Line-number context for in-file parse
 // failures is handled by [`QplibParseError`] instead — see its docstring.
 use anyhow::Context;
-
-/// Failure to parse a QPLIB file at a known line number.
-///
-/// This is the one structured error the QPLIB parser surfaces. It carries
-/// the 1-based `line_num` and a rendered `message` describing what went
-/// wrong on that line. Callers who want to report the position
-/// programmatically (editor squiggles, etc.) can recover it via:
-///
-/// ```ignore
-/// match ommx::qplib::load(path) {
-///     Err(e) => match e.downcast_ref::<ommx::qplib::QplibParseError>() {
-///         Some(pe) => eprintln!("{}:{}: {}", path.display(), pe.line_num, pe.message),
-///         None => eprintln!("{e}"),
-///     },
-///     Ok(inst) => { /* ... */ }
-/// }
-/// ```
-///
-/// Every [`QplibParseError`] constructed by this module also emits a
-/// structured `tracing::error!` event with `line_num` and `message` fields.
-#[derive(Debug, thiserror::Error)]
-#[error("QPLIB parse error at line {line_num}: {message}")]
-pub struct QplibParseError {
-    pub line_num: usize,
-    pub message: String,
-}
-
-impl QplibParseError {
-    /// Build a [`QplibParseError`] from a line number plus any error the
-    /// low-level parser produced, emitting a `tracing::error!` for the
-    /// combination. The returned value plugs straight into
-    /// [`crate::Error`] via the blanket `From<E: std::error::Error>` impl.
-    fn new(line_num: usize, cause: impl Display) -> Self {
-        let message = cause.to_string();
-        tracing::error!(line_num, %message, "QPLIB parse error");
-        Self { line_num, message }
-    }
-}
 
 #[derive(Default, Debug)]
 pub struct QplibFile {

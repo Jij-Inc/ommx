@@ -6,214 +6,123 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.19.1
 kernelspec:
-  display_name: ommx-update-books (3.9.23)
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
 
-# 特殊制約型
+# 特殊制約の意味と評価
 
-OMMX は通常の制約（{class}`~ommx.Constraint`、等式・不等式を持つ {class}`~ommx.Function`）に加えて、数理最適化で頻出するいくつかの特殊な制約を第一級の制約型として扱います。本ページでは以下の3種類の特殊制約型の定義と使い方、および PySCIPOpt Adapter を使って実際に解く手順を説明します。
+OMMXは、通常の等式・不等式に加えて、Indicator・OneHot・SOS1を制約として扱います。それぞれの**成立条件はソルバーとは独立に定義されており、ソルバーを呼ばずに評価できます。** 特殊制約は、特定のソルバーへの指示ではなく、問題そのものの条件です。
 
-- {class}`~ommx.IndicatorConstraint`: バイナリ変数による条件付き制約
-- {class}`~ommx.OneHotConstraint`: バイナリ変数集合のうち丁度1つが1
-- {class}`~ommx.Sos1Constraint`: 変数集合のうち高々1つが非ゼロ
+| 制約の種類 | 表す条件 |
+|---|---|
+| {class}`~ommx.IndicatorConstraint` | バイナリ変数が1のときだけ、指定した等式・不等式を課す |
+| {class}`~ommx.OneHotConstraint` | バイナリ変数のうち、ちょうど1個が1 |
+| {class}`~ommx.Sos1Constraint` | 変数のうち、高々1個が非ゼロ |
 
-以下の例では [OMMX Adapterで最適化問題を解く](../tutorial/solve_with_ommx_adapter.md) と同様に PySCIPOpt Adapter を使うので、事前にインストールしてください。
+このページでは{meth}`InstanceとStateの評価 <ommx.Instance.evaluate>`を使って、それぞれが何を意味するかを確認します。求解の手順は[Adapterで最適化問題を解くTutorial](../tutorial/solve_with_ommx_adapter)を参照してください。
 
-```
-pip install ommx-pyscipopt-adapter
-```
+## Indicator：条件付きの制約
 
-PySCIPOpt Adapter は Indicator と SOS1 をサポート宣言しており、SCIP の `addConsIndicator` / `addConsSOS1` にそのまま渡します（等式 Indicator は上下2本の不等式 Indicator に分解されます）。OneHot はサポート宣言がないため、Adapter 内部で通常の等式制約に自動変換されてから SCIP に渡されます。Adapter 側のサポート宣言や変換の詳細は [Adapter Capability モデルと制約変換](./capability_model.md) を参照してください。
+バイナリ変数 $z$ に対して、$z=1$ のときだけ $f(x)\leq0$ または $f(x)=0$ を要求します。$z=0$ のときは、式の値によらずIndicator制約は満たされます。ただし、変数自身のdomainや、他の制約まで無効になるわけではありません。
 
-## IndicatorConstraint
-
-**Indicator Constraint** はバイナリ変数 $z$ に対し、$z = 1$ のときのみ制約 $f(x) \leq 0$ あるいは $f(x) = 0$ を課す条件付き制約です。$z = 0$ のときはこの制約は無条件に満たされると見なされます。
-
-{class}`~ommx.IndicatorConstraint` は、既存の {class}`~ommx.Constraint` に対して {meth}`Constraint.with_indicator() <ommx.Constraint.with_indicator>` を呼ぶことで生成できます。Indicator の引数には変数 ID、detached な {class}`~ommx.DecisionVariable`、または {class}`~ommx.AttachedDecisionVariable` を渡せます。
+次の例は「設備を使う場合だけ、量を5以下にする」という条件です。
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable, Equality
+from ommx import Instance
 
-z = DecisionVariable.binary(0, name="z")
-x = DecisionVariable.continuous(1, lower=0, upper=10, name="x")
+indicator = Instance.maximize()
+enabled = indicator.new_binary("enabled")
+amount = indicator.new_continuous("amount", lower=0, upper=10)
+indicator.objective = amount
+indicator.add_indicator_constraint((amount <= 5).with_indicator(enabled))
 
-# z = 1 => x <= 5
-ic = (x <= 5).with_indicator(z)
-assert ic.indicator_variable_id == 0
-assert ic.equality == Equality.LessThanOrEqualToZero
+assert indicator.evaluate({enabled.id: 0, amount.id: 6}).feasible
+assert indicator.evaluate({enabled.id: 1, amount.id: 5}).feasible
+assert not indicator.evaluate({enabled.id: 1, amount.id: 6}).feasible
 ```
 
-{meth}`Instance.from_components <ommx.Instance.from_components>` の `indicator_constraints=` 引数に `dict[int, IndicatorConstraint]` を渡すことでインスタンスに追加できます。
+{meth}`~ommx.Constraint.with_indicator` で通常制約に制御変数を指定します。これは「$z=1$ならば制約が成立する」という片方向の含意であり、「制約が成立するなら必ず$z=1$」とは限りません。
 
-```{code-cell} ipython3
-instance = Instance.from_components(
-    decision_variables=[z, x],
-    objective=x,
-    constraints={0: z == 1},       # z を 1 に固定
-    indicator_constraints={0: ic}, # z = 1 => x <= 5
-    sense=Instance.MAXIMIZE,
-)
-assert set(instance.indicator_constraints.keys()) == {0}
-```
+## OneHot：ちょうど一つ選ぶ
 
-PySCIPOpt Adapter は Indicator 制約をサポート宣言しているので、そのまま求解できます。
-
-```{code-cell} ipython3
-from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
-
-solution = OMMXPySCIPOptAdapter.solve(instance)
-# z = 1 で x <= 5 が効くので x の最大値 5 が目的関数値
-assert abs(solution.objective - 5.0) < 1e-6
-```
-
-## OneHotConstraint
-
-**One-hot 制約** はバイナリ変数の集合 $\{x_1, \ldots, x_n\}$ に対して $\sum_i x_i = 1$、つまり丁度1つだけが $1$ であることを要求します。
+バイナリ変数 $x_0,\ldots,x_{n-1}$ に対して、$\sum_i x_i=1$ を要求します。選ばれない場合や、複数選ばれる場合は実行不可能です。
 
 ```{code-cell} ipython3
 from ommx import OneHotConstraint
 
-xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
-oh = OneHotConstraint(variables=xs)
-assert oh.variables == [0, 1, 2]
+one_hot = Instance.maximize()
+choices = [one_hot.new_binary("choice", subscripts=[i]) for i in range(3)]
+one_hot.objective = sum(v * x for v, x in zip([5, 10, 3], choices))
+one_hot.add_one_hot_constraint(OneHotConstraint(variables=choices))
+
+chosen = one_hot.evaluate({choices[0].id: 0, choices[1].id: 1, choices[2].id: 0})
+assert chosen.feasible
+assert chosen.objective == 10
+assert not one_hot.evaluate({x.id: 0 for x in choices}).feasible
 ```
 
-`variables` の各要素には、変数 ID、detached な {class}`~ommx.DecisionVariable`、または {class}`~ommx.AttachedDecisionVariable` を渡せます。この入力は変数の identity だけを使うため、`VariableIDLike` type alias として公開されます。制約を host に追加するとき、enclosing instance は自身が保持する決定変数を source of truth として、参照 ID と制約固有の要件を検証します。OneHot で参照する変数は存在し、かつバイナリである必要があります。制約は各変数の ID を保持し、`oh.variables` から参照できます。数学的には通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ と等価ですが、first-class の制約として保持することで、対応するソルバー（MIP系ソルバーの多くは one-hot 制約を直接受け付けます）に効率的に渡すことができます。
+数学的には通常の等式と同じ条件です。OneHotとして保持すると、「いずれか一つを選ぶ」という構造を、変換前にも変換後の結果確認にも利用できます。参照する変数はすべてBinaryである必要があります。
 
-```{code-cell} ipython3
-values = [5.0, 10.0, 3.0]
-instance_oh = Instance.from_components(
-    decision_variables=xs,
-    objective=sum(v * x for v, x in zip(values, xs)),
-    constraints={},
-    one_hot_constraints={0: oh},
-    sense=Instance.MAXIMIZE,
-)
-assert set(instance_oh.one_hot_constraints.keys()) == {0}
-```
+(sos1-constraint)=
+## SOS1：非ゼロは高々一つ
 
-PySCIPOpt Adapter は OneHot をサポート宣言していないため、`solve` の内部で通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ に自動変換されてから SCIP に渡されます。
-
-```{code-cell} ipython3
-solution = OMMXPySCIPOptAdapter.solve(instance_oh)
-# 3 つのうち丁度 1 つを選ぶので、最大値 10 をもつ x_1 が選ばれる
-assert abs(solution.objective - 10.0) < 1e-6
-```
-
-`instance_oh` は `solve` によって in-place に書き換わるため、呼び出し後は OneHot 制約が除去され、通常制約へ変換された痕跡が `removed_one_hot_constraints` に残ります。
-
-```{code-cell} ipython3
-assert instance_oh.one_hot_constraints == {}
-assert len(instance_oh.constraints) == 1
-assert set(instance_oh.removed_one_hot_constraints.keys()) == {0}
-```
-
-## Sos1Constraint
-
-**SOS1 (Special Ordered Set type 1)** 制約は変数集合 $\{x_1, \ldots, x_n\}$ の**高々1個**しか非ゼロになれないことを要求します。One-hot との違いは以下の通りです。
-
-- One-hot は $\sum x_i = 1$ を要求するため、丁度1個が非ゼロ。
-- SOS1 は高々1個が非ゼロで、全て $0$ であることも許容。
-- SOS1 の変数はバイナリとは限らない（連続変数でも良い）。
+SOS1は、指定した変数のうち高々1個だけが非ゼロであることを要求します。変数はBinaryでなくてもよく、全変数が0でも満たされます。非ゼロの変数の値を1に制限する条件でもありません。
 
 ```{code-cell} ipython3
 from ommx import Sos1Constraint
 
-ys = [DecisionVariable.continuous(i, lower=0, upper=10, name="y", subscripts=[i]) for i in range(3, 6)]
-s1 = Sos1Constraint(variables=ys)
-assert s1.variables == [3, 4, 5]
+sos1 = Instance.maximize()
+amounts = [
+    sos1.new_continuous("amount", lower=0, upper=10, subscripts=[i])
+    for i in range(3)
+]
+sos1.objective = sum(amounts)
+sos1.add_sos1_constraint(Sos1Constraint(variables=amounts))
+
+assert sos1.evaluate({x.id: 0 for x in amounts}).feasible
+assert sos1.evaluate({amounts[0].id: 7, amounts[1].id: 0, amounts[2].id: 0}).feasible
+assert not sos1.evaluate({amounts[0].id: 7, amounts[1].id: 1, amounts[2].id: 0}).feasible
 ```
 
-`OneHotConstraint` と同様に、`variables` の各要素は `VariableIDLike`、すなわち変数 ID、detached な決定変数、または attached な決定変数を受け取ります。SOS1 制約は各変数の ID を保持し、`s1.variables` から参照できます。
+OneHotと違って、「どれも選ばない」「一つだけ正の量を割り当てる」といった候補を表せます。負の値が許される変数も使え、符号によらず非ゼロかどうかを判定します。数値評価では、ほかの制約と同様に許容誤差を使います。
 
-```{code-cell} ipython3
-instance_s1 = Instance.from_components(
-    decision_variables=ys,
-    objective=sum(ys),
-    constraints={},
-    sos1_constraints={0: s1},
-    sense=Instance.MAXIMIZE,
-)
-assert set(instance_s1.sos1_constraints.keys()) == {0}
-```
+(sos1-big-m-formulation)=
+## 通常制約へのloweringと、特殊制約へのpromotion
 
-PySCIPOpt Adapter は SOS1 制約をサポート宣言しているので、そのまま求解できます。
+ソルバーが特殊制約を直接扱わない場合でも、OMMXの定義する条件を通常制約で表せる場合があります。この変換をloweringと呼びます。例えばOneHotは等式へ、有限なboundを持つIndicatorやSOS1はBig-Mを使う通常制約へ変換できます。
 
-```{code-cell} ipython3
-solution = OMMXPySCIPOptAdapter.solve(instance_s1)
-# 高々 1 つだけが非ゼロなので、1 つを上限 10 にして他を 0 にする
-assert abs(solution.objective - 10.0) < 1e-6
-```
+重要なのは、ソルバーへの対応と、制約の意味を分けて考えることです。直接渡す場合もloweringする場合も、出発点は上で定義した条件です。ただし、適用に必要なboundや数値計算上の条件は変換によって異なります。単に大きな係数を置けばよいわけではありません。
 
-## 制約種別ごとに独立したID空間
+逆に、指定した通常制約の組がSOS1を表すことを検証し、特殊制約として表し直す操作がpromotionです。変換式・生成物・正確な受理条件はAPI Referenceを参照してください。
 
-OMMX では、通常制約・Indicator・OneHot・SOS1 の4つはそれぞれ**独立したID空間**を持ちます。{meth}`Instance.from_components <ommx.Instance.from_components>` に渡す4つの dict はそれぞれ独立したキー空間として扱われるため、異なる制約型同士で同じ整数 ID を使っても衝突しません。
+- Indicatorのlowering：{meth}`~ommx.Instance.convert_indicator_to_constraint`
+- OneHotのlowering：{meth}`~ommx.Instance.convert_one_hot_to_constraint`
+- SOS1のBig-M lowering：{meth}`~ommx.Instance.convert_sos1_to_constraints`
+- 通常制約からSOS1へのpromotion：{meth}`~ommx.Instance.promote_sos1_big_m`
 
-したがって、例えば「通常制約 ID=1」と「Indicator 制約 ID=1」は衝突せず、別々の制約として共存できます。
+loweringでは、元の特殊制約をremovedとして保持し、生成した通常制約から変換元を参照できます。結果を元の制約として検査する仕組みは[候補を評価して結果を判断する](./evaluate_and_interpret.md)で説明します。
 
-```{code-cell} ipython3
-z2 = DecisionVariable.binary(10, name="z2")
-x2 = DecisionVariable.continuous(11, lower=0, upper=10, name="x2")
+## 制約IDと評価結果の参照
 
-instance_mix = Instance.from_components(
-    decision_variables=[z2, x2] + xs + ys,
-    objective=x2,
-    constraints={1: z2 == 1},                              # 通常制約 ID=1
-    indicator_constraints={1: (x2 <= 5).with_indicator(z2)}, # Indicator ID=1
-    one_hot_constraints={1: OneHotConstraint(variables=xs)},        # OneHot ID=1
-    sos1_constraints={1: Sos1Constraint(variables=ys)},             # SOS1 ID=1
-    sense=Instance.MAXIMIZE,
-)
+通常制約・Indicator・OneHot・SOS1のIDの番号は、removed を含む同じInstance内の全制約で一意です。`from_components` に渡す種類別の辞書にも、重複しない番号を指定してください。各制約が参照する変数は、制約とは別の決定変数IDで指定します。
 
-# 4 種の dict それぞれが ID=1 の制約を独立に保持している
-assert set(instance_mix.constraints.keys()) == {1}
-assert set(instance_mix.indicator_constraints.keys()) == {1}
-assert set(instance_mix.one_hot_constraints.keys()) == {1}
-assert set(instance_mix.sos1_constraints.keys()) == {1}
-```
+Instanceは全種類のactive／removedの最大番号より後から新しい番号を発行します。lowering・promotionで生成する制約には新しい番号を付け、removedに移す元の制約は元の番号を維持します。変換前後の関係はprovenanceや削除理由に記録されます。
 
-ただし、特殊制約型を通常制約に変換する（[Capability モデルと変換](./capability_model.md) 参照）と、新たに生成される通常制約は **`Constraint` 側の ID 空間**から割り当てられます。変換後に衝突する可能性があるのは通常制約の ID のみです。
+`ParametricInstance`も同じ規則に従い、評価後の`Solution`・`SampleSet`もIDを維持します。protobufの読み込みでは種類間の番号重複をエラーとし、自動再採番はしません。独立したID空間を使っていた3.0.0 beta期間中のデータにも、この検証を適用します。
 
-## 評価結果の参照
+SolutionやSampleSetのDataFrameは、`kind=` で種類を選びます。
 
-インスタンスを解いて得られた {class}`~ommx.Solution` や {class}`~ommx.SampleSet` は、共通の {meth}`~ommx.Solution.constraints_df` を `kind=` で切り替えて使います。
-
-| 制約型 | `kind=` の値 |
+| 制約の種類 | `kind=` |
 |---|---|
-| 通常制約 | `"regular"`（デフォルト） |
+| 通常制約 | `"regular"`（既定値） |
 | Indicator | `"indicator"` |
 | OneHot | `"one_hot"` |
 | SOS1 | `"sos1"` |
 
-```python
-solution.constraints_df()                  # regular（デフォルト）
-solution.constraints_df(kind="indicator")  # Indicator
-sample_set.constraints_df(kind="one_hot")  # OneHot
+```{code-cell} ipython3
+chosen.constraints_df(kind="one_hot")
 ```
 
-DataFrame の index 名は kind ごとに qualified（`regular_constraint_id` / `indicator_constraint_id` / `one_hot_constraint_id` / `sos1_constraint_id`）になっており、別 ID 空間どうしを誤って `df.join()` した場合に `df.head()` 等で気づきやすくなっています。
-
-Indicator 制約の DataFrame には、`indicator_active` というカラムが含まれます。これにより「インジケータが OFF だった（制約は自明に満たされた）」ケースと「インジケータが ON で制約が本当に満たされた」ケースを区別できます。なお、Indicator 制約には双対変数の値は定義されない（条件付き制約に対する双対値は一般に well-defined ではない）ため、`dual_variable` は含まれません。
-
-### `include=` で removed_reason カラムを追加する
-
-`removed_reason` は {meth}`~ommx.Solution.constraints_df` のデフォルトカラムには含まれません。`include=` に `"removed_reason"` を渡すと、reason 名と `removed_reason.{key}` パラメータカラムがまとめて追加されます（評価前に削除された制約の行のみ値が入り、それ以外の行は NA）。
-
-```python
-df = solution.constraints_df(
-    include=("label", "parameters", "removed_reason"),
-)
-```
-
-Indicator / OneHot / SOS1 でも同じく、対応する `kind=` と一緒に `"removed_reason"` を `include=` に渡せば取得できます。long-format で（id, parameter_key）の組合せごとに 1 行を得たい場合は、`kind=` で切り替えられる {meth}`~ommx.Solution.constraint_removed_reasons_df` サイドカーを引き続き利用できます。
-
-## Relax / Restore
-
-{class}`~ommx.IndicatorConstraint` は、通常制約と同じ relax / restore ワークフローを持ちます。
-
-- {meth}`Instance.relax_indicator_constraint() <ommx.Instance.relax_indicator_constraint>`: Indicator 制約を「緩和」（無効化）し、理由文字列を記録します。緩和された制約は `removed_indicator_constraints` に移動します。
-- {meth}`Instance.restore_indicator_constraint() <ommx.Instance.restore_indicator_constraint>`: 緩和した Indicator 制約を元に戻します。インジケータ変数が既に値を代入されている・固定されている場合は失敗します。
-
-OneHot / SOS1 については、`removed_one_hot_constraints` / `removed_sos1_constraints` への移動は [Capability モデルと制約変換](./capability_model.md) で扱う変換 API によって行われます。
+Indicatorでは `indicator_active` 列により、制御変数が0だった場合と、制御変数が1で本体の条件を検査した場合を区別できます。通常制約の式の値と、特殊制約ごとの違反量は意味が異なるので、各DataFrameの列の定義は {meth}`~ommx.Solution.constraints_df` で確認してください。

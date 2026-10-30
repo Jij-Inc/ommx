@@ -32,8 +32,8 @@ Three lifecycle stages are defined:
 | Type alias | Full type | Stage data |
 |---|---|---|
 | `Constraint` | `Constraint<Created>` | `CreatedData { function }` |
-| `EvaluatedConstraint` | `Constraint<Evaluated>` | `EvaluatedData { evaluated_value, feasible, ... }` |
-| `SampledConstraint` | `Constraint<SampledStage>` | `SampledData { evaluated_values, feasible, ... }` |
+| `EvaluatedConstraint` | `Constraint<Evaluated>` | `EvaluatedData { evaluated_value, used_decision_variable_ids, dual_variable }` |
+| `SampledConstraint` | `Constraint<SampledStage>` | `SampledData { evaluated_values, used_decision_variable_ids, dual_variables }` |
 
 Removed constraints are managed at the collection level —
 `ConstraintCollection` stores them as `(Constraint<Created>, RemovedReason)`
@@ -46,6 +46,119 @@ is queried through narrow per-collection accessors on `Instance` /
 `ParametricInstance` (see [Modeling labels and constraint context](#modeling-labels-and-constraint-context)).
 Decision variables and named functions additionally follow the table-owned ID
 rule: the row data no longer stores its own ID.
+
+## Bounds collections
+
+[`Bounds`](crate::Bounds) is now a dedicated collection rather than a type alias
+for `BTreeMap<VariableID, Bound>`. Construct it with `Bounds::new()`,
+`Bounds::from([(id, bound), ...])`, or by collecting `(VariableID, Bound)` pairs.
+Convert existing maps with `Bounds::from(map)` and convert back with
+`BTreeMap::from(bounds)`. Pass `&Bounds` to operations such as
+[`Instance::clip_bounds`](crate::Instance::clip_bounds) and
+[`Function::evaluate_bound`](crate::Function::evaluate_bound).
+
+[`Bounds::intersection`](crate::Bounds::intersection) returns combined
+restrictions without changing either input.
+[`Bounds::intersect_with`](crate::Bounds::intersect_with) updates a collection
+atomically. Both intersect matching IDs and retain entries present on only one
+side. An empty intersection returns `None`; the mutating operation then leaves
+the collection unchanged. These operations apply no tolerance and do not check
+variable kinds or fixed values; application to an instance performs those checks.
+The serialized map representation is unchanged.
+
+Use [`DecisionVariable::clip_bound_exact`](crate::DecisionVariable::clip_bound_exact)
+or [`Instance::clip_bounds_exact`](crate::Instance::clip_bounds_exact) when the
+supplied f64 endpoints are the intended boundaries. These methods apply even
+sub-tolerance continuous changes and round discrete intervals inward without
+error compensation. `clip_bound` and `clip_bounds` keep their existing
+tolerance-aware behavior. Exact table/instance clipping also requires every
+specified fixed value to satisfy the resulting bound and kind exactly, even
+when the bound does not change.
+
+```rust
+use ommx::{Bound, Bounds, VariableID};
+use std::collections::BTreeMap;
+
+let id = VariableID::from(1);
+let map = BTreeMap::from([(id, Bound::new(0.0, 10.0)?)]);
+let mut bounds = Bounds::from(map);
+bounds.intersect_with(&Bounds::from([(id, Bound::new(2.0, 8.0)?)]))
+    .expect("the intervals overlap");
+assert_eq!(bounds[&id], Bound::new(2.0, 8.0)?);
+# Ok::<(), ommx::Error>(())
+```
+
+## Constraint violation metrics
+
+`Solution::total_violation_l1()` is renamed to
+[`Solution::total_violation`](crate::Solution::total_violation), and
+`Solution::total_violation_l2()` is removed. The total sums one nonnegative
+scalar per constraint, including removed constraints and all special kinds.
+Regular equality and inequality definitions are unchanged.
+
+Query individual values with [`Solution::constraint_violation`](crate::Solution::constraint_violation),
+[`Solution::indicator_constraint_violation`](crate::Solution::indicator_constraint_violation),
+[`Solution::one_hot_constraint_violation`](crate::Solution::one_hot_constraint_violation), or
+[`Solution::sos1_constraint_violation`](crate::Solution::sos1_constraint_violation),
+passing the corresponding typed ID. Unknown IDs return `None`.
+
+Indicator uses its inner violation when active and zero otherwise. OneHot and
+SOS1 measure the minimum sum of absolute changes needed to satisfy their
+structural condition. Every constraint is feasible exactly when its violation is
+at most `atol`. For OneHot and SOS1, tolerance now applies to the total change,
+rather than to each member independently. Bounds and kinds remain separate.
+Input canonicalization precedes constraint evaluation and does not change the
+definition of the metric on the values supplied to the constraint.
+
+SampleSet feasibility and best-feasible selection also check variable bounds
+and kinds using the saved tolerance, matching the extracted Solution. Variable
+violations are not added to `total_violation`, so zero total constraint violation
+does not imply feasibility of the whole solution.
+
+Implement [`EvaluatedConstraintData`](crate::EvaluatedConstraintData) and
+[`SampledConstraintData`](crate::SampledConstraintData) for new constraint families.
+Their scalar metrics are required; blanket behavior implementations derive
+feasibility through `is_feasible(atol)` and `is_feasible_for(id, atol)`.
+`EvaluatedConstraint::is_feasible_with_tolerance(atol)` is renamed to
+`is_feasible(atol)`. The data traits no longer require a stored tolerance.
+Regular `EvaluatedData` / `SampledData` retain numeric results only. OneHot/SOS1
+stage data also store `violation`/`violations` in the SDK.
+
+A retained tolerance-dependent decision must retain its conditions. Indicator,
+OneHot, and SOS1 stage data therefore retain `activation_atol` alongside
+`indicator_active` / `active_variable`. Feasibility queries do not change these
+decisions or repeat input canonicalization. Solution/SampleSet retain their
+shared `feasibility_atol`, exposed by an accessor, and pass it to constraint
+queries. The current wire format requires retained activation conditions to
+match this shared tolerance; builders and parsers enforce that invariant.
+Tolerance-role separation and a split persisted context are tracked in
+[issue #1180](https://github.com/Jij-Inc/ommx/issues/1180).
+
+The v2 wire format retains its `feasible` flags/maps and the enclosing
+Solution/SampleSet's `feasibility_atol`, so consumers can read the result and its
+tolerance without an OMMX SDK. Serialization derives those flags from the scalar
+metrics; deserialization recomputes OneHot/SOS1 violations from the saved
+decision-variable values and validates the flags using the persisted tolerance.
+The protobuf schema is unchanged. Restore structural evaluated/sampled rows
+through Solution/SampleSet; they no longer implement standalone `Parse`, because
+their wire rows do not carry the member values needed to recover the metric.
+Evaluated/sampled v2 row and collection `From` conversions, and sampled v1
+collection `From` conversions, are also removed. Serialize through
+Solution/SampleSet, which supply the tolerance for the wire feasibility fields.
+
+The legacy v1 format cannot store the tolerance or native special constraints.
+Its exporters recompute all feasibility flags from retained regular constraints
+and variable values at `ATol::default()`, as its parsers do. A v1 round-trip
+therefore requires the same default tolerance on write and read, and may change
+feasibility from the original result. Use v2 to preserve the original tolerance
+and special constraints.
+
+Partial evaluation rejects fixings that eliminate approximately zero members
+from an active structural constraint when their accumulated errors could change
+feasibility. Exact-zero elimination remains supported.
+Evaluate the complete state or lower special
+constraints before partial evaluation. Lowering need not preserve the metric;
+retained originals and generated constraints each contribute.
 
 ## Breaking Changes
 
@@ -121,9 +234,10 @@ evaluated.dual_variable
 evaluated.removed_reason()
 evaluated.used_decision_variable_ids()
 
-// ✅ After (direct stage field access)
+// ✅ After (stage data and derived feasibility)
+use ommx::EvaluatedConstraintBehavior;
 evaluated.stage.evaluated_value
-evaluated.stage.feasible
+evaluated.is_feasible(atol)
 evaluated.stage.dual_variable
 evaluated.stage.used_decision_variable_ids
 ```
@@ -138,8 +252,9 @@ sampled.feasible()
 sampled.dual_variables
 
 // ✅ After
+use ommx::SampledConstraintBehavior;
 sampled.stage.evaluated_values
-sampled.stage.feasible
+sampled.is_feasible_for(sample_id, atol)
 sampled.stage.dual_variables
 ```
 
@@ -231,7 +346,6 @@ Constraint {
     equality,
     stage: EvaluatedData {
         evaluated_value,
-        feasible,
         dual_variable: None,
         used_decision_variable_ids,
     },
@@ -301,7 +415,9 @@ collection effects rather than raw active / removed / context map mutation.
 
 `EvaluatedConstraint` and `SampledConstraint` no longer use the `getset` crate. All fields are accessed directly via `self.equality` and `self.stage.*`. (`self.id` and `self.metadata` no longer exist on the struct — see [Modeling labels and constraint context](#modeling-labels-and-constraint-context) and the constraint-field-access section above.)
 
-Methods like `.id()`, `.equality()`, `.evaluated_value()`, `.feasible()` are **removed**. Use field access instead.
+Methods like `.id()`, `.equality()`, `.evaluated_value()`, `.feasible()` are **removed**.
+Use field access for stored data, and the behavior traits' `is_feasible(atol)` /
+`is_feasible_for(sample_id, atol)` methods for derived feasibility.
 
 ### 7. Error Surface Call-Site Rewrites
 
@@ -334,11 +450,37 @@ match decode(bytes) {
 let instance = decode(bytes)?;
 ```
 
+The broad v2 `ommx::LogEncodingError` enum is not restored. For the narrower
+recovery case “this otherwise valid Integer request has no exact log encoding,”
+downcast the v3 error to [`LogEncodingUnavailable`](crate::LogEncodingUnavailable).
+Unknown, fixed, or non-Integer variables and auxiliary-allocation or
+substitution failures remain ordinary errors. Exact integer-slack callers can
+similarly downcast to
+[`ExactIntegerSlackUnavailable`](crate::ExactIntegerSlackUnavailable) before
+selecting a different operation that does not require the inequality to become
+an equality.
+
 **Moved / renamed error types:**
 
 - `ommx::QplibParseError` → `ommx::qplib::QplibParseError`. The type is
   slimmer (1-based `line_num` + rendered `message`, no variant enum),
   and no longer re-exported at the crate root.
+
+**Semantic protobuf parse errors.** `RawParseError::InvalidInstance` and the
+domain-signal wrapper variants on `RawParseError` were removed during the 3.0
+beta. The `ParseError::error` field is no longer public; `ParseError` exposes
+its immediate cause through `std::error::Error::source()` instead. Match a
+curated signal on that source when the caller has a recovery path:
+
+```rust,ignore
+let solution_error = std::error::Error::source(parse_error)
+    .and_then(|source| source.downcast_ref::<SolutionError>());
+```
+
+Otherwise propagate the outer `ParseError` or render it for diagnostics.
+`RawParseError` now contains only generic protobuf-boundary failures. Dedicated
+message-specific parse signals, such as `QuadraticParseError`, are also exposed
+directly as the source.
 
 **Key lookups now return `Option<T>`:**
 
@@ -373,7 +515,7 @@ A type family mapping lifecycle stages to concrete types (HKT defunctionalizatio
 
 ```rust,ignore
 pub trait ConstraintType {
-    type ID: Clone + Copy + Ord + Hash + Debug;
+    type ID: IDType;
     type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
         + Clone + Debug + PartialEq;
     type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
@@ -393,25 +535,39 @@ impl ConstraintType for IndicatorConstraint {
 }
 ```
 
-### Behavior Traits
+### Constraint Data and Behavior Traits
 
-Two traits define common behavior for evaluated and sampled constraints:
+Each family supplies its scalar violations through the data traits.
+The caller supplies the feasibility tolerance to the behavior methods. The behavior traits have blanket implementations that derive
+feasibility from `violation <= atol`; families cannot override that predicate.
+The core methods are:
 
 ```rust,ignore
-pub trait EvaluatedConstraintBehavior {
+pub trait EvaluatedConstraintData {
     type ID;
-    fn is_feasible(&self) -> bool;
+    fn violation(&self) -> f64;
+    // Optional used_decision_variable_ids() override.
 }
 
-pub trait SampledConstraintBehavior {
+pub trait EvaluatedConstraintBehavior: EvaluatedConstraintData {
+    fn is_feasible(&self, atol: ATol) -> bool;
+}
+
+pub trait SampledConstraintData {
     type ID;
-    type Evaluated;
-    fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool>;
+    type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
+    fn violation_for(&self, sample_id: SampleID) -> Option<f64>;
+    fn validate_sample_ids(&self, expected: &SampleIDSet) -> std::result::Result<(), SampleIDSet>;
     fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated>;
+    // Optional used_decision_variable_ids() override.
+}
+
+pub trait SampledConstraintBehavior: SampledConstraintData {
+    fn is_feasible_for(&self, sample_id: SampleID, atol: ATol) -> Option<bool>;
 }
 ```
 
-Neither trait exposes the constraint's ID — it lives on the enclosing
+These traits do not expose the constraint's ID — it lives on the enclosing
 `BTreeMap` key. `is_removed()` is similarly absent from the traits;
 use `EvaluatedCollection::is_removed(&id)` or
 `SampledCollection::is_removed(&id)` instead.
@@ -466,8 +622,8 @@ pub struct SampledCollection<T: ConstraintType> {
 
 // Both Deref to BTreeMap<T::ID, T::Evaluated/Sampled> for backward-compatible access
 // and provide feasibility / removal / context accessors:
-collection.is_feasible()               // all constraints feasible
-collection.is_feasible_relaxed()       // all non-removed constraints feasible
+collection.is_feasible(atol)               // all constraints feasible
+collection.is_feasible_relaxed(atol)       // all non-removed constraints feasible
 collection.is_removed(&id)             // check if a constraint was removed
 collection.removed_reasons()           // &BTreeMap<T::ID, RemovedReason>
 collection.context()                   // &ConstraintContextStore<T::ID>
@@ -629,6 +785,38 @@ let evaluated = EvaluatedDecisionVariable::new(id, y, value)?;
 let sampled = SampledDecisionVariable::new(id, y, samples)?;
 ```
 
+Incremental construction on [`Instance`](crate::Instance) now follows the
+same owner boundary. The v2 `new_*` methods inserted a default row first and
+returned `&mut DecisionVariable`, which encouraged a second fallible bound
+mutation:
+
+```rust,ignore
+// ❌ Before: the unbounded row remains inserted if set_bound fails.
+instance
+    .new_integer()
+    .set_bound(bound, atol)?;
+
+// ✅ After: normalize and validate every table-owned field before insertion.
+let id = instance.new_integer(
+    bound,
+    DecisionVariableLabel {
+        name: Some("x".to_string()),
+        ..Default::default()
+    },
+    fixed_value,
+    atol,
+)?;
+```
+
+All typed constructors (`new_binary`, `new_integer`, `new_continuous`,
+`new_semi_integer`, and `new_semi_continuous`) accept the complete `Bound`,
+`DecisionVariableLabel`, optional fixed value, and `ATol`, and return
+`Result<VariableID, DecisionVariableError>`. The generic
+`new_decision_variable` additionally accepts `Kind`. They normalize the row,
+allocate the ID, validate the fixed value, and commit the row plus label and
+fixed-value sidecar as one operation. An error leaves the `Instance`
+unchanged.
+
 When constructing a created-stage table directly, use
 `DecisionVariableTable::with_fixed_values(entries, labels, fixed_values, atol)`.
 If no variables are fixed, pass an empty `fixed_values` map; this is the same
@@ -676,9 +864,11 @@ let irrelevant = instance.irrelevant_decision_variable_ids();
 
 Use [`Instance::decision_variable_usage`](crate::Instance::decision_variable_usage)
 when you still need the reverse usage index for variables that appear in
-objective / constraint / named-function bodies. The direct role helpers are the
-preferred replacement for migration code that only needs fixed / dependent /
-irrelevant classification.
+the active objective or active constraints, including special constraints.
+References only in named functions, removed constraints, the output objective,
+or dependency right-hand sides do not contribute to this index. The direct role
+helpers are the preferred replacement for migration code that only needs fixed /
+dependent / irrelevant classification.
 
 ### Named-function table ownership
 
@@ -875,10 +1065,14 @@ let air05_annotations = annotations.get("air05");
 - [ ] Update struct literals to use `stage: CreatedData { ... }` / `EvaluatedData { ... }` / etc.
 - [ ] Update `self.constraints` / `self.removed_constraints` → `self.constraint_collection.active()` / `.removed()`
 - [ ] Remove any `getset` usage for constraint types
-- [ ] Update any `InstanceError` / `MpsParseError` / `QplibParseError` / `StateValidationError` / `LogEncodingError` / `UnknownSampleIDError` matches → inspect `err.to_string()` or use `err.downcast_ref::<T>()` for signal types
+- [ ] Update any `InstanceError` / `MpsParseError` / `QplibParseError` / `StateValidationError` / `LogEncodingError` / `UnknownSampleIDError` matches → propagate ordinary failures, or downcast to `LogEncodingUnavailable` / another signal type only for an intentional recovery path
 - [ ] Replace `Result<T, UnknownSampleIDError>` key-lookup methods with `Option<T>` on the call site
 - [ ] Replace `DecisionVariable::new(id, kind, bound, ..., atol)` with `DecisionVariable::new(kind, bound, atol)`, and insert it under the desired `VariableID` key in the host table
 - [ ] Replace `DecisionVariable::binary(id)` / `integer(id)` / `continuous(id)` / `semi_integer(id)` / `semi_continuous(id)` / etc. with the no-argument row factories, and keep the ID on the enclosing map key
+- [ ] Replace chained `Instance::new_*().set_bound(...)` construction with one
+      fallible `Instance::new_*(bound, label, fixed_value, atol)?` call; update
+      generic `new_decision_variable` calls to pass the label before the fixed
+      value
 - [ ] Replace `DecisionVariable::substituted_value()` and `DecisionVariable::substitute(...)` with host-owned fixed values: `InstanceBuilder::fixed_decision_variable_values(...)`, `Instance::fixed_decision_variable_value(id)`, or `Instance::fixed_decision_variable_values()`
 - [ ] Replace `analyze_decision_variables()` role queries with `Instance::decision_variable_roles()`, `Instance::decision_variable_role(id)`, `Instance::fixed_decision_variables()`, `Instance::dependent_decision_variable_ids()`, or `Instance::irrelevant_decision_variable_ids()`; keep `Instance::decision_variable_usage()` only when you need reverse expression usage
 - [ ] Update `EvaluatedDecisionVariable::new(...)` and `SampledDecisionVariable::new(...)`: drop the `atol` argument, pass the `VariableID` separately for diagnostics, and keep using the enclosing `Solution` / `SampleSet` map key as the source of truth

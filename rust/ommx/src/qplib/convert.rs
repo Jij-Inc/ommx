@@ -179,7 +179,11 @@ fn to_quadratic(coeff_map: &HashMap<(usize, usize), f64>) -> v1::Quadratic {
     for ((row, col), val) in coeff_map.iter() {
         rows.push(*row as u64);
         columns.push(*col as u64);
-        values.push(*val);
+        // QPLIB uses (1/2) x^T Q x with Q stored as a lower-triangular
+        // matrix, not one half of a symmetric matrix. Both diagonal and
+        // cross terms therefore need the factor 1/2 in OMMX's polynomial.
+        // See https://qplib.zib.de/doc.html.
+        values.push(*val * 0.5);
     }
     v1::Quadratic {
         rows,

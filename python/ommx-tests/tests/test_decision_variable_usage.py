@@ -1,8 +1,10 @@
 """Test decision-variable role and used-variable APIs."""
 
+import math
+
 import pytest
 
-from ommx import DecisionVariable, DecisionVariableRole, Instance
+from ommx import DecisionVariable, DecisionVariableRole, Instance, Sense
 
 
 def test_decision_variable_roles_basic():
@@ -13,7 +15,7 @@ def test_decision_variable_roles_basic():
         decision_variables=x,
         objective=x[0] + x[1],
         constraints={0: x[1] + x[2] == 1},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     assert instance.used_decision_variables == x
@@ -33,7 +35,7 @@ def test_decision_variable_role_partitions():
         decision_variables=list(x.values()),
         objective=x[0],
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     instance.substitute({2: x[0] + 1})
     instance = instance.partial_evaluate({1: 2.0})
@@ -56,7 +58,7 @@ def _dependent_instance_y_eq_2x():
         decision_variables=list(x.values()),
         objective=x[1],
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     instance.substitute({10: x[1] + x[1]})
     return instance
@@ -113,7 +115,7 @@ def test_partial_evaluate_normalizes_dependency_chain():
         decision_variables=list(x.values()),
         objective=x[1],
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     instance.substitute({10: x[1] + x[1], 11: x[10] + 1})
 
@@ -150,7 +152,7 @@ def test_instance_populate_state():
         decision_variables=list(x.values()),
         objective=x[1] + x[2],
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     instance.substitute(
         {
@@ -160,7 +162,15 @@ def test_instance_populate_state():
     )
     instance = instance.partial_evaluate({99: 4.0})
 
-    populated = instance.populate_state({1: 2.0, 2: 3.0})
+    populated = instance.populate_state(
+        {
+            1: 2.0,
+            2: 3.0,
+            10: 5.0 + 5e-7,
+            99: 4.0 + 5e-7,
+        },
+        atol=1e-6,
+    )
 
     assert populated.entries == {
         1: 2.0,
@@ -169,3 +179,75 @@ def test_instance_populate_state():
         10: 5.0,
         99: 4.0,
     }
+
+
+def test_instance_canonicalizes_discrete_solver_values():
+    """Scalar and sample evaluation share discrete state canonicalization."""
+    x = {
+        0: DecisionVariable.binary(0),
+        1: DecisionVariable.integer(1),
+        2: DecisionVariable.semi_integer(2),
+        3: DecisionVariable.continuous(3),
+        4: DecisionVariable.semi_continuous(4),
+    }
+    instance = Instance.from_components(
+        decision_variables=list(x.values()),
+        objective=x[0],
+        constraints={},
+        sense=Sense.Minimize,
+    )
+    state = {
+        0: 1.0625,
+        1: -2.0625,
+        2: -1.9375,
+        3: 2.125,
+        4: -2.125,
+    }
+    expected = {
+        0: 1.0,
+        1: -2.0,
+        2: -2.0,
+        3: 2.125,
+        4: -2.125,
+    }
+
+    assert instance.populate_state(state, atol=0.125).entries == expected
+    solution = instance.evaluate(state, atol=0.125)
+    assert solution.state.entries == expected
+    assert solution.objective == 1.0
+
+    rewritten = instance.partial_evaluate(state, atol=0.125)
+    assert rewritten.fixed_decision_variables() == expected
+    rewritten_solution = rewritten.evaluate({}, atol=0.125)
+    assert rewritten_solution.state.entries == expected
+    assert rewritten_solution.objective == solution.objective
+
+    sample_set = instance.evaluate_samples(
+        {
+            7: state,
+            8: {
+                0: 0.9375,
+                1: -1.9375,
+                2: -2.0625,
+                3: 2.125,
+                4: -2.125,
+            },
+        },
+        atol=0.125,
+    )
+    assert sample_set.get(7).state.entries == expected
+    assert sample_set.get(8).state.entries == expected
+    assert sample_set.objectives[7] == 1.0
+    assert sample_set.objectives[8] == 1.0
+
+    boundary = state | {0: 1.125, 1: -2.125, 2: -1.875}
+    assert instance.populate_state(boundary, atol=0.125).entries == expected
+
+    outside = state | {
+        # Stay inside the binary bound tolerance while moving just beyond the
+        # integrality tolerance around zero.
+        0: math.nextafter(0.125, math.inf),
+        1: math.nextafter(-2.125, -math.inf),
+        2: math.nextafter(-1.875, math.inf),
+    }
+    assert instance.populate_state(outside, atol=0.125).entries == outside

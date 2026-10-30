@@ -1,4 +1,4 @@
-use super::{encoding::ensure_unit_spaced_integer_bound, Instance};
+use super::{encoding::MAX_EXACT_ENCODING_INTEGER, Instance};
 use crate::{
     ATol, Bound, Coefficient, DecisionVariable, Function, Kind, Linear, ModelingLabel, VariableID,
 };
@@ -9,19 +9,69 @@ const MAX_LOG_ENCODING_RANGE_WIDTH: u64 = (1_u64 << MAX_LOG_ENCODING_BITS) - 1;
 type PlannedAuxiliaryVariable = (VariableID, DecisionVariable, ModelingLabel);
 type PlannedLogEncodings = (BTreeMap<VariableID, Linear>, Vec<PlannedAuxiliaryVariable>);
 
-fn log_encoding_bit_count(width: f64) -> crate::Result<usize> {
+/// Reason that [`Instance::log_encode`] cannot construct an exact binary
+/// representation for an otherwise valid Integer encoding request.
+///
+/// The complete rewrite is planned before mutation. Therefore, when this
+/// signal is returned, the [`Instance`] is unchanged. Other failures during
+/// request validation, auxiliary-variable allocation, or expression
+/// substitution retain their original error types. The variants expose the
+/// same structured observations used by preparation diagnostics; callers that
+/// only select a fallback may simply downcast to this type.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum LogEncodingUnavailable {
+    #[error("bound must be finite for log-encoding: {bound}")]
+    NonFiniteBound { id: VariableID, bound: Bound },
+
+    #[error(
+        "integer bound is too far from zero for log-encoding: non-point range [{lower}, {upper}] cannot be represented as unit-spaced f64 integers"
+    )]
+    RangeOutsideExactIntegerDomain {
+        id: VariableID,
+        lower: f64,
+        upper: f64,
+        max_abs: f64,
+    },
+
+    #[error(
+        "range is too large for log-encoding: requires {required_bits} binary variables, but the limit is {max_bits}"
+    )]
+    RangeTooLarge {
+        id: VariableID,
+        required_bits: usize,
+        max_bits: usize,
+    },
+}
+
+impl LogEncodingUnavailable {
+    /// Return the decision variable whose exact representation is unavailable.
+    pub fn variable_id(&self) -> VariableID {
+        match self {
+            Self::NonFiniteBound { id, .. }
+            | Self::RangeOutsideExactIntegerDomain { id, .. }
+            | Self::RangeTooLarge { id, .. } => *id,
+        }
+    }
+}
+
+fn log_encoding_bit_count(id: VariableID, width: f64) -> crate::Result<usize> {
     if width == 0.0 {
         return Ok(0);
     }
     if width > MAX_LOG_ENCODING_RANGE_WIDTH as f64 {
-        crate::bail!(
-            { width, max_bits = MAX_LOG_ENCODING_BITS },
-            "range is too large for log-encoding: width {width} requires more than {MAX_LOG_ENCODING_BITS} binary variables",
-        );
+        let width = width as u64;
+        let required_bits = (u64::BITS - width.leading_zeros()) as usize;
+        return Err(LogEncodingUnavailable::RangeTooLarge {
+            id,
+            required_bits,
+            max_bits: MAX_LOG_ENCODING_BITS,
+        }
+        .into());
     }
     if width.fract() != 0.0 {
         crate::bail!(
-            { width },
+            { ?id, width },
             "integer range width is not exactly representable for log-encoding: {width}",
         );
     }
@@ -43,22 +93,42 @@ fn log_encoding_bit_count(width: f64) -> crate::Result<usize> {
 ///
 /// Returns an error if the bound is not finite, or if no feasible integer
 /// values exist within the bound.
-fn log_encoding_coefficients(bound: Bound, atol: ATol) -> crate::Result<(Vec<Coefficient>, f64)> {
+fn log_encoding_coefficients(
+    id: VariableID,
+    bound: Bound,
+    atol: ATol,
+) -> crate::Result<(Vec<Coefficient>, f64)> {
     let integer_bound = bound.as_integer_bound(atol).ok_or_else(|| {
-        crate::error!({ ?bound }, "no feasible integer values in bound for log-encoding: {bound}")
+        crate::error!(
+            { ?id, ?bound },
+            "no feasible integer values in bound for log-encoding: {bound}",
+        )
     })?;
     if !integer_bound.is_finite() {
-        crate::bail!({ ?bound }, "bound must be finite for log-encoding: {bound}");
+        return Err(LogEncodingUnavailable::NonFiniteBound { id, bound }.into());
     }
-    ensure_unit_spaced_integer_bound(integer_bound, "log-encoding")?;
+    if integer_bound.width() != 0.0
+        && (integer_bound.lower() < -MAX_EXACT_ENCODING_INTEGER
+            || integer_bound.upper() > MAX_EXACT_ENCODING_INTEGER)
+    {
+        return Err(LogEncodingUnavailable::RangeOutsideExactIntegerDomain {
+            id,
+            lower: integer_bound.lower(),
+            upper: integer_bound.upper(),
+            max_abs: MAX_EXACT_ENCODING_INTEGER,
+        }
+        .into());
+    }
 
     let u_l = integer_bound.width();
     if u_l < 0.0 {
-        // No feasible integer values in the range
-        crate::bail!({ ?bound }, "no feasible integer values in bound for log-encoding: {bound}");
+        crate::bail!(
+            { ?id, ?bound },
+            "no feasible integer values in bound for log-encoding: {bound}",
+        );
     }
 
-    let n = log_encoding_bit_count(u_l)?;
+    let n = log_encoding_bit_count(id, u_l)?;
     // There is only one feasible integer, and no need to encode
     if n == 0 {
         return Ok((vec![], integer_bound.lower()));
@@ -101,6 +171,56 @@ impl Instance {
     /// integer bound. Ranges that would require more than
     /// [`Self::MAX_LOG_ENCODING_BITS`] binary variables are rejected instead of
     /// creating an impractically large encoded search space.
+    ///
+    /// # Postconditions
+    ///
+    /// Encoding rewrites only the active formulation and preserves evaluation
+    /// in the pre-encoding output semantics.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, Bound, DecisionVariable, Evaluate, Function,
+    ///     Instance, Kind, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(0);
+    /// let integer = DecisionVariable::new(
+    ///     Kind::Integer,
+    ///     Bound::new(0.0, 3.0).unwrap(),
+    ///     ATol::default(),
+    /// )
+    /// .unwrap();
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(0)))
+    ///     .decision_variables(BTreeMap::from([(variable, integer)]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// let original = instance.objective().clone();
+    ///
+    /// instance.log_encode([variable], ATol::default()).unwrap();
+    /// let output = instance.output_objective().unwrap();
+    /// assert_eq!(output.sense(), Sense::Maximize);
+    /// assert_eq!(output.function(), &original);
+    /// let encoded_ids = instance.required_ids();
+    /// assert_eq!(encoded_ids.len(), 2);
+    /// let state = State::from(HashMap::from_iter(
+    ///     encoded_ids.into_iter().map(|id| (id.into_inner(), 1.0)),
+    /// ));
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), 3.0);
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+    /// assert_eq!(*solution.objective(), 3.0);
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LogEncodingUnavailable`] when an otherwise valid Integer
+    /// encoding request has no exact finite representation under this policy.
+    /// Unknown, fixed, or non-Integer variables and failures while allocating
+    /// or substituting auxiliary variables retain their ordinary error types.
     #[tracing::instrument(skip(self, ids))]
     pub fn log_encode(
         &mut self,
@@ -132,8 +252,32 @@ impl Instance {
         // Safe unwrap: each right-hand side uses only the fresh auxiliary IDs
         // planned above, none of which are assignment keys.
         let acyclic = crate::AcyclicAssignments::new(assignments).unwrap();
-        self.substitute_acyclic_with_fresh_decision_variables(&acyclic, auxiliary_variables, atol)?;
+        self.apply_encoding_substitution(&acyclic, auxiliary_variables, atol)?;
         Ok(encodings)
+    }
+
+    /// Log-encode all Integer decision variables currently used by solver input.
+    ///
+    /// The complete target set is derived from
+    /// [`Self::decision_variable_usage`] before mutation. All targets are
+    /// encoded together through [`Self::log_encode`]. On success,
+    /// [`DecisionVariableUsage::used_integer`](crate::DecisionVariableUsage::used_integer)
+    /// is empty; irrelevant Integer variables are not encoded.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error from [`Self::log_encode`] if any used Integer variable
+    /// cannot be encoded. In particular, used variables with non-finite bounds
+    /// retain [`LogEncodingUnavailable`], while an active SOS1 member retains
+    /// [`SubstitutionError`](crate::SubstitutionError). Lower active SOS1
+    /// constraints with [`Self::lower_special_constraints`] before calling this
+    /// method. Any error leaves the instance unchanged.
+    pub fn log_encode_all_used_integers(
+        &mut self,
+        atol: ATol,
+    ) -> crate::Result<BTreeMap<VariableID, Linear>> {
+        let ids = self.decision_variable_usage().used_integer().into_keys();
+        self.log_encode(ids, atol)
     }
 
     fn plan_log_encodings(
@@ -200,17 +344,19 @@ impl Instance {
                 "variable must be integer for log-encoding: id={id:?}, kind={kind:?}",
             );
         }
-        log_encoding_coefficients(v.bound(), atol)
+        log_encoding_coefficients(id, v.bound(), atol)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::EvaluatedConstraintBehavior;
     use crate::{
-        coeff, v1::State, Bound, DecisionVariable, Equality, Evaluate, Function,
-        IndicatorConstraint, IndicatorConstraintID, Instance, Kind, LinearMonomial,
-        OneHotConstraint, OneHotConstraintID, Sense, Solution, Sos1Constraint, Sos1ConstraintID,
+        coeff, v1::State, Bound, Constraint, ConstraintID, DecisionVariable, DecisionVariableRole,
+        Equality, Evaluate, Function, IndicatorConstraint, IndicatorConstraintID, Instance, Kind,
+        LinearMonomial, OneHotConstraint, OneHotConstraintID, Sense, Solution, Sos1Constraint,
+        Sos1ConstraintID,
     };
     use approx::relative_eq;
     use proptest::prelude::*;
@@ -219,6 +365,17 @@ mod tests {
     const MAX_PROPTEST_LOG_BITS: usize = 6;
     const EVALUATION_EQ_ABS_TOL: f64 = 1e-8;
     const EVALUATION_EQ_REL_TOL: f64 = 1e-12;
+
+    fn polynomial_full_v3_parameters() -> crate::InstanceParameters {
+        let function =
+            crate::FunctionParameters::polynomial_only(crate::PolynomialParameters::default());
+        crate::InstanceParameters {
+            objective: function,
+            constraint: function,
+            named_function: function,
+            ..crate::InstanceParameters::full_v3()
+        }
+    }
 
     fn aux_variable_count(instance: &Instance, label: &str) -> usize {
         let store = instance.variable_labels();
@@ -281,11 +438,14 @@ mod tests {
         if !integer_bound.is_finite() {
             return None;
         }
-        if ensure_unit_spaced_integer_bound(integer_bound, "log-encoding").is_err() {
+        if integer_bound.width() != 0.0
+            && (integer_bound.lower() < -MAX_EXACT_ENCODING_INTEGER
+                || integer_bound.upper() > MAX_EXACT_ENCODING_INTEGER)
+        {
             return None;
         }
         let width = integer_bound.width();
-        if width < 0.0 || log_encoding_bit_count(width).ok()? > max_bits {
+        if width < 0.0 || log_encoding_bit_count(VariableID::from(0), width).ok()? > max_bits {
             return None;
         }
         if integer_bound.lower() < i64::MIN as f64 || integer_bound.lower() > i64::MAX as f64 {
@@ -313,7 +473,7 @@ mod tests {
     }
 
     fn arbitrary_log_encode_case() -> BoxedStrategy<(Instance, LogEncodeTarget, State)> {
-        Instance::arbitrary()
+        Instance::arbitrary_with(polynomial_full_v3_parameters())
             .prop_filter_map(
                 "instance must contain an encodable used integer variable",
                 |instance| {
@@ -452,8 +612,8 @@ mod tests {
                 actual_constraint.stage.evaluated_value,
             )?;
             prop_assert_eq!(
-                expected_constraint.stage.feasible,
-                actual_constraint.stage.feasible
+                expected_constraint.is_feasible(expected.feasibility_atol()),
+                actual_constraint.is_feasible(actual.feasibility_atol())
             );
         }
 
@@ -472,8 +632,8 @@ mod tests {
                 actual_constraint.stage.evaluated_value,
             )?;
             prop_assert_eq!(
-                expected_constraint.stage.feasible,
-                actual_constraint.stage.feasible
+                expected_constraint.is_feasible(expected.feasibility_atol()),
+                actual_constraint.is_feasible(actual.feasibility_atol())
             );
             prop_assert_eq!(
                 expected_constraint.stage.indicator_active,
@@ -491,8 +651,8 @@ mod tests {
             }
             let actual_constraint = actual.evaluated_one_hot_constraints().get(id).unwrap();
             prop_assert_eq!(
-                expected_constraint.stage.feasible,
-                actual_constraint.stage.feasible
+                expected_constraint.is_feasible(expected.feasibility_atol()),
+                actual_constraint.is_feasible(actual.feasibility_atol())
             );
             prop_assert_eq!(
                 expected_constraint.stage.active_variable,
@@ -510,8 +670,8 @@ mod tests {
             }
             let actual_constraint = actual.evaluated_sos1_constraints().get(id).unwrap();
             prop_assert_eq!(
-                expected_constraint.stage.feasible,
-                actual_constraint.stage.feasible
+                expected_constraint.is_feasible(expected.feasibility_atol()),
+                actual_constraint.is_feasible(actual.feasibility_atol())
             );
             prop_assert_eq!(
                 expected_constraint.stage.active_variable,
@@ -552,10 +712,22 @@ mod tests {
         ) {
             let decoded_value = target.lower as f64 + delta as f64;
             let expected_state = state_with_original_value(state.clone(), &target, decoded_value);
+            let expected_active_objective = instance
+                .objective()
+                .evaluate(&expected_state, ATol::default())
+                .unwrap();
             let expected = instance.evaluate(&expected_state, ATol::default()).unwrap();
 
-            let (coefficients, _) =
-                log_encoding_coefficients(instance.decision_variables().get(&target.id).unwrap().bound(), ATol::default()).unwrap();
+            let (coefficients, _) = log_encoding_coefficients(
+                target.id,
+                instance
+                    .decision_variables()
+                    .get(&target.id)
+                    .unwrap()
+                    .bound(),
+                ATol::default(),
+            )
+            .unwrap();
             let bits = log_bits_for_delta(delta, &coefficients);
 
             let mut encoded_instance = instance.clone();
@@ -567,8 +739,17 @@ mod tests {
             prop_assert_eq!(binary_ids.len(), bits.len());
 
             let encoded_state = state_with_log_bits(state, &target, &binary_ids, &bits);
+            let actual_active_objective = encoded_instance
+                .objective()
+                .evaluate(&encoded_state, ATol::default())
+                .unwrap();
             let actual = encoded_instance.evaluate(&encoded_state, ATol::default()).unwrap();
 
+            assert_float_eq(
+                "active objective",
+                expected_active_objective,
+                actual_active_objective,
+            )?;
             assert_same_observable_evaluation(&expected, &actual)?;
         }
     }
@@ -621,17 +802,90 @@ mod tests {
     }
 
     #[test]
+    fn log_encode_captures_targeted_active_objective_and_preserves_existing_output() {
+        let id = VariableID::from(0);
+        let make_instance = || {
+            let variable = DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(0.0, 3.0).unwrap(),
+                ATol::default(),
+            )
+            .unwrap();
+            Instance::builder()
+                .sense(Sense::Maximize)
+                .objective(Function::from(crate::linear!(0)))
+                .decision_variables(BTreeMap::from([(id, variable)]))
+                .constraints(BTreeMap::new())
+                .build()
+                .unwrap()
+        };
+
+        let mut without_output = make_instance();
+        let original = without_output.objective().clone();
+        without_output.log_encode([id], ATol::default()).unwrap();
+        let output = without_output.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Maximize);
+        assert_eq!(output.function(), &original);
+
+        let mut with_output = make_instance();
+        assert!(with_output.convert_active_objective(Sense::Minimize));
+        let output = with_output.output_objective().cloned().unwrap();
+        with_output.log_encode([id], ATol::default()).unwrap();
+
+        assert_eq!(with_output.output_objective(), Some(&output));
+        assert_eq!(
+            with_output.decision_variable_role(id),
+            Some(DecisionVariableRole::Dependent)
+        );
+        assert!(!with_output.used_decision_variable_ids().contains(&id));
+        let state = State::from_iter(
+            with_output
+                .used_decision_variable_ids()
+                .into_iter()
+                .map(|id| (id.into_inner(), 0.0)),
+        );
+        let solution = with_output.evaluate(&state, ATol::default()).unwrap();
+        assert_eq!(*solution.sense(), Some(Sense::Maximize));
+        assert_eq!(*solution.objective(), 0.0);
+    }
+
+    #[test]
+    fn log_encode_does_not_capture_when_active_objective_is_not_targeted() {
+        let id = VariableID::from(0);
+        let variable = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let constraint = Constraint::equal_to_zero(Function::from(crate::linear!(0)));
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(id, variable)]))
+            .constraints(BTreeMap::from([(ConstraintID::from(0), constraint)]))
+            .build()
+            .unwrap();
+
+        instance.log_encode([id], ATol::default()).unwrap();
+
+        assert!(instance.output_objective().is_none());
+    }
+
+    #[test]
     fn test_log_encoding_coefficients() {
         // 2^3 case
         let bound = Bound::new(0.0, 7.0).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(bound, ATol::default()).unwrap();
+        let (coefficients, offset) =
+            log_encoding_coefficients(VariableID::from(0), bound, ATol::default()).unwrap();
         assert_eq!(coefficients, vec![coeff!(1.0), coeff!(2.0), coeff!(4.0)]);
         assert_eq!(offset, 0.0);
 
         // [1, 6] should be x = 1 + b1 + 2*b2 + 2*b3, the last coefficient is shifted
         // Then, 1 + 1 + 2 + 2 = 6
         let bound = Bound::new(1.0, 6.0).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(bound, ATol::default()).unwrap();
+        let (coefficients, offset) =
+            log_encoding_coefficients(VariableID::from(0), bound, ATol::default()).unwrap();
         assert_eq!(coefficients, vec![coeff!(1.0), coeff!(2.0), coeff!(2.0)]);
         assert_eq!(offset, 1.0);
         assert_eq!(
@@ -640,33 +894,52 @@ mod tests {
         );
 
         let bound = Bound::new(1.000000000001, 6.000000000001).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(bound, ATol::default()).unwrap();
+        let (coefficients, offset) =
+            log_encoding_coefficients(VariableID::from(0), bound, ATol::default()).unwrap();
         assert_eq!(coefficients, vec![coeff!(1.0), coeff!(2.0), coeff!(2.0)]);
         assert_eq!(offset, 1.0);
 
         // [2, 2] should be x = 2, no binary variables needed
         let bound = Bound::new(2.0, 2.0).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(bound, ATol::default()).unwrap();
+        let (coefficients, offset) =
+            log_encoding_coefficients(VariableID::from(0), bound, ATol::default()).unwrap();
         assert!(coefficients.is_empty());
         assert_eq!(offset, 2.0);
 
         // No feasible integer values
         let bound = Bound::new(1.3, 1.6).unwrap();
-        assert!(log_encoding_coefficients(bound, ATol::default()).is_err());
+        let err =
+            log_encoding_coefficients(VariableID::from(0), bound, ATol::default()).unwrap_err();
+        assert!(!err.is::<LogEncodingUnavailable>());
+        assert!(err.to_string().contains("no feasible integer values"));
+
+        let err = log_encoding_bit_count(VariableID::from(4), 1.5).unwrap_err();
+        assert!(!err.is::<LogEncodingUnavailable>());
+        assert!(err.to_string().contains("not exactly representable"));
     }
 
     #[test]
     fn test_log_encoding_rejects_range_requiring_too_many_bits() {
         let accepted_bound = Bound::new(0.0, MAX_LOG_ENCODING_RANGE_WIDTH as f64).unwrap();
         let (coefficients, offset) =
-            log_encoding_coefficients(accepted_bound, ATol::default()).unwrap();
+            log_encoding_coefficients(VariableID::from(0), accepted_bound, ATol::default())
+                .unwrap();
         assert_eq!(coefficients.len(), Instance::MAX_LOG_ENCODING_BITS);
         assert_eq!(offset, 0.0);
 
         let rejected_upper = 2.0_f64.powi(Instance::MAX_LOG_ENCODING_BITS as i32);
         let rejected_bound = Bound::new(0.0, rejected_upper).unwrap();
-        let err = log_encoding_coefficients(rejected_bound, ATol::default()).unwrap_err();
-        assert!(err.to_string().contains("too large for log-encoding"));
+        let err = log_encoding_coefficients(VariableID::from(0), rejected_bound, ATol::default())
+            .unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<LogEncodingUnavailable>(),
+            Some(LogEncodingUnavailable::RangeTooLarge {
+                id,
+                required_bits,
+                max_bits: MAX_LOG_ENCODING_BITS,
+            }) if *id == VariableID::from(0)
+                && *required_bits == MAX_LOG_ENCODING_BITS + 1
+        ));
     }
 
     #[test]
@@ -674,13 +947,27 @@ mod tests {
         let max_exact_integer = 2.0_f64.powi(53);
         let accepted_bound = Bound::new(max_exact_integer - 2.0, max_exact_integer).unwrap();
         let (coefficients, offset) =
-            log_encoding_coefficients(accepted_bound, ATol::default()).unwrap();
+            log_encoding_coefficients(VariableID::from(0), accepted_bound, ATol::default())
+                .unwrap();
         assert_eq!(coefficients, vec![coeff!(1.0), coeff!(1.0)]);
         assert_eq!(offset, max_exact_integer - 2.0);
 
         let rejected_bound = Bound::new(max_exact_integer, max_exact_integer + 2.0).unwrap();
-        let err = log_encoding_coefficients(rejected_bound, ATol::default()).unwrap_err();
-        assert!(err.to_string().contains("too far from zero"));
+        let err = log_encoding_coefficients(VariableID::from(0), rejected_bound, ATol::default())
+            .unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<LogEncodingUnavailable>(),
+            Some(LogEncodingUnavailable::RangeOutsideExactIntegerDomain {
+                id,
+                lower,
+                upper,
+                max_abs,
+            })
+                if *id == VariableID::from(0)
+                    && *lower == max_exact_integer
+                    && *upper == max_exact_integer + 2.0
+                    && *max_abs == max_exact_integer
+        ));
     }
 
     #[test]
@@ -701,6 +988,7 @@ mod tests {
                 .unwrap();
 
             let err = instance.log_encode([id], ATol::default()).unwrap_err();
+            assert!(!err.is::<LogEncodingUnavailable>());
             assert!(err.to_string().contains("must be integer"));
             assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
         }
@@ -712,6 +1000,7 @@ mod tests {
         let mut instance = fixed_integer_instance(id);
 
         let err = instance.log_encode([id], ATol::default()).unwrap_err();
+        assert!(!err.is::<LogEncodingUnavailable>());
         assert!(err.to_string().contains("fixed decision variable"));
         assert_eq!(instance.fixed_decision_variable_value(id), Some(1.0));
         assert!(instance.decision_variable_dependency.get(&id).is_none());
@@ -808,9 +1097,10 @@ mod tests {
             .unwrap();
 
         let err = instance.log_encode([id], ATol::default()).unwrap_err();
+        assert!(!err.is::<LogEncodingUnavailable>());
         assert!(err
             .to_string()
-            .contains("No available decision variable ID"));
+            .contains("Insufficient capacity for automatically assigned decision variable IDs"));
         assert!(instance.decision_variable_dependency.get(&id).is_none());
         assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
     }
@@ -837,6 +1127,7 @@ mod tests {
             .unwrap();
 
         let err = instance.log_encode([id], ATol::default()).unwrap_err();
+        assert!(!err.is::<LogEncodingUnavailable>());
         assert!(err.to_string().contains("SOS1"));
         assert!(instance.decision_variable_dependency.get(&id).is_none());
         assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
@@ -868,6 +1159,7 @@ mod tests {
 
         let err = instance.log_encode([id], ATol::default()).unwrap_err();
 
+        assert!(!err.is::<LogEncodingUnavailable>());
         assert!(err.to_string().contains("Coefficient must be finite"));
         assert_eq!(instance, before);
     }
@@ -938,10 +1230,154 @@ mod tests {
         let err = instance
             .log_encode([id0, id1], ATol::default())
             .unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<LogEncodingUnavailable>(),
+            Some(LogEncodingUnavailable::NonFiniteBound { id, .. }) if *id == id1
+        ));
         assert!(err.to_string().contains("bound must be finite"));
         assert!(instance.decision_variable_dependency.get(&id0).is_none());
         assert!(instance.decision_variable_dependency.get(&id1).is_none());
         assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
+    }
+
+    #[test]
+    fn log_encode_all_used_integers_satisfies_its_postcondition() {
+        let used0 = VariableID::from(0);
+        let used1 = VariableID::from(1);
+        let irrelevant = VariableID::from(2);
+        let bounded_integer = || {
+            DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(0.0, 3.0).unwrap(),
+                ATol::default(),
+            )
+            .unwrap()
+        };
+        let objective = (crate::linear!(0) + crate::linear!(1)).unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(objective))
+            .decision_variables(BTreeMap::from([
+                (used0, bounded_integer()),
+                (used1, bounded_integer()),
+                (irrelevant, bounded_integer()),
+            ]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let used_before = instance
+            .decision_variable_usage()
+            .used_integer()
+            .into_keys()
+            .collect::<BTreeSet<_>>();
+
+        let encodings = instance
+            .log_encode_all_used_integers(ATol::default())
+            .unwrap();
+
+        assert_eq!(
+            encodings.keys().copied().collect::<BTreeSet<_>>(),
+            used_before
+        );
+        assert!(instance.decision_variable_usage().used_integer().is_empty());
+        assert_eq!(
+            instance.decision_variable_role(used0),
+            Some(DecisionVariableRole::Dependent)
+        );
+        assert_eq!(
+            instance.decision_variable_role(used1),
+            Some(DecisionVariableRole::Dependent)
+        );
+        assert_eq!(
+            instance.decision_variable_role(irrelevant),
+            Some(DecisionVariableRole::Irrelevant)
+        );
+    }
+
+    #[test]
+    fn log_encode_all_used_integers_is_atomic_when_one_target_is_unbounded() {
+        let bounded = VariableID::from(0);
+        let unbounded = VariableID::from(1);
+        let bounded_integer = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(
+                (crate::linear!(0) + crate::linear!(1)).unwrap(),
+            ))
+            .decision_variables(BTreeMap::from([
+                (bounded, bounded_integer),
+                (unbounded, DecisionVariable::integer()),
+            ]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let before = instance.clone();
+
+        let err = instance
+            .log_encode_all_used_integers(ATol::default())
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<LogEncodingUnavailable>(),
+            Some(LogEncodingUnavailable::NonFiniteBound { id, .. }) if *id == unbounded
+        ));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn log_encode_all_used_integers_requires_sos1_to_be_lowered() {
+        let ordinary = VariableID::from(0);
+        let sos1_member = VariableID::from(1);
+        let sos1_id = Sos1ConstraintID::from(0);
+        let bounded_integer = || {
+            DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(0.0, 3.0).unwrap(),
+                ATol::default(),
+            )
+            .unwrap()
+        };
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(crate::linear!(0)))
+            .decision_variables(BTreeMap::from([
+                (ordinary, bounded_integer()),
+                (sos1_member, bounded_integer()),
+            ]))
+            .constraints(BTreeMap::new())
+            .sos1_constraints(BTreeMap::from([(
+                sos1_id,
+                Sos1Constraint::new(BTreeSet::from([sos1_member])).unwrap(),
+            )]))
+            .build()
+            .unwrap();
+        assert_eq!(
+            instance
+                .decision_variable_usage()
+                .used_integer()
+                .into_keys()
+                .collect::<BTreeSet<_>>(),
+            BTreeSet::from([ordinary, sos1_member])
+        );
+        let before = instance.clone();
+
+        let err = instance
+            .log_encode_all_used_integers(ATol::default())
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<crate::SubstitutionError>(),
+            Some(crate::SubstitutionError::Sos1VariableSubstitution {
+                variable,
+                constraint_id,
+            }) if *variable == sos1_member && *constraint_id == sos1_id
+        ));
+        assert_eq!(instance, before);
     }
 
     #[test]
@@ -965,6 +1401,7 @@ mod tests {
         let err = instance
             .log_encode([id0, id1], ATol::default())
             .unwrap_err();
+        assert!(!err.is::<LogEncodingUnavailable>());
         assert!(err.to_string().contains("unknown variable"));
         assert!(instance.decision_variable_dependency.get(&id0).is_none());
         assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);

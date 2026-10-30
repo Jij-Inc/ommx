@@ -12,6 +12,7 @@ tasks:
     cmds:
       - task: pytest
       - task: pyright
+      - task: markdown-code-runner
       - task: lint
 
   pytest:
@@ -24,7 +25,14 @@ tasks:
     cmds:
       - uv run pyright
 
+  markdown-code-runner:
+    desc: Run markdown code runner
+    cmds:
+      - uv run markdown-code-runner --verbose README.md
+
   lint:
     desc: Lint by ruff check
     cmds:
-      - uv run ruff check
+      - uv sync --locked --only-group lint --no-install-workspace --inexact
+      - uv run --no-sync ruff check python/ommx-openjij-adapter
+    dir: ../..

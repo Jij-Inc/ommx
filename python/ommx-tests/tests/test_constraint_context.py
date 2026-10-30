@@ -2,7 +2,7 @@
 Test context-field modification functionality for Constraint
 """
 
-from ommx import DecisionVariable, Constraint
+from ommx import DecisionVariable, Constraint, Equality
 
 
 def test_constraint_set_name():
@@ -172,7 +172,7 @@ def test_constraint_constructor_with_context():
     # Create constraint with all context in constructor
     constraint = Constraint(
         function=function,
-        equality=Constraint.EQUAL_TO_ZERO,
+        equality=Equality.EqualToZero,
         name="constructor_test",
         description="Created via constructor",
         subscripts=[5, 10, 15],
@@ -194,7 +194,7 @@ def test_constraint_constructor_partial_context():
     # Create constraint with only some context fields
     constraint = Constraint(
         function=function,
-        equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
+        equality=Equality.LessThanOrEqualToZero,
         description="Only description set",
     )
 

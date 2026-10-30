@@ -1,5 +1,28 @@
 use super::*;
 use crate::{ATol, Constraint, CreatedData, Evaluate, Propagate, PropagateOutcome, VariableIDSet};
+use anyhow::Context;
+
+// Full evaluation leaves ordinary kind and bound violations to Solution
+// feasibility. Indicator activation is structural, however, so its value must
+// be interpretable as binary before the constraint can be evaluated.
+fn indicator_is_active(
+    indicator_variable: VariableID,
+    value: f64,
+    sample_id: Option<SampleID>,
+    atol: ATol,
+) -> crate::Result<bool> {
+    crate::DecisionVariable::binary()
+        .check_value_consistency(indicator_variable, value, atol)
+        .with_context(|| match sample_id {
+            Some(sample_id) => format!(
+                "indicator variable {indicator_variable:?} has an invalid activation value in sample {sample_id:?}"
+            ),
+            None => format!(
+                "indicator variable {indicator_variable:?} has an invalid activation value"
+            ),
+        })?;
+    Ok(atol.approx_eq(value, 1.0))
+}
 
 impl Propagate for IndicatorConstraint<Created> {
     type Transformed = Constraint<Created>;
@@ -12,7 +35,7 @@ impl Propagate for IndicatorConstraint<Created> {
         let empty_state = crate::v1::State::default();
 
         if let Some(&indicator_value) = state.entries.get(&self.indicator_variable.into_inner()) {
-            if (indicator_value - 1.0).abs() < *atol {
+            if indicator_is_active(self.indicator_variable, indicator_value, None, atol)? {
                 // Indicator ON (~1) → promote inner constraint to regular Constraint.
                 // Clone the function so self (going to removed) retains its data.
                 let mut promoted_function = self.stage.function.clone();
@@ -37,15 +60,9 @@ impl Propagate for IndicatorConstraint<Created> {
                     },
                     empty_state,
                 ))
-            } else if indicator_value.abs() < *atol {
+            } else {
                 // Indicator OFF (~0) → vacuously satisfied; the constraint is consumed.
                 Ok((PropagateOutcome::Consumed(self), empty_state))
-            } else {
-                crate::bail!(
-                    "Indicator variable {:?} of indicator constraint has invalid value {} (must be 0 or 1)",
-                    self.indicator_variable,
-                    indicator_value
-                );
             }
         } else {
             // Indicator variable not in state — partial-evaluate inner function in-place
@@ -74,35 +91,15 @@ impl Evaluate for IndicatorConstraint<Created> {
                 )
             })?;
 
-        let indicator_on = if (*indicator_value - 1.0).abs() < *atol {
-            true
-        } else if indicator_value.abs() < *atol {
-            false
-        } else {
-            crate::bail!(
-                "Indicator variable {:?} of indicator constraint has invalid value {} (must be 0 or 1)",
-                self.indicator_variable,
-                indicator_value
-            );
-        };
-
-        let feasible = if indicator_on {
-            // Indicator ON → check constraint as usual
-            match self.equality {
-                Equality::EqualToZero => evaluated_value.abs() < *atol,
-                Equality::LessThanOrEqualToZero => evaluated_value < *atol,
-            }
-        } else {
-            // Indicator OFF → always feasible
-            true
-        };
+        let indicator_on =
+            indicator_is_active(self.indicator_variable, *indicator_value, None, atol)?;
 
         Ok(IndicatorConstraint {
             indicator_variable: self.indicator_variable,
             equality: self.equality,
             stage: IndicatorEvaluatedData {
                 evaluated_value,
-                feasible,
+                activation_atol: atol,
                 indicator_active: indicator_on,
                 used_decision_variable_ids,
             },
@@ -119,16 +116,10 @@ impl Evaluate for IndicatorConstraint<Created> {
         // Compute feasibility per sample.
         // We need both the evaluated value and the indicator variable's state,
         // so we iterate over samples (which provides the state) and look up the evaluated value.
-        let mut feasible = std::collections::BTreeMap::new();
+
         let mut indicator_active = std::collections::BTreeMap::new();
         for (sample_id, state) in samples.iter() {
             let sample_id = *sample_id;
-            let ev = *evaluated_values.get(sample_id).ok_or_else(|| {
-                crate::error!(
-                    "Sample ID {sample_id:?} missing from evaluated values during indicator-constraint evaluation"
-                )
-            })?;
-
             let indicator_value = state
                 .entries
                 .get(&self.indicator_variable.into_inner())
@@ -139,28 +130,13 @@ impl Evaluate for IndicatorConstraint<Created> {
                         sample_id,
                     )
                 })?;
-            let indicator_on = if (*indicator_value - 1.0).abs() < *atol {
-                true
-            } else if indicator_value.abs() < *atol {
-                false
-            } else {
-                crate::bail!(
-                    "Indicator variable {:?} of indicator constraint has invalid value {} in sample {:?} (must be 0 or 1)",
-                    self.indicator_variable,
-                    indicator_value,
-                    sample_id
-                );
-            };
+            let indicator_on = indicator_is_active(
+                self.indicator_variable,
+                *indicator_value,
+                Some(sample_id),
+                atol,
+            )?;
 
-            let f = if indicator_on {
-                match self.equality {
-                    Equality::EqualToZero => ev.abs() < *atol,
-                    Equality::LessThanOrEqualToZero => ev < *atol,
-                }
-            } else {
-                true
-            };
-            feasible.insert(sample_id, f);
             indicator_active.insert(sample_id, indicator_on);
         }
 
@@ -169,7 +145,7 @@ impl Evaluate for IndicatorConstraint<Created> {
             equality: self.equality,
             stage: IndicatorSampledData {
                 evaluated_values,
-                feasible,
+                activation_atol: atol,
                 indicator_active,
                 used_decision_variable_ids: self.required_ids(),
             },
@@ -201,7 +177,60 @@ impl Evaluate for IndicatorConstraint<Created> {
 mod tests {
     use super::*;
     use crate::{coeff, linear, Evaluate, Function, Propagate, PropagateOutcome};
+    use crate::{EvaluatedConstraintBehavior, SampledConstraintBehavior};
     use std::collections::HashMap;
+
+    #[test]
+    fn activation_and_residual_include_the_atol_boundary() {
+        let atol = ATol::new(0.125).unwrap();
+        let outside = f64::from_bits(0.125_f64.to_bits() + 1);
+        let indicator_boundary = 1.0 + *atol;
+        let indicator_id = VariableID::from(10);
+        let boundary_constraint = IndicatorConstraint::new(
+            indicator_id,
+            Equality::EqualToZero,
+            Function::Constant(crate::Coefficient::try_from(*atol).unwrap()),
+        );
+        let boundary_state = crate::v1::State::from(HashMap::from([(10, indicator_boundary)]));
+
+        let evaluated = boundary_constraint.evaluate(&boundary_state, atol).unwrap();
+        assert!(evaluated.stage.indicator_active);
+        assert!(evaluated.is_feasible(atol));
+
+        let sample_id = crate::SampleID::from(7);
+        let sampled = boundary_constraint
+            .evaluate_samples(
+                &crate::Sampled::from((sample_id, boundary_state.clone())),
+                atol,
+            )
+            .unwrap();
+        assert_eq!(sampled.stage.indicator_active.get(&sample_id), Some(&true));
+        assert_eq!(
+            sampled.is_feasible_for(sample_id, atol).as_ref(),
+            Some(&true)
+        );
+
+        let (outcome, _) = boundary_constraint
+            .clone()
+            .propagate(&boundary_state, atol)
+            .unwrap();
+        assert!(matches!(outcome, PropagateOutcome::Transformed { .. }));
+
+        let outside_constraint = IndicatorConstraint::new(
+            indicator_id,
+            Equality::EqualToZero,
+            Function::Constant(crate::Coefficient::try_from(outside).unwrap()),
+        );
+        let exact_on = crate::v1::State::from(HashMap::from([(10, 1.0)]));
+        assert!(!outside_constraint
+            .evaluate(&exact_on, atol)
+            .unwrap()
+            .is_feasible(atol));
+
+        let outside_indicator = f64::from_bits(indicator_boundary.to_bits() + 1);
+        let invalid_state = crate::v1::State::from(HashMap::from([(10, outside_indicator)]));
+        assert!(boundary_constraint.evaluate(&invalid_state, atol).is_err());
+    }
 
     #[test]
     fn test_evaluate_indicator_on_feasible() {
@@ -215,7 +244,7 @@ mod tests {
         // x1 = 3, x10 = 1 (indicator ON, 3 - 5 = -2 <= 0 → feasible)
         let state = crate::v1::State::from(HashMap::from([(1, 3.0), (10, 1.0)]));
         let result = ic.evaluate(&state, ATol::default()).unwrap();
-        assert!(result.stage.feasible);
+        assert!(result.is_feasible(crate::ATol::default()));
         assert!(result.stage.indicator_active);
         assert_eq!(result.stage.evaluated_value, -2.0);
     }
@@ -232,7 +261,7 @@ mod tests {
         // x1 = 7, x10 = 1 (indicator ON, 7 - 5 = 2 > 0 → infeasible)
         let state = crate::v1::State::from(HashMap::from([(1, 7.0), (10, 1.0)]));
         let result = ic.evaluate(&state, ATol::default()).unwrap();
-        assert!(!result.stage.feasible);
+        assert!(!result.is_feasible(crate::ATol::default()));
         assert!(result.stage.indicator_active);
         assert_eq!(result.stage.evaluated_value, 2.0);
     }
@@ -249,9 +278,33 @@ mod tests {
         // x1 = 100, x10 = 0 (indicator OFF → always feasible regardless of f(x))
         let state = crate::v1::State::from(HashMap::from([(1, 100.0), (10, 0.0)]));
         let result = ic.evaluate(&state, ATol::default()).unwrap();
-        assert!(result.stage.feasible);
+        assert!(result.is_feasible(crate::ATol::default()));
         assert!(!result.stage.indicator_active);
         assert_eq!(result.stage.evaluated_value, 95.0); // f(x) still evaluated for diagnostics
+    }
+
+    #[test]
+    fn test_evaluate_invalid_indicator_value_preserves_decision_variable_signal() {
+        let ic = IndicatorConstraint::new(
+            VariableID::from(10),
+            Equality::LessThanOrEqualToZero,
+            Function::from(linear!(1)),
+        );
+        let state = crate::v1::State::from(HashMap::from([(1, 3.0), (10, 0.5)]));
+
+        let error = ic.evaluate(&state, ATol::default()).unwrap_err();
+        let signal = error
+            .downcast_ref::<crate::DecisionVariableError>()
+            .expect("invalid caller-owned indicator value must remain downcastable");
+        assert!(matches!(
+            signal,
+            crate::DecisionVariableError::SubstitutedValueInconsistent {
+                id,
+                kind: crate::Kind::Binary,
+                substituted_value,
+                ..
+            } if *id == VariableID::from(10) && *substituted_value == 0.5
+        ));
     }
 
     #[test]
@@ -340,14 +393,43 @@ mod tests {
         let s2 = crate::SampleID::from(2);
 
         // Feasibility
-        assert!(result.stage.feasible[&s0]);
-        assert!(!result.stage.feasible[&s1]);
-        assert!(result.stage.feasible[&s2]);
+        assert!(result.is_feasible_for(s0, crate::ATol::default()).unwrap());
+        assert!(!result.is_feasible_for(s1, crate::ATol::default()).unwrap());
+        assert!(result.is_feasible_for(s2, crate::ATol::default()).unwrap());
 
         // Indicator active
         assert!(result.stage.indicator_active[&s0]);
         assert!(result.stage.indicator_active[&s1]);
         assert!(!result.stage.indicator_active[&s2]);
+    }
+
+    #[test]
+    fn test_evaluate_samples_invalid_indicator_value_preserves_decision_variable_signal() {
+        let ic = IndicatorConstraint::new(
+            VariableID::from(10),
+            Equality::LessThanOrEqualToZero,
+            Function::from(linear!(1)),
+        );
+        let sample_id = crate::SampleID::from(7);
+        let samples = crate::Sampled::from((
+            sample_id,
+            crate::v1::State::from(HashMap::from([(1, 3.0), (10, 0.5)])),
+        ));
+
+        let error = ic.evaluate_samples(&samples, ATol::default()).unwrap_err();
+        assert!(error.to_string().contains("sample SampleID(7)"));
+        let signal = error
+            .downcast_ref::<crate::DecisionVariableError>()
+            .expect("invalid sampled indicator value must remain downcastable");
+        assert!(matches!(
+            signal,
+            crate::DecisionVariableError::SubstitutedValueInconsistent {
+                id,
+                kind: crate::Kind::Binary,
+                substituted_value,
+                ..
+            } if *id == VariableID::from(10) && *substituted_value == 0.5
+        ));
     }
 
     // === Propagate tests ===
@@ -390,6 +472,29 @@ mod tests {
         let (outcome, additional) = ic.propagate(&state, ATol::default()).unwrap();
         assert!(additional.entries.is_empty());
         assert!(matches!(outcome, PropagateOutcome::Consumed(_)));
+    }
+
+    #[test]
+    fn test_propagate_invalid_indicator_value_preserves_decision_variable_signal() {
+        let ic = IndicatorConstraint::new(
+            VariableID::from(10),
+            Equality::LessThanOrEqualToZero,
+            Function::from(linear!(1)),
+        );
+        let state = crate::v1::State::from(HashMap::from([(10, 0.5)]));
+
+        let error = ic.propagate(&state, ATol::default()).unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<crate::DecisionVariableError>(),
+            Some(
+                crate::DecisionVariableError::SubstitutedValueInconsistent {
+                    id,
+                    kind: crate::Kind::Binary,
+                    substituted_value,
+                    ..
+                }
+            ) if *id == VariableID::from(10) && *substituted_value == 0.5
+        ));
     }
 
     #[test]

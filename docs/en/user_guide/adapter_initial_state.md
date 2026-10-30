@@ -23,16 +23,16 @@ The initial solution (`initial_state`) that can be provided is of type `ToState`
 We'll demonstrate how to provide an initial solution using the following instance:
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable, State
+from ommx import DecisionVariable, Instance, Sense, State
 
-x = DecisionVariable.integer(1, lower=0, upper=5)
-y = DecisionVariable.integer(2, lower=0, upper=5)
+x = DecisionVariable.integer(1, lower=0, upper=5, name="x", subscripts=[0])
+y = DecisionVariable.integer(2, lower=0, upper=5, name="x", subscripts=[1])
 
 ommx_instance = Instance.from_components(
     decision_variables=[x, y],
     objective=x - y,
     constraints={0: x + y <= 5},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 ```
 
@@ -77,6 +77,36 @@ adapter = OMMXPySCIPOptAdapter(
     initial_state=initial_state,
 )
 ```
+
+(named-initial-state)=
+## Providing Values by Name and Subscripts
+
+Pass a `NamedState` directly to SCIP's `initial_state` argument. The adapter
+uses {meth}`~ommx.Instance.state_from_named_values` to resolve names and subscripts
+against the instance being solved. This lets you reuse the same
+initial values when rebuilding a model assigns different variable IDs.
+
+```{code-cell} ipython3
+from ommx import NamedState
+
+initial_values: NamedState = {"x": {(0,): 3.0, (1,): 2.0}}
+solution = OMMXPySCIPOptAdapter.solve(ommx_instance, initial_state=initial_values)
+assert solution.state.entries == {x.id: 5.0, y.id: 0.0}
+
+# Explicit conversion is also available when you need a State.
+initial_state = ommx_instance.state_from_named_values(initial_values)
+```
+
+Subscript keys are tuples: `()` for a scalar, `(i,)` for one index, and
+`(i, j)` for two indices. You can also pass the output of
+{meth}`~ommx.Solution.extract_all_decision_variables` to reuse solution values.
+
+Conversion raises `KeyError` when a supplied name/subscript pair is unknown and
+`ValueError` when it matches multiple variables. Label parameters are ignored;
+use an ID-keyed state to distinguish variables with identical names and
+subscripts. Conversion accepts partial mappings and leaves omitted variables
+out of the resulting state. SCIP initializes omitted solver variables to zero.
+Keys that collide after string or integer normalization raise `ValueError`.
 
 ## Example Comparison With and Without Initial Solution
 

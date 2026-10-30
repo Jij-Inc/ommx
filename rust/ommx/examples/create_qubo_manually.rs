@@ -6,10 +6,12 @@
 //! Note: OMMX also provides functionality to convert general instances to QUBO format.
 //! This example shows the manual construction approach.
 //!
-//! In v3, per-variable modeling labels (name, subscripts, ...) live in
-//! the [`VariableLabelStore`] sibling field of [`Instance`] rather
-//! than on each [`DecisionVariable`]. Set it via
-//! [`Instance::set_variable_label`] after construction.
+//! In v3, per-variable modeling labels (name, subscripts, ...) live in the
+//! decision-variable table owned by [`Instance`] rather than on each
+//! [`DecisionVariable`] row. This example assembles an explicit-ID row map, so
+//! it sets the labels after constructing the root. For incremental construction
+//! with automatic IDs, `Instance::new_binary` inserts the row and label
+//! atomically.
 
 use anyhow::Result;
 use ommx::{

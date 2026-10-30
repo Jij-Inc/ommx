@@ -1,5 +1,5 @@
 use super::*;
-use crate::{v1, Message, Parse};
+use crate::{message_io, v1, Message, Parse};
 use anyhow::Result;
 
 impl Function {
@@ -9,7 +9,7 @@ impl Function {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
-        let inner = v1::Function::decode(bytes)?;
+        let inner = message_io::decode::<v1::Function>(bytes, "ommx.v1.Function")?;
         Ok(Parse::parse(inner, &())?)
     }
 }

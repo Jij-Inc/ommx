@@ -1,7 +1,10 @@
 from __future__ import annotations
+from ommx import ConstraintID, IndicatorConstraintID, Sos1ConstraintID
+
+import copy
 import math
 from dataclasses import asdict, dataclass, fields
-from typing import TYPE_CHECKING, Any, Iterable, Mapping, Optional, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Mapping, Optional, cast
 
 import pyscipopt
 from pyscipopt.scip import PY_SCIP_EVENTTYPE as SCIP_EVENTTYPE
@@ -16,12 +19,19 @@ from ommx.adapter import (
     NoSolutionReturned,
 )
 from ommx import (
-    Instance,
-    Solution,
-    DecisionVariable,
+    Equality,
     Function,
-    Constraint,
-    AdditionalCapability,
+    Instance,
+    InstanceClass,
+    InstanceClassClause,
+    Kind,
+    NamedState,
+    PolynomialRequirement,
+    PreparationPolicy,
+    Sense,
+    Solution,
+    SpecialConstraintKind,
+    SpecialConstraintPreparation,
     State,
     ToState,
 )
@@ -33,6 +43,16 @@ if TYPE_CHECKING:
 
 _tracer = trace.get_tracer("ommx.adapter.pyscipopt")
 _SCIP_TERMINATION_EVENT = "TERMINATION"
+_OBJECTIVE_AUXILIARY_NAME = "auxiliary_for_linearized_objective"
+
+_QUADRATIC_REGULAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS = {
+    Equality.EqualToZero: PolynomialRequirement.at_most(2),
+    Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(2),
+}
+_LINEAR_INDICATOR_BODY_POLYNOMIAL_REQUIREMENTS = {
+    Equality.EqualToZero: PolynomialRequirement.at_most(1),
+    Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(1),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -486,25 +506,54 @@ def _dataframe(
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    ADDITIONAL_CAPABILITIES = frozenset(
-        {
-            AdditionalCapability.Indicator,
-            AdditionalCapability.Sos1,
-        }
+    INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
+        [
+            InstanceClassClause(
+                label="pyscipopt-quadratic-mip",
+                allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
+                objective_polynomial_requirement=PolynomialRequirement.at_most(2),
+                regular_constraint_polynomial_requirements=(
+                    _QUADRATIC_REGULAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS
+                ),
+                indicator_body_polynomial_requirements=(
+                    _LINEAR_INDICATOR_BODY_POLYNOMIAL_REQUIREMENTS
+                ),
+                allows_sos1=True,
+                allowed_senses={Sense.Minimize, Sense.Maximize},
+            )
+        ]
     )
+
+    @classmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        """Recommend lowering OneHot constraints before using PySCIPOpt.
+
+        PySCIPOpt accepts Indicator and SOS1 constraints directly, so this
+        recommendation preserves those families and lowers only OneHot
+        constraints. The easy API applies a fresh policy to an isolated copy;
+        callers may instead edit and apply one before invoking
+        :meth:`solve_without_preparation`.
+        """
+        return PreparationPolicy(
+            special_constraints=SpecialConstraintPreparation.lower_special_constraints(
+                kinds={SpecialConstraintKind.OneHot}
+            )
+        )
 
     def __init__(
         self,
         ommx_instance: Instance,
         *,
-        initial_state: Optional[ToState] = None,
+        initial_state: Optional[ToState | NamedState] = None,
     ):
         """
         :param ommx_instance: The ommx.Instance to solve.
-        :param initial_state: Optional initial solution state.
+        :param initial_state: Optional initial solution as a State, ID-keyed
+            values, or values grouped by name and tuple subscripts. Named values
+            are resolved against this instance with ``state_from_named_values``.
         """
         with _tracer.start_as_current_span("convert"):
-            super().__init__(ommx_instance)
+            self.require_applicable(ommx_instance)
             self.instance = ommx_instance
             self.model = pyscipopt.Model()
             self.model.hideOutput()
@@ -522,14 +571,18 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         cls,
         ommx_instance: Instance,
         *,
-        initial_state: Optional[ToState] = None,
+        initial_state: Optional[ToState | NamedState] = None,
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """
         Solve the given ommx.Instance using PySCIPopt, returning an ommx.Solution.
 
-        :param ommx_instance: The ommx.Instance to solve.
-        :param initial_state: Optional initial solution state.
+        The input instance is not modified. An isolated copy is prepared with
+        the recommended PySCIPOpt policy before preparation-free execution.
+
+        :param ommx_instance: The ommx.Instance to prepare and solve.
+        :param initial_state: Optional initial solution as a State, ID-keyed
+            values, or values grouped by name and tuple subscripts.
 
         Examples
         =========
@@ -549,7 +602,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
             ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
-            ...     sense=Instance.MAXIMIZE,
+            ...     sense=Sense.Maximize,
             ... )
 
             Solve it
@@ -584,13 +637,13 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 ...     decision_variables=[x],
                 ...     objective=x,
                 ...     constraints={0: x >= 4},
-                ...     sense=Instance.MAXIMIZE,
+                ...     sense=Sense.Maximize,
                 ... )
 
                 >>> OMMXPySCIPOptAdapter.solve(instance)
                 Traceback (most recent call last):
                     ...
-                ommx.adapter.InfeasibleDetected: Model was infeasible
+                ommx.InfeasibleDetected: Model was infeasible
 
         Unbounded Problem
 
@@ -604,7 +657,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 ...     decision_variables=[x],
                 ...     objective=x,
                 ...     constraints={},
-                ...     sense=Instance.MAXIMIZE,
+                ...     sense=Sense.Maximize,
                 ... )
 
                 >>> OMMXPySCIPOptAdapter.solve(instance)
@@ -612,6 +665,23 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     ...
                 ommx.adapter.UnboundedDetected: Model was unbounded
         """
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.solve_without_preparation(
+            prepared,
+            initial_state=initial_state,
+            diagnostics=diagnostics,
+        )
+
+    @classmethod
+    def solve_without_preparation(
+        cls,
+        ommx_instance: Instance,
+        *,
+        initial_state: Optional[ToState | NamedState] = None,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> Solution:
+        """Solve an exact PySCIPOpt Adapter input without preparing it."""
         with _tracer.start_as_current_span("solve") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             adapter = cls(ommx_instance, initial_state=initial_state)
@@ -631,8 +701,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     SCIPProgressSnapshot.from_termination_report(termination_report)
                 )
                 diagnostics.record(termination_report)
-            solution = adapter.decode(model)
-            return solution
+            return adapter.decode(model)
 
     @property
     def solver_input(self) -> pyscipopt.Model:
@@ -651,6 +720,10 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         effectively the same problem as the OMMX instance used to create the
         adapter.
 
+        Backend optimality is mapped through the instance's output-objective
+        semantics. It remains unspecified when active-formulation optimality
+        does not transport to that objective.
+
         Examples
         =========
 
@@ -666,7 +739,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
             ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
-            ...     sense=Instance.MAXIMIZE,
+            ...     sense=Sense.Maximize,
             ... )
 
             >>> adapter = OMMXPySCIPOptAdapter(instance)
@@ -689,7 +762,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             if (
                 data.getStatus() == "optimal"
             ):  # pyscipopt does not appear to have an enum or constant for this
-                solution.optimality = Solution.OPTIMAL
+                solution.optimality = self.instance.map_active_optimality(
+                    Solution.OPTIMAL
+                )
 
             return solution
 
@@ -712,7 +787,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             ...     decision_variables=[x1],
             ...     objective=x1,
             ...     constraints={},
-            ...     sense=Instance.MINIMIZE,
+            ...     sense=Sense.Minimize,
             ... )
             >>> adapter = OMMXPySCIPOptAdapter(ommx_instance)
             >>> model = adapter.solver_input
@@ -740,10 +815,13 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             if data.getNSols() == 0:
                 raise NoSolutionReturned("No solution was returned [status: timelimit]")
 
-        # NOTE: It is assumed that getBestSol will return an error
-        #       if there is no feasible solution.
+        sol = data.getBestSol()
+        if sol is None:
+            raise OMMXPySCIPOptAdapterError(
+                f"There is no feasible solution. [status: {data.getStatus()}]"
+            )
+
         try:
-            sol = data.getBestSol()
             # NOTE recreating the map instead of using `self.varname_map`, as
             # this is probably more robust.
             varname_map = {var.name: var for var in data.getVars()}
@@ -760,13 +838,13 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
     def _set_decision_variables(self):
         for var in self.instance.used_decision_variables:
-            if var.kind == DecisionVariable.BINARY:
+            if var.kind == Kind.Binary:
                 self.model.addVar(name=str(var.id), vtype="B")
-            elif var.kind == DecisionVariable.INTEGER:
+            elif var.kind == Kind.Integer:
                 self.model.addVar(
                     name=str(var.id), vtype="I", lb=var.bound.lower, ub=var.bound.upper
                 )
-            elif var.kind == DecisionVariable.CONTINUOUS:
+            elif var.kind == Kind.Continuous:
                 self.model.addVar(
                     name=str(var.id), vtype="C", lb=var.bound.lower, ub=var.bound.upper
                 )
@@ -778,7 +856,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         # Check if objective is quadratic to add auxiliary variable
         degree = self.instance.objective.degree()
-        if degree > 3:
+        if degree is None or degree > 2:
             raise OMMXPySCIPOptAdapterError(
                 f"Objective function degree {degree} is not supported. "
                 "Only constant, linear, and quadratic objectives are supported."
@@ -787,15 +865,15 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             # If objective function is quadratic, add the auxiliary variable for the linearized objective function,
             # because the setObjective method in PySCIPOpt does not support quadratic objective functions.
             self.model.addVar(
-                name="auxiliary_for_linearized_objective", vtype="C", lb=None, ub=None
+                name=_OBJECTIVE_AUXILIARY_NAME, vtype="C", lb=None, ub=None
             )
 
         self.varname_map = {var.name: var for var in self.model.getVars()}
 
     def _set_objective(self):
-        if self.instance.sense == Instance.MAXIMIZE:
+        if self.instance.sense == Sense.Maximize:
             sense = "maximize"
-        elif self.instance.sense == Instance.MINIMIZE:
+        elif self.instance.sense == Sense.Minimize:
             sense = "minimize"
         else:
             raise OMMXPySCIPOptAdapterError(
@@ -819,7 +897,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             #     introduce the auxiliary variable z, and the linearized objective function problem is:
             #         min z
             #         s.t. z >= x^2 + y^2
-            auxiliary_var = self.varname_map["auxiliary_for_linearized_objective"]
+            auxiliary_var = self.varname_map[_OBJECTIVE_AUXILIARY_NAME]
 
             # Add the auxiliary variable to the objective function.
             self.model.setObjective(auxiliary_var, sense=sense)
@@ -838,104 +916,114 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
 
     def _set_constraints(self):
-        # Handle SOS1 constraints (first-class constraint type)
-        for sos1_id, sos1 in self.instance.sos1_constraints.items():
-            name = f"sos1_{sos1_id}"
-            vars = [self.varname_map[str(v)] for v in sos1.variables]
-            self.model.addConsSOS1(vars, name=name)
-
-        for cid, constraint in self.instance.constraints.items():
-            # Handle constraint function based on its type
-            f = constraint.function
-            degree = f.degree()
-            if degree == 0:
-                # Constant constraint is not passed to SCIP, but checked for feasibility
-                constant_value = f.constant_term
-                if constraint.equality == Constraint.EQUAL_TO_ZERO and math.isclose(
-                    constant_value, 0, abs_tol=1e-6
-                ):
-                    continue  # Skip feasible constant constraint
-                elif (
-                    constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
-                    and constant_value <= 1e-6
-                ):
-                    continue  # Skip feasible constant constraint
-                else:
-                    raise OMMXPySCIPOptAdapterError(
-                        f"Infeasible constant constraint was found: id {cid}"
-                    )
-            elif degree == 1:
-                expr = self._make_linear_expr(f)
-            elif degree == 2:
-                expr = self._make_quadratic_expr(f)
+        for cid in self.instance.constraints:
+            if isinstance(cid, ConstraintID):
+                self._set_regular_constraint(cid)
+            elif isinstance(cid, Sos1ConstraintID):
+                self._set_sos1_constraint(cid)
+            elif isinstance(cid, IndicatorConstraintID):
+                self._set_indicator_constraint(cid)
             else:
                 raise OMMXPySCIPOptAdapterError(
-                    f"Constraints must be either constant, linear or quadratic. "
-                    f"id: {cid}, "
-                    f"degree: {degree}"
+                    f"Unsupported constraint family: {type(cid).__name__} (id: {cid})"
                 )
 
-            if constraint.equality == Constraint.EQUAL_TO_ZERO:
-                constr_expr = expr == 0
-            elif constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
-                constr_expr = expr <= 0
+    def _set_sos1_constraint(self, sos1_id: Sos1ConstraintID):
+        sos1 = self.instance.constraints[sos1_id]
+        name = f"sos1_{sos1_id}"
+        vars = [self.varname_map[str(v)] for v in sos1.variables]
+        self.model.addConsSOS1(vars, name=name)
+
+    def _set_regular_constraint(self, cid: ConstraintID):
+        constraint = self.instance.constraints[cid]
+        # Handle constraint function based on its type
+        f = constraint.function
+        degree = f.degree()
+        if degree == 0:
+            # Constant constraint is not passed to SCIP, but checked for feasibility
+            constant_value = f.constant_term
+            if constraint.equality == Equality.EqualToZero and math.isclose(
+                constant_value, 0, abs_tol=1e-6
+            ):
+                return  # Skip feasible constant constraint
+            elif (
+                constraint.equality == Equality.LessThanOrEqualToZero
+                and constant_value <= 1e-6
+            ):
+                return  # Skip feasible constant constraint
             else:
                 raise OMMXPySCIPOptAdapterError(
-                    f"Not supported constraint equality: "
-                    f"id: {cid}, equality: {constraint.equality}"
+                    f"Infeasible constant constraint was found: id {cid}"
                 )
+        elif degree == 1:
+            expr = self._make_linear_expr(f)
+        elif degree == 2:
+            expr = self._make_quadratic_expr(f)
+        else:
+            raise OMMXPySCIPOptAdapterError(
+                f"Constraints must be either constant, linear or quadratic. "
+                f"id: {cid}, "
+                f"degree: {degree}"
+            )
 
-            self.model.addCons(constr_expr, name=str(cid))
+        if constraint.equality == Equality.EqualToZero:
+            constr_expr = expr == 0
+        elif constraint.equality == Equality.LessThanOrEqualToZero:
+            constr_expr = expr <= 0
+        else:
+            raise OMMXPySCIPOptAdapterError(
+                f"Not supported constraint equality: "
+                f"id: {cid}, equality: {constraint.equality}"
+            )
 
-        # Handle indicator constraints
-        for ind_id, indicator in self.instance.indicator_constraints.items():
-            f = indicator.function
-            degree = f.degree()
-            if degree == 0:
-                # Constant indicator constraint: check feasibility statically
-                # When indicator is ON, the constant constraint must hold
-                constant_value = f.constant_term
-                is_feasible = (
-                    indicator.equality == Constraint.EQUAL_TO_ZERO
-                    and math.isclose(constant_value, 0, abs_tol=1e-6)
-                ) or (
-                    indicator.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
-                    and constant_value <= 1e-6
-                )
-                if is_feasible:
-                    continue  # Always feasible, skip
-                # If infeasible when indicator is ON, add indicator constraint
-                # that forces indicator to be 0
-                binvar = self.varname_map[str(indicator.indicator_variable_id)]
-                self.model.addCons(binvar == 0, name=f"ind_{ind_id}_forced_off")
-                continue
-            elif degree == 1:
-                expr = self._make_linear_expr(f)
-            else:
-                raise OMMXPySCIPOptAdapterError(
-                    f"Indicator constraints must be linear. "
-                    f"id: {ind_id}, degree: {degree}"
-                )
+        self.model.addCons(constr_expr, name=str(cid))
 
+    def _set_indicator_constraint(self, ind_id: IndicatorConstraintID):
+        indicator = self.instance.constraints[ind_id]
+        f = indicator.function
+        degree = f.degree()
+        if degree == 0:
+            # Constant indicator constraint: check feasibility statically
+            # When indicator is ON, the constant constraint must hold
+            constant_value = f.constant_term
+            is_feasible = (
+                indicator.equality == Equality.EqualToZero
+                and math.isclose(constant_value, 0, abs_tol=1e-6)
+            ) or (
+                indicator.equality == Equality.LessThanOrEqualToZero
+                and constant_value <= 1e-6
+            )
+            if is_feasible:
+                return  # Always feasible, skip
+            # If infeasible when indicator is ON, add indicator constraint
+            # that forces indicator to be 0
             binvar = self.varname_map[str(indicator.indicator_variable_id)]
+            self.model.addCons(binvar == 0, name=f"ind_{ind_id}_forced_off")
+            return
+        elif degree == 1:
+            expr = self._make_linear_expr(f)
+        else:
+            raise OMMXPySCIPOptAdapterError(
+                f"Indicator constraints must be linear. id: {ind_id}, degree: {degree}"
+            )
 
-            if indicator.equality == Constraint.EQUAL_TO_ZERO:
-                # Decompose f(x) == 0 into two indicator constraints
-                self.model.addConsIndicator(
-                    expr <= 0, binvar=binvar, name=f"ind_{ind_id}_le"
-                )
-                self.model.addConsIndicator(
-                    -expr <= 0, binvar=binvar, name=f"ind_{ind_id}_ge"
-                )
-            elif indicator.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
-                self.model.addConsIndicator(
-                    expr <= 0, binvar=binvar, name=f"ind_{ind_id}"
-                )
-            else:
-                raise OMMXPySCIPOptAdapterError(
-                    f"Not supported indicator constraint equality: "
-                    f"id: {ind_id}, equality: {indicator.equality}"
-                )
+        binvar = self.varname_map[str(indicator.indicator_variable_id)]
+
+        if indicator.equality == Equality.EqualToZero:
+            # Decompose f(x) == 0 into two indicator constraints
+            self.model.addConsIndicator(
+                expr <= 0, binvar=binvar, name=f"ind_{ind_id}_le"
+            )
+            self.model.addConsIndicator(
+                -expr <= 0, binvar=binvar, name=f"ind_{ind_id}_ge"
+            )
+        elif indicator.equality == Equality.LessThanOrEqualToZero:
+            self.model.addConsIndicator(expr <= 0, binvar=binvar, name=f"ind_{ind_id}")
+        else:
+            raise OMMXPySCIPOptAdapterError(
+                f"Not supported indicator constraint equality: "
+                f"id: {ind_id}, equality: {indicator.equality}"
+            )
 
     def _make_linear_expr(self, f: Function) -> pyscipopt.Expr:
         return (
@@ -963,10 +1051,28 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         return quad_terms + linear_terms + constant
 
-    def _add_initial_state(self, initial_state: ToState) -> None:
+    def _add_initial_state(self, initial_state: ToState | NamedState) -> None:
+        if isinstance(initial_state, Mapping) and any(
+            isinstance(key, str) for key in initial_state
+        ):
+            state = self.instance.state_from_named_values(
+                cast(NamedState, initial_state)
+            )
+        else:
+            state = State(cast(ToState, initial_state))
+        values = {str(var_id): value for var_id, value in state.entries.items()}
+        if _OBJECTIVE_AUXILIARY_NAME in self.varname_map:
+            # SCIP initializes omitted coordinates to zero. Its objective
+            # auxiliary must describe that same complete initial point.
+            objective_state = {
+                var.id: values.get(str(var.id), 0.0)
+                for var in self.instance.used_decision_variables
+            }
+            values[_OBJECTIVE_AUXILIARY_NAME] = self.instance.objective.evaluate(
+                objective_state
+            )
         initial_sol = self.model.createSol()
-        for var_id, value in State(initial_state).entries.items():
-            var_name = str(var_id)
+        for var_name, value in values.items():
             if var_name in self.varname_map:
                 self.model.setSolVal(initial_sol, self.varname_map[var_name], value)
         # The free=True parameter means that solution will be freed afterwards.

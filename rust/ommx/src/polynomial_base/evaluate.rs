@@ -1,29 +1,16 @@
 use super::*;
 use crate::{v1::State, Evaluate, Result, Sampled, VariableIDSet};
 
-impl<M: Monomial> Evaluate for PolynomialBase<M> {
-    type Output = f64;
-    type SampledOutput = Sampled<f64>;
-
-    fn evaluate(&self, state: &State, _atol: crate::ATol) -> Result<Self::Output> {
-        let mut result = 0.0;
-        for (monomial, coefficient) in self.iter() {
-            let mut out = 1.0;
-            for id in monomial.ids() {
-                out *= state
-                    .entries
-                    .get(&id.into_inner())
-                    .ok_or_else(|| crate::error!("Missing entry for id: {}", id.into_inner()))?;
-            }
-            result += coefficient.into_inner() * out;
-        }
-        Ok(result)
+impl<M: Monomial> PolynomialBase<M> {
+    fn has_state_overlap(&self, state: &State) -> bool {
+        self.terms.keys().any(|monomial| {
+            monomial
+                .ids()
+                .any(|id| state.entries.contains_key(&id.into_inner()))
+        })
     }
 
-    fn partial_evaluate(&mut self, state: &State, _atol: crate::ATol) -> Result<()> {
-        if state.entries.is_empty() {
-            return Ok(());
-        }
+    fn build_partial_evaluated(&self, state: &State) -> Result<Self> {
         let mut updated = Self::default();
         for (monomial, coefficient) in &self.terms {
             let (new_monomial, value) = monomial.clone().partial_evaluate(state);
@@ -37,13 +24,53 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
                     continue;
                 }
                 Err(e) => {
-                    return Err(crate::error!(
-                        "Partial evaluation yields non-finite coefficient: {}",
-                        e
-                    ));
+                    return Err(crate::Error::new(e)
+                        .context("Partial evaluation yields non-finite coefficient"));
                 }
             }
         }
+        Ok(updated)
+    }
+
+    /// Prepare a replacement for `Function`/`Instance` atomic plans without
+    /// granting those owners mutable access to this polynomial's term storage.
+    pub(crate) fn partial_evaluate_replacement(&self, state: &State) -> Result<Option<Self>> {
+        if !self.has_state_overlap(state) {
+            return Ok(None);
+        }
+        self.build_partial_evaluated(state).map(Some)
+    }
+}
+
+impl<M: Monomial> Evaluate for PolynomialBase<M> {
+    type Output = f64;
+    type SampledOutput = Sampled<f64>;
+
+    fn evaluate(&self, state: &State, _atol: crate::ATol) -> Result<Self::Output> {
+        let mut result = 0.0;
+        for (monomial, coefficient) in self.iter() {
+            let mut out = 1.0;
+            for id in monomial.ids() {
+                let Some(value) = state.entries.get(&id.into_inner()) else {
+                    let missing_ids = self
+                        .required_ids()
+                        .into_iter()
+                        .filter(|id| !state.entries.contains_key(&id.into_inner()))
+                        .collect();
+                    return Err(crate::MissingStateEntries { ids: missing_ids }.into());
+                };
+                out *= value;
+            }
+            result += coefficient.into_inner() * out;
+        }
+        Ok(result)
+    }
+
+    fn partial_evaluate(&mut self, state: &State, _atol: crate::ATol) -> Result<()> {
+        if state.entries.is_empty() {
+            return Ok(());
+        }
+        let updated = self.build_partial_evaluated(state)?;
         *self = updated;
         Ok(())
     }
@@ -70,6 +97,34 @@ mod tests {
     use crate::random::*;
     use ::approx::{assert_abs_diff_eq, AbsDiffEq};
     use proptest::prelude::*;
+
+    #[test]
+    fn missing_state_entries_preserve_all_required_ids() {
+        let linear = (crate::linear!(1) + crate::linear!(2)).unwrap();
+
+        let error = linear
+            .evaluate(&State::default(), crate::ATol::default())
+            .unwrap_err();
+
+        assert_eq!(
+            error
+                .downcast_ref::<crate::MissingStateEntries>()
+                .map(|error| &error.ids),
+            Some(&VariableIDSet::from([1.into(), 2.into()]))
+        );
+    }
+
+    #[test]
+    fn partial_evaluate_preserves_coefficient_error_source() {
+        let mut linear = (crate::coeff!(f64::MAX) * crate::linear!(1)).unwrap();
+        let state = State::from(std::collections::HashMap::from([(1, f64::MAX)]));
+
+        let error = linear
+            .partial_evaluate(&state, crate::ATol::default())
+            .unwrap_err();
+
+        assert!(error.is::<crate::CoefficientError>());
+    }
 
     fn polynomial_and_state<M: Monomial>() -> impl Strategy<Value = (PolynomialBase<M>, State)> {
         PolynomialBase::arbitrary().prop_flat_map(|p| {
@@ -193,6 +248,37 @@ mod tests {
 
         assert!(err.to_string().contains("Coefficient must be finite"));
         assert_abs_diff_eq!(linear, before);
+    }
+
+    #[test]
+    fn partial_evaluate_preserves_tiny_nonzero_coefficients_independently_of_atol() {
+        let tiny = 1e-12;
+        let mut quadratic =
+            crate::Quadratic::single_term(crate::quadratic!(1, 2), crate::coeff!(1.0));
+        let assigned = State::from_iter([(1, tiny)]);
+
+        quadratic
+            .partial_evaluate(&assigned, crate::ATol::new(1.0).unwrap())
+            .unwrap();
+
+        assert_eq!(quadratic.num_terms(), 1);
+        assert_eq!(
+            quadratic
+                .get(&crate::quadratic!(2))
+                .expect("the exact nonzero coefficient must remain")
+                .into_inner(),
+            tiny
+        );
+        assert_eq!(
+            quadratic.required_ids(),
+            VariableIDSet::from([VariableID::from(2)])
+        );
+        assert_eq!(
+            quadratic
+                .evaluate(&State::from_iter([(2, 1.0)]), crate::ATol::default())
+                .unwrap(),
+            tiny
+        );
     }
 
     fn polynomial_and_samples<M: Monomial>(

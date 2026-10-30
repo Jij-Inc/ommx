@@ -1,9 +1,33 @@
-use crate::{SampledConstraint, SampledDecisionVariable};
+use crate::{SampledConstraintData, SampledDecisionVariable};
 use std::collections::BTreeMap;
 
 use super::*;
 
 impl SampleSet {
+    /// Unique constraint names across every family, including retained removed rows.
+    ///
+    /// Searches the same rows as `extract_constraints`. Unnamed constraints are
+    /// excluded; explicitly empty names are included. Duplicate names are
+    /// returned once, even when their subscripts are ambiguous for extraction.
+    pub fn constraint_names(&self) -> BTreeSet<String> {
+        let mut names = BTreeSet::new();
+        macro_rules! collect {
+            ($collection:expr) => {
+                let collection = $collection;
+                names.extend(
+                    collection
+                        .keys()
+                        .filter_map(|id| collection.context().name(*id).map(str::to_owned)),
+                );
+            };
+        }
+        collect!(&self.constraints);
+        collect!(&self.indicator_constraints);
+        collect!(&self.one_hot_constraints);
+        collect!(&self.sos1_constraints);
+        names
+    }
+
     /// Get all unique decision variable names in this sample set
     ///
     /// Returns a set of all unique variable names that have at least one named variable.
@@ -23,6 +47,13 @@ impl SampleSet {
             .keys()
             .filter_map(|id| self.named_function_labels().name(*id).map(str::to_owned))
             .collect()
+    }
+
+    fn ensure_sample_id(&self, sample_id: SampleID) -> Result<(), SampleSetError> {
+        if self.objectives.get(sample_id).is_none() {
+            return Err(SampleSetError::UnknownSampleID { id: sample_id });
+        }
+        Ok(())
     }
 
     /// Extract decision variable values for a given name and sample ID
@@ -89,6 +120,7 @@ impl SampleSet {
         &self,
         sample_id: SampleID,
     ) -> Result<BTreeMap<String, BTreeMap<Vec<i64>, f64>>, SampleSetError> {
+        self.ensure_sample_id(sample_id)?;
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
         for (id, variable) in self.decision_variables.iter() {
@@ -113,44 +145,51 @@ impl SampleSet {
         Ok(result)
     }
 
-    /// Extract constraint values for a given name and sample ID
+    /// Extract nonnegative constraint violations by name for one sample.
     ///
-    /// Returns a map from subscripts to values for the specified sample
+    /// Searches every family, including retained removed constraints, and returns
+    /// a mapping from subscripts to violations. Parameters and descriptions are
+    /// ignored. Regular constraints return violations, not signed function values.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the sample ID or name does not exist, or matching
+    /// constraints share subscripts, including across different families.
     pub fn extract_constraints(
         &self,
         name: &str,
         sample_id: SampleID,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SampleSetError> {
-        // Collect all constraints with the given name from their context store.
-        let context = self.constraints.context();
-        let matches: Vec<(crate::ConstraintID, &SampledConstraint)> = self
-            .constraints
-            .iter()
-            .filter(|(id, _)| context.name(**id) == Some(name))
-            .map(|(id, c)| (*id, c))
-            .collect();
-        if matches.is_empty() {
-            return Err(SampleSetError::UnknownConstraintName {
-                name: name.to_string(),
-            });
-        }
+        self.ensure_sample_id(sample_id)?;
         let mut result = BTreeMap::new();
-        for (id, constraint) in &matches {
-            if !context.parameters(*id).is_empty() {
-                return Err(SampleSetError::ParameterizedConstraint);
-            }
-            let subscripts = context.subscripts(*id).to_vec();
-            let value = *constraint
-                .stage
-                .evaluated_values
-                .get(sample_id)
-                .ok_or(SampleSetError::UnknownSampleID { id: sample_id })?;
-            if result.insert(subscripts.clone(), value).is_some() {
-                return Err(SampleSetError::DuplicateSubscripts {
-                    name: name.to_string(),
-                    subscripts,
-                });
-            }
+        macro_rules! collect {
+            ($collection:expr) => {
+                let collection = $collection;
+                let context = collection.context();
+                for (id, constraint) in collection.iter() {
+                    if context.name(*id) == Some(name) {
+                        let subscripts = context.subscripts(*id).to_vec();
+                        let value = constraint
+                            .violation_for(sample_id)
+                            .ok_or(SampleSetError::UnknownSampleID { id: sample_id })?;
+                        if result.insert(subscripts.clone(), value).is_some() {
+                            return Err(SampleSetError::DuplicateSubscripts {
+                                name: name.to_owned(),
+                                subscripts,
+                            });
+                        }
+                    }
+                }
+            };
+        }
+        collect!(&self.constraints);
+        collect!(&self.indicator_constraints);
+        collect!(&self.one_hot_constraints);
+        collect!(&self.sos1_constraints);
+        if result.is_empty() {
+            return Err(SampleSetError::UnknownConstraintName {
+                name: name.to_owned(),
+            });
         }
         Ok(result)
     }
@@ -173,6 +212,7 @@ impl SampleSet {
         &self,
         sample_id: SampleID,
     ) -> Result<BTreeMap<String, BTreeMap<Vec<i64>, f64>>, SampleSetError> {
+        self.ensure_sample_id(sample_id)?;
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
         for (id, nf) in &self.named_functions {
@@ -1068,6 +1108,29 @@ mod tests {
         assert_eq!(result.len(), 2);
         assert!(result.contains_key("cost"));
         assert!(result.contains_key("penalty"));
+    }
+
+    #[test]
+    fn test_extract_all_rejects_unknown_sample_id_without_named_entries() {
+        let mut objectives = crate::Sampled::default();
+        objectives.append([SampleID::from(0)], 0.0).unwrap();
+
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        assert!(matches!(
+            sample_set.extract_all_decision_variables(SampleID::from(999)),
+            Err(SampleSetError::UnknownSampleID { id }) if id == SampleID::from(999)
+        ));
+        assert!(matches!(
+            sample_set.extract_all_named_functions(SampleID::from(999)),
+            Err(SampleSetError::UnknownSampleID { id }) if id == SampleID::from(999)
+        ));
     }
 
     #[test]

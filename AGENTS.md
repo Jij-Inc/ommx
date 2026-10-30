@@ -97,6 +97,7 @@ Run `task -l` to see all available commands.
 ### Core Development Principles
 1. **Design Correctness Over Compatibility**: Unless the user explicitly requests compatibility, do not preserve obsolete APIs, layouts, or behavior for backward compatibility. Choose the best current design and update all affected code, docs, and tests accordingly.
 2. **Scope by Design Boundary**: Do not minimize changes for their own sake. Make the full coherent change required by the design, while still avoiding unrelated churn.
+3. **Extensible Constraint Families**: Adding a special-constraint family must be an additive API extension, not a breaking change to existing heterogeneous constraint queries. Expose extensible common types for IDs and rows instead of a closed union of all current families; keep concrete return types for family-specific lookups. Consumers must explicitly reject families they do not support. Silently skipping an unknown constraint changes the feasible region and can relax the optimization problem. Internal enums may enumerate current families, but public APIs must not promise that consumers can exhaustively enumerate every future family. Review both this extension contract and rejection paths when adding or changing constraint APIs.
 
 ### Python SDK Development
 - Top-level `ommx` is the public Python API surface re-exported from `ommx._ommx_rust`.
@@ -115,9 +116,18 @@ Run `task -l` to see all available commands.
 
 ## Review Perspectives
 
+### Documentation Reviews
+
+- When planning, writing, or reviewing Book changes that affect reader prerequisites, concept introduction order, or navigation between learning tasks, use `.agents/skills/book-reading-review/SKILL.md`.
+- For technical documentation publication concerns such as Sphinx build/render/link failures or generated API/docstring/stub consistency, use `.agents/skills/sphinx-docs-review/SKILL.md`. Select either or both by the requested work, not merely by a file being under `docs/`.
+
 ### Domain Responsibility Analysis
 - At the start of every review, use `.agents/skills/domain-responsibility-review/SKILL.md`.
 - First restate the global OMMX domain semantics, then identify each domain invariant, confirm where it is explicitly represented, and verify that no operation can break it.
+
+### Rust SDK Error Handling
+- When designing, implementing, or reviewing fallible Rust SDK APIs, public error or signal types, anyhow error chains, or Rust-to-Python exception conversion, use `.agents/skills/rust-error-handling/SKILL.md` after the domain responsibility analysis.
+- Keep `ommx::Result` as the default surface, add only domain-owned signals with a concrete caller recovery path, and keep Python-owned failures outside the shared Rust SDK mapper.
 
 ### Property-Test Generator Review
 - When a diff touches an `Arbitrary` implementation, a `*Parameters` strategy type, or what a default strategy generates, use `.agents/skills/proptest-arbitrary-review/SKILL.md`.
@@ -137,6 +147,9 @@ Run `task -l` to see all available commands.
 When developing solver adapters:
 - Import from top-level `ommx` — the public API surface
 - `ommx._ommx_rust` is an internal module and may change without notice
+- Declare only requirements of the adapter's own implementation in its package metadata. Base `requires-python` on the syntax and standard-library APIs it uses; add a Python upper bound only for a demonstrated incompatibility in the adapter itself.
+- Do not copy a solver's or transitive dependency's Python bounds or wheel availability into the adapter's `requires-python`. Let dependency metadata and the package resolver enforce those constraints.
+- Keep development and CI environment restrictions in workspace configuration. Record tested Python versions in classifiers and the CI matrix separately from package requirements.
 
 ```python
 from ommx import Instance, DecisionVariable, Function, Solution  # Good

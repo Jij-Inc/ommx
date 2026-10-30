@@ -1,17 +1,28 @@
+use crate::constraint_base::ConstraintView;
+use ommx::{SampledConstraintBehavior, SampledConstraintData};
 use pyo3::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
-pub struct SampledConstraint(pub ommx::SampledConstraint, pub ommx::ConstraintContext);
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(PartialEq)]
+pub struct SampledConstraint(
+    pub ommx::SampledConstraint,
+    pub ommx::ConstraintContext,
+    pub Option<ommx::RemovedReason>,
+);
+crate::constraint_base::constraint_subclass!(
+    SampledConstraint,
+    crate::constraint_base::ConstraintView
+);
 
 impl SampledConstraint {
     pub fn standalone(inner: ommx::SampledConstraint) -> Self {
-        Self(inner, ommx::ConstraintContext::default())
+        Self(inner, ommx::ConstraintContext::default(), None)
     }
 
     pub fn from_parts(inner: ommx::SampledConstraint, context: ommx::ConstraintContext) -> Self {
-        Self(inner, context)
+        Self(inner, context, None)
     }
 }
 
@@ -22,32 +33,6 @@ impl SampledConstraint {
     #[getter]
     pub fn equality(&self) -> crate::Equality {
         self.0.equality.into()
-    }
-
-    /// Get the constraint name
-    #[getter]
-    pub fn name(&self) -> Option<String> {
-        self.1.label.name.clone()
-    }
-
-    /// Get the subscripts
-    #[getter]
-    pub fn subscripts(&self) -> Vec<i64> {
-        self.1.label.subscripts.clone()
-    }
-
-    /// Get the description
-    #[getter]
-    pub fn description(&self) -> Option<String> {
-        self.1.label.description.clone()
-    }
-
-    /// Get the provenance chain.
-    ///
-    /// See {attr}`~ommx.Constraint.provenance` for semantics.
-    #[getter]
-    pub fn provenance(&self) -> Vec<crate::Provenance> {
-        crate::provenance_list(&self.1)
     }
 
     /// Get the used decision variable IDs
@@ -72,14 +57,43 @@ impl SampledConstraint {
             .collect()
     }
 
-    /// Get the feasibility status for all samples  
+    /// Compute feasibility for every sample using the supplied tolerance.
+    ///
+    /// This query does not re-evaluate the functions or change stored values.
+    #[pyo3(signature = (*, atol))]
+    pub fn feasible(&self, atol: f64) -> crate::error::OmmxPyResult<BTreeMap<u64, bool>> {
+        let atol = ommx::ATol::new(atol)?;
+        Ok(self
+            .0
+            .stage
+            .evaluated_values
+            .iter()
+            .map(|(&sample_id, _)| {
+                (
+                    sample_id.into_inner(),
+                    self.0
+                        .is_feasible_for(sample_id, atol)
+                        .expect("sample exists"),
+                )
+            })
+            .collect())
+    }
+
+    /// Nonnegative violations keyed by sample ID.
     #[getter]
-    pub fn feasible(&self) -> BTreeMap<u64, bool> {
+    pub fn violations(&self) -> BTreeMap<u64, f64> {
         self.0
             .stage
-            .feasible
+            .evaluated_values
             .iter()
-            .map(|(&sample_id, feasible)| (sample_id.into_inner(), *feasible))
+            .map(|(id, _)| {
+                (
+                    id.into_inner(),
+                    self.0.violation_for(*id).expect("validated sample ID"),
+                )
+            })
             .collect()
     }
 }
+
+constraint_result_context!(SampledConstraint);

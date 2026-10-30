@@ -9,6 +9,12 @@ Use this skill at the start of every OMMX review. The goal is to review code sha
 
 Treat this as a review pre-pass, not as the required final response order. When writing a code review, still lead with actionable findings; use the domain model to decide which findings matter and how to explain them.
 
+When a change adds or modifies a fallible public API, public signal type,
+`ommx::Error` chain, or error conversion, use
+`.agents/skills/rust-error-handling/SKILL.md` after identifying the domain
+owner here. Let that skill decide whether the failure needs a signal and how it
+crosses the PyO3 boundary.
+
 ## Mandatory Design Order
 
 For any change that affects mutation authority, table/collection APIs, access
@@ -103,6 +109,32 @@ Prefer evidence that scales past reviewer enumeration:
 - When a confirmed finding could have been prevented by a narrower type, a
   private module, or a typestate (as the Stage pattern already does for
   lifecycle), propose that enforcement as the fix, not a prose warning.
+
+## Constraint-Family Extension Contract
+
+Adding a special-constraint family must be an additive API extension. Public
+heterogeneous constraint queries must use extensible common ID and row types,
+not closed unions that promise every future family is already known. Keep
+precise concrete return types for lookups whose ID identifies a known family.
+Internal enums can enumerate the implementation's current families without
+exporting an exhaustive public contract.
+
+A consumer performing family-specific mathematical operations must declare the
+families it supports and explicitly reject the rest. Silently skipping an
+unknown constraint can enlarge the feasible region and relax the problem. A
+newly introduced family reaching an older adapter should fail explicitly; that
+failure is the extension contract working, not an API compatibility break.
+Generic metadata inspection may operate through the common row interface.
+
+Review evidence must include:
+
+- Existing concrete-ID lookups retain their return types and semantics.
+- Enumerating IDs or rows does not expose a closed list of current families.
+- A consumer's fallback rejects an ID outside its supported families, even
+  after it has handled every family known when that consumer was written.
+- Solver translation and lowering paths cannot silently omit unsupported
+  constraints, including when an earlier applicability check is bypassed.
+
 
 ## Table And Collection Ownership Checks
 

@@ -1,4 +1,4 @@
-from ommx import Instance, DecisionVariable
+from ommx import Instance, DecisionVariable, Sense
 
 
 def test_evaluate_samples_type_check():
@@ -10,7 +10,7 @@ def test_evaluate_samples_type_check():
         decision_variables=x,
         objective=x[0] + 2 * x[1] + 3 * x[2],
         constraints={0: x[1] + x[2] <= 1},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     samples = [
@@ -30,15 +30,15 @@ def test_sample_set_sense_minimize():
         decision_variables=[],
         objective=0,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     sample_set = instance.evaluate_samples([{}])
-    assert sample_set.sense == Instance.MINIMIZE
+    assert sample_set.sense == Sense.Minimize
 
     # Check that the sense is correct when creating a Solution
     # from a SampleSet using `.best_feasible`.
     solution = sample_set.best_feasible
-    assert solution.sense == Instance.MINIMIZE
+    assert solution.sense == Sense.Minimize
 
 
 def test_sample_set_sense_maximize():
@@ -46,12 +46,12 @@ def test_sample_set_sense_maximize():
         decision_variables=[],
         objective=0,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     sample_set = instance.evaluate_samples([{}])
-    assert sample_set.sense == Instance.MAXIMIZE
+    assert sample_set.sense == Sense.Maximize
 
     # Check that the sense is correct when creating a Solution
     # from a SampleSet using `.get()`.
     sokution = sample_set.get(0)
-    assert sokution.sense == Instance.MAXIMIZE
+    assert sokution.sense == Sense.Maximize

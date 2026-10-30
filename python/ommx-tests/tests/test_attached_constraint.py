@@ -1,10 +1,12 @@
 """Tests for AttachedConstraint write-through wrapper."""
 
+from ommx import ConstraintID
 import copy
 
 import pytest
 
 from ommx import (
+    Sense,
     AttachedConstraint,
     Constraint,
     DecisionVariable,
@@ -17,7 +19,7 @@ from ommx import (
 
 def _empty_instance() -> Instance:
     return Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=Function.from_linear(Linear.constant(0.0)),
         decision_variables=[DecisionVariable.binary(0), DecisionVariable.binary(1)],
         constraints={},
@@ -128,7 +130,7 @@ def test_attached_evaluate_uses_live_data():
 
     evaluated = attached.evaluate(state)
     assert evaluated.evaluated_value == pytest.approx(0.0)
-    assert evaluated.feasible is True
+    assert evaluated.is_feasible(atol=1e-6) is True
 
 
 def test_attached_constraint_id_and_instance_handle():
@@ -136,7 +138,7 @@ def test_attached_constraint_id_and_instance_handle():
     instance = _empty_instance()
     attached = instance.add_constraint(_make_constraint(name="balance"))
 
-    assert isinstance(attached.constraint_id, int)
+    assert isinstance(attached.constraint_id, ConstraintID)
     assert attached.instance is instance
 
 

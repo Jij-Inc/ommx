@@ -344,10 +344,12 @@ impl InstanceBuilder {
         // Validate one-hot constraints
         for (id, value) in &self.one_hot_constraints {
             if value.variables.is_empty() {
-                crate::bail!(
-                    { ?id },
-                    "One-hot constraint {id:?} has no variables; one-hot constraints must contain at least one variable",
-                );
+                return Err(crate::Error::new(
+                    crate::OneHotConstraintError::EmptyVariables,
+                )
+                .context(format!(
+                    "One-hot constraint {id:?} has no variables; one-hot constraints must contain at least one variable"
+                )));
             }
             for var_id in &value.variables {
                 let Some(dv) = decision_variables.get(var_id) else {
@@ -365,10 +367,12 @@ impl InstanceBuilder {
         // Validate SOS1 constraints
         for (id, value) in &self.sos1_constraints {
             if value.variables.is_empty() {
-                crate::bail!(
-                    { ?id },
-                    "SOS1 constraint {id:?} has no variables; SOS1 constraints must contain at least one variable",
-                );
+                return Err(crate::Error::new(
+                    crate::Sos1ConstraintError::EmptyVariables,
+                )
+                .context(format!(
+                    "SOS1 constraint {id:?} has no variables; SOS1 constraints must contain at least one variable"
+                )));
             }
             for var_id in &value.variables {
                 if !variable_ids.contains(var_id) {
@@ -445,9 +449,10 @@ impl InstanceBuilder {
             );
         }
 
-        Ok(Instance {
+        let instance = Instance {
             sense,
             objective,
+            output_objective: None,
             decision_variables,
             constraint_collection: ConstraintCollection::with_context(
                 constraints,
@@ -474,7 +479,9 @@ impl InstanceBuilder {
             parameters: self.parameters,
             description: self.description,
             annotations: Default::default(),
-        })
+        };
+        instance.validate_constraint_ids()?;
+        Ok(instance)
     }
 }
 
@@ -859,6 +866,10 @@ mod tests {
             .unwrap_err();
 
         let msg = err.to_string();
+        assert!(matches!(
+            err.downcast_ref::<crate::OneHotConstraintError>(),
+            Some(crate::OneHotConstraintError::EmptyVariables)
+        ));
         assert!(
             msg.contains("no variables") && msg.contains("42"),
             "expected empty one-hot error mentioning the id, got: {msg}"

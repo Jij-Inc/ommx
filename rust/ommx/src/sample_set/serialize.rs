@@ -1,8 +1,14 @@
 use super::*;
-use crate::{v1, v2, Message, Parse};
+use crate::{message_io, v1, v2, Message, Parse};
 use anyhow::Result;
 
 impl SampleSet {
+    /// Serialize using the lossy v1 format.
+    ///
+    /// Native special constraints are omitted. Feasibility is recomputed from
+    /// retained regular constraints and variable values at [`ATol::default`],
+    /// as on v1 import. Use the same default on write and read, or use
+    /// [`Self::to_v2_bytes`] to preserve the original tolerance and constraints.
     pub fn to_v1_bytes(&self) -> Vec<u8> {
         let v1_sample_set = v1::SampleSet::from(self.clone());
         v1_sample_set.encode_to_vec()
@@ -14,12 +20,12 @@ impl SampleSet {
     }
 
     pub fn from_v1_bytes(bytes: &[u8]) -> Result<Self> {
-        let inner = v1::SampleSet::decode(bytes)?;
+        let inner = message_io::decode::<v1::SampleSet>(bytes, "ommx.v1.SampleSet")?;
         Ok(Parse::parse(inner, &())?)
     }
 
     pub fn from_v2_bytes(bytes: &[u8]) -> Result<Self> {
-        let inner = v2::SampleSet::decode(bytes)?;
+        let inner = message_io::decode::<v2::SampleSet>(bytes, "ommx.v2.SampleSet")?;
         Ok(Parse::parse(inner, &())?)
     }
 }
@@ -56,16 +62,16 @@ impl From<SampleSet> for v2::SampleSet {
             required_features,
             objectives: Some(objectives.into()),
             decision_variables: Some(decision_variables.into()),
-            sampled_regular_constraints: Some(constraints.into()),
+            sampled_regular_constraints: Some(constraints.into_v2(feasibility_atol)),
             feasible: sample_bool_map_to_v2(feasible),
             sense: sense.into(),
             feasible_relaxed: sample_bool_map_to_v2(feasible_relaxed),
             sampled_named_functions: Some(named_functions.into()),
             metadata,
             annotations: crate::v2_io::extension_annotations_to_v2_map(annotations),
-            sampled_indicator_constraints: Some(indicator_constraints.into()),
-            sampled_one_hot_constraints: Some(one_hot_constraints.into()),
-            sampled_sos1_constraints: Some(sos1_constraints.into()),
+            sampled_indicator_constraints: Some(indicator_constraints.into_v2(feasibility_atol)),
+            sampled_one_hot_constraints: Some(one_hot_constraints.into_v2(feasibility_atol)),
+            sampled_sos1_constraints: Some(sos1_constraints.into_v2(feasibility_atol)),
             feasibility_atol: Some(feasibility_atol.into_inner()),
         }
     }

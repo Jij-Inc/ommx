@@ -16,6 +16,8 @@ pub use prost::Message;
 
 // Public modules
 pub mod artifact;
+#[cfg(feature = "cli")]
+pub mod cli;
 #[cfg(feature = "remote-artifact")]
 pub mod dataset;
 pub mod experiment;
@@ -33,6 +35,7 @@ mod atol;
 mod bound;
 mod coefficient;
 mod constraint;
+mod constraint_ids;
 mod constraint_type;
 mod decision_variable;
 pub mod error;
@@ -42,7 +45,9 @@ mod function;
 mod indicator_constraint;
 mod infeasible_detected;
 mod instance;
+mod instance_class;
 mod macros;
+mod message_io;
 mod modeling_label;
 mod named_function;
 mod one_hot_constraint;
@@ -62,12 +67,18 @@ pub use constraint::*;
 pub use constraint_type::*;
 pub use decision_variable::*;
 pub use error::*;
-pub use evaluate::{Evaluate, Propagate, PropagateOutcome};
+pub use evaluate::{
+    Evaluate, InconsistentDependentValue, MissingStateEntries, Propagate, PropagateOutcome,
+    UnknownStateEntries, UnverifiableDependentAssertion,
+};
 pub use format::{FormattedFunction, FunctionFormatOptions};
-pub use function::*;
+pub use function::{
+    Expression, Function, FunctionEvaluationError, FunctionParameters, IntoFunctionForMacro,
+};
 pub use indicator_constraint::*;
 pub use infeasible_detected::*;
 pub use instance::*;
+pub use instance_class::*;
 pub use modeling_label::*;
 pub use named_function::*;
 pub use one_hot_constraint::*;

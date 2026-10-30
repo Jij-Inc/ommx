@@ -1,6 +1,9 @@
 """Tests for NamedFunction wrapper and its integration with Instance, Solution, and SampleSet."""
 
+import sys
+
 from ommx import (
+    Sense,
     DecisionVariable,
     Function,
     Instance,
@@ -38,7 +41,7 @@ def _make_instance_with_named_functions():
         decision_variables=x,
         objective=objective,
         constraints={0: Function(sum(x)) <= 2},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
         named_functions=[nf0, nf1],
     )
     return instance, x
@@ -133,6 +136,17 @@ class TestNamedFunctionArithmetic:
         assert isinstance(result, Function)
         assert result.evaluate({1: 2.0}) == 9.0
 
+    def test_reverse_associative_operations_preserve_left_operand_order(self):
+        x = Function(DecisionVariable.continuous(1))
+        lhs = Function(Linear(terms={1: sys.float_info.max}))
+        rhs = NamedFunction(id=0, function=1 / (x - 2))
+
+        for expression in (lhs + rhs, lhs * rhs):
+            with pytest.raises(
+                ValueError, match="polynomial function produced a non-finite value"
+            ):
+                expression.evaluate({1: 2})
+
     def test_neg(self):
         x = DecisionVariable.integer(1)
         nf = NamedFunction(id=0, function=2 * x + 1)
@@ -226,7 +240,7 @@ class TestInstanceNamedFunctions:
             decision_variables=x,
             objective=x[0] + x[1],
             constraints={},
-            sense=Instance.MINIMIZE,
+            sense=Sense.Minimize,
         )
         assert instance.named_functions == []
 
@@ -235,12 +249,12 @@ class TestInstanceNamedFunctions:
         first = NamedFunction(id=0, function=x, name="first")
         second = NamedFunction(id=0, function=x + 1, name="second")
 
-        with pytest.raises(RuntimeError, match="Duplicate named function ID: 0"):
+        with pytest.raises(ValueError, match="Duplicate named function ID: 0"):
             Instance.from_components(
                 decision_variables=[x],
                 objective=x,
                 constraints={},
-                sense=Instance.MINIMIZE,
+                sense=Sense.Minimize,
                 named_functions=[first, second],
             )
 
@@ -253,7 +267,7 @@ class TestInstanceNamedFunctions:
                 decision_variables=[x],
                 objective=x,
                 constraints={},
-                sense=Instance.MINIMIZE,
+                sense=Sense.Minimize,
                 named_functions=[rogue],
             )
 
@@ -267,7 +281,7 @@ class TestInstanceNamedFunctions:
             parameters=[p],
             objective=x + p,
             constraints={},
-            sense=Instance.MINIMIZE,
+            sense=Sense.Minimize,
             named_functions=[nf],
         )
 
@@ -284,7 +298,7 @@ class TestInstanceNamedFunctions:
                 parameters=[p],
                 objective=x + p,
                 constraints={},
-                sense=Instance.MINIMIZE,
+                sense=Sense.Minimize,
                 named_functions=[rogue],
             )
 

@@ -335,7 +335,7 @@ impl DecisionVariableTable<Created> {
         };
         row.check_value_consistency(id, value, atol)?;
         if let Some(previous_value) = self.columns.fixed_values.get(&id).copied() {
-            if !previous_value.is_finite() || (previous_value - value).abs() > *atol {
+            if !previous_value.is_finite() || !atol.approx_eq(previous_value, value) {
                 return Err(DecisionVariableError::SubstitutedValueOverwrite {
                     id,
                     previous_value,
@@ -369,7 +369,7 @@ impl DecisionVariableTable<Created> {
                 .columns
                 .fixed_values
                 .get(&id)
-                .is_none_or(|previous| previous.is_finite() && (*previous - value).abs() <= *atol));
+                .is_none_or(|previous| previous.is_finite() && atol.approx_eq(*previous, value)));
         }
 
         for (id, value) in fixed_values {
@@ -378,6 +378,16 @@ impl DecisionVariableTable<Created> {
     }
 
     /// Insert one fresh row, its label, and optionally its fixed value.
+    ///
+    /// The row, label, and fixed-value column are committed together. If this
+    /// method returns an error, the table is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecisionVariableError::DuplicateID`] when `id` already exists,
+    /// [`DecisionVariableError::NonFiniteValue`] when `fixed_value` is not
+    /// finite, or [`DecisionVariableError::SubstitutedValueInconsistent`] when
+    /// it does not belong to the row's domain.
     pub fn insert(
         &mut self,
         id: VariableID,
@@ -391,9 +401,12 @@ impl DecisionVariableTable<Created> {
         }
         if let Some(value) = fixed_value {
             row.check_value_consistency(id, value, atol)?;
+        }
+        self.insert_labeled_row(id, row, label)?;
+        if let Some(value) = fixed_value {
             self.columns.fixed_values.insert(id, value);
         }
-        self.insert_labeled_row(id, row, label)
+        Ok(())
     }
 
     /// Impose an additional bound on one row while preserving table invariants.
@@ -438,6 +451,53 @@ impl DecisionVariableTable<Created> {
             self.entries.insert(id, row);
         }
         Ok(())
+    }
+
+    /// Intersect one row's bound without tolerance, preserving table invariants.
+    ///
+    /// Uses [`DecisionVariable::clip_bound_exact`]. A fixed value must be finite,
+    /// inside the resulting stored bound, integral for an integer-like kind,
+    /// and an exact member for a finite domain.
+    /// Fixed values are checked even if the bound does not change. On failure,
+    /// this table remains unchanged.
+    pub fn clip_bound_exact(&mut self, id: VariableID, bound: Bound) -> crate::Result<bool> {
+        let (updated, changed) = self.prepare_clipped_bound_exact(id, bound)?;
+        if changed {
+            self.entries.insert(id, updated);
+        }
+        Ok(changed)
+    }
+
+    /// Apply bounds atomically without tolerance.
+    ///
+    /// Every specified ID must exist. Bounds and fixed values are checked as
+    /// in [`Self::clip_bound_exact`] before any row is updated.
+    pub fn clip_bounds_exact(&mut self, bounds: &crate::Bounds) -> crate::Result<()> {
+        let mut updates = BTreeMap::new();
+        for (&id, &bound) in bounds {
+            let (updated, changed) = self.prepare_clipped_bound_exact(id, bound)?;
+            if changed {
+                updates.insert(id, updated);
+            }
+        }
+        self.entries.extend(updates);
+        Ok(())
+    }
+
+    fn prepare_clipped_bound_exact(
+        &self,
+        id: VariableID,
+        bound: Bound,
+    ) -> crate::Result<(DecisionVariable, bool)> {
+        let Some(row) = self.entries.get(&id) else {
+            crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
+        };
+        let mut updated = row.clone();
+        let changed = updated.clip_bound_exact(id, bound)?;
+        if let Some(&value) = self.columns.fixed_values.get(&id) {
+            updated.check_value_consistency_exact(id, value)?;
+        }
+        Ok((updated, changed))
     }
 }
 
@@ -615,9 +675,9 @@ impl Parse for crate::v2::DecisionVariable {
         match kind {
             Kind::FiniteDomain => {
                 if self.bound.is_some() {
-                    return Err(RawParseError::InvalidInstance(
-                        "KIND_FINITE_DOMAIN must not define bound".to_string(),
-                    )
+                    return Err(ParseError::new(crate::error!(
+                        "KIND_FINITE_DOMAIN must not define bound"
+                    ))
                     .context(message, "bound"));
                 }
                 let values = self
@@ -628,18 +688,16 @@ impl Parse for crate::v2::DecisionVariable {
                     })?
                     .values;
                 DecisionVariable::new_finite_domain(values).map_err(|source| {
-                    RawParseError::InvalidDecisionVariable(
-                        DecisionVariableError::InvalidDefinition {
-                            id: *id,
-                            source: Box::new(source),
-                        },
-                    )
+                    ParseError::new(DecisionVariableError::InvalidDefinition {
+                        id: *id,
+                        source: Box::new(source),
+                    })
                     .context(message, "finite_domain")
                 })
             }
             _ => {
                 if self.finite_domain.is_some() {
-                    return Err(RawParseError::InvalidInstance(format!(
+                    return Err(ParseError::new(crate::error!(
                         "finite_domain is only valid for KIND_FINITE_DOMAIN, but kind is {kind:?}"
                     ))
                     .context(message, "finite_domain"));
@@ -652,12 +710,10 @@ impl Parse for crate::v2::DecisionVariable {
                     })?
                     .parse_as(&(), message, "bound")?;
                 DecisionVariable::new(kind, bound, ATol::default()).map_err(|source| {
-                    RawParseError::InvalidDecisionVariable(
-                        DecisionVariableError::InvalidDefinition {
-                            id: *id,
-                            source: Box::new(source),
-                        },
-                    )
+                    ParseError::new(DecisionVariableError::InvalidDefinition {
+                        id: *id,
+                        source: Box::new(source),
+                    })
                     .context(message, "bound")
                 })
             }
@@ -693,8 +749,8 @@ impl Parse for crate::v2::EvaluatedDecisionVariable {
         }
         .parse(id)?;
         EvaluatedDecisionVariable::new(*id, decision_variable, self.value)
-            .map_err(RawParseError::InvalidDecisionVariable)
-            .map_err(|e| ParseError::from(e).context("ommx.v2.EvaluatedDecisionVariable", "value"))
+            .map_err(ParseError::new)
+            .map_err(|e| e.context("ommx.v2.EvaluatedDecisionVariable", "value"))
     }
 }
 
@@ -734,8 +790,8 @@ impl Parse for crate::v2::SampledDecisionVariable {
             })?
             .parse_as(&(), message, "samples")?;
         SampledDecisionVariable::new(*id, decision_variable, samples)
-            .map_err(RawParseError::InvalidDecisionVariable)
-            .map_err(|e| ParseError::from(e).context(message, "samples"))
+            .map_err(ParseError::new)
+            .map_err(|e| e.context(message, "samples"))
     }
 }
 
@@ -771,12 +827,10 @@ impl Parse for crate::v2::DecisionVariableTable {
             .into_iter()
             .map(|(id, value)| (VariableID::from(id), value))
             .collect();
-        DecisionVariableTable::<Created>::validate_labels(&entries, &labels).map_err(|e| {
-            RawParseError::InvalidInstance(e.to_string()).context(message, "labels")
-        })?;
-        validate_created_fixed_values(&entries, &fixed_values, ATol::default()).map_err(|e| {
-            RawParseError::InvalidInstance(e.to_string()).context(message, "fixed_values")
-        })?;
+        DecisionVariableTable::<Created>::validate_labels(&entries, &labels)
+            .map_err(|e| ParseError::new(e).context(message, "labels"))?;
+        validate_created_fixed_values(&entries, &fixed_values, ATol::default())
+            .map_err(|e| ParseError::new(e).context(message, "fixed_values"))?;
         Ok(DecisionVariableTable {
             entries,
             labels,
@@ -807,7 +861,7 @@ impl Parse for crate::v2::EvaluatedDecisionVariableTable {
         }
         let labels = crate::v2_io::modeling_label_store_from_v2_map(self.labels);
         EvaluatedDecisionVariableTable::new(entries, labels)
-            .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "labels"))
+            .map_err(|e| ParseError::new(e).context(message, "labels"))
     }
 }
 
@@ -833,7 +887,7 @@ impl Parse for crate::v2::SampledDecisionVariableTable {
         }
         let labels = crate::v2_io::modeling_label_store_from_v2_map(self.labels);
         SampledDecisionVariableTable::new(entries, labels)
-            .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "labels"))
+            .map_err(|e| ParseError::new(e).context(message, "labels"))
     }
 }
 
@@ -858,6 +912,8 @@ impl<'a, S: DecisionVariableTableStage> IntoIterator for &'a DecisionVariableTab
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error as _;
+
     use super::*;
     use crate::Bound;
 
@@ -866,6 +922,79 @@ mod tests {
         labels: VariableLabelStore,
     ) -> crate::Result<DecisionVariableTable> {
         DecisionVariableTable::with_fixed_values(entries, labels, BTreeMap::new(), ATol::default())
+    }
+
+    #[test]
+    fn exact_clipping_validates_fixed_values_even_for_unchanged_bounds() {
+        let atol = ATol::new(1e-6).unwrap();
+        for (kind, fixed) in [
+            (crate::Kind::Continuous, 3.0_f64.next_up()),
+            (crate::Kind::Integer, 3.0_f64.next_down()),
+        ] {
+            let bound = Bound::new(0.0, 3.0).unwrap();
+            let original = DecisionVariableTable::with_fixed_values(
+                BTreeMap::from([(0.into(), DecisionVariable::new(kind, bound, atol).unwrap())]),
+                Default::default(),
+                BTreeMap::from([(0.into(), fixed)]),
+                atol,
+            )
+            .unwrap();
+            let mut table = original.clone();
+            assert!(table.clip_bound_exact(0.into(), bound).is_err());
+            assert_eq!(table, original);
+            assert!(table
+                .clip_bounds_exact(&crate::Bounds::from([(0.into(), bound)]))
+                .is_err());
+            assert_eq!(table, original);
+        }
+    }
+
+    #[test]
+    fn exact_clipping_preserves_fixed_values_and_rejects_unknown_ids() {
+        let mut table = DecisionVariableTable::with_fixed_values(
+            BTreeMap::from([(
+                0.into(),
+                DecisionVariable::continuous()
+                    .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+                    .unwrap(),
+            )]),
+            Default::default(),
+            BTreeMap::from([(0.into(), 3.0)]),
+            ATol::default(),
+        )
+        .unwrap();
+        assert!(table
+            .clip_bound_exact(0.into(), Bound::new(2.0, 3.0).unwrap())
+            .unwrap());
+        assert_eq!(table.fixed_value(0.into()), Some(3.0));
+        let before = table.clone();
+        assert!(table
+            .clip_bound_exact(0.into(), Bound::new(2.0, 3.0_f64.next_down()).unwrap())
+            .is_err());
+        assert!(table
+            .clip_bound_exact(99.into(), Bound::unbounded())
+            .is_err());
+        assert_eq!(table, before);
+    }
+
+    #[test]
+    fn exact_clipping_validates_finite_domain_fixed_membership() {
+        let id = VariableID::from(0);
+        let original = DecisionVariableTable::with_fixed_values(
+            BTreeMap::from([(
+                id,
+                DecisionVariable::new_finite_domain(vec![0.0, 0.3, 1.0]).unwrap(),
+            )]),
+            Default::default(),
+            BTreeMap::from([(id, 0.3_f64.next_up())]),
+            ATol::default(),
+        )
+        .unwrap();
+        let mut table = original.clone();
+        assert!(table
+            .clip_bound_exact(id, Bound::new(0.0, 1.0).unwrap())
+            .is_err());
+        assert_eq!(table, original);
     }
 
     #[test]
@@ -992,10 +1121,14 @@ mod tests {
         )
         .unwrap_err();
 
-        assert!(
-            err.to_string().contains("Substituted value") && err.to_string().contains("ID=1"),
-            "unexpected error: {err}"
-        );
+        assert!(matches!(
+            err.downcast_ref::<DecisionVariableError>(),
+            Some(DecisionVariableError::SubstitutedValueInconsistent {
+                id: error_id,
+                substituted_value,
+                ..
+            }) if *error_id == id && *substituted_value == 0.5
+        ));
     }
 
     #[test]
@@ -1047,6 +1180,56 @@ mod tests {
         assert_eq!(table.get(&id), Some(&original));
         assert_eq!(table.labels().name(id), None);
         assert_eq!(table.fixed_value(id), Some(1.0));
+    }
+
+    #[test]
+    fn definition_table_insert_commits_row_label_and_fixed_value_together() {
+        let id = VariableID::from(1);
+        let row = DecisionVariable::integer();
+        let label = DecisionVariableLabel {
+            name: Some("x".to_string()),
+            subscripts: vec![2, 3],
+            ..Default::default()
+        };
+        let mut table = DecisionVariableTable::<crate::Created>::default();
+
+        table
+            .insert(id, row.clone(), label.clone(), Some(1.0), ATol::default())
+            .unwrap();
+
+        assert_eq!(table.get(&id), Some(&row));
+        assert_eq!(table.labels().collect_for(id), label);
+        assert_eq!(table.fixed_value(id), Some(1.0));
+    }
+
+    #[test]
+    fn definition_table_insert_rejects_inconsistent_fixed_value_atomically() {
+        let id = VariableID::from(1);
+        let mut table = DecisionVariableTable::<crate::Created>::default();
+        let before = table.clone();
+
+        let err = table
+            .insert(
+                id,
+                DecisionVariable::integer(),
+                DecisionVariableLabel {
+                    name: Some("invalid".to_string()),
+                    ..Default::default()
+                },
+                Some(0.5),
+                ATol::default(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            DecisionVariableError::SubstitutedValueInconsistent {
+                id: error_id,
+                substituted_value: 0.5,
+                ..
+            } if error_id == id
+        ));
+        assert_eq!(table, before);
     }
 
     #[test]
@@ -1184,6 +1367,12 @@ mod tests {
         .parse(&())
         .unwrap_err();
 
+        assert_eq!(
+            err.source()
+                .expect("ParseError must expose the orphan-label cause")
+                .to_string(),
+            "Modeling label references unknown decision variable ID VariableID(1)"
+        );
         assert!(
             err.to_string()
                 .contains("ommx.v2.DecisionVariableTable[labels]"),
@@ -1201,6 +1390,12 @@ mod tests {
         .parse(&())
         .unwrap_err();
 
+        assert_eq!(
+            err.source()
+                .expect("ParseError must expose the orphan-fixed-value cause")
+                .to_string(),
+            "Fixed decision-variable value references unknown decision variable ID VariableID(1)"
+        );
         assert!(
             err.to_string()
                 .contains("ommx.v2.DecisionVariableTable[fixed_values]"),
@@ -1225,6 +1420,12 @@ mod tests {
         .parse(&())
         .unwrap_err();
 
+        assert_eq!(
+            err.source()
+                .expect("ParseError must expose the orphan-label cause")
+                .to_string(),
+            "Modeling label references unknown decision variable ID VariableID(1)"
+        );
         assert!(
             err.to_string()
                 .contains("ommx.v2.EvaluatedDecisionVariableTable[labels]"),
@@ -1249,10 +1450,60 @@ mod tests {
         .parse(&())
         .unwrap_err();
 
+        assert_eq!(
+            err.source()
+                .expect("ParseError must expose the orphan-label cause")
+                .to_string(),
+            "Modeling label references unknown decision variable ID VariableID(1)"
+        );
         assert!(
             err.to_string()
                 .contains("ommx.v2.SampledDecisionVariableTable[labels]"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn parse_v2_definition_table_preserves_inconsistent_fixed_value_signal() {
+        let error = crate::v2::DecisionVariableTable {
+            entries: BTreeMap::from([(1, DecisionVariable::integer().into())]),
+            labels: BTreeMap::new(),
+            fixed_values: BTreeMap::from([(1, 0.5)]),
+        }
+        .parse(&())
+        .unwrap_err();
+
+        assert!(matches!(
+            error
+                .source()
+                .and_then(|source| source.downcast_ref::<DecisionVariableError>()),
+            Some(DecisionVariableError::SubstitutedValueInconsistent {
+                id,
+                substituted_value,
+                ..
+            }) if *id == VariableID::from(1) && *substituted_value == 0.5
+        ));
+        assert_eq!(error.context.len(), 1);
+        assert_eq!(error.context[0].message, "ommx.v2.DecisionVariableTable");
+        assert_eq!(error.context[0].field, "fixed_values");
+    }
+
+    #[test]
+    fn parse_v2_definition_table_preserves_non_finite_fixed_value_signal() {
+        let error = crate::v2::DecisionVariableTable {
+            entries: BTreeMap::from([(1, DecisionVariable::continuous().into())]),
+            labels: BTreeMap::new(),
+            fixed_values: BTreeMap::from([(1, f64::INFINITY)]),
+        }
+        .parse(&())
+        .unwrap_err();
+
+        assert!(matches!(
+            error
+                .source()
+                .and_then(|source| source.downcast_ref::<DecisionVariableError>()),
+            Some(DecisionVariableError::NonFiniteValue { id, value })
+                if *id == VariableID::from(1) && value.is_infinite()
+        ));
     }
 }

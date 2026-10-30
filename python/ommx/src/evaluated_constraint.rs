@@ -1,18 +1,28 @@
+use crate::constraint_base::ConstraintView;
 use std::collections::BTreeSet;
 
 use pyo3::prelude::*;
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
-pub struct EvaluatedConstraint(pub ommx::EvaluatedConstraint, pub ommx::ConstraintContext);
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(PartialEq)]
+pub struct EvaluatedConstraint(
+    pub ommx::EvaluatedConstraint,
+    pub ommx::ConstraintContext,
+    pub Option<ommx::RemovedReason>,
+);
+crate::constraint_base::constraint_subclass!(
+    EvaluatedConstraint,
+    crate::constraint_base::ConstraintView
+);
 
 impl EvaluatedConstraint {
     pub fn standalone(inner: ommx::EvaluatedConstraint) -> Self {
-        Self(inner, ommx::ConstraintContext::default())
+        Self(inner, ommx::ConstraintContext::default(), None)
     }
 
     pub fn from_parts(inner: ommx::EvaluatedConstraint, context: ommx::ConstraintContext) -> Self {
-        Self(inner, context)
+        Self(inner, context, None)
     }
 }
 
@@ -43,47 +53,13 @@ impl EvaluatedConstraint {
         self.0.stage.dual_variable = value;
     }
 
-    /// Get the feasibility status
-    #[getter]
-    pub fn feasible(&self) -> bool {
-        self.0.stage.feasible
-    }
-
-    /// Get the constraint name
-    #[getter]
-    pub fn name(&self) -> Option<String> {
-        self.1.label.name.clone()
-    }
-
-    /// Get the subscripts
-    #[getter]
-    pub fn subscripts(&self) -> Vec<i64> {
-        self.1.label.subscripts.clone()
-    }
-
-    /// Get the parameters
-    #[getter]
-    pub fn parameters(&self) -> std::collections::HashMap<String, String> {
-        self.1
-            .label
-            .parameters
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect()
-    }
-
-    /// Get the description
-    #[getter]
-    pub fn description(&self) -> Option<String> {
-        self.1.label.description.clone()
-    }
-
-    /// Get the provenance chain.
+    /// Check feasibility using the supplied absolute tolerance.
     ///
-    /// See {attr}`~ommx.Constraint.provenance` for semantics.
-    #[getter]
-    pub fn provenance(&self) -> Vec<crate::Provenance> {
-        crate::provenance_list(&self.1)
+    /// The query compares the stored violation with ``atol``. It does not
+    /// re-evaluate the function or canonicalize the input state.
+    #[pyo3(signature = (*, atol))]
+    pub fn is_feasible(&self, atol: f64) -> crate::error::OmmxPyResult<bool> {
+        Ok(self.0.is_feasible(ommx::ATol::new(atol)?))
     }
 
     /// Get the used decision variable IDs
@@ -103,8 +79,11 @@ impl EvaluatedConstraint {
     /// - For $f(x) = 0$: returns $|f(x)|$
     /// - For $f(x) \leq 0$: returns $\max(0, f(x))$
     ///
-    /// Returns 0.0 if the constraint is satisfied.
+    /// Zero implies feasibility. A small positive violation may also be feasible
+    /// within the supplied query tolerance; the residual is not rounded to zero.
     pub fn violation(&self) -> f64 {
         self.0.violation()
     }
 }
+
+constraint_result_context!(EvaluatedConstraint);

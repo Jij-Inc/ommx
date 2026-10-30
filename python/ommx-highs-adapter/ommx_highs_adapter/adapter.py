@@ -1,15 +1,31 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import asdict, dataclass, fields
-from typing import Any, Callable, Iterable, Mapping, cast
+from typing import Any, Callable, ClassVar, Iterable, Mapping, cast
 
 import highspy
 import numpy as np
 
-from highspy.highs import highs_linear_expression
+from highspy.highs import highs_linear_expression, highs_var
 from opentelemetry import trace
 
-from ommx import Instance, DecisionVariable, Solution, Constraint, State, Function
+from ommx import (
+    ConstraintID,
+    Equality,
+    Function,
+    Instance,
+    InstanceClass,
+    InstanceClassClause,
+    Kind,
+    PolynomialRequirement,
+    PreparationPolicy,
+    Sense,
+    Solution,
+    SpecialConstraintKind,
+    SpecialConstraintPreparation,
+    State,
+)
 from ommx.adapter import (
     DiagnosticsSink,
     SolverAdapter,
@@ -20,6 +36,11 @@ from ommx.adapter import (
 from .exception import OMMXHighsAdapterError
 
 _tracer = trace.get_tracer("ommx.adapter.highs")
+
+_LINEAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS = {
+    Equality.EqualToZero: PolynomialRequirement.at_most(1),
+    Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(1),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -422,24 +443,26 @@ class OMMXHighsAdapter(SolverAdapter):
        * - OMMX Type
          - HiGHS Type
          - Bounds
-       * - ``DecisionVariable.BINARY``
+       * - ``Kind.Binary``
          - ``HighsVarType.kInteger``
          - ``[0, 1]``
-       * - ``DecisionVariable.INTEGER``
+       * - ``Kind.Integer``
          - ``HighsVarType.kInteger``
          - ``[var.bound.lower, var.bound.upper]``
-       * - ``DecisionVariable.CONTINUOUS``
+       * - ``Kind.Continuous``
          - ``HighsVarType.kContinuous``
          - ``[var.bound.lower, var.bound.upper]``
-       * - ``DecisionVariable.SEMI_INTEGER``
+       * - ``Kind.SemiInteger``
          - **Not supported** (support planned)
          - \\-
-       * - ``DecisionVariable.SEMI_CONTINUOUS``
+       * - ``Kind.SemiContinuous``
          - **Not supported** (support planned)
          - \\-
 
-    **Note**: Semi-integer and semi-continuous variables are planned for future support but are
-    currently unsupported. Using these variable types will raise an ``OMMXHighsAdapterError``.
+    **Note**: Semi-integer and semi-continuous variables are planned for future
+    support but are currently unsupported. Exact-input APIs reject these kinds
+    with ``AdapterNotApplicableError``; the easy API reports that recommended
+    Preparation could not reach ``INPUT_CLASS``.
 
     Constraints
     -----------
@@ -456,10 +479,10 @@ class OMMXHighsAdapter(SolverAdapter):
        * - OMMX Constraint
          - Mathematical Form
          - HiGHS Constraint
-       * - ``Constraint.EQUAL_TO_ZERO``
+       * - ``Equality.EqualToZero``
          - f(x) = 0
          - ``const_expr == 0``
-       * - ``Constraint.LESS_THAN_OR_EQUAL_TO_ZERO``
+       * - ``Equality.LessThanOrEqualToZero``
          - f(x) ≤ 0
          - ``const_expr <= 0``
 
@@ -481,9 +504,9 @@ class OMMXHighsAdapter(SolverAdapter):
 
        * - OMMX Direction
          - HiGHS Method
-       * - ``Instance.MINIMIZE``
+       * - ``Sense.Minimize``
          - ``model.minimize(...)``
-       * - ``Instance.MAXIMIZE``
+       * - ``Sense.Maximize``
          - ``model.maximize(...)``
 
     **Function Types**:
@@ -495,18 +518,25 @@ class OMMXHighsAdapter(SolverAdapter):
     -----------------
     **Variable Values**: Extracted from HiGHS ``solution.col_value`` using maintained ID mapping
 
-    **Optimality Status**: Set to ``OPTIMALITY_OPTIMAL`` when HiGHS returns ``kOptimal``
+    **Optimality Status**:
 
-    **Dual Variables**: Extracted from ``solution.row_dual`` for constraints
+    - A HiGHS ``kOptimal`` status becomes ``OPTIMALITY_UNSPECIFIED`` when it
+      does not transport to the output objective
+
+    **Dual Variables**: Extracted from ``solution.row_dual`` when the active
+    objective is also the output objective. They are omitted when
+    output-objective projection would require a dual mapping that OMMX does not
+    define.
 
     Error Handling
     --------------
     **Unsupported Features**:
 
     - Quadratic functions (HiGHS supports linear problems only)
-    - Semi-integer variables (``DecisionVariable.SEMI_INTEGER``, kind=4) - support planned
-    - Semi-continuous variables (``DecisionVariable.SEMI_CONTINUOUS``, kind=5) - support planned
-    - Constraint types other than ``EQUAL_TO_ZERO``/``LESS_THAN_OR_EQUAL_TO_ZERO``
+    - Semi-integer variables (``Kind.SemiInteger``) - support planned
+    - Semi-continuous variables (``Kind.SemiContinuous``) - support planned
+    - Constraint types other than ``Equality.EqualToZero``/
+      ``Equality.LessThanOrEqualToZero``
 
     **Solver Status Mapping**:
 
@@ -528,13 +558,13 @@ class OMMXHighsAdapter(SolverAdapter):
     2. Constraint forms limited to equality (= 0) and inequality (≤ 0)
     3. Variable types limited to Binary, Integer, and Continuous
 
-       - Semi-integer (SEMI_INTEGER) support is planned but not yet implemented
-       - Semi-continuous (SEMI_CONTINUOUS) support is planned but not yet implemented
+       - ``Kind.SemiInteger`` support is planned but not yet implemented
+       - ``Kind.SemiContinuous`` support is planned but not yet implemented
 
     Examples
     --------
     >>> from ommx_highs_adapter import OMMXHighsAdapter
-    >>> from ommx import Instance, DecisionVariable
+    >>> from ommx import DecisionVariable, Instance, Sense
     >>>
     >>> # Define problem
     >>> x = DecisionVariable.binary(0)
@@ -543,7 +573,7 @@ class OMMXHighsAdapter(SolverAdapter):
     ...     decision_variables=[x, y],
     ...     objective=2*x + 3*y,
     ...     constraints={0: x + y <= 5},
-    ...     sense=Instance.MAXIMIZE,
+    ...     sense=Sense.Maximize,
     ... )
     >>>
     >>> # Solve
@@ -555,9 +585,48 @@ class OMMXHighsAdapter(SolverAdapter):
 
     """
 
+    INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
+        [
+            InstanceClassClause(
+                label="highs-linear-mip",
+                allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
+                objective_polynomial_requirement=PolynomialRequirement.at_most(1),
+                regular_constraint_polynomial_requirements=(
+                    _LINEAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS
+                ),
+                allowed_senses={Sense.Minimize, Sense.Maximize},
+            )
+        ]
+    )
+
+    @classmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        """Recommend lowering special constraints before using HiGHS.
+
+        HiGHS accepts both optimization senses, Binary, Integer, and Continuous
+        variables, and linear regular constraints directly. Its recommendation
+        therefore enables only lowering for the special-constraint families
+        currently understood by OMMX. The easy API applies a fresh policy to an
+        isolated copy; callers may instead edit and apply one before invoking
+        :meth:`solve_without_preparation`.
+        """
+        return PreparationPolicy(
+            special_constraints=SpecialConstraintPreparation.lower_special_constraints(
+                kinds={
+                    SpecialConstraintKind.Indicator,
+                    SpecialConstraintKind.OneHot,
+                    SpecialConstraintKind.Sos1,
+                }
+            )
+        )
+
     def __init__(self, ommx_instance: Instance, *, verbose: bool = False):
         """
         Initialize the adapter with an OMMX instance.
+
+        Build the HiGHS model without running the solver. Call
+        ``adapter.solver_input.run()`` to solve it, or use :meth:`solve`
+        for the complete workflow.
 
         Parameters
         ----------
@@ -567,7 +636,7 @@ class OMMXHighsAdapter(SolverAdapter):
             If True, enable HiGHS's console logging
         """
         with _tracer.start_as_current_span("convert"):
-            super().__init__(ommx_instance)
+            self.require_applicable(ommx_instance)
             self.instance = ommx_instance
             self.model = highspy.Highs()
 
@@ -577,7 +646,7 @@ class OMMXHighsAdapter(SolverAdapter):
                 self.model.setOptionValue("log_to_console", False)
 
             self.var_ids = {}
-            self.highs_vars = []
+            self.highs_vars: dict[int, highs_var] = {}
 
             self._set_decision_variables()
             self._set_objective()
@@ -601,12 +670,8 @@ class OMMXHighsAdapter(SolverAdapter):
         Parameters
         ----------
         ommx_instance : Instance
-            The OMMX optimization problem to solve. Must satisfy HiGHS adapter
-            requirements: linear objective function (constant or linear terms only),
-            linear constraints (constant or linear terms only), variables of type
-            Binary, Integer, or Continuous only (Semi-integer and Semi-continuous
-            support is planned but not yet implemented), and constraints of type
-            ``EQUAL_TO_ZERO`` or ``LESS_THAN_OR_EQUAL_TO_ZERO`` only.
+            The OMMX optimization problem to solve. The input is not modified;
+            an isolated copy is prepared with the recommended HiGHS policy.
 
         verbose : bool, default=False
             If True, enable HiGHS's console logging for debugging
@@ -619,7 +684,7 @@ class OMMXHighsAdapter(SolverAdapter):
             - Objective value in solution.objective
             - Constraint evaluations in solution.constraints
             - Optimality status in solution.optimality
-            - Dual variables (if available) in constraint.dual_variable
+            - Dual variables when the active and output objectives coincide
 
         Raises
         ------
@@ -627,8 +692,10 @@ class OMMXHighsAdapter(SolverAdapter):
             When the optimization problem has no feasible solution
         UnboundedDetected
             When the optimization problem is unbounded
+        PreparationTargetNotReachedError
+            When the recommended preparation cannot reach the Adapter input class
         OMMXHighsAdapterError
-            When the problem contains unsupported features or HiGHS encounters an error
+            When conversion or HiGHS encounters an adapter-specific error
 
         Examples
         --------
@@ -644,7 +711,7 @@ class OMMXHighsAdapter(SolverAdapter):
         ...     decision_variables=x,
         ...     objective=sum(p[i] * x[i] for i in range(6)),
         ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
-        ...     sense=Instance.MAXIMIZE,
+        ...     sense=Sense.Maximize,
         ... )
         >>>
         >>> solution = OMMXHighsAdapter.solve(instance)
@@ -663,12 +730,12 @@ class OMMXHighsAdapter(SolverAdapter):
         ...     decision_variables=[x],
         ...     objective=x,
         ...     constraints={0: x >= 4},  # Impossible: x ≤ 3 and x ≥ 4
-        ...     sense=Instance.MAXIMIZE,
+        ...     sense=Sense.Maximize,
         ... )
         >>> OMMXHighsAdapter.solve(instance)  # doctest: +IGNORE_EXCEPTION_DETAIL
         Traceback (most recent call last):
             ...
-        ommx.adapter.InfeasibleDetected: Model was infeasible
+        ommx.InfeasibleDetected: Model was infeasible
         """
         # TODO would have added an unbounded example/doctest above,
         # but the same example used with pyscipopt isn't being correctly
@@ -685,7 +752,7 @@ class OMMXHighsAdapter(SolverAdapter):
         # ...     decision_variables=[x],
         # ...     objective=x,
         # ...     constraints={},
-        # ...     sense=Instance.MAXIMIZE,
+        # ...     sense=Sense.Maximize,
         # ... )
 
         # >>> OMMXHighsAdapter.solve(instance)
@@ -693,6 +760,23 @@ class OMMXHighsAdapter(SolverAdapter):
         #     ...
         # ommx.adapter.UnboundedDetected: Model was unbounded
         # ````
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.solve_without_preparation(
+            prepared,
+            verbose=verbose,
+            diagnostics=diagnostics,
+        )
+
+    @classmethod
+    def solve_without_preparation(
+        cls,
+        ommx_instance: Instance,
+        *,
+        verbose: bool = False,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> Solution:
+        """Solve an exact HiGHS Adapter input without preparing it."""
         with _tracer.start_as_current_span("solve") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             adapter = cls(ommx_instance, verbose=verbose)
@@ -735,7 +819,10 @@ class OMMXHighsAdapter(SolverAdapter):
         Convert an optimized HiGHS model back to an OMMX Solution.
 
         This method translates HiGHS solver results into OMMX format, including
-        variable values, optimality status, and dual variable information.
+        variable values, optimality status, and transportable dual variable
+        information.
+        Backend optimality is mapped through the instance's output-objective
+        semantics and remains unspecified when it does not transport.
 
         Parameters
         ----------
@@ -749,8 +836,8 @@ class OMMXHighsAdapter(SolverAdapter):
             Complete OMMX solution containing:
             - Variable values mapped back to original OMMX IDs
             - Constraint evaluations and feasibility status
-            - Optimality information from HiGHS
-            - Dual variables for linear constraints
+            - Optimality information from HiGHS when transportable to the output objective
+            - Dual variables for linear constraints without output-objective projection
 
         Raises
         ------
@@ -767,9 +854,11 @@ class OMMXHighsAdapter(SolverAdapter):
         Any modifications to the HiGHS model structure after creation may
         make the decoding process incompatible.
 
-        The dual variables are extracted from HiGHS's row_dual and mapped
-        to OMMX constraints based on their order. Only constraints with
-        valid dual information will have the dual_variable field set.
+        When the active objective is also the output objective, dual variables
+        are extracted from HiGHS's ``row_dual`` and mapped to OMMX constraints
+        based on their order. If ``output_objective`` is present, every dual is
+        omitted because OMMX does not define how the active formulation's dual
+        certificate maps to the projected output semantics.
 
         Examples
         --------
@@ -781,7 +870,7 @@ class OMMXHighsAdapter(SolverAdapter):
         ...     decision_variables=[x],
         ...     objective=x,
         ...     constraints={},
-        ...     sense=Instance.MAXIMIZE,
+        ...     sense=Sense.Maximize,
         ... )
         >>>
         >>> adapter = OMMXHighsAdapter(instance)
@@ -799,16 +888,17 @@ class OMMXHighsAdapter(SolverAdapter):
 
             # set optimality
             if data.getModelStatus() == highspy.HighsModelStatus.kOptimal:
-                solution.optimality = Solution.OPTIMAL
+                solution.optimality = self.instance.map_active_optimality(
+                    Solution.OPTIMAL
+                )
 
-            # dual variables
-            solution_info = data.getSolution()
-            row_dual = solution_info.row_dual
-            row_dual_len = len(row_dual)
-
-            for constraint_id in solution.constraint_ids:
-                if constraint_id < row_dual_len:
-                    solution.set_dual_variable(constraint_id, row_dual[constraint_id])
+            # Duals certify the active formulation and need an explicit mapping
+            # before they can be attached to projected output semantics.
+            if self.instance.output_objective is None:
+                solution_info = data.getSolution()
+                row_dual = solution_info.row_dual
+                for constraint_id, row_index in self._constraint_rows.items():
+                    solution.set_dual_variable(constraint_id, row_dual[row_index])
 
             return solution
 
@@ -845,7 +935,7 @@ class OMMXHighsAdapter(SolverAdapter):
         ...     decision_variables=[x1],
         ...     objective=x1,
         ...     constraints={},
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> adapter = OMMXHighsAdapter(instance)
         >>> model = adapter.solver_input
@@ -872,45 +962,77 @@ class OMMXHighsAdapter(SolverAdapter):
         )
 
     def _set_decision_variables(self):
-        num_cols = len(self.instance.used_decision_variables)
-        lower = np.zeros(num_cols)
-        upper = np.zeros(num_cols)
-        types = []
+        variables = self.instance.used_decision_variables
+        num_cols = len(variables)
+        if num_cols == 0:
+            return
+
+        lower = np.empty(num_cols, dtype=np.float64)
+        upper = np.empty(num_cols, dtype=np.float64)
+        types = np.empty(num_cols, dtype=np.uint8)
+        integer = int(highspy.HighsVarType.kInteger)
+        continuous = int(highspy.HighsVarType.kContinuous)
         var_ids = []
 
-        for i, var in enumerate(self.instance.used_decision_variables):
+        for i, var in enumerate(variables):
             var_ids.append(var.id)
-            if var.kind == DecisionVariable.BINARY:
+            if var.kind == Kind.Binary:
                 lower[i] = 0
                 upper[i] = 1
-                types.append(highspy.HighsVarType.kInteger)
-            elif var.kind == DecisionVariable.INTEGER:
+                types[i] = integer
+            elif var.kind == Kind.Integer:
                 lower[i] = var.bound.lower
                 upper[i] = var.bound.upper
-                types.append(highspy.HighsVarType.kInteger)
-            elif var.kind == DecisionVariable.CONTINUOUS:
+                types[i] = integer
+            elif var.kind == Kind.Continuous:
                 lower[i] = var.bound.lower
                 upper[i] = var.bound.upper
-                types.append(highspy.HighsVarType.kContinuous)
+                types[i] = continuous
             else:
                 raise OMMXHighsAdapterError(
                     f"Unsupported decision variable kind: "
                     f"id: {var.id}, kind: {var.kind}"
                 )
-        self.highs_vars = self.model.addVariables(
-            var_ids, lb=lower.tolist(), ub=upper.tolist(), type=types
+        # Pass typed arrays directly, avoiding addVariables' per-item validation
+        # and conversions between NumPy arrays and Python lists.
+        empty_indices = np.empty(0, dtype=np.int32)
+        status = self.model.addCols(
+            num_cols,
+            np.zeros(num_cols, dtype=np.float64),
+            lower,
+            upper,
+            0,
+            empty_indices,
+            empty_indices,
+            np.empty(0, dtype=np.float64),
         )
+        if status != highspy.HighsStatus.kOk:
+            raise OMMXHighsAdapterError(f"Failed to add decision variables: {status}")
+        status = self.model.changeColsIntegrality(
+            num_cols, np.arange(num_cols, dtype=np.int32), types
+        )
+        if status != highspy.HighsStatus.kOk:
+            raise OMMXHighsAdapterError(
+                f"Failed to set decision variable integrality: {status}"
+            )
+        self.highs_vars = {
+            var_id: highs_var(i, self.model) for i, var_id in enumerate(var_ids)
+        }
 
     def _linear_expr_conversion(self, ommx_func: Function):
-        # NOTE we explicityly don't convert to `highspy.highs.highs_linear_expression`
-        # before returning as the callers want to check whether the returned
-        # value is a constant float.
-        if ommx_func.degree() >= 2:
+        degree = ommx_func.degree()
+        if degree is None or degree >= 2:
             raise OMMXHighsAdapterError(
                 "HiGHS Adapter currently only supports linear problems"
             )
+        if degree == 0:
+            # Keep constants as floats for the feasibility checks in _set_constraints.
+            return ommx_func.constant_term
+
+        # Python's sum copies the growing HiGHS expression on every addition.
+        # qsum appends terms in place, keeping construction linear in term count.
         return (
-            sum(
+            self.model.qsum(
                 coeff * self.highs_vars[id]
                 for (id, coeff) in ommx_func.linear_terms.items()
             )
@@ -918,39 +1040,53 @@ class OMMXHighsAdapter(SolverAdapter):
         )
 
     def _set_objective(self):
-        obj = self._linear_expr_conversion(self.instance.objective)
-        if isinstance(obj, float):
-            return
-        if self.instance.sense == Instance.MAXIMIZE:
-            self.model.maximize(highs_linear_expression(obj))
-        elif self.instance.sense == Instance.MINIMIZE:
-            self.model.minimize(highs_linear_expression(obj))
+        obj = highs_linear_expression(
+            self._linear_expr_conversion(self.instance.objective)
+        )
+        if self.instance.sense == Sense.Maximize:
+            sense = highspy.ObjSense.kMaximize
+        elif self.instance.sense == Sense.Minimize:
+            sense = highspy.ObjSense.kMinimize
         else:
             raise OMMXHighsAdapterError(f"Unsupported sense: {self.instance.sense}")
+        # Columns start with zero costs. Set the objective without solving;
+        # unlike setObjective, these APIs are also available in HiGHS 1.9.
+        self.model.changeColsCost(len(obj.idxs), obj.idxs, obj.vals)
+        self.model.changeObjectiveOffset(obj.constant or 0.0)
+        self.model.changeObjectiveSense(sense)
 
     def _set_constraints(self):
-        for cid, constr in self.instance.constraints.items():
+        self._constraint_rows: dict[ConstraintID, int] = {}
+        for cid in self.instance.constraints:
+            if not isinstance(cid, ConstraintID):
+                raise OMMXHighsAdapterError(
+                    f"Unsupported constraint family: {type(cid).__name__} (id: {cid})"
+                )
+            constr = self.instance.constraints[cid]
             const_expr = self._linear_expr_conversion(constr.function)
             if isinstance(const_expr, float):
                 val = const_expr
-                if constr.equality == Constraint.EQUAL_TO_ZERO:
+                if constr.equality == Equality.EqualToZero:
                     if abs(val) > 1e-10:
                         raise OMMXHighsAdapterError(
                             "Infeasible constant equality constraint"
                         )
                     continue
-                elif constr.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
+                elif constr.equality == Equality.LessThanOrEqualToZero:
                     if val > 1e-10:
                         raise OMMXHighsAdapterError(
                             "Infeasible constant inequality constraint"
                         )
                     continue
             else:
+                row_index = self.model.getNumRow()
                 const_expr = highs_linear_expression(const_expr)
-                if constr.equality == Constraint.EQUAL_TO_ZERO:
+                if constr.equality == Equality.EqualToZero:
                     self.model.addConstr(const_expr == 0, str(cid))
-                elif constr.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
+                    self._constraint_rows[cid] = row_index
+                elif constr.equality == Equality.LessThanOrEqualToZero:
                     self.model.addConstr(const_expr <= 0, str(cid))
+                    self._constraint_rows[cid] = row_index
                 else:
                     raise OMMXHighsAdapterError(
                         f"Unsupported constraint equality kind: {constr.equality}"

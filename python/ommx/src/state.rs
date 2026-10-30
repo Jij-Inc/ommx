@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::OmmxPyResult;
 use ommx::Message;
 use pyo3::{exceptions::PyTypeError, prelude::*, types::PyBytes, Bound, PyAny};
 use pyo3_stub_gen::runtime::PyRuntimeType;
@@ -13,28 +13,11 @@ fn normalize_zero(value: f64) -> f64 {
     }
 }
 
-/// State wrapper for Python
+#[pyo3_stub_gen::derive::gen_stub_pyclass(skip_stub_type, module = "ommx._ommx_rust")]
+#[doc = include_str!("docstrings/ommx/State.md")]
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct State(pub ommx::v1::State);
-
-// Manual PyClassInfo submission (instead of #[gen_stub_pyclass])
-pyo3_stub_gen::inventory::submit! {
-    pyo3_stub_gen::type_info::PyClassInfo {
-        pyclass_name: "State",
-        struct_id: || std::any::TypeId::of::<State>(),
-        doc: "State wrapper for Python",
-        module: Some("ommx._ommx_rust"),
-        bases: &[],
-        getters: &[],
-        setters: &[],
-        has_eq: false,
-        has_hash: false,
-        has_ord: false,
-        has_str: false,
-        subclass: false,
-    }
-}
 
 // PyStubType: input uses ToState, output uses State
 impl pyo3_stub_gen::PyStubType for State {
@@ -139,9 +122,42 @@ impl State {
         entries
     }
 
+    /// Load a published QPLIB `.sol` file into a {class}`~ommx.State`.
+    ///
+    /// Pass the variable count of the original QPLIB instance as
+    /// `num_variables`. Omitted variables receive zero. The standard QPLIB
+    /// solution names `xN`, `bN`, and `iN` map to OMMX ID `N - 2`; `objvar`
+    /// is ignored because the objective is computed by
+    /// {meth}`~ommx.Instance.evaluate`. Custom names and other solvers' `.sol`
+    /// formats are not supported. Names are case insensitive.
+    ///
+    /// Malformed input, duplicate IDs, nonfinite values, and out-of-range IDs
+    /// raise `ValueError` with a line number. File read failures raise
+    /// `RuntimeError`. Loading does not check bounds or feasibility.
+    ///
+    /// >>> import tempfile
+    /// >>> from pathlib import Path
+    /// >>> from ommx import State
+    /// >>> with tempfile.TemporaryDirectory() as directory:
+    /// ...     path = Path(directory) / "example.sol"
+    /// ...     _ = path.write_text("objvar 12\nx2 0.5\nb4 1\n")
+    /// ...     state = State.load_qplib_solution(str(path), num_variables=3)
+    /// >>> state.entries
+    /// {0: 0.5, 1: 0.0, 2: 1.0}
     #[staticmethod]
-    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = ommx::v1::State::decode(bytes.as_bytes())?;
+    #[pyo3(signature = (path, *, num_variables))]
+    pub fn load_qplib_solution(
+        py: Python<'_>,
+        path: String,
+        num_variables: usize,
+    ) -> OmmxPyResult<Self> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        Ok(Self(ommx::qplib::load_solution(path, num_variables)?))
+    }
+
+    #[staticmethod]
+    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
+        let inner = crate::message_io::decode(bytes.as_bytes(), "ommx.v1.State")?;
         Ok(Self(inner))
     }
 

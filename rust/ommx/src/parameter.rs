@@ -1,7 +1,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
-use crate::{ModelingLabel, ModelingLabelStore, Parse, ParseError, RawParseError, VariableID};
+use crate::{ModelingLabel, ModelingLabelStore, Parse, ParseError, VariableID};
 
 /// Modeling label for parametric-instance parameters.
 pub type ParameterLabel = ModelingLabel;
@@ -201,15 +201,15 @@ impl Parse for crate::v2::ParameterTable {
         for id in self.ids {
             let id = VariableID::from(id);
             if !ids.insert(id) {
-                return Err(RawParseError::InvalidInstance(format!(
+                return Err(ParseError::new(crate::error!(
+                    { ?id },
                     "Duplicated parameter ID is found in ommx.v2.ParameterTable: {id:?}",
                 ))
                 .context(message, "ids"));
             }
         }
         let labels = crate::v2_io::modeling_label_store_from_v2_map(self.labels);
-        ParameterTable::new(ids, labels)
-            .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "labels"))
+        ParameterTable::new(ids, labels).map_err(|e| ParseError::new(e).context(message, "labels"))
     }
 }
 
@@ -225,6 +225,7 @@ impl LogicalMemoryProfile for ParameterTable {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error as _;
 
     #[test]
     fn rejects_orphan_labels() {
@@ -324,11 +325,15 @@ mod tests {
         .parse(&())
         .unwrap_err();
 
-        assert!(
-            err.to_string().contains("Duplicated parameter ID")
-                && err.to_string().contains("VariableID(100)"),
-            "unexpected error: {err}"
+        assert_eq!(
+            err.source()
+                .expect("ParseError must retain its cause")
+                .to_string(),
+            "Duplicated parameter ID is found in ommx.v2.ParameterTable: VariableID(100)"
         );
+        assert_eq!(err.context.len(), 1);
+        assert_eq!(err.context[0].message, "ommx.v2.ParameterTable");
+        assert_eq!(err.context[0].field, "ids");
     }
 
     #[test]
@@ -348,6 +353,12 @@ mod tests {
         .parse(&())
         .unwrap_err();
 
+        assert_eq!(
+            err.source()
+                .expect("ParseError must retain its cause")
+                .to_string(),
+            "Modeling label references unknown parameter ID VariableID(100)"
+        );
         assert!(
             err.to_string().contains("ommx.v2.ParameterTable[labels]"),
             "unexpected error: {err}"

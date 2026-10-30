@@ -3,17 +3,8 @@ use ommx::{Evaluate, NamedFunctionID};
 use pyo3::{prelude::*, Bound, PyAny};
 use std::collections::HashMap;
 
-/// NamedFunction wrapper for Python.
-///
-/// Holds the Rust `NamedFunction` plus an owned snapshot of its label
-/// (`name` / `subscripts` / `parameters` / `description`). The label
-/// store lives at the host (`Instance` / `Solution` / `SampleSet`) level;
-/// when a wrapper is created via a host accessor, the host snapshots its
-/// store into the third tuple slot. Mutations on a wrapper do NOT
-/// propagate back to the host — re-insert via `Instance.from_components`
-/// (or equivalent) to apply changes. Same shape as `Constraint` /
-/// `DecisionVariable` after PR #843.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[doc = include_str!("docstrings/ommx/NamedFunction.md")]
 #[pyclass]
 #[derive(Clone)]
 pub struct NamedFunction(
@@ -100,16 +91,16 @@ impl NamedFunction {
     ///
     /// **Returns:** {class}`~ommx.EvaluatedNamedFunction` containing the evaluated value
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<EvaluatedNamedFunction> {
+    pub fn evaluate(
+        &self,
+        state: State,
+        atol: Option<f64>,
+    ) -> crate::error::OmmxPyResult<EvaluatedNamedFunction> {
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        let evaluated = self
-            .1
-            .evaluate(&state.0, atol)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let evaluated = self.1.evaluate(&state.0, atol)?;
         // Per-element evaluate doesn't see the host's label store, so the
         // label snapshot from the source `NamedFunction` carries over.
         Ok(EvaluatedNamedFunction(self.0, evaluated, self.2.clone()))
@@ -126,50 +117,49 @@ impl NamedFunction {
     ///
     /// **Returns:** Self (modified in-place) for method chaining
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn partial_evaluate(&mut self, state: State, atol: Option<f64>) -> PyResult<Self> {
+    pub fn partial_evaluate(
+        &mut self,
+        state: State,
+        atol: Option<f64>,
+    ) -> crate::error::OmmxPyResult<Self> {
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        self.1
-            .partial_evaluate(&state.0, atol)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        self.1.partial_evaluate(&state.0, atol)?;
         Ok(self.clone())
     }
 
     // Arithmetic operators - delegate to the inner function
 
     /// Addition: returns self.function + other
-    pub fn __add__(&self, other: Function) -> PyResult<Function> {
+    pub fn __add__(&self, other: Function) -> crate::error::OmmxPyResult<Function> {
         self.function().__add__(other)
     }
 
     /// Reverse addition: returns other + self.function
-    pub fn __radd__(&self, other: Function) -> PyResult<Function> {
-        self.function().__add__(other)
+    pub fn __radd__(&self, other: Function) -> crate::error::OmmxPyResult<Function> {
+        other.__add__(self.function())
     }
 
     /// Subtraction: returns self.function - other
-    pub fn __sub__(&self, other: Function) -> PyResult<Function> {
+    pub fn __sub__(&self, other: Function) -> crate::error::OmmxPyResult<Function> {
         self.function().__sub__(other)
     }
 
     /// Reverse subtraction: returns other - self.function
-    pub fn __rsub__(&self, other: Function) -> PyResult<Function> {
-        Ok(Function(
-            (&other.0 - &self.1.function).map_err(crate::coefficient_error_to_pyerr)?,
-        ))
+    pub fn __rsub__(&self, other: Function) -> crate::error::OmmxPyResult<Function> {
+        Ok(Function((&other.0 - &self.1.function)?))
     }
 
     /// Multiplication: returns self.function * other
-    pub fn __mul__(&self, other: Function) -> PyResult<Function> {
+    pub fn __mul__(&self, other: Function) -> crate::error::OmmxPyResult<Function> {
         self.function().__mul__(other)
     }
 
     /// Reverse multiplication: returns other * self.function
-    pub fn __rmul__(&self, other: Function) -> PyResult<Function> {
-        self.function().__mul__(other)
+    pub fn __rmul__(&self, other: Function) -> crate::error::OmmxPyResult<Function> {
+        other.__mul__(self.function())
     }
 
     /// Negation: returns -self.function
@@ -186,7 +176,7 @@ impl NamedFunction {
     /// Note: This does NOT return bool, it creates a Constraint object.
     #[gen_stub(type_ignore = ["override"])]
     #[pyo3(name = "__eq__")]
-    pub fn py_eq(&self, other: Function) -> PyResult<Constraint> {
+    pub fn py_eq(&self, other: Function) -> crate::error::OmmxPyResult<Constraint> {
         crate::comparison_constraint(-other.0 + &self.1.function, ommx::Equality::EqualToZero)
     }
 
@@ -194,7 +184,7 @@ impl NamedFunction {
     ///
     /// Returns a Constraint where (self.function - other) <= 0.
     #[pyo3(name = "__le__")]
-    pub fn py_le(&self, other: Function) -> PyResult<Constraint> {
+    pub fn py_le(&self, other: Function) -> crate::error::OmmxPyResult<Constraint> {
         crate::comparison_constraint(
             -other.0 + &self.1.function,
             ommx::Equality::LessThanOrEqualToZero,
@@ -205,7 +195,7 @@ impl NamedFunction {
     ///
     /// Returns a Constraint where (other - self.function) <= 0.
     #[pyo3(name = "__ge__")]
-    pub fn py_ge(&self, other: Function) -> PyResult<Constraint> {
+    pub fn py_ge(&self, other: Function) -> crate::error::OmmxPyResult<Constraint> {
         crate::comparison_constraint(
             other.0 - &self.1.function,
             ommx::Equality::LessThanOrEqualToZero,

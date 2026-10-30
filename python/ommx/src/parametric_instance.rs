@@ -1,16 +1,95 @@
+use crate::constraint_id::{
+    ConstraintIDInput, ConstraintMapInput, IndicatorConstraintIDInput, OneHotConstraintIDInput,
+    Sos1ConstraintIDInput,
+};
 use crate::{
-    pandas::{
-        constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
-        PyDataFrame, ToPandasEntry,
-    },
-    Constraint, DecisionVariable, Function, Instance, NamedFunction, Parameter, RemovedConstraint,
+    constraint_kind::{constraint_kind_collection, ConstraintKind},
+    error::OmmxPyResult,
+    pandas::{constraint_id_col, entries_to_dataframe, PyDataFrame, ToPandasEntry},
+    Constraint, DecisionVariable, Function, Instance, NamedFunction, OutputObjective, Parameter,
     Sense,
 };
-use anyhow::Result;
 use ommx::{ConstraintID, NamedFunctionID, VariableID};
-use pyo3::{exceptions::PyKeyError, prelude::*, types::PyBytes, Bound, PyAny};
+use pyo3::{
+    exceptions::{PyKeyError, PyValueError},
+    prelude::*,
+    types::PyBytes,
+    Bound, PyAny,
+};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+/// A family of optimization problems with fixed variables and constraints.
+///
+/// A ParametricInstance leaves some coefficients or constants symbolic as
+/// {class}`~ommx.Parameter` objects. The model's caller supplies their values
+/// with {meth}`~ommx.ParametricInstance.with_parameters` to obtain an ordinary
+/// {class}`~ommx.Instance` for evaluation, preparation, or a solver adapter.
+/// Parameters are inputs chosen before solving; they are not decision variables
+/// for the solver to optimize.
+///
+/// **Reuse a problem under different numerical conditions**
+///
+/// Here the two items and their scores stay fixed, while the allowed number
+/// of selected items changes. The original family remains available after
+/// each call to ``with_parameters``.
+///
+/// >>> from ommx import ConstraintID, DecisionVariable, Parameter, ParametricInstance, Sense
+/// >>> xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(2)]
+/// >>> capacity = Parameter(2, name="capacity", description="Maximum selected items")
+/// >>> family = ParametricInstance.from_components(
+/// ...     decision_variables=xs, parameters=[capacity],
+/// ...     objective=3 * xs[0] + 2 * xs[1],
+/// ...     constraints={0: xs[0] + xs[1] <= capacity}, sense=Sense.Maximize,
+/// ... )
+/// >>> one_item = family.with_parameters({capacity.id: 1})
+/// >>> two_items = family.with_parameters({capacity.id: 2})
+/// >>> candidate = {xs[0].id: 1, xs[1].id: 1}
+/// >>> assert not one_item.evaluate(candidate).feasible
+/// >>> assert two_items.evaluate(candidate).feasible
+/// >>> assert two_items.evaluate(candidate).objective == 5.0
+/// >>> assert {v.id for v in one_item.decision_variables} == {v.id for v in two_items.decision_variables}
+/// >>> assert set(one_item.constraints) == set(two_items.constraints) == {ConstraintID(0)}
+/// >>> assert family.parameter_ids == {capacity.id}
+///
+/// Materialization preserves decision-variable and constraint IDs. Those IDs
+/// let callers associate results with the same items and conditions across
+/// instances; they do not imply identical feasibility or optimal solutions.
+/// Parameters can also appear as objective and constraint coefficients, as in
+/// the weighted knapsack example in {meth}`~ommx.ParametricInstance.from_components`.
+///
+/// **Parameter identities and modeling labels**
+///
+/// Parameters and decision variables use one ID space and must not overlap.
+/// Here the decision variables have IDs 0 and 1, and the parameter has ID 2.
+/// Both can appear in arithmetic expressions, but only decision variables
+/// receive candidate values after materialization. Parameter names, subscripts,
+/// string-valued metadata, and descriptions describe model inputs; the IDs
+/// identify the numerical values passed to ``with_parameters``.
+///
+/// {attr}`~ommx.ParametricInstance.parameters` and
+/// {attr}`~ommx.ParametricInstance.parameter_ids` list declared parameters.
+/// {meth}`~ommx.ParametricInstance.parameters_df` collects their definitions
+/// and labels into a DataFrame, not a table of supplied numerical values.
+///
+/// >>> table = family.parameters_df()
+/// >>> assert table.loc[capacity.id, "name"] == "capacity"
+/// >>> assert table.loc[capacity.id, "description"] == "Maximum selected items"
+///
+/// {meth}`~ommx.ParametricInstance.decision_variables_df` and
+/// {meth}`~ommx.ParametricInstance.constraints_df` provide the corresponding
+/// model tables; the latter requires an explicit ``kind``. For required IDs,
+/// extra keys, and numerical substitution rules, read
+/// {meth}`~ommx.ParametricInstance.with_parameters`.
+///
+/// **When to rebuild the model**
+///
+/// Parameter values do not generate variable or constraint definitions. If an
+/// input changes the number of items or the model's structure, build new
+/// components in Python or use a modeler that generates that structure. This
+/// differs from changing numerical coefficients within an existing family.
+/// No Experiment is needed to construct or materialize a ParametricInstance.
+/// Use {class}`~ommx.experiment.Experiment` separately when recording the
+/// conditions and results of multiple trials is useful.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
@@ -23,27 +102,94 @@ impl_instance_annotations!(ParametricInstance);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl ParametricInstance {
+    /// Unique decision-variable names as a set of strings, excluding parameters.
+    /// Unnamed variables are excluded; explicitly empty names are included.
+    /// Each access returns a fresh set; editing it does not change this owner.
+    #[getter]
+    fn decision_variable_names(&self) -> BTreeSet<String> {
+        self.inner.decision_variable_names()
+    }
+
+    /// Unique names across all constraint families, as a set of strings.
+    ///
+    /// Only active constraints are included.
+    /// The scope matches `extract_constraints`. Unnamed constraints are excluded;
+    /// an explicitly empty name is included. Duplicate names appear once, even
+    /// when extraction would reject duplicate subscripts.
+    /// Each access returns a fresh set; editing it does not change this owner.
+    #[getter]
+    fn constraint_names(&self) -> BTreeSet<String> {
+        self.inner.constraint_names()
+    }
+
+    /// Deserialize a parametric instance from v1 protobuf bytes.
+    ///
+    /// Raises {class}`ValueError` if the protobuf payload is malformed or
+    /// semantically invalid.
     #[staticmethod]
-    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
         Ok(Self {
             inner: ommx::ParametricInstance::from_v1_bytes(bytes.as_bytes())?,
         })
     }
 
+    /// Deserialize a parametric instance from v2 protobuf bytes.
+    ///
+    /// Raises {class}`ValueError` if the protobuf payload is malformed or
+    /// semantically invalid.
     #[staticmethod]
-    pub fn from_v2_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v2_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
         Ok(Self {
             inner: ommx::ParametricInstance::from_v2_bytes(bytes.as_bytes())?,
         })
     }
 
-    pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+    /// Serialize this parametric instance in the OMMX v1 wire format.
+    ///
+    /// # Errors
+    ///
+    /// Serialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ... )
+    /// >>> assert instance.convert_active_objective(Sense.Minimize)
+    /// >>> assert instance.convert_active_objective(Sense.Maximize)
+    /// >>> parametric = instance.as_parametric_instance()
+    /// >>> try:
+    /// ...     parametric.to_v1_bytes()
+    /// ... except RuntimeError:
+    /// ...     pass
+    /// ... else:
+    /// ...     raise AssertionError("v1 serialization accepted an output objective")
+    pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyBytes::new(py, &self.inner.to_v1_bytes()?))
     }
 
+    /// Serialize this parametric instance in the OMMX v2 wire format.
+    ///
+    /// # Postconditions
+    ///
+    /// A v2 round-trip preserves both active and output objective semantics through materialization.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, ParametricInstance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> source = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+    /// ... )
+    /// >>> parametric = source.uniform_penalty_method()
+    /// >>> parameter_id = parametric.parameters[0].id
+    /// >>> restored = ParametricInstance.from_v2_bytes(parametric.to_v2_bytes())
+    /// >>> materialized = restored.with_parameters({parameter_id: 2.0})
+    /// >>> assert materialized.sense == Sense.Minimize
+    /// >>> assert materialized.objective.evaluate({0: 0}) == 2.0
+    /// >>> solution = materialized.evaluate({0: 0})
+    /// >>> assert (solution.sense, solution.objective) == (Sense.Minimize, 0.0)
     pub fn to_v2_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let _guard = crate::TRACING.attach_parent_context(py);
         PyBytes::new(py, &self.inner.to_v2_bytes())
@@ -57,27 +203,70 @@ impl ParametricInstance {
         self.inner.format_summary()
     }
 
+    /// Build a parametric instance from its model components.
+    ///
+    /// Constraint mappings accept integer keys or IDs of the matching family.
+    /// Integers are promoted to that family's ID. IDs of another family raise
+    /// {class}`TypeError`; keys that become duplicates raise {class}`ValueError`.
+    /// Returned collections always use typed IDs.
+    ///
+    /// Raises {class}`ValueError` if a decision variable and parameter use the
+    /// same ID.
+    ///
+    /// **Parameterize objective coefficients, weights, and a capacity**
+    ///
+    /// This two-item knapsack family fixes the item count and uses parameters
+    /// for both coefficients and the right-hand-side constant. Parameter IDs
+    /// are separate from the decision-variable IDs in the shared ID space.
+    ///
+    /// >>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
+    /// >>> n = 2
+    /// >>> xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(n)]
+    /// >>> profits = [Parameter(n + i, name="profit", subscripts=[i]) for i in range(n)]
+    /// >>> weights = [Parameter(2 * n + i, name="weight", subscripts=[i]) for i in range(n)]
+    /// >>> capacity = Parameter(3 * n, name="capacity")
+    /// >>> family = ParametricInstance.from_components(
+    /// ...     decision_variables=xs, parameters=profits + weights + [capacity],
+    /// ...     objective=sum(p * x for p, x in zip(profits, xs)),
+    /// ...     constraints={0: sum(w * x for w, x in zip(weights, xs)) <= capacity},
+    /// ...     sense=Sense.Maximize,
+    /// ... )
+    /// >>> values = {p.id: value for p, value in zip(profits, [3, 2])}
+    /// >>> values.update({w.id: value for w, value in zip(weights, [2, 1])})
+    /// >>> values[capacity.id] = 2
+    /// >>> instance = family.with_parameters(values)
+    /// >>> solution = instance.evaluate({xs[0].id: 1, xs[1].id: 0})
+    /// >>> assert solution.feasible and solution.objective == 3.0
+    /// >>> assert not instance.evaluate({xs[0].id: 1, xs[1].id: 1}).feasible
     #[staticmethod]
     #[pyo3(signature = (*, sense, objective, decision_variables, constraints, parameters, indicator_constraints=None, one_hot_constraints=None, sos1_constraints=None, named_functions=None, description=None))]
-    pub fn from_components(
+    pub(crate) fn from_components(
         sense: Sense,
         objective: Function,
         decision_variables: Vec<DecisionVariable>,
-        constraints: BTreeMap<u64, Constraint>,
+        constraints: ConstraintMapInput<ConstraintIDInput, Constraint>,
         parameters: Vec<Parameter>,
-        indicator_constraints: Option<BTreeMap<u64, crate::IndicatorConstraint>>,
-        one_hot_constraints: Option<BTreeMap<u64, crate::OneHotConstraint>>,
-        sos1_constraints: Option<BTreeMap<u64, crate::Sos1Constraint>>,
+        indicator_constraints: Option<
+            ConstraintMapInput<IndicatorConstraintIDInput, crate::IndicatorConstraint>,
+        >,
+        one_hot_constraints: Option<
+            ConstraintMapInput<OneHotConstraintIDInput, crate::OneHotConstraint>,
+        >,
+        sos1_constraints: Option<ConstraintMapInput<Sos1ConstraintIDInput, crate::Sos1Constraint>>,
         named_functions: Option<Vec<NamedFunction>>,
         description: Option<crate::InstanceDescription>,
-    ) -> Result<Self> {
+    ) -> OmmxPyResult<Self> {
         let mut rust_decision_variables = BTreeMap::new();
         let mut variable_labels = ommx::VariableLabelStore::default();
         for var in decision_variables {
             let id = var.0;
             variable_labels.insert(id, var.2);
             if rust_decision_variables.insert(id, var.1).is_some() {
-                anyhow::bail!("Duplicate decision variable ID: {}", id.into_inner());
+                return Err(PyValueError::new_err(format!(
+                    "Duplicate decision variable ID: {}",
+                    id.into_inner()
+                ))
+                .into());
             }
         }
 
@@ -157,7 +346,11 @@ impl ParametricInstance {
                 let id = nf.0;
                 named_function_labels.insert(id, nf.2);
                 if rust_named_functions.insert(id, nf.1).is_some() {
-                    anyhow::bail!("Duplicate named function ID: {}", id.into_inner());
+                    return Err(PyValueError::new_err(format!(
+                        "Duplicate named function ID: {}",
+                        id.into_inner()
+                    ))
+                    .into());
                 }
             }
             builder = builder.named_functions(rust_named_functions);
@@ -184,12 +377,12 @@ impl ParametricInstance {
 
     /// Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables and parameters.
     #[staticmethod]
-    pub fn empty() -> Result<Self> {
+    pub fn empty() -> OmmxPyResult<Self> {
         Self::from_components(
             Sense::Minimize,
             Function(ommx::Function::Zero),
             Vec::new(),
-            BTreeMap::new(),
+            Default::default(),
             Vec::new(),
             None,
             None,
@@ -201,8 +394,57 @@ impl ParametricInstance {
 
     /// Substitute parameters to yield an instance.
     ///
-    /// Parameters can be provided as a dict mapping parameter IDs to their values.
-    pub fn with_parameters(&self, parameters: HashMap<u64, f64>) -> Result<Instance> {
+    /// Provide a dict mapping every declared parameter ID to its numerical value,
+    /// including parameters not referenced by an expression. The original
+    /// {class}`~ommx.ParametricInstance` is unchanged and can be materialized again.
+    /// Missing declared IDs raise ``RuntimeError``.
+    ///
+    /// The method checks that declared IDs are included, not that the key sets are
+    /// equal. Additional keys are accepted and participate in substitution wherever
+    /// referenced. In particular, an extra decision-variable ID can also substitute
+    /// that coordinate in expressions. For parameter-only materialization, supply
+    /// exactly the IDs listed by {attr}`~ommx.ParametricInstance.parameters`.
+    ///
+    /// Substitution uses the SDK's default absolute tolerance and the expression
+    /// partial-evaluation rules; see {meth}`~ommx.Function.partial_evaluate`.
+    /// This is not a feasibility check or decision-variable kind/bound validation.
+    /// There is no blanket finiteness check of all supplied values: a referenced
+    /// non-finite value can fail during substitution, while an unreferenced value
+    /// need not be examined. Successful materialization does not prove that all
+    /// supplied values are finite or that the resulting problem is feasible.
+    ///
+    /// >>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> p, unused = Parameter(1, name="p"), Parameter(2, name="unused")
+    /// >>> family = ParametricInstance.from_components(
+    /// ...     decision_variables=[x], parameters=[p, unused], objective=x + p,
+    /// ...     constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> try:
+    /// ...     family.with_parameters({p.id: 3})
+    /// ... except RuntimeError as error:
+    /// ...     assert "Missing parameters" in str(error)
+    /// ... else:
+    /// ...     raise AssertionError("an omitted declared parameter was accepted")
+    /// >>> concrete = family.with_parameters({p.id: 3, unused.id: 0})
+    /// >>> assert concrete.objective.evaluate({x.id: 1}) == 4.0
+    ///
+    /// # Postconditions
+    ///
+    /// Penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists. Materialization substitutes parameters in the active energy, and an existing output objective remains explicit even if specialization makes it structurally equal to the active objective.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> source = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+    /// ... )
+    /// >>> parametric = source.uniform_penalty_method()
+    /// >>> parameter_id = parametric.parameters[0].id
+    /// >>> materialized = parametric.with_parameters({parameter_id: 2.0})
+    /// >>> assert materialized.objective.evaluate({0: 0}) == 2.0
+    /// >>> solution = materialized.evaluate({0: 0})
+    /// >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
+    pub fn with_parameters(&self, parameters: HashMap<u64, f64>) -> OmmxPyResult<Instance> {
         let mut v1_params = ommx::v1::Parameters::default();
         v1_params.entries = parameters;
         let instance = self.inner.clone().with_parameters(v1_params)?;
@@ -211,22 +453,40 @@ impl ParametricInstance {
 
     /// Format a function using this parametric instance's decision-variable and parameter labels.
     ///
-    /// The plain {func}`repr` / {func}`str` representation of {class}`Function`
+    /// The plain {func}`repr` / {func}`str` representation of {class}`~ommx.Function`
     /// remains context-free and renders raw ``x<id>`` symbols such as ``x1``.
-    /// Use this method when labels from this parametric instance should be used instead.
+    /// This method resolves both variable and parameter labels before any
+    /// parameter values have been supplied.
+    ///
+    /// >>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
+    /// >>> x = DecisionVariable.binary(0, name="x")
+    /// >>> p = Parameter(100, name="p", parameters={"scenario": "base"})
+    /// >>> model = ParametricInstance.from_components(
+    /// ...     sense=Sense.Minimize, objective=x + p, decision_variables=[x],
+    /// ...     parameters=[p], constraints={},
+    /// ... )
+    /// >>> assert model.format_function(model.objective) == "x + p[scenario=base]"
+    ///
+    /// Every referenced ID must belong to exactly one of this instance's
+    /// decision variables or parameters. The lookup uses IDs, not names from
+    /// another model, and validates them before applying output limits.
+    /// ``max_terms`` and ``max_chars`` both default to ``None`` for no limit;
+    /// their meaning is the same as in {meth}`~ommx.Instance.format_function`.
+    /// For a preview with truncation metadata, use
+    /// {meth}`~ommx.ParametricInstance.display_function`.
     #[pyo3(signature = (function, max_terms=None, max_chars=None))]
     pub fn format_function(
         &self,
         function: Function,
         max_terms: Option<usize>,
         max_chars: Option<usize>,
-    ) -> Result<String> {
+    ) -> OmmxPyResult<String> {
         let opts = ommx::FunctionFormatOptions {
             max_terms,
             max_chars,
         };
         if opts == ommx::FunctionFormatOptions::default() {
-            self.inner.format_function(&function.0)
+            Ok(self.inner.format_function(&function.0)?)
         } else {
             Ok(self.inner.format_function_with(&function.0, opts)?.text)
         }
@@ -235,15 +495,31 @@ impl ParametricInstance {
     /// Build a bounded notebook display object for a function in this parametric instance's context.
     ///
     /// By default this returns a preview capped at 100 complete terms and
-    /// 20,000 characters. Use {meth}`format_function` for an unbounded plain
-    /// text string.
+    /// 20,000 characters. Pass ``None`` to disable either limit. Parameter
+    /// labels are available before materialization, just as in
+    /// {meth}`~ommx.ParametricInstance.format_function`.
+    ///
+    /// The returned {class}`~ommx.display.FunctionDisplay` has the same preview
+    /// text and truncation metadata as {meth}`~ommx.Instance.display_function`.
+    /// Use ``format_function`` without limits for a complete plain text string.
+    ///
+    /// >>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
+    /// >>> x = DecisionVariable.binary(0, name="x")
+    /// >>> p = Parameter(100, name="p")
+    /// >>> model = ParametricInstance.from_components(
+    /// ...     sense=Sense.Minimize, objective=x + p, decision_variables=[x],
+    /// ...     parameters=[p], constraints={},
+    /// ... )
+    /// >>> preview = model.display_function(model.objective)
+    /// >>> assert preview.text == "x + p"
+    /// >>> assert not preview.truncated
     #[pyo3(signature = (function, max_terms=Some(100), max_chars=Some(20000)))]
     pub fn display_function(
         &self,
         function: Function,
         max_terms: Option<usize>,
         max_chars: Option<usize>,
-    ) -> Result<crate::display::FunctionDisplay> {
+    ) -> OmmxPyResult<crate::display::FunctionDisplay> {
         let formatted = self.inner.format_function_with(
             &function.0,
             ommx::FunctionFormatOptions {
@@ -279,18 +555,36 @@ impl ParametricInstance {
     /// IDs, when a parameter ID is used as an assignment target, or when
     /// substituting a variable that is a member of an indicator, one-hot, or
     /// SOS1 constraint.
+    ///
+    /// # Postconditions
+    ///
+    /// Substitution rewrites active expressions while materialized output evaluation restores the substituted variable.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> b = DecisionVariable.binary(1)
+    /// >>> source = Instance.from_components(
+    /// ...     decision_variables=[x, b], objective=x, constraints={}, sense=Sense.Maximize
+    /// ... )
+    /// >>> assert source.convert_active_objective(Sense.Minimize)
+    /// >>> parametric = source.as_parametric_instance()
+    /// >>> parametric.substitute({0: b})
+    /// >>> materialized = parametric.with_parameters({})
+    /// >>> assert materialized.required_ids() == {1}
+    /// >>> assert materialized.objective.evaluate({1: 1}) == -1.0
+    /// >>> solution = materialized.evaluate({1: 1})
+    /// >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)
     #[pyo3(signature = (assignments))]
     pub fn substitute(
         &mut self,
         py: Python<'_>,
         assignments: HashMap<u64, Function>,
-    ) -> PyResult<()> {
+    ) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let iter = assignments
             .into_iter()
             .map(|(id, f)| (VariableID::from(id), f.0));
-        ommx::substitute(&mut self.inner, iter)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        ommx::substitute(&mut self.inner, iter)?;
         Ok(())
     }
 
@@ -302,6 +596,31 @@ impl ParametricInstance {
     #[getter]
     pub fn objective(&self) -> Function {
         Function(self.inner.objective().clone())
+    }
+
+    /// Read-only output objective retained through parameter materialization,
+    /// if one has been captured.
+    ///
+    /// # Postconditions
+    ///
+    /// Conversion preserves both absence and an explicit output objective equal to the active pair.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> source = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ... )
+    /// >>> assert source.as_parametric_instance().output_objective is None
+    /// >>> assert source.convert_active_objective(Sense.Minimize)
+    /// >>> assert source.convert_active_objective(Sense.Maximize)
+    /// >>> parametric = source.as_parametric_instance()
+    /// >>> output = parametric.output_objective
+    /// >>> assert output is not None
+    /// >>> assert output.sense == parametric.sense
+    /// >>> assert output.function.almost_equal(parametric.objective)
+    #[getter]
+    pub fn output_objective(&self) -> Option<OutputObjective> {
+        self.inner.output_objective().cloned().map(Into::into)
     }
 
     /// List of all decision variables in the parametric instance sorted by
@@ -331,10 +650,14 @@ impl ParametricInstance {
     /// Add a decision variable to this parametric instance. Returns an
     /// {class}`~ommx.AttachedDecisionVariable` bound to the variable's
     /// id — a write-through handle for further label updates.
+    ///
+    /// Raises {class}`ValueError` if the variable's id collides with an
+    /// existing decision variable or parameter. Substituted variables retain
+    /// their ids and therefore also count as existing decision variables.
     pub fn add_decision_variable(
         slf: Bound<'_, Self>,
         variable: DecisionVariable,
-    ) -> Result<crate::AttachedDecisionVariable> {
+    ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
         let id = {
             let mut inst = slf.borrow_mut();
             inst.inner
@@ -364,26 +687,33 @@ impl ParametricInstance {
         ))
     }
 
-    /// Dict of all active constraints in the instance keyed by their IDs.
+    /// Extract active constraints of every family by name, keyed by subscript tuples.
     ///
-    /// Each value is an {class}`~ommx.AttachedConstraint`: a write-through
-    /// handle whose getters read from this parametric instance's SoA store
-    /// and whose context setters write back through to it. Use
-    /// {meth}`~ommx.AttachedConstraint.detach` to materialize a
-    /// {class}`~ommx.Constraint` snapshot if you need an independent copy.
-    #[getter]
-    pub fn constraints(slf: Bound<'_, Self>) -> BTreeMap<u64, crate::AttachedConstraint> {
+    /// Values are attached handles, just as in `constraints`: edits update this
+    /// model. The returned dictionary snapshots the matching keys; it does not
+    /// track later label or membership changes. Removed constraints are excluded.
+    /// Parameters and descriptions do not participate in matching.
+    ///
+    /// Raises KeyError if no active constraint has this name, and ValueError if
+    /// matching constraints share subscripts, including across different families.
+    /// Use typed-ID lookup in `constraints` to distinguish ambiguous labels.
+    fn extract_constraints(
+        slf: Bound<'_, Self>,
+        name: &str,
+    ) -> PyResult<
+        crate::subscript_map::SubscriptMap<crate::constraint_collection::ConstraintCollectionValue>,
+    > {
         let py = slf.py();
-        let ids: Vec<ConstraintID> = slf.borrow().inner.constraints().keys().copied().collect();
-        let py_parametric: Py<Self> = slf.unbind();
-        ids.into_iter()
-            .map(|id| {
-                (
-                    id.into_inner(),
-                    crate::AttachedConstraint::from_parametric(py_parametric.clone_ref(py), id),
-                )
-            })
-            .collect()
+        Self::constraints(slf).extract_by_name(py, name)
+    }
+
+    /// Live mapping of all active constraint families, keyed by typed IDs.
+    /// The view retains this owner and fetches each constraint on demand.
+    #[getter]
+    pub fn constraints(slf: Bound<'_, Self>) -> crate::constraint_collection::ConstraintCollection {
+        crate::constraint_collection::ConstraintCollection::new(crate::ConstraintHost::Parametric(
+            slf.unbind(),
+        ))
     }
 
     /// Add a regular constraint to this parametric instance.
@@ -401,7 +731,7 @@ impl ParametricInstance {
     pub fn add_constraint(
         slf: Bound<'_, Self>,
         constraint: Constraint,
-    ) -> Result<crate::AttachedConstraint> {
+    ) -> OmmxPyResult<crate::AttachedConstraint> {
         let id = {
             let mut inst = slf.borrow_mut();
             inst.inner.add_constraint(constraint.0, constraint.1)?
@@ -409,52 +739,15 @@ impl ParametricInstance {
         Ok(crate::AttachedConstraint::from_parametric(slf.unbind(), id))
     }
 
+    /// Live mapping of all removed constraint families, keyed by typed IDs.
+    /// The view retains this owner and fetches each constraint on demand.
     #[getter]
-    pub fn removed_constraints(&self) -> BTreeMap<u64, RemovedConstraint> {
-        let context = self.inner.constraint_collection().context();
-        self.inner
-            .removed_constraints()
-            .iter()
-            .map(|(id, (c, r))| {
-                (
-                    id.into_inner(),
-                    RemovedConstraint::from_parts(c.clone(), context.collect_for(*id), r.clone()),
-                )
-            })
-            .collect()
-    }
-
-    /// Dict of all active indicator constraints in the parametric instance
-    /// keyed by their IDs.
-    ///
-    /// Each value is an {class}`~ommx.AttachedIndicatorConstraint`: a
-    /// write-through handle whose getters read from this parametric
-    /// instance's SoA store and whose context setters write back through
-    /// to it.
-    #[getter]
-    pub fn indicator_constraints(
+    pub fn removed_constraints(
         slf: Bound<'_, Self>,
-    ) -> BTreeMap<u64, crate::AttachedIndicatorConstraint> {
-        let py = slf.py();
-        let ids: Vec<ommx::IndicatorConstraintID> = slf
-            .borrow()
-            .inner
-            .indicator_constraints()
-            .keys()
-            .copied()
-            .collect();
-        let py_parametric: Py<Self> = slf.unbind();
-        ids.into_iter()
-            .map(|id| {
-                (
-                    id.into_inner(),
-                    crate::AttachedIndicatorConstraint::from_parametric(
-                        py_parametric.clone_ref(py),
-                        id,
-                    ),
-                )
-            })
-            .collect()
+    ) -> crate::constraint_collection::RemovedConstraintCollection {
+        crate::constraint_collection::RemovedConstraintCollection::new(
+            crate::ConstraintHost::Parametric(slf.unbind()),
+        )
     }
 
     /// Add an indicator constraint to this parametric instance.
@@ -471,7 +764,7 @@ impl ParametricInstance {
     pub fn add_indicator_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::IndicatorConstraint,
-    ) -> Result<crate::AttachedIndicatorConstraint> {
+    ) -> OmmxPyResult<crate::AttachedIndicatorConstraint> {
         let id = {
             let mut inst = slf.borrow_mut();
             inst.inner
@@ -483,63 +776,11 @@ impl ParametricInstance {
         ))
     }
 
-    /// Dict of all removed indicator constraints in the parametric
-    /// instance keyed by their IDs.
-    #[getter]
-    pub fn removed_indicator_constraints(
-        &self,
-    ) -> BTreeMap<u64, crate::RemovedIndicatorConstraint> {
-        let context = self.inner.indicator_constraint_context();
-        self.inner
-            .removed_indicator_constraints()
-            .iter()
-            .map(|(id, (c, r))| {
-                (
-                    id.into_inner(),
-                    crate::RemovedIndicatorConstraint::from_parts(
-                        c.clone(),
-                        context.collect_for(*id),
-                        r.clone(),
-                    ),
-                )
-            })
-            .collect()
-    }
-
-    /// Dict of all active one-hot constraints in the parametric instance
-    /// keyed by their IDs. Each value is an
-    /// {class}`~ommx.AttachedOneHotConstraint`.
-    #[getter]
-    pub fn one_hot_constraints(
-        slf: Bound<'_, Self>,
-    ) -> BTreeMap<u64, crate::AttachedOneHotConstraint> {
-        let py = slf.py();
-        let ids: Vec<ommx::OneHotConstraintID> = slf
-            .borrow()
-            .inner
-            .one_hot_constraints()
-            .keys()
-            .copied()
-            .collect();
-        let py_parametric: Py<Self> = slf.unbind();
-        ids.into_iter()
-            .map(|id| {
-                (
-                    id.into_inner(),
-                    crate::AttachedOneHotConstraint::from_parametric(
-                        py_parametric.clone_ref(py),
-                        id,
-                    ),
-                )
-            })
-            .collect()
-    }
-
     /// Add a one-hot constraint to this parametric instance.
     pub fn add_one_hot_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::OneHotConstraint,
-    ) -> Result<crate::AttachedOneHotConstraint> {
+    ) -> OmmxPyResult<crate::AttachedOneHotConstraint> {
         let id = {
             let mut inst = slf.borrow_mut();
             inst.inner
@@ -551,58 +792,11 @@ impl ParametricInstance {
         ))
     }
 
-    /// Dict of all removed one-hot constraints in the parametric instance
-    /// keyed by their IDs. The removed map can become non-empty when an
-    /// `Instance` whose one-hot constraints have been converted (via
-    /// `convert_all_one_hots_to_constraints`) is round-tripped back to a
-    /// `ParametricInstance` via `From<Instance>`.
-    #[getter]
-    pub fn removed_one_hot_constraints(&self) -> BTreeMap<u64, crate::RemovedOneHotConstraint> {
-        let context = self.inner.one_hot_constraint_context();
-        self.inner
-            .removed_one_hot_constraints()
-            .iter()
-            .map(|(id, (c, r))| {
-                (
-                    id.into_inner(),
-                    crate::RemovedOneHotConstraint::from_parts(
-                        c.clone(),
-                        context.collect_for(*id),
-                        r.clone(),
-                    ),
-                )
-            })
-            .collect()
-    }
-
-    /// Dict of all active SOS1 constraints in the parametric instance keyed
-    /// by their IDs. Each value is an {class}`~ommx.AttachedSos1Constraint`.
-    #[getter]
-    pub fn sos1_constraints(slf: Bound<'_, Self>) -> BTreeMap<u64, crate::AttachedSos1Constraint> {
-        let py = slf.py();
-        let ids: Vec<ommx::Sos1ConstraintID> = slf
-            .borrow()
-            .inner
-            .sos1_constraints()
-            .keys()
-            .copied()
-            .collect();
-        let py_parametric: Py<Self> = slf.unbind();
-        ids.into_iter()
-            .map(|id| {
-                (
-                    id.into_inner(),
-                    crate::AttachedSos1Constraint::from_parametric(py_parametric.clone_ref(py), id),
-                )
-            })
-            .collect()
-    }
-
     /// Add a SOS1 constraint to this parametric instance.
     pub fn add_sos1_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::Sos1Constraint,
-    ) -> Result<crate::AttachedSos1Constraint> {
+    ) -> OmmxPyResult<crate::AttachedSos1Constraint> {
         let id = {
             let mut inst = slf.borrow_mut();
             inst.inner.add_sos1_constraint(constraint.0, constraint.1)?
@@ -611,28 +805,6 @@ impl ParametricInstance {
             slf.unbind(),
             id,
         ))
-    }
-
-    /// Dict of all removed SOS1 constraints in the parametric instance
-    /// keyed by their IDs. See {meth}`removed_one_hot_constraints` for the
-    /// round-trip rationale.
-    #[getter]
-    pub fn removed_sos1_constraints(&self) -> BTreeMap<u64, crate::RemovedSos1Constraint> {
-        let context = self.inner.sos1_constraint_context();
-        self.inner
-            .removed_sos1_constraints()
-            .iter()
-            .map(|(id, (c, r))| {
-                (
-                    id.into_inner(),
-                    crate::RemovedSos1Constraint::from_parts(
-                        c.clone(),
-                        context.collect_for(*id),
-                        r.clone(),
-                    ),
-                )
-            })
-            .collect()
     }
 
     #[getter]
@@ -645,6 +817,10 @@ impl ParametricInstance {
             .collect()
     }
 
+    /// Declared parameters and their modeling labels, sorted by ID.
+    ///
+    /// These are independent definitions, not assigned numerical values.
+    /// Supply values through {meth}`~ommx.ParametricInstance.with_parameters`.
     #[getter]
     pub fn parameters(&self) -> Vec<Parameter> {
         self.inner
@@ -672,6 +848,10 @@ impl ParametricInstance {
             .collect()
     }
 
+    /// IDs of all declared parameters, including those unused in expressions.
+    ///
+    /// {meth}`~ommx.ParametricInstance.with_parameters` requires a value for
+    /// every ID in this set. The set is independent of the owner.
     #[getter]
     pub fn parameter_ids(&self) -> BTreeSet<u64> {
         self.inner
@@ -693,36 +873,6 @@ impl ParametricInstance {
             })
             .ok_or_else(|| {
                 PyKeyError::new_err(format!("Decision variable with ID {variable_id} not found"))
-            })
-    }
-
-    /// Get a specific constraint by ID
-    pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<Constraint> {
-        let cid = ConstraintID::from(constraint_id);
-        let context = self.inner.constraint_collection().context();
-        self.inner
-            .constraints()
-            .get(&cid)
-            .map(|c| Constraint::from_parts(c.clone(), context.collect_for(cid)))
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!("Constraint with ID {constraint_id} not found"))
-            })
-    }
-
-    /// Get a specific removed constraint by ID
-    pub fn get_removed_constraint_by_id(&self, constraint_id: u64) -> PyResult<RemovedConstraint> {
-        let cid = ConstraintID::from(constraint_id);
-        let context = self.inner.constraint_collection().context();
-        self.inner
-            .removed_constraints()
-            .get(&cid)
-            .map(|(c, r)| {
-                RemovedConstraint::from_parts(c.clone(), context.collect_for(cid), r.clone())
-            })
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!(
-                    "Removed constraint with ID {constraint_id} not found"
-                ))
             })
     }
 
@@ -797,7 +947,7 @@ impl ParametricInstance {
     /// DataFrame of constraints, dispatched on `kind=`. See
     /// {meth}`ommx.Instance.constraints_df` for column / `kind=` /
     /// `include=` / `removed=` semantics.
-    #[pyo3(signature = (kind = ConstraintKind::Regular, include = None, removed = false))]
+    #[pyo3(signature = (*, kind, include = None, removed = false))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
@@ -900,7 +1050,18 @@ impl ParametricInstance {
         )
     }
 
-    /// DataFrame of parameters
+    /// Collect declared parameter definitions and modeling labels into a DataFrame.
+    ///
+    /// The index is the parameter ID, named ``id``. By default, the table
+    /// includes ``name``, ``subscripts``, ``description``, and flattened
+    /// ``parameters.<key>`` metadata columns. ``include=[]`` omits optional
+    /// columns; ``include=["label"]`` selects the modeling labels and
+    /// ``include=["parameters"]`` selects the string-valued metadata.
+    ///
+    /// These labels are not the numerical assignments supplied to
+    /// {meth}`~ommx.ParametricInstance.with_parameters`. Editing the DataFrame
+    /// does not change this ParametricInstance. See the class example for
+    /// selecting a parameter's name and description by ID.
     #[pyo3(signature = (include = None))]
     pub fn parameters_df<'py>(
         &self,
@@ -915,7 +1076,7 @@ impl ParametricInstance {
     /// Constraint context DataFrame (id-indexed). See
     /// {meth}`ommx.Instance.constraint_context_df` for column / `kind=`
     /// semantics.
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_context_df<'py>(
         &self,
         py: Python<'py>,
@@ -943,7 +1104,7 @@ impl ParametricInstance {
     }
 
     /// Constraint parameters DataFrame (long format).
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_parameters_df<'py>(
         &self,
         py: Python<'py>,
@@ -971,7 +1132,7 @@ impl ParametricInstance {
     }
 
     /// Constraint provenance DataFrame (long format).
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_provenance_df<'py>(
         &self,
         py: Python<'py>,
@@ -999,7 +1160,7 @@ impl ParametricInstance {
     }
 
     /// Removed-constraint reasons DataFrame (long format).
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,

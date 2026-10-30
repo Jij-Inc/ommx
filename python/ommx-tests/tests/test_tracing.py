@@ -18,17 +18,19 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import ReadableSpan
 
 from ommx import (
+    Sense,
     DecisionVariable,
     Equality,
     IndicatorConstraint,
     Instance,
+    SpecialConstraintKind,
 )
 
 from conftest import get_test_exporter, get_test_provider
 
 
 def _instance_with_indicator() -> Instance:
-    """Instance with one indicator constraint so ``reduce_capabilities``
+    """Instance with one indicator constraint so ``lower_special_constraints``
     has real work to do and emits the expected INFO event."""
     x = DecisionVariable.continuous(0, lower=0, upper=5)
     y = DecisionVariable.binary(1)
@@ -42,7 +44,7 @@ def _instance_with_indicator() -> Instance:
         objective=x,
         constraints={},
         indicator_constraints={7: ic},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
 
@@ -74,12 +76,12 @@ def test_rust_spans_are_forwarded() -> None:
     exporter.clear()
 
     instance = _instance_with_indicator()
-    instance.reduce_capabilities(set())
+    instance.lower_special_constraints({SpecialConstraintKind.Indicator})
 
     provider.force_flush()
-    rust_spans = [s for s in exporter.spans if s.name == "reduce_capabilities"]
+    rust_spans = [s for s in exporter.spans if s.name == "lower_special_constraints"]
     assert len(rust_spans) >= 1, (
-        "Expected at least one Rust 'reduce_capabilities' span, "
+        "Expected at least one Rust 'lower_special_constraints' span, "
         f"got: {[s.name for s in exporter.spans]}"
     )
 
@@ -96,7 +98,7 @@ def test_trace_context_propagation() -> None:
     with tracer.start_as_current_span("python_parent") as parent_span:
         parent_trace_id = parent_span.get_span_context().trace_id
         parent_span_id = parent_span.get_span_context().span_id
-        instance.reduce_capabilities(set())
+        instance.lower_special_constraints({SpecialConstraintKind.Indicator})
 
     provider.force_flush()
 
@@ -142,7 +144,7 @@ def test_evaluate_emits_rust_span_under_python_parent() -> None:
         decision_variables=[x, y],
         objective=x + y,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     with tracer.start_as_current_span("python_parent") as parent_span:
@@ -159,9 +161,8 @@ def test_evaluate_emits_rust_span_under_python_parent() -> None:
         assert s.context.trace_id == parent_trace_id
 
 
-def test_to_qubo_emits_pipeline_spans() -> None:
-    """``Instance.to_qubo`` exercises the nested QUBO conversion pipeline,
-    producing the expected span names on the Rust side."""
+def test_to_qubo_emits_active_format_span() -> None:
+    """``Instance.to_qubo`` keeps its Rust-side format operation observable."""
     exporter = get_test_exporter()
     provider = get_test_provider()
     exporter.clear()
@@ -171,41 +172,35 @@ def test_to_qubo_emits_pipeline_spans() -> None:
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     instance.to_qubo()
 
     provider.force_flush()
     names = {s.name for s in exporter.spans}
-    # The PyO3 pipeline wrapper and the Rust-side formatter both emit spans.
-    assert "qubo_hubo_pipeline" in names, (
-        f"Missing 'qubo_hubo_pipeline' span. Got: {sorted(names)}"
-    )
     assert "as_qubo_format" in names, (
         f"Missing 'as_qubo_format' span. Got: {sorted(names)}"
     )
 
 
 def test_tracing_info_event_captured_on_rust_span() -> None:
-    """``tracing::info!`` inside ``reduce_capabilities`` becomes a span event
+    """``tracing::info!`` inside ``lower_special_constraints`` becomes a span event
     on the Rust span, not a separate span."""
     exporter = get_test_exporter()
     provider = get_test_provider()
     exporter.clear()
 
     instance = _instance_with_indicator()
-    instance.reduce_capabilities(set())
+    instance.lower_special_constraints({SpecialConstraintKind.Indicator})
 
     provider.force_flush()
-    rust_spans = [s for s in exporter.spans if s.name == "reduce_capabilities"]
-    assert rust_spans, "reduce_capabilities span was not exported"
+    rust_spans = [s for s in exporter.spans if s.name == "lower_special_constraints"]
+    assert rust_spans, "lower_special_constraints span was not exported"
 
     events_across_spans = [event for s in rust_spans for event in s.events]
     matched = [
-        e
-        for e in events_across_spans
-        if "Indicator" in e.name and "converted to regular constraints" in e.name
+        e for e in events_across_spans if "Indicator" in e.name and "lowered" in e.name
     ]
     assert matched, (
         "Expected the INFO event from Rust to appear as a span event. "

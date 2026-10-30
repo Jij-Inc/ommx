@@ -7,7 +7,7 @@ import pytest
 
 from ommx.adapter import DiagnosticCollector, UnboundedDetected
 from ommx.experiment import Experiment
-from ommx import Instance, Constraint, DecisionVariable, Solution
+from ommx import Constraint, DecisionVariable, Instance, Optimality, Sense, Solution
 
 from ommx_pyscipopt_adapter import (
     SCIPDiagnosticsAnalyzer,
@@ -26,7 +26,7 @@ def _knapsack_instance() -> Instance:
         decision_variables=x,
         objective=sum(p[i] * x[i] for i in range(6)),
         constraints={0: cast(Constraint, sum(w[i] * x[i] for i in range(6)) <= 47)},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
 
@@ -156,11 +156,27 @@ def test_solution_optimality():
         decision_variables=[x, y],
         objective=x + y,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     solution = OMMXPySCIPOptAdapter.solve(ommx_instance)
     assert solution.optimality == Solution.OPTIMAL
+
+
+def test_solution_optimality_is_not_transported_through_fixed_penalty():
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={7: x == 1},
+        sense=Sense.Minimize,
+    )
+    instance.to_qubo(uniform_penalty_weight=0.0)
+
+    solution = OMMXPySCIPOptAdapter.solve(instance)
+
+    assert not solution.feasible
+    assert solution.optimality == Optimality.Unspecified
 
 
 def test_direct_solve_records_termination_report():
@@ -169,7 +185,7 @@ def test_direct_solve_records_termination_report():
         decision_variables=[x],
         objective=x,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     collector = DiagnosticCollector()
 
@@ -449,7 +465,7 @@ def test_direct_collector_keeps_termination_report_before_decode_error():
         decision_variables=[x],
         objective=x,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     collector = DiagnosticCollector()
 

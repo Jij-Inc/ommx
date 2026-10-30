@@ -1,12 +1,16 @@
 """Tests for IndicatorConstraint Big-M conversion to regular constraints."""
 
+from ommx import IndicatorConstraintID
+
 import pandas as pd
 import pytest
 from ommx import (
+    Sense,
     Instance,
     DecisionVariable,
     IndicatorConstraint,
     Equality,
+    Function,
 )
 
 
@@ -25,7 +29,7 @@ def _instance(ic: IndicatorConstraint, x_lower: float = 0.0, x_upper: float = 5.
         objective=x,
         constraints={},
         indicator_constraints={7: ic},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
 
@@ -44,10 +48,12 @@ def test_convert_inequality_emits_only_upper_big_m():
     new_ids = instance.convert_indicator_to_constraint(7)
     assert len(new_ids) == 1
 
-    assert instance.indicator_constraints == {}
-    removed = instance.removed_indicator_constraints[7]
+    assert not any(
+        isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
+    )
+    removed = instance.removed_constraints[IndicatorConstraintID(7)]
     assert removed.removed_reason == "ommx.Instance.convert_indicator_to_constraint"
-    assert removed.removed_reason_parameters["constraint_ids"] == str(new_ids[0])
+    assert removed.removed_reason_parameters["constraint_ids"] == "8"
 
 
 def test_convert_equality_emits_both_sides():
@@ -62,11 +68,28 @@ def test_convert_equality_emits_both_sides():
 
     new_ids = instance.convert_indicator_to_constraint(7)
     assert len(new_ids) == 2
-    assert instance.indicator_constraints == {}
-    removed = instance.removed_indicator_constraints[7]
-    assert removed.removed_reason_parameters["constraint_ids"] == ",".join(
-        str(i) for i in new_ids
+    assert not any(
+        isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
     )
+    removed = instance.removed_constraints[IndicatorConstraintID(7)]
+    assert removed.removed_reason_parameters["constraint_ids"] == "8,9"
+
+
+def test_convert_equality_uses_explicit_atol_for_composed_body():
+    x = DecisionVariable.continuous(0, lower=1e-8, upper=1e-8)
+    y = DecisionVariable.binary(1)
+    ic = IndicatorConstraint(
+        indicator_variable=y,
+        function=Function(x).signum() - 0.5,
+        equality=Equality.EqualToZero,
+    )
+    instance = _instance(ic, x_lower=1e-8, x_upper=1e-8)
+
+    new_ids = instance.convert_indicator_to_constraint(7, atol=1e-6)
+    assert len(new_ids) == 1
+    assert instance.constraints[new_ids[0]].function.evaluate(
+        {0: 1e-8, 1: 1.0}, atol=1e-6
+    ) == pytest.approx(0.5)
 
 
 def test_redundant_indicator_emits_no_constraint():
@@ -84,7 +107,7 @@ def test_redundant_indicator_emits_no_constraint():
     new_ids = instance.convert_indicator_to_constraint(7)
     assert new_ids == []
     assert instance.constraints == {}
-    removed = instance.removed_indicator_constraints[7]
+    removed = instance.removed_constraints[IndicatorConstraintID(7)]
     assert removed.removed_reason_parameters["constraint_ids"] == ""
 
 
@@ -104,15 +127,19 @@ def test_infinite_bound_is_rejected_without_mutation():
         objective=x,
         constraints={},
         indicator_constraints={7: ic},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     with pytest.raises(RuntimeError, match="non-finite"):
         instance.convert_indicator_to_constraint(7)
 
-    assert 7 in instance.indicator_constraints
-    assert instance.constraints == {}
-    assert instance.removed_indicator_constraints == {}
+    assert IndicatorConstraintID(7) in (
+        cid for cid in instance.constraints if isinstance(cid, IndicatorConstraintID)
+    )
+    assert set(instance.constraints) == {IndicatorConstraintID(7)}
+    assert not any(
+        isinstance(cid, IndicatorConstraintID) for cid in instance.removed_constraints
+    )
 
 
 def test_convert_all_is_atomic_on_error():
@@ -136,16 +163,26 @@ def test_convert_all_is_atomic_on_error():
         objective=x_bounded,
         constraints={},
         indicator_constraints={1: ic_ok, 2: ic_bad},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     with pytest.raises(RuntimeError, match="non-finite"):
         instance.convert_all_indicators_to_constraints()
 
     # Nothing was applied.
-    assert set(instance.indicator_constraints) == {1, 2}
-    assert instance.constraints == {}
-    assert instance.removed_indicator_constraints == {}
+    assert set(
+        (cid for cid in instance.constraints if isinstance(cid, IndicatorConstraintID))
+    ) == {
+        IndicatorConstraintID(1),
+        IndicatorConstraintID(2),
+    }
+    assert set(instance.constraints) == {
+        IndicatorConstraintID(1),
+        IndicatorConstraintID(2),
+    }
+    assert not any(
+        isinstance(cid, IndicatorConstraintID) for cid in instance.removed_constraints
+    )
 
 
 def test_removed_indicator_constraints_df_surfaces_reason_and_ids(snapshot):

@@ -1,8 +1,7 @@
-use anyhow::{bail, Context, Result};
 use oci_spec::image::ImageManifest;
 use ommx::artifact::media_types;
 use pyo3::{
-    exceptions::PyRuntimeWarning,
+    exceptions::{PyKeyError, PyRuntimeError, PyRuntimeWarning, PyValueError},
     prelude::*,
     types::{PyBytes, PyDict},
 };
@@ -12,7 +11,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::{PyArchiveDescriptor, PyDescriptor};
+use crate::{descriptor::as_descriptor, error::OmmxPyResult, PyArchiveDescriptor, PyDescriptor};
 
 /// A local-registry image reference and its cached OCI Manifest projection.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -97,9 +96,7 @@ impl PyArtifactRef {
         imports = ("builtins", "typing")
     ))]
     pub fn manifest<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        Ok(serde_pyobject::to_pyobject(py, &self.manifest)
-            .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?
-            .cast_into::<PyDict>()?)
+        Ok(serde_pyobject::to_pyobject(py, &self.manifest)?.cast_into::<PyDict>()?)
     }
 
     pub fn __repr__(&self) -> String {
@@ -128,12 +125,12 @@ impl PyArtifactRef {
 /// An artifact is an OCI container image that stores OMMX data
 /// (instances, solutions, sample sets, etc.) as layers.
 ///
-/// ```python
-/// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
-/// >>> print(artifact.image_name)
+/// This example requires remote registry access and is not executed as a doctest.
+///
+/// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")  # doctest: +SKIP
+/// >>> print(artifact.image_name)  # doctest: +SKIP
 /// ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
 ///
-/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Artifact")]
@@ -183,14 +180,15 @@ impl PyArtifact {
     /// archives importable while still making the imported artifact
     /// addressable in SQLite.
     ///
-    /// ```python
-    /// >>> artifact = Artifact.import_archive("data/random_lp_instance.ommx")
-    /// >>> print(artifact.image_name)
+    /// This example requires an external archive and writes to the persistent
+    /// Local Registry, so it is not executed as a doctest.
+    ///
+    /// >>> artifact = Artifact.import_archive("data/random_lp_instance.ommx")  # doctest: +SKIP
+    /// >>> print(artifact.image_name)  # doctest: +SKIP
     /// ghcr.io/jij-inc/ommx/random_lp_instance:...
     ///
-    /// ```
     #[staticmethod]
-    pub fn import_archive(py: Python<'_>, path: PathBuf) -> Result<Self> {
+    pub fn import_archive(py: Python<'_>, path: PathBuf) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(Self::new(ommx::artifact::LocalArtifactDyn::import_archive(
             &path,
@@ -215,8 +213,8 @@ impl PyArtifact {
     ///   <Artifact.inspect_archive>` — a side-effect-free read of the
     ///   manifest / layer descriptors without registry import.
     #[staticmethod]
-    pub fn load_archive(path: PathBuf) -> Result<Self> {
-        bail!(
+    pub fn load_archive(path: PathBuf) -> PyResult<Self> {
+        Err(PyRuntimeError::new_err(format!(
             "`Artifact.load_archive({path})` was renamed in v3. v2 read \
              archives in place with no registry side effect; v3 imports them \
              into the user's persistent SQLite Local Registry, so the old \
@@ -226,7 +224,7 @@ impl PyArtifact {
              - `Artifact.inspect_archive({path})` — read the manifest / layer \
                descriptors without touching the registry.",
             path = path.display(),
-        )
+        )))
     }
 
     /// Read a `.ommx` OCI archive's manifest and layer descriptors
@@ -240,15 +238,15 @@ impl PyArtifact {
     /// `Artifact.load(image_name)` later), use
     /// {meth}`Artifact.import_archive`.
     ///
-    /// ```python
-    /// >>> manifest = Artifact.inspect_archive("data/random_lp_instance.ommx")
-    /// >>> for layer in manifest.layers:
+    /// This example requires an external archive and is not executed as a doctest.
+    ///
+    /// >>> manifest = Artifact.inspect_archive("data/random_lp_instance.ommx")  # doctest: +SKIP
+    /// >>> for layer in manifest.layers:  # doctest: +SKIP
     /// ...     print(layer.media_type)
     /// application/org.ommx.v1.instance
     ///
-    /// ```
     #[staticmethod]
-    pub fn inspect_archive(py: Python<'_>, path: PathBuf) -> Result<PyArchiveManifest> {
+    pub fn inspect_archive(py: Python<'_>, path: PathBuf) -> OmmxPyResult<PyArchiveManifest> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let view = ommx::artifact::local_registry::ArchiveInspectView::read(&path)?;
         Ok(PyArchiveManifest::from(view))
@@ -258,32 +256,32 @@ impl PyArtifact {
     ///
     /// If the image is not found in local registry, it will try to pull from remote registry.
     ///
-    /// ```python
-    /// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
-    /// >>> print(artifact.image_name)
+    /// This example requires remote registry access and is not executed as a doctest.
+    ///
+    /// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")  # doctest: +SKIP
+    /// >>> print(artifact.image_name)  # doctest: +SKIP
     /// ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
     ///
-    /// ```
     ///
     /// Raises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the
     /// exact remote reference does not exist. Other remote access failures
     /// raise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.
+    /// An invalid image reference raises {class}`ValueError` before any remote
+    /// access is attempted.
     #[cfg(feature = "remote-artifact")]
     #[staticmethod]
-    pub fn load(py: Python<'_>, image_name: &str) -> PyResult<Self> {
+    pub fn load(py: Python<'_>, image_name: &str) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        crate::error::map_ommx_error(|| {
-            let image_name = ommx::artifact::ImageRef::parse(image_name)?;
-            let inner = ommx::artifact::LocalArtifactDyn::load(image_name)?;
-            Ok(Self::new(inner))
-        })
+        let image_name = ommx::artifact::ImageRef::parse(image_name)?;
+        let inner = ommx::artifact::LocalArtifactDyn::load(image_name)?;
+        Ok(Self::new(inner))
     }
 
     /// Push the artifact to remote registry.
     #[cfg(feature = "remote-artifact")]
-    pub fn push(&mut self, py: Python<'_>) -> Result<()> {
+    pub fn push(&mut self, py: Python<'_>) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        self.inner.push()
+        Ok(self.inner.push()?)
     }
 
     /// Save the artifact as a `.ommx` OCI archive file at `path`.
@@ -294,9 +292,9 @@ impl PyArtifact {
     /// Registry under the same image name; {meth}`Artifact.inspect_archive`
     /// reads the manifest / layer descriptors without writing into the
     /// registry.
-    pub fn save(&mut self, py: Python<'_>, path: PathBuf) -> Result<()> {
+    pub fn save(&mut self, py: Python<'_>, path: PathBuf) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        self.inner.save(&path)
+        Ok(self.inner.save(&path)?)
     }
 
     #[getter]
@@ -306,12 +304,12 @@ impl PyArtifact {
 
     /// Annotations in the artifact manifest.
     #[getter]
-    pub fn annotations(&mut self) -> Result<HashMap<String, String>> {
-        self.inner.annotations()
+    pub fn annotations(&mut self) -> OmmxPyResult<HashMap<String, String>> {
+        Ok(self.inner.annotations()?)
     }
 
     #[getter]
-    pub fn layers(&mut self) -> Result<Vec<PyDescriptor>> {
+    pub fn layers(&mut self) -> OmmxPyResult<Vec<PyDescriptor>> {
         Ok(self
             .inner
             .layers()?
@@ -321,27 +319,39 @@ impl PyArtifact {
     }
 
     /// Look up a layer descriptor by digest.
-    pub fn get_layer_descriptor(&mut self, py: Python<'_>, digest: &str) -> Result<PyDescriptor> {
+    ///
+    /// Raises {class}`ValueError` when `digest` is malformed and
+    /// {class}`KeyError` when the digest is valid but is not present in the
+    /// Artifact manifest.
+    pub fn get_layer_descriptor(
+        &mut self,
+        py: Python<'_>,
+        digest: &str,
+    ) -> OmmxPyResult<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        let digest: oci_spec::image::Digest = digest
+            .parse()
+            .map_err(|error| PyValueError::new_err(format!("Invalid layer digest: {error}")))?;
         let layers = self.inner.layers()?;
         for layer in layers {
-            if layer.digest().as_ref() == digest {
+            if layer.digest() == &digest {
                 return Ok(PyDescriptor::from(layer));
             }
         }
-        bail!("Layer {} not found", digest)
+        Err(PyKeyError::new_err(digest.to_string()).into())
     }
 
     /// Get raw bytes of a blob by Descriptor.
+    ///
+    /// Registry and storage failures, including a missing CAS blob referenced
+    /// by the Descriptor, raise {class}`RuntimeError`.
     pub fn get_blob<'py>(
         &mut self,
         py: Python<'py>,
         descriptor: &PyDescriptor,
-    ) -> PyResult<Bound<'py, PyBytes>> {
+    ) -> OmmxPyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let blob = descriptor
-            .read_blob_from(&self.inner)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let blob = self.inner.get_blob(as_descriptor(descriptor))?;
         Ok(PyBytes::new(py, &blob))
     }
 
@@ -350,8 +360,8 @@ impl PyArtifact {
     /// Raises `ValueError` if no instance layer is found.
     /// For multiple instance layers, use {meth}`get_instance` with a descriptor.
     #[getter(instance)]
-    pub fn instance_(&mut self, py: Python<'_>) -> Result<crate::Instance> {
-        Ok(self.get_instance(py, None)?)
+    pub fn instance_(&mut self, py: Python<'_>) -> OmmxPyResult<crate::Instance> {
+        self.get_instance(py, None)
     }
 
     /// The first solution layer in the artifact.
@@ -359,8 +369,8 @@ impl PyArtifact {
     /// Raises `ValueError` if no solution layer is found.
     /// For multiple solution layers, use {meth}`get_solution` with a descriptor.
     #[getter(solution)]
-    pub fn solution_(&mut self, py: Python<'_>) -> Result<crate::Solution> {
-        Ok(self.get_solution(py, None)?)
+    pub fn solution_(&mut self, py: Python<'_>) -> OmmxPyResult<crate::Solution> {
+        self.get_solution(py, None)
     }
 
     /// The first parametric instance layer in the artifact.
@@ -368,8 +378,11 @@ impl PyArtifact {
     /// Raises `ValueError` if no parametric instance layer is found.
     /// For multiple parametric instance layers, use {meth}`get_parametric_instance` with a descriptor.
     #[getter(parametric_instance)]
-    pub fn parametric_instance_(&mut self, py: Python<'_>) -> Result<crate::ParametricInstance> {
-        Ok(self.get_parametric_instance(py, None)?)
+    pub fn parametric_instance_(
+        &mut self,
+        py: Python<'_>,
+    ) -> OmmxPyResult<crate::ParametricInstance> {
+        self.get_parametric_instance(py, None)
     }
 
     /// The first sample set layer in the artifact.
@@ -377,8 +390,8 @@ impl PyArtifact {
     /// Raises `ValueError` if no sample set layer is found.
     /// For multiple sample set layers, use {meth}`get_sample_set` with a descriptor.
     #[getter(sample_set)]
-    pub fn sample_set_(&mut self, py: Python<'_>) -> Result<crate::SampleSet> {
-        Ok(self.get_sample_set(py, None)?)
+    pub fn sample_set_(&mut self, py: Python<'_>) -> OmmxPyResult<crate::SampleSet> {
+        self.get_sample_set(py, None)
     }
 
     /// Get the layer object corresponding to the descriptor.
@@ -389,44 +402,40 @@ impl PyArtifact {
     /// - OMMX solution payloads return {class}`~ommx.Solution`
     /// - OMMX sample-set payloads return {class}`~ommx.SampleSet`
     /// - `application/vnd.numpy` returns a numpy array
+    ///
+    /// Raises {class}`ValueError` for an unsupported media type. Registry and
+    /// storage failures raise {class}`RuntimeError`; exceptions raised by
+    /// Python-backed decoders are preserved.
     pub fn get_layer<'py>(
         &mut self,
         py: Python<'py>,
         descriptor: &PyDescriptor,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    ) -> OmmxPyResult<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let media_type = descriptor.as_descriptor().media_type();
+        let media_type = as_descriptor(descriptor).media_type();
         if media_types::is_instance_payload_media_type(media_type) {
-            let instance = self
-                .get_instance_inner(descriptor)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+            let instance = self.get_instance_inner(descriptor)?;
             Ok(instance
                 .into_pyobject(py)?
                 .into_any()
                 .unbind()
                 .into_bound(py))
         } else if media_types::is_parametric_instance_payload_media_type(media_type) {
-            let instance = self
-                .get_parametric_instance_inner(descriptor)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+            let instance = self.get_parametric_instance_inner(descriptor)?;
             Ok(instance
                 .into_pyobject(py)?
                 .into_any()
                 .unbind()
                 .into_bound(py))
         } else if media_types::is_solution_payload_media_type(media_type) {
-            let solution = self
-                .get_solution_inner(descriptor)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+            let solution = self.get_solution_inner(descriptor)?;
             Ok(solution
                 .into_pyobject(py)?
                 .into_any()
                 .unbind()
                 .into_bound(py))
         } else if media_types::is_sample_set_payload_media_type(media_type) {
-            let sample_set = self
-                .get_sample_set_inner(descriptor)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+            let sample_set = self.get_sample_set_inner(descriptor)?;
             Ok(sample_set
                 .into_pyobject(py)?
                 .into_any()
@@ -435,10 +444,7 @@ impl PyArtifact {
         } else if media_type.as_ref() == "application/vnd.numpy" {
             self.get_ndarray_inner(py, descriptor)
         } else {
-            Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "Unsupported media type {}",
-                media_type
-            )))
+            Err(PyValueError::new_err(format!("Unsupported media type {media_type}")).into())
         }
     }
 
@@ -447,36 +453,29 @@ impl PyArtifact {
     /// - If `descriptor` is `None`, returns the first instance layer.
     /// - If `descriptor` is given, returns the instance for that specific layer.
     ///
-    /// Raises `ValueError` if no instance layer is found.
+    /// Raises {class}`ValueError` if no instance layer is found, if the
+    /// Descriptor has the wrong media type, or if the payload is malformed.
+    /// Registry and storage failures raise {class}`RuntimeError`.
     #[pyo3(signature = (descriptor = None))]
     pub fn get_instance(
         &mut self,
         py: Python<'_>,
         descriptor: Option<&PyDescriptor>,
-    ) -> PyResult<crate::Instance> {
+    ) -> OmmxPyResult<crate::Instance> {
         let _guard = crate::TRACING.attach_parent_context(py);
         match descriptor {
-            Some(desc) => self
-                .get_instance_inner(desc)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string())),
+            Some(desc) => self.get_instance_inner(desc),
             None => {
-                let layers = self
-                    .inner
-                    .layers()
-                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+                let layers = self.inner.layers()?;
                 for desc in layers {
                     let py_desc = PyDescriptor::from(desc);
                     if media_types::is_instance_payload_media_type(
-                        py_desc.as_descriptor().media_type(),
+                        as_descriptor(&py_desc).media_type(),
                     ) {
-                        return self
-                            .get_instance_inner(&py_desc)
-                            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()));
+                        return self.get_instance_inner(&py_desc);
                     }
                 }
-                Err(pyo3::exceptions::PyValueError::new_err(
-                    "Instance layer not found",
-                ))
+                Err(PyValueError::new_err("Instance layer not found").into())
             }
         }
     }
@@ -486,36 +485,29 @@ impl PyArtifact {
     /// - If `descriptor` is `None`, returns the first solution layer.
     /// - If `descriptor` is given, returns the solution for that specific layer.
     ///
-    /// Raises `ValueError` if no solution layer is found.
+    /// Raises {class}`ValueError` if no solution layer is found, if the
+    /// Descriptor has the wrong media type, or if the payload is malformed.
+    /// Registry and storage failures raise {class}`RuntimeError`.
     #[pyo3(signature = (descriptor = None))]
     pub fn get_solution(
         &mut self,
         py: Python<'_>,
         descriptor: Option<&PyDescriptor>,
-    ) -> PyResult<crate::Solution> {
+    ) -> OmmxPyResult<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
         match descriptor {
-            Some(desc) => self
-                .get_solution_inner(desc)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string())),
+            Some(desc) => self.get_solution_inner(desc),
             None => {
-                let layers = self
-                    .inner
-                    .layers()
-                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+                let layers = self.inner.layers()?;
                 for desc in layers {
                     let py_desc = PyDescriptor::from(desc);
                     if media_types::is_solution_payload_media_type(
-                        py_desc.as_descriptor().media_type(),
+                        as_descriptor(&py_desc).media_type(),
                     ) {
-                        return self
-                            .get_solution_inner(&py_desc)
-                            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()));
+                        return self.get_solution_inner(&py_desc);
                     }
                 }
-                Err(pyo3::exceptions::PyValueError::new_err(
-                    "Solution layer not found",
-                ))
+                Err(PyValueError::new_err("Solution layer not found").into())
             }
         }
     }
@@ -525,36 +517,29 @@ impl PyArtifact {
     /// - If `descriptor` is `None`, returns the first parametric instance layer.
     /// - If `descriptor` is given, returns the parametric instance for that specific layer.
     ///
-    /// Raises `ValueError` if no parametric instance layer is found.
+    /// Raises {class}`ValueError` if no parametric instance layer is found, if
+    /// the Descriptor has the wrong media type, or if the payload is
+    /// malformed. Registry and storage failures raise {class}`RuntimeError`.
     #[pyo3(signature = (descriptor = None))]
     pub fn get_parametric_instance(
         &mut self,
         py: Python<'_>,
         descriptor: Option<&PyDescriptor>,
-    ) -> PyResult<crate::ParametricInstance> {
+    ) -> OmmxPyResult<crate::ParametricInstance> {
         let _guard = crate::TRACING.attach_parent_context(py);
         match descriptor {
-            Some(desc) => self
-                .get_parametric_instance_inner(desc)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string())),
+            Some(desc) => self.get_parametric_instance_inner(desc),
             None => {
-                let layers = self
-                    .inner
-                    .layers()
-                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+                let layers = self.inner.layers()?;
                 for desc in layers {
                     let py_desc = PyDescriptor::from(desc);
                     if media_types::is_parametric_instance_payload_media_type(
-                        py_desc.as_descriptor().media_type(),
+                        as_descriptor(&py_desc).media_type(),
                     ) {
-                        return self
-                            .get_parametric_instance_inner(&py_desc)
-                            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()));
+                        return self.get_parametric_instance_inner(&py_desc);
                     }
                 }
-                Err(pyo3::exceptions::PyValueError::new_err(
-                    "Parametric instance layer not found",
-                ))
+                Err(PyValueError::new_err("Parametric instance layer not found").into())
             }
         }
     }
@@ -564,80 +549,79 @@ impl PyArtifact {
     /// - If `descriptor` is `None`, returns the first sample set layer.
     /// - If `descriptor` is given, returns the sample set for that specific layer.
     ///
-    /// Raises `ValueError` if no sample set layer is found.
+    /// Raises {class}`ValueError` if no sample set layer is found, if the
+    /// Descriptor has the wrong media type, or if the payload is malformed.
+    /// Registry and storage failures raise {class}`RuntimeError`.
     #[pyo3(signature = (descriptor = None))]
     pub fn get_sample_set(
         &mut self,
         py: Python<'_>,
         descriptor: Option<&PyDescriptor>,
-    ) -> PyResult<crate::SampleSet> {
+    ) -> OmmxPyResult<crate::SampleSet> {
         let _guard = crate::TRACING.attach_parent_context(py);
         match descriptor {
-            Some(desc) => self
-                .get_sample_set_inner(desc)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string())),
+            Some(desc) => self.get_sample_set_inner(desc),
             None => {
-                let layers = self
-                    .inner
-                    .layers()
-                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+                let layers = self.inner.layers()?;
                 for desc in layers {
                     let py_desc = PyDescriptor::from(desc);
                     if media_types::is_sample_set_payload_media_type(
-                        py_desc.as_descriptor().media_type(),
+                        as_descriptor(&py_desc).media_type(),
                     ) {
-                        return self
-                            .get_sample_set_inner(&py_desc)
-                            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()));
+                        return self.get_sample_set_inner(&py_desc);
                     }
                 }
-                Err(pyo3::exceptions::PyValueError::new_err(
-                    "Sample set layer not found",
-                ))
+                Err(PyValueError::new_err("Sample set layer not found").into())
             }
         }
     }
 
     /// Get a numpy array from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_ndarray`.
+    ///
+    /// A mismatched media type raises {class}`ValueError`; registry and storage
+    /// failures raise {class}`RuntimeError`. NumPy exceptions are preserved.
     pub fn get_ndarray<'py>(
         &mut self,
         py: Python<'py>,
         descriptor: &PyDescriptor,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    ) -> OmmxPyResult<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.get_ndarray_inner(py, descriptor)
     }
 
     /// Get a pandas DataFrame from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_dataframe`.
+    ///
+    /// A mismatched media type raises {class}`ValueError`; registry and storage
+    /// failures raise {class}`RuntimeError`. pandas exceptions are preserved.
     pub fn get_dataframe<'py>(
         &mut self,
         py: Python<'py>,
         descriptor: &PyDescriptor,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    ) -> OmmxPyResult<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         assert_media_type(descriptor, "application/vnd.apache.parquet")?;
-        let blob = descriptor
-            .read_blob_from(&self.inner)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let blob = self.inner.get_blob(as_descriptor(descriptor))?;
         let io = py.import("io")?;
         let pandas = py.import("pandas")?;
         let bytes_io = io.call_method1("BytesIO", (PyBytes::new(py, &blob),))?;
-        pandas.call_method1("read_parquet", (bytes_io,))
+        Ok(pandas.call_method1("read_parquet", (bytes_io,))?)
     }
 
     /// Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_json`.
+    ///
+    /// A mismatched media type raises {class}`ValueError`; registry and storage
+    /// failures raise {class}`RuntimeError`. JSON decoder exceptions are
+    /// preserved.
     pub fn get_json<'py>(
         &mut self,
         py: Python<'py>,
         descriptor: &PyDescriptor,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    ) -> OmmxPyResult<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         assert_media_type(descriptor, "application/json")?;
-        let blob = descriptor
-            .read_blob_from(&self.inner)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let blob = self.inner.get_blob(as_descriptor(descriptor))?;
         let json = py.import("json")?;
-        json.call_method1("loads", (PyBytes::new(py, &blob),))
+        Ok(json.call_method1("loads", (PyBytes::new(py, &blob),))?)
     }
 }
 
@@ -1159,21 +1143,21 @@ pub struct PyAnonymousArtifactRef {
 }
 
 impl PyAnonymousArtifactRef {
-    fn from_ref_record(record: ommx::artifact::local_registry::RefRecord) -> Result<Self> {
+    fn from_ref_record(record: ommx::artifact::local_registry::RefRecord) -> Self {
         let image_name = format!("{}:{}", record.name, record.reference);
         let kind = if record.name.ends_with(".ommx.local/experiment") {
             "experiment"
         } else {
             "artifact"
         };
-        Ok(Self {
+        Self {
             image_name,
             kind: kind.to_string(),
             name: record.name,
             reference: record.reference,
             digest: record.manifest_digest.to_string(),
             updated_at: record.updated_at,
-        })
+        }
     }
 }
 
@@ -1269,34 +1253,57 @@ impl PyPruneAnonymousReport {
 }
 
 impl PyArtifact {
-    fn get_instance_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::Instance> {
+    fn get_instance_inner(&mut self, descriptor: &PyDescriptor) -> OmmxPyResult<crate::Instance> {
+        assert_media_type_matches(
+            descriptor,
+            "an OMMX Instance payload",
+            media_types::is_instance_payload_media_type(as_descriptor(descriptor).media_type()),
+        )?;
         Ok(crate::Instance {
-            inner: self.inner.get_instance_layer(descriptor.as_descriptor())?,
+            inner: self.inner.get_instance_layer(as_descriptor(descriptor))?,
         })
     }
 
-    fn get_solution_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::Solution> {
+    fn get_solution_inner(&mut self, descriptor: &PyDescriptor) -> OmmxPyResult<crate::Solution> {
+        assert_media_type_matches(
+            descriptor,
+            "an OMMX Solution payload",
+            media_types::is_solution_payload_media_type(as_descriptor(descriptor).media_type()),
+        )?;
         Ok(crate::Solution {
-            inner: self.inner.get_solution_layer(descriptor.as_descriptor())?,
+            inner: self.inner.get_solution_layer(as_descriptor(descriptor))?,
         })
     }
 
     fn get_parametric_instance_inner(
         &mut self,
         descriptor: &PyDescriptor,
-    ) -> Result<crate::ParametricInstance> {
+    ) -> OmmxPyResult<crate::ParametricInstance> {
+        assert_media_type_matches(
+            descriptor,
+            "an OMMX ParametricInstance payload",
+            media_types::is_parametric_instance_payload_media_type(
+                as_descriptor(descriptor).media_type(),
+            ),
+        )?;
         Ok(crate::ParametricInstance {
             inner: self
                 .inner
-                .get_parametric_instance_layer(descriptor.as_descriptor())?,
+                .get_parametric_instance_layer(as_descriptor(descriptor))?,
         })
     }
 
-    fn get_sample_set_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::SampleSet> {
+    fn get_sample_set_inner(
+        &mut self,
+        descriptor: &PyDescriptor,
+    ) -> OmmxPyResult<crate::SampleSet> {
+        assert_media_type_matches(
+            descriptor,
+            "an OMMX SampleSet payload",
+            media_types::is_sample_set_payload_media_type(as_descriptor(descriptor).media_type()),
+        )?;
         Ok(crate::SampleSet {
-            inner: self
-                .inner
-                .get_sample_set_layer(descriptor.as_descriptor())?,
+            inner: self.inner.get_sample_set_layer(as_descriptor(descriptor))?,
         })
     }
 
@@ -1304,24 +1311,33 @@ impl PyArtifact {
         &mut self,
         py: Python<'py>,
         descriptor: &PyDescriptor,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    ) -> OmmxPyResult<Bound<'py, PyAny>> {
         assert_media_type(descriptor, "application/vnd.numpy")?;
-        let blob = descriptor
-            .read_blob_from(&self.inner)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let blob = self.inner.get_blob(as_descriptor(descriptor))?;
         let io = py.import("io")?;
         let numpy = py.import("numpy")?;
         let bytes_io = io.call_method1("BytesIO", (PyBytes::new(py, &blob),))?;
-        numpy.call_method1("load", (bytes_io,))
+        Ok(numpy.call_method1("load", (bytes_io,))?)
     }
 }
 
-fn assert_media_type(descriptor: &PyDescriptor, expected: &str) -> Result<()> {
+fn assert_media_type(descriptor: &PyDescriptor, expected: &str) -> PyResult<()> {
     let actual = descriptor.media_type();
-    if actual != expected {
-        bail!("Expected media type '{}', got '{}'", expected, actual);
+    assert_media_type_matches(descriptor, expected, actual == expected)
+}
+
+fn assert_media_type_matches(
+    descriptor: &PyDescriptor,
+    expected: &str,
+    matches: bool,
+) -> PyResult<()> {
+    if matches {
+        return Ok(());
     }
-    Ok(())
+    Err(PyValueError::new_err(format!(
+        "Expected media type '{expected}', got '{}'",
+        descriptor.media_type()
+    )))
 }
 
 // ---------------------------------------------------------------------------
@@ -1342,11 +1358,11 @@ impl DraftInner {
         Self(Some(Box::new(builder)))
     }
 
-    fn as_mut(&mut self) -> Result<&mut ommx::artifact::ArtifactDraft<'static>> {
+    fn as_mut(&mut self) -> PyResult<&mut ommx::artifact::ArtifactDraft<'static>> {
         self.0
             .as_mut()
             .map(|b| b.as_mut())
-            .ok_or_else(|| anyhow::anyhow!("Already committed artifact"))
+            .ok_or_else(|| PyRuntimeError::new_err("Already committed artifact"))
     }
 
     fn add_layer(
@@ -1354,24 +1370,24 @@ impl DraftInner {
         media_type: &str,
         blob: &[u8],
         annotations: HashMap<String, String>,
-    ) -> Result<PyDescriptor> {
+    ) -> OmmxPyResult<PyDescriptor> {
         let desc = self
             .as_mut()?
             .add_layer_bytes(media_type.into(), blob.to_vec(), annotations)?;
         Ok(PyDescriptor::from(desc))
     }
 
-    fn add_annotation(&mut self, key: &str, value: &str) -> Result<()> {
+    fn add_annotation(&mut self, key: &str, value: &str) -> PyResult<()> {
         self.as_mut()?.add_annotation(key, value);
         Ok(())
     }
 
-    fn commit(&mut self) -> Result<ommx::artifact::LocalArtifact<'static>> {
+    fn commit(&mut self) -> OmmxPyResult<ommx::artifact::LocalArtifact<'static>> {
         let builder = self
             .0
             .take()
-            .ok_or_else(|| anyhow::anyhow!("Already committed artifact"))?;
-        (*builder).commit()
+            .ok_or_else(|| PyRuntimeError::new_err("Already committed artifact"))?;
+        Ok((*builder).commit()?)
     }
 }
 
@@ -1381,13 +1397,13 @@ impl DraftInner {
 
 /// Mutable draft for OMMX Artifacts.
 ///
-/// ```python
-/// >>> draft = ArtifactDraft.temp()
-/// >>> artifact = draft.commit()
-/// >>> print(artifact.image_name)
+/// This example writes to the persistent Local Registry and is not executed as a doctest.
+///
+/// >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+/// >>> artifact = draft.commit()  # doctest: +SKIP
+/// >>> print(artifact.image_name)  # doctest: +SKIP
 /// ttl.sh/...-...-...-...-...:1h
 ///
-/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "ArtifactDraft")]
@@ -1402,21 +1418,25 @@ impl PyArtifactDraft {
     /// returned handle if you also want a `.ommx` archive file for
     /// sharing.
     ///
-    /// ```python
     /// >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
     /// >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
     /// >>> instance = generator.get_v1_instance()
     /// >>> import uuid
     /// >>> image_name = f"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}"
-    /// >>> draft = ArtifactDraft.new(image_name)
-    /// >>> _desc = draft.add_instance(instance)
-    /// >>> artifact = draft.commit()
-    /// >>> print(artifact.image_name)
+    ///
+    /// The remaining operations use the persistent Local Registry.
+    ///
+    /// >>> draft = ArtifactDraft.new(image_name)  # doctest: +SKIP
+    /// >>> _desc = draft.add_instance(instance)  # doctest: +SKIP
+    /// >>> artifact = draft.commit()  # doctest: +SKIP
+    /// >>> print(artifact.image_name)  # doctest: +SKIP
     /// ghcr.io/jij-inc/ommx/single_feasible_lp:...
     ///
-    /// ```
+    ///
+    /// Raises {class}`ValueError` when `image_name` is not a valid OCI image
+    /// reference. Registry and storage failures raise {class}`RuntimeError`.
     #[staticmethod]
-    pub fn new(image_name: &str) -> Result<Self> {
+    pub fn new(image_name: &str) -> OmmxPyResult<Self> {
         let image_name = ommx::artifact::ImageRef::parse(image_name)?;
         let builder = ommx::artifact::ArtifactDraft::new(image_name)?;
         Ok(Self(DraftInner::new(builder)))
@@ -1453,18 +1473,19 @@ impl PyArtifactDraft {
     /// Call {meth}`Artifact.save(path)` on the returned handle to also
     /// write a `.ommx` archive file for sharing.
     ///
-    /// ```python
     /// >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
     /// >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
     /// >>> instance = generator.get_v1_instance()
-    /// >>> draft = ArtifactDraft.new_anonymous()
-    /// >>> _desc = draft.add_instance(instance)
-    /// >>> artifact = draft.commit()
-    /// >>> assert ".ommx.local/anonymous:" in artifact.image_name
     ///
-    /// ```
+    /// The remaining operations use the persistent Local Registry.
+    ///
+    /// >>> draft = ArtifactDraft.new_anonymous()  # doctest: +SKIP
+    /// >>> _desc = draft.add_instance(instance)  # doctest: +SKIP
+    /// >>> artifact = draft.commit()  # doctest: +SKIP
+    /// >>> assert ".ommx.local/anonymous:" in artifact.image_name  # doctest: +SKIP
+    ///
     #[staticmethod]
-    pub fn new_anonymous() -> Result<Self> {
+    pub fn new_anonymous() -> OmmxPyResult<Self> {
         let builder = ommx::artifact::ArtifactDraft::new_anonymous()?;
         Ok(Self(DraftInner::new(builder)))
     }
@@ -1473,15 +1494,15 @@ impl PyArtifactDraft {
     /// Insecure; for tests only. `ttl.sh` is a public registry that
     /// expires images after one hour.
     ///
-    /// ```python
-    /// >>> draft = ArtifactDraft.temp()
-    /// >>> artifact = draft.commit()
-    /// >>> print(artifact.image_name)
+    /// This example writes to the persistent Local Registry and is not executed as a doctest.
+    ///
+    /// >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+    /// >>> artifact = draft.commit()  # doctest: +SKIP
+    /// >>> print(artifact.image_name)  # doctest: +SKIP
     /// ttl.sh/...-...-...-...-...:1h
     ///
-    /// ```
     #[staticmethod]
-    pub fn temp() -> Result<Self> {
+    pub fn temp() -> OmmxPyResult<Self> {
         let builder = ommx::artifact::ArtifactDraft::temp()?;
         Ok(Self(DraftInner::new(builder)))
     }
@@ -1492,28 +1513,29 @@ impl PyArtifactDraft {
     /// This also sets the `org.opencontainers.image.source` annotation
     /// to the GitHub repository URL.
     #[staticmethod]
-    pub fn for_github(org: &str, repo: &str, name: &str, tag: &str) -> Result<Self> {
+    pub fn for_github(org: &str, repo: &str, name: &str, tag: &str) -> OmmxPyResult<Self> {
         let builder = ommx::artifact::ArtifactDraft::for_github(org, repo, name, tag)?;
         Ok(Self(DraftInner::new(builder)))
     }
 
     /// Add an {class}`~ommx.Instance` to the artifact with annotations.
     ///
-    /// ```python
     /// >>> from ommx import Instance
     /// >>> instance = Instance.minimize()
     /// >>> instance.title = "test instance"
-    /// >>> draft = ArtifactDraft.temp()
-    /// >>> desc = draft.add_instance(instance)
-    /// >>> print(desc.annotations['org.ommx.v1.instance.title'])
+    ///
+    /// The remaining operations use the persistent Local Registry.
+    ///
+    /// >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+    /// >>> desc = draft.add_instance(instance)  # doctest: +SKIP
+    /// >>> print(desc.annotations['org.ommx.v1.instance.title'])  # doctest: +SKIP
     /// test instance
     ///
-    /// ```
     pub fn add_instance(
         &mut self,
         py: Python<'_>,
         instance: &crate::Instance,
-    ) -> Result<PyDescriptor> {
+    ) -> OmmxPyResult<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let desc = self.0.as_mut()?.add_instance(instance.inner.clone())?;
         Ok(PyDescriptor::from(desc))
@@ -1524,7 +1546,7 @@ impl PyArtifactDraft {
         &mut self,
         py: Python<'_>,
         instance: &crate::ParametricInstance,
-    ) -> Result<PyDescriptor> {
+    ) -> OmmxPyResult<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let desc = self
             .0
@@ -1538,7 +1560,7 @@ impl PyArtifactDraft {
         &mut self,
         py: Python<'_>,
         solution: &crate::Solution,
-    ) -> Result<PyDescriptor> {
+    ) -> OmmxPyResult<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let desc = self.0.as_mut()?.add_solution(solution.inner.clone())?;
         Ok(PyDescriptor::from(desc))
@@ -1549,7 +1571,7 @@ impl PyArtifactDraft {
         &mut self,
         py: Python<'_>,
         sample_set: &crate::SampleSet,
-    ) -> Result<PyDescriptor> {
+    ) -> OmmxPyResult<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let desc = self.0.as_mut()?.add_sample_set(sample_set.inner.clone())?;
         Ok(PyDescriptor::from(desc))
@@ -1557,19 +1579,20 @@ impl PyArtifactDraft {
 
     /// Add a numpy ndarray to the artifact with npy format.
     ///
-    /// ```python
     /// >>> import numpy as np
     /// >>> array = np.array([1, 2, 3])
-    /// >>> draft = ArtifactDraft.temp()
-    /// >>> _desc = draft.add_ndarray(array, title="test_array")
-    /// >>> artifact = draft.commit()
-    /// >>> layer = artifact.layers[0]
-    /// >>> print(layer.media_type)
+    ///
+    /// The remaining operations use the persistent Local Registry.
+    ///
+    /// >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+    /// >>> _desc = draft.add_ndarray(array, title="test_array")  # doctest: +SKIP
+    /// >>> artifact = draft.commit()  # doctest: +SKIP
+    /// >>> layer = artifact.layers[0]  # doctest: +SKIP
+    /// >>> print(layer.media_type)  # doctest: +SKIP
     /// application/vnd.numpy
-    /// >>> print(layer.annotations)
+    /// >>> print(layer.annotations)  # doctest: +SKIP
     /// {'org.ommx.user.title': 'test_array'}
     ///
-    /// ```
     #[pyo3(signature = (array, *, annotation_namespace = "org.ommx.user.", **annotations))]
     pub fn add_ndarray(
         &mut self,
@@ -1577,7 +1600,7 @@ impl PyArtifactDraft {
         array: &Bound<PyAny>,
         annotation_namespace: &str,
         annotations: Option<&Bound<pyo3::types::PyDict>>,
-    ) -> Result<PyDescriptor> {
+    ) -> OmmxPyResult<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let io = py.import("io")?;
         let numpy = py.import("numpy")?;
@@ -1590,24 +1613,25 @@ impl PyArtifactDraft {
 
     /// Add a pandas DataFrame to the artifact with parquet format.
     ///
-    /// ```python
     /// >>> import pandas as pd
     /// >>> df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
-    /// >>> draft = ArtifactDraft.temp()
-    /// >>> _desc = draft.add_dataframe(df, title="test_dataframe")
-    /// >>> artifact = draft.commit()
-    /// >>> layer = artifact.layers[0]
-    /// >>> print(layer.media_type)
+    ///
+    /// The remaining operations use the persistent Local Registry.
+    ///
+    /// >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+    /// >>> _desc = draft.add_dataframe(df, title="test_dataframe")  # doctest: +SKIP
+    /// >>> artifact = draft.commit()  # doctest: +SKIP
+    /// >>> layer = artifact.layers[0]  # doctest: +SKIP
+    /// >>> print(layer.media_type)  # doctest: +SKIP
     /// application/vnd.apache.parquet
     ///
-    /// ```
     #[pyo3(signature = (df, *, annotation_namespace = "org.ommx.user.", **annotations))]
     pub fn add_dataframe(
         &mut self,
         df: &Bound<PyAny>,
         annotation_namespace: &str,
         annotations: Option<&Bound<pyo3::types::PyDict>>,
-    ) -> Result<PyDescriptor> {
+    ) -> OmmxPyResult<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(df.py());
         let blob: Vec<u8> = df.call_method0("to_parquet")?.extract()?;
         let ann = build_annotations(annotation_namespace, annotations)?;
@@ -1617,16 +1641,17 @@ impl PyArtifactDraft {
 
     /// Add a JSON object to the artifact.
     ///
-    /// ```python
     /// >>> obj = {"a": 1, "b": 2}
-    /// >>> draft = ArtifactDraft.temp()
-    /// >>> _desc = draft.add_json(obj, title="test_json")
-    /// >>> artifact = draft.commit()
-    /// >>> layer = artifact.layers[0]
-    /// >>> print(layer.media_type)
+    ///
+    /// The remaining operations use the persistent Local Registry.
+    ///
+    /// >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+    /// >>> _desc = draft.add_json(obj, title="test_json")  # doctest: +SKIP
+    /// >>> artifact = draft.commit()  # doctest: +SKIP
+    /// >>> layer = artifact.layers[0]  # doctest: +SKIP
+    /// >>> print(layer.media_type)  # doctest: +SKIP
     /// application/json
     ///
-    /// ```
     #[pyo3(signature = (obj, *, annotation_namespace = "org.ommx.user.", **annotations))]
     pub fn add_json(
         &mut self,
@@ -1634,7 +1659,7 @@ impl PyArtifactDraft {
         obj: &Bound<PyAny>,
         annotation_namespace: &str,
         annotations: Option<&Bound<pyo3::types::PyDict>>,
-    ) -> Result<PyDescriptor> {
+    ) -> OmmxPyResult<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let json = py.import("json")?;
         let blob_str: String = json.call_method1("dumps", (obj,))?.extract()?;
@@ -1652,17 +1677,20 @@ impl PyArtifactDraft {
         media_type: &str,
         blob: &Bound<PyBytes>,
         annotations: HashMap<String, String>,
-    ) -> Result<PyDescriptor> {
+    ) -> OmmxPyResult<PyDescriptor> {
         self.0.add_layer(media_type, blob.as_bytes(), annotations)
     }
 
     /// Add annotation to the artifact itself.
-    pub fn add_annotation(&mut self, key: &str, value: &str) -> Result<()> {
+    pub fn add_annotation(&mut self, key: &str, value: &str) -> PyResult<()> {
         self.0.add_annotation(key, value)
     }
 
     /// Commit the artifact draft.
-    pub fn commit(&mut self, py: Python<'_>) -> Result<PyArtifact> {
+    ///
+    /// Raises {class}`RuntimeError` for registry or storage failures and when
+    /// the draft has already been committed.
+    pub fn commit(&mut self, py: Python<'_>) -> OmmxPyResult<PyArtifact> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let inner = self.0.commit()?;
         Ok(PyArtifact::new(ommx::artifact::LocalArtifactDyn::open(
@@ -1675,7 +1703,7 @@ impl PyArtifactDraft {
 fn build_annotations(
     namespace: &str,
     annotations: Option<&Bound<pyo3::types::PyDict>>,
-) -> Result<HashMap<String, String>> {
+) -> PyResult<HashMap<String, String>> {
     let ns = crate::annotations::normalize_namespace(namespace);
     let mut result = HashMap::new();
     if let Some(dict) = annotations {
@@ -1684,7 +1712,9 @@ fn build_annotations(
             let v: String = value.extract()?;
             let full_key = format!("{ns}{k}");
             if ommx::is_reserved_annotation_key(&full_key) {
-                bail!("User annotation key `{full_key}` is reserved for OMMX metadata");
+                return Err(PyValueError::new_err(format!(
+                    "User annotation key `{full_key}` is reserved for OMMX metadata"
+                )));
             }
             result.insert(full_key, v);
         }
@@ -1708,6 +1738,7 @@ fn build_annotations(
 /// By default, an invalid cached record is repaired from the CAS when possible.
 /// OMMX emits `RuntimeWarning` for repaired or skipped refs and returns the
 /// remaining records. Pass `strict=True` to fail on the first invalid ref.
+/// Registry, manifest, and storage failures raise {class}`RuntimeError`.
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (prefix = None, *, root = None, include_internal = false, strict = false))]
@@ -1717,7 +1748,7 @@ pub fn list_artifacts(
     root: Option<PathBuf>,
     include_internal: bool,
     strict: bool,
-) -> Result<Vec<PyArtifactRef>> {
+) -> OmmxPyResult<Vec<PyArtifactRef>> {
     let _guard = crate::TRACING.attach_parent_context(py);
     let registry = open_local_registry(root)?;
     let report = registry.list_artifacts_with_options(
@@ -1754,6 +1785,9 @@ pub(crate) fn emit_registry_list_warnings(
 /// unreachable. Returns the atomically removed Manifest digest, or `None` when
 /// the ref did not exist. Pass that digest to {func}`restore_image` to roll back
 /// this exact deletion.
+///
+/// An invalid image reference raises {class}`ValueError`. Registry and storage
+/// failures raise {class}`RuntimeError`.
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (image_name, *, root = None))]
@@ -1761,10 +1795,10 @@ pub fn remove_image(
     py: Python<'_>,
     image_name: &str,
     root: Option<PathBuf>,
-) -> Result<Option<String>> {
+) -> OmmxPyResult<Option<String>> {
     let _guard = crate::TRACING.attach_parent_context(py);
-    let registry = open_local_registry(root)?;
     let image_name = ommx::artifact::ImageRef::parse(image_name)?;
+    let registry = open_local_registry(root)?;
     Ok(registry
         .remove_image_ref(&image_name)?
         .map(|removed| removed.manifest_digest.to_string()))
@@ -1779,6 +1813,10 @@ pub fn remove_image(
 /// `True` when the ref is inserted and `False` when it already points to the
 /// requested digest. A different existing target is reported as a conflict and
 /// is never replaced.
+///
+/// Invalid image references and malformed Manifest digests raise
+/// {class}`ValueError`. Registry, storage, and ref-conflict failures raise
+/// {class}`RuntimeError`.
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (image_name, manifest_digest, *, root = None))]
@@ -1787,22 +1825,24 @@ pub fn restore_image(
     image_name: &str,
     manifest_digest: &str,
     root: Option<PathBuf>,
-) -> Result<bool> {
+) -> OmmxPyResult<bool> {
     let _guard = crate::TRACING.attach_parent_context(py);
-    let registry = open_local_registry(root)?;
     let image_name = ommx::artifact::ImageRef::parse(image_name)?;
-    let manifest_digest: oci_spec::image::Digest =
-        manifest_digest.parse().context("Invalid manifest digest")?;
+    let manifest_digest: oci_spec::image::Digest = manifest_digest
+        .parse()
+        .map_err(|error| PyValueError::new_err(format!("Invalid manifest digest: {error}")))?;
+    let registry = open_local_registry(root)?;
     match registry.restore_image_ref(&image_name, &manifest_digest)? {
         ommx::artifact::local_registry::RefUpdate::Inserted => Ok(true),
         ommx::artifact::local_registry::RefUpdate::Unchanged => Ok(false),
         ommx::artifact::local_registry::RefUpdate::Conflicted {
             existing_manifest_digest,
             incoming_manifest_digest,
-        } => bail!(
+        } => Err(PyRuntimeError::new_err(format!(
             "Cannot restore {image_name} to {incoming_manifest_digest}: ref currently points to \
              {existing_manifest_digest}"
-        ),
+        ))
+        .into()),
         ommx::artifact::local_registry::RefUpdate::Replaced { .. } => {
             unreachable!("restore_image_ref never replaces an existing ref")
         }
@@ -1816,14 +1856,17 @@ pub fn restore_image(
 /// are left for {func}`gc` to reclaim if they become unreachable.
 /// Anonymous Experiment refs are included only when `experiments=True`.
 /// `older_than` accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.
+/// An invalid duration raises {class}`ValueError`; registry and storage failures
+/// raise {class}`RuntimeError`.
 ///
-/// ```python
 /// >>> from ommx.artifact import prune_anonymous
-/// >>> report = prune_anonymous()
-/// >>> report.delete_applied
+///
+/// The following dry run still reads the caller's persistent Local Registry.
+///
+/// >>> report = prune_anonymous()  # doctest: +SKIP
+/// >>> report.delete_applied  # doctest: +SKIP
 /// False
 ///
-/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (*, root = None, delete = false, experiments = false, older_than = None))]
@@ -1833,16 +1876,14 @@ pub fn prune_anonymous(
     delete: bool,
     experiments: bool,
     older_than: Option<&str>,
-) -> Result<PyPruneAnonymousReport> {
+) -> OmmxPyResult<PyPruneAnonymousReport> {
     let _guard = crate::TRACING.attach_parent_context(py);
+    let older_than = older_than.map(parse_gc_duration).transpose()?;
     let registry = open_local_registry(root)?;
     let registry_root = registry.root().to_path_buf();
     let options = ommx::artifact::local_registry::AnonymousRefOptions {
         include_experiments: experiments,
-        older_than: older_than
-            .map(ommx::artifact::local_registry::GcOptions::parse_grace_period)
-            .transpose()
-            .map_err(anyhow::Error::msg)?,
+        older_than,
     };
     let refs = if delete {
         registry.prune_anonymous_refs(&options)?
@@ -1855,7 +1896,7 @@ pub fn prune_anonymous(
         refs: refs
             .into_iter()
             .map(PyAnonymousArtifactRef::from_ref_record)
-            .collect::<Result<Vec<_>>>()?,
+            .collect(),
     })
 }
 
@@ -1864,14 +1905,17 @@ pub fn prune_anonymous(
 /// This is the Python SDK equivalent of `ommx gc`. It is a dry-run by
 /// default. Pass `delete=True` to unlink orphan candidates. The `grace_period`
 /// string accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.
+/// An invalid duration raises {class}`ValueError`; registry and storage failures
+/// raise {class}`RuntimeError`.
 ///
-/// ```python
 /// >>> from ommx.artifact import gc
-/// >>> report = gc()
-/// >>> report.delete_applied
+///
+/// The following dry run still reads the caller's persistent Local Registry.
+///
+/// >>> report = gc()  # doctest: +SKIP
+/// >>> report.delete_applied  # doctest: +SKIP
 /// False
 ///
-/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (*, root = None, delete = false, grace_period = "24h"))]
@@ -1880,12 +1924,11 @@ pub fn gc(
     root: Option<PathBuf>,
     delete: bool,
     grace_period: &str,
-) -> Result<PyGcReport> {
+) -> OmmxPyResult<PyGcReport> {
     let _guard = crate::TRACING.attach_parent_context(py);
+    let grace_period = parse_gc_duration(grace_period)?;
     let registry = open_local_registry(root)?;
     let registry_root = registry.root().to_path_buf();
-    let grace_period = ommx::artifact::local_registry::GcOptions::parse_grace_period(grace_period)
-        .map_err(|error| anyhow::anyhow!(error))?;
     let options = ommx::artifact::local_registry::GcOptions {
         grace_period,
         ..Default::default()
@@ -1931,7 +1974,7 @@ pub fn get_local_registry_root() -> PathBuf {
 ///
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-pub fn set_local_registry_root(path: PathBuf) -> Result<()> {
+pub fn set_local_registry_root(path: PathBuf) -> OmmxPyResult<()> {
     ommx::artifact::set_local_registry_root(path)?;
     Ok(())
 }
@@ -1939,21 +1982,29 @@ pub fn set_local_registry_root(path: PathBuf) -> Result<()> {
 /// Get all image names stored in the local registry.
 ///
 /// Returns a list of image names (as strings) found in the local registry.
+/// Corrupted persisted refs and other registry failures raise
+/// {class}`RuntimeError`.
 ///
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-pub fn get_images() -> Result<Vec<String>> {
+pub fn get_images() -> OmmxPyResult<Vec<String>> {
     let images = ommx::artifact::get_images()?;
     Ok(images.into_iter().map(|img| img.to_string()).collect())
 }
 
 fn open_local_registry(
     root: Option<PathBuf>,
-) -> Result<ommx::artifact::local_registry::LocalRegistry> {
-    match root {
-        Some(root) => ommx::artifact::local_registry::LocalRegistry::open(root),
-        None => ommx::artifact::local_registry::LocalRegistry::open_default(),
-    }
+) -> OmmxPyResult<ommx::artifact::local_registry::LocalRegistry> {
+    let registry = match root {
+        Some(root) => ommx::artifact::local_registry::LocalRegistry::open(root)?,
+        None => ommx::artifact::local_registry::LocalRegistry::open_default()?,
+    };
+    Ok(registry)
+}
+
+fn parse_gc_duration(input: &str) -> PyResult<std::time::Duration> {
+    ommx::artifact::local_registry::GcOptions::parse_grace_period(input)
+        .map_err(PyValueError::new_err)
 }
 
 fn system_time_to_unix_seconds(time: SystemTime) -> Option<f64> {

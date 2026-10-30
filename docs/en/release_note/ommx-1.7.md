@@ -28,7 +28,7 @@ Summary
 - [English Jupyter Book](https://jij-inc.github.io/ommx/en/introduction.html)
 - QPLIB format parser
 - Several APIs have been added to `ommx.v1.SampleSet` and `ommx.v1.ParametricInstance`, and integration with OMMX Artifact has been added.
-  - For `ommx.v1.SampleSet`, please refer to the [new explanation page](https://jij-inc.github.io/ommx/en/ommx_message/sample_set.html)
+  - For the current API, see {class}`~ommx.SampleSet`.
   - For support of OMMX Artifact, please refer to the API reference [ommx.artifact.Artifact](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact) and [ommx.artifact.ArtifactBuilder](https://jij-inc.github.io/ommx/python/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder).
 - Change in behavior of `{Solution, SampleSet}.feasible`
 

@@ -19,6 +19,10 @@ AutoAPI, toctrees, or rendered documentation.
      adapter-facing protocol.
    - For domain operations, use `.agents/skills/domain-responsibility-review/SKILL.md`
      first and keep the Python API aligned with the owner boundary.
+   - If the operation propagates Rust SDK failures or the diff touches
+     `OmmxPyResult`, `python/ommx/src/error.rs`, signal mappings, or binding-local
+     `map_err`, use `.agents/skills/rust-error-handling/SKILL.md` before choosing
+     a Python exception class.
 
 2. Review PyO3 source before generated stubs.
    - Start from `python/ommx/src/*.rs`, not from

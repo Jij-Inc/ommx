@@ -15,7 +15,7 @@
 //! not an `ImageRef` method — v3 storage is SQLite + content-addressed
 //! blobs, not a path-tree keyed by image name.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use oci_spec::distribution::Reference;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, fmt, str::FromStr};
@@ -24,6 +24,27 @@ use std::{borrow::Cow, fmt, str::FromStr};
 /// behaviour of `docker pull <name>` and
 /// [`oci_spec::distribution::Reference::tag`].
 const DEFAULT_TAG: &str = "latest";
+
+/// OMMX-owned signal for an invalid OCI image reference supplied at an SDK
+/// boundary.
+///
+/// [`ImageRef::parse`] and [`FromStr`] keep returning [`crate::Result`], while
+/// callers that need to distinguish invalid input can downcast the error to
+/// this type without depending on the OCI parser implementation.
+///
+/// ```
+/// use ommx::artifact::{ImageRef, ImageRefParseError};
+///
+/// let error = ImageRef::parse("INVALID/IMAGE").unwrap_err();
+/// assert!(error.downcast_ref::<ImageRefParseError>().is_some());
+/// ```
+#[derive(Debug, thiserror::Error)]
+#[error("Invalid image reference {input:?}: {source}")]
+pub struct ImageRefParseError {
+    input: String,
+    #[source]
+    source: oci_spec::distribution::ParseError,
+}
 
 /// Parsed OCI image reference owned by the OMMX SDK.
 ///
@@ -165,7 +186,10 @@ impl FromStr for ImageRef {
         let canonical = canonicalize_legacy_docker_hub_host(input);
         let reference = canonical
             .parse::<Reference>()
-            .with_context(|| format!("Invalid image reference: {input}"))?;
+            .map_err(|source| ImageRefParseError {
+                input: input.to_string(),
+                source,
+            })?;
         Ok(Self(reference))
     }
 }
@@ -240,6 +264,23 @@ impl<'de> Deserialize<'de> for ImageRef {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error as _;
+
+    #[test]
+    fn invalid_reference_preserves_ommx_owned_signal_and_oci_source() {
+        let error = ImageRef::parse("INVALID/IMAGE").unwrap_err();
+        let signal = error
+            .downcast_ref::<ImageRefParseError>()
+            .expect("invalid image references must preserve ImageRefParseError");
+        assert!(signal.to_string().contains("INVALID/IMAGE"));
+        assert!(
+            signal
+                .source()
+                .and_then(|source| { source.downcast_ref::<oci_spec::distribution::ParseError>() })
+                .is_some(),
+            "ImageRefParseError must preserve the OCI parser error as its source"
+        );
+    }
 
     #[test]
     fn parses_canonical_form() {

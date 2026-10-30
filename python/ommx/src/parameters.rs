@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::OmmxPyResult;
 use ommx::Message;
 use pyo3::{prelude::*, types::PyBytes, Bound};
 
@@ -10,8 +10,8 @@ pub struct Parameters(pub ommx::v1::Parameters);
 #[pymethods]
 impl Parameters {
     #[staticmethod]
-    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = ommx::v1::Parameters::decode(bytes.as_bytes())?;
+    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
+        let inner = crate::message_io::decode(bytes.as_bytes(), "ommx.v1.Parameters")?;
         Ok(Self(inner))
     }
 

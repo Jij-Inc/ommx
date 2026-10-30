@@ -1,4 +1,7 @@
-from ommx import Instance, DecisionVariable, State
+from ommx import ConstraintID
+import math
+
+from ommx import Bound, DecisionVariable, Instance, State, Sense
 import ommx
 import pytest
 
@@ -40,7 +43,7 @@ def test_default_atol_constraint_evaluation():
         decision_variables=[x],
         objective=x,  # minimize x
         constraints={1: constraint},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     # Create a state that violates the constraint by exactly 1e-5
@@ -77,6 +80,104 @@ def test_default_atol_constraint_evaluation():
     assert ommx.get_default_atol() == initial_atol
 
 
+def test_constraint_boundary_matches_scalar_sample_and_v2_validation():
+    x = DecisionVariable.continuous(1, lower=-1, upper=1)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={1: x == 0, 2: x <= 0},
+        sense=Sense.Minimize,
+    )
+    atol = 0.125
+    outside = math.nextafter(atol, math.inf)
+
+    boundary_solution = instance.evaluate({1: atol}, atol=atol)
+    outside_solution = instance.evaluate({1: outside}, atol=atol)
+    assert boundary_solution.constraints[ConstraintID(1)].is_feasible(atol=atol)
+    assert boundary_solution.constraints[ConstraintID(2)].is_feasible(atol=atol)
+    assert not outside_solution.constraints[ConstraintID(1)].is_feasible(atol=atol)
+    assert not outside_solution.constraints[ConstraintID(2)].is_feasible(atol=atol)
+
+    restored_solution = type(boundary_solution).from_v2_bytes(
+        boundary_solution.to_v2_bytes()
+    )
+    assert restored_solution.constraints[ConstraintID(1)].is_feasible(atol=atol)
+    assert restored_solution.constraints[ConstraintID(2)].is_feasible(atol=atol)
+
+    sample_set = instance.evaluate_samples(
+        {7: {1: atol}, 8: {1: outside}},
+        atol=atol,
+    )
+    assert sample_set.get(7).constraints[ConstraintID(1)].is_feasible(atol=atol)
+    assert sample_set.get(7).constraints[ConstraintID(2)].is_feasible(atol=atol)
+    assert not sample_set.get(8).constraints[ConstraintID(1)].is_feasible(atol=atol)
+    assert not sample_set.get(8).constraints[ConstraintID(2)].is_feasible(atol=atol)
+
+    restored_sample_set = type(sample_set).from_v2_bytes(sample_set.to_v2_bytes())
+    assert (
+        restored_sample_set.get(7).constraints[ConstraintID(1)].is_feasible(atol=atol)
+    )
+    assert (
+        restored_sample_set.get(7).constraints[ConstraintID(2)].is_feasible(atol=atol)
+    )
+    assert (
+        not restored_sample_set.get(8)
+        .constraints[ConstraintID(1)]
+        .is_feasible(atol=atol)
+    )
+    assert (
+        not restored_sample_set.get(8)
+        .constraints[ConstraintID(2)]
+        .is_feasible(atol=atol)
+    )
+
+
+def test_bound_membership_matches_inequality_residual_feasibility():
+    atol = 1e-6
+    x = DecisionVariable.continuous(1, lower=-10, upper=10)
+    upper = 2.0 / 3.0
+    lower = 2.0 + atol
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={1: x <= upper, 2: x >= lower},
+        sense=Sense.Minimize,
+    )
+
+    above = upper + atol
+    upper_feasible = (
+        instance.evaluate({1: above}, atol=atol)
+        .constraints[ConstraintID(1)]
+        .is_feasible(atol=atol)
+    )
+    assert Bound(float("-inf"), upper).contains(above, atol) == upper_feasible
+    assert not upper_feasible
+
+    below = 2.0
+    lower_feasible = (
+        instance.evaluate({1: below}, atol=atol)
+        .constraints[ConstraintID(2)]
+        .is_feasible(atol=atol)
+    )
+    assert Bound(lower, float("inf")).contains(below, atol) == lower_feasible
+    assert not lower_feasible
+
+
+def test_bound_membership_handles_infinite_endpoints_without_hiding_overflow():
+    atol = 1e-6
+    maximum = float.fromhex("0x1.fffffffffffffp+1023")
+
+    assert Bound.unbounded().contains(-maximum, atol)
+    assert Bound.unbounded().contains(maximum, atol)
+    assert not Bound.unbounded().contains(float("-inf"), atol)
+    assert not Bound.unbounded().contains(float("inf"), atol)
+
+    finite = Bound(-maximum, maximum)
+    assert finite.contains(0.0, atol)
+    assert not finite.contains(-maximum, atol)
+    assert not finite.contains(maximum, atol)
+
+
 def test_set_default_atol_validation():
     """Test that set_default_atol validates input values."""
     initial_atol = ommx.get_default_atol()
@@ -86,11 +187,11 @@ def test_set_default_atol_validation():
     assert ommx.get_default_atol() == 1e-3
 
     # Should reject zero
-    with pytest.raises(Exception):  # Should raise an error for non-positive values
+    with pytest.raises(ValueError, match="ATol must be positive"):
         ommx.set_default_atol(0.0)
 
     # Should reject negative values
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError, match="ATol must be positive"):
         ommx.set_default_atol(-1e-6)
 
     # Reset for other tests
@@ -115,7 +216,7 @@ def test_instance_evaluate_with_custom_atol():
         decision_variables=[x1],
         objective=x1,
         constraints={1: constraint},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     # Create a state where x1 = 1.0 + 1e-6 (violates constraint by 1e-6)

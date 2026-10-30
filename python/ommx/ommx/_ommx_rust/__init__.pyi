@@ -16,10 +16,10 @@ import pathlib
 import types
 import typing
 import typing_extensions
+from ommx._typing import _K, _T, _V_co
 from typing import TypeAlias
 
 __all__ = [
-    "AdditionalCapability",
     "AnonymousArtifactRef",
     "ArchiveDescriptor",
     "ArchiveManifest",
@@ -32,19 +32,32 @@ __all__ = [
     "AttachedOneHotConstraint",
     "AttachedSos1Constraint",
     "AutosavePolicy",
+    "BinaryPowerPreparation",
     "Bound",
+    "BridgeError",
     "Constraint",
+    "ConstraintCollection",
+    "ConstraintFamilyView",
+    "ConstraintID",
+    "ConstraintIDBase",
+    "ConstraintView",
     "DecisionVariable",
     "DecisionVariableRole",
     "Descriptor",
     "DiagnosticCollector",
     "Equality",
     "EvaluatedConstraint",
+    "EvaluatedConstraintCollection",
     "EvaluatedDecisionVariable",
+    "EvaluatedIndicatorConstraint",
     "EvaluatedNamedFunction",
+    "EvaluatedOneHotConstraint",
+    "EvaluatedSos1Constraint",
+    "ExactIntegerSlackError",
     "Experiment",
     "ExperimentCheckpointRef",
     "ExperimentRef",
+    "FixedPenaltyPreparation",
     "Function",
     "GcBlob",
     "GcInvalidManifest",
@@ -52,20 +65,37 @@ __all__ = [
     "GcReport",
     "GcRoot",
     "IndicatorConstraint",
+    "IndicatorConstraintID",
+    "InfeasibleDetected",
     "Instance",
+    "InstanceClass",
+    "InstanceClassClause",
+    "InstanceClassClauseReport",
+    "InstanceClassMembershipReport",
+    "InstanceClassMismatch",
     "InstanceDescription",
+    "IntegerEncodingPreparation",
+    "IntegerSlackPreparation",
     "InvalidRemoteArtifactError",
     "Kind",
     "Linear",
     "LinearLike",
+    "LogEncodingError",
     "NamedFunction",
+    "NamedState",
+    "ObjectivePreparation",
     "OneHotConstraint",
+    "OneHotConstraintID",
     "OpenSolve",
     "Optimality",
+    "OutputObjective",
     "Parameter",
     "Parameters",
     "ParametricInstance",
     "Polynomial",
+    "PolynomialRequirement",
+    "PreparationPolicy",
+    "PreparationTargetNotReachedError",
     "Provenance",
     "ProvenanceKind",
     "PruneAnonymousReport",
@@ -77,6 +107,7 @@ __all__ = [
     "RemoteArtifactNotFoundError",
     "RemoteArtifactTransportError",
     "RemovedConstraint",
+    "RemovedConstraintCollection",
     "RemovedIndicatorConstraint",
     "RemovedOneHotConstraint",
     "RemovedSos1Constraint",
@@ -84,8 +115,12 @@ __all__ = [
     "Run",
     "SampleSet",
     "SampledConstraint",
+    "SampledConstraintCollection",
     "SampledDecisionVariable",
+    "SampledIndicatorConstraint",
     "SampledNamedFunction",
+    "SampledOneHotConstraint",
+    "SampledSos1Constraint",
     "Samples",
     "Sampling",
     "ScalarLike",
@@ -93,7 +128,14 @@ __all__ = [
     "Sense",
     "Solution",
     "Solve",
+    "Sos1BigMPromotion",
+    "Sos1BigMPromotionBatchRejectedError",
+    "Sos1BigMPromotionRequest",
+    "Sos1BigMSelectorClaim",
     "Sos1Constraint",
+    "Sos1ConstraintID",
+    "SpecialConstraintKind",
+    "SpecialConstraintPreparation",
     "State",
     "ToFunction",
     "ToSamples",
@@ -116,6 +158,13 @@ __all__ = [
 ]
 
 LinearLike: TypeAlias = Linear | DecisionVariable | AttachedDecisionVariable
+NamedState: TypeAlias = collections.abc.Mapping[
+    str, collections.abc.Mapping[tuple[int, ...], float]
+]
+r"""
+Decision-variable values grouped by name and tuple subscripts. Use () for scalars and (i,) for one-dimensional indices. Resolve against the target Instance with state_from_named_values.
+"""
+
 ScalarLike: TypeAlias = builtins.int | builtins.float | numpy.integer | numpy.floating
 ToFunction: TypeAlias = (
     builtins.int
@@ -259,12 +308,11 @@ class Artifact:
     An artifact is an OCI container image that stores OMMX data
     (instances, solutions, sample sets, etc.) as layers.
 
-    ```python
-    >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
-    >>> print(artifact.image_name)
-    ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
+    This example requires remote registry access and is not executed as a doctest.
 
-    ```
+    >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")  # doctest: +SKIP
+    >>> print(artifact.image_name)  # doctest: +SKIP
+    ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
     """
 
     TRACE_OTLP_PROTOBUF_MEDIA_TYPE: builtins.str
@@ -337,12 +385,12 @@ class Artifact:
         archives importable while still making the imported artifact
         addressable in SQLite.
 
-        ```python
-        >>> artifact = Artifact.import_archive("data/random_lp_instance.ommx")
-        >>> print(artifact.image_name)
-        ghcr.io/jij-inc/ommx/random_lp_instance:...
+        This example requires an external archive and writes to the persistent
+        Local Registry, so it is not executed as a doctest.
 
-        ```
+        >>> artifact = Artifact.import_archive("data/random_lp_instance.ommx")  # doctest: +SKIP
+        >>> print(artifact.image_name)  # doctest: +SKIP
+        ghcr.io/jij-inc/ommx/random_lp_instance:...
         """
     @staticmethod
     def load_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Artifact:
@@ -381,13 +429,12 @@ class Artifact:
         `Artifact.load(image_name)` later), use
         {meth}`Artifact.import_archive`.
 
-        ```python
-        >>> manifest = Artifact.inspect_archive("data/random_lp_instance.ommx")
-        >>> for layer in manifest.layers:
+        This example requires an external archive and is not executed as a doctest.
+
+        >>> manifest = Artifact.inspect_archive("data/random_lp_instance.ommx")  # doctest: +SKIP
+        >>> for layer in manifest.layers:  # doctest: +SKIP
         ...     print(layer.media_type)
         application/org.ommx.v1.instance
-
-        ```
         """
     @staticmethod
     def load(image_name: builtins.str) -> Artifact:
@@ -396,16 +443,18 @@ class Artifact:
 
         If the image is not found in local registry, it will try to pull from remote registry.
 
-        ```python
-        >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
-        >>> print(artifact.image_name)
+        This example requires remote registry access and is not executed as a doctest.
+
+        >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")  # doctest: +SKIP
+        >>> print(artifact.image_name)  # doctest: +SKIP
         ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
 
-        ```
 
         Raises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the
         exact remote reference does not exist. Other remote access failures
         raise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.
+        An invalid image reference raises {class}`ValueError` before any remote
+        access is attempted.
         """
     def push(self) -> None:
         r"""
@@ -425,10 +474,17 @@ class Artifact:
     def get_layer_descriptor(self, digest: builtins.str) -> Descriptor:
         r"""
         Look up a layer descriptor by digest.
+
+        Raises {class}`ValueError` when `digest` is malformed and
+        {class}`KeyError` when the digest is valid but is not present in the
+        Artifact manifest.
         """
     def get_blob(self, descriptor: Descriptor) -> bytes:
         r"""
         Get raw bytes of a blob by Descriptor.
+
+        Registry and storage failures, including a missing CAS blob referenced
+        by the Descriptor, raise {class}`RuntimeError`.
         """
     def get_layer(self, descriptor: Descriptor) -> typing.Any:
         r"""
@@ -440,6 +496,10 @@ class Artifact:
         - OMMX solution payloads return {class}`~ommx.Solution`
         - OMMX sample-set payloads return {class}`~ommx.SampleSet`
         - `application/vnd.numpy` returns a numpy array
+
+        Raises {class}`ValueError` for an unsupported media type. Registry and
+        storage failures raise {class}`RuntimeError`; exceptions raised by
+        Python-backed decoders are preserved.
         """
     def get_instance(self, descriptor: typing.Optional[Descriptor] = None) -> Instance:
         r"""
@@ -448,7 +508,9 @@ class Artifact:
         - If `descriptor` is `None`, returns the first instance layer.
         - If `descriptor` is given, returns the instance for that specific layer.
 
-        Raises `ValueError` if no instance layer is found.
+        Raises {class}`ValueError` if no instance layer is found, if the
+        Descriptor has the wrong media type, or if the payload is malformed.
+        Registry and storage failures raise {class}`RuntimeError`.
         """
     def get_solution(self, descriptor: typing.Optional[Descriptor] = None) -> Solution:
         r"""
@@ -457,7 +519,9 @@ class Artifact:
         - If `descriptor` is `None`, returns the first solution layer.
         - If `descriptor` is given, returns the solution for that specific layer.
 
-        Raises `ValueError` if no solution layer is found.
+        Raises {class}`ValueError` if no solution layer is found, if the
+        Descriptor has the wrong media type, or if the payload is malformed.
+        Registry and storage failures raise {class}`RuntimeError`.
         """
     def get_parametric_instance(
         self, descriptor: typing.Optional[Descriptor] = None
@@ -468,7 +532,9 @@ class Artifact:
         - If `descriptor` is `None`, returns the first parametric instance layer.
         - If `descriptor` is given, returns the parametric instance for that specific layer.
 
-        Raises `ValueError` if no parametric instance layer is found.
+        Raises {class}`ValueError` if no parametric instance layer is found, if
+        the Descriptor has the wrong media type, or if the payload is
+        malformed. Registry and storage failures raise {class}`RuntimeError`.
         """
     def get_sample_set(
         self, descriptor: typing.Optional[Descriptor] = None
@@ -479,19 +545,31 @@ class Artifact:
         - If `descriptor` is `None`, returns the first sample set layer.
         - If `descriptor` is given, returns the sample set for that specific layer.
 
-        Raises `ValueError` if no sample set layer is found.
+        Raises {class}`ValueError` if no sample set layer is found, if the
+        Descriptor has the wrong media type, or if the payload is malformed.
+        Registry and storage failures raise {class}`RuntimeError`.
         """
     def get_ndarray(self, descriptor: Descriptor) -> typing.Any:
         r"""
         Get a numpy array from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_ndarray`.
+
+        A mismatched media type raises {class}`ValueError`; registry and storage
+        failures raise {class}`RuntimeError`. NumPy exceptions are preserved.
         """
     def get_dataframe(self, descriptor: Descriptor) -> typing.Any:
         r"""
         Get a pandas DataFrame from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_dataframe`.
+
+        A mismatched media type raises {class}`ValueError`; registry and storage
+        failures raise {class}`RuntimeError`. pandas exceptions are preserved.
         """
     def get_json(self, descriptor: Descriptor) -> typing.Any:
         r"""
         Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_json`.
+
+        A mismatched media type raises {class}`ValueError`; registry and storage
+        failures raise {class}`RuntimeError`. JSON decoder exceptions are
+        preserved.
         """
 
 @typing.final
@@ -499,13 +577,12 @@ class ArtifactDraft:
     r"""
     Mutable draft for OMMX Artifacts.
 
-    ```python
-    >>> draft = ArtifactDraft.temp()
-    >>> artifact = draft.commit()
-    >>> print(artifact.image_name)
-    ttl.sh/...-...-...-...-...:1h
+    This example writes to the persistent Local Registry and is not executed as a doctest.
 
-    ```
+    >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+    >>> artifact = draft.commit()  # doctest: +SKIP
+    >>> print(artifact.image_name)  # doctest: +SKIP
+    ttl.sh/...-...-...-...-...:1h
     """
     @staticmethod
     def new(image_name: builtins.str) -> ArtifactDraft:
@@ -516,19 +593,23 @@ class ArtifactDraft:
         returned handle if you also want a `.ommx` archive file for
         sharing.
 
-        ```python
         >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
         >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
         >>> instance = generator.get_v1_instance()
         >>> import uuid
         >>> image_name = f"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}"
-        >>> draft = ArtifactDraft.new(image_name)
-        >>> _desc = draft.add_instance(instance)
-        >>> artifact = draft.commit()
-        >>> print(artifact.image_name)
+
+        The remaining operations use the persistent Local Registry.
+
+        >>> draft = ArtifactDraft.new(image_name)  # doctest: +SKIP
+        >>> _desc = draft.add_instance(instance)  # doctest: +SKIP
+        >>> artifact = draft.commit()  # doctest: +SKIP
+        >>> print(artifact.image_name)  # doctest: +SKIP
         ghcr.io/jij-inc/ommx/single_feasible_lp:...
 
-        ```
+
+        Raises {class}`ValueError` when `image_name` is not a valid OCI image
+        reference. Registry and storage failures raise {class}`RuntimeError`.
         """
     @staticmethod
     def new_anonymous() -> ArtifactDraft:
@@ -564,16 +645,16 @@ class ArtifactDraft:
         Call {meth}`Artifact.save(path)` on the returned handle to also
         write a `.ommx` archive file for sharing.
 
-        ```python
         >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
         >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
         >>> instance = generator.get_v1_instance()
-        >>> draft = ArtifactDraft.new_anonymous()
-        >>> _desc = draft.add_instance(instance)
-        >>> artifact = draft.commit()
-        >>> assert ".ommx.local/anonymous:" in artifact.image_name
 
-        ```
+        The remaining operations use the persistent Local Registry.
+
+        >>> draft = ArtifactDraft.new_anonymous()  # doctest: +SKIP
+        >>> _desc = draft.add_instance(instance)  # doctest: +SKIP
+        >>> artifact = draft.commit()  # doctest: +SKIP
+        >>> assert ".ommx.local/anonymous:" in artifact.image_name  # doctest: +SKIP
         """
     @staticmethod
     def temp() -> ArtifactDraft:
@@ -582,13 +663,12 @@ class ArtifactDraft:
         Insecure; for tests only. `ttl.sh` is a public registry that
         expires images after one hour.
 
-        ```python
-        >>> draft = ArtifactDraft.temp()
-        >>> artifact = draft.commit()
-        >>> print(artifact.image_name)
-        ttl.sh/...-...-...-...-...:1h
+        This example writes to the persistent Local Registry and is not executed as a doctest.
 
-        ```
+        >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+        >>> artifact = draft.commit()  # doctest: +SKIP
+        >>> print(artifact.image_name)  # doctest: +SKIP
+        ttl.sh/...-...-...-...-...:1h
         """
     @staticmethod
     def for_github(
@@ -605,16 +685,16 @@ class ArtifactDraft:
         r"""
         Add an {class}`~ommx.Instance` to the artifact with annotations.
 
-        ```python
         >>> from ommx import Instance
         >>> instance = Instance.minimize()
         >>> instance.title = "test instance"
-        >>> draft = ArtifactDraft.temp()
-        >>> desc = draft.add_instance(instance)
-        >>> print(desc.annotations['org.ommx.v1.instance.title'])
-        test instance
 
-        ```
+        The remaining operations use the persistent Local Registry.
+
+        >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+        >>> desc = draft.add_instance(instance)  # doctest: +SKIP
+        >>> print(desc.annotations['org.ommx.v1.instance.title'])  # doctest: +SKIP
+        test instance
         """
     def add_parametric_instance(self, instance: ParametricInstance) -> Descriptor:
         r"""
@@ -638,19 +718,19 @@ class ArtifactDraft:
         r"""
         Add a numpy ndarray to the artifact with npy format.
 
-        ```python
         >>> import numpy as np
         >>> array = np.array([1, 2, 3])
-        >>> draft = ArtifactDraft.temp()
-        >>> _desc = draft.add_ndarray(array, title="test_array")
-        >>> artifact = draft.commit()
-        >>> layer = artifact.layers[0]
-        >>> print(layer.media_type)
-        application/vnd.numpy
-        >>> print(layer.annotations)
-        {'org.ommx.user.title': 'test_array'}
 
-        ```
+        The remaining operations use the persistent Local Registry.
+
+        >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+        >>> _desc = draft.add_ndarray(array, title="test_array")  # doctest: +SKIP
+        >>> artifact = draft.commit()  # doctest: +SKIP
+        >>> layer = artifact.layers[0]  # doctest: +SKIP
+        >>> print(layer.media_type)  # doctest: +SKIP
+        application/vnd.numpy
+        >>> print(layer.annotations)  # doctest: +SKIP
+        {'org.ommx.user.title': 'test_array'}
         """
     def add_dataframe(
         self,
@@ -662,17 +742,17 @@ class ArtifactDraft:
         r"""
         Add a pandas DataFrame to the artifact with parquet format.
 
-        ```python
         >>> import pandas as pd
         >>> df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
-        >>> draft = ArtifactDraft.temp()
-        >>> _desc = draft.add_dataframe(df, title="test_dataframe")
-        >>> artifact = draft.commit()
-        >>> layer = artifact.layers[0]
-        >>> print(layer.media_type)
-        application/vnd.apache.parquet
 
-        ```
+        The remaining operations use the persistent Local Registry.
+
+        >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+        >>> _desc = draft.add_dataframe(df, title="test_dataframe")  # doctest: +SKIP
+        >>> artifact = draft.commit()  # doctest: +SKIP
+        >>> layer = artifact.layers[0]  # doctest: +SKIP
+        >>> print(layer.media_type)  # doctest: +SKIP
+        application/vnd.apache.parquet
         """
     def add_json(
         self,
@@ -684,16 +764,16 @@ class ArtifactDraft:
         r"""
         Add a JSON object to the artifact.
 
-        ```python
         >>> obj = {"a": 1, "b": 2}
-        >>> draft = ArtifactDraft.temp()
-        >>> _desc = draft.add_json(obj, title="test_json")
-        >>> artifact = draft.commit()
-        >>> layer = artifact.layers[0]
-        >>> print(layer.media_type)
-        application/json
 
-        ```
+        The remaining operations use the persistent Local Registry.
+
+        >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+        >>> _desc = draft.add_json(obj, title="test_json")  # doctest: +SKIP
+        >>> artifact = draft.commit()  # doctest: +SKIP
+        >>> layer = artifact.layers[0]  # doctest: +SKIP
+        >>> print(layer.media_type)  # doctest: +SKIP
+        application/json
         """
     def add_layer(
         self,
@@ -713,6 +793,9 @@ class ArtifactDraft:
     def commit(self) -> Artifact:
         r"""
         Commit the artifact draft.
+
+        Raises {class}`RuntimeError` for registry or storage failures and when
+        the draft has already been committed.
         """
 
 @typing.final
@@ -758,7 +841,7 @@ class ArtifactRef:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class AttachedConstraint:
+class AttachedConstraint(ConstraintView):
     r"""
     Attached constraint — a write-through handle bound to a host
     ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
@@ -774,7 +857,7 @@ class AttachedConstraint:
     wrapper to release the back-reference.
     """
     @property
-    def constraint_id(self) -> builtins.int:
+    def constraint_id(self) -> ConstraintID:
         r"""
         The id this handle points at.
         """
@@ -798,6 +881,7 @@ class AttachedConstraint:
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
     def provenance(self) -> builtins.list[Provenance]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def detach(self) -> Constraint:
         r"""
         Return a {class}`~ommx.Constraint` snapshot of the current
@@ -881,7 +965,7 @@ class AttachedDecisionVariable:
         The parent host this variable lives in.
         """
     @property
-    def kind(self) -> builtins.int: ...
+    def kind(self) -> Kind: ...
     @property
     def bound(self) -> Bound: ...
     @property
@@ -993,7 +1077,7 @@ class AttachedDecisionVariable:
     def add_parameter(self, key: builtins.str, value: builtins.str) -> None: ...
 
 @typing.final
-class AttachedIndicatorConstraint:
+class AttachedIndicatorConstraint(ConstraintView):
     r"""
     Attached indicator constraint — a write-through handle bound to a host
     ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
@@ -1001,11 +1085,11 @@ class AttachedIndicatorConstraint:
     `AttachedIndicatorConstraint` is returned by
     `Instance.add_indicator_constraint` /
     `ParametricInstance.add_indicator_constraint` and by their
-    `indicator_constraints[id]` getters. Reads pull live data from the parent
+    `constraints[IndicatorConstraintID(...)]` lookups. Reads pull live data from the parent
     host and context setters write through to its SoA context store.
     """
     @property
-    def constraint_id(self) -> builtins.int:
+    def constraint_id(self) -> IndicatorConstraintID:
         r"""
         The id this handle points at.
         """
@@ -1030,6 +1114,7 @@ class AttachedIndicatorConstraint:
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
     def provenance(self) -> builtins.list[Provenance]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def detach(self) -> IndicatorConstraint:
         r"""
         Return an {class}`~ommx.IndicatorConstraint` snapshot of the
@@ -1075,18 +1160,18 @@ class AttachedIndicatorConstraint:
         """
 
 @typing.final
-class AttachedOneHotConstraint:
+class AttachedOneHotConstraint(ConstraintView):
     r"""
     Attached one-hot constraint — a write-through handle bound to a host
     ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
 
     Returned by `Instance.add_one_hot_constraint` /
     `ParametricInstance.add_one_hot_constraint` and by their
-    `one_hot_constraints[id]` getters. Reads pull live data from the parent
+    `constraints[OneHotConstraintID(...)]` lookups. Reads pull live data from the parent
     host and context setters write through to its SoA context store.
     """
     @property
-    def constraint_id(self) -> builtins.int:
+    def constraint_id(self) -> OneHotConstraintID:
         r"""
         The id this handle points at.
         """
@@ -1107,6 +1192,7 @@ class AttachedOneHotConstraint:
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
     def provenance(self) -> builtins.list[Provenance]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def detach(self) -> OneHotConstraint:
         r"""
         Return a {class}`~ommx.OneHotConstraint` snapshot of the current
@@ -1152,17 +1238,17 @@ class AttachedOneHotConstraint:
         """
 
 @typing.final
-class AttachedSos1Constraint:
+class AttachedSos1Constraint(ConstraintView):
     r"""
     Attached SOS1 constraint — a write-through handle bound to a host
     ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
 
     Returned by `Instance.add_sos1_constraint` /
     `ParametricInstance.add_sos1_constraint` and by their
-    `sos1_constraints[id]` getters.
+    `constraints[Sos1ConstraintID(...)]` lookups.
     """
     @property
-    def constraint_id(self) -> builtins.int: ...
+    def constraint_id(self) -> Sos1ConstraintID: ...
     @property
     def instance(self) -> typing.Any: ...
     @property
@@ -1177,6 +1263,7 @@ class AttachedSos1Constraint:
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
     def provenance(self) -> builtins.list[Provenance]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def detach(self) -> Sos1Constraint:
         r"""
         Return a {class}`~ommx.Sos1Constraint` snapshot of the current
@@ -1256,6 +1343,21 @@ class AutosavePolicy:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class BinaryPowerPreparation:
+    r"""
+    Reduce powers of active Binary variables during Preparation.
+
+    This phase invokes {meth}`~ommx.Instance.reduce_binary_power`, using
+    $x^n=x$ for Binary variables and positive integer $n$. If it rewrites the
+    active objective and no {attr}`~ommx.Instance.output_objective` exists, the unreduced objective and
+    sense are captured there. An existing output objective is retained, so
+    solution and sample evaluation retain the entry output semantics.
+    A coefficient error leaves the instance unchanged.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(cls) -> BinaryPowerPreparation: ...
+
+@typing.final
 class Bound:
     r"""
     Variable bound wrapper for Python
@@ -1279,14 +1381,29 @@ class Bound:
     def of_binary() -> Bound: ...
     def width(self) -> builtins.float: ...
     def is_finite(self) -> builtins.bool: ...
-    def contains(
-        self, value: builtins.float, atol: builtins.float
-    ) -> builtins.bool: ...
+    def contains(self, value: builtins.float, atol: builtins.float) -> builtins.bool:
+        r"""
+        Return whether ``value`` satisfies this bound under ``atol``.
+
+        Membership treats the bound as the two inequality residuals
+        ``lower - value <= 0`` and ``value - upper <= 0``. Both use the same
+        tolerance semantics as regular inequality constraints after finite
+        evaluation. An infinite endpoint leaves that side unconstrained;
+        non-finite values and finite-endpoint residual overflow are not
+        contained.
+        """
     def nearest_to_zero(self) -> builtins.float: ...
     def intersection(self, other: Bound) -> typing.Optional[Bound]: ...
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Bound: ...
     def __deepcopy__(self, _memo: typing.Any) -> Bound: ...
+
+class BridgeError(builtins.RuntimeError):
+    r"""
+    An OMMX bridge protocol, registration, or transfer failure after loading the SDK.
+    """
+
+    ...
 
 @typing.final
 class Constraint:
@@ -1304,11 +1421,11 @@ class Constraint:
 
     EQUAL_TO_ZERO: Equality
     r"""
-    Class constant for equality type: equal to zero (==)
+    Compatibility alias for {attr}`Equality.EqualToZero`.
     """
     LESS_THAN_OR_EQUAL_TO_ZERO: Equality
     r"""
-    Class constant for equality type: less than or equal to zero (<=)
+    Compatibility alias for {attr}`Equality.LessThanOrEqualToZero`.
     """
     @property
     def function(self) -> Function: ...
@@ -1366,7 +1483,7 @@ class Constraint:
         - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
         - `atol`: Optional absolute tolerance for evaluation
 
-        **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value and feasibility
+        **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value. Query feasibility with ``is_feasible(atol=...)``
         """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
@@ -1439,6 +1556,398 @@ class Constraint:
     def __deepcopy__(self, _memo: typing.Any) -> Constraint: ...
 
 @typing.final
+class ConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
+    r"""
+    Live, read-only mapping of all active constraint families in a model.
+
+    Obtained from {attr}`~ommx.Instance.constraints` or
+    {attr}`~ommx.ParametricInstance.constraints`. The collection keeps its owner
+    alive and observes subsequent owner mutations. Obtaining it does not collect
+    constraint rows; indexing fetches the selected row from the owner's current
+    state. Active model rows are attached handles whose label setters update that
+    owner.
+
+    >>> from ommx import ConstraintID, Instance
+    >>> model = Instance.minimize()
+    >>> x = model.new_binary("x")
+    >>> rule = model.add_constraint(x <= 1, "limit")
+    >>> rows = model.constraints
+    >>> cid = rule.constraint_id
+    >>> rows[cid].set_name("capacity")
+    >>> assert model.constraints[cid].name == "capacity"
+    >>> assert rows.get(ConstraintID(99)) is None
+    >>> assert rows.get(ConstraintID(99), "missing") == "missing"
+
+    **Typed keys and row ownership**
+
+    Mixed-family lookups require typed IDs, even though constraint numbers are
+    unique across all families in an Instance. Bare integers raise ``TypeError``;
+    a missing typed ID raises ``KeyError``. ``get(id)`` returns ``None`` for a
+    missing typed ID, or the supplied default in ``get(id, default)``. Indexing and
+    ``get`` preserve the concrete row type for a known concrete ID; the latter's
+    return type also includes the default's type. See {class}`~ommx.ConstraintIDBase`
+    for ID families, integer promotion, and the extension contract.
+
+    The collection cannot be changed by item assignment or deletion. Change the
+    model through its owner methods. Related collections use the same lookup and
+    iteration rules but have different row ownership:
+
+    | Collection | Included constraints | Returned rows |
+    | --- | --- | --- |
+    | {class}`~ommx.ConstraintCollection` | Active model constraints | Attached handles |
+    | {class}`~ommx.RemovedConstraintCollection` | Retained removed model constraints | Independent snapshots |
+    | {class}`~ommx.EvaluatedConstraintCollection` | Active and retained removed constraints in a Solution | Independent evaluated snapshots |
+    | {class}`~ommx.SampledConstraintCollection` | Active and retained removed constraints in a SampleSet | Independent sampled snapshots |
+
+    Attached handles compare equal when they refer to the same owner object and
+    typed ID. Handles from different owners are unequal even if the models contain
+    identical data. Removed and result snapshots compare their stored data, including
+    metadata and removal reasons. Mapping equality and membership in ``values()`` or
+    ``items()`` use those row equality rules.
+
+    **Live views and iteration**
+
+    ``keys()``, ``values()``, and ``items()`` are live views. ``iter(rows)`` snapshots
+    typed IDs immediately; iterators over the standard Python views snapshot them on
+    the first ``next()``. Within the currently supported families, IDs follow family
+    order (regular, indicator, one-hot, SOS1), then numeric order. Values are fetched
+    as they are visited. If a snapshotted key is removed before its value is fetched,
+    that access raises ``KeyError``.
+
+    >>> ids_before_addition = iter(rows)
+    >>> keys = rows.keys()
+    >>> added = model.add_constraint(x >= 0, "lower")
+    >>> assert list(ids_before_addition) == [cid]
+    >>> assert list(keys) == [cid, added.constraint_id]
+    >>> assert rows == dict(rows)
+
+    ``dict(rows)`` materializes a mapping at that time; its active model values are
+    still attached handles. To inspect just one family, use ``of_kind`` and
+    {class}`~ommx.ConstraintFamilyView`. To collect a table, use the owner's
+    ``constraints_df(kind=...)``. Its typed index matches the selected family's keys;
+    on models, ``removed=True`` includes both active and retained removed rows.
+    """
+    def __len__(self) -> builtins.int: ...
+    def __contains__(self, key: builtins.object) -> builtins.bool: ...
+    def __iter__(self) -> typing.Iterator[ConstraintIDBase]:
+        r"""
+        Iterate a snapshot of typed IDs; constraint rows are not collected.
+        """
+    def keys(self) -> typing.KeysView[ConstraintIDBase]:
+        r"""
+        Live key view. Iteration order is family order, then numeric ID.
+        """
+    def values(self) -> typing.ValuesView[ConstraintView]:
+        r"""
+        Live value view; each row is fetched when visited.
+        """
+    def items(self) -> typing.ItemsView[ConstraintIDBase, ConstraintView]:
+        r"""
+        Live item view; each row is fetched when visited.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __eq__(self, other: typing.Any) -> typing.Any: ...
+    @typing.overload
+    def __getitem__(self, key: ConstraintID) -> AttachedConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: IndicatorConstraintID) -> AttachedIndicatorConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: OneHotConstraintID) -> AttachedOneHotConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: Sos1ConstraintID) -> AttachedSos1Constraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintID, default: None = None
+    ) -> AttachedConstraint | None: ...
+    @typing.overload
+    def get(self, key: ConstraintID, default: _T) -> AttachedConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: None = None
+    ) -> AttachedIndicatorConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: _T
+    ) -> AttachedIndicatorConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: None = None
+    ) -> AttachedOneHotConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: _T
+    ) -> AttachedOneHotConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: None = None
+    ) -> AttachedSos1Constraint | None: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: _T
+    ) -> AttachedSos1Constraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintIDBase, default: None = None
+    ) -> ConstraintView | None: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["regular"]
+    ) -> ConstraintFamilyView[ConstraintID, AttachedConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["indicator"]
+    ) -> ConstraintFamilyView[IndicatorConstraintID, AttachedIndicatorConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["one_hot"]
+    ) -> ConstraintFamilyView[OneHotConstraintID, AttachedOneHotConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["sos1"]
+    ) -> ConstraintFamilyView[Sos1ConstraintID, AttachedSos1Constraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+
+@typing.final
+class ConstraintFamilyView(typing.Mapping[_K, _V_co]):
+    r"""
+    Live, read-only mapping of one constraint family, created by ``of_kind``.
+
+    The selected family fixes the key type. Indexing, ``get``, and membership accept
+    integers as well as that family's typed IDs; an ID of another family raises
+    ``TypeError``. Iteration and dictionary keys retain typed IDs. A literal
+    ``kind`` also selects the concrete key and row types for static type checking.
+
+    >>> from ommx import ConstraintID, Instance
+    >>> model = Instance.minimize()
+    >>> x = model.new_binary("x")
+    >>> rule = model.add_constraint(x <= 1, "limit")
+    >>> regular = model.constraints.of_kind("regular")
+    >>> assert rule.constraint_id == ConstraintID(0)
+    >>> assert regular[0] == regular[ConstraintID(0)]
+    >>> assert list(regular) == [ConstraintID(0)]
+    >>> assert 0 in regular
+    >>> assert regular.get(99) is None
+    >>> regular[0].set_name("capacity")
+    >>> assert model.constraints[ConstraintID(0)].name == "capacity"
+
+    The accepted strings are ``"regular"``, ``"indicator"``, ``"one_hot"``, and
+    ``"sos1"``, matching ``constraints_df(kind=...)``. An unknown ``kind`` raises
+    ``ValueError``. See {class}`~ommx.EvaluatedConstraintCollection` for the current
+    ID and result-type table.
+
+    The view retains its owner without collecting rows. It follows the row ownership,
+    equality, and iterator snapshot rules of {class}`~ommx.ConstraintCollection`:
+    active model rows are attached handles, while removed and result rows are
+    independent snapshots. This applies to Instance and ParametricInstance active
+    and removed collections, and to Solution and SampleSet result collections.
+
+    Filtering is an inspection operation. Selecting one family does not establish
+    that a solver or transformation supports every constraint in the model. A
+    consumer must inspect all constraints and reject unsupported families; see
+    {class}`~ommx.ConstraintIDBase`.
+    """
+    def __len__(self) -> builtins.int:
+        r"""
+        Number of current rows in the selected family.
+        """
+    def __getitem__(self, key: _K | builtins.int) -> _V_co:
+        r"""
+        Fetch a row using an integer or an ID of the selected family.
+        """
+    def __contains__(self, key: builtins.object) -> builtins.bool: ...
+    def __iter__(self) -> typing.Iterator[_K]:
+        r"""
+        Snapshot this family's typed IDs now; fetch rows only when indexed.
+        """
+    def keys(self) -> typing.KeysView[_K]:
+        r"""
+        Live keys view. View iterators snapshot IDs on first advance.
+        """
+    def values(self) -> typing.ValuesView[_V_co]:
+        r"""
+        Live values view; rows are fetched on demand.
+        """
+    def items(self) -> typing.ItemsView[_K, _V_co]:
+        r"""
+        Live items view; keys remain typed and rows are fetched on demand.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __eq__(self, other: typing.Any) -> typing.Any: ...
+    @typing.overload
+    def get(self, key: _K | builtins.int, default: None = None) -> _V_co | None: ...
+    @typing.overload
+    def get(self, key: _K | builtins.int, default: _T) -> _V_co | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+
+@typing.final
+class ConstraintID(ConstraintIDBase):
+    r"""
+    A regular constraint ID. Unequal to integers and IDs of other constraint families.
+
+    See {class}`~ommx.ConstraintIDBase` for lookup, copying, serialization, and extension contracts.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __lt__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __le__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __gt__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __ge__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __hash__(self) -> builtins.int: ...
+    def __new__(cls, value: builtins.int) -> ConstraintID:
+        r"""
+        Create a typed ID identifying this constraint family and number.
+
+        The value must be an unsigned 64-bit integer. An ID of another
+        family is not accepted. IDs have no integer conversion protocol.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __reduce__(self) -> tuple[type, tuple[builtins.int]]:
+        r"""
+        Reconstruct the same ID family through its public constructor.
+        The numeric payload is used only by the serialization protocol.
+        """
+    def __copy__(self) -> ConstraintID:
+        r"""
+        IDs are immutable; copying preserves the same typed identity.
+        """
+    def __deepcopy__(self, _memo: typing.Any) -> ConstraintID:
+        r"""
+        IDs are immutable, including when nested in copied containers.
+        """
+
+class ConstraintIDBase:
+    r"""
+    Common base of constraint IDs, including families introduced by future SDKs.
+
+    Consumers must handle the concrete ID types they support and reject all
+    others. This base alone is not a usable constraint identity. Integers are
+    not instances of this class and are never accepted by mixed-family lookups.
+
+    **Typed identity and integer inputs**
+
+    The currently supported concrete types are {class}`~ommx.ConstraintID`,
+    {class}`~ommx.IndicatorConstraintID`, {class}`~ommx.OneHotConstraintID`, and
+    {class}`~ommx.Sos1ConstraintID`. An ID carries its family and an unsigned
+    64-bit number. IDs from different families are unequal, even if their
+    numbers coincide. Within one Instance, constraint numbers must still be
+    unique across all active and removed families.
+
+    APIs whose argument already fixes a family promote integer inputs to that
+    family's ID: for example, ``constraints={1: constraint}`` in
+    {meth}`~ommx.Instance.from_components`, or
+    ``instance.constraints.of_kind("regular")[1]``. They reject IDs of another
+    family. Such mapping inputs reject ``1`` and ``ConstraintID(1)`` together
+    with ``ValueError``, because the keys normalize to the same identity.
+    Mixed-family collections and ``constraint_violation(id)`` require typed
+    IDs. DataFrame indexes also retain typed IDs. Constraint IDs do not support
+    ``int()`` or integer-index conversion; variable and sample IDs remain integers.
+
+    IDs are immutable. Shallow and deep copies return the same ID object;
+    copying containers or pickling preserves ID family and value, including
+    IDs used in DataFrame indexes or columns.
+
+    >>> import copy
+    >>> import pickle
+    >>> from ommx import ConstraintID, OneHotConstraintID
+    >>> cid = ConstraintID(7)
+    >>> assert cid != 7 and cid != OneHotConstraintID(7)
+    >>> assert copy.copy(cid) is cid
+    >>> assert copy.deepcopy(cid) is cid
+    >>> assert copy.deepcopy({cid: [cid]}) == {cid: [cid]}
+    >>> restored = pickle.loads(pickle.dumps({cid: [cid]}))
+    >>> assert restored == {cid: [cid]}
+    >>> assert type(next(iter(restored))) is ConstraintID
+
+    **Supporting additional families**
+
+    New special-constraint families are additive API extensions. Collections,
+    including removed and result collections, expose the open common interfaces
+    ``Mapping[ConstraintIDBase, ConstraintView]``; their known concrete ID
+    overloads retain precise row types. The currently supported families are
+    not an exhaustive list of future possibilities.
+
+    A solver adapter or transformation must reject families it cannot handle.
+    Silently skipping their constraints can relax the optimization problem.
+    Keep this check even if an earlier applicability check normally excludes
+    unsupported kinds. For example, a consumer requiring regular rows can
+    validate the complete collection before processing it:
+
+    >>> from ommx import ConstraintID, Instance, OneHotConstraint
+    >>> def regular_rows(model):
+    ...     rows = []
+    ...     for cid in model.constraints:
+    ...         if not isinstance(cid, ConstraintID):
+    ...             raise NotImplementedError("Unsupported constraint family")
+    ...         rows.append(model.constraints[cid])
+    ...     return rows
+    >>> model = Instance.minimize()
+    >>> x = model.new_binary("x")
+    >>> y = model.new_binary("y")
+    >>> rule = model.add_constraint(x + y <= 1)
+    >>> assert regular_rows(model) == [rule]
+    >>> _ = model.add_one_hot_constraint(OneHotConstraint(variables=[x, y]))
+    >>> regular_rows(model)
+    Traceback (most recent call last):
+    ...
+    NotImplementedError: Unsupported constraint family
+
+    Handle additional concrete ID types explicitly when supported and retain
+    the rejecting fallback. Receiving a new family in an older consumer should
+    fail explicitly. Metadata-only inspection can use {class}`~ommx.ConstraintView`
+    without interpreting each family's mathematical meaning.
+    """
+    def __new__(cls) -> ConstraintIDBase: ...
+
+class ConstraintView:
+    r"""
+    Common metadata interface for rows fetched from constraint collections.
+
+    The set of concrete constraint families is open. Inspect a concrete ID or
+    row type before using family-specific mathematical operations, and reject
+    unsupported families rather than dropping their constraints. This interface
+    does not imply whether the row is attached or an owned result snapshot.
+    See {class}`~ommx.ConstraintCollection` for the ownership and iteration
+    contracts and {class}`~ommx.ConstraintIDBase` for explicit family dispatch.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def provenance(self) -> builtins.list[Provenance]: ...
+
+@typing.final
 class DecisionVariable:
     r"""
     Decision variable in an optimization problem.
@@ -1447,36 +1956,54 @@ class DecisionVariable:
     It supports binary, integer, continuous, semi-integer, semi-continuous,
     and finite-domain variables, and can be used in arithmetic expressions to
     build objective functions and constraints.
+    Construction requires a {class}`~ommx.Kind` and raises ValueError when the
+    requested bound cannot be normalized for the selected variable kind.
+    Use {meth}`~ommx.DecisionVariable.finite_domain` for an explicitly enumerated
+    domain instead of an interval bound.
 
     Note that this object overloads `==` for creating a constraint, not for equality comparison.
 
     # Examples
 
-    ```python
     >>> x = DecisionVariable.integer(1)
     >>> x == 1  # Returns Constraint, not bool
     Constraint(...)
-    ```
 
     For object equality comparison, use the ``equals_to()`` method or compare IDs:
 
-    ```python
     >>> y = DecisionVariable.integer(2)
     >>> x.id == y.id
     False
-    ```
     """
 
-    BINARY: builtins.int = 1
-    INTEGER: builtins.int = 2
-    CONTINUOUS: builtins.int = 3
-    SEMI_INTEGER: builtins.int = 4
-    SEMI_CONTINUOUS: builtins.int = 5
-    FINITE_DOMAIN: builtins.int = 6
+    BINARY: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.Binary`.
+    """
+    INTEGER: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.Integer`.
+    """
+    CONTINUOUS: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.Continuous`.
+    """
+    SEMI_INTEGER: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.SemiInteger`.
+    """
+    SEMI_CONTINUOUS: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.SemiContinuous`.
+    """
+    FINITE_DOMAIN: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.FiniteDomain`.
+    """
     @property
     def id(self) -> builtins.int: ...
     @property
-    def kind(self) -> builtins.int: ...
+    def kind(self) -> Kind: ...
     @property
     def bound(self) -> Bound: ...
     @property
@@ -1545,7 +2072,7 @@ class DecisionVariable:
     def __new__(
         cls,
         id: builtins.int,
-        kind: builtins.int,
+        kind: Kind,
         bound: Bound,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
@@ -1610,11 +2137,40 @@ class DecisionVariable:
         description: typing.Optional[builtins.str] = None,
     ) -> DecisionVariable:
         r"""
-        Create a finite-domain decision variable.
+        Create a decision variable whose feasible values are explicitly enumerated.
 
-        `values` is the exact feasible set, not a discretization of a
-        continuous interval. Values must be non-empty, finite, and unique;
-        they are stored in ascending order.
+        ```pycon
+        >>> from ommx import DecisionVariable, Instance, Kind
+        >>> dose = DecisionVariable.finite_domain(0, [1.0, 0.1, 0.5, 0.3], name="dose")
+        >>> assert dose.kind == Kind.FiniteDomain
+        >>> dose.values
+        [0.1, 0.3, 0.5, 1.0]
+        >>> assert (dose.bound.lower, dose.bound.upper) == (0.1, 1.0)
+
+        ```
+
+        `values` is the exact feasible set. It must be non-empty and contain unique,
+        finite numbers; OMMX stores the values in ascending order. Values between the
+        minimum and maximum that are not listed remain infeasible. This domain does
+        not approximate a continuous interval.
+
+        The {attr}`~ommx.DecisionVariable.bound` property and the `lower` and `upper`
+        columns in {meth}`~ommx.Instance.decision_variables_df` are derived from the
+        minimum and maximum of `values`. They do not independently define the domain.
+        The DataFrame's `values` column contains the exact set for finite-domain
+        variables and a missing value for interval-domain kinds.
+
+        For incremental construction with automatically assigned IDs, use
+        {meth}`~ommx.Instance.new_finite_domain`:
+
+        ```pycon
+        >>> instance = Instance.minimize()
+        >>> dose = instance.new_finite_domain([0.1, 0.3, 0.5, 1.0], "dose")
+        >>> instance.objective = dose
+        >>> assert instance.evaluate({dose.id: 0.3}).feasible
+        >>> assert not instance.evaluate({dose.id: 0.4}).feasible
+
+        ```
         """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> DecisionVariable: ...
@@ -1682,7 +2238,7 @@ class DiagnosticCollector:
     def record(self, diagnostic: adapter.DiagnosticReport) -> None: ...
 
 @typing.final
-class EvaluatedConstraint:
+class EvaluatedConstraint(ConstraintView):
     @property
     def equality(self) -> Equality:
         r"""
@@ -1704,41 +2260,52 @@ class EvaluatedConstraint:
         Set the dual variable value
         """
     @property
-    def feasible(self) -> builtins.bool:
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
-        Get the feasibility status
+        Get the used decision variable IDs
         """
     @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
-        Get the constraint name
+        Modeling name, if supplied.
         """
     @property
     def subscripts(self) -> builtins.list[builtins.int]:
         r"""
-        Get the subscripts
+        Modeling subscripts.
         """
     @property
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
-        Get the parameters
+        Modeling parameters.
         """
     @property
     def description(self) -> typing.Optional[builtins.str]:
         r"""
-        Get the description
+        Modeling description, if supplied.
         """
     @property
     def provenance(self) -> builtins.list[Provenance]:
         r"""
-        Get the provenance chain.
-
-        See {attr}`~ommx.Constraint.provenance` for semantics.
+        Transformation lineage, preserving the source constraint family.
         """
     @property
-    def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
+    def removed_reason(self) -> typing.Optional[builtins.str]:
         r"""
-        Get the used decision variable IDs
+        Reason this constraint was removed before evaluation, or None.
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Parameters of the removal reason; empty for an active constraint.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def is_feasible(self, *, atol: builtins.float) -> builtins.bool:
+        r"""
+        Check feasibility using the supplied absolute tolerance.
+
+        The query compares the stored violation with ``atol``. It does not
+        re-evaluate the function or canonicalize the input state.
         """
     def violation(self) -> builtins.float:
         r"""
@@ -1748,7 +2315,173 @@ class EvaluatedConstraint:
         - For $f(x) = 0$: returns $|f(x)|$
         - For $f(x) \leq 0$: returns $\max(0, f(x))$
 
-        Returns 0.0 if the constraint is satisfied.
+        Zero implies feasibility. A small positive violation may also be feasible
+        within the supplied query tolerance; the residual is not rounded to zero.
+        """
+
+@typing.final
+class EvaluatedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
+    r"""
+    Live mapping of a Solution's constraint results, including retained removed rows.
+
+    Obtained from {attr}`~ommx.Solution.constraints`. The collection keeps its
+    Solution alive and fetches each row on access. Each row is an independent
+    snapshot containing labels, provenance, removal reasons, and evaluation
+    diagnostics. Editing a fetched snapshot does not update the Solution. Use an
+    owner method such as {meth}`~ommx.Solution.set_dual_variable` to update the result;
+    subsequent collection access observes that update.
+
+    >>> from ommx import Instance
+    >>> model = Instance.minimize()
+    >>> x = model.new_binary("x")
+    >>> upper = model.add_constraint(x <= 1, "upper")
+    >>> lower = model.add_constraint(x >= 0, "lower")
+    >>> model.relax_constraint(lower.constraint_id, "inspect later")
+    >>> solution = model.evaluate({x.id: 0})
+    >>> rows = solution.constraints
+    >>> assert lower.constraint_id in rows
+    >>> assert rows[lower.constraint_id].removed_reason == "inspect later"
+    >>> snapshot = rows[upper.constraint_id]
+    >>> solution.set_dual_variable(upper.constraint_id, 3.0)
+    >>> assert snapshot.dual_variable is None
+    >>> assert rows[upper.constraint_id].dual_variable == 3.0
+    >>> snapshot.dual_variable = 8.0
+    >>> assert rows[upper.constraint_id].dual_variable == 3.0
+
+    **Result types**
+
+    The currently supported families have the following concrete result types.
+    The set of possible families is open; use {class}`~ommx.ConstraintIDBase` and
+    {class}`~ommx.ConstraintView` for common interfaces, and explicitly reject
+    unsupported families when interpreting their mathematical meaning.
+
+    | ``kind`` | Typed ID | Solution row | SampleSet row |
+    | --- | --- | --- | --- |
+    | ``"regular"`` | {class}`~ommx.ConstraintID` | {class}`~ommx.EvaluatedConstraint` | {class}`~ommx.SampledConstraint` |
+    | ``"indicator"`` | {class}`~ommx.IndicatorConstraintID` | {class}`~ommx.EvaluatedIndicatorConstraint` | {class}`~ommx.SampledIndicatorConstraint` |
+    | ``"one_hot"`` | {class}`~ommx.OneHotConstraintID` | {class}`~ommx.EvaluatedOneHotConstraint` | {class}`~ommx.SampledOneHotConstraint` |
+    | ``"sos1"`` | {class}`~ommx.Sos1ConstraintID` | {class}`~ommx.EvaluatedSos1Constraint` | {class}`~ommx.SampledSos1Constraint` |
+
+    For the mixed-family typed-key contract, ``get``, live views, iteration timing,
+    and snapshot equality, see {class}`~ommx.ConstraintCollection`. Filter without
+    collecting rows using ``of_kind`` and {class}`~ommx.ConstraintFamilyView`.
+    {meth}`~ommx.Solution.constraints_df` collects one family as a DataFrame;
+    retained removed constraints remain included. Its ``kind`` argument is required,
+    as it is for ``constraint_context_df``, ``constraint_parameters_df``,
+    ``constraint_provenance_df``, and ``constraint_removed_reasons_df`` on all owners.
+
+    For multiple candidates, {class}`~ommx.SampledConstraintCollection` returns
+    sampled rows. Their ``violations`` and ``feasible(atol=...)`` are keyed by sample
+    ID. Per-sample objective and overall feasibility belong to
+    {attr}`~ommx.SampleSet.summary`, rather than the per-constraint rows.
+    """
+    def __len__(self) -> builtins.int: ...
+    def __contains__(self, key: builtins.object) -> builtins.bool: ...
+    def __iter__(self) -> typing.Iterator[ConstraintIDBase]:
+        r"""
+        Iterate a snapshot of typed IDs; constraint rows are not collected.
+        """
+    def keys(self) -> typing.KeysView[ConstraintIDBase]:
+        r"""
+        Live key view. Iteration order is family order, then numeric ID.
+        """
+    def values(self) -> typing.ValuesView[ConstraintView]:
+        r"""
+        Live value view; each row is fetched when visited.
+        """
+    def items(self) -> typing.ItemsView[ConstraintIDBase, ConstraintView]:
+        r"""
+        Live item view; each row is fetched when visited.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __eq__(self, other: typing.Any) -> typing.Any: ...
+    @typing.overload
+    def __getitem__(self, key: ConstraintID) -> EvaluatedConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: IndicatorConstraintID) -> EvaluatedIndicatorConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: OneHotConstraintID) -> EvaluatedOneHotConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: Sos1ConstraintID) -> EvaluatedSos1Constraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintID, default: None = None
+    ) -> EvaluatedConstraint | None: ...
+    @typing.overload
+    def get(self, key: ConstraintID, default: _T) -> EvaluatedConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: None = None
+    ) -> EvaluatedIndicatorConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: _T
+    ) -> EvaluatedIndicatorConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: None = None
+    ) -> EvaluatedOneHotConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: _T
+    ) -> EvaluatedOneHotConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: None = None
+    ) -> EvaluatedSos1Constraint | None: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: _T
+    ) -> EvaluatedSos1Constraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintIDBase, default: None = None
+    ) -> ConstraintView | None: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["regular"]
+    ) -> ConstraintFamilyView[ConstraintID, EvaluatedConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["indicator"]
+    ) -> ConstraintFamilyView[IndicatorConstraintID, EvaluatedIndicatorConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["one_hot"]
+    ) -> ConstraintFamilyView[OneHotConstraintID, EvaluatedOneHotConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["sos1"]
+    ) -> ConstraintFamilyView[Sos1ConstraintID, EvaluatedSos1Constraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
         """
 
 @typing.final
@@ -1805,6 +2538,86 @@ class EvaluatedDecisionVariable:
         """
 
 @typing.final
+class EvaluatedIndicatorConstraint(ConstraintView):
+    r"""
+    An owned evaluated indicator result. Fetched by typed ID from the owning result's constraints collection.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling name, if supplied.
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Modeling subscripts.
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Modeling parameters.
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling description, if supplied.
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Transformation lineage, preserving the source constraint family.
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reason this constraint was removed before evaluation, or None.
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Parameters of the removal reason; empty for an active constraint.
+        """
+    @property
+    def activation_atol(self) -> builtins.float:
+        r"""
+        Tolerance used when the activation diagnostic was computed.
+        """
+    @property
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        IDs of decision variables used to evaluate this constraint.
+        """
+    @property
+    def indicator_variable_id(self) -> builtins.int:
+        r"""
+        Decision variable that activates this constraint.
+        """
+    @property
+    def equality(self) -> Equality:
+        r"""
+        Equality of the inner constraint.
+        """
+    @property
+    def evaluated_value(self) -> builtins.float:
+        r"""
+        Inner residual at the evaluated state.
+        """
+    @property
+    def indicator_active(self) -> builtins.bool:
+        r"""
+        Whether the indicator was active at evaluation time.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def violation(self) -> builtins.float:
+        r"""
+        Nonnegative violation retained by the evaluation.
+        """
+    def is_feasible(self, *, atol: builtins.float) -> builtins.bool:
+        r"""
+        Compare the stored violation with atol without changing activation diagnostics.
+        """
+
+@typing.final
 class EvaluatedNamedFunction:
     r"""
     EvaluatedNamedFunction wrapper for Python.
@@ -1829,6 +2642,153 @@ class EvaluatedNamedFunction:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> EvaluatedNamedFunction: ...
     def __deepcopy__(self, _memo: typing.Any) -> EvaluatedNamedFunction: ...
+
+@typing.final
+class EvaluatedOneHotConstraint(ConstraintView):
+    r"""
+    An owned evaluated one-hot result. Fetched by typed ID from the owning result's constraints collection.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling name, if supplied.
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Modeling subscripts.
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Modeling parameters.
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling description, if supplied.
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Transformation lineage, preserving the source constraint family.
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reason this constraint was removed before evaluation, or None.
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Parameters of the removal reason; empty for an active constraint.
+        """
+    @property
+    def activation_atol(self) -> builtins.float:
+        r"""
+        Tolerance used when the activation diagnostic was computed.
+        """
+    @property
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        IDs of decision variables used to evaluate this constraint.
+        """
+    @property
+    def variables(self) -> builtins.set[builtins.int]:
+        r"""
+        Member decision variable IDs.
+        """
+    @property
+    def active_variable(self) -> typing.Optional[builtins.int]:
+        r"""
+        Retained selected-variable diagnostic, using activation_atol.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def violation(self) -> builtins.float:
+        r"""
+        Nonnegative violation retained by the evaluation.
+        """
+    def is_feasible(self, *, atol: builtins.float) -> builtins.bool:
+        r"""
+        Compare the stored violation with atol without changing activation diagnostics.
+        """
+
+@typing.final
+class EvaluatedSos1Constraint(ConstraintView):
+    r"""
+    An owned evaluated SOS1 result. Fetched by typed ID from the owning result's constraints collection.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling name, if supplied.
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Modeling subscripts.
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Modeling parameters.
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling description, if supplied.
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Transformation lineage, preserving the source constraint family.
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reason this constraint was removed before evaluation, or None.
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Parameters of the removal reason; empty for an active constraint.
+        """
+    @property
+    def activation_atol(self) -> builtins.float:
+        r"""
+        Tolerance used when the activation diagnostic was computed.
+        """
+    @property
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        IDs of decision variables used to evaluate this constraint.
+        """
+    @property
+    def variables(self) -> builtins.set[builtins.int]:
+        r"""
+        Member decision variable IDs.
+        """
+    @property
+    def active_variable(self) -> typing.Optional[builtins.int]:
+        r"""
+        Retained selected-variable diagnostic, using activation_atol.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def violation(self) -> builtins.float:
+        r"""
+        Nonnegative violation retained by the evaluation.
+        """
+    def is_feasible(self, *, atol: builtins.float) -> builtins.bool:
+        r"""
+        Compare the stored violation with atol without changing activation diagnostics.
+        """
+
+class ExactIntegerSlackError(builtins.RuntimeError):
+    r"""
+    Exact integer-slack conversion is unavailable for the requested inequality.
+    """
+
+    ...
 
 @typing.final
 class Experiment:
@@ -1862,6 +2822,12 @@ class Experiment:
     `Run.log_solve(...)` and `Run.log_sample(...)` for payloads that belong to
     a specific run.
 
+    Attachment lookup by an absent name raises {class}`KeyError`. A caller-side
+    image reference, autosave value, media type, or JSON input that is invalid
+    raises {class}`ValueError`. Registry, archive, storage, and lifecycle-state
+    failures raise {class}`RuntimeError`. Exceptions raised by Python codecs,
+    adapters, tracing hooks, and data libraries pass through unchanged.
+
     Example:
 
     >>> from ommx.experiment import Experiment
@@ -1879,7 +2845,9 @@ class Experiment:
 
     If the experiment has only one run, open the experiment and the run in
     one `with` statement. On normal exit, the run is finished first and then
-    the experiment is committed:
+    the experiment is committed. The following workflow uses the caller's
+    persistent Local Registry and a remote registry, so it is not executed by
+    doctest:
 
     >>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP
     ...     solution = run.log_solve(adapter, instance, time_limit=10.0)
@@ -1914,9 +2882,17 @@ class Experiment:
         Returns `None` for an unsealed Experiment.
         """
     @property
+    def lifecycle_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Concise exception type and message for a failed or interrupted Experiment.
+
+        This is lifecycle metadata, not solver diagnostics. It is `None` when
+        no reason was recorded.
+        """
+    @property
     def artifact(self) -> Artifact:
         r"""
-        Committed OMMX Artifact for this Experiment.
+        Immutable OMMX Artifact for this finished, failed, or interrupted Experiment.
 
         Raises an error if the Experiment has not been committed yet.
         """
@@ -1988,8 +2964,8 @@ class Experiment:
     @staticmethod
     def import_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Experiment:
         r"""
-        Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI
-        Image Layout directory).
+        Import a finished, failed, or interrupted Experiment Artifact from a
+        `.ommx` OCI archive file (or an OCI Image Layout directory).
 
         The archive is imported into the default Local Registry, matching
         {meth}`Artifact.import_archive`, and then interpreted as an
@@ -1998,7 +2974,7 @@ class Experiment:
     @staticmethod
     def from_artifact(artifact: Artifact) -> Experiment:
         r"""
-        Interpret an already-open Artifact as a committed Experiment.
+        Interpret an already-open Artifact as a finished, failed, or interrupted Experiment.
 
         This is the usual entry point after importing or receiving an OMMX
         Artifact handle. The artifact must contain an Experiment config.
@@ -2022,13 +2998,12 @@ class Experiment:
 
         If `image_name` is omitted, OMMX generates an anonymous local
         Experiment name for the child. The returned Experiment can be used as
-        a context manager:
+        a context manager. This requires an already committed parent in a
+        caller-owned Local Registry, so it is not executed by doctest:
 
-        ```python
-        with parent.fork() as child:
-            with child.run() as run:
-                run.log_parameter("capacity", 56)
-        ```
+        >>> with parent.fork() as child:  # doctest: +SKIP
+        ...     with child.run() as run:
+        ...         run.log_parameter("capacity", 56)
 
         Raises an error if this Experiment has not been committed yet.
 
@@ -2069,7 +3044,7 @@ class Experiment:
         """
     def save(self, path: builtins.str | os.PathLike | pathlib.Path) -> None:
         r"""
-        Save this committed Experiment Artifact as a `.ommx` OCI archive file at `path`.
+        Save this finished, failed, or interrupted Experiment Artifact as a `.ommx` archive.
 
         The archive is an exchange-format export of the registry-resident
         Experiment Artifact. Loading the archive back via
@@ -2080,7 +3055,7 @@ class Experiment:
         """
     def push(self) -> None:
         r"""
-        Push this committed Experiment Artifact to its remote registry.
+        Push this finished, failed, or interrupted Experiment Artifact remotely.
 
         Use `rename(...)` first when an anonymous or local-only experiment
         should be published under a remote container image reference.
@@ -2161,12 +3136,12 @@ class Experiment:
         Start a new Run in this unsealed Experiment.
 
         The returned `Run` must be closed before `commit()`. Use it as a
-        context manager to close it automatically on normal or exceptional exit:
+        context manager to close it automatically on normal or exceptional
+        exit. This requires a caller-owned unsealed Experiment and writes to
+        its Local Registry, so it is not executed by doctest:
 
-        ```python
-        with experiment.run() as run:
-            run.log_parameter("capacity", 47)
-        ```
+        >>> with experiment.run() as run:  # doctest: +SKIP
+        ...     run.log_parameter("capacity", 47)
 
         Closing a Run records its status as `"finished"`, `"failed"`, or
         `"interrupted"`. It also publishes a best-effort draft checkpoint when
@@ -2399,12 +3374,216 @@ class ExperimentRef:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class FixedPenaltyPreparation:
+    r"""
+    Selection for the fixed-weight penalty Preparation phase.
+
+    Let $F(x)$ be the active objective and $g_i(x)$ the body of each active
+    regular constraint. With normalized nonnegative penalty magnitudes $w_i$,
+    the keyed operation replaces the active objective by
+
+    $$
+    F(x) + \sum_i w_i g_i(x)^2
+    $$
+
+    for minimization, and by $F(x) - \sum_i w_i g_i(x)^2$ for maximization. The
+    uniform operation uses one $w$ for every active regular constraint. For an
+    inequality $g_i(x) \leq 0$, this squares $g_i(x)$ itself; it is not the
+    one-sided penalty $\max(0, g_i(x))^2$.
+
+    On success, every active regular constraint moves to
+    {attr}`~ommx.Instance.removed_constraints`, while existing removed
+    constraints are preserved. When at least one active regular constraint is
+    converted, the entry output semantics are preserved in
+    {attr}`~ommx.Instance.output_objective` for solution and sample evaluation
+    (retaining an existing output objective, or capturing the active pair),
+    but active-formulation optimality is no longer transported. Active
+    Indicator, OneHot, or SOS1 constraints are not penalty-converted and cause
+    an error before mutation. Validation, objective construction, and regular
+    constraint lifecycle changes are atomic: any error leaves the instance
+    unchanged. When a penalty is applied to active constraints, OMMX validates
+    the weight domain but cannot decide whether a weight is large enough for an
+    application's penalty rule; that choice belongs to the caller.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def penalty_method_with_fixed_weights(
+        *,
+        weights: typing.Mapping[builtins.int, builtins.float],
+        atol: typing.Optional[builtins.float] = None,
+    ) -> FixedPenaltyPreparation:
+        r"""
+        Select the keyed fixed-weight penalty owner operation.
+
+        The keys of ``weights`` must be exactly the active regular constraint
+        IDs. Each value is the corresponding $w_i$ in the class formula.
+        ``atol`` is used by the owner operation to accept a penalty magnitude
+        down to ``-atol`` and normalize a tolerated negative value to zero. Every
+        weight must be finite.
+        Removed constraints record
+        ``reason="ommx.Instance.penalty_method_with_fixed_weights"`` with no
+        reason parameters.
+        """
+    @staticmethod
+    def uniform_penalty_method_with_fixed_weight(
+        *, weight: builtins.float, atol: typing.Optional[builtins.float] = None
+    ) -> FixedPenaltyPreparation:
+        r"""
+        Select the uniform fixed-weight penalty owner operation.
+
+        ``weight`` is the common $w$ in the class formula for every active
+        regular constraint. In particular, this replaces $F(x)$ by
+        $F(x) + w \sum_i g_i(x)^2$ for minimization and by
+        $F(x) - w \sum_i g_i(x)^2$ for maximization, after normalizing $w$.
+        ``atol`` is used by the owner operation to accept a penalty magnitude
+        down to ``-atol`` and normalize a tolerated negative value to zero. When
+        at least one active regular constraint is converted, the weight must be
+        finite. With no active constraint of any family, the owner operation is
+        an identity and does not inspect the weight.
+        Removed constraints record
+        ``reason="ommx.Instance.uniform_penalty_method_with_fixed_weight"`` with
+        no reason parameters.
+        """
+
+@typing.final
 class Function:
     r"""
-    General mathematical function of decision variables.
+    A scalar expression used in optimization objectives and constraint bodies.
+
+    Function refers to variables by ID, without owning their names, kinds, or bounds.
+    It can be evaluated independently of a solver. Use
+    {meth}`~ommx.Instance.evaluate` when variable domains and constraints must also be
+    checked, and {class}`~ommx.InstanceClass` to inspect a solver-input representation.
+    Being evaluable as a Function does not imply that an Adapter accepts it.
+
+    **Evaluate an expression or a candidate**
+
+    An expression can have a value even when the supplied candidate violates a
+    constraint. Here the expression is ``2*x + 3``, while the problem also requires
+    ``x == 0``:
+
+    >>> from ommx import Function, Instance
+    >>> instance = Instance.minimize()
+    >>> x = instance.new_binary("x")
+    >>> f = Function(2 * x + 3)
+    >>> instance.objective = f
+    >>> _ = instance.add_constraint(x == 0)
+    >>> candidate = {x.id: 1}
+    >>> assert f.evaluate(candidate) == 5.0
+    >>> assert not instance.evaluate(candidate).feasible
+
+    The {class}`~ommx.Solution` records the problem-level evaluation. To register
+    other quantities to report for each candidate, use {class}`~ommx.NamedFunction`;
+    those quantities do not become objectives or constraints.
+
+    **Construction and polynomial forms**
+
+    Construct a Function from numbers, decision variables, parameters, polynomial
+    objects, or another Function. {class}`~ommx.Linear` stores a linear polynomial,
+    {class}`~ommx.Quadratic` a polynomial of degree at most two, and
+    {class}`~ommx.Polynomial` an arbitrary-degree polynomial. Function is the common
+    wrapper for these forms and for composed scalar expressions.
+
+    >>> from ommx import DecisionVariable, Function, Linear
+    >>> x = DecisionVariable.continuous(0)
+    >>> y = DecisionVariable.continuous(1)
+    >>> constant = Function(3)
+    >>> f = Function(x + 2 * y + 3)
+    >>> by_coefficients = Function(Linear(terms={0: 1, 1: 2}, constant=3))
+    >>> assert f.almost_equal(by_coefficients)
+    >>> assert f.evaluate({0: 1, 1: 0}) == 4.0
+    >>> assert f.linear_terms == {0: 1.0, 1: 2.0}
+    >>> assert f.constant_term == 3.0
+    >>> assert f.terms == {(): 3.0, (0,): 1.0, (1,): 2.0}
+    >>> quadratic = Function(x * x + x * y + y * y)
+    >>> cubic = Function(x * x * x + y * y)
+    >>> assert quadratic.degree() == 2
+    >>> assert cubic.degree() == 3
+
+    Addition, subtraction, multiplication, and negation of stored polynomials are
+    normalized into polynomial form. Terms that become exactly zero through
+    cancellation or floating-point underflow are removed. Finite nonzero coefficients
+    are retained regardless of magnitude; the evaluation tolerance does not prune
+    them. This describes Function arithmetic, not the numerical behavior of a
+    downstream coefficient-format conversion.
+
+    Use {meth}`~ommx.Function.degree` and {meth}`~ommx.Function.num_terms` for polynomial
+    metadata, and {attr}`~ommx.Function.terms`, {attr}`~ommx.Function.linear_terms`,
+    {attr}`~ommx.Function.quadratic_terms`, and {attr}`~ommx.Function.constant_term`
+    for coefficients. Composed expressions return ``None``
+    for degree/term count and raise ``TypeError`` for coefficient properties; these
+    accessors do not expand an expression. {meth}`~ommx.Function.almost_equal` compares coefficients
+    or expression structure, not global mathematical equivalence.
+
+    **Composed scalar operations**
+
+    Use Python arithmetic and ``abs(f)`` to construct expressions, together with
+    {meth}`~ommx.Function.signum`, {meth}`~ommx.Function.minimum`,
+    {meth}`~ommx.Function.maximum`, and {meth}`~ommx.Function.powi`. These calls
+    construct expressions rather than supplying variable values. For pointwise
+    minimum and maximum, use the methods rather than Python's built-in ``min`` and
+    ``max``.
+
+    >>> fx, fy = Function(x), Function(y)
+    >>> assert abs(fx - 3).evaluate({0: 1}) == 2.0
+    >>> assert fx.minimum(fy).evaluate({0: 1, 1: 0}) == 0.0
+    >>> assert (fx / (fy + 1)).evaluate({0: 1, 1: 1}) == 0.5
+    >>> assert (fx ** 2).evaluate({0: 1}) == 1.0
+
+    Division remains a composed expression even with a constant divisor. Except for
+    identity operations and finite constant folding, integer powers also remain
+    composed, including nonnegative powers. To construct an expanded polynomial
+    square, use ``g * g`` rather than ``g ** 2``. See {meth}`~ommx.Function.powi` for the supported
+    exponent types and domain rules.
+
+    The current {class}`~ommx.InstanceClassClause` requirements describe polynomial
+    objectives and constraint bodies. A composed expression therefore needs an
+    appropriate polynomial reformulation before it can be passed to the bundled
+    solver adapters; evaluating it successfully does not establish input-class
+    membership.
+
+    **Evaluation, substitution, and stored order**
+
+    {meth}`~ommx.Function.evaluate` supplies the point-evaluation contract, including tolerance-based
+    zero tests, undefined operations, and non-finite values. {meth}`~ommx.Function.partial_evaluate`
+    returns an expression with selected values substituted and does not fix the
+    tolerance for a later evaluation. {meth}`~ommx.Function.evaluate_bound` returns an enclosing
+    interval, which need not be the tightest possible range.
+
+    Composed expressions retain parentheses and operand order. They evaluate left
+    to right, combining two values per operator application rather than automatically
+    reassociating expressions such as ``(abs(a) + abs(b)) + abs(c)`` and
+    ``abs(a) + (abs(b) + abs(c))``. A domain or overflow error can depend on that
+    order.
+
+    The wire representation uses a flat reverse-Polish-notation (RPN) instruction
+    sequence rather than a recursively nested tree. Its encoding belongs to the
+    [OMMX Message specification](https://github.com/Jij-Inc/ommx/tree/main/proto);
+    constructing a Python Function does not require creating RPN instructions.
+
+    **Read expressions using model labels**
+
+    The context-free ``str`` and ``repr`` representations use variable IDs. For
+    names and subscripts, use {meth}`~ommx.Instance.format_function`, or
+    {meth}`~ommx.Instance.display_function` for a bounded Notebook preview. These
+    operations resolve IDs using the supplied model's labels; they do not remap
+    variables from another model by name. A {class}`~ommx.ParametricInstance` also
+    provides these methods and can resolve parameter labels.
     """
     @property
-    def terms(self) -> dict: ...
+    def terms(self) -> dict:
+        r"""
+        Get all polynomial terms as a dictionary mapping monomial tuples to coefficients.
+
+        The empty tuple denotes the constant term. Repeated IDs denote powers,
+        for example ``(0, 0)`` for the square of variable 0. The dictionary is a
+        snapshot and does not change the Function when edited.
+        Finite nonzero coefficients are not discarded because of their size or
+        the evaluation tolerance; exact cancellation or floating-point underflow
+        may produce zeros during polynomial arithmetic.
+        Raises ``TypeError`` for a composed expression. This property does not
+        expand the expression, including a retained integer power.
+        """
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]:
         r"""
@@ -2413,6 +3592,7 @@ class Function:
         Returns dictionary mapping variable IDs to their linear coefficients.
         Returns empty dict if function has no linear terms.
         Works for all polynomial functions by filtering only degree-1 terms.
+        Raises TypeError if this is a non-polynomial expression function.
         """
     @property
     def quadratic_terms(
@@ -2424,6 +3604,7 @@ class Function:
         Returns dictionary mapping variable ID pairs to their quadratic coefficients.
         Returns empty dict if function has no quadratic terms.
         Works for all polynomial functions by filtering only degree-2 terms.
+        Raises TypeError if this is a non-polynomial expression function.
         """
     @property
     def constant_term(self) -> builtins.float:
@@ -2432,10 +3613,12 @@ class Function:
 
         Returns the constant term. Returns 0.0 if function has no constant term.
         Works for all polynomial functions by filtering the degree-0 term.
+        Raises TypeError if this is a non-polynomial expression function.
         """
     @property
     def type_name(self) -> builtins.str: ...
     def __iadd__(self, rhs: ToFunction) -> Function: ...
+    def __pow__(self, exponent: int, modulo: None = None) -> Function: ...
     def __new__(cls, inner: ToFunction) -> Function:
         r"""
         Create a Function from various types.
@@ -2474,28 +3657,79 @@ class Function:
         Returns Some(Quadratic) if the function can be represented as quadratic,
         None otherwise.
         """
-    def degree(self) -> builtins.int:
+    def degree(self) -> typing.Optional[builtins.int]:
         r"""
-        Get the degree of this function.
+        Return the degree of the stored polynomial, or ``None`` for a composed expression.
 
-        Returns the highest degree of any term in the function.
+        Returns the highest degree of any term in a polynomial function.
         Zero function has degree 0, constant function has degree 0,
         linear function has degree 1, quadratic function has degree 2, etc.
+        This inspects the representation; it does not expand an expression to
+        determine its mathematical degree. For the variable expression
+        ``g = Function(DecisionVariable.continuous(0))``, ``g ** 2`` returns
+        ``None`` while the explicitly multiplied ``g * g`` has degree 2.
         """
-    def num_terms(self) -> builtins.int:
+    def num_terms(self) -> typing.Optional[builtins.int]:
         r"""
         Get the number of terms in this function.
 
         Zero function has 0 terms, constant function has 1 term,
         and polynomial functions have the number of non-zero coefficient terms.
+        Returns ``None`` for composed expressions, even when their mathematical
+        value could be represented by a polynomial. No expansion is performed.
         """
     def almost_equal(
         self, other: ToFunction, atol: builtins.float = 1e-06
-    ) -> builtins.bool: ...
+    ) -> builtins.bool:
+        r"""
+        Compare polynomial coefficients or composed-expression structure within ``atol``.
+
+        For two stored polynomials, compares the coefficient of each monomial;
+        an absent monomial has coefficient zero. Different polynomial storage
+        variants may compare equal. For two composed expressions, operators and
+        evaluation order must match, and polynomial operands are compared with
+        the same coefficient tolerance. A polynomial and a composed expression
+        do not compare equal merely because they evaluate to the same values.
+        This is not a test of global mathematical equivalence.
+
+        - ``other``: Function to compare with.
+        - ``atol``: Positive absolute coefficient tolerance.
+
+        >>> from ommx import DecisionVariable, Function
+        >>> x = Function(DecisionVariable.continuous(0))
+        >>> assert ((x + 1) * (x + 1)).almost_equal(x * x + 2 * x + 1)
+        >>> assert (x * x).almost_equal(x * x)
+        >>> assert not (x ** 2).almost_equal(x * x)
+        """
     def __repr__(self) -> builtins.str: ...
     def __neg__(self) -> Function:
         r"""
         Negation operator
+        """
+    def __abs__(self) -> Function:
+        r"""
+        Absolute value operator
+        """
+    def signum(self) -> Function:
+        r"""
+        Construct the pointwise sign of this function.
+
+        Evaluation returns 0 when ``abs(value) <= atol``, -1 below that interval,
+        and 1 above it. The tolerance is supplied to {meth}`~ommx.Function.evaluate`,
+        not fixed when this expression is constructed or partially evaluated.
+        """
+    def minimum(self, rhs: ToFunction) -> Function:
+        r"""
+        Construct the pointwise minimum of two functions.
+
+        Use this method instead of Python's built-in ``min``, which compares
+        objects rather than constructing an optimization expression.
+        """
+    def maximum(self, rhs: ToFunction) -> Function:
+        r"""
+        Construct the pointwise maximum of two functions.
+
+        Use this method instead of Python's built-in ``max``.
         """
     def __add__(self, rhs: ToFunction) -> Function:
         r"""
@@ -2522,6 +3756,44 @@ class Function:
         r"""
         Reverse multiplication (lhs * self)
         """
+    def __truediv__(self, rhs: ToFunction) -> Function:
+        r"""
+        Construct division by another function, retaining a composed expression.
+
+        This also applies to a constant divisor. The zero-domain check is made
+        by {meth}`~ommx.Function.evaluate` with its ``atol``; constructing the
+        expression does not establish that all inputs lie in its domain.
+        """
+    def __rtruediv__(self, lhs: ToFunction) -> Function:
+        r"""
+        Reverse division (lhs / self)
+        """
+    def powi(self, exponent: builtins.int) -> Function:
+        r"""
+        Raise this function to a signed 32-bit integer power.
+
+        ``f.powi(n)`` and ``f ** n`` construct the same operation. Floating-point
+        or function-valued exponents, reversed exponentiation such as ``2 ** f``,
+        and modular exponentiation are not supported.
+
+        Except for identity operations and finite constant folding, powers
+        remain composed expressions, including nonnegative powers. They are not
+        automatically expanded into polynomial coefficients. Use explicit
+        multiplication, such as ``g * g``, when an expanded polynomial square is
+        required by an input format.
+
+        During {meth}`~ommx.Function.evaluate`, a negative power is undefined when
+        the base has absolute value at most ``atol``. Negative bases are supported because the
+        exponent is integral; zero to the zero power is 1. The operand is still
+        evaluated, so raising an undefined expression to zero does not erase its
+        domain restriction.
+
+        >>> from ommx import DecisionVariable, Function
+        >>> g = Function(DecisionVariable.continuous(0))
+        >>> assert (g ** 2).degree() is None
+        >>> assert (g * g).degree() == 2
+        >>> assert (g ** 0).evaluate({0: 0}) == 1.0
+        """
     def add_scalar(self, scalar: builtins.float) -> Function: ...
     def add_linear(self, linear: Linear) -> Function: ...
     def add_quadratic(self, quadratic: Quadratic) -> Function: ...
@@ -2530,7 +3802,12 @@ class Function:
     def mul_linear(self, linear: Linear) -> Function: ...
     def mul_quadratic(self, quadratic: Quadratic) -> Function: ...
     def mul_polynomial(self, polynomial: Polynomial) -> Function: ...
-    def content_factor(self) -> builtins.float: ...
+    def content_factor(self) -> builtins.float:
+        r"""
+        Return the minimal positive factor that makes all coefficients integers.
+
+        Raises `TypeError` for a composed, non-polynomial Function.
+        """
     def required_ids(self) -> builtins.set[builtins.int]: ...
     @staticmethod
     def random(
@@ -2541,11 +3818,80 @@ class Function:
     ) -> Function: ...
     def evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
-    ) -> builtins.float: ...
+    ) -> builtins.float:
+        r"""
+        Evaluate this expression at the supplied variable values.
+
+        - ``state``: A {class}`~ommx.State` or mapping from variable IDs to values.
+            All IDs required by the expression must be supplied.
+        - ``atol``: Positive absolute tolerance for zero-sensitive operations.
+            If omitted, {func}`~ommx.get_default_atol` supplies it.
+
+        Returns the scalar value of the expression.
+
+        A Function references IDs but does not own variable kinds, bounds, or
+        constraints. This method does not test candidate feasibility or round
+        discrete-variable values; use {meth}`~ommx.Instance.evaluate` for that.
+
+        ``abs(v) <= atol`` is treated as zero, including the boundary. This gives
+        ``signum(v) == 0`` and makes a denominator or a negative-power base in
+        that interval undefined. ``0 ** 0`` is 1, and integer powers of negative
+        bases are supported. Polynomial coefficients are not pruned using this
+        tolerance.
+
+        Composed expressions evaluate operands from left to right and combine
+        two values at each operator application. Parentheses and operation order
+        are retained rather than reassociated. Overflow and domain failures can
+        therefore depend on the represented order. Simplification does not
+        erase the domain of a partial function: ``0 * (1 / f)`` remains undefined
+        where ``f`` is treated as zero.
+
+        Raises ``ValueError`` for a missing required variable value, undefined
+        point operation, or non-finite operand/intermediate result.
+
+        >>> from ommx import Function, Linear
+        >>> f = Function(Linear(terms={0: 1, 1: 2}, constant=3))
+        >>> assert f.evaluate({0: 1, 1: 0}) == 4.0
+        """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
-    ) -> Function: ...
-    def evaluate_bound(self, bounds: typing.Mapping[builtins.int, Bound]) -> Bound:
+    ) -> Function:
+        r"""
+        Substitute supplied variable values and return the remaining Function.
+
+        The original Function is unchanged. Values may cover only some of the
+        required IDs; unresolved variables remain in the returned expression.
+        The concrete {class}`~ommx.Linear`, {class}`~ommx.Quadratic`, and
+        {class}`~ommx.Polynomial` partial-evaluation methods preserve their
+        respective Python types; this method returns a Function.
+
+        Closed subexpressions are folded only when the result is independent of
+        the later evaluation tolerance. ``signum``, division, and negative
+        integer powers remain composed operations even after all their variables
+        are replaced. Construction, substitution, and partial evaluation do not
+        capture a default or supplied ``atol`` for these zero-domain decisions;
+        the subsequent {meth}`~ommx.Function.evaluate` call determines their
+        value or domain.
+
+        - ``state``: Variable-ID/value mapping or {class}`~ommx.State` to substitute.
+        - ``atol``: A positive tolerance; zero-sensitive composed
+            operations are retained rather than resolved with this value.
+
+        >>> from ommx import Function, Linear
+        >>> f = Function(Linear(terms={0: 1, 1: 2}, constant=3))
+        >>> remaining = f.partial_evaluate({0: 1})
+        >>> assert remaining.evaluate({1: 0}) == 4.0
+        >>> x = Function(Linear(terms={0: 1}))
+        >>> sign = x.signum().partial_evaluate({0: 1e-8}, atol=1e-6)
+        >>> assert sign.evaluate({}, atol=1e-6) == 0.0
+        >>> assert sign.evaluate({}, atol=1e-9) == 1.0
+        """
+    def evaluate_bound(
+        self,
+        bounds: typing.Mapping[builtins.int, Bound],
+        *,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> Bound:
         r"""
         Compute an interval bound of this function given variable bounds.
 
@@ -2554,26 +3900,34 @@ class Function:
         **Args:**
 
         - `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.
+        - `atol`: Absolute tolerance used by operations whose semantics depend on
+          whether a value is zero. If omitted, {func}`~ommx.get_default_atol` supplies it.
+          Use the same tolerance when point-evaluating this function.
 
         **Returns:** A {class}`~ommx.Bound` that contains $[\inf f, \sup f]$ over the given variable bounds.
 
-        **Tightness:** This evaluates the bound **term by term** (monomial-wise)
-        and sums the per-term intervals. The result is a **sound
+        **Tightness:** Polynomial leaves are bounded **term by term**
+        (monomial-wise), and composed expression operations combine their operand
+        bounds with interval arithmetic. The result is a **sound
         over-approximation** of the true range $[\inf f, \sup f]$ but is **not
         guaranteed to be tight**, because it ignores dependencies between terms
-        that share variables. For example, $f = x^2 - x$ with $x \in [0, 1]$
-        has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but term-wise
-        evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.
+        or operands that share variables. For example, $f = x^2 - x$ with
+        $x \in [0, 1]$ has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but
+        term-wise evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.
+
+        **Raises:** `RuntimeError` when an interval contains a value treated as
+        zero by `atol` in a denominator or as the base of a negative integer
+        power.
+        Raises `ValueError` if valid bound endpoints cannot be constructed after
+        numeric overflow.
 
         # Examples
 
-        ```python
         >>> from ommx import Function, Linear, Bound
         >>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3
         >>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})
-        >>> (b.lower, b.upper)
-        (3.0, 7.0)
-        ```
+        >>> b.lower <= 3.0 and b.upper >= 7.0
+        True
         """
     def __copy__(self) -> Function: ...
     def __deepcopy__(self, _memo: typing.Any) -> Function: ...
@@ -2815,57 +4169,271 @@ class IndicatorConstraint:
     def __deepcopy__(self, _memo: typing.Any) -> IndicatorConstraint: ...
 
 @typing.final
+class IndicatorConstraintID(ConstraintIDBase):
+    r"""
+    An indicator constraint ID. Unequal to integers and IDs of other constraint families.
+
+    See {class}`~ommx.ConstraintIDBase` for lookup, copying, serialization, and extension contracts.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __lt__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __le__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __gt__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __ge__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __hash__(self) -> builtins.int: ...
+    def __new__(cls, value: builtins.int) -> IndicatorConstraintID:
+        r"""
+        Create a typed ID identifying this constraint family and number.
+
+        The value must be an unsigned 64-bit integer. An ID of another
+        family is not accepted. IDs have no integer conversion protocol.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __reduce__(self) -> tuple[type, tuple[builtins.int]]:
+        r"""
+        Reconstruct the same ID family through its public constructor.
+        The numeric payload is used only by the serialization protocol.
+        """
+    def __copy__(self) -> IndicatorConstraintID:
+        r"""
+        IDs are immutable; copying preserves the same typed identity.
+        """
+    def __deepcopy__(self, _memo: typing.Any) -> IndicatorConstraintID:
+        r"""
+        IDs are immutable, including when nested in copied containers.
+        """
+
+class InfeasibleDetected(builtins.RuntimeError):
+    r"""
+    The mathematical model was proven infeasible.
+    """
+
+    ...
+
+@typing.final
 class Instance:
     r"""
-    Optimization problem instance.
+    An optimization problem with variable domains, an objective, and constraints.
 
-    This class also contains annotations like {attr}`~ommx.Instance.title`.
-    OMMX-defined annotations are stored in explicit protobuf fields, while
-    user-defined annotations are stored in the protobuf annotation map and
-    mirrored to OMMX Artifact descriptors.
+    An Instance defines which assignments are feasible and how their objective
+    values are computed independently of a solver. Its main components are:
 
-    # Examples
+    - {attr}`~ommx.Instance.decision_variables`: variables and their domains.
+    - {attr}`~ommx.Instance.objective`: the objective {class}`~ommx.Function`.
+    - {attr}`~ommx.Instance.constraints`: all active regular and special constraints.
+    - {attr}`~ommx.Instance.sense`: whether the objective is minimized or maximized.
 
-    Create an instance for KnapSack Problem
+    Regular constraints have the form ``f(x) == 0`` or ``f(x) <= 0``;
+    ``f(x) >= 0`` is represented as ``-f(x) <= 0``. Special constraints express
+    structure directly, such as conditional constraints
+    ({class}`~ommx.IndicatorConstraint`), exactly one selected binary variable
+    ({class}`~ommx.OneHotConstraint`), or at most one nonzero variable
+    ({class}`~ommx.Sos1Constraint`). They are conditions of the problem, not
+    instructions to a particular solver. See {class}`~ommx.InstanceClass` for
+    the separate question of which representations a solver adapter accepts.
 
-    ```python
-    >>> from ommx import Instance, DecisionVariable
-    ```
+    **Build and evaluate a problem**
 
-    Profit and weight of items
+    This problem maximizes ``x + y`` subject to ``x * y == 0``, with binary
+    variables. {meth}`~ommx.Instance.maximize` starts an empty maximization
+    problem; use {meth}`~ommx.Instance.minimize` for minimization.
 
-    ```python
-    >>> p = [10, 13, 18, 31, 7, 15]
-    >>> w = [11, 15, 20, 35, 10, 33]
-    ```
+    >>> from ommx import Instance
+    >>> instance = Instance.maximize()
+    >>> x = instance.new_binary("x")
+    >>> y = instance.new_binary("y")
+    >>> instance.objective = x + y
+    >>> exclusive = instance.add_constraint(x * y == 0, "exclusive")
+    >>> solution = instance.evaluate({x.id: 1, y.id: 0})
+    >>> assert solution.feasible
+    >>> assert solution.objective == 1.0
 
-    Decision variables
+    The ``new_*`` methods and {meth}`~ommx.Instance.add_constraint` assign IDs
+    automatically and return attached handles. IDs remain accessible through
+    ``x.id`` and ``exclusive.constraint_id``. {meth}`~ommx.Instance.evaluate`
+    accepts a {class}`~ommx.State` or an ID-to-value dictionary and returns a
+    {class}`~ommx.Solution`. Evaluation checks the supplied candidate; it does
+    not search for a better one or establish optimality.
 
-    ```python
-    >>> x = [DecisionVariable.binary(i) for i in range(6)]
-    ```
+    Use {meth}`~ommx.Instance.from_components` when components already have
+    explicit IDs. The Instance validates that expressions and special
+    constraints refer to variables defined in that Instance.
 
-    Objective and constraint
-
-    ```python
-    >>> objective = sum(p[i] * x[i] for i in range(6))
-    >>> constraint = sum(w[i] * x[i] for i in range(6)) <= 47
-    ```
-
-    Compose as an instance
-
-    ```python
-    >>> instance = Instance.from_components(
-    ...     decision_variables=x,
-    ...     objective=objective,
-    ...     constraints=[constraint],
-    ...     sense=Instance.MAXIMIZE,
+    >>> from ommx import ConstraintID, DecisionVariable, Instance, Sense
+    >>> a = DecisionVariable.binary(10, name="a")
+    >>> assembled = Instance.from_components(
+    ...     decision_variables=[a], objective=a, constraints={7: a <= 1},
+    ...     sense=Sense.Maximize,
     ... )
-    ```
+    >>> assert ConstraintID(7) in assembled.constraints
+    >>> assert assembled.evaluate({a.id: 1}).feasible
+
+    **Variable domains and modeling labels**
+
+    A variable's ``kind``, ``lower``, and ``upper`` define its domain. Binary
+    variables take 0 or 1, Integer variables take integers within their bounds,
+    and Continuous variables take real values within their bounds.
+    SemiInteger and SemiContinuous additionally allow zero even when zero is
+    outside the specified interval.
+
+    >>> from ommx import Instance
+    >>> typed = Instance.minimize()
+    >>> flag = typed.new_binary("flag")
+    >>> count = typed.new_integer("count", lower=0, upper=10)
+    >>> amount = typed.new_continuous("amount", lower=0)
+    >>> batch = typed.new_semi_integer("batch", lower=2, upper=10)
+    >>> rate = typed.new_semi_continuous("rate", lower=0.5, upper=4)
+
+    Here ``batch`` permits 0 and the integers from 2 through 10; ``rate``
+    permits 0 and real values from 0.5 through 4. Each ``new_*`` method
+    documents its bound normalization, tolerance, and validation rules. An
+    invalid definition is rejected before adding the variable or its label.
+
+    Variables and constraints also carry ``name``, ``subscripts``,
+    ``parameters``, and ``description`` labels. For example, ``name="x"``
+    and ``subscripts=[i]`` describe a source-model variable ``x_i``;
+    ``parameters`` stores string-valued indices. Labels support display and
+    analysis without changing the mathematical conditions. Names need not be
+    unique: identity is determined by IDs, not names or labels.
+    All ``new_*`` methods and {meth}`~ommx.Instance.add_constraint` accept
+    these labels. For ``add_constraint``, omitted labels preserve the input
+    constraint's labels.
+
+    {meth}`~ommx.Instance.decision_variables_df` collects definitions and
+    labels into a pandas DataFrame. {meth}`~ommx.Instance.format_function` and
+    {meth}`~ommx.Instance.display_function` use the Instance's variable labels
+    to display expressions; a Function alone retains only variable IDs.
+    After evaluation, {meth}`~ommx.Solution.extract_decision_variables` uses
+    names and subscripts to retrieve values for application-level analysis.
+
+    **Constraint identity and access**
+
+    Constraint numbers are unique across all families in one Instance,
+    including removed constraints. Their numbering is separate from variable
+    IDs. Supply distinct numbers across the regular and special-constraint
+    mappings passed to {meth}`~ommx.Instance.from_components`.
+
+    {attr}`~ommx.Instance.constraints` is a live collection of all active
+    families. A typed ID identifies both the family and the number. Bare
+    integers are rejected by this heterogeneous collection even though
+    constraint numbers are globally unique within the Instance. Obtaining
+    the collection does not collect rows; each row is fetched when accessed.
+    {attr}`~ommx.Instance.removed_constraints` exposes retained constraints
+    that are no longer active.
+
+    >>> from ommx import ConstraintID, Instance
+    >>> model = Instance.minimize()
+    >>> selected = model.new_binary("selected")
+    >>> added = model.add_constraint(selected == 1, "required")
+    >>> assert added.constraint_id == ConstraintID(0)
+    >>> assert model.constraints[added.constraint_id].name == "required"
+    >>> assert list(model.constraints) == [added.constraint_id]
+
+    Use {meth}`~ommx.Instance.constraints_df` with an explicit ``kind``, such
+    as ``kind="regular"``, to collect one family into a DataFrame. Collection
+    lookup and iteration contracts belong to {class}`~ommx.ConstraintCollection`.
+
+    **Edit the Instance through attached handles**
+
+    {attr}`~ommx.Instance.decision_variables`,
+    {meth}`~ommx.Instance.attached_decision_variable`, and active constraint
+    lookups return attached handles. Their label setters update the owning
+    Instance. The following example updates a variable and a regular constraint
+    after construction; the same operations work on a loaded Instance.
+    ``set_name``, ``set_description``, ``set_subscripts``, and ``set_parameters``
+    replace their fields; ``add_subscripts`` appends indices and
+    ``add_parameter`` / ``add_parameters`` merge parameter entries.
+
+    >>> from ommx import Instance
+    >>> labeled = Instance.maximize()
+    >>> choice = labeled.new_binary("choice")
+    >>> labeled.objective = choice
+    >>> rule = labeled.add_constraint(choice <= 1, "limit")
+    >>> variable = labeled.attached_decision_variable(choice.id)
+    >>> constraint = labeled.constraints[rule.constraint_id]
+    >>> variable.set_name("selected")
+    >>> variable.set_subscripts([0])
+    >>> variable.set_description("Whether product 0 is selected")
+    >>> constraint.set_name("selection_limit")
+    >>> assert labeled.attached_decision_variable(choice.id).name == "selected"
+    >>> assert labeled.constraints[rule.constraint_id].name == "selection_limit"
+
+    Changing labels preserves IDs and mathematical conditions. Set labels
+    before evaluation when the resulting Solution should carry them. By
+    contrast, ``detach()`` and
+    {meth}`~ommx.Instance.get_decision_variable_by_id` return independent
+    snapshots. Editing a snapshot or a DataFrame does not write back to the
+    Instance.
+
+    >>> snapshot = constraint.detach()
+    >>> _ = snapshot.set_name("snapshot_only")
+    >>> table = labeled.decision_variables_df()
+    >>> table.loc[choice.id, "name"] = "table_only"
+    >>> assert labeled.constraints[rule.constraint_id].name == "selection_limit"
+    >>> assert labeled.attached_decision_variable(choice.id).name == "selected"
+
+    **Retained variables and output evaluation**
+
+    {attr}`~ommx.Instance.decision_variables` contains every retained variable.
+    {attr}`~ommx.Instance.used_decision_variables` selects variables used in
+    the current objective or active constraints. Fixed and dependent variables
+    remain defined so that evaluation can reconstruct their values, although
+    the solver no longer chooses those values directly.
+
+    >>> from ommx import Instance
+    >>> original = Instance.maximize()
+    >>> x = original.new_binary("x")
+    >>> y = original.new_binary("y")
+    >>> original.objective = x + y
+    >>> fixed = original.partial_evaluate({x.id: 1})
+    >>> assert {v.id for v in fixed.decision_variables} == {x.id, y.id}
+    >>> assert {v.id for v in fixed.used_decision_variables} == {y.id}
+    >>> assert fixed.evaluate({y.id: 0}).state.entries == {x.id: 1.0, y.id: 0.0}
+
+    Instances can retain information used only to interpret results:
+    {class}`~ommx.NamedFunction` expressions for reporting metrics, removed
+    constraints for checking original conditions, and an
+    {class}`~ommx.OutputObjective` separate from the current solver-facing
+    objective. A variable appearing only in this information is not thereby
+    a used variable. {meth}`~ommx.Instance.populate_state` restores fixed and
+    dependent values before evaluation. An otherwise irrelevant variable is
+    assigned a default when omitted; that default is not a reconstructed
+    candidate value. Supply its value explicitly when it matters to the output.
+
+    Reconstruction does not by itself establish feasibility or equivalence
+    between the original and transformed optimization problems. Read the
+    guarantees of each transformation, such as {meth}`~ommx.Instance.substitute`,
+    and the output semantics of {meth}`~ommx.Instance.evaluate`.
+
+    For example, changing only the active objective can preserve the objective
+    reported after evaluation, including when all solver-input variables have
+    been fixed:
+
+    >>> from ommx import DecisionVariable, Instance, Sense
+    >>> x = DecisionVariable.binary(0)
+    >>> instance = Instance.from_components(
+    ...     decision_variables=[x], objective=3 * x, constraints={},
+    ...     sense=Sense.Maximize,
+    ... )
+    >>> assert instance.convert_active_objective(Sense.Minimize)
+    >>> fixed = instance.partial_evaluate({0: 1})
+    >>> assert fixed.sense == Sense.Minimize
+    >>> assert fixed.objective.evaluate({}) == -3.0
+    >>> assert fixed.required_ids() == set()
+    >>> assert fixed.used_decision_variables == []
+    >>> assert fixed.populate_state({}).entries == {0: 1.0}
+    >>> solution = fixed.evaluate({})
+    >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)
     """
 
     MAXIMIZE: Sense
+    r"""
+    Compatibility alias for {attr}`Sense.Maximize`.
+    """
     MINIMIZE: Sense
+    r"""
+    Compatibility alias for {attr}`Sense.Minimize`.
+    """
     Description: type[InstanceDescription]
     @property
     def annotations(self) -> types.MappingProxyType[str, str]:
@@ -2900,11 +4468,92 @@ class Instance:
     @created.setter
     def created(self, value: datetime.datetime) -> None: ...
     @property
-    def sense(self) -> Sense: ...
+    def constraint_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Unique names across all constraint families, as a set of strings.
+
+        Only active constraints are included.
+        The scope matches `extract_constraints`. Unnamed constraints are excluded;
+        an explicitly empty name is included. Duplicate names appear once, even
+        when extraction would reject duplicate subscripts.
+        Each access returns a fresh set; editing it does not change this owner.
+        """
     @property
-    def objective(self) -> Function: ...
+    def sense(self) -> Sense:
+        r"""
+        Active optimization sense used by the solver-facing formulation.
+
+        # Postconditions
+
+        The property reports the active sense even when evaluation uses a distinct output sense.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> assert instance.sense == Sense.Minimize
+        >>> assert instance.evaluate({0: 1}).sense == Sense.Maximize
+        """
+    @property
+    def objective(self) -> Function:
+        r"""
+        Active objective used by the solver-facing formulation.
+
+        # Postconditions
+
+        Assignment replaces the active objective and rebases subsequent output evaluation onto it.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> assert instance.objective.evaluate({0: 1}) == -1.0
+        >>> instance.objective = 2 * x
+        >>> solution = instance.evaluate({0: 1})
+        >>> assert instance.sense == Sense.Minimize
+        >>> assert (solution.sense, solution.objective) == (Sense.Minimize, 2.0)
+        """
     @objective.setter
     def objective(self, value: ToFunction) -> None: ...
+    @property
+    def output_objective(self) -> typing.Optional[OutputObjective]:
+        r"""
+        Read-only output objective used by {meth}`~ommx.Instance.evaluate` and
+        {meth}`~ommx.Instance.evaluate_samples`, if one has been captured.
+
+        A newly constructed Instance has no output objective; evaluation uses
+        its active {attr}`~ommx.Instance.objective` and {attr}`~ommx.Instance.sense`.
+        Transformations can capture a separate objective and sense for reporting.
+        See {meth}`~ommx.Instance.convert_active_objective` for a complete example
+        contrasting solver-facing and reported values. Capturing an output
+        objective does not itself prove feasibility or optimality.
+
+        # Postconditions
+
+        Absence and an explicit output objective equal to the active pair remain distinct.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> assert instance.output_objective is None
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> output = instance.output_objective
+        >>> assert output is not None
+        >>> assert output.sense == Sense.Maximize
+        >>> assert output.function.evaluate({0: 1}) == 3.0
+        >>> assert output.preserves_optimality
+        >>> assert instance.convert_active_objective(Sense.Maximize)
+        >>> output = instance.output_objective
+        >>> assert output is not None
+        >>> assert output.sense == instance.sense
+        >>> assert output.function.almost_equal(instance.objective)
+        """
     @property
     def decision_variable_names(self) -> builtins.set[builtins.str]:
         r"""
@@ -2930,86 +4579,75 @@ class Instance:
         independent {class}`~ommx.DecisionVariable` snapshot.
         """
     @property
-    def constraints(self) -> builtins.dict[builtins.int, AttachedConstraint]:
+    def constraints(self) -> ConstraintCollection:
         r"""
-        Dict of all active constraints in the instance keyed by their IDs.
+        Live mapping of all active constraint families, keyed by typed IDs.
+        The view retains this owner and fetches each constraint on demand.
+        """
+    @property
+    def active_special_constraint_kinds(self) -> builtins.set[SpecialConstraintKind]:
+        r"""
+        The kinds of active special constraints this instance currently uses.
 
-        Each value is an {class}`~ommx.AttachedConstraint`: a write-through
-        handle whose getters read from this instance's SoA store and whose
-        context setters write back through to it. Use
-        {meth}`~ommx.AttachedConstraint.detach` to materialize a
-        {class}`~ommx.Constraint` snapshot if you need an independent copy.
+        Returns the set of {class}`~ommx.SpecialConstraintKind` values corresponding
+        to non-empty active (non-removed) special constraint collections. An
+        empty set means the instance has no active special constraints.
         """
     @property
-    def indicator_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, AttachedIndicatorConstraint]:
+    def removed_constraints(self) -> RemovedConstraintCollection:
         r"""
-        Dict of all active indicator constraints in the instance keyed by
-        their IDs.
+        Live mapping of retained constraints that are no longer active.
 
-        Each value is an {class}`~ommx.AttachedIndicatorConstraint`: a
-        write-through handle whose getters read from this instance's SoA
-        store and whose context setters write back through to it.
-        """
-    @property
-    def removed_indicator_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, RemovedIndicatorConstraint]:
-        r"""
-        Dict of all removed indicator constraints in the instance keyed by their IDs.
-        """
-    @property
-    def one_hot_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, AttachedOneHotConstraint]:
-        r"""
-        Dict of all active one-hot constraints in the instance keyed by their IDs.
+        Active constraints in {attr}`~ommx.Instance.constraints` define the current
+        solver-facing formulation. Removed constraints remain available for evaluation
+        and inspection, but are not imposed as active conditions. Both collections
+        include regular constraints and supported special-constraint families, currently
+        Indicator, OneHot, and SOS1, keyed by their typed IDs.
 
-        Each value is an {class}`~ommx.AttachedOneHotConstraint`: a
-        write-through handle whose getters read from this instance's SoA
-        store and whose context setters write back through to it.
-        """
-    @property
-    def removed_one_hot_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, RemovedOneHotConstraint]:
-        r"""
-        Dict of all removed one-hot constraints in the instance keyed by their IDs.
-        """
-    @property
-    def sos1_constraints(self) -> builtins.dict[builtins.int, AttachedSos1Constraint]:
-        r"""
-        Dict of all active SOS1 constraints in the instance keyed by their IDs.
+        The returned {class}`~ommx.RemovedConstraintCollection` keeps this Instance alive
+        and observes subsequent owner changes. Each lookup returns an independent
+        snapshot with labels, provenance, and the removal reason; editing a snapshot
+        does not change the Instance. See that class for lookup and iteration semantics.
 
-        Each value is an {class}`~ommx.AttachedSos1Constraint`: a
-        write-through handle whose getters read from this instance's SoA
-        store and whose context setters write back through to it.
-        """
-    @property
-    def removed_sos1_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, RemovedSos1Constraint]:
-        r"""
-        Dict of all removed SOS1 constraints in the instance keyed by their IDs.
-        """
-    @property
-    def required_capabilities(self) -> builtins.set[AdditionalCapability]:
-        r"""
-        The non-standard constraint capabilities this instance currently uses.
+        **Removal records a change, not its mathematical guarantee**
 
-        Returns the set of :class:`AdditionalCapability` values corresponding to
-        the active (non-removed) constraint collections the instance contains.
-        An empty set means the instance only uses regular constraints.
+        Different operations retain removed constraints for different reasons:
 
-        Callers can diff this against an adapter's
-        ``ADDITIONAL_CAPABILITIES`` to see what would be converted, or use
-        :meth:`reduce_capabilities` to perform the conversion.
-        """
-    @property
-    def removed_constraints(self) -> builtins.dict[builtins.int, RemovedConstraint]:
-        r"""
-        Dict of all removed constraints in the instance keyed by their IDs.
+        | Operation | Active formulation | Retained information |
+        | --- | --- | --- |
+        | {meth}`~ommx.Instance.relax_constraint` or {meth}`~ommx.Instance.relax_indicator_constraint` | Omits the selected condition | The condition and caller-supplied removal reason |
+        | Special-constraint lowering, such as {meth}`~ommx.Instance.convert_one_hot_to_constraint` | Represents the condition using regular constraints | The original special constraint; generated constraints carry provenance |
+        | {meth}`~ommx.Instance.penalty_method` | Replaces regular constraints with weighted objective terms | The constraints to check independently of the penalized objective |
+        | Removal of trivial constraints during preprocessing | Omits conditions found unnecessary by that operation | The removed conditions and their reasons |
+
+        The presence of removed constraints alone therefore does not establish
+        equivalence, relaxation, or preservation of optimal solutions. Read the owning
+        transformation's applicability and guarantee; in particular, a finite penalty
+        weight does not by itself guarantee that the selected candidate satisfies the
+        removed constraints.
+
+        **Evaluation and inspection**
+
+        {meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Instance.evaluate_samples`
+        evaluate both active and removed constraints after restoring and completing
+        variable values through {meth}`~ommx.Instance.populate_state`.
+        {attr}`~ommx.Solution.feasible` includes all retained constraints;
+        {attr}`~ommx.Solution.feasible_relaxed` excludes removed constraints. Both also
+        check every retained variable's kind and bounds. The corresponding
+        {attr}`~ommx.SampleSet.feasible` and {attr}`~ommx.SampleSet.feasible_relaxed`
+        properties return these judgments by sample ID.
+
+        A variable used only in removed constraints may be irrelevant to the active
+        formulation. If omitted, its default is used for evaluation. Supply its actual
+        value when checking a particular candidate; the default is not a recovered
+        solver choice.
+
+        For a table of active and removed rows, use
+        {meth}`~ommx.Instance.constraints_df` with `removed=True` and an explicit
+        `kind`. On a Solution, use {meth}`~ommx.Solution.constraints_df` with
+        `include=("removed_reason",)` to inspect removal reasons alongside evaluated
+        values and violations. The complete relax, evaluate, inspect, and restore
+        example is in {meth}`~ommx.Instance.relax_constraint`.
         """
     @property
     def named_functions(self) -> builtins.list[NamedFunction]:
@@ -3019,7 +4657,21 @@ class Instance:
     @property
     def description(self) -> typing.Optional[InstanceDescription]: ...
     @property
-    def used_decision_variables(self) -> builtins.list[DecisionVariable]: ...
+    def used_decision_variables(self) -> builtins.list[DecisionVariable]:
+        r"""
+        Decision variables used by the mathematical solver input.
+
+        This list contains the variables referenced by the objective or by an
+        active regular, Indicator, OneHot, or SOS1 constraint. Variables
+        referenced only by the output objective, named functions, removed
+        constraints, or the right-hand side of a decision-variable dependency
+        are excluded. Fixed, dependent, and irrelevant variables are also
+        excluded; {meth}`~ommx.Instance.evaluate` and
+        {meth}`~ommx.Instance.evaluate_samples` populate their output values from
+        stored values, dependencies, or defaults respectively.
+        See {meth}`~ommx.Instance.populate_state` for the complete reconstruction
+        and default rules and examples of retained versus used variables.
+        """
     def replace_annotations(
         self, annotations: typing.Mapping[builtins.str, builtins.str]
     ) -> None: ...
@@ -3045,25 +4697,153 @@ class Instance:
     def get_user_annotations(
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def tighten_bounds_simultaneously_once(
+        self,
+        *,
+        max_terms: builtins.int = 32,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> builtins.dict[builtins.int, Bound]:
+        r"""
+        Apply one simultaneous bound-tightening pass using all active regular constraints.
+
+        Calls {meth}`tighten_bounds_simultaneously_once_using_constraints` with
+        every active regular constraint ID and the same ``max_terms`` limit.
+        Non-affine rows and rows exceeding ``max_terms`` variable terms are skipped. All
+        rows read the bounds at entry, and updates are applied together once.
+        Returns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.
+        The same tolerance, supported-domain and atomicity rules apply as for
+        the explicitly selected form.
+        ``max_terms`` defaults to 32 and excludes the constant term.
+
+        # Examples
+
+        A second call can propagate a bound learned by the first call. These
+        methods perform a single pass each, rather than iterating to a fixed point.
+
+        >>> from ommx import Bound, Instance
+        >>> instance = Instance.minimize()
+        >>> x = instance.new_integer("x", lower=0, upper=10)
+        >>> y = instance.new_integer("y", lower=0, upper=10)
+        >>> _ = instance.add_constraint(x <= 2)
+        >>> _ = instance.add_constraint(y <= x)
+        >>> assert instance.tighten_bounds_simultaneously_once() == {x.id: Bound(0, 2)}
+        >>> assert instance.tighten_bounds_simultaneously_once(max_terms=64) == {y.id: Bound(0, 2)}
+        >>> assert instance.tighten_bounds_simultaneously_once() == {}
+        """
+    def tighten_bounds_simultaneously_once_using_constraints(
+        self,
+        constraint_ids: typing.AbstractSet[ConstraintID | builtins.int],
+        *,
+        max_terms: builtins.int = 32,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> builtins.dict[builtins.int, Bound]:
+        r"""
+        Apply one simultaneous bound-tightening pass using selected regular constraints.
+
+        ``constraint_ids`` is a set of active regular constraint IDs. Unknown
+        and removed IDs are errors; an empty set applies no updates. Selected
+        non-affine rows are skipped. All eligible variables in the selected
+        rows may have their bounds tightened.
+        Only compact polynomial functions of degree at most one are used;
+        composed expressions are skipped even when mathematically affine.
+
+        ``max_terms`` limits each affine row to this many variable terms
+        (default: 32). The constant term does not count. Rows exceeding the
+        limit are skipped before domain lookup or candidate evaluation. Terms
+        of fixed, semi and dependent variables still count. With a zero limit,
+        only constant rows are processed, including contradiction detection.
+
+        Returns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.
+        Every row reads the bounds at entry; all updates are collected and applied
+        together. Newly tightened bounds are not reused during this call. Call
+        again to propagate changes through further rows.
+        Candidate extrema are combined before comparing changes with ``atol``.
+        When continuous stored endpoints cross but their tolerated domains overlap,
+        use the interval between the endpoints, intersected with the entry bounds.
+        Both sides of equalities are used. Tolerance is accounted for algebraically:
+        continuous domains expand to ``[lower - atol, upper + atol]``, and row
+        residuals may be at most ``atol``. For ``a*x + r <= 0`` with ``a > 0``,
+        the limit is ``(atol - min(r)) / a``. Subtract ``atol`` to store a continuous
+        upper bound, or round down for an integer/binary upper bound. Negative
+        coefficients give the corresponding lower bound. Changes within ``atol``
+        are ignored.
+
+        Residual intervals use {meth}`~ommx.Function.evaluate_bound`; candidate
+        arithmetic uses ordinary floating-point operations. No point-evaluation
+        boundary is searched. Rounding, cancellation and evaluation order can
+        change feasibility near numerical boundaries, even when subsequent
+        evaluation uses the same ``atol``.
+
+        Only the selected active regular constraints are used; special
+        constraints do not contribute. Infinite domain endpoints are allowed:
+        an initially unbounded variable can acquire a finite bound. An upper/lower
+        candidate with a non-finite required residual or boundary calculation is
+        skipped; other candidates in the same row are still processed. Semi-variable domains include
+        zero when deriving other bounds, but semi, fixed and dependent variables
+        are not changed. This is not a complete infeasibility detector.
+
+        Requires finite ``0 < atol < 1``. On failure the instance is unchanged.
+        If omitted, {func}`~ommx.get_default_atol` supplies the tolerance.
+
+        # Examples
+
+        Select existing constraint IDs from a complete problem. With
+        ``atol=0.125``, the row ``2*x <= 6`` permits ``x <= 3.0625``. The
+        continuous bound's own tolerance is subtracted, so its stored upper
+        endpoint becomes ``2.9375``. Row 101 is not selected here and does not
+        impose a lower bound.
+
+        >>> from ommx import Bound, ConstraintID, DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.continuous(0)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=0, sense=Sense.Minimize,
+        ...     constraints={100: 2 * x <= 6, 101: x >= -2},
+        ... )
+        >>> changed = instance.tighten_bounds_simultaneously_once_using_constraints(
+        ...     {ConstraintID(100)}, max_terms=64, atol=0.125,
+        ... )
+        >>> assert changed == {x.id: Bound(float("-inf"), 2.9375)}
+        >>> assert instance.get_decision_variable_by_id(x.id).bound == changed[x.id]
+        """
     @staticmethod
-    def from_v1_bytes(bytes: bytes) -> Instance: ...
+    def from_v1_bytes(bytes: bytes) -> Instance:
+        r"""
+        Deserialize an instance from v1 protobuf bytes.
+
+        Raises {class}`ValueError` if the protobuf payload is malformed or
+        semantically invalid.
+        """
     @staticmethod
-    def from_v2_bytes(bytes: bytes) -> Instance: ...
+    def from_v2_bytes(bytes: bytes) -> Instance:
+        r"""
+        Deserialize an instance from v2 protobuf bytes.
+
+        Raises {class}`ValueError` if the protobuf payload is malformed or
+        semantically invalid.
+        """
     @staticmethod
     def from_components(
         *,
         sense: Sense,
         objective: ToFunction,
         decision_variables: typing.Sequence[DecisionVariable],
-        constraints: typing.Mapping[builtins.int, Constraint],
+        constraints: typing.Mapping[ConstraintID, Constraint]
+        | typing.Mapping[builtins.int, Constraint]
+        | typing.Mapping[ConstraintID | builtins.int, Constraint],
         indicator_constraints: typing.Optional[
-            typing.Mapping[builtins.int, IndicatorConstraint]
+            typing.Mapping[IndicatorConstraintID, IndicatorConstraint]
+            | typing.Mapping[builtins.int, IndicatorConstraint]
+            | typing.Mapping[IndicatorConstraintID | builtins.int, IndicatorConstraint]
         ] = None,
         one_hot_constraints: typing.Optional[
-            typing.Mapping[builtins.int, OneHotConstraint]
+            typing.Mapping[OneHotConstraintID, OneHotConstraint]
+            | typing.Mapping[builtins.int, OneHotConstraint]
+            | typing.Mapping[OneHotConstraintID | builtins.int, OneHotConstraint]
         ] = None,
         sos1_constraints: typing.Optional[
-            typing.Mapping[builtins.int, Sos1Constraint]
+            typing.Mapping[Sos1ConstraintID, Sos1Constraint]
+            | typing.Mapping[builtins.int, Sos1Constraint]
+            | typing.Mapping[Sos1ConstraintID | builtins.int, Sos1Constraint]
         ] = None,
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
@@ -3071,11 +4851,16 @@ class Instance:
         r"""
         Create an instance from its components.
 
+        Constraint mappings accept integer keys or IDs of the matching family.
+        Integers are promoted to that family's ID. IDs of another family raise
+        {class}`TypeError`; keys that become duplicates raise {class}`ValueError`.
+        Returned collections always use typed IDs.
+
         **Args:**
         - `sense`: Optimization sense (minimize or maximize)
         - `objective`: Objective function
         - `decision_variables`: List of decision variables
-        - `constraints`: List of constraints
+        - `constraints`: Mapping from regular constraint IDs to constraints
         - `named_functions`: Optional list of named functions
         - `description`: Optional instance description
 
@@ -3090,28 +4875,88 @@ class Instance:
 
         # Examples
 
-        ```python
-        >>> from ommx import Instance
+        >>> from ommx import Instance, Sense
         >>> instance = Instance.minimize()
-        >>> instance.sense == Instance.MINIMIZE
+        >>> instance.sense == Sense.Minimize
         True
-        ```
         """
     @staticmethod
     def minimize() -> Instance:
         r"""
         Create an empty minimization instance with a zero objective.
 
-        Decision variables and constraints can be added incrementally with
-        {meth}`new_binary` and {meth}`add_constraint`.
+        Decision variables and constraints can be added incrementally with the
+        `new_*` methods and {meth}`add_constraint`.
         """
     @staticmethod
     def maximize() -> Instance:
         r"""
         Create an empty maximization instance with a zero objective.
 
-        Decision variables and constraints can be added incrementally with
-        {meth}`new_binary` and {meth}`add_constraint`.
+        Decision variables and constraints can be added incrementally with the
+        `new_*` methods and {meth}`add_constraint`.
+        """
+    def state_from_named_values(self, values: NamedState) -> State:
+        r"""
+        Create an ID-keyed {class}`~ommx.State` from values grouped by name and subscripts.
+
+        >>> from ommx import Instance, NamedState
+        >>> instance = Instance.minimize()
+        >>> x = instance.new_binary("x", subscripts=[0])
+        >>> values: NamedState = {"x": {(0,): 1.0}}
+        >>> state = instance.state_from_named_values(values)
+        >>> state.entries == {x.id: 1.0}
+        True
+
+        Use tuple keys: `()` for scalars, `(i,)` for one-dimensional variables,
+        and `(i, j)` for two-dimensional variables. This also accepts the output
+        of {meth}`~ommx.Solution.extract_all_decision_variables`, resolving IDs
+        against this instance even when the source solution used different IDs.
+
+        Partial states and empty mappings are accepted. Omitted variables are
+        not filled or inferred. Conversion does not validate values against
+        kind, bounds, fixed values, or dependencies, or require finite values;
+        use {meth}`~ommx.Instance.evaluate` for validation.
+
+        Only names and subscripts identify variables; parameters and descriptions
+        are ignored. Unnamed variables cannot be addressed. Raises `KeyError`
+        for an unknown name/subscript pair and `ValueError` when a supplied pair
+        matches multiple variables. In that case, use an ID-keyed state to
+        distinguish them. Ambiguous labels not supplied are allowed.
+        Input keys that repeat after string or integer normalization also raise
+        `ValueError` instead of overwriting earlier values.
+        Neither this instance nor the input mapping is modified.
+
+        **Reuse a candidate after rebuilding a model**
+
+        A rebuilt model can assign different IDs to the same labeled variables.
+        Extract labels from the source result, then resolve them against the
+        target. The source candidate is feasible here, but the target tightens
+        the bound of ``y`` from 3 to 1:
+
+        >>> from ommx import Instance
+        >>> source = Instance.maximize()
+        >>> x = [source.new_binary("x", subscripts=[i]) for i in range(2)]
+        >>> y = source.new_integer("y", lower=0, upper=3)
+        >>> source.objective = 3 * x[0] + 5 * x[1] + y
+        >>> _ = source.add_constraint(x[0] + x[1] <= 1)
+        >>> solution = source.evaluate({x[0].id: 1, x[1].id: 0, y.id: 2})
+        >>> assert solution.feasible
+        >>> named_values = solution.extract_all_decision_variables()
+        >>> target = Instance.maximize()
+        >>> target_y = target.new_integer("y", lower=0, upper=1)
+        >>> target_x1 = target.new_binary("x", subscripts=[1])
+        >>> target_x0 = target.new_binary("x", subscripts=[0])
+        >>> target.objective = 3 * target_x0 + 5 * target_x1 + target_y
+        >>> _ = target.add_constraint(target_x0 + target_x1 <= 1)
+        >>> state = target.state_from_named_values(named_values)
+        >>> assert state.entries == {target_x0.id: 1.0, target_x1.id: 0.0, target_y.id: 2.0}
+        >>> assert not target.evaluate(state).feasible
+
+        Matching labels transfers the values; it does not establish feasibility
+        for the new problem. Unnamed variables and other values omitted from the
+        extraction are not transferred. If the state is to be used as a solver's
+        initial candidate, also consult that adapter's ``initial_state`` contract.
         """
     def add_decision_variable(
         self, variable: DecisionVariable
@@ -3125,14 +4970,15 @@ class Instance:
         label updates. The original wrapper is not modified.
 
         Raises {class}`ValueError` if the variable's id collides with an
-        existing variable, parameter, or substitution-dependency key.
+        existing decision variable. Substituted variables retain their ids and
+        therefore also count as existing decision variables.
         """
     def new_binary(
         self,
         name: typing.Optional[builtins.str] = None,
         *,
         subscripts: typing.Sequence[builtins.int] = [],
-        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        parameters: collections.abc.Mapping[str, str] = {},
         description: typing.Optional[builtins.str] = None,
     ) -> AttachedDecisionVariable:
         r"""
@@ -3149,7 +4995,141 @@ class Instance:
         - `description`: Optional human-readable description.
 
         Raises {class}`ValueError` if the maximum decision-variable ID is
-        `2**64 - 1` and no larger automatic ID can be assigned.
+        `2**64 - 1` and no larger automatic ID can be assigned. On failure, no
+        variable or modeling label is added to the instance.
+        """
+    def new_integer(
+        self,
+        name: typing.Optional[builtins.str] = None,
+        *,
+        lower: builtins.float = float("-inf"),
+        upper: builtins.float = float("inf"),
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: collections.abc.Mapping[str, str] = {},
+        description: typing.Optional[builtins.str] = None,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> AttachedDecisionVariable:
+        r"""
+        Create and add an integer decision variable with an automatically assigned ID.
+
+        The bounds default to `(-inf, inf)`. Each finite side is normalized to
+        the least or greatest integer value that satisfies the original bound
+        under `atol`; an infinite side remains unbounded. Bound membership uses
+        the same inequality-residual tolerance semantics as constraint
+        feasibility. Returns an
+        {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+        expressions.
+
+        **Args:**
+        - `name`: Optional human-readable modeling name. Names need not be unique.
+        - `lower`: Lower bound of the variable.
+        - `upper`: Upper bound of the variable.
+        - `subscripts`: Optional integer indices from the source model.
+        - `parameters`: Optional string-valued indices from the source model.
+        - `description`: Optional human-readable description.
+        - `atol`: Absolute tolerance for integer-bound normalization. If
+          omitted, the current default returned by
+          {func}`~ommx.get_default_atol` is used.
+
+        Raises {class}`ValueError` if the bounds are invalid or normalization
+        yields no integer value, or if no larger automatic ID can be assigned.
+        On failure, no variable or modeling label is added to the instance.
+        """
+    def new_continuous(
+        self,
+        name: typing.Optional[builtins.str] = None,
+        *,
+        lower: builtins.float = float("-inf"),
+        upper: builtins.float = float("inf"),
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: collections.abc.Mapping[str, str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> AttachedDecisionVariable:
+        r"""
+        Create and add a continuous decision variable with an automatically assigned ID.
+
+        The bounds default to `(-inf, inf)`. Returns an
+        {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+        expressions.
+
+        **Args:**
+        - `name`: Optional human-readable modeling name. Names need not be unique.
+        - `lower`: Lower bound of the variable.
+        - `upper`: Upper bound of the variable.
+        - `subscripts`: Optional integer indices from the source model.
+        - `parameters`: Optional string-valued indices from the source model.
+        - `description`: Optional human-readable description.
+
+        Raises {class}`ValueError` if the bounds are invalid or if no larger
+        automatic ID can be assigned. On failure, no variable or modeling label
+        is added to the instance.
+        """
+    def new_semi_integer(
+        self,
+        name: typing.Optional[builtins.str] = None,
+        *,
+        lower: builtins.float = float("-inf"),
+        upper: builtins.float = float("inf"),
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: collections.abc.Mapping[str, str] = {},
+        description: typing.Optional[builtins.str] = None,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> AttachedDecisionVariable:
+        r"""
+        Create and add a semi-integer decision variable with an automatically assigned ID.
+
+        The bounds default to `(-inf, inf)`. Each finite side is normalized under
+        `atol` using the same residual-feasibility rule as
+        {meth}`~ommx.Instance.new_integer`, while an infinite side remains
+        unbounded. Unlike an integer variable, if the bound contains no integer,
+        its normalized bound becomes `[0, 0]`, preserving the zero alternative
+        in the semi-integer domain. Returns an
+        {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+        expressions.
+
+        **Args:**
+        - `name`: Optional human-readable modeling name. Names need not be unique.
+        - `lower`: Lower bound of the variable.
+        - `upper`: Upper bound of the variable.
+        - `subscripts`: Optional integer indices from the source model.
+        - `parameters`: Optional string-valued indices from the source model.
+        - `description`: Optional human-readable description.
+        - `atol`: Absolute tolerance for integer-bound normalization. If
+          omitted, the current default returned by
+          {func}`~ommx.get_default_atol` is used.
+
+        Raises {class}`ValueError` if the bounds are invalid or if no larger
+        automatic ID can be assigned. On failure, no variable or modeling label
+        is added to the instance.
+        """
+    def new_semi_continuous(
+        self,
+        name: typing.Optional[builtins.str] = None,
+        *,
+        lower: builtins.float = float("-inf"),
+        upper: builtins.float = float("inf"),
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: collections.abc.Mapping[str, str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> AttachedDecisionVariable:
+        r"""
+        Create and add a semi-continuous decision variable with an automatically assigned ID.
+
+        The bounds default to `(-inf, inf)`. Returns an
+        {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+        expressions.
+
+        **Args:**
+        - `name`: Optional human-readable modeling name. Names need not be unique.
+        - `lower`: Lower bound of the variable.
+        - `upper`: Upper bound of the variable.
+        - `subscripts`: Optional integer indices from the source model.
+        - `parameters`: Optional string-valued indices from the source model.
+        - `description`: Optional human-readable description.
+
+        Raises {class}`ValueError` if the bounds are invalid or if no larger
+        automatic ID can be assigned. On failure, no variable or modeling label
+        is added to the instance.
         """
     def new_finite_domain(
         self,
@@ -3157,7 +5137,7 @@ class Instance:
         name: typing.Optional[builtins.str] = None,
         *,
         subscripts: typing.Sequence[builtins.int] = [],
-        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        parameters: collections.abc.Mapping[str, str] = {},
         description: typing.Optional[builtins.str] = None,
     ) -> AttachedDecisionVariable:
         r"""
@@ -3189,6 +5169,21 @@ class Instance:
         independent {class}`~ommx.DecisionVariable` snapshot.
 
         Raises {class}`KeyError` if no variable with `variable_id` exists.
+        """
+    def extract_constraints(
+        self, name: builtins.str
+    ) -> builtins.dict[builtins.tuple[builtins.int, ...], ConstraintView]:
+        r"""
+        Extract active constraints of every family by name, keyed by subscript tuples.
+
+        Values are attached handles, just as in `constraints`: edits update this
+        model. The returned dictionary snapshots the matching keys; it does not
+        track later label or membership changes. Removed constraints are excluded.
+        Parameters and descriptions do not participate in matching.
+
+        Raises KeyError if no active constraint has this name, and ValueError if
+        matching constraints share subscripts, including across different families.
+        Use typed-ID lookup in `constraints` to distinguish ambiguous labels.
         """
     def add_constraint(
         self,
@@ -3248,28 +5243,86 @@ class Instance:
         r"""
         Add a SOS1 constraint to this instance.
         """
-    def reduce_capabilities(
-        self, supported: builtins.set[AdditionalCapability]
-    ) -> builtins.set[AdditionalCapability]:
+    def lower_special_constraints(
+        self,
+        kinds_to_lower: builtins.set[SpecialConstraintKind],
+        *,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> builtins.set[SpecialConstraintKind]:
         r"""
-        Convert constraint types not in `supported` into regular constraints.
+        Lower selected active special constraint kinds into regular constraints.
 
-        For every capability in :attr:`required_capabilities` not in
-        ``supported``, the corresponding bulk conversion is invoked
-        (:meth:`convert_all_indicators_to_constraints`,
-        :meth:`convert_all_one_hots_to_constraints`, or
-        :meth:`convert_all_sos1_to_constraints`). The instance is mutated in
-        place and :attr:`required_capabilities` becomes a subset of
-        ``supported`` on success.
+        For every kind in ``kinds_to_lower``, the corresponding bulk conversion
+        is invoked
+        ({meth}`~ommx.Instance.convert_all_indicators_to_constraints`,
+        {meth}`~ommx.Instance.convert_all_one_hots_to_constraints`, or
+        {meth}`~ommx.Instance.convert_all_sos1_to_constraints`) when that kind is active. The
+        instance is mutated in place. Kinds omitted from ``kinds_to_lower``
+        remain active, and an empty set is a no-op. This does not establish
+        {class}`~ommx.InstanceClass` membership; check the resulting input separately.
 
-        Returns the set of :class:`AdditionalCapability` values that were
-        actually converted. Empty when nothing needed conversion.
+        Returns the set of {class}`~ommx.SpecialConstraintKind` values that were
+        requested and active, and therefore actually lowered. Empty when no
+        requested kind was active.
 
-        Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
-        with a non-finite bound).
+        ``atol`` controls zero-sensitive interval bounds used while lowering
+        Indicator constraints. If omitted, :attr:`DEFAULT_ATOL` is used. This
+        aligns zero-sensitive Function body evaluation; lowering itself assumes
+        exact discrete variable values.
+
+        Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. The
+        Indicator and SOS1 bulk conversions validate their complete families
+        before mutation, including generated-ID capacity. OneHot checks ID
+        capacity for the whole family before converting in ascending original
+        ID order; other conversion failures may leave earlier OneHot conversions
+        committed. The whole operation is not transactional across
+        families: an error does not roll back earlier completed families.
+
+        Raises if an underlying conversion fails, including insufficient fresh
+        IDs or a required non-finite Big-M bound.
         """
-    def to_v1_bytes(self) -> bytes: ...
-    def to_v2_bytes(self) -> bytes: ...
+    def to_v1_bytes(self) -> bytes:
+        r"""
+        Serialize this instance in the OMMX v1 wire format.
+
+        # Errors
+
+        Serialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> assert instance.convert_active_objective(Sense.Maximize)
+        >>> try:
+        ...     instance.to_v1_bytes()
+        ... except RuntimeError:
+        ...     pass
+        ... else:
+        ...     raise AssertionError("v1 serialization accepted an output objective")
+        """
+    def to_v2_bytes(self) -> bytes:
+        r"""
+        Serialize this instance in the OMMX v2 wire format.
+
+        # Postconditions
+
+        A v2 round-trip preserves both active and output objective semantics.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> restored = Instance.from_v2_bytes(instance.to_v2_bytes())
+        >>> assert restored.sense == Sense.Minimize
+        >>> assert restored.objective.evaluate({0: 1}) == -3.0
+        >>> solution = restored.evaluate({0: 1})
+        >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)
+        """
     def __str__(self) -> builtins.str: ...
     def __repr__(self) -> builtins.str: ...
     def format_function(
@@ -3281,9 +5334,30 @@ class Instance:
         r"""
         Format a function using this instance's decision-variable labels.
 
-        The plain {func}`repr` / {func}`str` representation of {class}`Function`
+        The plain {func}`repr` / {func}`str` representation of {class}`~ommx.Function`
         remains context-free and renders raw ``x<id>`` symbols such as ``x1``.
-        Use this method when labels from this instance should be used instead.
+        This method resolves names and subscripts from this instance without
+        changing the expression or its value.
+
+        >>> from ommx import Instance
+        >>> instance = Instance.minimize()
+        >>> x0 = instance.new_binary("x", subscripts=[0])
+        >>> x1 = instance.new_binary("x", subscripts=[1])
+        >>> instance.objective = x0 + 2 * x1
+        >>> assert instance.format_function(instance.objective) == "x[0] + 2*x[1]"
+
+        Every ID referenced by ``function`` must exist in this instance. IDs are
+        checked before truncation, even if an unknown ID would be outside the
+        preview. An expression does not remember the model its variables came
+        from: using another instance resolves the same numeric IDs in that
+        instance, not matching names across models.
+
+        ``max_terms`` limits complete stored terms and ``max_chars`` limits
+        Unicode characters; both default to ``None`` for no limit. Explicit
+        limits can produce incomplete text. Use
+        {meth}`~ommx.Instance.display_function` when truncation metadata or a
+        Notebook presentation is needed. The corresponding
+        {meth}`~ommx.ParametricInstance.format_function` also resolves parameters.
         """
     def display_function(
         self,
@@ -3295,30 +5369,134 @@ class Instance:
         Build a bounded notebook display object for a function in this instance's context.
 
         By default this returns a preview capped at 100 complete terms and
-        20,000 characters. Use {meth}`format_function` for an unbounded plain
-        text string.
+        20,000 characters. Pass ``None`` to disable either limit. Use
+        {meth}`~ommx.Instance.format_function` for an unbounded plain text string.
+        ID resolution and validation are the same as for that method.
+
+        The returned {class}`~ommx.display.FunctionDisplay` renders itself in a
+        Notebook. Its ``text`` is the formatted preview; ``truncated``,
+        ``omitted_terms``, and ``truncated_by_chars`` distinguish a preview from
+        the complete expression. A character limit can cut through a term, so
+        ``written_terms`` counts only terms written completely.
+
+        >>> from ommx import Instance
+        >>> instance = Instance.minimize()
+        >>> x = [instance.new_binary("x", subscripts=[i]) for i in range(3)]
+        >>> preview = instance.display_function(sum(x), max_terms=2)
+        >>> assert preview.text == "x[0] + x[1]"
+        >>> assert preview.truncated
+        >>> assert (preview.total_terms, preview.written_terms, preview.omitted_terms) == (3, 2, 1)
+        >>> complete = instance.display_function(sum(x), max_terms=None, max_chars=None)
+        >>> assert not complete.truncated
         """
     def required_ids(self) -> builtins.set[builtins.int]:
         r"""
-        Get the set of decision variable IDs used in the objective and remaining constraints.
+        Get the decision variable IDs required by the active formulation.
 
-        # Examples
+        # Postconditions
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
-        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        IDs referenced only by preserved output semantics are not required solver inputs.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(x),
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
+        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
         ... )
-        >>> instance.required_ids()
-        {0, 1, 2}
-        ```
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> fixed = instance.partial_evaluate({0: 1})
+        >>> assert fixed.required_ids() == set()
+        >>> assert fixed.evaluate({}).objective == 1.0
         """
-    def as_qubo_format(self) -> tuple[dict, builtins.float]: ...
-    def as_hubo_format(self) -> tuple[dict, builtins.float]: ...
+    def as_qubo_format(self) -> tuple[dict, builtins.float]:
+        r"""
+        Return the active objective in QUBO format without preparing the instance.
+
+        Returns ``(Q, offset)``, where ``Q`` is a ``dict[tuple[int, int], float]``
+        keyed by decision-variable IDs. For binary values, the formatted energy is
+        ``offset + sum(c * state[i] * state[j] for (i, j), c in Q.items())``.
+        Keys satisfy ``i <= j``; linear terms use ``(i, i)`` and each off-diagonal
+        term occurs once, with no factor of two. The constant is returned separately.
+        Missing keys have coefficient zero; unused variables need not appear.
+
+        # Applicability and errors
+
+        Raises ``RuntimeError`` unless all of the following hold:
+
+        - The active sense is {attr}`~ommx.Sense.Minimize`.
+        - There are no active regular, Indicator, OneHot, or SOS1 constraints.
+          Removed constraints do not prevent formatting and are not exported.
+        - Every variable referenced by the active objective has Binary kind.
+          Other variables retained by the instance do not prevent formatting.
+        - The active objective is stored as an expanded polynomial. Composed
+          expressions, including an unexpanded {meth}`~ommx.Function.powi`, are
+          rejected even if mathematically polynomial.
+        - Each nonconstant term retained by the numerical filtering below has
+          at most two distinct variable IDs after applying the binary identity
+          ``x**n = x`` for positive integer powers. Terms with the same resulting
+          pair are summed. A retained term with three distinct IDs is rejected;
+          terms are not reduced using auxiliary variables.
+
+        This method does not mutate the instance, encode variables, add penalties,
+        or change the sense. Use {meth}`~ommx.Instance.prepare` or
+        {meth}`~ommx.Instance.to_qubo` when preparation is needed.
+        {meth}`~ommx.InstanceClass.qubo` checks the stored polynomial degree
+        (at most two), without this formatter's binary-power reduction or numerical
+        filtering. For example, an expanded ``x * x * x`` for Binary ``x`` can be
+        formatted here even though it is outside that class. Membership checking,
+        preparation, and coefficient formatting are separate operations.
+
+        # Numerical behavior
+
+        Coefficients and the offset use double-precision floating-point arithmetic;
+        aggregation can round or overflow, and resulting sums are not checked for
+        finiteness. Coefficients are not rescaled. The current implementation skips source
+        terms with ``abs(coefficient) <= 2**-52`` (approximately ``2.22e-16``),
+        including constants, before converting their keys. After summing terms
+        into a pair, it removes that pair when ``abs(sum) < 2**-52``.
+        This fixed absolute threshold is independent of evaluation tolerances and
+        can change energies and minimizers. Preservation of nonzero small
+        coefficients is tracked in [issue #1301](https://github.com/Jij-Inc/ommx/issues/1301);
+        the behavior described here is the current implementation.
+
+        # Active and output objectives
+
+        The coefficients describe the active objective, subject to the numerical
+        filtering above. They do not carry {attr}`~ommx.Instance.output_objective`,
+        removed constraints, or value-recovery rules. Keep the instance and use
+        {meth}`~ommx.Instance.evaluate` or {meth}`~ommx.Instance.evaluate_samples`
+        to interpret candidates with its output semantics. Backend energy can
+        differ from the objective reported by those methods.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=3 * x + 5, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> qubo, offset = instance.as_qubo_format()
+        >>> assert (qubo, offset) == ({(0, 0): -3.0}, -5.0)
+        >>> assert instance.objective.evaluate({0: 1}) == -8.0
+        >>> assert instance.evaluate({0: 1}).objective == 8.0
+        """
+    def as_hubo_format(self) -> tuple[dict, builtins.float]:
+        r"""
+        Return the active objective in HUBO format without preparing the instance.
+
+        # Postconditions
+
+        The returned coefficients represent the active objective rather than preserved output semantics.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=3 * x + 5, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> hubo, offset = instance.as_hubo_format()
+        >>> assert (hubo, offset) == ({(0,): -3.0}, -5.0)
+        >>> assert instance.objective.evaluate({0: 1}) == -8.0
+        >>> assert instance.evaluate({0: 1}).objective == 8.0
+        """
     def to_qubo(
         self,
         *,
@@ -3331,60 +5509,43 @@ class Instance:
         r"""
         Convert the instance to a QUBO format.
 
-        This is a **Driver API** for QUBO conversion calling single-purpose methods in order:
+        # Postconditions
 
-        1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.
-        2. Check continuous variables and raise error if exists.
-        3. Convert inequality constraints
+        The driver is equivalent to QUBO Preparation followed by active-objective formatting and preserves the output semantics present on entry.
 
-          * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-          * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`
-
-        4. Convert to QUBO with (uniform) penalty method
-
-          * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.
-          * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.
-          * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
-
-        5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.
-        6. Finally convert to QUBO format by {meth}`~ommx.Instance.as_qubo_format`.
-
-        Please see the document of each method for details.
-        If you want to customize the conversion, use the methods above manually.
-
-        # Examples
-
-        Let's consider a maximization problem with two integer variables $x_0, x_1 \in [0, 2]$ subject to an inequality:
-
-        $$\max \; x_0 + x_1 \quad \text{s.t.} \quad x_0 + 2 x_1 \leq 3$$
-
-        ```python
-        >>> from ommx import Instance, DecisionVariable
-        >>> x = [DecisionVariable.integer(i, lower=0, upper=2, name="x", subscripts=[i]) for i in range(2)]
+        >>> import copy
+        >>> from ommx import DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
+        >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(x),
-        ...     constraints=[(x[0] + 2*x[1] <= 3).set_id(0)],
-        ...     sense=Instance.MAXIMIZE,
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
         ... )
-        ```
+        >>> explicit = copy.copy(instance)
+        >>> policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
+        >>> _ = explicit.prepare(InstanceClass.qubo(), policy)
+        >>> expected = explicit.as_qubo_format()
+        >>> actual = instance.to_qubo(uniform_penalty_weight=2.0)
+        >>> assert actual == expected
+        >>> assert InstanceClass.qubo().contains(instance)
+        >>> assert instance.sense == Sense.Minimize
+        >>> assert instance.objective.evaluate({0: 0}) == 2.0
+        >>> solution = instance.evaluate({0: 0})
+        >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)
 
-        Convert into QUBO format
+        # Errors
 
-        ```python
-        >>> qubo, offset = instance.to_qubo()
-        >>> qubo
-        {(3, 3): -6.0, (3, 4): 2.0, (3, 5): 4.0, (3, 6): 4.0, (3, 7): 2.0, (3, 8): 4.0, (4, 4): -6.0, (4, 5): 4.0, (4, 6): 4.0, (4, 7): 2.0, (4, 8): 4.0, (5, 5): -9.0, (5, 6): 8.0, (5, 7): 4.0, (5, 8): 8.0, (6, 6): -9.0, (6, 7): 4.0, (6, 8): 8.0, (7, 7): -5.0, (7, 8): 4.0, (8, 8): -8.0}
-        >>> offset
-        9.0
-        ```
+        Mutually exclusive penalty options raise ``ValueError`` before mutating the instance.
 
-        For the maximization problem, the sense is converted to minimization for generating QUBO, and then converted back to maximization.
-
-        ```python
-        >>> instance.sense == Instance.MAXIMIZE
-        True
-        ```
+        >>> unchanged = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
+        ... )
+        >>> before = unchanged.to_v2_bytes()
+        >>> try:
+        ...     unchanged.to_qubo(uniform_penalty_weight=1.0, penalty_weights={7: 2.0})
+        ... except ValueError:
+        ...     pass
+        ... else:
+        ...     raise AssertionError("mutually exclusive penalty options were accepted")
+        >>> assert unchanged.to_v2_bytes() == before
         """
     def to_hubo(
         self,
@@ -3398,31 +5559,64 @@ class Instance:
         r"""
         Convert the instance to a HUBO format.
 
-        This is a **Driver API** for HUBO conversion calling single-purpose methods in order:
+        # Postconditions
 
-        1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.
-        2. Check continuous variables and raise error if exists.
-        3. Convert inequality constraints
+        The driver is equivalent to HUBO Preparation followed by active-objective formatting and preserves the output semantics present on entry.
 
-          * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-          * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`
+        >>> import copy
+        >>> from ommx import DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
+        ... )
+        >>> explicit = copy.copy(instance)
+        >>> policy = PreparationPolicy.for_hubo(uniform_penalty_weight=2.0)
+        >>> _ = explicit.prepare(InstanceClass.hubo(), policy)
+        >>> expected = explicit.as_hubo_format()
+        >>> actual = instance.to_hubo(uniform_penalty_weight=2.0)
+        >>> assert actual == expected
+        >>> assert InstanceClass.hubo().contains(instance)
+        >>> assert instance.sense == Sense.Minimize
+        >>> assert instance.objective.evaluate({0: 0}) == 2.0
+        >>> solution = instance.evaluate({0: 0})
+        >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)
 
-        4. Convert to HUBO with (uniform) penalty method
+        # Errors
 
-          * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.
-          * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.
-          * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
+        Mutually exclusive penalty options raise ``ValueError`` before mutating the instance.
 
-        5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.
-        6. Finally convert to HUBO format by {meth}`~ommx.Instance.as_hubo_format`.
-
-        Please see the documentation for {meth}`~ommx.Instance.to_qubo` for more information, or the
-        documentation for each individual method for additional details. The
-        difference between this and {meth}`~ommx.Instance.to_qubo` is that this method isn't
-        restricted to quadratic or linear problems. If you want to customize the
-        conversion, use the individual methods above manually.
+        >>> unchanged = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
+        ... )
+        >>> before = unchanged.to_v2_bytes()
+        >>> try:
+        ...     unchanged.to_hubo(uniform_penalty_weight=1.0, penalty_weights={7: 2.0})
+        ... except ValueError:
+        ...     pass
+        ... else:
+        ...     raise AssertionError("mutually exclusive penalty options were accepted")
+        >>> assert unchanged.to_v2_bytes() == before
         """
-    def as_parametric_instance(self) -> ParametricInstance: ...
+    def as_parametric_instance(self) -> ParametricInstance:
+        r"""
+        Convert this instance into a parameter-free parametric instance.
+
+        # Postconditions
+
+        Materializing the result without parameters preserves both active and output objective semantics.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> restored = instance.as_parametric_instance().with_parameters({})
+        >>> assert restored.sense == Sense.Minimize
+        >>> assert restored.objective.evaluate({0: 1}) == -1.0
+        >>> solution = restored.evaluate({0: 1})
+        >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)
+        """
     def penalty_method(self) -> ParametricInstance:
         r"""
         Convert to a parametric unconstrained instance by penalty method.
@@ -3444,34 +5638,25 @@ class Instance:
         > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
         > This feature is intended to use with {meth}`~ommx.Instance.add_integer_slack_to_inequality`.
 
-        # Examples
+        # Postconditions
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable, Constraint
-        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        Penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
+
+        >>> from ommx import ConstraintID
+        >>> from ommx import DecisionVariable, Instance, Optimality, Sense
+        >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(x),
-        ...     constraints=[x[0] + x[1] == 1, x[1] + x[2] == 1],
-        ...     sense=Instance.MAXIMIZE,
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
         ... )
-        >>> instance.objective
-        Function(x0 + x1 + x2)
-        >>> pi = instance.penalty_method()
-        ```
-
-        The constraint is put in removed_constraints
-
-        ```python
-        >>> pi.constraints
-        []
-        >>> len(pi.removed_constraints)
-        2
-        >>> pi.removed_constraints[0]
-        RemovedConstraint(x0 + x1 - 1 == 0, reason=ommx.Instance.penalty_method, parameter_id=3)
-        >>> pi.removed_constraints[1]
-        RemovedConstraint(x1 + x2 - 1 == 0, reason=ommx.Instance.penalty_method, parameter_id=4)
-        ```
+        >>> parametric = instance.penalty_method()
+        >>> parameters = {parameter.id: 2.0 for parameter in parametric.parameters}
+        >>> prepared = parametric.with_parameters(parameters)
+        >>> assert parametric.constraints == {}
+        >>> assert ConstraintID(7) in parametric.removed_constraints
+        >>> assert prepared.objective.evaluate({0: 0}) == 2.0
+        >>> solution = prepared.evaluate({0: 0})
+        >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
+        >>> assert prepared.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified
         """
     def uniform_penalty_method(self) -> ParametricInstance:
         r"""
@@ -3493,44 +5678,25 @@ class Instance:
         > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
         > This feature is intended to use with {meth}`~ommx.Instance.add_integer_slack_to_inequality`.
 
-        # Examples
+        # Postconditions
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
-        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        Uniform-penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
+
+        >>> from ommx import ConstraintID
+        >>> from ommx import DecisionVariable, Instance, Optimality, Sense
+        >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(x),
-        ...     constraints=[sum(x) == 3],
-        ...     sense=Instance.MAXIMIZE,
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
         ... )
-        >>> instance.objective
-        Function(x0 + x1 + x2)
-        >>> pi = instance.uniform_penalty_method()
-        ```
-
-        The constraint is put in removed_constraints
-
-        ```python
-        >>> pi.constraints
-        []
-        >>> len(pi.removed_constraints)
-        1
-        >>> pi.removed_constraints[0]
-        RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=ommx.Instance.uniform_penalty_method)
-        ```
-
-        There is only one parameter in the instance
-
-        ```python
-        >>> len(pi.parameters)
-        1
-        >>> p = pi.parameters[0]
-        >>> p.id
-        3
-        >>> p.name
-        'uniform_penalty_weight'
-        ```
+        >>> parametric = instance.uniform_penalty_method()
+        >>> parameter_id = parametric.parameters[0].id
+        >>> prepared = parametric.with_parameters({parameter_id: 2.0})
+        >>> assert parametric.constraints == {}
+        >>> assert ConstraintID(7) in parametric.removed_constraints
+        >>> assert prepared.objective.evaluate({0: 0}) == 2.0
+        >>> solution = prepared.evaluate({0: 0})
+        >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
+        >>> assert prepared.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified
         """
     def evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
@@ -3538,68 +5704,223 @@ class Instance:
         r"""
         Evaluate the given {class}`~ommx.State` into a {class}`~ommx.Solution`.
 
-        This method evaluates the problem instance using the provided state (a map from decision variable IDs to their values),
-        and returns a {class}`~ommx.Solution` object containing objective value, evaluated constraint values, and feasibility information.
+        Accepts a State, an ID-to-value mapping, or an iterable of ID/value pairs.
+        This checks one candidate against this problem's variable domains and
+        constraints and computes its output objective; it does not search for a
+        better candidate or prove optimality. An infeasible candidate can still
+        have an objective value. See {class}`~ommx.Solution` for a complete
+        example and how to interpret the results.
 
-        # Examples
+        Evaluate a solver's returned candidate with the transformed Instance
+        used for that solve. Its recorded dependencies, removed constraints,
+        and output objective are needed to reconstruct and interpret the result.
 
-        Create a simple instance with three binary variables and evaluate a solution:
+        # Postconditions
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
-        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        Evaluation first applies the canonicalization, population, and consistency
+        assertion rules documented by {meth}`~ommx.Instance.populate_state`, then
+        applies preserved output objective semantics to the populated state.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(x),
-        ...     constraints=[(x[0] + x[1] <= 1).set_id(0)],
-        ...     sense=Instance.MAXIMIZE,
+        ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
         ... )
-        ```
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> fixed = instance.partial_evaluate({0: 1})
+        >>> solution = fixed.evaluate({})
+        >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)
 
-        Evaluate it with a state x0 = 1, x1 = 0, x2 = 0, and show the objective and constraints:
+        # Errors
 
-        ```python
-        >>> solution = instance.evaluate({0: 1, 1: 0, 2: 0})
-        >>> solution.objective
-        1.0
-        ```
+        Evaluation raises ``ValueError`` when an active required ID is missing.
 
-        If the value is out of the range, the solution is infeasible:
-
-        ```python
-        >>> solution = instance.evaluate({0: 1, 1: 0, 2: 2})
-        >>> solution.feasible
-        False
-        ```
-
-        If some of the decision variables are not set, this raises an error:
-
-        ```python
-        >>> instance.evaluate({0: 1, 1: 0})
-        ```
-        Traceback (most recent call last):
-            ...
-        ValueError: The state does not contain some required IDs: {VariableID(2)}
+        >>> required = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize
+        ... )
+        >>> try:
+        ...     required.evaluate({})
+        ... except ValueError as error:
+        ...     assert "missing required variable IDs" in str(error)
+        ... else:
+        ...     raise AssertionError("evaluation accepted a missing active ID")
         """
     def populate_state(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> State:
         r"""
-        Populate fixed, irrelevant, and dependent decision variables in a state.
+        Restore fixed and dependent values and fill omitted irrelevant values in a candidate.
 
-        The input state must contain all decision variables that are actually used
-        by this instance's objective and active constraints. The returned
-        {class}`~ommx.State` contains every decision variable in the instance.
+        Accepts a {class}`~ommx.State`, an ID-to-value mapping, or an iterable of ID/value
+        pairs. The returned State contains exactly the decision-variable IDs retained by
+        this Instance. Supply every variable used by its current objective and active
+        constraints; missing used values are errors, not opportunities to choose defaults.
+
+        Use {meth}`~ommx.Instance.evaluate` to populate a candidate and then evaluate its
+        objective, variable domains, and constraints, or
+        {meth}`~ommx.Instance.evaluate_samples` for multiple candidates. Population alone
+        does not establish feasibility or optimality.
+
+        **Fixed values and retained variables**
+
+        Fixing a variable removes it from the values a solver must choose, while retaining
+        its definition and fixed value for results. Here `partial_evaluate` returns a new
+        Instance; the original remains unchanged.
+
+        ```pycon
+        >>> from ommx import DecisionVariableRole, Instance
+        >>> original = Instance.maximize()
+        >>> x = original.new_binary("x")
+        >>> y = original.new_binary("y")
+        >>> original.objective = x + y
+        >>> _ = original.add_constraint(x * y == 0)
+        >>> fixed = original.partial_evaluate({x.id: 1})
+        >>> assert {v.id for v in fixed.decision_variables} == {x.id, y.id}
+        >>> assert {v.id for v in fixed.used_decision_variables} == {y.id}
+        >>> assert fixed.decision_variable_role(x.id) == DecisionVariableRole.Fixed
+        >>> assert fixed.fixed_decision_variables() == {x.id: 1.0}
+        >>> assert fixed.populate_state({y.id: 0}).entries == {x.id: 1.0, y.id: 0.0}
+        >>> assert fixed.evaluate({y.id: 0}).objective == 1.0
+        >>> assert original.decision_variable_role(x.id) == DecisionVariableRole.Used
+
+        ```
+
+        {attr}`~ommx.Instance.decision_variables` contains all retained variables.
+        {attr}`~ommx.Instance.used_decision_variables` selects solver-input variables,
+        including variables in active special constraints and an Indicator's controlling
+        Binary variable. Roles belong to an Instance and can change after transformation;
+        they are independent of the variable's Binary, Integer, or other kind. See
+        {class}`~ommx.DecisionVariableRole` for the four roles and the corresponding queries.
+
+        **Dependent values**
+
+        A substituted variable is restored from its recorded expression. In this example,
+        `count` is represented as twice the Binary variable `flag`.
+
+        ```pycon
+        >>> from ommx import DecisionVariableRole, Instance
+        >>> encoded = Instance.minimize()
+        >>> count = encoded.new_integer("count", lower=0, upper=2)
+        >>> flag = encoded.new_binary("flag")
+        >>> encoded.objective = count + flag
+        >>> encoded.substitute({count.id: 2 * flag})
+        >>> assert encoded.decision_variable_roles() == {
+        ...     count.id: DecisionVariableRole.Dependent,
+        ...     flag.id: DecisionVariableRole.Used,
+        ... }
+        >>> assert encoded.dependent_decision_variable_ids() == {count.id}
+        >>> assert encoded.populate_state({flag.id: 1}).entries == {count.id: 2.0, flag.id: 1.0}
+        >>> assert encoded.evaluate({flag.id: 1}).objective == 3.0
+
+        ```
+
+        The restored `count=2` is in its domain, but `count=1` cannot be represented by
+        `2 * flag`. Reconstruction therefore does not prove that the original and
+        transformed problems are equivalent. {meth}`~ommx.Instance.substitute` does not
+        automatically turn the substituted variable's domain into new constraints; check
+        its transformation contract when choosing an expression.
+
+        **Irrelevant values and defaults**
+
+        An irrelevant variable is neither used, fixed, nor dependent. Its value is not
+        determined by optimization or reconstruction. When omitted, Binary, Integer, and
+        Continuous variables receive the value in their bound nearest to zero;
+        SemiInteger and SemiContinuous variables receive zero. The latter kinds allow
+        zero as well as values in their nonzero interval.
+
+        ```pycon
+        >>> from ommx import DecisionVariable, DecisionVariableRole, Instance, Sense
+        >>> variables = [
+        ...     DecisionVariable.binary(0),
+        ...     DecisionVariable.integer(1, lower=2, upper=5),
+        ...     DecisionVariable.continuous(2, lower=-5, upper=-2),
+        ...     DecisionVariable.semi_integer(3, lower=2, upper=5),
+        ...     DecisionVariable.semi_continuous(4, lower=2, upper=5),
+        ... ]
+        >>> reporting = Instance.from_components(
+        ...     decision_variables=variables, objective=0, constraints={}, sense=Sense.Minimize
+        ... )
+        >>> assert reporting.irrelevant_decision_variable_ids() == {0, 1, 2, 3, 4}
+        >>> assert reporting.decision_variable_role(1) == DecisionVariableRole.Irrelevant
+        >>> assert reporting.populate_state({}).entries == {0: 0.0, 1: 2.0, 2: -2.0, 3: 0.0, 4: 0.0}
+        >>> assert reporting.populate_state({1: 4}).entries[1] == 4.0
+
+        ```
+
+        A reference only from a named function, removed constraint, output objective, or
+        dependency right-hand side does not make a variable used. If such a variable is
+        irrelevant, omitting its value means these expressions use its default. Supply the
+        value explicitly when checking a particular candidate; the default is neither a
+        solver-selected value nor a reconstruction of that candidate.
+
+        **Canonicalization and consistency assertions**
+
+        For finite supplied coordinates that are neither fixed nor dependent, Binary
+        values at most `atol` away from zero or one and Integer or SemiInteger values at
+        most `atol` away from an integer are represented exactly. Derived dependent values
+        use the same target-kind rule. Continuous and SemiContinuous values are not
+        rounded. Other finite values remain available for feasibility checks.
+
+        A caller-provided fixed or dependent value is a consistency assertion, not an
+        override. After validation, the returned state uses the stored fixed value
+        unchanged or the canonicalized derived dependent value. Dependencies consume
+        canonicalized non-fixed, non-dependent inputs. A supplied dependent assertion is
+        compared with the value derived from those inputs before target-kind
+        canonicalization, so an assertion computed from the uncanonicalized solver vector
+        can be rejected as inconsistent.
+
+        ```pycon
+        >>> assert fixed.populate_state({x.id: 1 - 2e-7, y.id: 0}, atol=1e-6).entries[x.id] == 1.0
+        >>> assert encoded.populate_state({flag.id: 1 - 2e-7, count.id: 2}, atol=1e-6).entries == {
+        ...     count.id: 2.0,
+        ...     flag.id: 1.0,
+        ... }
+        >>> try:
+        ...     encoded.populate_state({flag.id: 1, count.id: 1})
+        ... except ValueError:
+        ...     pass
+        ... else:
+        ...     raise AssertionError("a dependent assertion overwrote the recorded expression")
+        >>> assert encoded.populate_state({flag.id: 0.25}).entries[flag.id] == 0.25
+        >>> assert not encoded.evaluate({flag.id: 0.25}).feasible
+
+        ```
+
+        `atol` defaults to {attr}`~ommx.DEFAULT_ATOL`. Missing used IDs, unknown IDs,
+        non-finite supplied values, and inconsistent fixed or dependent assertions raise
+        `ValueError`. Invalid finite values can remain in the populated state: use
+        {meth}`~ommx.Instance.evaluate` to inspect kind, bound, and constraint feasibility.
+
+        **Preserved output evaluation**
+
+        Fixed values are restored even when needed only by preserved output semantics.
+        Changing the solver-facing objective does not change which fixed value is restored:
+
+        ```pycon
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> reward = DecisionVariable.binary(0)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[reward],
+        ...     objective=3 * reward,
+        ...     constraints={},
+        ...     sense=Sense.Maximize,
+        ... )
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> fixed_reward = instance.partial_evaluate({0: 1})
+        >>> assert fixed_reward.populate_state({}).entries == {0: 1.0}
+        >>> assert fixed_reward.evaluate({}).objective == 3.0
+
+        ```
         """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Instance:
         r"""
-        Creates a new instance with specific decision variables fixed to given values.
+        Creates a new instance by fixing decision variables from a supplied state.
 
-        This method substitutes the specified decision variables with their provided values,
-        creating a new problem instance where these variables are fixed. This is useful for
-        scenarios such as:
+        This method validates supplied values, selects their Instance-owned representations
+        under the rules below, and substitutes the specified decision variables. This creates
+        a new problem instance where these variables are fixed and is useful for scenarios such as:
 
         - Creating simplified sub-problems with some variables fixed
         - Incrementally solving a problem by fixing some variables and optimizing the rest
@@ -3611,37 +5932,68 @@ class Instance:
         - `atol`: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
 
         **Returns:**
-        A new instance with the specified decision variables fixed to their given values.
+        A new instance with the specified decision variables fixed to values selected by the
+        canonicalization and ownership rules below.
 
-        # Examples
+        # Postconditions
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
-        >>> x = DecisionVariable.binary(1)
-        >>> y = DecisionVariable.binary(2)
+        After the existing kind and bound validation, accepted supplied coordinates
+        use the same Instance-owned canonicalization rules as
+        {meth}`~ommx.Instance.populate_state` before propagation and substitution.
+        Non-fixed, non-dependent Continuous and SemiContinuous values are not rounded.
+        Existing fixed values remain authoritative, dependent inputs remain consistency
+        assertions, and values outside the existing partial-evaluation acceptance contract
+        remain rejected. The new instance rewrites only active expressions while retaining
+        canonical fixed values for output evaluation.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x, y],
-        ...     objective=x + y,
-        ...     constraints=[x + y <= 1],
-        ...     sense=Instance.MINIMIZE
+        ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
         ... )
-        >>> new_instance = instance.partial_evaluate({1: 1})
-        >>> new_instance.objective
-        Function(x2 + 1)
-        ```
-
-        Fixed values are owned by the instance and exposed through the
-        attached decision-variable view:
-
-        ```python
-        >>> x = new_instance.attached_decision_variable(1)
-        >>> x.substituted_value
-        1.0
-        ```
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> fixed = instance.partial_evaluate({0: 1.0000005}, atol=1e-6)
+        >>> assert instance.required_ids() == {0}
+        >>> assert fixed.required_ids() == set()
+        >>> assert fixed.objective.evaluate({}) == -3.0
+        >>> assert fixed.attached_decision_variable(0).substituted_value == 1.0
+        >>> solution = fixed.evaluate({})
+        >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)
         """
     def evaluate_samples(
         self, samples: ToSamples, *, atol: typing.Optional[builtins.float] = None
-    ) -> SampleSet: ...
+    ) -> SampleSet:
+        r"""
+        Evaluate multiple candidates into a {class}`~ommx.SampleSet`.
+
+        Accepts {class}`~ommx.Samples`, a mapping from sample IDs to states, or
+        a sequence of states with automatically assigned sample IDs. Each state
+        maps decision-variable IDs to values. This evaluates supplied candidates;
+        it does not generate them or establish global optimality. See
+        {class}`~ommx.SampleSet` for a complete example, summary tables, and
+        selection of the best feasible candidate obtained.
+
+        Use the transformed Instance associated with the returned candidates,
+        as for {meth}`~ommx.Instance.evaluate` on a single candidate.
+
+        # Postconditions
+
+        Every sample uses the canonicalization, population, and consistency assertion
+        rules documented by {meth}`~ommx.Instance.populate_state` before applying
+        preserved output objective semantics. SampleID membership is preserved.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> fixed = instance.partial_evaluate({0: 1})
+        >>> sample_set = fixed.evaluate_samples({7: {}})
+        >>> assert sample_set.sense == Sense.Maximize
+        >>> assert sample_set.objectives[7] == 3.0
+        >>> assert sample_set.get(7).state.entries == {0: 1.0}
+        """
     def random_state(self, rng: Rng) -> State:
         r"""
         Generate a random state for this instance using the provided random number generator.
@@ -3661,33 +6013,27 @@ class Instance:
 
         Generate random state only for used variables
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable, Rng
+        >>> from ommx import DecisionVariable, Instance, Rng, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(5)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=x[0] + x[1],
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={},
+        ...     sense=Sense.Maximize,
         ... )
 
         >>> rng = Rng()
         >>> state = instance.random_state(rng)
-        ```
 
         Only used variables have values
 
-        ```python
         >>> set(state.entries.keys())
         {0, 1}
-        ```
 
         Values respect binary bounds
 
-        ```python
         >>> all(state.entries[i] in [0.0, 1.0] for i in state.entries)
         True
-        ```
         """
     def random_samples(
         self,
@@ -3713,128 +6059,199 @@ class Instance:
         **Returns:**
         Samples object
 
+        Raises {class}`ValueError` if the requested state groups cannot
+        partition the samples or the inclusive sample-ID range is too small.
+        `num_different_samples=0` is valid only when `num_samples=0`.
+
         # Examples
 
         Generate samples for a simple instance:
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable, Rng
+        >>> from ommx import DecisionVariable, Instance, Rng, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints=[(sum(x) <= 2).set_id(0)],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={0: sum(x) <= 2},
+        ...     sense=Sense.Maximize,
         ... )
 
         >>> rng = Rng()
         >>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)
         >>> samples.num_samples()
         5
-        ```
         """
     def relax_constraint(
-        self, constraint_id: builtins.int, reason: builtins.str, **parameters: str
+        self,
+        constraint_id: ConstraintID | builtins.int,
+        reason: builtins.str,
+        **parameters: str,
     ) -> None:
         r"""
-        Remove a constraint from the instance.
+        Move an active regular constraint to the retained removed collection.
 
-        The removed constraint is stored in {attr}`~ommx.Instance.removed_constraints`, and can be restored by {meth}`~ommx.Instance.restore_constraint`.
+        The Instance is changed in place. `constraint_id` accepts a {class}`~ommx.ConstraintID`
+        or its integer value. `reason` records why the condition was removed, and
+        additional keyword arguments record string-valued reason parameters. The
+        constraint keeps its ID, labels, and provenance.
 
-        **Args:**
-        - `constraint_id`: The ID of the constraint to remove.
-        - `reason`: The reason why the constraint is removed.
-        - `parameters`: Additional parameters to describe the reason.
+        Removed constraints no longer restrict the active formulation, but
+        {meth}`~ommx.Instance.evaluate` still checks them. Here the relaxed formulation
+        allows `x=1`, while the retained `x <= 0` condition rejects it:
 
-        # Examples
+        ```pycon
+        >>> from ommx import Instance
+        >>> instance = Instance.maximize()
+        >>> x = instance.new_binary("x")
+        >>> instance.objective = x
+        >>> limit = instance.add_constraint(x <= 0, "limit")
+        >>> limit_id = limit.constraint_id
+        >>> instance.relax_constraint(limit_id, "example.relax_limit", purpose="inspection")
+        >>> assert limit_id not in instance.constraints
+        >>> removed = instance.removed_constraints[limit_id]
+        >>> assert removed.removed_reason == "example.relax_limit"
+        >>> assert removed.removed_reason_parameters == {"purpose": "inspection"}
+        >>> solution = instance.evaluate({x.id: 1})
+        >>> assert solution.feasible_relaxed
+        >>> assert not solution.feasible
 
-        Relax constraint, and restore it.
-
-        ```python
-        >>> from ommx import Instance, DecisionVariable
-        >>> x = [DecisionVariable.binary(i) for i in range(3)]
-        >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(x),
-        ...     constraints=[(sum(x) == 3).set_id(1)],
-        ...     sense=Instance.MAXIMIZE,
-        ... )
-        >>> instance.constraints
-        [Constraint(x0 + x1 + x2 - 3 == 0)]
         ```
 
-        ```python
-        >>> instance.relax_constraint(1, "manual relaxation")
-        >>> instance.constraints
-        []
-        >>> instance.removed_constraints
-        [RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=manual relaxation)]
+        Inspect the removal reason on the model and the evaluated violation on the
+        result. `kind="regular"` selects the regular-constraint family; the same table
+        APIs also accept `"indicator"`, `"one_hot"`, and `"sos1"` for those families.
+
+        ```pycon
+        >>> model_rows = instance.constraints_df(kind="regular", removed=True)
+        >>> assert model_rows.loc[limit_id, "removed_reason"] == "example.relax_limit"
+        >>> result_rows = solution.constraints_df(kind="regular", include=("removed_reason",))
+        >>> assert result_rows.loc[limit_id, "removed_reason"] == "example.relax_limit"
+        >>> assert result_rows.loc[limit_id, "removed_reason.purpose"] == "inspection"
+        >>> assert result_rows.loc[limit_id, "violation"] == 1.0
+        >>> instance.restore_constraint(limit_id)
+        >>> assert limit_id in instance.constraints
+        >>> assert limit_id not in instance.removed_constraints
+        >>> assert not instance.evaluate({x.id: 1}).feasible_relaxed
+
         ```
 
-        ```python
-        >>> instance.restore_constraint(1)
-        >>> instance.constraints
-        [Constraint(x0 + x1 + x2 - 3 == 0)]
-        >>> instance.removed_constraints
-        []
-        ```
+        {meth}`~ommx.Instance.restore_constraint` makes the retained constraint active
+        again, using the Instance's current fixed values and variable dependencies.
+        It does not undo other transformations, remove generated variables or
+        constraints, or revert objective changes. The already-created Solution above
+        continues to describe its earlier evaluation.
+
+        Raises `RuntimeError` if the ID does not identify an active regular constraint.
+        Use {meth}`~ommx.Instance.relax_indicator_constraint` for an Indicator constraint.
+        See {attr}`~ommx.Instance.removed_constraints` for other operations that retain
+        removed constraints and for the distinction between removal and relaxation.
         """
-    def restore_constraint(self, constraint_id: builtins.int) -> None: ...
+    def restore_constraint(self, constraint_id: ConstraintID | builtins.int) -> None:
+        r"""
+        Make a retained removed regular constraint active again.
+
+        Applies the Instance's current variable dependencies and fixed values
+        before restoring the row, and removes its removal reason. The ID,
+        labels, and provenance are retained. The argument accepts a
+        {class}`~ommx.ConstraintID` or its integer value.
+
+        This restores one condition, not the state before a transformation:
+        generated variables or constraints and objective changes remain.
+        See {meth}`~ommx.Instance.relax_constraint` for a complete round trip.
+        Raises RuntimeError if the ID is not a removed regular constraint or
+        its expression cannot be normalized for the current Instance. Failure
+        leaves the row removed.
+        """
     def relax_indicator_constraint(
-        self, constraint_id: builtins.int, reason: builtins.str, **parameters: str
+        self,
+        constraint_id: IndicatorConstraintID | builtins.int,
+        reason: builtins.str,
+        **parameters: str,
     ) -> None:
         r"""
         Relax an indicator constraint by moving it from active to removed.
+
+        Accepts an {class}`~ommx.IndicatorConstraintID` or its integer value.
+        Records the supplied reason and string-valued keyword parameters,
+        preserving the constraint's ID, labels, and provenance. Raises
+        RuntimeError if the ID does not identify an active Indicator constraint.
+        Evaluation still checks the retained condition; see
+        {attr}`~ommx.Instance.removed_constraints` for feasibility semantics and
+        {meth}`~ommx.Instance.relax_constraint` for the equivalent regular-
+        constraint workflow. Restore with
+        {meth}`~ommx.Instance.restore_indicator_constraint`.
         """
-    def restore_indicator_constraint(self, constraint_id: builtins.int) -> None:
+    def restore_indicator_constraint(
+        self, constraint_id: IndicatorConstraintID | builtins.int
+    ) -> None:
         r"""
         Restore a removed indicator constraint back to active.
+
+        Accepts an {class}`~ommx.IndicatorConstraintID` or its integer value.
+        Applies current fixed values and dependencies to the constraint body,
+        preserving its ID, labels, and provenance and clearing the removal
+        reason. This does not undo generated constraints, auxiliary variables,
+        or objective changes from other transformations.
+
+        Raises RuntimeError if the ID is not a removed Indicator constraint,
+        its controlling variable has been fixed or substituted, or its body
+        cannot be normalized. Failure leaves the row removed.
         """
-    def convert_one_hot_to_constraint(self, one_hot_id: builtins.int) -> builtins.int:
+    def convert_one_hot_to_constraint(
+        self, one_hot_id: OneHotConstraintID | builtins.int
+    ) -> ConstraintID:
         r"""
         Convert a one-hot constraint to a regular equality constraint.
 
         A one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the
         linear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality
         as a new regular constraint and moves the one-hot constraint into
-        {attr}`~ommx.Instance.removed_one_hot_constraints` with
+        {attr}`~ommx.Instance.removed_constraints` with
         ``reason="ommx.Instance.convert_one_hot_to_constraint"`` and a
         ``constraint_id`` parameter pointing to the new regular constraint.
+        The generated regular constraint preserves the original one-hot context
+        and appends a {class}`~ommx.Provenance` entry identifying the original
+        one-hot constraint.
 
         Returns the ID of the newly created regular constraint.
 
+        Raises if the ID does not identify an active one-hot constraint, the
+        equality cannot be constructed, or no fresh constraint ID is available.
+        The instance is unchanged on error.
+
         # Examples
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable, OneHotConstraint
+        >>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
         ...     constraints={},
         ...     one_hot_constraints={1: OneHotConstraint(variables=x)},
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> new_id = instance.convert_one_hot_to_constraint(1)
-        >>> instance.one_hot_constraints
-        {}
         >>> instance.constraints
-        {0: Constraint(x0 + x1 + x2 - 1 == 0)}
-        >>> instance.removed_one_hot_constraints
-        {1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}
-        ```
+        {ConstraintID(2): Constraint(x0 + x1 + x2 - 1 == 0)}
+        >>> instance.removed_constraints
+        {OneHotConstraintID(1): RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=2)}
         """
-    def convert_all_one_hots_to_constraints(self) -> builtins.list[builtins.int]:
+    def convert_all_one_hots_to_constraints(self) -> builtins.list[ConstraintID]:
         r"""
         Convert every active one-hot constraint to a regular equality constraint.
 
         See {meth}`~ommx.Instance.convert_one_hot_to_constraint` for the conversion rule.
-        Returns the IDs of the newly created regular constraints.
+        Returns the IDs of the newly created regular constraints in ascending
+        order of the original one-hot IDs.
+
+        Fresh constraint-ID capacity is checked for the entire family before
+        mutation; insufficient capacity leaves the instance unchanged.
+        Conversions are then applied one at a time in that order. Other failures
+        do not provide family-wide rollback: earlier completed conversions remain.
 
         # Examples
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable, OneHotConstraint
+        >>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(4)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -3844,19 +6261,16 @@ class Instance:
         ...         1: OneHotConstraint(variables=x[:2]),
         ...         2: OneHotConstraint(variables=x[2:]),
         ...     },
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_all_one_hots_to_constraints()
-        [0, 1]
-        >>> instance.one_hot_constraints
-        {}
+        [ConstraintID(3), ConstraintID(4)]
         >>> instance.constraints
-        {0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}
-        ```
+        {ConstraintID(3): Constraint(x0 + x1 - 1 == 0), ConstraintID(4): Constraint(x2 + x3 - 1 == 0)}
         """
     def convert_sos1_to_constraints(
-        self, sos1_id: builtins.int
-    ) -> builtins.list[builtins.int]:
+        self, sos1_id: Sos1ConstraintID | builtins.int
+    ) -> builtins.list[ConstraintID]:
         r"""
         Convert a SOS1 constraint to regular constraints using the Big-M method.
 
@@ -3885,36 +6299,41 @@ class Instance:
         Raises if any $x_i$ has a non-binary bound that is not finite, if its domain
         excludes $0$, or if its kind is semi-continuous / semi-integer (the split
         domain $\{0\} \cup [l, u]$ is not uniformly implemented across the codebase
-        yet, so Big-M conversion of these kinds is not supported).
-        The instance is not mutated on error.
+        yet, so Big-M conversion of these kinds is not supported), or if there
+        is insufficient decision-variable or regular-constraint ID capacity.
+        All preconditions, including generated-ID capacity, are validated before
+        mutation. Any error leaves the Instance unchanged.
+
+        On success, the original SOS1 constraint is moved to
+        {attr}`~ommx.Instance.removed_constraints` with
+        ``reason="ommx.Instance.convert_sos1_to_constraints"`` and a
+        comma-separated ``constraint_ids`` parameter in returned order. Every
+        generated regular constraint records a {class}`~ommx.Provenance` entry
+        identifying the original SOS1 constraint.
 
         # Examples
 
         All-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable, Sos1Constraint
+        >>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
         ...     constraints={},
         ...     sos1_constraints={1: Sos1Constraint(variables=x)},
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_sos1_to_constraints(1)
-        [0]
-        >>> instance.sos1_constraints
-        {}
+        [ConstraintID(2)]
         >>> instance.constraints
-        {0: Constraint(x0 + x1 + x2 - 1 <= 0)}
-        >>> instance.removed_sos1_constraints
-        {1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}
-        ```
+        {ConstraintID(2): Constraint(x0 + x1 + x2 - 1 <= 0)}
+        >>> instance.removed_constraints
+        {Sos1ConstraintID(1): RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=2)}
         """
     def convert_all_sos1_to_constraints(
         self,
-    ) -> builtins.dict[builtins.int, builtins.list[builtins.int]]:
+    ) -> builtins.dict[Sos1ConstraintID, builtins.list[ConstraintID]]:
         r"""
         Convert every active SOS1 constraint to regular constraints using Big-M.
 
@@ -3922,15 +6341,13 @@ class Instance:
         rule. Returns a dict mapping each original SOS1 ID to the list of regular
         constraint IDs it produced.
 
-        Atomic: every active SOS1 is validated up front, and only if every one is
-        convertible are the conversions applied. If any SOS1 fails validation
-        (unsupported kind, non-finite bound, domain excludes 0, etc.), no mutation
-        happens and the instance is left untouched.
+        Atomic: every active SOS1 and the total generated-ID capacity are
+        validated before mutation. If validation fails, including because IDs
+        are exhausted, the Instance is left unchanged.
 
         # Examples
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable, Sos1Constraint
+        >>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint
         >>> x = [DecisionVariable.binary(i) for i in range(4)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -3940,19 +6357,19 @@ class Instance:
         ...         1: Sos1Constraint(variables=x[:2]),
         ...         2: Sos1Constraint(variables=x[2:]),
         ...     },
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_all_sos1_to_constraints()
-        {1: [0], 2: [1]}
-        >>> instance.sos1_constraints
-        {}
+        {Sos1ConstraintID(1): [ConstraintID(3)], Sos1ConstraintID(2): [ConstraintID(4)]}
         >>> instance.constraints
-        {0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}
-        ```
+        {ConstraintID(3): Constraint(x0 + x1 - 1 <= 0), ConstraintID(4): Constraint(x2 + x3 - 1 <= 0)}
         """
     def convert_indicator_to_constraint(
-        self, indicator_id: builtins.int
-    ) -> builtins.list[builtins.int]:
+        self,
+        indicator_id: IndicatorConstraintID | builtins.int,
+        *,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> builtins.list[ConstraintID]:
         r"""
         Convert an indicator constraint to regular constraints using the Big-M method.
 
@@ -3988,16 +6405,30 @@ class Instance:
         Raises if the bound needed for an emitted side is non-finite, or if $f(x)$
         references a semi-continuous / semi-integer variable (the split domain
         $\{0\} \cup [l, u]$ is not uniformly implemented, so Big-M conversion could
-        silently drop the upper side when $0 \notin [l, u]$). The instance is not
-        mutated on error.
+        silently drop the upper side when $0 \notin [l, u]$). Also raises if the
+        ID is not active or there are insufficient fresh constraint IDs for the
+        emitted sides. A conversion emitting no sides needs no fresh IDs.
+        The instance is not mutated on error.
+
+        ``atol`` controls which Function-body values the bound evaluator treats
+        as zero. If omitted, :attr:`DEFAULT_ATOL` is used. Big-M algebra assumes
+        the indicator variable is exactly binary; this does not canonicalize an
+        approximate solver value near 0 or 1.
+
+        On success, the original indicator constraint is moved to
+        {attr}`~ommx.Instance.removed_constraints` with
+        ``reason="ommx.Instance.convert_indicator_to_constraint"`` and a
+        comma-separated ``constraint_ids`` parameter in returned order (empty
+        when no side is emitted). Every generated regular constraint records a
+        {class}`~ommx.Provenance` entry identifying the original indicator
+        constraint.
 
         # Examples
 
         Convert an inequality indicator where the upper side is active:
 
-        ```python
         >>> from ommx import (
-        ...     Instance, DecisionVariable, IndicatorConstraint, Equality,
+        ...     Instance, DecisionVariable, IndicatorConstraint, Equality, Sense,
         ... )
         >>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)
         >>> y = DecisionVariable.binary(1)
@@ -4011,19 +6442,16 @@ class Instance:
         ...     objective=x,
         ...     constraints={},
         ...     indicator_constraints={1: ic},
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_indicator_to_constraint(1)
-        [0]
-        >>> instance.indicator_constraints
-        {}
+        [ConstraintID(2)]
         >>> instance.constraints
-        {0: Constraint(x0 + 3*x1 - 5 <= 0)}
-        ```
+        {ConstraintID(2): Constraint(x0 + 3*x1 - 5 <= 0)}
         """
     def convert_all_indicators_to_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, builtins.list[builtins.int]]:
+        self, *, atol: typing.Optional[builtins.float] = None
+    ) -> builtins.dict[IndicatorConstraintID, builtins.list[ConstraintID]]:
         r"""
         Convert every active indicator constraint to regular constraints using Big-M.
 
@@ -4033,8 +6461,11 @@ class Instance:
 
         Atomic: every active indicator is validated up front, and only if every
         one is convertible are the conversions applied. If any indicator fails
-        validation (non-finite bound on a required side), no mutation happens and
-        the instance is left untouched.
+        validation, or there are insufficient fresh constraint IDs for all
+        emitted sides, no mutation happens and the instance is left untouched.
+
+        ``atol`` has the same Function-body meaning as in the single-constraint
+        conversion. If omitted, :attr:`DEFAULT_ATOL` is used.
         """
     def log_encode(
         self,
@@ -4057,42 +6488,26 @@ class Instance:
         - `atol`: Optional absolute tolerance used when normalizing integer
           bounds before encoding. If None, uses the default tolerance.
 
-        # Examples
+        Raises {class}`~ommx.LogEncodingError` when an exact representation is
+        unavailable for a requested variable. Allocation and expression-rewrite
+        failures retain their original exception types.
 
-        Let's consider a simple integer programming problem with three integer variables x0, x1, and x2.
+        # Postconditions
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
-        >>> x = [
-        ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
-        ...     for i in range(3)
-        ... ]
+        Encoding preserves existing output semantics, or captures the pre-encoding active objective when no output objective exists, while rewriting the active objective.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.integer(0, lower=0, upper=3)
         >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(x),
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
+        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
         ... )
-        >>> instance.objective
-        Function(x0 + x1 + x2)
-        ```
-
-        To log-encode the integer variables x0 and x2 (except x1), call log_encode:
-
-        ```python
-        >>> instance.log_encode({0, 2})
-        ```
-
-        Integer variable in range $[0, 3]$ can be represented by two binary variables:
-
-        $$x_0 = b_{0,0} + 2 b_{0,1}, \quad x_2 = b_{2,0} + 2 b_{2,1}$$
-
-        And these are substituted into the objective and constraint functions.
-
-        ```python
-        >>> instance.objective
-        Function(x1 + x3 + 2*x4 + x5 + 2*x6)
-        ```
+        >>> instance.log_encode({0})
+        >>> encoded_ids = instance.required_ids()
+        >>> assert len(encoded_ids) == 2
+        >>> state = {variable_id: 1 for variable_id in encoded_ids}
+        >>> assert instance.objective.evaluate(state) == 3.0
+        >>> solution = instance.evaluate(state)
+        >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)
         """
     def unary_encode(
         self,
@@ -4123,21 +6538,22 @@ class Instance:
         - `atol`: Optional absolute tolerance used when normalizing integer
           bounds before encoding. If None, uses the default tolerance.
 
-        # Examples
+        # Postconditions
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
+        Encoding preserves existing output semantics, or captures the pre-encoding active objective when no output objective exists, while rewriting the active objective.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.integer(0, lower=2, upper=5, name="x")
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x],
-        ...     objective=x,
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
+        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
         ... )
         >>> instance.unary_encode({0})
-        >>> instance.objective
-        Function(x1 + x2 + x3 + 2)
-        ```
+        >>> encoded_ids = instance.required_ids()
+        >>> assert len(encoded_ids) == 3
+        >>> state = {variable_id: 1 for variable_id in encoded_ids}
+        >>> assert instance.objective.evaluate(state) == 5.0
+        >>> solution = instance.evaluate(state)
+        >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 5.0)
         """
     def substitute(self, assignments: typing.Mapping[builtins.int, ToFunction]) -> None:
         r"""
@@ -4162,32 +6578,78 @@ class Instance:
         the caller must provide a domain-preserving encoding or add the required
         linking and bound constraints explicitly.
 
+        The substituted variable's definition is retained and its value becomes
+        dependent on the replacement expression. {meth}`~ommx.Instance.evaluate`
+        reconstructs that value and checks its original kind and bound when
+        determining {attr}`~ommx.Solution.feasible`. Those checks do not add
+        constraints to the solver input. Being able to reconstruct a value is
+        therefore not a guarantee of an equivalent optimization problem.
+
         Raises ``ValueError`` on cyclic or recursive assignments, or when
-        substituting a variable that is a member of an indicator, one-hot, or
-        SOS1 constraint.
+        substituting the controlling variable of an active Indicator constraint
+        or a member of an active OneHot or SOS1 constraint. Variables appearing
+        only in an Indicator's function body can be substituted.
 
         # Examples
 
-        Encode an integer variable x0 in range $[0, 3]$ into two binary
-        variables by hand, instead of using {meth}`~ommx.Instance.log_encode`:
+        To retain a variable's domain in the solver input, keep that variable
+        and add a linking equality. Here two newly introduced binary variables
+        encode one original binary variable. The original variable's domain
+        and the equality together prevent both encoding variables from being 1.
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
-        >>> x = DecisionVariable.integer(0, lower=0, upper=3, name="x")
-        >>> b = [DecisionVariable.binary(i, name="b", subscripts=[i]) for i in (1, 2)]
+        >>> from ommx import Instance
+        >>> linked = Instance.maximize()
+        >>> original = linked.new_binary("original")
+        >>> linked.objective = original
+        >>> bits = [linked.new_binary("bit", subscripts=[i]) for i in range(2)]
+        >>> _ = linked.add_constraint(original == bits[0] + bits[1])
+        >>> assert linked.evaluate({original.id: 1, bits[0].id: 1, bits[1].id: 0}).feasible
+        >>> assert not linked.evaluate({original.id: 1, bits[0].id: 1, bits[1].id: 1}).feasible
+
+        Alternatively, eliminate the original variable from the solver input
+        and constrain the replacement expression explicitly. Because the new
+        variables are binary, their sum is integral; the added bounds ensure
+        that it also lies in the original binary domain. The lower bound is
+        redundant for this particular encoding, but illustrates both sides of
+        the domain constraint.
+
+        >>> from ommx import Instance
+        >>> encoded = Instance.maximize()
+        >>> original = encoded.new_binary("original")
+        >>> encoded.objective = original
+        >>> bits = [encoded.new_binary("bit", subscripts=[i]) for i in range(2)]
+        >>> expression = bits[0] + bits[1]
+        >>> encoded.substitute({original.id: expression})
+        >>> _ = encoded.add_constraint(expression >= 0)
+        >>> _ = encoded.add_constraint(expression <= 1)
+        >>> solution = encoded.evaluate({bits[0].id: 1, bits[1].id: 0})
+        >>> assert solution.feasible
+        >>> assert solution.state.entries[original.id] == 1.0
+        >>> assert not encoded.evaluate({bits[0].id: 1, bits[1].id: 1}).feasible
+
+        # Postconditions
+
+        Substitution rewrites the active objective while output evaluation restores the substituted variable value.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> b = DecisionVariable.binary(1)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x, *b],
-        ...     objective=x,
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
+        ...     decision_variables=[x, b], objective=x, constraints={}, sense=Sense.Maximize
         ... )
-        >>> instance.substitute({0: b[0] + 2 * b[1]})
-        >>> instance.objective
-        Function(x1 + 2*x2)
-        ```
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> instance.substitute({0: b})
+        >>> assert instance.required_ids() == {1}
+        >>> assert instance.objective.evaluate({1: 1}) == -1.0
+        >>> solution = instance.evaluate({1: 1})
+        >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)
         """
     def convert_inequality_to_equality_with_integer_slack(
-        self, constraint_id: builtins.int, max_integer_range: builtins.int
+        self,
+        constraint_id: ConstraintID | builtins.int,
+        max_integer_range: builtins.int,
+        *,
+        atol: typing.Optional[builtins.float] = None,
     ) -> None:
         r"""
         Convert an inequality constraint $f(x) \leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.
@@ -4198,11 +6660,13 @@ class Instance:
 
         - Since this method evaluates the bound of $f(x)$, we may find that:
 
-          - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:
+          - The bound $[l, u]$ is infeasible at the selected tolerance, i.e.
+            $l > \text{atol}$:
             this means the instance is infeasible because this constraint never be satisfied,
             and an error is raised.
 
-          - The bound $[l, u]$ is always negative, i.e. $u \leq 0$:
+          - The bound is feasible everywhere at the selected tolerance, i.e.
+            $u \leq \text{atol}$:
             this means this constraint is trivially satisfied,
             the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,
             and this method returns without introducing slack variable or raising an error.
@@ -4211,8 +6675,8 @@ class Instance:
 
         Let's consider a simple inequality constraint x0 + 2*x1 <= 5.
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import ConstraintID
+        >>> from ommx import DecisionVariable, Equality, Instance, Sense
         >>> x = [
         ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
         ...     for i in range(3)
@@ -4220,28 +6684,36 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints=[
-        ...         (x[0] + 2*x[1] <= 5).set_id(0)
-        ...     ],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={0: x[0] + 2*x[1] <= 5},
+        ...     sense=Sense.Maximize,
         ... )
-        >>> instance.constraints[0]
-        Constraint(x0 + 2*x1 - 5 <= 0)
-        ```
 
         Introduce an integer slack variable
 
-        ```python
         >>> instance.convert_inequality_to_equality_with_integer_slack(
         ...     constraint_id=0,
         ...     max_integer_range=32
         ... )
-        >>> instance.constraints[0]
-        Constraint(x0 + 2*x1 + x3 - 5 == 0)
-        ```
+        >>> assert instance.constraints[ConstraintID(0)].function.terms == {
+        ...     (0,): 1.0, (1,): 2.0, (3,): 1.0, (): -5.0
+        ... }
+        >>> assert instance.constraints[ConstraintID(0)].equality == Equality.EqualToZero
+
+        Raises {class}`~ommx.ExactIntegerSlackError` when exact conversion is
+        unavailable because the coefficients cannot be normalized or the slack
+        range exceeds ``max_integer_range``. Raises
+        {class}`~ommx.InfeasibleDetected` when the bounds prove the inequality
+        infeasible.
+        ``atol`` controls zero-sensitive interval evaluation and the inclusive
+        inequality feasibility threshold and must be less than ``0.5``. If
+        omitted, :attr:`DEFAULT_ATOL` is used.
         """
     def add_integer_slack_to_inequality(
-        self, constraint_id: builtins.int, slack_upper_bound: builtins.int
+        self,
+        constraint_id: ConstraintID | builtins.int,
+        slack_upper_bound: builtins.int,
+        *,
+        atol: typing.Optional[builtins.float] = None,
     ) -> typing.Optional[builtins.float]:
         r"""
         Convert inequality $f(x) \leq 0$ to **inequality** $f(x) + b s \leq 0$ with an integer slack variable $s$.
@@ -4259,12 +6731,16 @@ class Instance:
         **Returns:**
         The coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
 
+        ``atol`` controls zero-sensitive interval bounds and the inclusive
+        inequality feasibility threshold used to select the slack coefficient;
+        it must be less than ``0.5``. If omitted, :attr:`DEFAULT_ATOL` is used.
+
         # Examples
 
         Let's consider a simple inequality constraint x0 + 2*x1 <= 4.
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import ConstraintID
+        >>> from ommx import DecisionVariable, Equality, Instance, Sense
         >>> x = [
         ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
         ...     for i in range(3)
@@ -4272,25 +6748,21 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints=[
-        ...         (x[0] + 2*x[1] <= 4).set_id(0)
-        ...     ],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={0: x[0] + 2*x[1] <= 4},
+        ...     sense=Sense.Maximize,
         ... )
-        >>> instance.constraints[0]
-        Constraint(x0 + 2*x1 - 4 <= 0)
-        ```
 
         Introduce an integer slack variable s in [0, 2]
 
-        ```python
         >>> b = instance.add_integer_slack_to_inequality(
         ...     constraint_id=0,
         ...     slack_upper_bound=2
         ... )
-        >>> b, instance.constraints[0]
-        (2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))
-        ```
+        >>> assert b == 2.0
+        >>> assert instance.constraints[ConstraintID(0)].function.terms == {
+        ...     (0,): 1.0, (1,): 2.0, (3,): 2.0, (): -4.0
+        ... }
+        >>> assert instance.constraints[ConstraintID(0)].equality == Equality.LessThanOrEqualToZero
         """
     def decision_variable_role(
         self, id: builtins.int
@@ -4298,26 +6770,43 @@ class Instance:
         r"""
         Return the state role of a decision variable.
 
-        The role is one of ``used``, ``fixed``, ``dependent``, or
-        ``irrelevant``. Unknown IDs return ``None``.
+        See {class}`~ommx.DecisionVariableRole` for the four roles, which depend
+        on this Instance's current structure rather than the variable's kind.
+        Unknown IDs return ``None``. For a complete reconstruction example,
+        see {meth}`~ommx.Instance.populate_state`.
         """
     def decision_variable_roles(
         self,
     ) -> builtins.dict[builtins.int, DecisionVariableRole]:
         r"""
         Return the state role of every decision variable, keyed by ID.
+
+        Each value is a {class}`~ommx.DecisionVariableRole` derived from this
+        Instance. See {meth}`~ommx.Instance.populate_state` for an example that
+        queries roles after substitution and reconstructs the candidate values.
         """
     def fixed_decision_variables(self) -> builtins.dict[builtins.int, builtins.float]:
         r"""
         Return fixed decision variables as ``{id: fixed_value}``.
+
+        These values are retained by the Instance and restored by
+        {meth}`~ommx.Instance.populate_state`; a caller's fixed-value entry is
+        checked for consistency rather than used to overwrite the recorded value.
         """
     def dependent_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
         Return IDs of decision variables defined by ``decision_variable_dependency``.
+
+        {meth}`~ommx.Instance.populate_state` computes their values from the
+        recorded expressions. See that method for an example and consistency rules.
         """
     def irrelevant_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
         Return IDs of decision variables not used, fixed, or dependent.
+
+        Values omitted from a candidate receive defaults under
+        {meth}`~ommx.Instance.populate_state`. Supply a value explicitly when
+        it matters for reporting or checking a particular candidate.
         """
     def stats(self) -> dict:
         r"""
@@ -4360,7 +6849,6 @@ class Instance:
 
         # Examples
 
-        ```python
         >>> from ommx import Instance
         >>> instance = Instance.minimize()
         >>> stats = instance.stats()
@@ -4368,7 +6856,6 @@ class Instance:
         0
         >>> stats["constraints"]["total"]
         0
-        ```
         """
     def decision_variables_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
@@ -4378,7 +6865,8 @@ class Instance:
         """
     def constraints_df(
         self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        *,
+        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"],
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
         removed: builtins.bool = False,
     ) -> pandas.DataFrame:
@@ -4408,8 +6896,7 @@ class Instance:
         DataFrame of named functions
         """
     def constraint_context_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint context DataFrame (id-indexed wide format).
@@ -4420,8 +6907,7 @@ class Instance:
         to read: `"regular"`, `"indicator"`, `"one_hot"`, or `"sos1"`.
         """
     def constraint_parameters_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint parameters DataFrame (long format).
@@ -4430,8 +6916,7 @@ class Instance:
         `{kind}_constraint_id`, `key`, `value`. Default RangeIndex.
         """
     def constraint_provenance_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint provenance DataFrame (long format).
@@ -4440,8 +6925,7 @@ class Instance:
         `{kind}_constraint_id`, `step`, `source_kind`, `source_id`.
         """
     def constraint_removed_reasons_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Removed-constraint reasons DataFrame (long format).
@@ -4470,105 +6954,160 @@ class Instance:
         r"""
         Convert the instance to a minimization problem.
 
-        If the instance is already a minimization problem, this does nothing.
+        If both the active objective and the output objective already use
+        minimization, this does nothing.
 
         **Returns:**
-        ``True`` if the instance is converted, ``False`` if already a minimization problem.
+        ``True`` if either objective is converted, ``False`` if both already
+        use minimization.
 
-        # Examples
+        # Postconditions
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
-        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        Conversion changes both active and output objective semantics and is idempotent at the target sense. An existing output objective remains explicit even if both objectives become structurally equal.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(x),
-        ...     constraints=[sum(x) == 1],
-        ...     sense=Instance.MAXIMIZE,
+        ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
         ... )
-        >>> instance.sense == Instance.MAXIMIZE
-        True
-        >>> instance.objective
-        Function(x0 + x1 + x2)
-        ```
-
-        Convert to a minimization problem
-
-        ```python
-        >>> instance.as_minimization_problem()
-        True
-        >>> instance.sense == Instance.MINIMIZE
-        True
-        >>> instance.objective
-        Function(-x0 - x1 - x2)
-        ```
-
-        If the instance is already a minimization problem, this does nothing
-
-        ```python
-        >>> instance.as_minimization_problem()
-        False
-        ```
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> assert instance.evaluate({0: 1}).objective == 3.0
+        >>> assert instance.as_minimization_problem()
+        >>> solution = instance.evaluate({0: 1})
+        >>> assert instance.objective.evaluate({0: 1}) == -3.0
+        >>> assert (solution.sense, solution.objective) == (Sense.Minimize, -3.0)
+        >>> assert not instance.as_minimization_problem()
         """
     def as_maximization_problem(self) -> builtins.bool:
         r"""
         Convert the instance to a maximization problem.
 
-        If the instance is already a maximization problem, this does nothing.
+        If both the active objective and the output objective already use
+        maximization, this does nothing.
 
         **Returns:**
-        ``True`` if the instance is converted, ``False`` if already a maximization problem.
+        ``True`` if either objective is converted, ``False`` if both already
+        use maximization.
 
-        # Examples
+        # Postconditions
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
-        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        Conversion changes both active and output objective semantics and is idempotent at the target sense. An existing output objective remains explicit even if both objectives become structurally equal.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(x),
-        ...     constraints=[sum(x) == 1],
-        ...     sense=Instance.MINIMIZE,
+        ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Minimize
         ... )
-        >>> instance.sense == Instance.MINIMIZE
-        True
-        >>> instance.objective
-        Function(x0 + x1 + x2)
+        >>> assert instance.convert_active_objective(Sense.Maximize)
+        >>> assert instance.evaluate({0: 1}).objective == 3.0
+        >>> assert instance.as_maximization_problem()
+        >>> solution = instance.evaluate({0: 1})
+        >>> assert instance.objective.evaluate({0: 1}) == -3.0
+        >>> assert (solution.sense, solution.objective) == (Sense.Maximize, -3.0)
+        >>> assert not instance.as_maximization_problem()
+        """
+    def convert_active_objective(self, target: Sense) -> builtins.bool:
+        r"""
+        Convert only the active, solver-facing objective to `target`.
+
+        For example, a solver may accept only minimization while the problem maximizes
+        a reward. This method negates the active objective and changes
+        {attr}`~ommx.Instance.sense`, preserving the objective and sense returned by
+        {meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Instance.evaluate_samples`:
+
+        ```pycon
+        >>> from ommx import Instance, Sense
+        >>> instance = Instance.maximize()
+        >>> reward = instance.new_binary("reward")
+        >>> instance.objective = 3 * reward
+        >>> assert instance.output_objective is None
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> assert instance.sense == Sense.Minimize
+        >>> assert instance.objective.evaluate({reward.id: 1}) == -3.0
+        >>> reported = instance.evaluate({reward.id: 1})
+        >>> assert (reported.sense, reported.objective) == (Sense.Maximize, 3.0)
+        >>> assert not instance.convert_active_objective(Sense.Minimize)
+
         ```
 
-        Convert to a maximization problem
+        Returns `True` if the active objective was converted and `False` if its sense
+        already equals `target`. On the first conversion without an output objective,
+        the previous active objective and sense are captured in
+        {attr}`~ommx.Instance.output_objective`. An existing output objective is kept.
+        Once captured, it remains explicit even if a later conversion makes it equal
+        to the active objective. Conversion works in either direction:
 
-        ```python
-        >>> instance.as_maximization_problem()
-        True
-        >>> instance.sense == Instance.MAXIMIZE
-        True
-        >>> instance.objective
-        Function(-x0 - x1 - x2)
+        ```pycon
+        >>> for source, target in (
+        ...     (Sense.Maximize, Sense.Minimize),
+        ...     (Sense.Minimize, Sense.Maximize),
+        ... ):
+        ...     model = Instance.minimize() if source == Sense.Minimize else Instance.maximize()
+        ...     x = model.new_binary("x")
+        ...     model.objective = 3 * x
+        ...     before = model.evaluate({x.id: 1})
+        ...     assert model.convert_active_objective(target)
+        ...     after = model.evaluate({x.id: 1})
+        ...     assert model.sense == target
+        ...     assert model.objective.evaluate({x.id: 1}) == -3.0
+        ...     assert (after.sense, after.objective) == (before.sense, before.objective)
+        ...     assert not model.convert_active_objective(target)
+
         ```
 
-        If the instance is already a maximization problem, this does nothing
+        Use {meth}`~ommx.Instance.as_minimization_problem` or
+        {meth}`~ommx.Instance.as_maximization_problem` when both the active and output
+        objective semantics should change. Assigning a new {attr}`~ommx.Instance.objective`
+        also rebases output evaluation onto that objective.
 
-        ```python
-        >>> instance.as_maximization_problem()
-        False
-        ```
+        The reported objective is separate from feasibility and optimality. In
+        particular, after penalty conversion a small {attr}`~ommx.Solution.objective`
+        does not measure the penalty or establish that retained constraints are
+        satisfied. Check {attr}`~ommx.Solution.feasible` independently. Equivalent
+        objective sign conversion preserves optimality, but other transformations can
+        invalidate its transport; use {meth}`~ommx.Instance.map_active_optimality` for
+        the recorded mapping of a backend's optimality status.
+        """
+    def map_active_optimality(self, active: Optimality) -> Optimality:
+        r"""
+        Map an optimality status for the active solver-facing formulation to
+        the objective semantics returned by evaluation.
+
+        When the instance records that active-formulation optimality does not
+        transport to its output objective, this returns
+        {attr}`~ommx.Optimality.Unspecified`.
+        Otherwise the supplied status is returned unchanged. This reads the
+        recorded transformation guarantee; it does not solve the problem,
+        verify a backend's claim, or test a candidate's feasibility. Merely
+        retaining an output objective or reconstructing variable values does
+        not establish optimality. See {attr}`~ommx.Solution.optimality` for the
+        status stored on a result.
+
+        # Postconditions
+
+        Optimality is preserved for equivalent objective conversion and discarded after penalty preparation.
+
+        >>> from ommx import DecisionVariable, Instance, Optimality, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> equivalent = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> assert equivalent.convert_active_objective(Sense.Minimize)
+        >>> statuses = (Optimality.Unspecified, Optimality.Optimal, Optimality.NotOptimal)
+        >>> for status in statuses:
+        ...     assert equivalent.map_active_optimality(status) == status
+        >>> penalized = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+        ... )
+        >>> _ = penalized.to_qubo(uniform_penalty_weight=1.0)
+        >>> for status in statuses:
+        ...     assert penalized.map_active_optimality(status) == Optimality.Unspecified
         """
     def get_decision_variable_by_id(
         self, variable_id: builtins.int
     ) -> DecisionVariable:
         r"""
         Get a specific decision variable by ID
-        """
-    def get_constraint_by_id(self, constraint_id: builtins.int) -> Constraint:
-        r"""
-        Get a specific constraint by ID
-        """
-    def get_removed_constraint_by_id(
-        self, constraint_id: builtins.int
-    ) -> RemovedConstraint:
-        r"""
-        Get a specific removed constraint by ID
         """
     def get_named_function_by_id(
         self, named_function_id: builtins.int
@@ -4586,44 +7125,89 @@ class Instance:
         **Returns:**
         ``True`` if any reduction was performed, ``False`` otherwise.
 
-        # Examples
+        # Postconditions
 
-        Consider an instance with binary variables and quadratic terms:
+        Reduction preserves existing output semantics, or captures the pre-reduction active objective when no output objective exists, while rewriting active expressions.
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
-        >>> x = [DecisionVariable.binary(i) for i in range(2)]
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=x[0] * x[0] + x[0] * x[1],
-        ...     constraints=[],
-        ...     sense=Instance.MINIMIZE,
+        ...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Maximize
         ... )
-        >>> instance.objective
-        Function(x0*x0 + x0*x1)
-        ```
-
-        After reducing binary powers, x0^2 becomes x0:
-
-        ```python
-        >>> changed = instance.reduce_binary_power()
-        >>> changed
-        True
-        >>> instance.objective
-        Function(x0*x1 + x0)
-        ```
-
-        Running it again should not change anything:
-
-        ```python
-        >>> changed = instance.reduce_binary_power()
-        >>> changed
-        False
-        ```
+        >>> assert instance.reduce_binary_power()
+        >>> assert instance.objective.evaluate({0: 1}) == 1.0
+        >>> solution = instance.evaluate({0: 1})
+        >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)
+        >>> assert not instance.reduce_binary_power()
         """
     @staticmethod
     def load_mps(path: builtins.str) -> Instance: ...
-    def save_mps(self, path: builtins.str, compress: builtins.bool = True) -> None: ...
+    def save_mps(self, path: builtins.str, compress: builtins.bool = True) -> None:
+        r"""
+        Write the active formulation to an MPS file.
+
+        # Parameters
+
+        - ``path``: Destination file. Missing parent directories are created and
+          an existing file is overwritten after model validation succeeds.
+        - ``compress``: Write gzip-compressed bytes when ``True`` (the default),
+          or plain text when ``False``, independently of the filename extension.
+
+        # Supported models
+
+        The writer accepts both minimization and maximization. The active objective
+        and active regular constraint functions must be stored as expanded
+        polynomials of degree at most two. Quadratic terms are written using
+        ``QUADOBJ`` and ``QCMATRIX`` sections, with the coefficient convention
+        described below. Variables used by the active formulation must have
+        Binary, Integer, or Continuous kind. Active Indicator, OneHot, and SOS1
+        constraints are rejected; lower them before export if appropriate.
+        No preparation is performed automatically.
+
+        Unsupported models raise ``RuntimeError`` before creating directories
+        or truncating the destination. Errors reported during path setup or
+        writing raise ``RuntimeError``. Writing is not atomic: created directories
+        and a truncated or partial destination may remain after failure.
+        With compression enabled, the current implementation does not propagate
+        errors that occur only while finishing the gzip stream. A normal return
+        therefore does not guarantee a complete gzip file. The instance is not
+        modified.
+
+        # Quadratic coefficient convention
+
+        The current writer emits each stored quadratic monomial coefficient once,
+        unchanged, in both sections. It does not double diagonal objective
+        coefficients or add mirrored off-diagonal constraint entries.
+        Receiving tools can therefore interpret a different model or reject the
+        file even when they recognize these section names.
+
+        For example, [Gurobi's MPS convention](https://docs.gurobi.com/projects/optimizer/en/current/reference/fileformats/modelformats.html#quadobj-section)
+        applies a one-half multiplier to the objective matrix and requires a
+        symmetric constraint matrix. An objective ``6 * x * x`` is written here
+        as a diagonal coefficient of ``6``, which that objective convention
+        interprets as ``3 * x * x``. Check the receiving tool's conventions and
+        imported quadratic expressions before solving; this writer does not
+        adapt the coefficients to a selected external tool.
+
+        # Information boundary
+
+        The writer exports the active objective and sense, active regular
+        constraints, and the kinds and bounds of variables used by that model.
+        Quadratic coefficients follow the convention above.
+        Unused variables, including those referenced only by output semantics,
+        named functions, or removed constraints, are omitted. Unused variables
+        of unsupported kinds do not prevent export.
+
+        ``description.name`` supplies the problem name. Variables and constraints
+        use generated names ``OMMX_VAR_<id>`` and ``OMMX_CONSTR_<id>``; their
+        modeling names, subscripts, and other labels are not preserved. Other
+        Instance information is not exported, including remaining description
+        fields, annotations, parameters, named functions, removed constraints,
+        dependencies, fixed-value recovery, and {attr}`~ommx.Instance.output_objective`.
+        MPS is therefore not a round-trip storage format for an OMMX Instance.
+        Retain the OMMX instance when its recovery and output semantics are needed
+        to interpret an external tool's candidates.
+        """
     @staticmethod
     def load_qplib(path: builtins.str) -> Instance: ...
     def logical_memory_profile(self) -> builtins.str:
@@ -4648,20 +7232,510 @@ class Instance:
 
         # Examples
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=x[0] + x[1],
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={},
+        ...     sense=Sense.Maximize,
         ... )
         >>> profile = instance.logical_memory_profile()
         >>> isinstance(profile, str)
         True
-        ```
         """
+    def prepare(self, input_class: InstanceClass, policy: PreparationPolicy) -> None:
+        r"""
+        Apply the caller's ``policy`` to this instance in place to reach
+        ``input_class`` membership.
+
+        ``policy`` selects existing {class}`~ommx.Instance` owner operations.
+        Whole-class membership is checked before the first phase and after each
+        selected phase. Phases are applied at most once in this order, stopping
+        as soon as membership is reached:
+
+        1. ``special_constraints``:
+           {meth}`~ommx.Instance.lower_special_constraints`
+        2. ``objective``: {meth}`~ommx.Instance.convert_active_objective`
+        3. ``integer_slack``:
+           {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,
+           followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only
+           when exact conversion is unavailable and ``slack_upper_bound`` is set
+        4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
+        5. ``fixed_penalty``
+        6. ``binary_power_reduction``:
+           {meth}`~ommx.Instance.reduce_binary_power`
+
+        Success guarantees ``input_class`` membership. When ``input_class`` is an
+        Adapter's ``INPUT_CLASS``, that membership is the complete applicability
+        condition; converter-local or backend failures may still occur later.
+
+        Preparation is not globally transactional. Changes committed by an
+        earlier owner operation remain if a later operation raises an error.
+        Within the Integer-slack phase, active regular inequalities are processed
+        in ascending constraint-ID order, and a later failure leaves earlier
+        conversions committed. Other phases retain the mutation and failure
+        semantics of their owner operations.
+
+        Existing Rust owner signals retain their Python exception mappings.
+        When configured phases are exhausted without reaching ``input_class``,
+        {class}`~ommx.PreparationTargetNotReachedError` exposes the final
+        membership report through its ``report`` attribute.
+
+        # Postconditions
+
+        Selected owner operations establish their own output semantics, and
+        successful composition reaches the target class.
+
+        >>> from ommx import DecisionVariable, Instance, InstanceClass, Optimality, PreparationPolicy, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
+        ... )
+        >>> policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
+        >>> assert instance.prepare(InstanceClass.qubo(), policy) is None
+        >>> assert InstanceClass.qubo().contains(instance)
+        >>> assert instance.sense == Sense.Minimize
+        >>> assert instance.objective.evaluate({0: 0}) == 2.0
+        >>> solution = instance.evaluate({0: 0})
+        >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)
+        >>> assert instance.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified
+        """
+    def promote_sos1_big_m(
+        self,
+        request: Sos1BigMPromotionRequest,
+        *,
+        mode: typing.Literal["best_effort", "strict"] = "best_effort",
+    ) -> Sos1BigMPromotion:
+        r"""
+        Validate and promote a batch of claimed SOS1 Big-M formulations.
+
+        The batch request is keyed by regular cardinality constraint ID.
+        The Rust {class}`Instance` checks every formulation against the same
+        unchanged instance and reconciles conflicts before applying the plan.
+        Bounds are inferred using only each formulation's claimed Big-M links.
+        Successful entries apply their prepared bounds together with promotion;
+        rejected entries contribute no bound changes, and strict rejection
+        leaves the entire instance unchanged.
+        Both modes return one {class}`~ommx.Sos1BigMPromotion` batch report:
+
+        - ``mode="best_effort"`` (default) applies independent valid formulations.
+          The report's ``promoted`` map associates each successful cardinality
+          ID with its allocated SOS1 ID; ``rejections`` maps rejected
+          cardinality IDs to diagnostic strings.
+        - ``mode="strict"`` requires every formulation to be valid. Any
+          rejection raises {class}`~ommx.Sos1BigMPromotionBatchRejectedError`
+          before mutation. The exception's ``request_count`` is the batch
+          size and ``rejections`` contains all rejected cardinality IDs and
+          their diagnostics. A successful strict report has no rejections.
+
+        Overlapping formulation rows are rejected; independent formulations
+        may share SOS1 members. An empty request returns an empty report.
+        Planning and application do not clone the instance.
+
+        Promotion preserves the objective and mathematical feasible region on
+        original members after projecting out fresh selectors. Positive link
+        scaling is allowed; Big-M must cover the prepared member bounds exactly.
+        Bounds are derived directly from exact link-coefficient ratios without
+        tolerance expansion. Integer limits are rounded inward; conversion to
+        floating-point bounds rounds outward. Exact clipping retains even
+        sub-tolerance updates and does not read the default tolerance.
+        Coverage validation is exact.
+        Promotion does not promise identical
+        violations or feasibility classification at finite tolerance.
+        Unknown mode strings raise {class}`ValueError` before planning.
+        """
+
+@typing.final
+class InstanceClass:
+    r"""
+    A set of :class:`Instance` values represented as a finite union of clauses.
+    """
+    @property
+    def clauses(self) -> builtins.list[InstanceClassClause]: ...
+    def __new__(
+        cls, clauses: typing.Sequence[InstanceClassClause]
+    ) -> InstanceClass: ...
+    @staticmethod
+    def qubo() -> InstanceClass:
+        r"""
+        Class of minimization QUBO formulations accepted by
+        {meth}`~ommx.Instance.as_qubo_format` after Preparation.
+
+        # Postconditions
+
+        The target accepts unconstrained minimization QUBO formulations and rejects models outside that class.
+
+        >>> from ommx import DecisionVariable, Instance, InstanceClass, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> linear = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize
+        ... )
+        >>> quadratic = Instance.from_components(
+        ...     decision_variables=[x], objective=x * x, constraints={}, sense=Sense.Minimize
+        ... )
+        >>> cubic = Instance.from_components(
+        ...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Minimize
+        ... )
+        >>> maximizing = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> continuous = DecisionVariable.continuous(1)
+        >>> non_binary = Instance.from_components(
+        ...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize
+        ... )
+        >>> constrained = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize
+        ... )
+        >>> target = InstanceClass.qubo()
+        >>> assert target.contains(linear)
+        >>> assert target.contains(quadratic)
+        >>> assert not target.contains(cubic)
+        >>> assert not target.contains(maximizing)
+        >>> assert not target.contains(non_binary)
+        >>> assert not target.contains(constrained)
+        """
+    @staticmethod
+    def hubo() -> InstanceClass:
+        r"""
+        Class of minimization HUBO formulations accepted by
+        {meth}`~ommx.Instance.as_hubo_format` after Preparation.
+
+        # Postconditions
+
+        The target accepts unconstrained minimization Binary HUBO formulations and rejects models outside that class.
+
+        >>> from ommx import DecisionVariable, Instance, InstanceClass, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> linear = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize
+        ... )
+        >>> cubic = Instance.from_components(
+        ...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Minimize
+        ... )
+        >>> maximizing = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> continuous = DecisionVariable.continuous(1)
+        >>> non_binary = Instance.from_components(
+        ...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize
+        ... )
+        >>> constrained = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize
+        ... )
+        >>> target = InstanceClass.hubo()
+        >>> assert target.contains(linear)
+        >>> assert target.contains(cubic)
+        >>> assert not target.contains(maximizing)
+        >>> assert not target.contains(non_binary)
+        >>> assert not target.contains(constrained)
+        """
+    def union(self, other: InstanceClass) -> InstanceClass:
+        r"""
+        Return the finite union of two instance classes.
+        """
+    def contains(self, instance: Instance) -> builtins.bool:
+        r"""
+        Return whether ``instance`` belongs to this class.
+        """
+    def check_membership(self, instance: Instance) -> InstanceClassMembershipReport:
+        r"""
+        Evaluate membership without mutating or preparing ``instance``.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class InstanceClassClause:
+    r"""
+    One conjunctive clause in an :class:`InstanceClass`.
+
+    Every condition in a clause must hold. The containing instance class is
+    the finite union of its clauses, so alternatives are not combined across
+    clause boundaries.
+    """
+    @property
+    def label(self) -> builtins.str:
+        r"""
+        Human-readable diagnostic label. It does not affect membership.
+        """
+    @property
+    def allowed_variable_kinds(self) -> builtins.set[Kind]: ...
+    @property
+    def objective_polynomial_requirement(self) -> PolynomialRequirement: ...
+    @property
+    def regular_constraint_polynomial_requirements(
+        self,
+    ) -> builtins.dict[Equality, PolynomialRequirement]: ...
+    @property
+    def indicator_body_polynomial_requirements(
+        self,
+    ) -> builtins.dict[Equality, PolynomialRequirement]: ...
+    @property
+    def allows_one_hot(self) -> builtins.bool: ...
+    @property
+    def allows_sos1(self) -> builtins.bool: ...
+    @property
+    def allowed_senses(self) -> builtins.set[Sense]: ...
+    def __new__(
+        cls,
+        *,
+        label: builtins.str,
+        allowed_variable_kinds: builtins.set[Kind],
+        objective_polynomial_requirement: PolynomialRequirement,
+        allowed_senses: builtins.set[Sense],
+        regular_constraint_polynomial_requirements: typing.Optional[
+            typing.Mapping[Equality, PolynomialRequirement]
+        ] = None,
+        indicator_body_polynomial_requirements: typing.Optional[
+            typing.Mapping[Equality, PolynomialRequirement]
+        ] = None,
+        allows_one_hot: builtins.bool = False,
+        allows_sos1: builtins.bool = False,
+    ) -> InstanceClassClause: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class InstanceClassClauseReport:
+    r"""
+    Membership result for one conjunctive instance-class clause.
+    """
+    @property
+    def clause_index(self) -> builtins.int: ...
+    @property
+    def clause_label(self) -> builtins.str: ...
+    @property
+    def mismatches(self) -> builtins.list[InstanceClassMismatch]: ...
+    @property
+    def is_member(self) -> builtins.bool: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class InstanceClassMembershipReport:
+    r"""
+    Side-effect-free membership report for an :class:`InstanceClass`.
+    """
+    @property
+    def clause_reports(self) -> builtins.list[InstanceClassClauseReport]: ...
+    @property
+    def is_member(self) -> builtins.bool: ...
+    @property
+    def matching_clauses(self) -> builtins.list[tuple[builtins.int, builtins.str]]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __str__(self) -> builtins.str: ...
+    def __repr__(self) -> builtins.str: ...
+
+class InstanceClassMismatch:
+    r"""
+    One structured reason an instance is outside a complete clause.
+    """
+    @typing.final
+    class VariableKindNotAllowed(InstanceClassMismatch):
+        __match_args__ = (
+            "kind",
+            "variable_ids",
+            "allowed_kinds",
+        )
+        @property
+        def kind(self) -> Kind: ...
+        @property
+        def variable_ids(self) -> builtins.set[builtins.int]: ...
+        @property
+        def allowed_kinds(self) -> builtins.set[Kind]: ...
+        def __new__(
+            cls,
+            kind: Kind,
+            variable_ids: builtins.set[builtins.int],
+            allowed_kinds: builtins.set[Kind],
+        ) -> InstanceClassMismatch.VariableKindNotAllowed: ...
+
+    @typing.final
+    class ObjectiveDegreeExceedsBound(InstanceClassMismatch):
+        __match_args__ = (
+            "actual_degree",
+            "bound",
+        )
+        @property
+        def actual_degree(self) -> builtins.int: ...
+        @property
+        def bound(self) -> PolynomialRequirement: ...
+        def __new__(
+            cls, actual_degree: builtins.int, bound: PolynomialRequirement
+        ) -> InstanceClassMismatch.ObjectiveDegreeExceedsBound: ...
+
+    @typing.final
+    class ObjectiveFunctionNotPolynomial(InstanceClassMismatch):
+        __match_args__ = ()
+        def __new__(cls) -> InstanceClassMismatch.ObjectiveFunctionNotPolynomial: ...
+
+    @typing.final
+    class RegularConstraintRelationNotAllowed(InstanceClassMismatch):
+        __match_args__ = (
+            "relation",
+            "constraint_ids",
+            "allowed_relations",
+        )
+        @property
+        def relation(self) -> Equality: ...
+        @property
+        def constraint_ids(self) -> builtins.set[ConstraintID]: ...
+        @property
+        def allowed_relations(self) -> builtins.set[Equality]: ...
+        def __new__(
+            cls,
+            relation: Equality,
+            constraint_ids: typing.AbstractSet[ConstraintID | builtins.int],
+            allowed_relations: builtins.set[Equality],
+        ) -> InstanceClassMismatch.RegularConstraintRelationNotAllowed: ...
+
+    @typing.final
+    class RegularConstraintDegreeExceedsBound(InstanceClassMismatch):
+        __match_args__ = (
+            "relation",
+            "actual_degrees",
+            "bound",
+        )
+        @property
+        def relation(self) -> Equality: ...
+        @property
+        def actual_degrees(self) -> builtins.dict[ConstraintID, builtins.int]: ...
+        @property
+        def bound(self) -> PolynomialRequirement: ...
+        def __new__(
+            cls,
+            relation: Equality,
+            actual_degrees: typing.Mapping[ConstraintID, builtins.int]
+            | typing.Mapping[builtins.int, builtins.int]
+            | typing.Mapping[ConstraintID | builtins.int, builtins.int],
+            bound: PolynomialRequirement,
+        ) -> InstanceClassMismatch.RegularConstraintDegreeExceedsBound: ...
+
+    @typing.final
+    class RegularConstraintFunctionNotPolynomial(InstanceClassMismatch):
+        __match_args__ = (
+            "relation",
+            "constraint_ids",
+        )
+        @property
+        def relation(self) -> Equality: ...
+        @property
+        def constraint_ids(self) -> builtins.set[ConstraintID]: ...
+        def __new__(
+            cls,
+            relation: Equality,
+            constraint_ids: typing.AbstractSet[ConstraintID | builtins.int],
+        ) -> InstanceClassMismatch.RegularConstraintFunctionNotPolynomial: ...
+
+    @typing.final
+    class IndicatorConstraintsNotAllowed(InstanceClassMismatch):
+        __match_args__ = ("constraint_ids",)
+        @property
+        def constraint_ids(self) -> builtins.set[IndicatorConstraintID]: ...
+        def __new__(
+            cls,
+            constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
+        ) -> InstanceClassMismatch.IndicatorConstraintsNotAllowed: ...
+
+    @typing.final
+    class IndicatorConstraintRelationNotAllowed(InstanceClassMismatch):
+        __match_args__ = (
+            "relation",
+            "constraint_ids",
+            "allowed_relations",
+        )
+        @property
+        def relation(self) -> Equality: ...
+        @property
+        def constraint_ids(self) -> builtins.set[IndicatorConstraintID]: ...
+        @property
+        def allowed_relations(self) -> builtins.set[Equality]: ...
+        def __new__(
+            cls,
+            relation: Equality,
+            constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
+            allowed_relations: builtins.set[Equality],
+        ) -> InstanceClassMismatch.IndicatorConstraintRelationNotAllowed: ...
+
+    @typing.final
+    class IndicatorBodyDegreeExceedsBound(InstanceClassMismatch):
+        __match_args__ = (
+            "relation",
+            "actual_degrees",
+            "bound",
+        )
+        @property
+        def relation(self) -> Equality: ...
+        @property
+        def actual_degrees(
+            self,
+        ) -> builtins.dict[IndicatorConstraintID, builtins.int]: ...
+        @property
+        def bound(self) -> PolynomialRequirement: ...
+        def __new__(
+            cls,
+            relation: Equality,
+            actual_degrees: typing.Mapping[IndicatorConstraintID, builtins.int]
+            | typing.Mapping[builtins.int, builtins.int]
+            | typing.Mapping[IndicatorConstraintID | builtins.int, builtins.int],
+            bound: PolynomialRequirement,
+        ) -> InstanceClassMismatch.IndicatorBodyDegreeExceedsBound: ...
+
+    @typing.final
+    class IndicatorBodyFunctionNotPolynomial(InstanceClassMismatch):
+        __match_args__ = (
+            "relation",
+            "constraint_ids",
+        )
+        @property
+        def relation(self) -> Equality: ...
+        @property
+        def constraint_ids(self) -> builtins.set[IndicatorConstraintID]: ...
+        def __new__(
+            cls,
+            relation: Equality,
+            constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
+        ) -> InstanceClassMismatch.IndicatorBodyFunctionNotPolynomial: ...
+
+    @typing.final
+    class OneHotConstraintsNotAllowed(InstanceClassMismatch):
+        __match_args__ = ("constraint_ids",)
+        @property
+        def constraint_ids(self) -> builtins.set[OneHotConstraintID]: ...
+        def __new__(
+            cls, constraint_ids: typing.AbstractSet[OneHotConstraintID | builtins.int]
+        ) -> InstanceClassMismatch.OneHotConstraintsNotAllowed: ...
+
+    @typing.final
+    class Sos1ConstraintsNotAllowed(InstanceClassMismatch):
+        __match_args__ = ("constraint_ids",)
+        @property
+        def constraint_ids(self) -> builtins.set[Sos1ConstraintID]: ...
+        def __new__(
+            cls, constraint_ids: typing.AbstractSet[Sos1ConstraintID | builtins.int]
+        ) -> InstanceClassMismatch.Sos1ConstraintsNotAllowed: ...
+
+    @typing.final
+    class SenseNotAllowed(InstanceClassMismatch):
+        __match_args__ = (
+            "sense",
+            "allowed_senses",
+        )
+        @property
+        def sense(self) -> Sense: ...
+        @property
+        def allowed_senses(self) -> builtins.set[Sense]: ...
+        def __new__(
+            cls, sense: Sense, allowed_senses: builtins.set[Sense]
+        ) -> InstanceClassMismatch.SenseNotAllowed: ...
+
+    @typing.final
+    class Unknown(InstanceClassMismatch):
+        __match_args__ = ("message",)
+        @property
+        def message(self) -> builtins.str: ...
+        def __new__(cls, message: builtins.str) -> InstanceClassMismatch.Unknown: ...
+
+    ...
 
 @typing.final
 class InstanceDescription:
@@ -4693,6 +7767,85 @@ class InstanceDescription:
     def __copy__(self) -> InstanceDescription: ...
     def __deepcopy__(self, _memo: typing.Any) -> InstanceDescription: ...
 
+@typing.final
+class IntegerEncodingPreparation:
+    r"""
+    Selection for the used-Integer encoding Preparation phase.
+
+    Exactly one encoding owner operation is selected. Validation and mutation
+    semantics remain owned by that operation.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def log_encode_all_used_integers(
+        *, atol: typing.Optional[builtins.float] = None
+    ) -> IntegerEncodingPreparation:
+        r"""
+        Select log encoding of every used Integer decision variable.
+
+        The complete target set is determined from
+        {attr}`~ommx.Instance.used_decision_variables` before mutation and encoded
+        together with the same mathematical rule as {meth}`~ommx.Instance.log_encode`.
+        ``atol`` normalizes bounds that are within tolerance of integers. On
+        success, no used Integer decision variable remains; irrelevant Integer
+        variables are not encoded.
+
+        A used Integer with a non-finite or otherwise non-encodable bound raises
+        {class}`~ommx.LogEncodingError`. Active SOS1 members cannot be substituted
+        and must be lowered first. Any error leaves this phase's input unchanged.
+        """
+
+@typing.final
+class IntegerSlackPreparation:
+    r"""
+    Integer-slack Preparation for active regular inequalities.
+
+    Preparation first attempts exact conversion to equality using
+    ``max_integer_range`` and ``atol``. ``slack_upper_bound=None`` requires the
+    constraint to become an equality or be removed as trivially satisfied, so
+    {class}`~ommx.ExactIntegerSlackError` is propagated. An integer value permits the
+    constraint to remain an inequality: only that signal selects the
+    inequality-preserving owner operation with this upper bound. The latter is
+    not an approximation of the original feasible set. Every other owner error
+    is propagated unchanged.
+    """
+    @property
+    def max_integer_range(self) -> builtins.int:
+        r"""
+        Maximum finite range accepted for exact Integer slack.
+        """
+    @property
+    def atol(self) -> builtins.float:
+        r"""
+        Absolute tolerance used to normalize bounds to integers.
+        """
+    @property
+    def slack_upper_bound(self) -> typing.Optional[builtins.int]:
+        r"""
+        Optional upper bound for inequality-preserving Integer slack.
+
+        ``None`` requires equality. An integer permits the inequality-preserving
+        owner operation only after {class}`~ommx.ExactIntegerSlackError`.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls,
+        *,
+        max_integer_range: builtins.int,
+        atol: typing.Optional[builtins.float] = None,
+        slack_upper_bound: typing.Optional[builtins.int] = None,
+    ) -> IntegerSlackPreparation:
+        r"""
+        Configure Integer-slack Preparation for active regular inequalities.
+
+        ``max_integer_range`` and ``atol`` are passed to
+        {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`.
+        ``slack_upper_bound`` has the fallback semantics documented by this
+        class. Inequalities are processed in ascending constraint-ID order; a
+        failure on a later constraint does not roll back conversions already
+        completed by this phase.
+        """
+
 class InvalidRemoteArtifactError(RemoteArtifactError):
     r"""
     The remote response is not a valid OMMX Artifact.
@@ -4712,30 +7865,23 @@ class Linear:
 
     Create a linear function `f(x₁, x₂) = 2x₁ + 3x₂ + 1`:
 
-    ```python
+    >>> from ommx import DecisionVariable, Linear
     >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
-    ```
 
     Or create via DecisionVariable arithmetic:
 
-    ```python
     >>> x1 = DecisionVariable.integer(1)
     >>> x2 = DecisionVariable.integer(2)
     >>> g = 2*x1 + 3*x2 + 1
-    ```
 
     Compare two linear functions with tolerance:
 
-    ```python
     >>> f.almost_equal(g, atol=1e-12)
     True
-    ```
 
     Note that `==` creates an equality Constraint, not a boolean:
 
-    ```python
     >>> constraint = f == g  # Returns Constraint, not bool
-    ```
     """
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]: ...
@@ -4836,19 +7982,158 @@ class Linear:
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
 
+class LogEncodingError(builtins.RuntimeError):
+    r"""
+    An exact log encoding is unavailable for one requested decision variable.
+    """
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Machine-readable reason for unavailable exact encoding.
+        """
+    @property
+    def variable_id(self) -> builtins.int:
+        r"""
+        Decision variable for which exact encoding is unavailable.
+        """
+    @property
+    def observed(self) -> builtins.str | builtins.int | builtins.float:
+        r"""
+        Observed bound or bit count that made encoding unavailable.
+        """
+    @property
+    def expected(self) -> builtins.str | builtins.int | builtins.float:
+        r"""
+        Required bound condition or maximum bit count.
+        """
+
 @typing.final
 class NamedFunction:
     r"""
-    NamedFunction wrapper for Python.
+    A labeled expression for reporting a candidate's additional metrics.
 
-    Holds the Rust `NamedFunction` plus an owned snapshot of its label
-    (`name` / `subscripts` / `parameters` / `description`). The label
-    store lives at the host (`Instance` / `Solution` / `SampleSet`) level;
-    when a wrapper is created via a host accessor, the host snapshots its
-    store into the third tuple slot. Mutations on a wrapper do NOT
-    propagate back to the host — re-insert via `Instance.from_components`
-    (or equivalent) to apply changes. Same shape as `Constraint` /
-    `DecisionVariable` after PR #843.
+    For example, minimize cost while also recording distance or workload. Register
+    the expression in an {class}`~ommx.Instance`, evaluate a candidate, and retrieve
+    its value from the {class}`~ommx.Solution`. Registering a NamedFunction does not
+    make it an objective or a constraint.
+
+    **Register, evaluate, and read a metric**
+
+    Choose exactly one of two alternatives. The objective is cost; ``distance`` is
+    an additional measurement of the same candidate.
+
+    ```pycon
+    >>> from ommx import DecisionVariable, Instance, NamedFunction, Sense
+    >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(2)]
+    >>> distance = NamedFunction(id=0, function=10 * x[0] + 3 * x[1], name="distance")
+    >>> instance = Instance.from_components(
+    ...     sense=Sense.Minimize,
+    ...     objective=x[0] + 2 * x[1],
+    ...     decision_variables=x,
+    ...     constraints={0: sum(x) == 1},
+    ...     named_functions=[distance],
+    ... )
+    >>> solution = instance.evaluate({x[0].id: 1, x[1].id: 0})
+    >>> assert solution.feasible
+    >>> assert solution.objective == 1.0
+    >>> assert solution.extract_named_functions("distance") == {(): 10.0}
+    >>> metrics = solution.named_functions_df()
+    >>> assert metrics.loc[distance.id, "name"] == "distance"
+    >>> assert metrics.loc[distance.id, "value"] == 10.0
+
+    ```
+
+    This candidate costs 1 and has distance 10. The distance did not contribute to
+    the objective or the feasibility conditions. All variables referenced by the
+    metric must still be declared in the Instance. Named-function IDs form their own
+    namespace, separate from variable and constraint IDs; they must be unique within
+    the Instance. An {class}`~ommx.ParametricInstance` can also hold named functions
+    whose expressions contain its declared parameters.
+
+    Use {meth}`~ommx.Solution.extract_named_functions` for a dictionary keyed by
+    subscript tuples, or {meth}`~ommx.Solution.named_functions_df` for a table indexed
+    by named-function ID. A scalar metric has no subscripts and uses ``()`` as its
+    dictionary key. To label a metric for each facility, for example, reuse a name
+    with distinct ``subscripts``. Names and subscripts are modeling labels;
+    ``parameters`` and ``description`` do not disambiguate duplicate extraction keys.
+    The extraction methods specify missing-name and duplicate-key errors.
+
+    **Compare metrics across candidates**
+
+    {meth}`~ommx.Instance.evaluate_samples` evaluates the registered metrics for each
+    candidate. Select one using its sample ID when querying a
+    {class}`~ommx.SampleSet`.
+
+    ```pycon
+    >>> results = instance.evaluate_samples(
+    ...     {
+    ...         7: {x[0].id: 1, x[1].id: 0},
+    ...         9: {x[0].id: 0, x[1].id: 1},
+    ...     }
+    ... )
+    >>> assert results.extract_named_functions("distance", 7) == {(): 10.0}
+    >>> assert results.extract_named_functions("distance", 9) == {(): 3.0}
+    >>> assert results.best_feasible.objective == 1.0
+    >>> assert results.best_feasible.extract_named_functions("distance") == {(): 10.0}
+
+    ```
+
+    The cheapest candidate is not the one with the shortest distance. Registering
+    metrics does not change the objective-based ordering or the selection made by
+    {attr}`~ommx.SampleSet.best_feasible`.
+
+    **Supply values for variables used only in reporting**
+
+    Appearing only in a named function does not make a variable used by the current
+    objective or active constraints. If it also has no fixed value or dependency,
+    the variable is irrelevant to that current problem. When its value is omitted,
+    {meth}`~ommx.Instance.populate_state` supplies a default before the named
+    function is evaluated. That default is not a recovered value of the candidate.
+
+    ```pycon
+    >>> recorded = DecisionVariable.integer(0, lower=2, upper=5, name="recorded")
+    >>> reporting = Instance.from_components(
+    ...     sense=Sense.Minimize,
+    ...     objective=0,
+    ...     decision_variables=[recorded],
+    ...     constraints={},
+    ...     named_functions=[NamedFunction(id=0, function=recorded, name="recorded")],
+    ... )
+    >>> omitted = reporting.evaluate({})
+    >>> explicit = reporting.evaluate({recorded.id: 4})
+    >>> assert omitted.extract_named_functions("recorded") == {(): 2.0}
+    >>> assert explicit.extract_named_functions("recorded") == {(): 4.0}
+    >>> assert not reporting.evaluate({recorded.id: 6}).feasible
+
+    ```
+
+    Pass the candidate's actual value when it matters to reporting. Variable kinds
+    and bounds are still checked by {meth}`~ommx.Instance.evaluate`, including for
+    variables that appear only in a metric. Calling {meth}`~ommx.NamedFunction.evaluate`
+    directly evaluates just this expression; it does not check an Instance's variable
+    domains or constraints or reconstruct its omitted values.
+
+    **Ownership**
+
+    An Instance stores the registered expression and its labels. Objects returned by
+    {attr}`~ommx.Instance.named_functions` or
+    {meth}`~ommx.Instance.get_named_function_by_id` are independent snapshots.
+    Partially evaluating a retrieved object does not replace the registered metric.
+
+    ```pycon
+    >>> snapshot = instance.get_named_function_by_id(distance.id)
+    >>> _ = snapshot.partial_evaluate({x[0].id: 1, x[1].id: 0})
+    >>> assert snapshot.function.evaluate({}) == 10.0
+    >>> assert instance.evaluate({x[0].id: 0, x[1].id: 1}).extract_named_functions(
+    ...     "distance"
+    ... ) == {(): 3.0}
+
+    ```
+
+    Arithmetic on a NamedFunction produces a {class}`~ommx.Function`; comparisons
+    such as ``metric <= limit`` construct a {class}`~ommx.Constraint`. These new
+    expressions or constraints take effect in a model only when assigned or added
+    through that model's APIs.
     """
     @property
     def id(self) -> builtins.int: ...
@@ -4964,6 +8249,31 @@ class NamedFunction:
     def __deepcopy__(self, _memo: typing.Any) -> NamedFunction: ...
 
 @typing.final
+class ObjectivePreparation:
+    r"""
+    Selection for the active-objective Preparation phase.
+
+    The phase invokes {meth}`~ommx.Instance.convert_active_objective`. When the
+    target differs from the active sense, that owner operation changes only the
+    solver-facing objective. An existing {attr}`~ommx.Instance.output_objective`
+    is retained; otherwise the pre-conversion objective and sense are captured
+    there. Solution and sample evaluation retain the entry output semantics.
+    Convert the active objective to ``target`` during Preparation.
+
+    # Invariants
+
+    The immutable target records the solver-facing sense requested by Preparation.
+
+    >>> from ommx import ObjectivePreparation, Sense
+    >>> preparation = ObjectivePreparation(target=Sense.Minimize)
+    >>> assert preparation.target == Sense.Minimize
+    """
+    @property
+    def target(self) -> Sense: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(cls, *, target: Sense) -> ObjectivePreparation: ...
+
+@typing.final
 class OneHotConstraint:
     r"""
     A one-hot constraint: exactly one variable must be 1, the rest must be 0.
@@ -5024,6 +8334,41 @@ class OneHotConstraint:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> OneHotConstraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> OneHotConstraint: ...
+
+@typing.final
+class OneHotConstraintID(ConstraintIDBase):
+    r"""
+    A one-hot constraint ID. Unequal to integers and IDs of other constraint families.
+
+    See {class}`~ommx.ConstraintIDBase` for lookup, copying, serialization, and extension contracts.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __lt__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __le__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __gt__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __ge__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __hash__(self) -> builtins.int: ...
+    def __new__(cls, value: builtins.int) -> OneHotConstraintID:
+        r"""
+        Create a typed ID identifying this constraint family and number.
+
+        The value must be an unsigned 64-bit integer. An ID of another
+        family is not accepted. IDs have no integer conversion protocol.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __reduce__(self) -> tuple[type, tuple[builtins.int]]:
+        r"""
+        Reconstruct the same ID family through its public constructor.
+        The numeric payload is used only by the serialization protocol.
+        """
+    def __copy__(self) -> OneHotConstraintID:
+        r"""
+        IDs are immutable; copying preserves the same typed identity.
+        """
+    def __deepcopy__(self, _memo: typing.Any) -> OneHotConstraintID:
+        r"""
+        IDs are immutable, including when nested in copied containers.
+        """
 
 @typing.final
 class OpenSolve:
@@ -5089,23 +8434,66 @@ class OpenSolve:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class OutputObjective:
+    r"""
+    Read-only objective semantics used when evaluating solver output.
+
+    # Invariants
+
+    The sense, function, and optimality-transport flag are exposed as one
+    root-owned value. Instances create and update this value through their
+    mathematical owner operations; Python callers cannot construct or mutate it.
+    """
+    @property
+    def sense(self) -> Sense:
+        r"""
+        Optimization sense used for evaluated output objective values.
+        """
+    @property
+    def function(self) -> Function:
+        r"""
+        Function evaluated after the full state is populated.
+        """
+    @property
+    def preserves_optimality(self) -> builtins.bool:
+        r"""
+        Whether active-formulation optimality transports to the output objective.
+        """
+
+@typing.final
 class Parameter:
     r"""
-    Parameter in an optimization problem.
+    A symbolic numerical input to a fixed-structure optimization problem.
 
-    Parameters are values that are fixed during optimization but may vary between different
-    runs or scenarios. They share the same ID space with decision variables.
+    The caller supplies a value when materializing a
+    {class}`~ommx.ParametricInstance`; the solver does not choose it. Parameters
+    can represent coefficients or constants in objectives and constraints.
+    Their IDs share the decision-variable ID space and must be distinct from
+    all decision-variable IDs and other parameter IDs in the same family.
+    Changing a parameter value does not create or remove model components.
 
-    Note that this object overloads `==` for creating a constraint, not for equality comparison.
+    ``name``, ``subscripts``, ``parameters``, and ``description`` are modeling
+    labels. In particular, the string-valued ``parameters`` metadata is separate
+    from the numerical assignment passed to
+    {meth}`~ommx.ParametricInstance.with_parameters`.
+
+    Arithmetic operators build expressions just as for decision variables.
+    The comparisons ``==``, ``<=``, and ``>=`` construct constraints; ``==``
+    does not compare two Parameter objects for equality. Compare their IDs
+    when checking identity.
 
     # Examples
 
-    ```python
-    >>> p = Parameter(1, name="penalty")
+    >>> from ommx import DecisionVariable, Linear, Parameter
+    >>> p = Parameter(1, name="offset")
     >>> x = DecisionVariable.integer(2)
-    >>> x + p  # Returns Linear expression
-    Linear(...)
-    ```
+    >>> expression = x + p
+    >>> assert isinstance(expression, Linear)
+    >>> assert expression.evaluate({x.id: 2, p.id: 3}) == 5.0
+
+    See {meth}`~ommx.ParametricInstance.from_components` for a complete model
+    using parameterized profits, weights, and capacity, then
+    {meth}`~ommx.ParametricInstance.with_parameters` to create an Instance.
     """
     @property
     def id(self) -> builtins.int: ...
@@ -5212,6 +8600,80 @@ class Parameters:
 
 @typing.final
 class ParametricInstance:
+    r"""
+    A family of optimization problems with fixed variables and constraints.
+
+    A ParametricInstance leaves some coefficients or constants symbolic as
+    {class}`~ommx.Parameter` objects. The model's caller supplies their values
+    with {meth}`~ommx.ParametricInstance.with_parameters` to obtain an ordinary
+    {class}`~ommx.Instance` for evaluation, preparation, or a solver adapter.
+    Parameters are inputs chosen before solving; they are not decision variables
+    for the solver to optimize.
+
+    **Reuse a problem under different numerical conditions**
+
+    Here the two items and their scores stay fixed, while the allowed number
+    of selected items changes. The original family remains available after
+    each call to ``with_parameters``.
+
+    >>> from ommx import ConstraintID, DecisionVariable, Parameter, ParametricInstance, Sense
+    >>> xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(2)]
+    >>> capacity = Parameter(2, name="capacity", description="Maximum selected items")
+    >>> family = ParametricInstance.from_components(
+    ...     decision_variables=xs, parameters=[capacity],
+    ...     objective=3 * xs[0] + 2 * xs[1],
+    ...     constraints={0: xs[0] + xs[1] <= capacity}, sense=Sense.Maximize,
+    ... )
+    >>> one_item = family.with_parameters({capacity.id: 1})
+    >>> two_items = family.with_parameters({capacity.id: 2})
+    >>> candidate = {xs[0].id: 1, xs[1].id: 1}
+    >>> assert not one_item.evaluate(candidate).feasible
+    >>> assert two_items.evaluate(candidate).feasible
+    >>> assert two_items.evaluate(candidate).objective == 5.0
+    >>> assert {v.id for v in one_item.decision_variables} == {v.id for v in two_items.decision_variables}
+    >>> assert set(one_item.constraints) == set(two_items.constraints) == {ConstraintID(0)}
+    >>> assert family.parameter_ids == {capacity.id}
+
+    Materialization preserves decision-variable and constraint IDs. Those IDs
+    let callers associate results with the same items and conditions across
+    instances; they do not imply identical feasibility or optimal solutions.
+    Parameters can also appear as objective and constraint coefficients, as in
+    the weighted knapsack example in {meth}`~ommx.ParametricInstance.from_components`.
+
+    **Parameter identities and modeling labels**
+
+    Parameters and decision variables use one ID space and must not overlap.
+    Here the decision variables have IDs 0 and 1, and the parameter has ID 2.
+    Both can appear in arithmetic expressions, but only decision variables
+    receive candidate values after materialization. Parameter names, subscripts,
+    string-valued metadata, and descriptions describe model inputs; the IDs
+    identify the numerical values passed to ``with_parameters``.
+
+    {attr}`~ommx.ParametricInstance.parameters` and
+    {attr}`~ommx.ParametricInstance.parameter_ids` list declared parameters.
+    {meth}`~ommx.ParametricInstance.parameters_df` collects their definitions
+    and labels into a DataFrame, not a table of supplied numerical values.
+
+    >>> table = family.parameters_df()
+    >>> assert table.loc[capacity.id, "name"] == "capacity"
+    >>> assert table.loc[capacity.id, "description"] == "Maximum selected items"
+
+    {meth}`~ommx.ParametricInstance.decision_variables_df` and
+    {meth}`~ommx.ParametricInstance.constraints_df` provide the corresponding
+    model tables; the latter requires an explicit ``kind``. For required IDs,
+    extra keys, and numerical substitution rules, read
+    {meth}`~ommx.ParametricInstance.with_parameters`.
+
+    **When to rebuild the model**
+
+    Parameter values do not generate variable or constraint definitions. If an
+    input changes the number of items or the model's structure, build new
+    components in Python or use a modeler that generates that structure. This
+    differs from changing numerical coefficients within an existing family.
+    No Experiment is needed to construct or materialize a ParametricInstance.
+    Use {class}`~ommx.experiment.Experiment` separately when recording the
+    conditions and results of multiple trials is useful.
+    """
     @property
     def annotations(self) -> types.MappingProxyType[str, str]:
         r"""
@@ -5245,9 +8707,51 @@ class ParametricInstance:
     @created.setter
     def created(self, value: datetime.datetime) -> None: ...
     @property
+    def decision_variable_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Unique decision-variable names as a set of strings, excluding parameters.
+        Unnamed variables are excluded; explicitly empty names are included.
+        Each access returns a fresh set; editing it does not change this owner.
+        """
+    @property
+    def constraint_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Unique names across all constraint families, as a set of strings.
+
+        Only active constraints are included.
+        The scope matches `extract_constraints`. Unnamed constraints are excluded;
+        an explicitly empty name is included. Duplicate names appear once, even
+        when extraction would reject duplicate subscripts.
+        Each access returns a fresh set; editing it does not change this owner.
+        """
+    @property
     def sense(self) -> Sense: ...
     @property
     def objective(self) -> Function: ...
+    @property
+    def output_objective(self) -> typing.Optional[OutputObjective]:
+        r"""
+        Read-only output objective retained through parameter materialization,
+        if one has been captured.
+
+        # Postconditions
+
+        Conversion preserves both absence and an explicit output objective equal to the active pair.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> source = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> assert source.as_parametric_instance().output_objective is None
+        >>> assert source.convert_active_objective(Sense.Minimize)
+        >>> assert source.convert_active_objective(Sense.Maximize)
+        >>> parametric = source.as_parametric_instance()
+        >>> output = parametric.output_objective
+        >>> assert output is not None
+        >>> assert output.sense == parametric.sense
+        >>> assert output.function.almost_equal(parametric.objective)
+        """
     @property
     def decision_variables(self) -> builtins.list[AttachedDecisionVariable]:
         r"""
@@ -5259,84 +8763,39 @@ class ParametricInstance:
         shape on `Instance`.
         """
     @property
-    def constraints(self) -> builtins.dict[builtins.int, AttachedConstraint]:
+    def constraints(self) -> ConstraintCollection:
         r"""
-        Dict of all active constraints in the instance keyed by their IDs.
-
-        Each value is an {class}`~ommx.AttachedConstraint`: a write-through
-        handle whose getters read from this parametric instance's SoA store
-        and whose context setters write back through to it. Use
-        {meth}`~ommx.AttachedConstraint.detach` to materialize a
-        {class}`~ommx.Constraint` snapshot if you need an independent copy.
+        Live mapping of all active constraint families, keyed by typed IDs.
+        The view retains this owner and fetches each constraint on demand.
         """
     @property
-    def removed_constraints(self) -> builtins.dict[builtins.int, RemovedConstraint]: ...
-    @property
-    def indicator_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, AttachedIndicatorConstraint]:
+    def removed_constraints(self) -> RemovedConstraintCollection:
         r"""
-        Dict of all active indicator constraints in the parametric instance
-        keyed by their IDs.
-
-        Each value is an {class}`~ommx.AttachedIndicatorConstraint`: a
-        write-through handle whose getters read from this parametric
-        instance's SoA store and whose context setters write back through
-        to it.
-        """
-    @property
-    def removed_indicator_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, RemovedIndicatorConstraint]:
-        r"""
-        Dict of all removed indicator constraints in the parametric
-        instance keyed by their IDs.
-        """
-    @property
-    def one_hot_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, AttachedOneHotConstraint]:
-        r"""
-        Dict of all active one-hot constraints in the parametric instance
-        keyed by their IDs. Each value is an
-        {class}`~ommx.AttachedOneHotConstraint`.
-        """
-    @property
-    def removed_one_hot_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, RemovedOneHotConstraint]:
-        r"""
-        Dict of all removed one-hot constraints in the parametric instance
-        keyed by their IDs. The removed map can become non-empty when an
-        `Instance` whose one-hot constraints have been converted (via
-        `convert_all_one_hots_to_constraints`) is round-tripped back to a
-        `ParametricInstance` via `From<Instance>`.
-        """
-    @property
-    def sos1_constraints(self) -> builtins.dict[builtins.int, AttachedSos1Constraint]:
-        r"""
-        Dict of all active SOS1 constraints in the parametric instance keyed
-        by their IDs. Each value is an {class}`~ommx.AttachedSos1Constraint`.
-        """
-    @property
-    def removed_sos1_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, RemovedSos1Constraint]:
-        r"""
-        Dict of all removed SOS1 constraints in the parametric instance
-        keyed by their IDs. See {meth}`removed_one_hot_constraints` for the
-        round-trip rationale.
+        Live mapping of all removed constraint families, keyed by typed IDs.
+        The view retains this owner and fetches each constraint on demand.
         """
     @property
     def named_functions(self) -> builtins.list[NamedFunction]: ...
     @property
-    def parameters(self) -> builtins.list[Parameter]: ...
+    def parameters(self) -> builtins.list[Parameter]:
+        r"""
+        Declared parameters and their modeling labels, sorted by ID.
+
+        These are independent definitions, not assigned numerical values.
+        Supply values through {meth}`~ommx.ParametricInstance.with_parameters`.
+        """
     @property
     def description(self) -> typing.Optional[InstanceDescription]: ...
     @property
     def decision_variable_ids(self) -> builtins.set[builtins.int]: ...
     @property
-    def parameter_ids(self) -> builtins.set[builtins.int]: ...
+    def parameter_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        IDs of all declared parameters, including those unused in expressions.
+
+        {meth}`~ommx.ParametricInstance.with_parameters` requires a value for
+        every ID in this set. The set is independent of the owner.
+        """
     def replace_annotations(
         self, annotations: typing.Mapping[builtins.str, builtins.str]
     ) -> None: ...
@@ -5363,11 +8822,66 @@ class ParametricInstance:
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
     @staticmethod
-    def from_v1_bytes(bytes: bytes) -> ParametricInstance: ...
+    def from_v1_bytes(bytes: bytes) -> ParametricInstance:
+        r"""
+        Deserialize a parametric instance from v1 protobuf bytes.
+
+        Raises {class}`ValueError` if the protobuf payload is malformed or
+        semantically invalid.
+        """
     @staticmethod
-    def from_v2_bytes(bytes: bytes) -> ParametricInstance: ...
-    def to_v1_bytes(self) -> bytes: ...
-    def to_v2_bytes(self) -> bytes: ...
+    def from_v2_bytes(bytes: bytes) -> ParametricInstance:
+        r"""
+        Deserialize a parametric instance from v2 protobuf bytes.
+
+        Raises {class}`ValueError` if the protobuf payload is malformed or
+        semantically invalid.
+        """
+    def to_v1_bytes(self) -> bytes:
+        r"""
+        Serialize this parametric instance in the OMMX v1 wire format.
+
+        # Errors
+
+        Serialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> assert instance.convert_active_objective(Sense.Maximize)
+        >>> parametric = instance.as_parametric_instance()
+        >>> try:
+        ...     parametric.to_v1_bytes()
+        ... except RuntimeError:
+        ...     pass
+        ... else:
+        ...     raise AssertionError("v1 serialization accepted an output objective")
+        """
+    def to_v2_bytes(self) -> bytes:
+        r"""
+        Serialize this parametric instance in the OMMX v2 wire format.
+
+        # Postconditions
+
+        A v2 round-trip preserves both active and output objective semantics through materialization.
+
+        >>> from ommx import DecisionVariable, Instance, ParametricInstance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> source = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+        ... )
+        >>> parametric = source.uniform_penalty_method()
+        >>> parameter_id = parametric.parameters[0].id
+        >>> restored = ParametricInstance.from_v2_bytes(parametric.to_v2_bytes())
+        >>> materialized = restored.with_parameters({parameter_id: 2.0})
+        >>> assert materialized.sense == Sense.Minimize
+        >>> assert materialized.objective.evaluate({0: 0}) == 2.0
+        >>> solution = materialized.evaluate({0: 0})
+        >>> assert (solution.sense, solution.objective) == (Sense.Minimize, 0.0)
+        """
     def __str__(self) -> builtins.str: ...
     def __repr__(self) -> builtins.str: ...
     @staticmethod
@@ -5376,20 +8890,65 @@ class ParametricInstance:
         sense: Sense,
         objective: ToFunction,
         decision_variables: typing.Sequence[DecisionVariable],
-        constraints: typing.Mapping[builtins.int, Constraint],
+        constraints: typing.Mapping[ConstraintID, Constraint]
+        | typing.Mapping[builtins.int, Constraint]
+        | typing.Mapping[ConstraintID | builtins.int, Constraint],
         parameters: typing.Sequence[Parameter],
         indicator_constraints: typing.Optional[
-            typing.Mapping[builtins.int, IndicatorConstraint]
+            typing.Mapping[IndicatorConstraintID, IndicatorConstraint]
+            | typing.Mapping[builtins.int, IndicatorConstraint]
+            | typing.Mapping[IndicatorConstraintID | builtins.int, IndicatorConstraint]
         ] = None,
         one_hot_constraints: typing.Optional[
-            typing.Mapping[builtins.int, OneHotConstraint]
+            typing.Mapping[OneHotConstraintID, OneHotConstraint]
+            | typing.Mapping[builtins.int, OneHotConstraint]
+            | typing.Mapping[OneHotConstraintID | builtins.int, OneHotConstraint]
         ] = None,
         sos1_constraints: typing.Optional[
-            typing.Mapping[builtins.int, Sos1Constraint]
+            typing.Mapping[Sos1ConstraintID, Sos1Constraint]
+            | typing.Mapping[builtins.int, Sos1Constraint]
+            | typing.Mapping[Sos1ConstraintID | builtins.int, Sos1Constraint]
         ] = None,
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
-    ) -> ParametricInstance: ...
+    ) -> ParametricInstance:
+        r"""
+        Build a parametric instance from its model components.
+
+        Constraint mappings accept integer keys or IDs of the matching family.
+        Integers are promoted to that family's ID. IDs of another family raise
+        {class}`TypeError`; keys that become duplicates raise {class}`ValueError`.
+        Returned collections always use typed IDs.
+
+        Raises {class}`ValueError` if a decision variable and parameter use the
+        same ID.
+
+        **Parameterize objective coefficients, weights, and a capacity**
+
+        This two-item knapsack family fixes the item count and uses parameters
+        for both coefficients and the right-hand-side constant. Parameter IDs
+        are separate from the decision-variable IDs in the shared ID space.
+
+        >>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
+        >>> n = 2
+        >>> xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(n)]
+        >>> profits = [Parameter(n + i, name="profit", subscripts=[i]) for i in range(n)]
+        >>> weights = [Parameter(2 * n + i, name="weight", subscripts=[i]) for i in range(n)]
+        >>> capacity = Parameter(3 * n, name="capacity")
+        >>> family = ParametricInstance.from_components(
+        ...     decision_variables=xs, parameters=profits + weights + [capacity],
+        ...     objective=sum(p * x for p, x in zip(profits, xs)),
+        ...     constraints={0: sum(w * x for w, x in zip(weights, xs)) <= capacity},
+        ...     sense=Sense.Maximize,
+        ... )
+        >>> values = {p.id: value for p, value in zip(profits, [3, 2])}
+        >>> values.update({w.id: value for w, value in zip(weights, [2, 1])})
+        >>> values[capacity.id] = 2
+        >>> instance = family.with_parameters(values)
+        >>> solution = instance.evaluate({xs[0].id: 1, xs[1].id: 0})
+        >>> assert solution.feasible and solution.objective == 3.0
+        >>> assert not instance.evaluate({xs[0].id: 1, xs[1].id: 1}).feasible
+        """
     @staticmethod
     def empty() -> ParametricInstance:
         r"""
@@ -5401,7 +8960,56 @@ class ParametricInstance:
         r"""
         Substitute parameters to yield an instance.
 
-        Parameters can be provided as a dict mapping parameter IDs to their values.
+        Provide a dict mapping every declared parameter ID to its numerical value,
+        including parameters not referenced by an expression. The original
+        {class}`~ommx.ParametricInstance` is unchanged and can be materialized again.
+        Missing declared IDs raise ``RuntimeError``.
+
+        The method checks that declared IDs are included, not that the key sets are
+        equal. Additional keys are accepted and participate in substitution wherever
+        referenced. In particular, an extra decision-variable ID can also substitute
+        that coordinate in expressions. For parameter-only materialization, supply
+        exactly the IDs listed by {attr}`~ommx.ParametricInstance.parameters`.
+
+        Substitution uses the SDK's default absolute tolerance and the expression
+        partial-evaluation rules; see {meth}`~ommx.Function.partial_evaluate`.
+        This is not a feasibility check or decision-variable kind/bound validation.
+        There is no blanket finiteness check of all supplied values: a referenced
+        non-finite value can fail during substitution, while an unreferenced value
+        need not be examined. Successful materialization does not prove that all
+        supplied values are finite or that the resulting problem is feasible.
+
+        >>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> p, unused = Parameter(1, name="p"), Parameter(2, name="unused")
+        >>> family = ParametricInstance.from_components(
+        ...     decision_variables=[x], parameters=[p, unused], objective=x + p,
+        ...     constraints={}, sense=Sense.Minimize
+        ... )
+        >>> try:
+        ...     family.with_parameters({p.id: 3})
+        ... except RuntimeError as error:
+        ...     assert "Missing parameters" in str(error)
+        ... else:
+        ...     raise AssertionError("an omitted declared parameter was accepted")
+        >>> concrete = family.with_parameters({p.id: 3, unused.id: 0})
+        >>> assert concrete.objective.evaluate({x.id: 1}) == 4.0
+
+        # Postconditions
+
+        Penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists. Materialization substitutes parameters in the active energy, and an existing output objective remains explicit even if specialization makes it structurally equal to the active objective.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> source = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+        ... )
+        >>> parametric = source.uniform_penalty_method()
+        >>> parameter_id = parametric.parameters[0].id
+        >>> materialized = parametric.with_parameters({parameter_id: 2.0})
+        >>> assert materialized.objective.evaluate({0: 0}) == 2.0
+        >>> solution = materialized.evaluate({0: 0})
+        >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
         """
     def format_function(
         self,
@@ -5412,9 +9020,27 @@ class ParametricInstance:
         r"""
         Format a function using this parametric instance's decision-variable and parameter labels.
 
-        The plain {func}`repr` / {func}`str` representation of {class}`Function`
+        The plain {func}`repr` / {func}`str` representation of {class}`~ommx.Function`
         remains context-free and renders raw ``x<id>`` symbols such as ``x1``.
-        Use this method when labels from this parametric instance should be used instead.
+        This method resolves both variable and parameter labels before any
+        parameter values have been supplied.
+
+        >>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
+        >>> x = DecisionVariable.binary(0, name="x")
+        >>> p = Parameter(100, name="p", parameters={"scenario": "base"})
+        >>> model = ParametricInstance.from_components(
+        ...     sense=Sense.Minimize, objective=x + p, decision_variables=[x],
+        ...     parameters=[p], constraints={},
+        ... )
+        >>> assert model.format_function(model.objective) == "x + p[scenario=base]"
+
+        Every referenced ID must belong to exactly one of this instance's
+        decision variables or parameters. The lookup uses IDs, not names from
+        another model, and validates them before applying output limits.
+        ``max_terms`` and ``max_chars`` both default to ``None`` for no limit;
+        their meaning is the same as in {meth}`~ommx.Instance.format_function`.
+        For a preview with truncation metadata, use
+        {meth}`~ommx.ParametricInstance.display_function`.
         """
     def display_function(
         self,
@@ -5426,8 +9052,24 @@ class ParametricInstance:
         Build a bounded notebook display object for a function in this parametric instance's context.
 
         By default this returns a preview capped at 100 complete terms and
-        20,000 characters. Use {meth}`format_function` for an unbounded plain
-        text string.
+        20,000 characters. Pass ``None`` to disable either limit. Parameter
+        labels are available before materialization, just as in
+        {meth}`~ommx.ParametricInstance.format_function`.
+
+        The returned {class}`~ommx.display.FunctionDisplay` has the same preview
+        text and truncation metadata as {meth}`~ommx.Instance.display_function`.
+        Use ``format_function`` without limits for a complete plain text string.
+
+        >>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
+        >>> x = DecisionVariable.binary(0, name="x")
+        >>> p = Parameter(100, name="p")
+        >>> model = ParametricInstance.from_components(
+        ...     sense=Sense.Minimize, objective=x + p, decision_variables=[x],
+        ...     parameters=[p], constraints={},
+        ... )
+        >>> preview = model.display_function(model.objective)
+        >>> assert preview.text == "x + p"
+        >>> assert not preview.truncated
         """
     def substitute(self, assignments: typing.Mapping[builtins.int, ToFunction]) -> None:
         r"""
@@ -5456,6 +9098,25 @@ class ParametricInstance:
         IDs, when a parameter ID is used as an assignment target, or when
         substituting a variable that is a member of an indicator, one-hot, or
         SOS1 constraint.
+
+        # Postconditions
+
+        Substitution rewrites active expressions while materialized output evaluation restores the substituted variable.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> b = DecisionVariable.binary(1)
+        >>> source = Instance.from_components(
+        ...     decision_variables=[x, b], objective=x, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> assert source.convert_active_objective(Sense.Minimize)
+        >>> parametric = source.as_parametric_instance()
+        >>> parametric.substitute({0: b})
+        >>> materialized = parametric.with_parameters({})
+        >>> assert materialized.required_ids() == {1}
+        >>> assert materialized.objective.evaluate({1: 1}) == -1.0
+        >>> solution = materialized.evaluate({1: 1})
+        >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)
         """
     def add_decision_variable(
         self, variable: DecisionVariable
@@ -5464,6 +9125,10 @@ class ParametricInstance:
         Add a decision variable to this parametric instance. Returns an
         {class}`~ommx.AttachedDecisionVariable` bound to the variable's
         id — a write-through handle for further label updates.
+
+        Raises {class}`ValueError` if the variable's id collides with an
+        existing decision variable or parameter. Substituted variables retain
+        their ids and therefore also count as existing decision variables.
         """
     def attached_decision_variable(
         self, variable_id: builtins.int
@@ -5471,6 +9136,21 @@ class ParametricInstance:
         r"""
         Look up the {class}`~ommx.AttachedDecisionVariable` for the given
         id — a write-through handle.
+        """
+    def extract_constraints(
+        self, name: builtins.str
+    ) -> builtins.dict[builtins.tuple[builtins.int, ...], ConstraintView]:
+        r"""
+        Extract active constraints of every family by name, keyed by subscript tuples.
+
+        Values are attached handles, just as in `constraints`: edits update this
+        model. The returned dictionary snapshots the matching keys; it does not
+        track later label or membership changes. Removed constraints are excluded.
+        Parameters and descriptions do not participate in matching.
+
+        Raises KeyError if no active constraint has this name, and ValueError if
+        matching constraints share subscripts, including across different families.
+        Use typed-ID lookup in `constraints` to distinguish ambiguous labels.
         """
     def add_constraint(self, constraint: Constraint) -> AttachedConstraint:
         r"""
@@ -5519,16 +9199,6 @@ class ParametricInstance:
         r"""
         Get a specific decision variable by ID
         """
-    def get_constraint_by_id(self, constraint_id: builtins.int) -> Constraint:
-        r"""
-        Get a specific constraint by ID
-        """
-    def get_removed_constraint_by_id(
-        self, constraint_id: builtins.int
-    ) -> RemovedConstraint:
-        r"""
-        Get a specific removed constraint by ID
-        """
     def get_named_function_by_id(
         self, named_function_id: builtins.int
     ) -> NamedFunction:
@@ -5547,7 +9217,8 @@ class ParametricInstance:
         """
     def constraints_df(
         self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        *,
+        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"],
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
         removed: builtins.bool = False,
     ) -> pandas.DataFrame:
@@ -5566,11 +9237,21 @@ class ParametricInstance:
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
     ) -> pandas.DataFrame:
         r"""
-        DataFrame of parameters
+        Collect declared parameter definitions and modeling labels into a DataFrame.
+
+        The index is the parameter ID, named ``id``. By default, the table
+        includes ``name``, ``subscripts``, ``description``, and flattened
+        ``parameters.<key>`` metadata columns. ``include=[]`` omits optional
+        columns; ``include=["label"]`` selects the modeling labels and
+        ``include=["parameters"]`` selects the string-valued metadata.
+
+        These labels are not the numerical assignments supplied to
+        {meth}`~ommx.ParametricInstance.with_parameters`. Editing the DataFrame
+        does not change this ParametricInstance. See the class example for
+        selecting a parameter's name and description by ID.
         """
     def constraint_context_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint context DataFrame (id-indexed). See
@@ -5578,22 +9259,19 @@ class ParametricInstance:
         semantics.
         """
     def constraint_parameters_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint parameters DataFrame (long format).
         """
     def constraint_provenance_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint provenance DataFrame (long format).
         """
     def constraint_removed_reasons_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Removed-constraint reasons DataFrame (long format).
@@ -5621,17 +9299,14 @@ class Polynomial:
 
     Create via DecisionVariable operations:
 
-    ```python
+    >>> from ommx import DecisionVariable
     >>> x = DecisionVariable.integer(1)
     >>> y = DecisionVariable.integer(2)
     >>> p = x * x * y + x * y * y + 1  # Cubic polynomial
-    ```
 
     Note that `==`, `<=`, `>=` create Constraint objects:
 
-    ```python
     >>> constraint = p == 0  # Returns Constraint
-    ```
     """
     @typing.overload
     def __add__(
@@ -5718,13 +9393,252 @@ class Polynomial:
         """
 
 @typing.final
+class PolynomialRequirement:
+    r"""
+    Polynomial requirement for one function position in an
+    :class:`InstanceClassClause`.
+    """
+    @property
+    def maximum_degree(self) -> typing.Optional[builtins.int]:
+        r"""
+        Inclusive maximum degree, or ``None`` when any degree is accepted.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def at_most(maximum: builtins.int) -> PolynomialRequirement:
+        r"""
+        Require a polynomial whose degree is at most ``maximum``.
+        """
+    @staticmethod
+    def any_degree() -> PolynomialRequirement:
+        r"""
+        Require a polynomial of any degree.
+        """
+    def accepts_degree(self, actual_degree: builtins.int) -> builtins.bool:
+        r"""
+        Return whether ``actual_degree`` satisfies this requirement.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PreparationPolicy:
+    r"""
+    Select optional transformations applied by {meth}`~ommx.Instance.prepare`.
+
+    Each property selects at most one phase. Properties may be combined freely,
+    although owner-operation validation and target membership can still make a
+    combination fail for a particular {class}`~ommx.Instance`.
+    See {meth}`~ommx.Instance.prepare` for phase ordering, early stopping, and
+    mutation on failure.
+
+    # Invariants
+
+    A default policy selects no Preparation phase. Future phases also default
+    to disabled.
+
+    >>> from ommx import PreparationPolicy
+    >>> policy = PreparationPolicy()
+    >>> assert (
+    ...     policy.special_constraints,
+    ...     policy.objective,
+    ...     policy.integer_slack,
+    ...     policy.integer_encoding,
+    ...     policy.fixed_penalty,
+    ...     policy.binary_power_reduction,
+    ... ) == (None, None, None, None, None, None)
+    """
+    @property
+    def special_constraints(self) -> typing.Optional[SpecialConstraintPreparation]: ...
+    @special_constraints.setter
+    def special_constraints(
+        self, value: typing.Optional[SpecialConstraintPreparation]
+    ) -> None: ...
+    @property
+    def objective(self) -> typing.Optional[ObjectivePreparation]: ...
+    @objective.setter
+    def objective(self, value: typing.Optional[ObjectivePreparation]) -> None: ...
+    @property
+    def integer_slack(self) -> typing.Optional[IntegerSlackPreparation]: ...
+    @integer_slack.setter
+    def integer_slack(
+        self, value: typing.Optional[IntegerSlackPreparation]
+    ) -> None: ...
+    @property
+    def integer_encoding(self) -> typing.Optional[IntegerEncodingPreparation]: ...
+    @integer_encoding.setter
+    def integer_encoding(
+        self, value: typing.Optional[IntegerEncodingPreparation]
+    ) -> None: ...
+    @property
+    def fixed_penalty(self) -> typing.Optional[FixedPenaltyPreparation]: ...
+    @fixed_penalty.setter
+    def fixed_penalty(
+        self, value: typing.Optional[FixedPenaltyPreparation]
+    ) -> None: ...
+    @property
+    def binary_power_reduction(self) -> typing.Optional[BinaryPowerPreparation]: ...
+    @binary_power_reduction.setter
+    def binary_power_reduction(
+        self, value: typing.Optional[BinaryPowerPreparation]
+    ) -> None: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls,
+        *,
+        special_constraints: typing.Optional[SpecialConstraintPreparation] = None,
+        objective: typing.Optional[ObjectivePreparation] = None,
+        integer_slack: typing.Optional[IntegerSlackPreparation] = None,
+        integer_encoding: typing.Optional[IntegerEncodingPreparation] = None,
+        fixed_penalty: typing.Optional[FixedPenaltyPreparation] = None,
+        binary_power_reduction: typing.Optional[BinaryPowerPreparation] = None,
+    ) -> PreparationPolicy: ...
+    @staticmethod
+    def for_qubo(
+        *,
+        uniform_penalty_weight: typing.Optional[builtins.float] = None,
+        penalty_weights: typing.Optional[
+            typing.Mapping[builtins.int, builtins.float]
+        ] = None,
+        inequality_integer_slack_max_range: builtins.int = 31,
+    ) -> PreparationPolicy:
+        r"""
+        Return a fresh policy for preparing an instance for QUBO formatting.
+
+        ``uniform_penalty_weight`` and ``penalty_weights`` override the default
+        uniform penalty weight of 1.0 and are mutually exclusive. The keyed form
+        must cover exactly the active regular constraints at the penalty phase.
+        ``inequality_integer_slack_max_range`` defaults to 31 and configures both
+        the exact Integer-slack range and the fallback slack upper bound. This
+        QUBO policy also reduces powers of Binary variables before checking the
+        quadratic target.
+
+        # Postconditions
+
+        Each call returns a fresh complete QUBO policy whose optional weights and slack range are applied exactly.
+
+        >>> from ommx import (
+        ...     BinaryPowerPreparation, FixedPenaltyPreparation,
+        ...     IntegerEncodingPreparation, IntegerSlackPreparation,
+        ...     ObjectivePreparation, PreparationPolicy, Sense,
+        ...     SpecialConstraintKind, SpecialConstraintPreparation,
+        ... )
+        >>> expected_special = SpecialConstraintPreparation.lower_special_constraints(
+        ...     kinds={
+        ...         SpecialConstraintKind.Indicator,
+        ...         SpecialConstraintKind.OneHot,
+        ...         SpecialConstraintKind.Sos1,
+        ...     }
+        ... )
+        >>> expected_penalty = FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=1.0)
+        >>> first = PreparationPolicy.for_qubo(inequality_integer_slack_max_range=17)
+        >>> second = PreparationPolicy.for_qubo(inequality_integer_slack_max_range=17)
+        >>> assert first is not second
+        >>> assert first.special_constraints == expected_special
+        >>> assert first.objective == ObjectivePreparation(target=Sense.Minimize)
+        >>> assert first.integer_slack == IntegerSlackPreparation(max_integer_range=17, slack_upper_bound=17)
+        >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_used_integers()
+        >>> assert first.fixed_penalty == expected_penalty
+        >>> assert first.binary_power_reduction == BinaryPowerPreparation()
+        >>> first.fixed_penalty = None
+        >>> first.binary_power_reduction = None
+        >>> assert second.fixed_penalty == expected_penalty
+        >>> assert second.binary_power_reduction == BinaryPowerPreparation()
+        >>> keyed = PreparationPolicy.for_qubo(penalty_weights={3: 2.0})
+        >>> assert keyed.fixed_penalty == FixedPenaltyPreparation.penalty_method_with_fixed_weights(weights={3: 2.0})
+
+        # Errors
+
+        Supplying uniform and keyed penalty weights together raises ``ValueError``.
+
+        >>> try:
+        ...     PreparationPolicy.for_qubo(uniform_penalty_weight=1.0, penalty_weights={3: 2.0})
+        ... except ValueError as error:
+        ...     assert "Both uniform_penalty_weight" in str(error)
+        ... else:
+        ...     raise AssertionError("mutually exclusive penalty options were accepted")
+        """
+    @staticmethod
+    def for_hubo(
+        *,
+        uniform_penalty_weight: typing.Optional[builtins.float] = None,
+        penalty_weights: typing.Optional[
+            typing.Mapping[builtins.int, builtins.float]
+        ] = None,
+        inequality_integer_slack_max_range: builtins.int = 31,
+    ) -> PreparationPolicy:
+        r"""
+        Return a fresh policy for preparing an instance for HUBO formatting.
+
+        ``uniform_penalty_weight`` and ``penalty_weights`` override the default
+        uniform penalty weight of 1.0 and are mutually exclusive. The keyed form
+        must cover exactly the active regular constraints at the penalty phase.
+        ``inequality_integer_slack_max_range`` defaults to 31 and configures both
+        the exact Integer-slack range and the fallback slack upper bound. Unlike
+        {meth}`for_qubo`, this policy leaves Binary-power reduction disabled
+        because HUBO accepts arbitrary polynomial degree.
+
+        # Postconditions
+
+        Each call returns a fresh complete HUBO policy with no Binary-power reduction and exact overrides.
+
+        >>> from ommx import (
+        ...     FixedPenaltyPreparation, IntegerEncodingPreparation,
+        ...     IntegerSlackPreparation, ObjectivePreparation,
+        ...     PreparationPolicy, Sense, SpecialConstraintKind,
+        ...     SpecialConstraintPreparation,
+        ... )
+        >>> expected_special = SpecialConstraintPreparation.lower_special_constraints(
+        ...     kinds={
+        ...         SpecialConstraintKind.Indicator,
+        ...         SpecialConstraintKind.OneHot,
+        ...         SpecialConstraintKind.Sos1,
+        ...     }
+        ... )
+        >>> first = PreparationPolicy.for_hubo(inequality_integer_slack_max_range=17)
+        >>> second = PreparationPolicy.for_hubo(inequality_integer_slack_max_range=17)
+        >>> assert first is not second
+        >>> assert first.special_constraints == expected_special
+        >>> assert first.objective == ObjectivePreparation(target=Sense.Minimize)
+        >>> assert first.integer_slack == IntegerSlackPreparation(max_integer_range=17, slack_upper_bound=17)
+        >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_used_integers()
+        >>> assert first.fixed_penalty == FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=1.0)
+        >>> assert first.binary_power_reduction is None
+        >>> first.fixed_penalty = None
+        >>> assert second.fixed_penalty == FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=1.0)
+        >>> uniform = PreparationPolicy.for_hubo(uniform_penalty_weight=4.0)
+        >>> assert uniform.fixed_penalty == FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=4.0)
+
+        # Errors
+
+        Supplying uniform and keyed penalty weights together raises ``ValueError``.
+
+        >>> try:
+        ...     PreparationPolicy.for_hubo(uniform_penalty_weight=1.0, penalty_weights={3: 2.0})
+        ... except ValueError as error:
+        ...     assert "Both uniform_penalty_weight" in str(error)
+        ... else:
+        ...     raise AssertionError("mutually exclusive penalty options were accepted")
+        """
+
+class PreparationTargetNotReachedError(builtins.RuntimeError):
+    r"""
+    Configured Preparation phases were exhausted without reaching the target InstanceClass.
+    """
+    @property
+    def report(self) -> InstanceClassMembershipReport:
+        r"""
+        Final membership report for the partially prepared Instance.
+        """
+
+@typing.final
 class Provenance:
     r"""
     One step in a regular constraint's transformation history.
 
     When a special constraint (indicator / one-hot / SOS1) is converted into a
     regular {class}`~ommx.Constraint` — for example via
-    `Instance.convert_one_hot_to_constraint` or `Instance.reduce_capabilities` —
+    {meth}`~ommx.Instance.convert_one_hot_to_constraint` or
+    {meth}`~ommx.Instance.lower_special_constraints` —
     the generated constraint records a {class}`Provenance` entry naming the
     original special constraint. This lets callers trace a regular constraint
     back to the special constraint it was derived from.
@@ -5735,7 +9649,7 @@ class Provenance:
         The kind of special constraint this regular constraint was generated from.
         """
     @property
-    def original_id(self) -> builtins.int:
+    def original_id(self) -> ConstraintIDBase:
         r"""
         The ID of the original special constraint (before transformation).
         """
@@ -5779,17 +9693,14 @@ class Quadratic:
 
     Create via DecisionVariable multiplication:
 
-    ```python
+    >>> from ommx import DecisionVariable
     >>> x = DecisionVariable.integer(1)
     >>> y = DecisionVariable.integer(2)
     >>> q = x * y + 2*x + 3*y + 1
-    ```
 
     Note that `==`, `<=`, `>=` create Constraint objects:
 
-    ```python
     >>> constraint = q <= 10  # Returns Constraint
-    ```
     """
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]: ...
@@ -5930,7 +9841,7 @@ class RemoteArtifactTransportError(RemoteArtifactError):
     ...
 
 @typing.final
-class RemovedConstraint:
+class RemovedConstraint(ConstraintView):
     r"""
     RemovedConstraint wrapper for Python.
 
@@ -5980,6 +9891,7 @@ class RemovedConstraint:
 
         See {attr}`~ommx.Constraint.provenance` for semantics.
         """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __new__(
         cls,
         constraint: Constraint,
@@ -5993,10 +9905,151 @@ class RemovedConstraint:
     def __deepcopy__(self, _memo: typing.Any) -> RemovedConstraint: ...
 
 @typing.final
-class RemovedIndicatorConstraint:
+class RemovedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
+    r"""
+    Live mapping of all retained removed constraint families in a model.
+
+    Obtained from {attr}`~ommx.Instance.removed_constraints` or
+    {attr}`~ommx.ParametricInstance.removed_constraints`. Each access returns an
+    independent snapshot, including labels, provenance, and removal reasons.
+    Changing that snapshot does not update its owner; a later lookup reads the
+    owner's current state.
+
+    Removed constraints are excluded from the active formulation but still checked
+    when candidates are evaluated. Removal can follow relaxation, an equivalent
+    lowering, or another transformation; the collection's presence does not identify
+    which guarantee holds. See {attr}`~ommx.Instance.removed_constraints` for their
+    evaluation semantics and {meth}`~ommx.Instance.relax_constraint` for a complete
+    relax, inspect, evaluate, and restore example.
+
+    The collection keeps its owner alive. The typed-key, ``get``, live-view,
+    iteration, and snapshot equality rules are documented in
+    {class}`~ommx.ConstraintCollection`. Use ``of_kind`` and
+    {class}`~ommx.ConstraintFamilyView` to inspect one family. A model's
+    ``constraints_df(kind=..., removed=True)`` includes both active and removed rows.
+    """
+    def __len__(self) -> builtins.int: ...
+    def __contains__(self, key: builtins.object) -> builtins.bool: ...
+    def __iter__(self) -> typing.Iterator[ConstraintIDBase]:
+        r"""
+        Iterate a snapshot of typed IDs; constraint rows are not collected.
+        """
+    def keys(self) -> typing.KeysView[ConstraintIDBase]:
+        r"""
+        Live key view. Iteration order is family order, then numeric ID.
+        """
+    def values(self) -> typing.ValuesView[ConstraintView]:
+        r"""
+        Live value view; each row is fetched when visited.
+        """
+    def items(self) -> typing.ItemsView[ConstraintIDBase, ConstraintView]:
+        r"""
+        Live item view; each row is fetched when visited.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __eq__(self, other: typing.Any) -> typing.Any: ...
+    @typing.overload
+    def __getitem__(self, key: ConstraintID) -> RemovedConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: IndicatorConstraintID) -> RemovedIndicatorConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: OneHotConstraintID) -> RemovedOneHotConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: Sos1ConstraintID) -> RemovedSos1Constraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintID, default: None = None
+    ) -> RemovedConstraint | None: ...
+    @typing.overload
+    def get(self, key: ConstraintID, default: _T) -> RemovedConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: None = None
+    ) -> RemovedIndicatorConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: _T
+    ) -> RemovedIndicatorConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: None = None
+    ) -> RemovedOneHotConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: _T
+    ) -> RemovedOneHotConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: None = None
+    ) -> RemovedSos1Constraint | None: ...
+    @typing.overload
+    def get(self, key: Sos1ConstraintID, default: _T) -> RemovedSos1Constraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintIDBase, default: None = None
+    ) -> ConstraintView | None: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["regular"]
+    ) -> ConstraintFamilyView[ConstraintID, RemovedConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["indicator"]
+    ) -> ConstraintFamilyView[IndicatorConstraintID, RemovedIndicatorConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["one_hot"]
+    ) -> ConstraintFamilyView[OneHotConstraintID, RemovedOneHotConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["sos1"]
+    ) -> ConstraintFamilyView[Sos1ConstraintID, RemovedSos1Constraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+
+@typing.final
+class RemovedIndicatorConstraint(ConstraintView):
     r"""
     A removed indicator constraint together with the reason it was removed.
     """
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def provenance(self) -> builtins.list[Provenance]: ...
     @property
     def constraint(self) -> IndicatorConstraint: ...
     @property
@@ -6011,10 +10064,11 @@ class RemovedIndicatorConstraint:
     def removed_reason_parameters(
         self,
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class RemovedOneHotConstraint:
+class RemovedOneHotConstraint(ConstraintView):
     r"""
     A removed one-hot constraint together with the reason it was removed.
     """
@@ -6031,15 +10085,18 @@ class RemovedOneHotConstraint:
     @property
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
+    def provenance(self) -> builtins.list[Provenance]: ...
+    @property
     def removed_reason(self) -> builtins.str: ...
     @property
     def removed_reason_parameters(
         self,
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class RemovedSos1Constraint:
+class RemovedSos1Constraint(ConstraintView):
     r"""
     A removed SOS1 constraint together with the reason it was removed.
     """
@@ -6056,11 +10113,14 @@ class RemovedSos1Constraint:
     @property
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
+    def provenance(self) -> builtins.list[Provenance]: ...
+    @property
     def removed_reason(self) -> builtins.str: ...
     @property
     def removed_reason_parameters(
         self,
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -6209,9 +10269,11 @@ class Run:
         r"""
         Solve an Instance with an OMMX SolverAdapter and log a Solve entry.
 
-        The input Instance is cloned before calling the adapter, so adapter-side
-        capability reductions do not mutate the caller's object. The original
-        input is always stored as the Solve input.
+        The input Instance is cloned before calling the Adapter's easy
+        ``solve()`` API. That API may prepare another isolated copy with the
+        Adapter's recommended Policy, so neither step mutates the caller's
+        object. The original caller input, before any recommended Preparation,
+        is always stored as the Solve input.
 
         `adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword
         arguments are passed to `adapter.solve(...)` and recorded as
@@ -6277,6 +10339,10 @@ class Run:
         construction or the context body fails before `decode` succeeds, a failed
         or interrupted Solve is recorded when possible and the exception is
         re-raised.
+
+        This is the strict exact-input path: it does not apply the Adapter's
+        recommended Preparation Policy. The supplied Instance must already
+        belong to the Adapter's ``INPUT_CLASS``.
         """
     def finish(self) -> None:
         r"""
@@ -6292,14 +10358,20 @@ class Run:
 @typing.final
 class SampleSet:
     r"""
-    The output of sampling-based optimization algorithms, e.g. simulated annealing (SA).
+    Multiple candidates evaluated against the same optimization problem.
 
-    - Similar to `Solution` rather than the raw `State` message.
-      This class contains the sampled values of decision variables with the objective value, constraint violations,
-      feasibility, and modeling labels/context of constraints and decision variables.
-    - This class is usually created via `Instance.evaluate_samples`.
+    {class}`~ommx.Samples` contains candidate assignments identified by sample
+    IDs; a SampleSet adds their objective values, feasibility, evaluated variables
+    and constraints, and modeling labels. Samples corresponds to
+    {class}`~ommx.State`, while SampleSet corresponds to {class}`~ommx.Solution`.
+    Candidates may come from a sampler or be supplied manually.
 
-    # Examples
+    Use {meth}`~ommx.Instance.evaluate_samples` with Samples, a dictionary of
+    sample IDs to assignments, or an iterable of assignments. Explicit IDs are
+    preserved; iterables receive IDs from 0. See {class}`~ommx.Samples` for
+    construction and repeated-assignment semantics.
+
+    **Evaluate several candidates**
 
     Let's consider a simple optimization problem:
 
@@ -6307,30 +10379,25 @@ class SampleSet:
     subject to x_1 + x_2 + x_3 = 1
     x_1, x_2, x_3 in {0, 1}
 
-    ```python
+    >>> from ommx import DecisionVariable, Instance, Sense
     >>> x = [DecisionVariable.binary(i) for i in range(3)]
     >>> instance = Instance.from_components(
     ...     decision_variables=x,
     ...     objective=x[0] + 2*x[1] + 3*x[2],
-    ...     constraints=[sum(x) == 1],
-    ...     sense=Instance.MAXIMIZE,
+    ...     constraints={0: sum(x) == 1},
+    ...     sense=Sense.Maximize,
     ... )
-    ```
 
     with three samples:
 
-    ```python
     >>> samples = {
     ...     0: {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0
     ...     1: {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0
     ...     2: {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)
     ... } # ^ sample ID
-    ```
 
-    Note that this will be done by sampling-based solvers, but we do it manually here.
-    We can evaluate the samples via `Instance.evaluate_samples`:
+    Evaluate all candidates using the same Instance:
 
-    ```python
     >>> sample_set = instance.evaluate_samples(samples)
     >>> sample_set.summary  # doctest: +NORMALIZE_WHITESPACE
                objective  feasible
@@ -6338,27 +10405,72 @@ class SampleSet:
     1                3.0      True
     0                1.0      True
     2                3.0     False
-    ```
 
-    The `summary` attribute shows the objective value, feasibility of each sample.
-    Note that this `feasible` column represents the feasibility of the original constraints, not the relaxed constraints.
-    You can get each sample by `get` as a `Solution` format:
+    {attr}`~ommx.SampleSet.summary` shows each sample's objective and feasibility.
+    Feasible candidates appear first, ordered by the objective according to
+    {attr}`~ommx.SampleSet.sense`. Feasibility checks variable kinds and bounds
+    and all retained constraints, including removed constraints.
+    Retrieve an individual sample as a Solution using its ID:
 
-    ```python
     >>> solution = sample_set.get(sample_id=0)
     >>> solution.objective
     1.0
-    ```
 
-    `best_feasible` returns the best feasible sample, i.e. the largest objective value among feasible samples:
+    {attr}`~ommx.SampleSet.best_feasible` selects the largest objective value
+    among feasible samples for this maximization problem:
 
-    ```python
     >>> solution = sample_set.best_feasible
     >>> solution.objective
     3.0
-    ```
 
-    Of course, the sample of smallest objective value is returned for minimization problems.
+    Minimization selects the smallest objective instead. This is the best among
+    the supplied candidates, not a proof of global optimality. Selection raises
+    ValueError when no candidate is feasible, including for an empty SampleSet.
+
+    **Inspect a candidate's values and diagnostics**
+
+    The Solution returned by {meth}`~ommx.SampleSet.get` retains variable labels,
+    evaluated constraints, named metrics, and the evaluation tolerance. Use its
+    extraction methods or query {meth}`~ommx.SampleSet.extract_decision_variables`,
+    {meth}`~ommx.SampleSet.extract_constraints`, and
+    {meth}`~ommx.SampleSet.extract_named_functions` with a sample ID directly.
+    {class}`~ommx.NamedFunction` records additional metrics without changing the
+    objective or adding feasibility conditions.
+
+    {attr}`~ommx.SampleSet.constraints` exposes per-constraint results across
+    samples through {class}`~ommx.SampledConstraintCollection`.
+    {meth}`~ommx.SampleSet.constraints_df` selects one family for a table;
+    {attr}`~ommx.SampleSet.summary` is the per-sample overview.
+
+    **Evaluate transformed problems**
+
+    Evaluate candidates with the transformed Instance supplied to the sampler.
+    It retains the fixed values and dependencies needed to restore variables,
+    removed constraints to inspect, and any preserved output objective.
+    Evaluation reports that output objective and sense, which may differ from
+    the active solver-facing objective.
+
+    >>> from ommx import Instance, Optimality, Sense
+    >>> original = Instance.maximize()
+    >>> x = original.new_binary("x")
+    >>> y = original.new_binary("y")
+    >>> original.objective = 3 * x + y
+    >>> prepared = original.partial_evaluate({x.id: 1})
+    >>> assert prepared.convert_active_objective(Sense.Minimize)
+    >>> results = prepared.evaluate_samples({7: {y.id: 0}, 9: {y.id: 1}})
+    >>> assert results.sense == Sense.Maximize
+    >>> assert results.objectives == {7: 3.0, 9: 4.0}
+    >>> assert results.get(7).state.entries == {x.id: 1.0, y.id: 0.0}
+    >>> assert results.best_feasible_id == 9
+    >>> assert results.best_feasible.optimality == Optimality.Unspecified
+
+    Successful value reconstruction, feasibility, and optimality remain separate
+    questions. {attr}`~ommx.SampleSet.feasible` includes retained removed
+    constraints; {attr}`~ommx.SampleSet.feasible_relaxed` excludes them while
+    still checking all variable domains. See {class}`~ommx.Solution` for output
+    interpretation and {meth}`~ommx.Instance.populate_state` for reconstruction,
+    defaults, and normalization. Choosing the best supplied candidate never
+    establishes optimality of the original or transformed problem.
     """
     @property
     def annotations(self) -> types.MappingProxyType[str, str]:
@@ -6401,39 +10513,127 @@ class SampleSet:
     @parameters.setter
     def parameters(self, value: typing.Any) -> None: ...
     @property
-    def best_feasible_id(self) -> builtins.int: ...
+    def constraint_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Unique names across all constraint families, as a set of strings.
+
+        Retained removed constraints are included; no sample ID is needed.
+        The scope matches `extract_constraints`. Unnamed constraints are excluded;
+        an explicitly empty name is included. Duplicate names appear once, even
+        when extraction would reject duplicate subscripts.
+        Each access returns a fresh set; editing it does not change this owner.
+        """
     @property
-    def best_feasible_relaxed_id(self) -> builtins.int: ...
+    def best_feasible_id(self) -> builtins.int:
+        r"""
+        ID of the best feasible candidate, using the same selection as
+        {attr}`~ommx.SampleSet.best_feasible`.
+
+        Raises ValueError if there is no feasible sample, including when empty.
+        """
     @property
-    def best_feasible(self) -> Solution: ...
+    def best_feasible_relaxed_id(self) -> builtins.int:
+        r"""
+        ID of the best candidate satisfying {attr}`~ommx.SampleSet.feasible_relaxed`.
+
+        Uses the reported objective and {attr}`~ommx.SampleSet.sense`, like
+        {attr}`~ommx.SampleSet.best_feasible_relaxed`.
+        Raises ValueError if there is no such candidate, including when empty.
+        """
     @property
-    def best_feasible_relaxed(self) -> Solution: ...
+    def best_feasible(self) -> Solution:
+        r"""
+        The best feasible candidate as an independent Solution.
+
+        Selects only candidates satisfying {attr}`~ommx.SampleSet.feasible`,
+        including variable domains and retained removed constraints. Minimization
+        selects the smallest reported objective; maximization selects the largest.
+        Selection does not prove global optimality or change the extracted
+        Solution's optimality status.
+
+        Raises ValueError if there is no feasible candidate, including when the
+        SampleSet is empty. There is no universal ordering of infeasible candidates:
+        choose your own criteria from the constraint and variable diagnostics.
+        The objective ordering in ``summary`` is not such a feasibility criterion.
+
+        >>> from ommx import Instance
+        >>> instance = Instance.maximize()
+        >>> x = instance.new_binary("x")
+        >>> instance.objective = x
+        >>> _ = instance.add_constraint(x == 1, "required")
+        >>> results = instance.evaluate_samples({10: {x.id: 0}, 20: {x.id: 1}})
+        >>> assert results.best_feasible_id == 20
+        >>> assert results.best_feasible.state.entries == {x.id: 1.0}
+        >>> infeasible = instance.evaluate_samples([{x.id: 0}])
+        >>> infeasible.best_feasible
+        Traceback (most recent call last):
+        ...
+        ValueError: No feasible solution found
+        """
     @property
-    def best_feasible_unrelaxed(self) -> Solution: ...
+    def best_feasible_relaxed(self) -> Solution:
+        r"""
+        The best candidate satisfying relaxed feasibility as an independent Solution.
+
+        Uses {attr}`~ommx.SampleSet.feasible_relaxed`: removed constraints are
+        excluded, while all variable kinds and bounds still apply. The selected
+        candidate can therefore fail {attr}`~ommx.Solution.feasible`.
+        Comparison still uses the reported objective and sense; it does not switch
+        to an active solver-facing objective. Raises ValueError if there is no
+        qualifying candidate, including when empty.
+        """
+    @property
+    def best_feasible_unrelaxed(self) -> Solution:
+        r"""
+        Alias for {attr}`~ommx.SampleSet.best_feasible`, including removed constraints.
+        Raises ValueError if there is no feasible sample.
+        """
     @property
     def objectives(self) -> builtins.dict[builtins.int, builtins.float]:
         r"""
-        Get objectives for all samples
+        Reported objective values keyed by sample ID.
+
+        Evaluation uses the Instance's preserved output objective when present,
+        otherwise its active objective. An infeasible candidate can still have
+        an objective value; read this together with {attr}`~ommx.SampleSet.feasible`.
         """
     @property
     def feasible(self) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
-        Get feasibility status for all samples
+        Get feasibility status for all samples, including variable bounds and kinds.
+
+        Includes all retained regular and special constraints, even removed ones.
+        Each value matches {attr}`~ommx.Solution.feasible` on the corresponding
+        extracted Solution and uses {attr}`~ommx.SampleSet.feasibility_atol`.
         """
     @property
     def feasible_relaxed(self) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
-        Get relaxed feasibility status for all samples
+        Get relaxed feasibility status for all samples.
+
+        Removed constraints are excluded; variable bounds and kinds still apply.
         """
     @property
     def feasible_unrelaxed(self) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
-        Get unrelaxed feasibility status for all samples
+        Alias for {attr}`~ommx.SampleSet.feasible`, keyed by sample ID.
+        """
+    @property
+    def feasibility_atol(self) -> builtins.float:
+        r"""
+        Absolute tolerance associated with the stored evaluation and feasibility results.
+
+        Pass this to an extracted constraint's explicit feasibility query to use
+        the enclosing result's threshold.
         """
     @property
     def sense(self) -> Sense:
         r"""
-        Get the optimization sense (minimize or maximize)
+        The sense associated with the reported objective values.
+
+        This is the preserved output sense when recorded by the evaluated
+        Instance, otherwise its active sense. ``summary`` and the ``best_feasible``
+        selectors use it even if a transformation changed the solver-facing sense.
         """
     @property
     def named_functions(self) -> builtins.list[SampledNamedFunction]:
@@ -6441,9 +10641,10 @@ class SampleSet:
         Get named functions for compatibility with existing Python code
         """
     @property
-    def constraints(self) -> builtins.list[SampledConstraint]:
+    def constraints(self) -> SampledConstraintCollection:
         r"""
-        Get constraints for compatibility with existing Python code
+        Live mapping of all constraint families, including removed results.
+        Typed IDs select the family. Rows are fetched only when indexed.
         """
     @property
     def decision_variables(self) -> builtins.list[SampledDecisionVariable]:
@@ -6464,20 +10665,18 @@ class SampleSet:
 
         # Examples
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x + y,
         ...     objective=sum(x) + sum(y),
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={},
+        ...     sense=Sense.Maximize,
         ... )
         >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
         >>> sorted(sample_set.decision_variable_names)
         ['x', 'y']
-        ```
         """
     @property
     def named_function_names(self) -> builtins.set[builtins.str]:
@@ -6487,14 +10686,19 @@ class SampleSet:
     @property
     def summary(self) -> pandas.DataFrame:
         r"""
-        Summary DataFrame with columns: objective, feasible. Sorted by feasible desc then objective.
-        Index is sample_id.
-        """
-    @property
-    def summary_with_constraints(self) -> pandas.DataFrame:
-        r"""
-        Summary DataFrame with per-constraint feasibility columns.
-        Index is sample_id.
+        A materialized overview with one row per sample ID.
+
+        The index is ``sample_id`` and the columns are ``objective`` and
+        ``feasible``. Feasibility matches {attr}`~ommx.SampleSet.feasible`, including
+        variable kinds and bounds and all retained constraints, even removed ones.
+        Feasible candidates appear first; within each feasibility group, objective
+        values are ascending for minimization and descending for maximization,
+        according to {attr}`~ommx.SampleSet.sense`.
+
+        The index keeps the candidate's ID rather than its displayed row position;
+        use that ID with {meth}`~ommx.SampleSet.get`. Identical assignments under
+        different IDs remain separate rows. Editing the DataFrame does not update
+        the SampleSet. See the {class}`~ommx.SampleSet` example for the table layout.
         """
     def replace_annotations(
         self, annotations: typing.Mapping[builtins.str, builtins.str]
@@ -6527,13 +10731,42 @@ class SampleSet:
     def from_v2_bytes(bytes: bytes) -> SampleSet: ...
     def to_v1_bytes(self) -> bytes: ...
     def to_v2_bytes(self) -> bytes: ...
-    def get(self, sample_id: builtins.int) -> Solution: ...
+    def get(self, sample_id: builtins.int) -> Solution:
+        r"""
+        Return one sample as a Solution.
+
+        ``sample_id`` is the candidate's ID, not its row position in
+        {attr}`~ommx.SampleSet.summary`. The independent result contains evaluated
+        values, variable and constraint labels, retained removed constraints,
+        named functions, reported objective and sense, and the stored tolerance.
+        Changing the extracted Solution does not update the SampleSet.
+        Raises KeyError if the sample ID does not exist.
+
+        >>> from ommx import Instance, Solution
+        >>> instance = Instance.maximize()
+        >>> x = instance.new_binary("selected", subscripts=[0])
+        >>> instance.objective = x
+        >>> results = instance.evaluate_samples({10: {x.id: 0}, 20: {x.id: 1}})
+        >>> assert list(results.summary.index) == [20, 10]
+        >>> solution = results.get(sample_id=10)
+        >>> assert isinstance(solution, Solution)
+        >>> assert solution.objective == 0.0
+        >>> assert solution.extract_decision_variables("selected") == {(0,): 0.0}
+        """
     def get_sample_by_id(self, sample_id: builtins.int) -> Solution:
         r"""
-        Get sample by ID (alias for get method)
+        Get sample by ID (alias for get method).
+
+        Raises KeyError if the sample ID does not exist.
         """
-    def num_samples(self) -> builtins.int: ...
-    def sample_ids(self) -> builtins.set[builtins.int]: ...
+    def num_samples(self) -> builtins.int:
+        r"""
+        Number of candidate IDs, including repeated assignments with different IDs.
+        """
+    def sample_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        All candidate IDs as an independent set of integers.
+        """
     def feasible_ids(self) -> builtins.set[builtins.int]: ...
     def feasible_relaxed_ids(self) -> builtins.set[builtins.int]: ...
     def feasible_unrelaxed_ids(self) -> builtins.set[builtins.int]: ...
@@ -6541,7 +10774,24 @@ class SampleSet:
         self, name: builtins.str, sample_id: builtins.int
     ) -> dict:
         r"""
-        Extract decision variable values for a given name and sample ID
+        Extract decision variable values for a given name and sample ID.
+
+        Returns a dictionary keyed by subscript tuples. A scalar variable uses
+        ``()``. This is equivalent to extracting the name from ``get(sample_id)``;
+        names and subscripts identify matches, not parameters or descriptions.
+        See {meth}`~ommx.Solution.extract_decision_variables` for the relationship
+        between named dictionaries, variable IDs, and DataFrames.
+
+        Raises KeyError if the name or sample ID does not exist, and ValueError
+        if the same subscript is found more than once.
+
+        >>> from ommx import Instance
+        >>> instance = Instance.maximize()
+        >>> x = instance.new_binary("selected", subscripts=[0])
+        >>> instance.objective = x
+        >>> results = instance.evaluate_samples({7: {x.id: 1}})
+        >>> assert results.extract_decision_variables("selected", 7) == {(0,): 1.0}
+        >>> assert results.get(7).extract_decision_variables("selected") == {(0,): 1.0}
         """
     def extract_all_decision_variables(self, sample_id: builtins.int) -> dict:
         r"""
@@ -6550,21 +10800,24 @@ class SampleSet:
         Returns a mapping from variable name to a mapping from subscripts to values.
         This is useful for extracting all variables at once in a structured format.
         Variables without names are not included in the result.
+        Inner keys are subscript tuples, with ``()`` for a scalar variable.
+        Parameters and descriptions do not distinguish matching labels.
+        Use {meth}`~ommx.Instance.state_from_named_values` on a receiving Instance
+        to resolve its IDs from this dictionary before evaluating it there.
 
-        Raises ValueError if a decision variable with parameters is found, or if the same
-        name and subscript combination is found multiple times, or if the sample ID is invalid.
+        Raises KeyError if the sample ID does not exist, and ValueError if the
+        same name and subscript combination is found multiple times.
 
         # Examples
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x + y,
         ...     objective=sum(x) + sum(y),
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={},
+        ...     sense=Sense.Maximize,
         ... )
         >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
         >>> all_vars = sample_set.extract_all_decision_variables(0)
@@ -6572,31 +10825,61 @@ class SampleSet:
         {(0,): 1.0, (1,): 1.0, (2,): 1.0}
         >>> all_vars["y"]
         {(0,): 1.0, (1,): 1.0}
-        ```
         """
-    def extract_constraints(self, name: builtins.str, sample_id: builtins.int) -> dict:
+    def extract_constraints(
+        self, name: builtins.str, sample_id: builtins.int
+    ) -> builtins.dict[builtins.tuple[builtins.int, ...], builtins.float]:
         r"""
-        Extract constraint values for a given name and sample ID
+        Extract nonnegative violations of all constraint families by name for one sample.
+
+        Raises KeyError if the name or sample ID does not exist. Raises
+        ValueError if matching constraints share subscripts, including across families.
+        Parameters and descriptions are ignored. Retained removed constraints are
+        included. Regular constraints return violations, not signed function values.
         """
     def extract_named_functions(
         self, name: builtins.str, sample_id: builtins.int
     ) -> dict:
         r"""
-        Extract named function values for a given name and sample ID
+        Extract named function values for a given name and sample ID.
+
+        Returns a dictionary keyed by subscript tuples, with ``()`` for a scalar
+        metric. Named functions report candidate metrics without changing the
+        objective or feasibility conditions. See {meth}`~ommx.Solution.extract_named_functions`
+        for the corresponding single-candidate query, or {class}`~ommx.NamedFunction`
+        for the complete registration and evaluation workflow. Parameters and
+        descriptions do not distinguish matching labels.
+
+        Raises KeyError if the name or sample ID does not exist, and ValueError
+        if the same subscript is found more than once.
+
+        >>> from ommx import DecisionVariable, Instance, NamedFunction, Sense
+        >>> x = DecisionVariable.binary(0, name="selected")
+        >>> cost = NamedFunction(id=10, function=4 * x, name="cost")
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={},
+        ...     sense=Sense.Maximize, named_functions=[cost],
+        ... )
+        >>> results = instance.evaluate_samples({7: {x.id: 0}, 9: {x.id: 1}})
+        >>> assert results.extract_named_functions("cost", 9) == {(): 4.0}
+        >>> assert results.get(9).extract_named_functions("cost") == {(): 4.0}
         """
     def extract_all_named_functions(self, sample_id: builtins.int) -> dict:
         r"""
-        Extract all named function values grouped by name for a given sample ID
+        Extract all named function values grouped by name for a given sample ID.
+
+        The outer keys are names; inner keys are subscript tuples, with ``()`` for
+        a scalar metric. Entries without names are excluded. Parameters and
+        descriptions are ignored when grouping.
+
+        Raises KeyError if the sample ID does not exist, and ValueError if the
+        same name and subscript combination is found multiple times.
         """
     def get_decision_variable_by_id(
         self, variable_id: builtins.int
     ) -> SampledDecisionVariable:
         r"""
         Get a specific sampled decision variable by ID
-        """
-    def get_constraint_by_id(self, constraint_id: builtins.int) -> SampledConstraint:
-        r"""
-        Get a specific sampled constraint by ID
         """
     def get_named_function_by_id(
         self, named_function_id: builtins.int
@@ -6616,7 +10899,8 @@ class SampleSet:
         """
     def constraints_df(
         self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        *,
+        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"],
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
     ) -> pandas.DataFrame:
         r"""
@@ -6639,8 +10923,7 @@ class SampleSet:
         Dynamic columns: one per sample_id (int) with the function's evaluated value.
         """
     def constraint_context_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint context DataFrame (id-indexed). See
@@ -6648,22 +10931,19 @@ class SampleSet:
         semantics. Reads from the sampled collection's context store.
         """
     def constraint_parameters_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint parameters DataFrame (long format).
         """
     def constraint_provenance_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint provenance DataFrame (long format).
         """
     def constraint_removed_reasons_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Removed-constraint reasons DataFrame (long format).
@@ -6678,33 +10958,11 @@ class SampleSet:
         """
 
 @typing.final
-class SampledConstraint:
+class SampledConstraint(ConstraintView):
     @property
     def equality(self) -> Equality:
         r"""
         Get the constraint equality type
-        """
-    @property
-    def name(self) -> typing.Optional[builtins.str]:
-        r"""
-        Get the constraint name
-        """
-    @property
-    def subscripts(self) -> builtins.list[builtins.int]:
-        r"""
-        Get the subscripts
-        """
-    @property
-    def description(self) -> typing.Optional[builtins.str]:
-        r"""
-        Get the description
-        """
-    @property
-    def provenance(self) -> builtins.list[Provenance]:
-        r"""
-        Get the provenance chain.
-
-        See {attr}`~ommx.Constraint.provenance` for semantics.
         """
     @property
     def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
@@ -6717,9 +10975,180 @@ class SampledConstraint:
         Get the evaluated values for all samples
         """
     @property
-    def feasible(self) -> builtins.dict[builtins.int, builtins.bool]:
+    def violations(self) -> builtins.dict[builtins.int, builtins.float]:
         r"""
-        Get the feasibility status for all samples
+        Nonnegative violations keyed by sample ID.
+        """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling name, if supplied.
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Modeling subscripts.
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Modeling parameters.
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling description, if supplied.
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Transformation lineage, preserving the source constraint family.
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reason this constraint was removed before evaluation, or None.
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Parameters of the removal reason; empty for an active constraint.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def feasible(
+        self, *, atol: builtins.float
+    ) -> builtins.dict[builtins.int, builtins.bool]:
+        r"""
+        Compute feasibility for every sample using the supplied tolerance.
+
+        This query does not re-evaluate the functions or change stored values.
+        """
+
+@typing.final
+class SampledConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
+    r"""
+    Live mapping of a SampleSet's constraint results, including retained removed rows.
+
+    Obtained from {attr}`~ommx.SampleSet.constraints`. Each access returns an
+    independent snapshot with labels, provenance, removal reasons, and sampled
+    evaluation diagnostics. Changing that snapshot does not update the SampleSet;
+    a later lookup reads the owner's current state. The collection keeps its owner
+    alive.
+
+    The typed-key, ``get``, live-view, iteration, and snapshot equality rules are
+    documented in {class}`~ommx.ConstraintCollection`. See
+    {class}`~ommx.EvaluatedConstraintCollection` for the current ID and result-type
+    table, and {class}`~ommx.ConstraintFamilyView` for ``of_kind`` filtering.
+    Sampled rows expose ``violations`` and ``feasible(atol=...)`` keyed by sample ID.
+    Use {attr}`~ommx.SampleSet.summary` for per-sample objectives and overall
+    feasibility, or {meth}`~ommx.SampleSet.constraints_df` with an explicit ``kind``
+    for a table of one constraint family, including retained removed rows.
+    """
+    def __len__(self) -> builtins.int: ...
+    def __contains__(self, key: builtins.object) -> builtins.bool: ...
+    def __iter__(self) -> typing.Iterator[ConstraintIDBase]:
+        r"""
+        Iterate a snapshot of typed IDs; constraint rows are not collected.
+        """
+    def keys(self) -> typing.KeysView[ConstraintIDBase]:
+        r"""
+        Live key view. Iteration order is family order, then numeric ID.
+        """
+    def values(self) -> typing.ValuesView[ConstraintView]:
+        r"""
+        Live value view; each row is fetched when visited.
+        """
+    def items(self) -> typing.ItemsView[ConstraintIDBase, ConstraintView]:
+        r"""
+        Live item view; each row is fetched when visited.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __eq__(self, other: typing.Any) -> typing.Any: ...
+    @typing.overload
+    def __getitem__(self, key: ConstraintID) -> SampledConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: IndicatorConstraintID) -> SampledIndicatorConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: OneHotConstraintID) -> SampledOneHotConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: Sos1ConstraintID) -> SampledSos1Constraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintID, default: None = None
+    ) -> SampledConstraint | None: ...
+    @typing.overload
+    def get(self, key: ConstraintID, default: _T) -> SampledConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: None = None
+    ) -> SampledIndicatorConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: _T
+    ) -> SampledIndicatorConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: None = None
+    ) -> SampledOneHotConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: _T
+    ) -> SampledOneHotConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: None = None
+    ) -> SampledSos1Constraint | None: ...
+    @typing.overload
+    def get(self, key: Sos1ConstraintID, default: _T) -> SampledSos1Constraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintIDBase, default: None = None
+    ) -> ConstraintView | None: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["regular"]
+    ) -> ConstraintFamilyView[ConstraintID, SampledConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["indicator"]
+    ) -> ConstraintFamilyView[IndicatorConstraintID, SampledIndicatorConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["one_hot"]
+    ) -> ConstraintFamilyView[OneHotConstraintID, SampledOneHotConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["sos1"]
+    ) -> ConstraintFamilyView[Sos1ConstraintID, SampledSos1Constraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
         """
 
 @typing.final
@@ -6771,6 +11200,89 @@ class SampledDecisionVariable:
         """
 
 @typing.final
+class SampledIndicatorConstraint(ConstraintView):
+    r"""
+    An owned sampled indicator result. Fetched by typed ID from the owning result's constraints collection.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling name, if supplied.
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Modeling subscripts.
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Modeling parameters.
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling description, if supplied.
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Transformation lineage, preserving the source constraint family.
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reason this constraint was removed before evaluation, or None.
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Parameters of the removal reason; empty for an active constraint.
+        """
+    @property
+    def violations(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Nonnegative violations keyed by sample ID.
+        """
+    @property
+    def activation_atol(self) -> builtins.float:
+        r"""
+        Tolerance used when the activation diagnostics were computed.
+        """
+    @property
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        IDs of decision variables used to evaluate this constraint.
+        """
+    @property
+    def indicator_variable_id(self) -> builtins.int:
+        r"""
+        Decision variable that activates this constraint.
+        """
+    @property
+    def equality(self) -> Equality:
+        r"""
+        Equality of the inner constraint.
+        """
+    @property
+    def evaluated_values(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Inner residuals keyed by sample ID.
+        """
+    @property
+    def indicator_active(self) -> builtins.dict[builtins.int, builtins.bool]:
+        r"""
+        Activation diagnostics keyed by sample ID.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def feasible(
+        self, *, atol: builtins.float
+    ) -> builtins.dict[builtins.int, builtins.bool]:
+        r"""
+        Compare each stored violation with atol without changing activation diagnostics.
+        """
+
+@typing.final
 class SampledNamedFunction:
     r"""
     SampledNamedFunction wrapper for Python.
@@ -6815,9 +11327,208 @@ class SampledNamedFunction:
     def __deepcopy__(self, _memo: typing.Any) -> SampledNamedFunction: ...
 
 @typing.final
+class SampledOneHotConstraint(ConstraintView):
+    r"""
+    An owned sampled one-hot result. Fetched by typed ID from the owning result's constraints collection.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling name, if supplied.
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Modeling subscripts.
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Modeling parameters.
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling description, if supplied.
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Transformation lineage, preserving the source constraint family.
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reason this constraint was removed before evaluation, or None.
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Parameters of the removal reason; empty for an active constraint.
+        """
+    @property
+    def violations(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Nonnegative violations keyed by sample ID.
+        """
+    @property
+    def activation_atol(self) -> builtins.float:
+        r"""
+        Tolerance used when the activation diagnostics were computed.
+        """
+    @property
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        IDs of decision variables used to evaluate this constraint.
+        """
+    @property
+    def variables(self) -> builtins.set[builtins.int]:
+        r"""
+        Member decision variable IDs.
+        """
+    @property
+    def active_variable(
+        self,
+    ) -> builtins.dict[builtins.int, typing.Optional[builtins.int]]:
+        r"""
+        Retained selected-variable diagnostics keyed by sample ID, using activation_atol.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def feasible(
+        self, *, atol: builtins.float
+    ) -> builtins.dict[builtins.int, builtins.bool]:
+        r"""
+        Compare each stored violation with atol without changing activation diagnostics.
+        """
+
+@typing.final
+class SampledSos1Constraint(ConstraintView):
+    r"""
+    An owned sampled SOS1 result. Fetched by typed ID from the owning result's constraints collection.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling name, if supplied.
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Modeling subscripts.
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Modeling parameters.
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling description, if supplied.
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Transformation lineage, preserving the source constraint family.
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reason this constraint was removed before evaluation, or None.
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Parameters of the removal reason; empty for an active constraint.
+        """
+    @property
+    def violations(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Nonnegative violations keyed by sample ID.
+        """
+    @property
+    def activation_atol(self) -> builtins.float:
+        r"""
+        Tolerance used when the activation diagnostics were computed.
+        """
+    @property
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        IDs of decision variables used to evaluate this constraint.
+        """
+    @property
+    def variables(self) -> builtins.set[builtins.int]:
+        r"""
+        Member decision variable IDs.
+        """
+    @property
+    def active_variable(
+        self,
+    ) -> builtins.dict[builtins.int, typing.Optional[builtins.int]]:
+        r"""
+        Retained selected-variable diagnostics keyed by sample ID, using activation_atol.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def feasible(
+        self, *, atol: builtins.float
+    ) -> builtins.dict[builtins.int, builtins.bool]:
+        r"""
+        Compare each stored violation with atol without changing activation diagnostics.
+        """
+
+@typing.final
 class Samples:
     r"""
-    Collection of State samples
+    Multiple candidate assignments, each identified by a sample ID.
+
+    Each candidate is a {class}`~ommx.State`: a mapping from variable IDs to values.
+    Sample IDs identify candidates, independently of the variable IDs within each
+    candidate. Samples does not evaluate an objective or establish feasibility.
+    Pass it to {meth}`~ommx.Instance.evaluate_samples` to obtain a
+    {class}`~ommx.SampleSet`, just as evaluating one State produces a
+    {class}`~ommx.Solution`.
+
+    **Choose sample IDs or assign them automatically**
+
+    A dictionary from sample IDs to States or variable-value dictionaries preserves
+    the supplied IDs. Use these IDs to associate results with a sampler's records.
+    An iterable of States or variable-value dictionaries assigns IDs from 0 in
+    iteration order.
+
+    >>> from ommx import Samples, State
+    >>> explicit = Samples({10: {0: 1, 1: 0}, 20: State({0: 0, 1: 1})})
+    >>> assert explicit.sample_ids() == {10, 20}
+    >>> assert explicit.get_state(20).entries == {0: 0.0, 1: 1.0}
+    >>> automatic = Samples([{0: 1, 1: 0}, {0: 0, 1: 1}])
+    >>> assert automatic.sample_ids() == {0, 1}
+
+    Identical assignments may occur under different IDs. {meth}`~ommx.Samples.num_samples`
+    counts sample IDs, not distinct assignments; the IDs remain available after
+    evaluation.
+
+    >>> repeated = Samples([{0: 1}, {0: 1}])
+    >>> assert repeated.num_samples() == 2
+    >>> assert repeated.sample_ids() == {0, 1}
+    >>> assert repeated.get_state(0).entries == repeated.get_state(1).entries
+
+    **Accepted inputs**
+
+    The constructor also accepts an existing Samples object, one State, or a
+    nonempty variable-value dictionary. A single assignment receives sample ID 0.
+    An empty dictionary or empty iterable creates no samples; use ``[{}]`` or
+    ``State({})`` to represent one empty assignment.
+
+    >>> single = Samples({5: 1.0})
+    >>> assert single.sample_ids() == {0}
+    >>> assert single.get_state(0).entries == {5: 1.0}
+    >>> assert Samples({}).num_samples() == 0
+    >>> assert Samples([{}]).num_samples() == 1
+    >>> assert Samples(State({})).num_samples() == 1
+
+    {meth}`~ommx.Instance.evaluate_samples` accepts these inputs directly, so an
+    explicit Samples construction is optional. {meth}`~ommx.Samples.append` adds
+    an assignment under one or more new IDs and rejects duplicate IDs without
+    changing the collection.
     """
     def __new__(cls, entries: ToSamples) -> Samples: ...
     @staticmethod
@@ -6825,19 +11536,27 @@ class Samples:
     def to_v1_bytes(self) -> bytes: ...
     def num_samples(self) -> builtins.int:
         r"""
-        Get the number of samples
+        Number of sample IDs, including separate IDs with identical assignments.
         """
     def sample_ids(self) -> builtins.set[builtins.int]:
         r"""
-        Get all sample IDs
+        All sample IDs as an independent set of integers.
         """
     def get_state(self, sample_id: builtins.int) -> State:
         r"""
-        Get the state for a specific sample ID
+        Return an independent State for one sample ID.
+
+        Raises KeyError if the sample ID is not present. This returns raw candidate
+        values, not a feasibility assessment; use {meth}`~ommx.Instance.evaluate_samples`
+        to obtain evaluated results.
         """
     def append(self, sample_ids: typing.Sequence[builtins.int], state: ToState) -> None:
         r"""
-        Append a sample with the given sample IDs and state
+        Append a sample with the given sample IDs and state.
+
+        Raises {class}`ValueError` if an ID already exists in this collection
+        or occurs more than once in `sample_ids`. The collection is unchanged
+        when validation fails.
         """
 
 @typing.final
@@ -6861,7 +11580,9 @@ class Sampling:
     @property
     def input(self) -> Instance:
         r"""
-        Input `Instance` passed to the sampler.
+        `Instance` supplied to the logging call, before any automatic Adapter
+        Preparation performed by that call. It may already have been prepared
+        explicitly by the caller.
         """
     @property
     def output(self) -> typing.Optional[SampleSet]:
@@ -6892,6 +11613,8 @@ class SealedRun:
 
     `SealedRun` exposes run-level attachments by name, `Solve` records created
     by `Run.log_solve`, and `Sampling` records created by `Run.log_sample`.
+    Missing attachment names raise {class}`KeyError`; choosing a typed getter
+    incompatible with the stored media type raises {class}`ValueError`.
     The `status` property records
     how the Run scope was closed: `"finished"`, `"failed"`, or `"interrupted"`.
     It is not an aggregate status of child records, so a finished Run may
@@ -6910,6 +11633,11 @@ class SealedRun:
         This records how the Run scope was closed, not whether every child
         `Solve` record finished successfully. A finished Run may contain failed
         Solve attempts if those adapter errors were handled inside the Run.
+        """
+    @property
+    def lifecycle_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Concise exception type and message for a failed or interrupted Run.
         """
     @property
     def attachment_names(self) -> builtins.list[builtins.str]:
@@ -6999,10 +11727,117 @@ class SealedRun:
 @typing.final
 class Solution:
     r"""
-    Python SDK domain type for evaluated optimization results.
+    A candidate evaluated against a particular optimization problem.
 
-    This class contains annotations persisted in protobuf payloads and mirrored
-    to OMMX Artifact descriptors.
+    A {class}`~ommx.State` maps variable IDs to values; it does not say whether
+    those values satisfy a problem. A Solution adds the objective value,
+    feasibility results, evaluated variables and constraints, and their modeling
+    labels. Use {meth}`~ommx.Instance.evaluate` with a State or an ID-to-value
+    dictionary to obtain one, whether the candidate came from a solver or was
+    supplied manually.
+
+    **Evaluate a candidate**
+
+    This problem maximizes ``x + y`` while forbidding both binary variables
+    from being 1. Evaluation checks one assignment; it does not search for a
+    better assignment or prove optimality.
+
+    >>> from ommx import Instance, Optimality, State
+    >>> instance = Instance.maximize()
+    >>> x = instance.new_binary("x")
+    >>> y = instance.new_binary("y")
+    >>> instance.objective = x + y
+    >>> exclusive = instance.add_constraint(x * y == 0, "exclusive")
+    >>> state = State({x.id: 1, y.id: 0})
+    >>> solution = instance.evaluate(state)
+    >>> assert solution.state.entries == {x.id: 1.0, y.id: 0.0}
+    >>> assert solution.feasible
+    >>> assert solution.objective == 1.0
+    >>> assert solution.optimality == Optimality.Unspecified
+
+    **Read feasibility, objective, and optimality separately**
+
+    | Property | Meaning | Does not establish |
+    | --- | --- | --- |
+    | {attr}`~ommx.Solution.feasible` | Variable domains and all retained constraints are satisfied | No better candidate exists |
+    | {attr}`~ommx.Solution.objective` | The candidate's reported objective value | Feasibility or optimality |
+    | {attr}`~ommx.Solution.optimality` | Recorded optimality status, for example supplied by an adapter | A proof performed by ``evaluate`` |
+
+    An infeasible candidate can still have an objective value when its
+    expressions can be evaluated. It cannot be selected as a better feasible
+    solution merely because that value looks preferable.
+
+    >>> infeasible = instance.evaluate({x.id: 1, y.id: 1})
+    >>> assert infeasible.objective == 2.0
+    >>> assert not infeasible.feasible
+
+    Feasibility includes variable ``kind`` and bounds, not only constraints.
+    Floating-point checks use the tolerance supplied to ``evaluate(..., atol=...)``;
+    {attr}`~ommx.Solution.feasibility_atol` records it. The exact rules for
+    discrete-value normalization, reconstruction, and omitted values belong to
+    {meth}`~ommx.Instance.populate_state`.
+
+    **Inspect evaluated values**
+
+    {meth}`~ommx.Solution.decision_variables_df` combines variable definitions
+    and labels with evaluated values. {meth}`~ommx.Solution.constraints_df`
+    selects one constraint family and includes its evaluation diagnostics.
+    For a regular constraint ``f(x) <= 0``, the signed value ``f(x)`` and the
+    nonnegative violation ``max(0, f(x))`` are different quantities.
+
+    For queries without pandas, {attr}`~ommx.Solution.constraints` is a live
+    {class}`~ommx.EvaluatedConstraintCollection` indexed by typed constraint IDs.
+    It includes active constraints and constraints retained after removal.
+    Each fetched row is an independent snapshot; editing it does not update
+    the Solution. Use an owner method such as
+    {meth}`~ommx.Solution.set_dual_variable` when changing result data.
+    {class}`~ommx.ConstraintFamilyView` documents family-filtered queries, and
+    {class}`~ommx.ConstraintIDBase` documents the extensible ID interface.
+
+    {meth}`~ommx.Solution.extract_decision_variables` and
+    {meth}`~ommx.Solution.extract_constraints` use names and subscript tuples to
+    retrieve variable values and constraint violations for application-level
+    analysis. {class}`~ommx.NamedFunction` expressions registered on the Instance
+    provide additional reported metrics through
+    {meth}`~ommx.Solution.extract_named_functions` or
+    {meth}`~ommx.Solution.named_functions_df`. These metrics do not add an
+    objective or a feasibility condition.
+
+    **Evaluate a transformed problem**
+
+    Evaluate a solver's returned State with the transformed Instance that was
+    supplied to it. That Instance retains the fixed values, dependencies,
+    removed constraints, and output objective needed to interpret the result.
+    Passing the State directly to the original Instance may lose that context
+    or leave required original variables unspecified.
+
+    >>> from ommx import Instance, Optimality, Sense
+    >>> original = Instance.maximize()
+    >>> x = original.new_binary("x")
+    >>> y = original.new_binary("y")
+    >>> original.objective = 3 * x + y
+    >>> prepared = original.partial_evaluate({x.id: 1})
+    >>> assert prepared.convert_active_objective(Sense.Minimize)
+    >>> restored = prepared.evaluate({y.id: 0})
+    >>> assert restored.state.entries == {x.id: 1.0, y.id: 0.0}
+    >>> assert prepared.objective.evaluate({y.id: 0}) == -3.0
+    >>> assert (restored.sense, restored.objective) == (Sense.Maximize, 3.0)
+    >>> assert restored.optimality == Optimality.Unspecified
+
+    Fixed and dependent values are reconstructed. Otherwise irrelevant variables
+    omitted from the candidate receive defaults; a default is not a value found
+    by the solver. Supply such a value when it matters to reported metrics.
+    Distinguish successful reconstruction, feasibility including removed
+    constraints, and transport of objective or optimality information.
+    {attr}`~ommx.Solution.feasible_relaxed` excludes removed constraints but
+    still checks variable domains. Output objective and optimality transport
+    follow {attr}`~ommx.Instance.output_objective` and
+    {meth}`~ommx.Instance.map_active_optimality`, respectively.
+
+    Use {class}`~ommx.SampleSet` to evaluate multiple candidates with the same
+    rules. Being best among the candidates obtained does not establish global
+    optimality. Solution annotations can also be persisted in protobuf payloads
+    and mirrored to OMMX Artifact descriptors.
     """
 
     OPTIMAL: Optimality
@@ -7058,21 +11893,45 @@ class Solution:
     @parameters.setter
     def parameters(self, value: typing.Any) -> None: ...
     @property
+    def constraint_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Unique names across all constraint families, as a set of strings.
+
+        Retained removed constraints are included; no sample ID is needed.
+        The scope matches `extract_constraints`. Unnamed constraints are excluded;
+        an explicitly empty name is included. Duplicate names appear once, even
+        when extraction would reject duplicate subscripts.
+        Each access returns a fresh set; editing it does not change this owner.
+        """
+    @property
     def objective(self) -> builtins.float:
         r"""
-        Get the objective function value
+        The reported objective value of this candidate.
+
+        Evaluation uses the Instance's preserved output objective when one is
+        present; otherwise it uses the active objective. Read the value together
+        with {attr}`~ommx.Solution.sense` and {attr}`~ommx.Solution.feasible`.
+        An infeasible candidate can have an objective value, and the value alone
+        establishes neither feasibility nor optimality.
         """
     @property
     def state(self) -> State:
         r"""
-        Get the solution state containing variable values
+        An independent State containing the evaluated variable values.
+
+        Includes retained fixed and dependent values restored by evaluation and
+        defaults supplied for omitted irrelevant variables. See
+        {meth}`~ommx.Instance.populate_state` for the reconstruction rules.
         """
     @property
     def feasible(self) -> builtins.bool:
         r"""
-        Feasibility of the solution in terms of all constraints, including removed constraints.
+        Whether all retained constraints and variable domains are satisfied.
 
-        This is an alias for `feasible_unrelaxed`.
+        Checks all regular and special constraints, including removed constraints,
+        together with the kind and bounds of every retained variable, using
+        {attr}`~ommx.Solution.feasibility_atol`. This is an alias for
+        {attr}`~ommx.Solution.feasible_unrelaxed`; it does not establish optimality.
 
         Compatibility: The meaning of this property has changed from Python SDK 1.7.0.
         Previously, this property represents the feasibility of the remaining constraints only,
@@ -7083,22 +11942,59 @@ class Solution:
     @property
     def feasible_relaxed(self) -> builtins.bool:
         r"""
-        Feasibility of the solution in terms of remaining constraints, not including relaxed (removed) constraints.
+        Whether active constraints and all retained variable domains are satisfied.
+
+        Excludes constraints retained after removal, across all constraint families.
+        Variable kind and bound checks are still applied with
+        {attr}`~ommx.Solution.feasibility_atol`. A result can satisfy this property
+        while failing {attr}`~ommx.Solution.feasible` because a removed constraint
+        is violated.
+
+        >>> from ommx import Instance
+        >>> instance = Instance.minimize()
+        >>> x = instance.new_binary("x")
+        >>> instance.objective = x
+        >>> required = instance.add_constraint(x == 1, "required")
+        >>> instance.relax_constraint(required.constraint_id, "manual relaxation")
+        >>> solution = instance.evaluate({x.id: 0})
+        >>> assert solution.feasible_relaxed
+        >>> assert not solution.feasible
+        >>> assert solution.constraints[required.constraint_id].violation() == 1.0
         """
     @property
     def feasible_unrelaxed(self) -> builtins.bool:
         r"""
-        Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.
+        Alias for {attr}`~ommx.Solution.feasible`, including removed constraints
+        and every retained variable's kind and bounds.
+        """
+    @property
+    def feasibility_atol(self) -> builtins.float:
+        r"""
+        Absolute tolerance associated with the stored evaluation and feasibility results.
+
+        Pass this to an extracted constraint's explicit feasibility query to use
+        the enclosing result's threshold.
         """
     @property
     def sense(self) -> Sense:
         r"""
-        Get the optimization sense (minimize or maximize)
+        The optimization sense associated with the reported objective value.
+
+        This is the preserved output sense when an output objective is recorded
+        on the evaluated Instance, and otherwise its active sense. It can differ
+        from the solver-facing sense after a transformation. Raises RuntimeError
+        for older serialized results that do not record a sense.
         """
     @property
     def optimality(self) -> Optimality:
         r"""
-        Get the optimality status
+        The recorded optimality status, not a result of candidate evaluation.
+
+        {meth}`~ommx.Instance.evaluate` produces ``Optimality.Unspecified``.
+        An adapter may attach a solver's status, or a caller may set this property;
+        setting it does not prove the claim. For a transformed formulation, use
+        {meth}`~ommx.Instance.map_active_optimality` to determine which status
+        transports to the reported output problem.
         """
     @optimality.setter
     def optimality(self, value: Optimality) -> None:
@@ -7121,9 +12017,37 @@ class Solution:
         Get evaluated decision variables as a list sorted by ID
         """
     @property
-    def constraints(self) -> builtins.dict[builtins.int, EvaluatedConstraint]:
+    def constraints(self) -> EvaluatedConstraintCollection:
         r"""
-        Get evaluated constraints as a dict keyed by constraint ID
+        Live mapping of all constraint families, including removed results.
+
+        Typed IDs select the family. Rows are fetched only when indexed, as
+        independent snapshots with labels, provenance, removal reasons, and
+        evaluation diagnostics. Changing a snapshot does not update this
+        Solution; subsequent lookups read the owner's current result.
+        Use {meth}`~ommx.Solution.set_dual_variable` to update a stored regular
+        constraint's dual value.
+
+        >>> from ommx import Instance
+        >>> instance = Instance.minimize()
+        >>> x = instance.new_binary("x")
+        >>> capacity = instance.add_constraint(x <= 2, "capacity")
+        >>> solution = instance.evaluate({x.id: 0})
+        >>> rows = solution.constraints
+        >>> row = rows[capacity.constraint_id]
+        >>> assert row.evaluated_value == -2.0
+        >>> assert row.violation() == 0.0
+        >>> assert row.is_feasible(atol=solution.feasibility_atol)
+        >>> row.dual_variable = 9.0
+        >>> assert rows[capacity.constraint_id].dual_variable is None
+        >>> solution.set_dual_variable(capacity.constraint_id, 2.0)
+        >>> assert rows[capacity.constraint_id].dual_variable == 2.0
+        >>> assert row.dual_variable == 9.0
+
+        {class}`~ommx.EvaluatedConstraintCollection` specifies membership,
+        lookup, iteration, and equality. Its ``of_kind`` method returns a
+        {class}`~ommx.ConstraintFamilyView` for one family without collecting
+        rows. Use {meth}`~ommx.Solution.constraints_df` for a materialized table.
         """
     @property
     def named_functions(self) -> builtins.list[EvaluatedNamedFunction]:
@@ -7133,8 +12057,6 @@ class Solution:
     @property
     def decision_variable_ids(self) -> builtins.set[builtins.int]: ...
     @property
-    def constraint_ids(self) -> builtins.set[builtins.int]: ...
-    @property
     def decision_variable_names(self) -> builtins.set[builtins.str]:
         r"""
         Get all unique decision variable names in this solution.
@@ -7143,20 +12065,18 @@ class Solution:
 
         # Examples
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x + y,
         ...     objective=sum(x) + sum(y),
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={},
+        ...     sense=Sense.Maximize,
         ... )
         >>> solution = instance.evaluate({i: 1 for i in range(5)})
         >>> sorted(solution.decision_variable_names)
         ['x', 'y']
-        ```
         """
     @property
     def named_function_ids(self) -> builtins.set[builtins.int]: ...
@@ -7198,25 +12118,43 @@ class Solution:
     def to_v2_bytes(self) -> bytes: ...
     def extract_decision_variables(self, name: builtins.str) -> dict:
         r"""
-        Extract the values of decision variables based on the `name` with `subscripts` key.
+        Extract evaluated variable values using their model name and subscript tuples.
 
-        Raises ValueError if a decision variable with parameters is found, or if the same subscript is found.
+        Use labels such as product, facility, or time indices to return results
+        to application code. The result is a dictionary: ``(i,)`` identifies a
+        one-dimensional subscript, ``(i, j)`` a pair, and ``()`` a scalar variable
+        without subscripts. Names and subscripts are labels, not variable IDs;
+        ``parameters`` and ``description`` do not distinguish extraction keys.
 
-        # Examples
+        Raises KeyError if no decision variable has the requested name, and
+        ValueError if the same subscript is found more than once.
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
-        >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
-        >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(x),
-        ...     constraints=[sum(x) == 1],
-        ...     sense=Instance.MAXIMIZE,
-        ... )
-        >>> solution = instance.evaluate({i: 1 for i in range(3)})
-        >>> solution.extract_decision_variables("x")
-        {(0,): 1.0, (1,): 1.0, (2,): 1.0}
-        ```
+        >>> from ommx import Instance
+        >>> instance = Instance.maximize()
+        >>> x = [instance.new_binary("x", subscripts=[i]) for i in range(2)]
+        >>> y = instance.new_integer("y", lower=0, upper=3)
+        >>> instance.objective = 3 * x[0] + 5 * x[1] + y
+        >>> _ = instance.add_constraint(x[0] + x[1] <= 1)
+        >>> solution = instance.evaluate({x[0].id: 1, x[1].id: 0, y.id: 2})
+        >>> assert solution.feasible
+        >>> assert solution.extract_decision_variables("x") == {(0,): 1.0, (1,): 0.0}
+        >>> assert solution.extract_decision_variables("y") == {(): 2.0}
+        >>> named_values = solution.extract_all_decision_variables()
+        >>> assert named_values == {"x": {(0,): 1.0, (1,): 0.0}, "y": {(): 2.0}}
+        >>> table = solution.decision_variables_df()
+        >>> x_rows = table.loc[table["name"] == "x", ["subscripts", "value"]]
+        >>> assert x_rows["value"].to_dict() == {x[0].id: 1.0, x[1].id: 0.0}
+
+        {meth}`~ommx.Solution.extract_all_decision_variables` groups all named
+        variables. {meth}`~ommx.Solution.decision_variables_df` also includes
+        unnamed variables and keeps variable IDs as its index; its ``subscripts``
+        column contains lists, while the dictionaries above use tuple keys.
+        {meth}`~ommx.SampleSet.extract_decision_variables` provides the same query
+        for a selected sample ID.
+
+        To reuse values in a rebuilt model, use
+        {meth}`~ommx.Instance.state_from_named_values` on the receiving Instance.
+        It resolves that model's IDs by labels; it does not establish feasibility.
         """
     def extract_all_decision_variables(self) -> dict:
         r"""
@@ -7225,21 +12163,28 @@ class Solution:
         Returns a mapping from variable name to a mapping from subscripts to values.
         This is useful for extracting all variables at once in a structured format.
         Variables without names are not included in the result.
+        Scalar variables use the empty tuple ``()`` as their inner key.
+        Names and subscripts select matches; parameters and descriptions are ignored.
 
-        Raises ValueError if a decision variable with parameters is found, or if the same
-        name and subscript combination is found multiple times.
+        Raises ValueError if the same name and subscript combination is found
+        multiple times. Distinct IDs do not disambiguate duplicate labels in this
+        format. Use {attr}`~ommx.Solution.state` or
+        {meth}`~ommx.Solution.decision_variables_df` for values keyed by ID.
+        See {meth}`~ommx.Solution.extract_decision_variables` for the complete
+        single-name, grouped, and table workflow, and
+        {meth}`~ommx.Instance.state_from_named_values` to map these values into
+        another Instance.
 
         # Examples
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x + y,
         ...     objective=sum(x) + sum(y),
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={},
+        ...     sense=Sense.Maximize,
         ... )
         >>> solution = instance.evaluate({i: 1 for i in range(5)})
         >>> all_vars = solution.extract_all_decision_variables()
@@ -7247,45 +12192,117 @@ class Solution:
         {(0,): 1.0, (1,): 1.0, (2,): 1.0}
         >>> all_vars["y"]
         {(0,): 1.0, (1,): 1.0}
-        ```
         """
-    def extract_constraints(self, name: builtins.str) -> dict:
+    def extract_constraints(
+        self, name: builtins.str
+    ) -> builtins.dict[builtins.tuple[builtins.int, ...], builtins.float]:
         r"""
-        Extract the values of constraints based on the `name` with `subscripts` key.
+        Extract nonnegative violations of all constraint families by name, keyed by subscript tuples.
 
-        Raises ValueError if the constraint with parameters is found, or if the same subscript is found.
+        Discover available names with {attr}`~ommx.Solution.constraint_names`.
+        Matching uses the name and subscripts only; a scalar constraint has the
+        key ``()``. The returned dictionary captures values at extraction time.
+
+        Raises KeyError if no constraint has the requested name. Raises
+        ValueError if matching constraints share subscripts, including across families.
+        Parameters and descriptions are ignored. Retained removed constraints are
+        included. Regular constraints return violations, not signed function values.
+        Indicator violations account for activation, while OneHot and SOS1 use
+        their respective metrics; see {meth}`~ommx.Solution.total_violation`.
+        Use {meth}`~ommx.Solution.get_constraint_value` or the regular row's
+        ``evaluated_value`` when the signed value is needed.
+
+        A transformation may copy a source constraint's labels onto generated
+        constraints. If both survive in the result with the same name and
+        subscripts, distinguish them through typed-ID lookup in
+        {attr}`~ommx.Solution.constraints` instead of name extraction.
+
+        Related methods on {meth}`~ommx.Instance.extract_constraints` and
+        {meth}`~ommx.ParametricInstance.extract_constraints` return attached
+        handles for active constraints; {meth}`~ommx.SampleSet.extract_constraints`
+        returns violations for a selected sample, including removed constraints.
 
         # Examples
 
-        ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> c0 = (x[0] + x[1] == 1).set_name("c").add_subscripts([0])
         >>> c1 = (x[1] + x[2] == 1).set_name("c").add_subscripts([1])
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints=[c0, c1],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={0: c0, 1: c1},
+        ...     sense=Sense.Maximize,
         ... )
         >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
         >>> solution.extract_constraints("c")
         {(0,): 0.0, (1,): 0.0}
-        ```
+
+        A feasible inequality can have a negative signed value and zero violation:
+
+        >>> from ommx import Instance
+        >>> named = Instance.minimize()
+        >>> x = named.new_binary("x")
+        >>> capacity = named.add_constraint(x <= 2, "capacity", subscripts=[0])
+        >>> assert named.constraint_names == {"capacity"}
+        >>> assert named.extract_constraints("capacity")[(0,)] == capacity
+        >>> assert named.as_parametric_instance().extract_constraints("capacity")[(0,)].name == "capacity"
+        >>> solution = named.evaluate({x.id: 0})
+        >>> assert solution.extract_constraints("capacity") == {(0,): 0.0}
+        >>> assert solution.get_constraint_value(capacity.constraint_id) == -2.0
+        >>> samples = named.evaluate_samples({7: {x.id: 0}})
+        >>> assert samples.extract_constraints("capacity", 7) == {(0,): 0.0}
         """
     def extract_named_functions(self, name: builtins.str) -> dict:
         r"""
-        Extract named functions by name with subscripts as key (returns a Python dict)
+        Extract named functions by name with subscripts as key (returns a Python dict).
+
+        Named functions report additional metrics for the evaluated candidate;
+        registering one does not change the objective or add a constraint.
+        Discover names with {attr}`~ommx.Solution.named_function_names`, or use
+        {meth}`~ommx.Solution.named_functions_df` for a table including labels.
+        A scalar metric uses the empty tuple ``()`` as its key.
+        Names and subscripts select matches; parameters and descriptions are ignored.
+        The {class}`~ommx.NamedFunction` class example covers registration,
+        single-candidate and multi-candidate evaluation, and reporting-only variables.
+
+        Raises KeyError if no named function has the requested name, and
+        ValueError if the same subscript is found more than once.
+
+        >>> from ommx import DecisionVariable, Instance, NamedFunction, Sense
+        >>> x = DecisionVariable.binary(0, name="selected")
+        >>> cost = NamedFunction(id=10, function=4 * x, name="cost")
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={},
+        ...     sense=Sense.Maximize, named_functions=[cost],
+        ... )
+        >>> solution = instance.evaluate({x.id: 1})
+        >>> assert solution.objective == 1.0
+        >>> assert solution.extract_named_functions("cost") == {(): 4.0}
+        >>> assert solution.named_functions_df().loc[cost.id, "value"] == 4.0
         """
     def extract_all_named_functions(self) -> dict:
         r"""
-        Extract all named functions grouped by name (returns a Python dict)
+        Extract all named functions grouped by name (returns a Python dict).
+
+        The outer keys are names; each inner dictionary maps subscript tuples to
+        evaluated values, with ``()`` for a scalar metric. Entries without names
+        are excluded. Parameters and descriptions are ignored when grouping.
+        Use {meth}`~ommx.Solution.named_functions_df` to include unnamed entries
+        and retain their IDs.
+
+        Raises ValueError if the same name and subscript combination is found
+        multiple times.
         """
     def set_dual_variable(
-        self, constraint_id: builtins.int, value: typing.Optional[builtins.float]
+        self,
+        constraint_id: ConstraintID | builtins.int,
+        value: typing.Optional[builtins.float],
     ) -> None:
         r"""
-        Set the dual variable value for a specific constraint by ID
+        Set the dual variable value for a specific constraint by ID.
+
+        Raises KeyError if the constraint ID does not exist.
         """
     def get_decision_variable_by_id(
         self, variable_id: builtins.int
@@ -7293,19 +12310,17 @@ class Solution:
         r"""
         Get a specific evaluated decision variable by ID
         """
-    def get_constraint_value(self, constraint_id: builtins.int) -> builtins.float:
+    def get_constraint_value(
+        self, constraint_id: ConstraintID | builtins.int
+    ) -> builtins.float:
         r"""
         Get the evaluated value of a specific constraint by ID
         """
     def get_dual_variable(
-        self, constraint_id: builtins.int
+        self, constraint_id: ConstraintID | builtins.int
     ) -> typing.Optional[builtins.float]:
         r"""
         Get the dual variable value for a specific constraint by ID
-        """
-    def get_constraint_by_id(self, constraint_id: builtins.int) -> EvaluatedConstraint:
-        r"""
-        Get a specific evaluated constraint by ID
         """
     def get_named_function_by_id(
         self, named_function_id: builtins.int
@@ -7317,17 +12332,50 @@ class Solution:
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
     ) -> pandas.DataFrame:
         r"""
-        DataFrame of evaluated decision variables
+        A materialized DataFrame of variable definitions, labels, and evaluated values.
 
-        Columns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value
+        The integer ``id`` index identifies variables. Columns include ``kind``,
+        ``lower``, ``upper``, and ``value``, plus modeling labels such as ``name``,
+        ``subscripts``, ``description``, and ``parameters.{key}``. Evaluated rows
+        have no ``substituted_value`` field, so that compatibility column is NA;
+        read the populated value from ``value``. ``include`` selects optional
+        label/sidecar columns as on {meth}`~ommx.Instance.decision_variables_df`.
+        The table includes variables without names. ``subscripts`` holds lists
+        such as ``[0]``; {meth}`~ommx.Solution.extract_decision_variables` uses
+        tuples as dictionary keys instead. Editing this table does not update
+        the Solution.
+
+        >>> from ommx import Instance
+        >>> instance = Instance.maximize()
+        >>> x = instance.new_binary("selected", subscripts=[0])
+        >>> instance.objective = x
+        >>> solution = instance.evaluate({x.id: 1})
+        >>> table = solution.decision_variables_df()
+        >>> assert table.loc[x.id, "name"] == "selected"
+        >>> assert table.loc[x.id, "value"] == 1.0
+        >>> table.loc[x.id, "value"] = 0.0
+        >>> assert solution.state.entries[x.id] == 1.0
         """
     def constraints_df(
         self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        *,
+        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"],
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
     ) -> pandas.DataFrame:
         r"""
-        DataFrame of evaluated constraints, dispatched on `kind=`. See
+        DataFrame of evaluated constraints, including `feasible` and `violation` for every kind.
+
+        ``kind`` is required: ``"regular"``, ``"indicator"``, ``"one_hot"``, or
+        ``"sos1"``. The index contains typed IDs of the selected family. Rows
+        retain their labels and evaluation diagnostics; editing this materialized
+        table does not update the Solution.
+
+        For regular constraints, ``value`` is the signed left-hand-side value:
+        equality requires zero and inequality requires a nonpositive value,
+        within {attr}`~ommx.Solution.feasibility_atol`. The nonnegative
+        ``violation`` column and per-row ``feasible`` are therefore distinct
+        from ``value``. Per-constraint feasibility does not check variable domains.
+        The `violation` column uses {meth}`constraint_violation`. See
         {meth}`ommx.Instance.constraints_df` for column / `kind=` /
         `include=` semantics.
 
@@ -7336,18 +12384,34 @@ class Solution:
         `"removed_reason"` in `include=`. When the flag is on, rows for
         constraints removed before evaluation get `removed_reason` /
         `removed_reason.{key}` columns populated; other rows have NA.
+        The related metadata queries {meth}`~ommx.Solution.constraint_context_df`,
+        {meth}`~ommx.Solution.constraint_parameters_df`,
+        {meth}`~ommx.Solution.constraint_provenance_df`, and
+        {meth}`~ommx.Solution.constraint_removed_reasons_df` also require ``kind``.
+
+        >>> from ommx import Instance
+        >>> instance = Instance.minimize()
+        >>> x = instance.new_binary("x")
+        >>> capacity = instance.add_constraint(x <= 2, "capacity")
+        >>> solution = instance.evaluate({x.id: 0})
+        >>> table = solution.constraints_df(kind="regular")
+        >>> assert table.loc[capacity.constraint_id, "value"] == -2.0
+        >>> assert table.loc[capacity.constraint_id, "violation"] == 0.0
+        >>> assert table.loc[capacity.constraint_id, "feasible"]
         """
     def named_functions_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
     ) -> pandas.DataFrame:
         r"""
-        DataFrame of evaluated named functions
+        DataFrame of evaluated named functions, including entries without names.
 
         Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}
+
+        The index is the named-function ID, and ``value`` is its evaluated metric.
+        See {class}`~ommx.NamedFunction` for a complete registration-to-table example.
         """
     def constraint_context_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint context DataFrame (id-indexed). See
@@ -7355,22 +12419,19 @@ class Solution:
         semantics. Reads from the evaluated collection's context store.
         """
     def constraint_parameters_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint parameters DataFrame (long format).
         """
     def constraint_provenance_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint provenance DataFrame (long format).
         """
     def constraint_removed_reasons_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Removed-constraint reasons DataFrame (long format).
@@ -7385,21 +12446,33 @@ class Solution:
         """
     def __copy__(self) -> Solution: ...
     def __deepcopy__(self, _memo: typing.Any) -> Solution: ...
-    def total_violation_l1(self) -> builtins.float:
+    def total_violation(self) -> builtins.float:
         r"""
-        Calculate total constraint violation using L1 norm (sum of absolute violations)
+        Sum the nonnegative scalar violation of every constraint, including removed constraints.
 
-        Returns the sum of violations across all constraints (including removed constraints):
-        - For equality constraints: $\sum |f(x)|$
-        - For inequality constraints: $\sum \max(0, f(x))$
+        - Equality: `abs(f(x))`; inequality: `max(0, f(x))`.
+        - Indicator: the inner violation when active, otherwise zero.
+        - OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.
+        - SOS1: `min_i sum_{j != i} abs(x_j)`.
+
+        Each constraint is feasible exactly when its violation is at most the
+        evaluation tolerance. This threshold applies to each constraint separately,
+        not to the total. Zero therefore implies that all constraints are feasible.
+        Variable bound and kind violations
+        are not added. Values use the evaluated state after discrete-value
+        canonicalization. Lowering need not preserve the metric: a retained
+        original and its generated constraints each contribute.
+
+        Use {meth}`constraint_violation` for individual values, also available in
+        the `violation` column of {meth}`constraints_df` for every constraint kind.
         """
-    def total_violation_l2(self) -> builtins.float:
+    def constraint_violation(self, constraint_id: ConstraintIDBase) -> builtins.float:
         r"""
-        Calculate total constraint violation using L2 norm squared (sum of squared violations)
+        Get one constraint's nonnegative scalar violation.
 
-        Returns the sum of squared violations across all constraints (including removed constraints):
-        - For equality constraints: $\sum (f(x))^2$
-        - For inequality constraints: $\sum (\max(0, f(x)))^2$
+        Uses the definitions in {meth}`total_violation`, including for removed
+        constraints. The ID type selects its family. Raises `KeyError` when
+        the ID is absent from that constraint family.
         """
 
 @typing.final
@@ -7424,7 +12497,9 @@ class Solve:
     @property
     def input(self) -> Instance:
         r"""
-        Input `Instance` passed to the solver.
+        `Instance` supplied to the logging call, before any automatic Adapter
+        Preparation performed by that call. It may already have been prepared
+        explicitly by the caller.
         """
     @property
     def output(self) -> typing.Optional[Solution]:
@@ -7451,6 +12526,141 @@ class Solve:
         Adapter-defined diagnostics recorded during this solve.
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class Sos1BigMPromotion:
+    r"""
+    Read-only report for an entire SOS1 Big-M promotion batch.
+
+    Each cardinality constraint ID in the request has exactly one outcome:
+    promotion to an SOS1 constraint, or rejection with a diagnostic.
+    The ``promoted`` and ``rejections`` properties return snapshots derived
+    from that single outcome map. Their keys are disjoint and their union is
+    exactly the request's cardinality constraint IDs.
+
+    Both application modes return this report type. Strict mode returns it
+    only when all formulations were promoted. Membership, retained formulation
+    history, and selector reconstruction remain owned by the mutated
+    {class}`Instance`.
+    """
+    @property
+    def request_count(self) -> builtins.int:
+        r"""
+        Number of formulations in the original batch request.
+        """
+    @property
+    def promoted(self) -> builtins.dict[ConstraintID, Sos1ConstraintID]:
+        r"""
+        Applied promotions: cardinality constraint ID to allocated SOS1 ID.
+        """
+    @property
+    def rejections(self) -> builtins.dict[ConstraintID, builtins.str]:
+        r"""
+        Rejected formulations: cardinality constraint ID to diagnostic message.
+
+        These are diagnostic strings, not exception objects. Rejected
+        formulations were not applied.
+        """
+
+class Sos1BigMPromotionBatchRejectedError(builtins.RuntimeError):
+    r"""
+    One or more requests in a strict SOS1 Big-M promotion batch were rejected.
+    """
+    @property
+    def request_count(self) -> builtins.int:
+        r"""
+        Number of formulations in the rejected strict batch.
+        """
+    @property
+    def rejections(self) -> builtins.dict[ConstraintID, builtins.str]:
+        r"""
+        Diagnostic messages keyed by rejected cardinality constraint ID.
+        """
+
+@typing.final
+class Sos1BigMPromotionRequest:
+    r"""
+    Untrusted stable-ID request for a batch of SOS1 Big-M promotions.
+
+    Outer keys are regular cardinality constraint IDs. Each value maps intended
+    SOS1 member IDs to selector claims for that formulation. A cardinality ID
+    occurs at most once. Bounds, kinds, coefficients, and row contents are
+    read from the current {class}`Instance` when the batch is validated.
+    """
+    @property
+    def selector_claims(
+        self,
+    ) -> builtins.dict[
+        ConstraintID, builtins.dict[builtins.int, Sos1BigMSelectorClaim]
+    ]:
+        r"""
+        Formulation claims keyed by cardinality constraint ID, then member ID.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls,
+        selector_claims: typing.Mapping[
+            ConstraintID, typing.Mapping[builtins.int, Sos1BigMSelectorClaim]
+        ]
+        | typing.Mapping[
+            builtins.int, typing.Mapping[builtins.int, Sos1BigMSelectorClaim]
+        ]
+        | typing.Mapping[
+            ConstraintID | builtins.int,
+            typing.Mapping[builtins.int, Sos1BigMSelectorClaim],
+        ],
+    ) -> Sos1BigMPromotionRequest: ...
+
+@typing.final
+class Sos1BigMSelectorClaim:
+    r"""
+    Unchecked selector-role claim for one member of an SOS1 Big-M formulation.
+
+    Construct claims with {meth}`reused` or {meth}`fresh`. The claim contains
+    stable IDs only; {meth}`~ommx.Instance.promote_sos1_big_m` validates the
+    current variable domains and regular-constraint rows before mutating the
+    instance.
+    """
+    @property
+    def is_reused(self) -> builtins.bool:
+        r"""
+        Whether this claim reuses the member itself as its selector.
+        """
+    @property
+    def selector(self) -> typing.Optional[builtins.int]:
+        r"""
+        Claimed fresh selector ID, or ``None`` for a reused selector.
+        """
+    @property
+    def upper_link(self) -> typing.Optional[ConstraintID]:
+        r"""
+        Claimed upper-link constraint ID, if supplied.
+        """
+    @property
+    def lower_link(self) -> typing.Optional[ConstraintID]:
+        r"""
+        Claimed lower-link constraint ID, if supplied.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def reused() -> Sos1BigMSelectorClaim:
+        r"""
+        Claim that the promoted member is itself a Binary selector.
+        """
+    @staticmethod
+    def fresh(
+        selector: builtins.int,
+        *,
+        upper_link: typing.Optional[ConstraintID | builtins.int] = None,
+        lower_link: typing.Optional[ConstraintID | builtins.int] = None,
+    ) -> Sos1BigMSelectorClaim:
+        r"""
+        Claim a separate private Binary selector and its optional Big-M links.
+
+        A link may be omitted only when the current member domain makes that
+        side redundant. Supplied links are always validated by the Rust
+        {class}`Instance` owner.
+        """
 
 @typing.final
 class Sos1Constraint:
@@ -7515,15 +12725,131 @@ class Sos1Constraint:
     def __deepcopy__(self, _memo: typing.Any) -> Sos1Constraint: ...
 
 @typing.final
+class Sos1ConstraintID(ConstraintIDBase):
+    r"""
+    An SOS1 constraint ID. Unequal to integers and IDs of other constraint families.
+
+    See {class}`~ommx.ConstraintIDBase` for lookup, copying, serialization, and extension contracts.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __lt__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __le__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __gt__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __ge__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __hash__(self) -> builtins.int: ...
+    def __new__(cls, value: builtins.int) -> Sos1ConstraintID:
+        r"""
+        Create a typed ID identifying this constraint family and number.
+
+        The value must be an unsigned 64-bit integer. An ID of another
+        family is not accepted. IDs have no integer conversion protocol.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __reduce__(self) -> tuple[type, tuple[builtins.int]]:
+        r"""
+        Reconstruct the same ID family through its public constructor.
+        The numeric payload is used only by the serialization protocol.
+        """
+    def __copy__(self) -> Sos1ConstraintID:
+        r"""
+        IDs are immutable; copying preserves the same typed identity.
+        """
+    def __deepcopy__(self, _memo: typing.Any) -> Sos1ConstraintID:
+        r"""
+        IDs are immutable, including when nested in copied containers.
+        """
+
+@typing.final
+class SpecialConstraintPreparation:
+    r"""
+    Selection for the special-constraint Preparation phase.
+
+    Construct a value with an owner-operation factory. Validation and mutation
+    semantics remain owned by that {class}`~ommx.Instance` operation.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def lower_special_constraints(
+        *,
+        kinds: builtins.set[SpecialConstraintKind],
+        atol: typing.Optional[builtins.float] = None,
+    ) -> SpecialConstraintPreparation:
+        r"""
+        Select {meth}`~ommx.Instance.lower_special_constraints`.
+
+        ``kinds`` is passed unchanged as the set of active special-constraint
+        families to lower. See the owner operation and its per-family conversion
+        methods for formulas, prerequisites, generated artifacts, stored removal
+        reasons and provenance, and failure semantics.
+
+        ``atol`` is used when Indicator Function bodies require zero-sensitive
+        interval evaluation. If omitted, :attr:`DEFAULT_ATOL` is stored in the
+        preparation step.
+        """
+
+@typing.final
 class State:
     r"""
-    State wrapper for Python
+    A candidate assignment from integer decision-variable IDs to numeric values.
+
+    A State contains values, not the variable domains, objective, or constraints of
+    an optimization problem. Creating one does not establish feasibility or
+    optimality. Pass it to {meth}`~ommx.Instance.evaluate` on the corresponding
+    problem to obtain a {class}`~ommx.Solution` with evaluation results.
+
+    >>> from ommx import Instance, State
+    >>> instance = Instance.maximize()
+    >>> x = instance.new_binary("x")
+    >>> instance.objective = x
+    >>> candidate = State({x.id: 1})
+    >>> assert candidate.entries == {x.id: 1.0}
+    >>> result = instance.evaluate(candidate)
+    >>> assert result.feasible and result.objective == 1.0
+
+    APIs accepting a State also accept an ID-to-value mapping or an iterable of
+    ID/value pairs. The assignment must use the IDs of the Instance being evaluated.
+    After transforming a problem, evaluate the returned candidate with that
+    transformed Instance so that its recorded fixed values, dependencies, retained
+    constraints, and output objective can be interpreted correctly.
+
+    The returned Solution's {attr}`~ommx.Solution.state` contains the populated
+    assignment. Missing required IDs are errors; reconstruction, default values for
+    irrelevant variables, and tolerance-based normalization are documented by
+    {meth}`~ommx.Instance.populate_state`.
     """
     @property
     def entries(self) -> builtins.dict[builtins.int, builtins.float]: ...
     @entries.setter
     def entries(self, value: typing.Mapping[builtins.int, builtins.float]) -> None: ...
     def __new__(cls, entries: ToState) -> State: ...
+    @staticmethod
+    def load_qplib_solution(
+        path: builtins.str, *, num_variables: builtins.int
+    ) -> State:
+        r"""
+        Load a published QPLIB `.sol` file into a {class}`~ommx.State`.
+
+        Pass the variable count of the original QPLIB instance as
+        `num_variables`. Omitted variables receive zero. The standard QPLIB
+        solution names `xN`, `bN`, and `iN` map to OMMX ID `N - 2`; `objvar`
+        is ignored because the objective is computed by
+        {meth}`~ommx.Instance.evaluate`. Custom names and other solvers' `.sol`
+        formats are not supported. Names are case insensitive.
+
+        Malformed input, duplicate IDs, nonfinite values, and out-of-range IDs
+        raise `ValueError` with a line number. File read failures raise
+        `RuntimeError`. Loading does not check bounds or feasibility.
+
+        >>> import tempfile
+        >>> from pathlib import Path
+        >>> from ommx import State
+        >>> with tempfile.TemporaryDirectory() as directory:
+        ...     path = Path(directory) / "example.sol"
+        ...     _ = path.write_text("objvar 12\nx2 0.5\nb4 1\n")
+        ...     state = State.load_qplib_solution(str(path), num_variables=3)
+        >>> state.entries
+        {0: 0.5, 1: 0.0, 2: 1.0}
+        """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> State: ...
     def to_v1_bytes(self) -> bytes: ...
@@ -7539,33 +12865,30 @@ class State:
     def __deepcopy__(self, _memo: typing.Any) -> State: ...
 
 @typing.final
-class AdditionalCapability(enum.Enum):
-    r"""
-    Constraint type capability flag for non-standard constraint types.
-
-    Standard constraints are always supported. This enum lists capabilities
-    that adapters must explicitly opt in to.
-
-    Use as a set: `{AdditionalCapability.Indicator}`
-    """
-
-    Indicator = ...
-    r"""
-    Indicator constraints: binvar = 1 → f(x) <= 0
-    """
-    OneHot = ...
-    r"""
-    One-hot constraints: exactly one of a set of binary variables must be 1
-    """
-    Sos1 = ...
-    r"""
-    SOS1 constraints: at most one of a set of variables can be non-zero
-    """
-
-@typing.final
 class DecisionVariableRole(enum.Enum):
     r"""
-    Decision variable role in an instance.
+    How a decision variable obtains its value in an {class}`~ommx.Instance`.
+
+    Roles are derived from the Instance's current structure and can change after
+    transformation. They are separate from Binary, Integer, or other variable kinds.
+    Query one role with {meth}`~ommx.Instance.decision_variable_role`, or all roles
+    with {meth}`~ommx.Instance.decision_variable_roles`.
+
+    | Role | Meaning | Value for candidate evaluation |
+    | --- | --- | --- |
+    | `Used` | Referenced by the current objective or active constraints | Supplied by the caller |
+    | `Fixed` | A retained, non-used variable with a recorded fixed value | Restored from that value |
+    | `Dependent` | Neither used nor fixed; represented by an expression in other variables | Computed from that expression |
+    | `Irrelevant` | Neither used, fixed, nor dependent | Supplied by the caller, or filled with a default when omitted |
+
+    Active constraints include regular and special constraints, including an
+    Indicator's controlling Binary variable. References only from named functions,
+    removed constraints, output objectives, or dependency right-hand sides do not
+    make a variable used. Being irrelevant to solver input does not mean its value
+    cannot affect reporting.
+
+    {meth}`~ommx.Instance.populate_state` explains reconstruction, defaults,
+    canonicalization, and consistency assertions with executable examples.
     """
 
     Used = ...
@@ -7585,6 +12908,7 @@ class DecisionVariableRole(enum.Enum):
     Not used, fixed, or dependent
     """
 
+    def __hash__(self) -> builtins.int: ...
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
@@ -7603,6 +12927,7 @@ class Equality(enum.Enum):
     Less than or equal to zero constraint (<=)
     """
 
+    def __hash__(self) -> builtins.int: ...
     @staticmethod
     def from_pb(value: builtins.int) -> Equality:
         r"""
@@ -7646,6 +12971,7 @@ class Kind(enum.Enum):
     Finite-domain decision variable (one of explicitly enumerated values)
     """
 
+    def __hash__(self) -> builtins.int: ...
     @staticmethod
     def from_pb(value: builtins.int) -> Kind:
         r"""
@@ -7710,6 +13036,7 @@ class ProvenanceKind(enum.Enum):
     The regular constraint was generated from a SOS1 constraint.
     """
 
+    def __hash__(self) -> builtins.int: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -7754,6 +13081,7 @@ class Sense(enum.Enum):
     Maximize the objective function
     """
 
+    def __hash__(self) -> builtins.int: ...
     @staticmethod
     def from_pb(value: builtins.int) -> Sense:
         r"""
@@ -7766,6 +13094,34 @@ class Sense(enum.Enum):
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
+@typing.final
+class SpecialConstraintKind(enum.Enum):
+    r"""
+    Kind of active special constraint in an instance.
+
+    Use these values with {attr}`~ommx.Instance.active_special_constraint_kinds` to
+    inspect an instance and {meth}`~ommx.Instance.lower_special_constraints` to select
+    special constraint families for explicit lowering to regular constraints.
+    This is a transformation selector, not an adapter input declaration or an
+    ``ommx.v2.Feature`` wire-format requirement.
+    """
+
+    Indicator = ...
+    r"""
+    Indicator constraints: binvar = 1 → f(x) <= 0
+    """
+    OneHot = ...
+    r"""
+    One-hot constraints: exactly one of a set of binary variables must be 1
+    """
+    Sos1 = ...
+    r"""
+    SOS1 constraints: at most one of a set of variables can be non-zero
+    """
+
+    def __hash__(self) -> builtins.int: ...
+
+def _run_cli(args: typing.Sequence[builtins.str]) -> builtins.int: ...
 def gc(
     *,
     root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
@@ -7778,14 +13134,16 @@ def gc(
     This is the Python SDK equivalent of `ommx gc`. It is a dry-run by
     default. Pass `delete=True` to unlink orphan candidates. The `grace_period`
     string accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.
+    An invalid duration raises {class}`ValueError`; registry and storage failures
+    raise {class}`RuntimeError`.
 
-    ```python
     >>> from ommx.artifact import gc
-    >>> report = gc()
-    >>> report.delete_applied
-    False
 
-    ```
+    The following dry run still reads the caller's persistent Local Registry.
+
+    >>> report = gc()  # doctest: +SKIP
+    >>> report.delete_applied  # doctest: +SKIP
+    False
     """
 
 def get_default_atol() -> builtins.float: ...
@@ -7794,6 +13152,8 @@ def get_images() -> builtins.list[builtins.str]:
     Get all image names stored in the local registry.
 
     Returns a list of image names (as strings) found in the local registry.
+    Corrupted persisted refs and other registry failures raise
+    {class}`RuntimeError`.
     """
 
 def get_local_registry_root() -> pathlib.Path:
@@ -7821,6 +13181,7 @@ def list_artifacts(
     By default, an invalid cached record is repaired from the CAS when possible.
     OMMX emits `RuntimeWarning` for repaired or skipped refs and returns the
     remaining records. Pass `strict=True` to fail on the first invalid ref.
+    Registry, manifest, and storage failures raise {class}`RuntimeError`.
     """
 
 def list_experiment_checkpoints(
@@ -7876,14 +13237,16 @@ def prune_anonymous(
     are left for {func}`gc` to reclaim if they become unreachable.
     Anonymous Experiment refs are included only when `experiments=True`.
     `older_than` accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.
+    An invalid duration raises {class}`ValueError`; registry and storage failures
+    raise {class}`RuntimeError`.
 
-    ```python
     >>> from ommx.artifact import prune_anonymous
-    >>> report = prune_anonymous()
-    >>> report.delete_applied
-    False
 
-    ```
+    The following dry run still reads the caller's persistent Local Registry.
+
+    >>> report = prune_anonymous()  # doctest: +SKIP
+    >>> report.delete_applied  # doctest: +SKIP
+    False
     """
 
 def qplib_instance_annotations() -> builtins.dict[
@@ -7902,6 +13265,9 @@ def remove_image(
     unreachable. Returns the atomically removed Manifest digest, or `None` when
     the ref did not exist. Pass that digest to {func}`restore_image` to roll back
     this exact deletion.
+
+    An invalid image reference raises {class}`ValueError`. Registry and storage
+    failures raise {class}`RuntimeError`.
     """
 
 def restore_image(
@@ -7920,6 +13286,10 @@ def restore_image(
     `True` when the ref is inserted and `False` when it already points to the
     requested digest. A different existing target is reported as a conflict and
     is never replaced.
+
+    Invalid image references and malformed Manifest digests raise
+    {class}`ValueError`. Registry, storage, and ref-conflict failures raise
+    {class}`RuntimeError`.
     """
 
 def set_default_atol(value: builtins.float) -> None: ...

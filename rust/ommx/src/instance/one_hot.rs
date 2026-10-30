@@ -23,8 +23,18 @@ impl Instance {
     /// original one-hot constraint into `removed_one_hot_constraints` with
     /// `reason = "ommx.Instance.convert_one_hot_to_constraint"` and a
     /// `constraint_id` parameter pointing to the new regular constraint.
+    /// The generated constraint preserves the original one-hot context and
+    /// appends [`Provenance::OneHotConstraint`] naming the original ID. Read
+    /// [`Self::constraint_context`] to recover its modeling label and trace the
+    /// generated solver row back to the source constraint.
     ///
     /// Returns the [`ConstraintID`] of the newly created regular constraint.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `id` is not active, the generated equality cannot be
+    /// constructed, or no fresh regular-constraint ID is available. These
+    /// failures leave the instance unchanged.
     pub fn convert_one_hot_to_constraint(
         &mut self,
         id: OneHotConstraintID,
@@ -36,7 +46,8 @@ impl Instance {
             .with_context(|| format!("OneHot constraint with ID {id:?} not found"))?
             .clone();
 
-        let new_id = self.constraint_collection.unused_id();
+        self.ensure_constraint_id_capacity(1)?;
+        let new_id = self.next_constraint_number()?.into();
 
         let sum = one_hot
             .variables
@@ -75,6 +86,14 @@ impl Instance {
     /// See [`Self::convert_one_hot_to_constraint`] for the conversion rule.
     /// Returns the IDs of the newly created regular constraints in ascending
     /// order of the original one-hot constraint IDs.
+    ///
+    /// # Errors
+    ///
+    /// Checks the ID capacity for the whole batch before any conversion, so
+    /// insufficient capacity returns an error without changing the instance.
+    /// Other errors from a single-constraint conversion can leave earlier
+    /// conversions in place. To preserve the source instance for every error,
+    /// convert a clone and discard it on error.
     pub fn convert_all_one_hots_to_constraints(&mut self) -> Result<Vec<ConstraintID>> {
         let ids: Vec<_> = self
             .one_hot_constraint_collection
@@ -82,6 +101,7 @@ impl Instance {
             .keys()
             .copied()
             .collect();
+        self.ensure_constraint_id_capacity(ids.len())?;
         ids.into_iter()
             .map(|id| self.convert_one_hot_to_constraint(id))
             .collect()
@@ -162,6 +182,37 @@ mod tests {
     }
 
     #[test]
+    fn conversion_preserves_modeling_context_and_appends_provenance() {
+        let mut instance = instance_with_one_one_hot();
+        let id = OneHotConstraintID::from(7);
+        let context = crate::ConstraintContext {
+            label: crate::ModelingLabel {
+                name: Some("assignment".to_owned()),
+                subscripts: vec![3],
+                parameters: [("group".to_owned(), "jobs".to_owned())]
+                    .into_iter()
+                    .collect(),
+                description: Some("choose one job".to_owned()),
+            },
+            provenance: vec![Provenance::IndicatorConstraint(
+                crate::IndicatorConstraintID::from(11),
+            )],
+        };
+        instance
+            .set_one_hot_constraint_context(id, context.clone())
+            .unwrap();
+
+        let new_id = instance.convert_one_hot_to_constraint(id).unwrap();
+        assert_eq!(
+            instance.one_hot_constraint_context().collect_for(id),
+            context
+        );
+        let mut expected = context;
+        expected.provenance.push(Provenance::OneHotConstraint(id));
+        assert_eq!(instance.constraint_context().collect_for(new_id), expected);
+    }
+
+    #[test]
     fn missing_id_errors_without_mutating_state() {
         // Unknown IDs return Err and leave both collections untouched.
         let mut instance = instance_with_one_one_hot();
@@ -208,5 +259,126 @@ mod tests {
         for id in new_ids {
             assert!(instance.constraints().contains_key(&id));
         }
+    }
+
+    #[test]
+    fn single_conversion_errors_without_mutation_when_active_or_removed_ids_are_exhausted() {
+        for removed in [false, true] {
+            let mut instance = instance_with_one_one_hot();
+            let last_id = ConstraintID::from(u64::MAX);
+            instance
+                .insert_constraint(last_id, Constraint::equal_to_zero(Function::Zero))
+                .unwrap();
+            if removed {
+                instance
+                    .relax_constraint(last_id, "test".to_owned(), [])
+                    .unwrap();
+            }
+            let before = instance.clone();
+
+            instance
+                .convert_one_hot_to_constraint(OneHotConstraintID::from(7))
+                .unwrap_err();
+
+            assert_eq!(instance, before);
+        }
+    }
+
+    #[test]
+    fn single_conversion_can_allocate_the_last_regular_constraint_id() {
+        let mut instance = instance_with_one_one_hot();
+        instance
+            .insert_constraint(
+                ConstraintID::from(u64::MAX - 1),
+                Constraint::equal_to_zero(Function::Zero),
+            )
+            .unwrap();
+
+        let id = instance
+            .convert_one_hot_to_constraint(OneHotConstraintID::from(7))
+            .unwrap();
+
+        assert_eq!(id, ConstraintID::from(u64::MAX));
+        assert!(instance.constraints().contains_key(&id));
+        assert!(instance.one_hot_constraints().is_empty());
+        assert_eq!(instance.removed_one_hot_constraints().len(), 1);
+    }
+
+    fn instance_with_two_one_hots() -> Instance {
+        let mut instance = instance_with_one_one_hot();
+        instance
+            .add_one_hot_constraint(
+                OneHotConstraint::new([VariableID::from(1)].into_iter().collect()).unwrap(),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+        instance
+    }
+
+    #[test]
+    fn bulk_conversion_checks_total_id_capacity_before_converting_any_one_hot() {
+        let mut instance = instance_with_two_one_hots();
+        instance
+            .insert_constraint(
+                ConstraintID::from(u64::MAX - 1),
+                Constraint::equal_to_zero(Function::Zero),
+            )
+            .unwrap();
+        let before = instance.clone();
+
+        instance.convert_all_one_hots_to_constraints().unwrap_err();
+
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn bulk_conversion_can_allocate_all_remaining_regular_constraint_ids_in_source_order() {
+        let mut instance = instance_with_two_one_hots();
+        instance
+            .insert_constraint(
+                ConstraintID::from(u64::MAX - 2),
+                Constraint::equal_to_zero(Function::Zero),
+            )
+            .unwrap();
+        let source_ids: Vec<_> = instance.one_hot_constraints().keys().copied().collect();
+
+        let generated_ids = instance.convert_all_one_hots_to_constraints().unwrap();
+
+        assert_eq!(
+            generated_ids,
+            vec![
+                ConstraintID::from(u64::MAX - 1),
+                ConstraintID::from(u64::MAX)
+            ],
+        );
+        for (source_id, generated_id) in source_ids.into_iter().zip(generated_ids) {
+            assert_eq!(
+                instance.constraint_context().provenance(generated_id),
+                &[Provenance::OneHotConstraint(source_id)],
+            );
+        }
+        assert!(instance.one_hot_constraints().is_empty());
+        assert_eq!(instance.removed_one_hot_constraints().len(), 2);
+    }
+
+    #[test]
+    fn empty_bulk_conversion_succeeds_when_regular_constraint_ids_are_exhausted() {
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .constraints(BTreeMap::from([(
+                ConstraintID::from(u64::MAX),
+                Constraint::equal_to_zero(Function::Zero),
+            )]))
+            .build()
+            .unwrap();
+        let before = instance.clone();
+
+        assert!(instance
+            .convert_all_one_hots_to_constraints()
+            .unwrap()
+            .is_empty());
+        assert_eq!(instance, before);
     }
 }

@@ -1,13 +1,50 @@
+from ommx import ConstraintID
+import math
+from collections import UserDict
+from types import MappingProxyType
+from typing import Any
+
+import ommx
+import pytest
 from ommx import (
-    Instance,
+    Kind,
+    AttachedDecisionVariable,
+    Bound,
     DecisionVariable,
+    ExactIntegerSlackError,
     Function,
+    InfeasibleDetected,
+    Instance,
+    InstanceClass,
     Linear,
+    LogEncodingError,
     Parameter,
     ParametricInstance,
+    PreparationPolicy,
+    Sense,
 )
-import math
-import pytest
+
+
+def test_operation_error_types_are_public_runtime_errors():
+    from ommx.adapter import InfeasibleDetected as AdapterInfeasibleDetected
+
+    operation_error_types = (
+        LogEncodingError,
+        ExactIntegerSlackError,
+        InfeasibleDetected,
+    )
+    for error_type in operation_error_types:
+        assert issubclass(error_type, RuntimeError)
+        assert error_type.__module__ == "ommx"
+    assert AdapterInfeasibleDetected is InfeasibleDetected
+    assert {
+        "LogEncodingError",
+        "ExactIntegerSlackError",
+        "InfeasibleDetected",
+    } <= set(ommx.__all__)
+    assert ommx.LogEncodingError is LogEncodingError
+    assert ommx.ExactIntegerSlackError is ExactIntegerSlackError
+    assert ommx.InfeasibleDetected is InfeasibleDetected
 
 
 def test_incremental_modeling_workflow():
@@ -18,18 +55,18 @@ def test_incremental_modeling_workflow():
     instance.objective = x + y
     constraint = instance.add_constraint(x - y == 1, "c1")
 
-    assert instance.sense == Instance.MAXIMIZE
+    assert instance.sense == Sense.Maximize
     assert (x.id, x.name) == (0, "x")
     assert (y.id, y.name) == (1, "y")
     assert instance.objective.almost_equal(Function(x + y))
-    assert constraint.constraint_id == 0
+    assert constraint.constraint_id == ConstraintID(0)
     assert constraint.name == "c1"
 
 
 def test_minimize_creates_empty_minimization_instance():
     instance = Instance.minimize()
 
-    assert instance.sense == Instance.MINIMIZE
+    assert instance.sense == Sense.Minimize
     assert instance.decision_variables == []
     assert instance.constraints == {}
     assert instance.objective.almost_equal(Function(0))
@@ -57,17 +94,254 @@ def test_new_binary_accepts_full_modeling_label():
     assert unnamed.description == ""
 
 
-def test_new_binary_raises_value_error_when_automatic_id_overflows():
+@pytest.mark.parametrize("mapping_type", [UserDict, MappingProxyType])
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "new_binary",
+        "new_integer",
+        "new_continuous",
+        "new_semi_integer",
+        "new_semi_continuous",
+    ],
+)
+def test_new_decision_variables_accept_mapping_parameters(
+    method_name: str, mapping_type: type
+):
+    instance = Instance.minimize()
+
+    variable = getattr(instance, method_name)(
+        "x", parameters=mapping_type({"region": "east"})
+    )
+
+    assert variable.parameters == {"region": "east"}
+
+
+def test_new_decision_variable_rejects_non_string_mapping_atomically():
+    instance = Instance.minimize()
+    invalid_parameters: Any = {"region": 1}
+
+    with pytest.raises(TypeError, match=r"parameters must be a Mapping\[str, str\]"):
+        instance.new_binary("x", parameters=invalid_parameters)
+
+    assert instance.decision_variables == []
+
+
+def test_decision_variable_kind_uses_kind_enum() -> None:
+    variable = DecisionVariable(0, Kind.Binary, Bound(0, 1))
+
+    assert type(variable.kind) is Kind
+    assert variable.kind == Kind.Binary
+    assert type(DecisionVariable.BINARY) is Kind
+    assert DecisionVariable.BINARY == Kind.Binary
+
+
+def test_new_non_binary_variables_assign_ids_and_preserve_domains_and_labels():
+    instance = Instance.minimize()
+    cases = [
+        (
+            instance.new_integer,
+            DecisionVariable.integer,
+            Kind.Integer,
+            0.2,
+            3.8,
+        ),
+        (
+            instance.new_continuous,
+            DecisionVariable.continuous,
+            Kind.Continuous,
+            0.2,
+            3.8,
+        ),
+        (
+            instance.new_semi_integer,
+            DecisionVariable.semi_integer,
+            Kind.SemiInteger,
+            1.2,
+            4.8,
+        ),
+        (
+            instance.new_semi_continuous,
+            DecisionVariable.semi_continuous,
+            Kind.SemiContinuous,
+            1.2,
+            4.8,
+        ),
+    ]
+
+    for expected_id, (new_variable, detached_factory, kind, lower, upper) in enumerate(
+        cases
+    ):
+        attached = new_variable(
+            "x",
+            lower=lower,
+            upper=upper,
+            subscripts=[expected_id],
+            parameters={"region": "east"},
+            description="incremental variable",
+        )
+        expected = detached_factory(expected_id, lower=lower, upper=upper)
+
+        assert isinstance(attached, AttachedDecisionVariable)
+        assert attached.id == expected_id
+        assert type(attached.kind) is Kind
+        assert attached.kind == kind
+        assert type(expected.kind) is Kind
+        assert attached.detach().equals_to(expected)
+        assert attached.name == "x"
+        assert attached.subscripts == [expected_id]
+        assert attached.parameters == {"region": "east"}
+        assert attached.description == "incremental variable"
+
+    unbounded = instance.new_continuous("unbounded")
+    assert unbounded.id == len(cases)
+    assert unbounded.bound.lower == -math.inf
+    assert unbounded.bound.upper == math.inf
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    ["new_integer", "new_continuous", "new_semi_integer", "new_semi_continuous"],
+)
+def test_new_non_binary_variable_rejects_invalid_bounds_atomically(method_name: str):
+    instance = Instance.minimize()
+
+    with pytest.raises(ValueError):
+        getattr(instance, method_name)("x", lower=2, upper=1)
+
+    assert instance.decision_variables == []
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    ["new_integer", "new_continuous", "new_semi_integer", "new_semi_continuous"],
+)
+def test_new_non_binary_variable_bounds_are_keyword_only(method_name: str):
+    instance = Instance.minimize()
+
+    with pytest.raises(TypeError):
+        getattr(instance, method_name)("x", 0, 1)
+
+    assert instance.decision_variables == []
+
+
+def test_new_integer_rejects_bounds_without_an_integer_atomically():
+    instance = Instance.minimize()
+
+    with pytest.raises(ValueError):
+        instance.new_integer("invalid", lower=1.1, upper=1.9)
+
+    assert instance.decision_variables == []
+    assert instance.new_integer("valid", lower=1, upper=2).id == 0
+
+
+def test_new_semi_integer_uses_zero_when_bounds_contain_no_integer():
+    instance = Instance.minimize()
+
+    variable = instance.new_semi_integer("zero-only", lower=1.1, upper=1.9)
+
+    assert variable.bound.lower == 0
+    assert variable.bound.upper == 0
+
+
+def test_new_integer_atol_overrides_the_process_default_atomically():
+    initial_atol = ommx.get_default_atol()
+    try:
+        ommx.set_default_atol(0.2)
+
+        defaulted_instance = Instance.minimize()
+        defaulted = defaulted_instance.new_integer("defaulted", lower=1.1, upper=1.9)
+        assert (defaulted.bound.lower, defaulted.bound.upper) == (1, 2)
+
+        explicit_instance = Instance.minimize()
+        with pytest.raises(ValueError):
+            explicit_instance.new_integer("explicit", lower=1.1, upper=1.9, atol=1e-6)
+        assert explicit_instance.decision_variables == []
+    finally:
+        ommx.set_default_atol(initial_atol)
+
+
+def test_new_semi_integer_atol_overrides_the_process_default():
+    initial_atol = ommx.get_default_atol()
+    try:
+        ommx.set_default_atol(0.2)
+
+        defaulted = Instance.minimize().new_semi_integer(
+            "defaulted", lower=1.1, upper=1.9
+        )
+        assert (defaulted.bound.lower, defaulted.bound.upper) == (1, 2)
+
+        explicit = Instance.minimize().new_semi_integer(
+            "explicit", lower=1.1, upper=1.9, atol=1e-6
+        )
+        assert (explicit.bound.lower, explicit.bound.upper) == (0, 0)
+    finally:
+        ommx.set_default_atol(initial_atol)
+
+
+@pytest.mark.parametrize("method_name", ["new_integer", "new_semi_integer"])
+def test_new_integer_kinds_use_bound_residual_membership(method_name: str):
+    atol = 1e-6
+    variable = getattr(Instance.minimize(), method_name)(
+        "x",
+        lower=2.0 + atol,
+        upper=4.0 - atol,
+        atol=atol,
+    )
+
+    assert (variable.bound.lower, variable.bound.upper) == (3.0, 3.0)
+
+
+def test_binary_bound_normalization_uses_bound_residual_membership():
+    initial_atol = ommx.get_default_atol()
+    try:
+        atol = 1e-6
+        ommx.set_default_atol(atol)
+        source = Bound(0.0, 1.0 - atol)
+
+        assert not source.contains(1.0, atol)
+        variable = DecisionVariable(0, Kind.Binary, source)
+        assert (variable.bound.lower, variable.bound.upper) == (0.0, 0.0)
+    finally:
+        ommx.set_default_atol(initial_atol)
+
+
+@pytest.mark.parametrize("method_name", ["new_integer", "new_semi_integer"])
+def test_new_discrete_variable_rejects_invalid_atol_atomically(method_name: str):
+    instance = Instance.minimize()
+
+    with pytest.raises(ValueError):
+        getattr(instance, method_name)("x", lower=0, upper=1, atol=0)
+
+    assert instance.decision_variables == []
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "new_binary",
+        "new_integer",
+        "new_continuous",
+        "new_semi_integer",
+        "new_semi_continuous",
+    ],
+)
+def test_new_decision_variable_raises_value_error_when_automatic_id_overflows(
+    method_name: str,
+):
     max_id = 2**64 - 1
     instance = Instance.from_components(
         decision_variables=[DecisionVariable.binary(max_id)],
         objective=0,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
-    with pytest.raises(ValueError, match="No available decision variable ID remains"):
-        instance.new_binary("x")
+    with pytest.raises(
+        ValueError,
+        match="Insufficient capacity for automatically assigned decision variable IDs",
+    ):
+        getattr(instance, method_name)("x")
 
     assert [variable.id for variable in instance.decision_variables] == [max_id]
 
@@ -115,34 +389,22 @@ def test_add_constraint_accepts_full_modeling_label():
     assert snapshot.description == "existing description"
 
 
-def test_set_objective():
-    x = [DecisionVariable.binary(i) for i in range(3)]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=sum(x),
-        constraints={},
-        sense=Instance.MAXIMIZE,
-    )
-    assert instance.objective.almost_equal(Function(sum(x)))
-
-    instance.objective = x[1]
-    assert instance.objective.almost_equal(Function(x[1]))
-
-
 def test_convert_inequality_to_equality_with_integer_slack_limit():
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
         constraints={0: math.pi * x[0] + math.e * x[1] >= 1},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
-    with pytest.raises(RuntimeError) as e:
+    with pytest.raises(ExactIntegerSlackError) as e:
         instance.convert_inequality_to_equality_with_integer_slack(0, 32)
-    assert (
-        str(e.value)
-        == "The range of the slack variable exceeds the limit: evaluated(15174216961756088) > limit(32)"
-    )
+    message = str(e.value)
+    prefix = "The range of the slack variable exceeds the limit: evaluated("
+    suffix = ") > limit(32)"
+    assert message.startswith(prefix)
+    assert message.endswith(suffix)
+    assert int(message.removeprefix(prefix).removesuffix(suffix)) > 32
 
 
 def test_convert_inequality_to_equality_with_integer_slack_continuous():
@@ -151,7 +413,7 @@ def test_convert_inequality_to_equality_with_integer_slack_continuous():
         decision_variables=x,
         objective=sum(x),
         constraints={0: x[0] + x[1] >= 7.89},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     with pytest.raises(RuntimeError) as e:
         instance.convert_inequality_to_equality_with_integer_slack(0, 32)
@@ -173,9 +435,9 @@ def test_convert_inequality_to_equality_with_integer_slack_infeasible():
             # Never satisfied since both x0 and x1 are non-negative
             0: (x[0] + 2 * x[1] <= -1),
         },
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
-    with pytest.raises(RuntimeError) as e:
+    with pytest.raises(InfeasibleDetected) as e:
         instance.convert_inequality_to_equality_with_integer_slack(0, 32)
     assert (
         str(e.value)
@@ -192,13 +454,34 @@ def test_convert_inequality_to_equality_with_integer_slack_trivial():
         decision_variables=x,
         objective=sum(x),
         constraints={0: x[0] + 2 * x[1] >= 0},  # Trivially satisfied
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     instance.convert_inequality_to_equality_with_integer_slack(
         constraint_id=0, max_integer_range=32
     )
     assert instance.constraints == {}
-    assert 0 in instance.removed_constraints
+    assert ConstraintID(0) in instance.removed_constraints
+
+
+def test_convert_inequality_to_equality_with_integer_slack_uses_atol():
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=0,
+        constraints={0: x + 0.25 <= 0},
+        sense=Sense.Minimize,
+    )
+
+    instance.convert_inequality_to_equality_with_integer_slack(
+        constraint_id=0, max_integer_range=1, atol=0.4
+    )
+
+    constraint = instance.constraints[ConstraintID(0)]
+    slack_id = (constraint.function.required_ids() - {0}).pop()
+    assert constraint.evaluate({0: 0.0, slack_id: 0.0}, atol=0.4).is_feasible(atol=0.4)
+    assert not constraint.evaluate({0: 1.0, slack_id: 0.0}, atol=0.4).is_feasible(
+        atol=0.4
+    )
 
 
 def test_add_integer_slack_to_inequality_infeasible():
@@ -213,9 +496,9 @@ def test_add_integer_slack_to_inequality_infeasible():
             # Never satisfied since both x0 and x1 are non-negative
             0: (x[0] + 2 * x[1] <= -1),
         },
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
-    with pytest.raises(RuntimeError) as e:
+    with pytest.raises(InfeasibleDetected) as e:
         instance.add_integer_slack_to_inequality(0, 4)
     assert (
         str(e.value)
@@ -232,14 +515,14 @@ def test_add_integer_slack_to_inequality_trivial():
         decision_variables=x,
         objective=sum(x),
         constraints={0: x[0] + 2 * x[1] >= 0},  # Trivially satisfied
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     b = instance.add_integer_slack_to_inequality(0, 4)
     assert b is None
 
     # Check that the constraint is removed
     assert instance.constraints == {}
-    assert 0 in instance.removed_constraints
+    assert ConstraintID(0) in instance.removed_constraints
 
 
 def test_add_integer_slack_to_inequality_continuous():
@@ -248,7 +531,7 @@ def test_add_integer_slack_to_inequality_continuous():
         decision_variables=x,
         objective=sum(x),
         constraints={0: x[0] + x[1] >= 7.89},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     with pytest.raises(RuntimeError) as e:
         instance.add_integer_slack_to_inequality(0, 4)
@@ -264,7 +547,7 @@ def test_to_qubo_penalty_weight():
         decision_variables=x,
         objective=x[0],
         constraints={123: x[0] == 0, 456: x[1] == 1},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     # QUBO = x0 + 1 * (x0)^2 + 2 * (x1 - 1)^2 = 2*x0 - 2*x1 + 1
     qubo, offset = instance.to_qubo(penalty_weights={123: 1.0, 456: 2.0})
@@ -272,40 +555,104 @@ def test_to_qubo_penalty_weight():
     assert offset == 2.0
 
 
-def test_to_qubo_continuous():
+def _binary_polynomial_energy(
+    coefficients: dict[tuple[int, ...], float],
+    offset: float,
+    state: dict[int, float],
+) -> float:
+    return offset + sum(
+        coefficient * math.prod(state[variable_id] for variable_id in ids)
+        for ids, coefficient in coefficients.items()
+    )
+
+
+@pytest.mark.parametrize(
+    ("driver_name", "policy_name", "class_name", "format_name"),
+    [
+        ("to_qubo", "for_qubo", "qubo", "as_qubo_format"),
+        ("to_hubo", "for_hubo", "hubo", "as_hubo_format"),
+    ],
+)
+def test_qubo_hubo_driver_matches_explicit_preparation_and_preserves_output(
+    driver_name: str,
+    policy_name: str,
+    class_name: str,
+    format_name: str,
+) -> None:
+    x = DecisionVariable.integer(0, lower=0, upper=3)
+    source = Instance.from_components(
+        decision_variables=[x],
+        objective=3 * x + 5,
+        constraints={7: x <= 2},
+        sense=Sense.Maximize,
+    )
+    driver = Instance.from_v2_bytes(source.to_v2_bytes())
+    explicit = Instance.from_v2_bytes(source.to_v2_bytes())
+    kwargs = {
+        "uniform_penalty_weight": 2.0,
+        "inequality_integer_slack_max_range": 7,
+    }
+
+    actual_coefficients, actual_offset = getattr(driver, driver_name)(**kwargs)
+    policy = getattr(PreparationPolicy, policy_name)(**kwargs)
+    explicit.prepare(getattr(InstanceClass, class_name)(), policy)
+    expected_coefficients, expected_offset = getattr(explicit, format_name)()
+
+    assert actual_coefficients == expected_coefficients
+    assert actual_offset == expected_offset
+    assert driver.to_v2_bytes() == explicit.to_v2_bytes()
+    assert driver.sense == Sense.Minimize
+
+    active_state = {variable_id: 0.0 for variable_id in driver.required_ids()}
+    active_energy = _binary_polynomial_energy(
+        actual_coefficients,
+        actual_offset,
+        active_state,
+    )
+    assert driver.objective.evaluate(active_state) == pytest.approx(active_energy)
+
+    solution = driver.evaluate(active_state)
+    sample_set = driver.evaluate_samples({11: active_state})
+    assert solution.sense == Sense.Maximize
+    assert solution.objective == pytest.approx(5.0)
+    assert sample_set.sense == Sense.Maximize
+    assert sample_set.objectives[11] == pytest.approx(5.0)
+
+
+def test_to_qubo_reduces_repeated_binary_power() -> None:
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x * x * x,
+        constraints={},
+        sense=Sense.Minimize,
+    )
+
+    qubo, offset = instance.to_qubo()
+
+    assert qubo == {(0, 0): 1.0}
+    assert offset == 0.0
+    assert InstanceClass.qubo().contains(instance)
+    assert instance.evaluate({0: 1}).objective == 1.0
+
+
+@pytest.mark.parametrize("method_name", ["to_qubo", "to_hubo"])
+def test_qubo_hubo_continuous_partial_failure(method_name: str) -> None:
     x = [DecisionVariable.continuous(i, lower=-1.23, upper=4.56) for i in range(3)]
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
         constraints={0: x[0] + x[1] >= 7.89},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
-    with pytest.raises(ValueError) as e:
-        instance.to_qubo()
-    assert (
-        str(e.value)
-        == "Continuous variables are not supported in QUBO conversion: IDs=[0, 1, 2]"
-    )
-
-
-def test_to_qubo_invalid_penalty_option():
-    x = [
-        DecisionVariable.integer(i, lower=0, upper=2, name="x", subscripts=[i])
-        for i in range(2)
-    ]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=sum(x),
-        constraints={0: x[0] + 2 * x[1] <= 3},
-        sense=Instance.MAXIMIZE,
-    )
-
-    with pytest.raises(ValueError) as e:
-        instance.to_qubo(uniform_penalty_weight=1.0, penalty_weights={0: 2.0})
-    assert (
-        str(e.value)
-        == "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
-    )
+    with pytest.raises(
+        RuntimeError,
+        match=r"The constraint contains continuous decision variables: "
+        r"ID=VariableID\(0\)",
+    ):
+        getattr(instance, method_name)()
+    assert instance.sense == Sense.Minimize
+    assert instance.evaluate({0: 0, 1: 0, 2: 0}).sense == Sense.Maximize
 
 
 def test_hubo_3rd_degree():
@@ -314,7 +661,7 @@ def test_hubo_3rd_degree():
         decision_variables=x,
         objective=(x[0] + x[0] * x[0] + x[0] * x[1] * x[2]),
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     hubo, offset = instance.to_hubo()
     assert hubo == {(0,): 2.0, (0, 1, 2): 1.0}
@@ -327,48 +674,12 @@ def test_to_hubo_penalty_weight():
         decision_variables=x,
         objective=x[0],
         constraints={123: x[0] == 0, 456: x[1] == 1},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     # QUBO = x0 + 1 * (x0)^2 + 2 * (x1 - 1)^2 = 2*x0 - 2*x1 + 1
     hubo, offset = instance.to_hubo(penalty_weights={123: 1.0, 456: 2.0})
     assert hubo == {(0,): 2.0, (1,): -2.0}
     assert offset == 2.0
-
-
-def test_to_hubo_continuous():
-    x = [DecisionVariable.continuous(i, lower=-1.23, upper=4.56) for i in range(3)]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=sum(x),
-        constraints={0: x[0] + x[1] >= 7.89},
-        sense=Instance.MAXIMIZE,
-    )
-    with pytest.raises(ValueError) as e:
-        instance.to_hubo()
-    assert (
-        str(e.value)
-        == "Continuous variables are not supported in HUBO conversion: IDs=[0, 1, 2]"
-    )
-
-
-def test_to_hubo_invalid_penalty_option():
-    x = [
-        DecisionVariable.integer(i, lower=0, upper=2, name="x", subscripts=[i])
-        for i in range(2)
-    ]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=sum(x),
-        constraints={0: x[0] + 2 * x[1] <= 3},
-        sense=Instance.MAXIMIZE,
-    )
-
-    with pytest.raises(ValueError) as e:
-        instance.to_hubo(uniform_penalty_weight=1.0, penalty_weights={0: 2.0})
-    assert (
-        str(e.value)
-        == "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
-    )
 
 
 def test_evaluate_irrelevant_binary_variable():
@@ -377,7 +688,7 @@ def test_evaluate_irrelevant_binary_variable():
         decision_variables=x,
         objective=x[0],
         constraints={0: x[1] == 1},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     solution = instance.evaluate({0: 1, 1: 0})
     assert solution.extract_decision_variables("x") == {
@@ -403,7 +714,7 @@ def test_evaluate_irrelevant_integer_variables():
         decision_variables=x,
         objective=x[0],
         constraints={0: x[1] == 1},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     solution = instance.evaluate({0: 1, 1: 0})
     assert solution.extract_decision_variables("x") == {
@@ -421,7 +732,7 @@ def test_stats_empty_instance():
         decision_variables=[],
         objective=Function(0),
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     stats = instance.stats()
 
@@ -450,7 +761,7 @@ def test_stats_with_variables():
         decision_variables=x,
         objective=x[0] + x[1],  # Use only binary variables in objective
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     stats = instance.stats()
 
@@ -473,7 +784,7 @@ def test_stats_with_constraints():
         decision_variables=x,
         objective=x[0],
         constraints={0: x[0] + x[1] == 1, 1: x[1] + x[2] == 1},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     # Remove one constraint
@@ -498,7 +809,7 @@ def test_multiple_log_encodes():
         decision_variables=x,
         objective=x[0],
         constraints={0: x[0] + x[1] <= 5, 1: x[1] + x[2] <= 5},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     instance.log_encode()
@@ -527,17 +838,18 @@ def test_encode_methods_reject_explicit_non_integer_variables():
             decision_variables=[x],
             objective=x,
             constraints={},
-            sense=Instance.MAXIMIZE,
+            sense=Sense.Maximize,
         )
-        with pytest.raises(RuntimeError, match="must be integer"):
+        with pytest.raises(RuntimeError, match="must be integer") as error:
             log_instance.log_encode({0})
+        assert not isinstance(error.value, LogEncodingError)
         assert _variables_named(log_instance, "ommx.log_encode") == []
 
         unary_instance = Instance.from_components(
             decision_variables=[x],
             objective=x,
             constraints={},
-            sense=Instance.MAXIMIZE,
+            sense=Sense.Maximize,
         )
         with pytest.raises(RuntimeError, match="must be integer"):
             unary_instance.unary_encode({0})
@@ -551,10 +863,11 @@ def test_encode_methods_reject_fixed_variables():
         decision_variables=[x],
         objective=x,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     ).partial_evaluate({0: 1})
-    with pytest.raises(RuntimeError, match="fixed decision variable"):
+    with pytest.raises(RuntimeError, match="fixed decision variable") as error:
         log_instance.log_encode({0})
+    assert not isinstance(error.value, LogEncodingError)
     assert log_instance.fixed_decision_variables() == {0: 1.0}
     assert log_instance.dependent_decision_variable_ids() == set()
     assert _variables_named(log_instance, "ommx.log_encode") == []
@@ -563,7 +876,7 @@ def test_encode_methods_reject_fixed_variables():
         decision_variables=[x],
         objective=x,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     ).partial_evaluate({0: 1})
     with pytest.raises(RuntimeError, match="fixed decision variable"):
         unary_instance.unary_encode({0})
@@ -581,12 +894,17 @@ def test_log_encode_auto_detect_is_transactional_on_failure():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     before = instance.decision_variables
 
-    with pytest.raises(RuntimeError, match="bound must be finite"):
+    with pytest.raises(LogEncodingError, match="bound must be finite") as error:
         instance.log_encode()
+
+    assert error.value.kind == "non_finite_bound"
+    assert error.value.variable_id == 1
+    assert error.value.observed == "[-inf, inf]"
+    assert error.value.expected == "finite integer range"
 
     assert instance.decision_variables == before
     assert _variables_named(instance, "ommx.log_encode") == []
@@ -598,7 +916,7 @@ def test_unary_encode():
         decision_variables=[x],
         objective=x,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     instance.unary_encode({0})
@@ -632,7 +950,7 @@ def test_unary_encode_respects_max_range_on_auto_detect():
         decision_variables=[x],
         objective=x,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     with pytest.raises(RuntimeError, match=r"max_range\(5\)"):
@@ -666,7 +984,7 @@ def test_unary_encode_auto_detect_is_transactional_on_failure():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     before = instance.decision_variables
 
@@ -683,18 +1001,18 @@ def test_encoding_methods_validate_atol():
         decision_variables=[x],
         objective=x,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     unary_instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
-    with pytest.raises(RuntimeError, match="ATol must be positive"):
+    with pytest.raises(ValueError, match="ATol must be positive"):
         log_instance.log_encode(atol=0.0)
-    with pytest.raises(RuntimeError, match="ATol must be positive"):
+    with pytest.raises(ValueError, match="ATol must be positive"):
         unary_instance.unary_encode(atol=0.0)
 
 
@@ -708,7 +1026,7 @@ def test_multiple_unary_encodes():
         decision_variables=x,
         objective=x[0],
         constraints={0: x[0] + x[1] <= 5, 1: x[1] + x[2] <= 5},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     instance.unary_encode()
@@ -731,7 +1049,7 @@ def test_substitute_unary_encode():
         decision_variables=[x, *b],
         objective=x,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     instance.substitute({0: b[0] + b[1] + b[2] + b[3]})  # x = sum(b_i)
@@ -762,7 +1080,7 @@ def test_substitute_one_hot_encode():
         decision_variables=[x, *b],
         objective=x,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     instance.substitute({0: b[1] + 2 * b[2] + 3 * b[3]})  # x = sum(v * b_v)
@@ -787,7 +1105,7 @@ def test_substitute_recursive_assignment_raises():
         decision_variables=x,
         objective=x[0] + x[1],
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     objective_before = Function(instance.objective)
     decision_variable_ids_before = {v.id for v in instance.decision_variables}
@@ -797,6 +1115,20 @@ def test_substitute_recursive_assignment_raises():
 
     assert {v.id for v in instance.decision_variables} == decision_variable_ids_before
     assert instance.objective.almost_equal(objective_before)
+
+
+def test_parametric_instance_from_components_rejects_parameter_id_collision():
+    x = DecisionVariable.binary(1, name="x")
+    p = Parameter(1, name="p")
+
+    with pytest.raises(ValueError, match="collides with an existing parameter"):
+        ParametricInstance.from_components(
+            decision_variables=[x],
+            parameters=[p],
+            objective=x,
+            constraints={},
+            sense=Sense.Minimize,
+        )
 
 
 def test_parametric_instance_substitute_with_parameterized_rhs():
@@ -809,7 +1141,7 @@ def test_parametric_instance_substitute_with_parameterized_rhs():
         parameters=[p],
         objective=x + p * y,
         constraints={0: x <= p + 1},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     parametric.substitute({0: p * y + 1})
@@ -829,7 +1161,7 @@ def test_parametric_instance_substitute_recursive_assignment_raises():
         parameters=[p],
         objective=x[0] + p * x[1],
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     objective_before = Function(parametric.objective)
 
@@ -847,7 +1179,7 @@ def test_parametric_instance_substitute_parameter_id_raises():
         parameters=[p],
         objective=x + p,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     objective_before = Function(parametric.objective)
 
@@ -864,7 +1196,7 @@ def test_parametric_instance_substitute_undefined_rhs_id_raises():
         parameters=[],
         objective=x,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     objective_before = Function(parametric.objective)
 

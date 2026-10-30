@@ -20,12 +20,15 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
 
-      - name: Regenerate stub file
+      - name: Regenerate stub files
         run: task python:stubgen
 
-      - name: Check updated
+      - name: Check generated files
         run: |
-          git diff --exit-code python/ommx/ommx/_ommx_rust/__init__.pyi
+          if [ -n "$(git status --porcelain --untracked-files=all -- python/ommx/ommx docs/api)" ]; then
+            git status --short --untracked-files=all -- python/ommx/ommx docs/api
+            exit 1
+          fi
 
   # uv run and maturin develop/build doesn't work well together-
   # Even if one runs maturin develop once, uv run pyright
@@ -91,12 +94,21 @@ jobs:
           path: wheels
       - name: Transform Python Project to run tests
         run: |
-          uv run ci-scripts/setup-python-test-project.py ${{ matrix.python-version }}
+          # Keep the project-rewrite tooling independent of the target Python.
+          uv sync --python 3.10 --locked --only-group maintenance --no-install-workspace
+          uv run --python 3.10 --no-sync ci-scripts/setup-python-test-project.py ${{ matrix.python-version }}
           cat pyproject.toml
       - name: Install deps
         run: task python:sync
       - name: Test
         run: task python:test-ci
+
+      - name: Check PyO3 bridge generated stub and typing
+        if: matrix.python-version == '3.10'
+        run: task pyo3-bridge:check
+
+      - name: Test PyO3 bridge across extension boundary
+        run: task pyo3-bridge:runtime-test
 
   # Test Sphinx documentation with code execution
   test-book:
@@ -122,7 +134,9 @@ jobs:
           path: wheels
       - name: Transform Python Project to run tests
         run: |
-          uv run ci-scripts/setup-python-test-project.py ${{ env.python-version }}
+          # Keep the project-rewrite tooling independent of the target Python.
+          uv sync --python 3.10 --locked --only-group maintenance --no-install-workspace
+          uv run --python 3.10 --no-sync ci-scripts/setup-python-test-project.py ${{ env.python-version }}
           cat pyproject.toml
       - name: Install deps
         run: task python:sync
@@ -137,8 +151,11 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
 
+      - name: Install lint tools
+        run: uv sync --locked --only-group lint --no-install-workspace
+
       - name: Format
-        run: uvx ruff format --check python
+        run: uv run --no-sync ruff format --check python
 
       - name: Lint
-        run: uvx ruff check python
+        run: uv run --no-sync ruff check python

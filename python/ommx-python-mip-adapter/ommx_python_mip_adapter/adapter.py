@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Optional
+import copy
+from typing import ClassVar, Optional
 
 import mip
 from opentelemetry import trace
@@ -12,14 +13,68 @@ from ommx.adapter import (
     UnboundedDetected,
     NoSolutionReturned,
 )
-from ommx import Instance, Constraint, DecisionVariable, Solution, State, Function
+from ommx import (
+    ConstraintID,
+    Equality,
+    Function,
+    Instance,
+    InstanceClass,
+    InstanceClassClause,
+    Kind,
+    PolynomialRequirement,
+    PreparationPolicy,
+    Sense,
+    Solution,
+    SpecialConstraintKind,
+    SpecialConstraintPreparation,
+    State,
+)
 
 from .exception import OMMXPythonMIPAdapterError
 
 _tracer = trace.get_tracer("ommx.adapter.python_mip")
 
+_LINEAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS = {
+    Equality.EqualToZero: PolynomialRequirement.at_most(1),
+    Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(1),
+}
+
 
 class OMMXPythonMIPAdapter(SolverAdapter):
+    INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
+        [
+            InstanceClassClause(
+                label="python-mip-linear-mip",
+                allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
+                objective_polynomial_requirement=PolynomialRequirement.at_most(1),
+                regular_constraint_polynomial_requirements=(
+                    _LINEAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS
+                ),
+                allowed_senses={Sense.Minimize, Sense.Maximize},
+            )
+        ]
+    )
+
+    @classmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        """Recommend lowering special constraints before using Python-MIP.
+
+        Python-MIP currently accepts only regular constraints through this
+        adapter. The recommendation therefore lowers the special-constraint
+        families currently understood by OMMX. The easy API applies a fresh
+        policy to an isolated copy; callers may instead edit and apply one
+        before invoking :meth:`solve_without_preparation`.
+        """
+        return PreparationPolicy(
+            special_constraints=SpecialConstraintPreparation.lower_special_constraints(
+                kinds={
+                    SpecialConstraintKind.Indicator,
+                    SpecialConstraintKind.OneHot,
+                    SpecialConstraintKind.Sos1,
+                }
+            )
+        )
+
     def __init__(
         self,
         ommx_instance: Instance,
@@ -37,10 +92,10 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         :param verbose: If True, enable Python-MIP's verbose mode
         """
         with _tracer.start_as_current_span("convert"):
-            super().__init__(ommx_instance)
-            if ommx_instance.sense == Instance.MAXIMIZE:
+            self.require_applicable(ommx_instance)
+            if ommx_instance.sense == Sense.Maximize:
                 sense = mip.MAXIMIZE
-            elif ommx_instance.sense == Instance.MINIMIZE:
+            elif ommx_instance.sense == Sense.Minimize:
                 sense = mip.MINIMIZE
             else:
                 raise OMMXPythonMIPAdapterError(
@@ -79,7 +134,10 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         """
         Solve the given ommx.Instance using Python-MIP, returning an ommx.Solution.
 
-        :param ommx_instance: The ommx.Instance to solve.
+        The input instance is not modified. An isolated copy is prepared with
+        the recommended Python-MIP policy before preparation-free execution.
+
+        :param ommx_instance: The ommx.Instance to prepare and solve.
         :param relax: If True, relax all integer variables to continuous variables by using the `relax` parameter in Python-MIP's `Model.optimize() <https://docs.python-mip.com/en/latest/classes.html#mip.Model.optimize>`.
         :param verbose: If True, enable Python-MIP's verbose mode
 
@@ -100,7 +158,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
             ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
-            ...     sense=Instance.MAXIMIZE,
+            ...     sense=Sense.Maximize,
             ... )
 
             Solve it
@@ -135,13 +193,13 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 ...     decision_variables=[x],
                 ...     objective=x,
                 ...     constraints={0: x >= 4},
-                ...     sense=Instance.MAXIMIZE,
+                ...     sense=Sense.Maximize,
                 ... )
 
                 >>> OMMXPythonMIPAdapter.solve(instance)
                 Traceback (most recent call last):
                     ...
-                ommx.adapter.InfeasibleDetected: Model was infeasible
+                ommx.InfeasibleDetected: Model was infeasible
 
         Unbounded Problem
 
@@ -155,7 +213,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 ...     decision_variables=[x],
                 ...     objective=x,
                 ...     constraints={},
-                ...     sense=Instance.MAXIMIZE,
+                ...     sense=Sense.Maximize,
                 ... )
 
                 >>> OMMXPythonMIPAdapter.solve(instance)
@@ -176,7 +234,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 ...     decision_variables=[x, y],
                 ...     objective=x + y,
                 ...     constraints={0: x + y <= 1},
-                ...     sense=Instance.MAXIMIZE,
+                ...     sense=Sense.Maximize,
                 ... )
 
                 >>> solution = OMMXPythonMIPAdapter.solve(instance)
@@ -184,9 +242,28 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 1.0
 
         """
-        _ = diagnostics
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.solve_without_preparation(
+            prepared,
+            relax=relax,
+            verbose=verbose,
+            diagnostics=diagnostics,
+        )
+
+    @classmethod
+    def solve_without_preparation(
+        cls,
+        ommx_instance: Instance,
+        relax: bool = False,
+        verbose: bool = False,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> Solution:
+        """Solve an exact Python-MIP Adapter input without preparing it."""
         with _tracer.start_as_current_span("solve") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
+            _ = diagnostics
             adapter = cls(ommx_instance, relax=relax, verbose=verbose)
             model = adapter.solver_input
             with _tracer.start_as_current_span("call"):
@@ -218,6 +295,10 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         `solver_input`, you must set `solution.relaxation` yourself if you
         care about this value.
 
+        Backend optimality is mapped through the instance's output-objective
+        semantics. It remains unspecified when active-formulation optimality
+        does not transport to that objective.
+
         Examples
         =========
 
@@ -233,7 +314,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
             ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
-            ...     sense=Instance.MAXIMIZE,
+            ...     sense=Sense.Maximize,
             ... )
 
             >>> adapter = OMMXPythonMIPAdapter(instance)
@@ -251,17 +332,18 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             state = self.decode_to_state(data)
             solution = self.instance.evaluate(state)
 
-            dual_variables = {}
-            for constraint in data.constrs:
-                pi = constraint.pi
-                if pi is not None:
-                    id = int(constraint.name)
-                    dual_variables[id] = pi
-            for constraint_id, dual_value in dual_variables.items():
-                solution.set_dual_variable(constraint_id, dual_value)
+            # Duals certify the active formulation and need an explicit mapping
+            # before they can be attached to projected output semantics.
+            if self.instance.output_objective is None:
+                for constraint_id, name in self._constraint_names.items():
+                    constraint = data.constr_by_name(name)
+                    if constraint is not None and constraint.pi is not None:
+                        solution.set_dual_variable(constraint_id, float(constraint.pi))
 
             if data.status == mip.OptimizationStatus.OPTIMAL:
-                solution.optimality = Solution.OPTIMAL
+                solution.optimality = self.instance.map_active_optimality(
+                    Solution.OPTIMAL
+                )
 
             if self._relax:
                 solution.relaxation = Solution.LP_RELAXED
@@ -286,7 +368,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             ...     decision_variables=[x1],
             ...     objective=x1,
             ...     constraints={},
-            ...     sense=Instance.MINIMIZE,
+            ...     sense=Sense.Minimize,
             ... )
             >>> adapter = OMMXPythonMIPAdapter(ommx_instance)
             >>> model = adapter.solver_input
@@ -329,19 +411,19 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
     def _set_decision_variables(self):
         for var in self.instance.used_decision_variables:
-            if var.kind == DecisionVariable.BINARY:
+            if var.kind == Kind.Binary:
                 self.model.add_var(
                     name=str(var.id),
                     var_type=mip.BINARY,
                 )
-            elif var.kind == DecisionVariable.INTEGER:
+            elif var.kind == Kind.Integer:
                 self.model.add_var(
                     name=str(var.id),
                     var_type=mip.INTEGER,
                     lb=var.bound.lower,  # type: ignore
                     ub=var.bound.upper,  # type: ignore
                 )
-            elif var.kind == DecisionVariable.CONTINUOUS:
+            elif var.kind == Kind.Continuous:
                 self.model.add_var(
                     name=str(var.id),
                     var_type=mip.CONTINUOUS,
@@ -362,6 +444,11 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         Translate ommx.Function to `mip.LinExpr` or `float`.
         """
         degree = f.degree()
+        if degree is None:
+            raise OMMXPythonMIPAdapterError(
+                "Non-polynomial functions are not supported. "
+                "Only linear (degree 1) and constant (degree 0) functions are supported."
+            )
         constant = f.constant_term
         if degree > 1:
             raise OMMXPythonMIPAdapterError(
@@ -383,15 +470,23 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         self.model.objective = self._as_lin_expr(self.instance.objective)
 
     def _set_constraints(self):
-        for cid, constraint in self.instance.constraints.items():
+        self._constraint_names: dict[ConstraintID, str] = {}
+        for cid in self.instance.constraints:
+            if not isinstance(cid, ConstraintID):
+                raise OMMXPythonMIPAdapterError(
+                    f"Unsupported constraint family: {type(cid).__name__} (id: {cid})"
+                )
+            constraint = self.instance.constraints[cid]
             lin_expr = self._as_lin_expr(constraint.function)
-            if constraint.equality == Constraint.EQUAL_TO_ZERO:
+            if constraint.equality == Equality.EqualToZero:
                 constr_expr = lin_expr == 0
-            elif constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
+            elif constraint.equality == Equality.LessThanOrEqualToZero:
                 constr_expr = lin_expr <= 0  # type: ignore
             else:
                 raise OMMXPythonMIPAdapterError(
                     f"Not supported constraint equality: "
                     f"id: {cid}, equality: {constraint.equality}"
                 )
-            self.model.add_constr(constr_expr, name=str(cid))
+            name = str(cid)
+            self.model.add_constr(constr_expr, name=name)
+            self._constraint_names[cid] = name

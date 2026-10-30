@@ -136,5 +136,10 @@ def test_prune_anonymous_can_include_experiments_and_filter_by_age():
 
 
 def test_prune_anonymous_rejects_invalid_retention_duration():
-    with pytest.raises(RuntimeError, match="invalid duration suffix"):
+    with pytest.raises(ValueError, match="invalid duration suffix"):
         prune_anonymous(older_than="last-week")
+
+
+def test_gc_rejects_invalid_grace_period():
+    with pytest.raises(ValueError, match="invalid duration suffix"):
+        gc(grace_period="last-week")

@@ -8,44 +8,53 @@ def miplib2017(name: str) -> Instance:
     """
     Load a MIPLIB 2017 instance as OMMX Artifact.
 
+    Uses the published ``ghcr.io/jij-inc/ommx/v2.7/miplib2017`` distribution,
+    generated with the corrected MPS integer bounds in OMMX 2.7.0. The
+    distribution version is fixed independently of the installed SDK version;
+    existing unversioned Artifacts are not used as a fallback.
+
     >>> from ommx.dataset import miplib2017
-    >>> instance = miplib2017("air05")
+
+    Loading the instance requires remote registry access, so the following
+    calls are not executed as doctests.
+
+    >>> instance = miplib2017("air05")  # doctest: +SKIP
 
     Common annotations
 
-    >>> instance.title
+    >>> instance.title  # doctest: +SKIP
     'air05'
-    >>> instance.authors
+    >>> instance.authors  # doctest: +SKIP
     ['G. Astfalk']
-    >>> instance.license
+    >>> instance.license  # doctest: +SKIP
     'CC-BY-SA-4.0'
-    >>> instance.num_variables
+    >>> instance.num_variables  # doctest: +SKIP
     7195
-    >>> instance.num_constraints
+    >>> instance.num_constraints  # doctest: +SKIP
     426
 
     MIPLIB-specific annotations are stored with `org.ommx.miplib.*` keys.
 
-    >>> instance.annotations["org.ommx.miplib.binaries"]
+    >>> instance.annotations["org.ommx.miplib.binaries"]  # doctest: +SKIP
     '7195'
-    >>> instance.annotations["org.ommx.miplib.integers"]
+    >>> instance.annotations["org.ommx.miplib.integers"]  # doctest: +SKIP
     '0'
-    >>> instance.annotations["org.ommx.miplib.continuous"]
+    >>> instance.annotations["org.ommx.miplib.continuous"]  # doctest: +SKIP
     '0'
-    >>> instance.annotations["org.ommx.miplib.non_zero"]
+    >>> instance.annotations["org.ommx.miplib.non_zero"]  # doctest: +SKIP
     '52121'
 
-    >>> instance.annotations["org.ommx.miplib.status"]
+    >>> instance.annotations["org.ommx.miplib.status"]  # doctest: +SKIP
     'easy'
-    >>> instance.annotations["org.ommx.miplib.objective"]
+    >>> instance.annotations["org.ommx.miplib.objective"]  # doctest: +SKIP
     '26374'
-    >>> instance.annotations["org.ommx.miplib.url"]
+    >>> instance.annotations["org.ommx.miplib.url"]  # doctest: +SKIP
     'https://miplib.zib.de/instance_details_air05.html'
-    >>> instance.annotations["org.ommx.miplib.tags"]
+    >>> instance.annotations["org.ommx.miplib.tags"]  # doctest: +SKIP
     'benchmark,binary,benchmark_suitable,set_partitioning'
 
     """
-    artifact = Artifact.load(f"ghcr.io/jij-inc/ommx/miplib2017:{name}")
+    artifact = Artifact.load(f"ghcr.io/jij-inc/ommx/v2.7/miplib2017:{name}")
     return artifact.instance
 
 
@@ -68,39 +77,48 @@ def qplib(tag: str) -> Instance:
     """
     Load a QPLIB instance as OMMX Artifact.
 
+    Uses the published ``ghcr.io/jij-inc/ommx/v2.8/qplib`` distribution,
+    generated with corrected quadratic coefficients in OMMX 2.8.0. The
+    distribution version is independent of the installed SDK version;
+    old unversioned Artifacts are not used as a fallback.
+
     >>> from ommx.dataset import qplib
-    >>> instance = qplib("0018")
+
+    Loading the instance requires remote registry access, so the following
+    calls are not executed as doctests.
+
+    >>> instance = qplib("0018")  # doctest: +SKIP
 
     Common annotations
 
-    >>> instance.title
+    >>> instance.title  # doctest: +SKIP
     'QPLIB_0018'
-    >>> instance.authors
+    >>> instance.authors  # doctest: +SKIP
     ['Andrea Scozzari']
-    >>> instance.license
+    >>> instance.license  # doctest: +SKIP
     'CC-BY-4.0'
-    >>> instance.num_variables
+    >>> instance.num_variables  # doctest: +SKIP
     50
-    >>> instance.num_constraints
+    >>> instance.num_constraints  # doctest: +SKIP
     2
 
     QPLIB-specific annotations are stored with `org.ommx.qplib.*` keys.
 
-    >>> instance.annotations["org.ommx.qplib.nvars"]
+    >>> instance.annotations["org.ommx.qplib.nvars"]  # doctest: +SKIP
     '50'
-    >>> instance.annotations["org.ommx.qplib.ncons"]
+    >>> instance.annotations["org.ommx.qplib.ncons"]  # doctest: +SKIP
     '1'
-    >>> instance.annotations["org.ommx.qplib.objtype"]
+    >>> instance.annotations["org.ommx.qplib.objtype"]  # doctest: +SKIP
     'quadratic'
-    >>> instance.annotations["org.ommx.qplib.objcurvature"]
+    >>> instance.annotations["org.ommx.qplib.objcurvature"]  # doctest: +SKIP
     'indefinite'
-    >>> instance.annotations["org.ommx.qplib.probtype"]
+    >>> instance.annotations["org.ommx.qplib.probtype"]  # doctest: +SKIP
     'QCL'
-    >>> instance.annotations["org.ommx.qplib.url"]
+    >>> instance.annotations["org.ommx.qplib.url"]  # doctest: +SKIP
     'http://qplib.zib.de/QPLIB_0018.html'
 
     """
-    artifact = Artifact.load(f"ghcr.io/jij-inc/ommx/qplib:{tag}")
+    artifact = Artifact.load(f"ghcr.io/jij-inc/ommx/v2.8/qplib:{tag}")
     return artifact.instance
 
 

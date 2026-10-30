@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use crate::{random::unique_integers, Function, PolynomialParameters};
+use crate::{random::unique_integers, Function, FunctionParameters};
 use anyhow::{anyhow, Result};
 use proptest::prelude::*;
 
 impl Arbitrary for NamedFunction {
-    type Parameters = PolynomialParameters;
+    type Parameters = FunctionParameters;
     type Strategy = BoxedStrategy<Self>;
     fn arbitrary_with(params: Self::Parameters) -> Self::Strategy {
         Function::arbitrary_with(params)
@@ -45,7 +45,7 @@ impl Default for NamedFunctionIDParameters {
 
 pub fn arbitrary_named_functions(
     id_parameters: NamedFunctionIDParameters,
-    parameters: PolynomialParameters,
+    parameters: FunctionParameters,
 ) -> impl Strategy<Value = BTreeMap<NamedFunctionID, NamedFunction>> {
     let unique_ids_strategy = unique_integers(0, id_parameters.max_id.0, id_parameters.size);
     let named_functions_strategy = proptest::collection::vec(

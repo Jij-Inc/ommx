@@ -15,14 +15,45 @@ ommx
    _items/ommx.State
    _items/ommx.Samples
    _items/ommx.Bound
+   _items/ommx.BridgeError
+   _items/ommx.ExactIntegerSlackError
+   _items/ommx.InfeasibleDetected
+   _items/ommx.LogEncodingError
+   _items/ommx.PreparationTargetNotReachedError
+   _items/ommx.Sos1BigMPromotionBatchRejectedError
    _items/ommx.Linear
    _items/ommx.Quadratic
    _items/ommx.Polynomial
    _items/ommx.Function
+   _items/ommx.OutputObjective
    _items/ommx.DecisionVariable
    _items/ommx.AttachedDecisionVariable
    _items/ommx.Parameter
-   _items/ommx.AdditionalCapability
+   _items/ommx.SpecialConstraintKind
+   _items/ommx.PolynomialRequirement
+   _items/ommx.InstanceClassClause
+   _items/ommx.InstanceClass
+   _items/ommx.InstanceClassMismatch
+   _items/ommx.InstanceClassClauseReport
+   _items/ommx.InstanceClassMembershipReport
+   _items/ommx.SpecialConstraintPreparation
+   _items/ommx.ObjectivePreparation
+   _items/ommx.IntegerSlackPreparation
+   _items/ommx.IntegerEncodingPreparation
+   _items/ommx.BinaryPowerPreparation
+   _items/ommx.FixedPenaltyPreparation
+   _items/ommx.PreparationPolicy
+   _items/ommx.ConstraintCollection
+   _items/ommx.ConstraintFamilyView
+   _items/ommx.RemovedConstraintCollection
+   _items/ommx.EvaluatedConstraintCollection
+   _items/ommx.SampledConstraintCollection
+   _items/ommx.ConstraintIDBase
+   _items/ommx.ConstraintView
+   _items/ommx.ConstraintID
+   _items/ommx.IndicatorConstraintID
+   _items/ommx.OneHotConstraintID
+   _items/ommx.Sos1ConstraintID
    _items/ommx.Constraint
    _items/ommx.AttachedConstraint
    _items/ommx.IndicatorConstraint
@@ -34,15 +65,24 @@ ommx
    _items/ommx.Sos1Constraint
    _items/ommx.AttachedSos1Constraint
    _items/ommx.RemovedSos1Constraint
+   _items/ommx.Sos1BigMSelectorClaim
+   _items/ommx.Sos1BigMPromotionRequest
+   _items/ommx.Sos1BigMPromotion
    _items/ommx.RemovedConstraint
    _items/ommx.Provenance
    _items/ommx.ProvenanceKind
    _items/ommx.NamedFunction
    _items/ommx.EvaluatedDecisionVariable
    _items/ommx.EvaluatedConstraint
+   _items/ommx.EvaluatedIndicatorConstraint
+   _items/ommx.EvaluatedOneHotConstraint
+   _items/ommx.EvaluatedSos1Constraint
    _items/ommx.EvaluatedNamedFunction
    _items/ommx.SampledDecisionVariable
    _items/ommx.SampledConstraint
+   _items/ommx.SampledIndicatorConstraint
+   _items/ommx.SampledOneHotConstraint
+   _items/ommx.SampledSos1Constraint
    _items/ommx.SampledNamedFunction
    _items/ommx.Instance
    _items/ommx.ParametricInstance
@@ -53,4 +93,5 @@ ommx
    _items/ommx.set_default_atol
    _items/ommx.VariableIDLike
    _items/ommx.ToState
+   _items/ommx.NamedState
    _items/ommx.ToSamples

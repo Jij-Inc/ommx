@@ -5,7 +5,15 @@ mod annotations;
 mod artifact;
 mod attached;
 mod bound;
+#[cfg(feature = "cli")]
+mod cli;
 mod constraint;
+mod constraint_base;
+mod constraint_collection;
+mod constraint_id;
+mod constraint_kind;
+#[macro_use]
+mod constraint_results;
 #[cfg(feature = "remote-artifact")]
 mod dataset;
 mod decision_variable;
@@ -18,9 +26,12 @@ mod evaluated_decision_variable;
 mod evaluated_named_function;
 mod experiment;
 mod function;
+mod in_place_add;
 mod indicator_constraint;
 mod instance;
+mod instance_class;
 mod linear;
+mod message_io;
 mod named_function;
 mod one_hot_constraint;
 mod pandas;
@@ -28,7 +39,9 @@ mod parameter;
 mod parameters;
 mod parametric_instance;
 mod polynomial;
+mod preparation;
 mod provenance;
+mod pyo3_bridge;
 mod quadratic;
 mod random;
 mod sample_set;
@@ -38,7 +51,9 @@ mod sampled_named_function;
 mod samples;
 mod solution;
 mod sos1_constraint;
+mod sos1_promotion;
 mod state;
+mod subscript_map;
 
 pub use artifact::*;
 // `attached.rs` is implementation detail — re-export only the host enum that
@@ -47,10 +62,17 @@ pub use artifact::*;
 pub use attached::ConstraintHost;
 pub use bound::*;
 pub use constraint::*;
+pub use constraint_id::{
+    ConstraintID, IndicatorConstraintID, OneHotConstraintID, Sos1ConstraintID,
+};
+pub use constraint_results::{
+    EvaluatedIndicatorConstraint, EvaluatedOneHotConstraint, EvaluatedSos1Constraint,
+    SampledIndicatorConstraint, SampledOneHotConstraint, SampledSos1Constraint,
+};
 #[cfg(feature = "remote-artifact")]
 pub use dataset::*;
 pub use decision_variable::*;
-pub use descriptor::*;
+pub use descriptor::{PyArchiveDescriptor, PyDescriptor};
 pub use enums::*;
 pub use evaluated_constraint::*;
 pub use evaluated_decision_variable::*;
@@ -59,6 +81,7 @@ pub use experiment::*;
 pub use function::*;
 pub use indicator_constraint::*;
 pub use instance::*;
+pub use instance_class::*;
 pub use linear::*;
 pub use named_function::*;
 pub use one_hot_constraint::*;
@@ -66,6 +89,7 @@ pub use parameter::*;
 pub use parameters::*;
 pub use parametric_instance::*;
 pub use polynomial::*;
+pub use preparation::*;
 pub use provenance::*;
 pub use quadratic::*;
 pub use random::*;
@@ -76,20 +100,17 @@ pub use sampled_named_function::*;
 pub use samples::*;
 pub use solution::*;
 pub use sos1_constraint::*;
+pub use sos1_promotion::*;
 pub use state::*;
 
 use pyo3::prelude::*;
 use pyo3_stub_gen::runtime::PyModuleTypeAliasExt;
 
-pub(crate) fn coefficient_error_to_pyerr(error: ommx::CoefficientError) -> PyErr {
-    pyo3::exceptions::PyValueError::new_err(error.to_string())
-}
-
 pub(crate) fn comparison_constraint(
     function: std::result::Result<ommx::Function, ommx::CoefficientError>,
     equality: ommx::Equality,
-) -> PyResult<Constraint> {
-    let function = function.map_err(coefficient_error_to_pyerr)?;
+) -> error::OmmxPyResult<Constraint> {
+    let function = function?;
     Ok(Constraint(
         ommx::Constraint {
             equality,
@@ -131,8 +152,8 @@ pub(crate) const TRACING: TracingBridge = TracingBridge::new("ommx");
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-pub fn set_default_atol(value: f64) -> anyhow::Result<()> {
-    ommx::ATol::set_default(value)
+pub fn set_default_atol(value: f64) -> error::OmmxPyResult<()> {
+    Ok(ommx::ATol::set_default(value)?)
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
@@ -145,6 +166,9 @@ pub fn get_default_atol() -> f64 {
 /// See <https://pyo3.rs/main/free-threading#supporting-free-threaded-python-with-pyo3>.
 #[pymodule(gil_used = false)]
 fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
+    #[cfg(feature = "cli")]
+    m.add_function(wrap_pyfunction!(cli::_run_cli, m)?)?;
+
     // OMMX Artifact
     error::register_exceptions(py, m)?;
     m.add_class::<PyArchiveDescriptor>()?;
@@ -181,18 +205,36 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(list_experiments, m)?)?;
     m.add_function(wrap_pyfunction!(list_experiment_checkpoints, m)?)?;
 
+    m.add_class::<constraint_base::ConstraintIDBase>()?;
+    m.add_class::<constraint_base::ConstraintView>()?;
+    constraint_collection::register(m)?;
+
     // OMMX Message
     m.add_class::<Linear>()?;
     m.add_class::<Quadratic>()?;
     m.add_class::<Polynomial>()?;
     m.add_class::<Function>()?;
     m.add_class::<VariableBound>()?;
+    m.add_class::<OutputObjective>()?;
     m.add_class::<Instance>()?;
     m.add_class::<InstanceDescription>()?;
     m.add_class::<DecisionVariable>()?;
     m.add_class::<AttachedDecisionVariable>()?;
     m.add_class::<Parameter>()?;
-    m.add_class::<AdditionalCapability>()?;
+    m.add_class::<SpecialConstraintKind>()?;
+    m.add_class::<PolynomialRequirement>()?;
+    m.add_class::<InstanceClassClause>()?;
+    m.add_class::<InstanceClass>()?;
+    m.add_class::<InstanceClassMismatch>()?;
+    m.add_class::<InstanceClassClauseReport>()?;
+    m.add_class::<InstanceClassMembershipReport>()?;
+    m.add_class::<SpecialConstraintPreparation>()?;
+    m.add_class::<ObjectivePreparation>()?;
+    m.add_class::<IntegerSlackPreparation>()?;
+    m.add_class::<IntegerEncodingPreparation>()?;
+    m.add_class::<BinaryPowerPreparation>()?;
+    m.add_class::<FixedPenaltyPreparation>()?;
+    m.add_class::<PreparationPolicy>()?;
     m.add_class::<Constraint>()?;
     m.add_class::<AttachedConstraint>()?;
     m.add_class::<IndicatorConstraint>()?;
@@ -204,6 +246,9 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Sos1Constraint>()?;
     m.add_class::<AttachedSos1Constraint>()?;
     m.add_class::<RemovedSos1Constraint>()?;
+    m.add_class::<Sos1BigMSelectorClaim>()?;
+    m.add_class::<Sos1BigMPromotionRequest>()?;
+    m.add_class::<Sos1BigMPromotion>()?;
     m.add_class::<NamedFunction>()?;
     m.add_class::<RemovedConstraint>()?;
     m.add_class::<Provenance>()?;
@@ -212,9 +257,20 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Parameters>()?;
     m.add_class::<Solution>()?;
     m.add_class::<SampleSet>()?;
+    m.add_class::<ConstraintID>()?;
+    m.add_class::<IndicatorConstraintID>()?;
+    m.add_class::<OneHotConstraintID>()?;
+    m.add_class::<Sos1ConstraintID>()?;
+    m.add_class::<EvaluatedIndicatorConstraint>()?;
+    m.add_class::<EvaluatedOneHotConstraint>()?;
+    m.add_class::<EvaluatedSos1Constraint>()?;
+    m.add_class::<SampledIndicatorConstraint>()?;
+    m.add_class::<SampledOneHotConstraint>()?;
+    m.add_class::<SampledSos1Constraint>()?;
     m.add_class::<Samples>()?;
     m.add_class::<State>()?;
     m.add_type_alias::<ToState>()?;
+    m.add_type_alias::<NamedState>()?;
     m.add_type_alias::<VariableIDLike>()?;
     m.add_type_alias::<ScalarLike>()?;
     m.add_type_alias::<LinearLike>()?;
@@ -249,6 +305,11 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(set_default_atol, m)?)?;
     m.add_function(wrap_pyfunction!(get_default_atol, m)?)?;
 
+    // Versioned production runtime receivers consumed by the published
+    // `ommx-pyo3-bridge` crate. They stay binding-private because only this
+    // extension owns construction of the canonical Python classes.
+    pyo3_bridge::register(m)?;
+
     Ok(())
 }
 
@@ -264,18 +325,52 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "State",
     "Samples",
     "Bound",
+    // Cross-extension bridge failures
+    "BridgeError",
+    // Domain operation signals
+    "ExactIntegerSlackError",
+    "InfeasibleDetected",
+    "LogEncodingError",
+    "PreparationTargetNotReachedError",
+    "Sos1BigMPromotionBatchRejectedError",
     // Function types
     "Linear",
     "Quadratic",
     "Polynomial",
     "Function",
+    "OutputObjective",
     // Decision variable and parameter
     "DecisionVariable",
     "AttachedDecisionVariable",
     "Parameter",
-    // Constraint capability
-    "AdditionalCapability",
+    // Instance classes and explicit special-constraint lowering
+    "SpecialConstraintKind",
+    "PolynomialRequirement",
+    "InstanceClassClause",
+    "InstanceClass",
+    "InstanceClassMismatch",
+    "InstanceClassClauseReport",
+    "InstanceClassMembershipReport",
+    // Preparation
+    "SpecialConstraintPreparation",
+    "ObjectivePreparation",
+    "IntegerSlackPreparation",
+    "IntegerEncodingPreparation",
+    "BinaryPowerPreparation",
+    "FixedPenaltyPreparation",
+    "PreparationPolicy",
     // Constraint and named function
+    "ConstraintCollection",
+    "ConstraintFamilyView",
+    "RemovedConstraintCollection",
+    "EvaluatedConstraintCollection",
+    "SampledConstraintCollection",
+    "ConstraintIDBase",
+    "ConstraintView",
+    "ConstraintID",
+    "IndicatorConstraintID",
+    "OneHotConstraintID",
+    "Sos1ConstraintID",
     "Constraint",
     "AttachedConstraint",
     "IndicatorConstraint",
@@ -287,6 +382,9 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "Sos1Constraint",
     "AttachedSos1Constraint",
     "RemovedSos1Constraint",
+    "Sos1BigMSelectorClaim",
+    "Sos1BigMPromotionRequest",
+    "Sos1BigMPromotion",
     "RemovedConstraint",
     "Provenance",
     "ProvenanceKind",
@@ -294,9 +392,15 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     // Evaluated types
     "EvaluatedDecisionVariable",
     "EvaluatedConstraint",
+    "EvaluatedIndicatorConstraint",
+    "EvaluatedOneHotConstraint",
+    "EvaluatedSos1Constraint",
     "EvaluatedNamedFunction",
     "SampledDecisionVariable",
     "SampledConstraint",
+    "SampledIndicatorConstraint",
+    "SampledOneHotConstraint",
+    "SampledSos1Constraint",
     "SampledNamedFunction",
     // Top-level types
     "Instance",
@@ -310,6 +414,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     // Type aliases
     "VariableIDLike",
     "ToState",
+    "NamedState",
     "ToSamples"
 );
 

@@ -1,0 +1,544 @@
+use crate::constraint_id::{
+    ConstraintIDInput, ConstraintMapInput, ConstraintSetInput, IndicatorConstraintIDInput,
+    OneHotConstraintIDInput, Sos1ConstraintIDInput,
+};
+use crate::{Equality, Instance, Kind, Sense};
+use pyo3::prelude::*;
+use std::collections::{BTreeMap, BTreeSet};
+
+/// Polynomial requirement for one function position in an
+/// :class:`InstanceClassClause`.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass(eq, frozen)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PolynomialRequirement(pub ommx::PolynomialRequirement);
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PolynomialRequirement {
+    /// Require a polynomial whose degree is at most ``maximum``.
+    #[staticmethod]
+    pub fn at_most(maximum: u32) -> Self {
+        Self(ommx::PolynomialRequirement::at_most(maximum))
+    }
+
+    /// Require a polynomial of any degree.
+    #[staticmethod]
+    pub fn any_degree() -> Self {
+        Self(ommx::PolynomialRequirement::any_degree())
+    }
+
+    /// Inclusive maximum degree, or ``None`` when any degree is accepted.
+    #[getter]
+    pub fn maximum_degree(&self) -> Option<u32> {
+        self.0.maximum_degree().map(|degree| degree.into_inner())
+    }
+
+    /// Return whether ``actual_degree`` satisfies this requirement.
+    pub fn accepts_degree(&self, actual_degree: u32) -> bool {
+        self.0.accepts_degree(actual_degree.into())
+    }
+
+    pub fn __repr__(&self) -> String {
+        match self.maximum_degree() {
+            Some(maximum) => format!("PolynomialRequirement.at_most({maximum})"),
+            None => "PolynomialRequirement.any_degree()".to_string(),
+        }
+    }
+}
+
+/// One conjunctive clause in an :class:`InstanceClass`.
+///
+/// Every condition in a clause must hold. The containing instance class is
+/// the finite union of its clauses, so alternatives are not combined across
+/// clause boundaries.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct InstanceClassClause(pub ommx::InstanceClassClause);
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl InstanceClassClause {
+    #[new]
+    #[pyo3(signature = (*, label, allowed_variable_kinds, objective_polynomial_requirement, allowed_senses, regular_constraint_polynomial_requirements=None, indicator_body_polynomial_requirements=None, allows_one_hot=false, allows_sos1=false))]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        label: String,
+        allowed_variable_kinds: BTreeSet<Kind>,
+        objective_polynomial_requirement: PolynomialRequirement,
+        allowed_senses: BTreeSet<Sense>,
+        regular_constraint_polynomial_requirements: Option<
+            BTreeMap<Equality, PolynomialRequirement>,
+        >,
+        indicator_body_polynomial_requirements: Option<BTreeMap<Equality, PolynomialRequirement>>,
+        allows_one_hot: bool,
+        allows_sos1: bool,
+    ) -> Self {
+        let mut clause = ommx::InstanceClassClause::new(
+            label,
+            allowed_variable_kinds.into_iter().map(Into::into).collect(),
+            objective_polynomial_requirement.0,
+            allowed_senses.into_iter().map(Into::into).collect(),
+        );
+        for (relation, requirement) in
+            regular_constraint_polynomial_requirements.unwrap_or_default()
+        {
+            clause = clause.with_regular_constraint(relation.into(), requirement.0);
+        }
+        for (relation, requirement) in indicator_body_polynomial_requirements.unwrap_or_default() {
+            clause = clause.with_indicator_constraint(relation.into(), requirement.0);
+        }
+        if allows_one_hot {
+            clause = clause.with_one_hot();
+        }
+        if allows_sos1 {
+            clause = clause.with_sos1();
+        }
+        Self(clause)
+    }
+
+    /// Human-readable diagnostic label. It does not affect membership.
+    #[getter]
+    pub fn label(&self) -> &str {
+        self.0.label()
+    }
+
+    #[getter]
+    pub fn allowed_variable_kinds(&self) -> BTreeSet<Kind> {
+        self.0
+            .allowed_variable_kinds()
+            .iter()
+            .copied()
+            .map(Into::into)
+            .collect()
+    }
+
+    #[getter]
+    pub fn objective_polynomial_requirement(&self) -> PolynomialRequirement {
+        PolynomialRequirement(self.0.objective_polynomial_requirement())
+    }
+
+    #[getter]
+    pub fn regular_constraint_polynomial_requirements(
+        &self,
+    ) -> BTreeMap<Equality, PolynomialRequirement> {
+        self.0
+            .regular_constraint_polynomial_requirements()
+            .map(|(relation, requirement)| (relation.into(), PolynomialRequirement(requirement)))
+            .collect()
+    }
+
+    #[getter]
+    pub fn indicator_body_polynomial_requirements(
+        &self,
+    ) -> BTreeMap<Equality, PolynomialRequirement> {
+        self.0
+            .indicator_body_polynomial_requirements()
+            .map(|(relation, requirement)| (relation.into(), PolynomialRequirement(requirement)))
+            .collect()
+    }
+
+    #[getter]
+    pub fn allows_one_hot(&self) -> bool {
+        self.0.allows_one_hot()
+    }
+
+    #[getter]
+    pub fn allows_sos1(&self) -> bool {
+        self.0.allows_sos1()
+    }
+
+    #[getter]
+    pub fn allowed_senses(&self) -> BTreeSet<Sense> {
+        self.0
+            .allowed_senses()
+            .iter()
+            .copied()
+            .map(Into::into)
+            .collect()
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!("InstanceClassClause(label={:?})", self.label())
+    }
+}
+
+/// A set of :class:`Instance` values represented as a finite union of clauses.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass(frozen)]
+#[derive(Debug, Clone)]
+pub struct InstanceClass(pub ommx::InstanceClass);
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl InstanceClass {
+    #[new]
+    pub fn new(clauses: Vec<InstanceClassClause>) -> Self {
+        Self(ommx::InstanceClass::new(
+            clauses.into_iter().map(|clause| clause.0).collect(),
+        ))
+    }
+
+    /// Class of minimization QUBO formulations accepted by
+    /// {meth}`~ommx.Instance.as_qubo_format` after Preparation.
+    ///
+    /// # Postconditions
+    ///
+    /// The target accepts unconstrained minimization QUBO formulations and rejects models outside that class.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, InstanceClass, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> linear = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> quadratic = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x * x, constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> cubic = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> maximizing = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ... )
+    /// >>> continuous = DecisionVariable.continuous(1)
+    /// >>> non_binary = Instance.from_components(
+    /// ...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> constrained = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize
+    /// ... )
+    /// >>> target = InstanceClass.qubo()
+    /// >>> assert target.contains(linear)
+    /// >>> assert target.contains(quadratic)
+    /// >>> assert not target.contains(cubic)
+    /// >>> assert not target.contains(maximizing)
+    /// >>> assert not target.contains(non_binary)
+    /// >>> assert not target.contains(constrained)
+    #[staticmethod]
+    pub fn qubo() -> Self {
+        Self(ommx::InstanceClass::qubo())
+    }
+
+    /// Class of minimization HUBO formulations accepted by
+    /// {meth}`~ommx.Instance.as_hubo_format` after Preparation.
+    ///
+    /// # Postconditions
+    ///
+    /// The target accepts unconstrained minimization Binary HUBO formulations and rejects models outside that class.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, InstanceClass, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> linear = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> cubic = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> maximizing = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ... )
+    /// >>> continuous = DecisionVariable.continuous(1)
+    /// >>> non_binary = Instance.from_components(
+    /// ...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> constrained = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize
+    /// ... )
+    /// >>> target = InstanceClass.hubo()
+    /// >>> assert target.contains(linear)
+    /// >>> assert target.contains(cubic)
+    /// >>> assert not target.contains(maximizing)
+    /// >>> assert not target.contains(non_binary)
+    /// >>> assert not target.contains(constrained)
+    #[staticmethod]
+    pub fn hubo() -> Self {
+        Self(ommx::InstanceClass::hubo())
+    }
+
+    #[getter]
+    pub fn clauses(&self) -> Vec<InstanceClassClause> {
+        self.0
+            .clauses()
+            .iter()
+            .cloned()
+            .map(InstanceClassClause)
+            .collect()
+    }
+
+    /// Return the finite union of two instance classes.
+    pub fn union(&self, other: &InstanceClass) -> Self {
+        Self(self.0.clone().union(other.0.clone()))
+    }
+
+    /// Return whether ``instance`` belongs to this class.
+    pub fn contains(&self, instance: &Instance) -> bool {
+        self.0.contains(&instance.inner)
+    }
+
+    /// Evaluate membership without mutating or preparing ``instance``.
+    pub fn check_membership(&self, instance: &Instance) -> InstanceClassMembershipReport {
+        InstanceClassMembershipReport(self.0.check_membership(&instance.inner))
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!("InstanceClass(clauses={:?})", self.clauses())
+    }
+}
+
+/// One structured reason an instance is outside a complete clause.
+#[pyo3_stub_gen::derive::gen_stub_pyclass_complex_enum]
+#[pyclass(eq, frozen)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum InstanceClassMismatch {
+    VariableKindNotAllowed {
+        kind: Kind,
+        variable_ids: BTreeSet<u64>,
+        allowed_kinds: BTreeSet<Kind>,
+    },
+    ObjectiveDegreeExceedsBound {
+        actual_degree: u32,
+        bound: PolynomialRequirement,
+    },
+    ObjectiveFunctionNotPolynomial {},
+    RegularConstraintRelationNotAllowed {
+        relation: Equality,
+        constraint_ids: ConstraintSetInput<ConstraintIDInput>,
+        allowed_relations: BTreeSet<Equality>,
+    },
+    RegularConstraintDegreeExceedsBound {
+        relation: Equality,
+        actual_degrees: ConstraintMapInput<ConstraintIDInput, u32>,
+        bound: PolynomialRequirement,
+    },
+    RegularConstraintFunctionNotPolynomial {
+        relation: Equality,
+        constraint_ids: ConstraintSetInput<ConstraintIDInput>,
+    },
+    IndicatorConstraintsNotAllowed {
+        constraint_ids: ConstraintSetInput<IndicatorConstraintIDInput>,
+    },
+    IndicatorConstraintRelationNotAllowed {
+        relation: Equality,
+        constraint_ids: ConstraintSetInput<IndicatorConstraintIDInput>,
+        allowed_relations: BTreeSet<Equality>,
+    },
+    IndicatorBodyDegreeExceedsBound {
+        relation: Equality,
+        actual_degrees: ConstraintMapInput<IndicatorConstraintIDInput, u32>,
+        bound: PolynomialRequirement,
+    },
+    IndicatorBodyFunctionNotPolynomial {
+        relation: Equality,
+        constraint_ids: ConstraintSetInput<IndicatorConstraintIDInput>,
+    },
+    OneHotConstraintsNotAllowed {
+        constraint_ids: ConstraintSetInput<OneHotConstraintIDInput>,
+    },
+    Sos1ConstraintsNotAllowed {
+        constraint_ids: ConstraintSetInput<Sos1ConstraintIDInput>,
+    },
+    SenseNotAllowed {
+        sense: Sense,
+        allowed_senses: BTreeSet<Sense>,
+    },
+    Unknown {
+        message: String,
+    },
+}
+
+impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
+    fn from(mismatch: ommx::InstanceClassMismatch) -> Self {
+        match mismatch {
+            ommx::InstanceClassMismatch::VariableKindNotAllowed {
+                kind,
+                variable_ids,
+                allowed_kinds,
+            } => Self::VariableKindNotAllowed {
+                kind: kind.into(),
+                variable_ids: variable_ids.iter().map(|id| id.into_inner()).collect(),
+                allowed_kinds: allowed_kinds.into_iter().map(Into::into).collect(),
+            },
+            ommx::InstanceClassMismatch::ObjectiveDegreeExceedsBound {
+                actual_degree,
+                bound,
+            } => Self::ObjectiveDegreeExceedsBound {
+                actual_degree: actual_degree.into_inner(),
+                bound: PolynomialRequirement(bound),
+            },
+            ommx::InstanceClassMismatch::ObjectiveFunctionNotPolynomial => {
+                Self::ObjectiveFunctionNotPolynomial {}
+            }
+            ommx::InstanceClassMismatch::RegularConstraintRelationNotAllowed {
+                relation,
+                constraint_ids,
+                allowed_relations,
+            } => Self::RegularConstraintRelationNotAllowed {
+                relation: relation.into(),
+                constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
+                allowed_relations: allowed_relations.into_iter().map(Into::into).collect(),
+            },
+            ommx::InstanceClassMismatch::RegularConstraintDegreeExceedsBound {
+                relation,
+                actual_degrees,
+                bound,
+            } => Self::RegularConstraintDegreeExceedsBound {
+                relation: relation.into(),
+                actual_degrees: actual_degrees
+                    .into_iter()
+                    .map(|(id, degree)| (id.into(), degree.into_inner()))
+                    .collect(),
+                bound: PolynomialRequirement(bound),
+            },
+            ommx::InstanceClassMismatch::RegularConstraintFunctionNotPolynomial {
+                relation,
+                constraint_ids,
+            } => Self::RegularConstraintFunctionNotPolynomial {
+                relation: relation.into(),
+                constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
+            },
+            ommx::InstanceClassMismatch::IndicatorConstraintsNotAllowed { constraint_ids } => {
+                Self::IndicatorConstraintsNotAllowed {
+                    constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
+                }
+            }
+            ommx::InstanceClassMismatch::IndicatorConstraintRelationNotAllowed {
+                relation,
+                constraint_ids,
+                allowed_relations,
+            } => Self::IndicatorConstraintRelationNotAllowed {
+                relation: relation.into(),
+                constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
+                allowed_relations: allowed_relations.into_iter().map(Into::into).collect(),
+            },
+            ommx::InstanceClassMismatch::IndicatorBodyDegreeExceedsBound {
+                relation,
+                actual_degrees,
+                bound,
+            } => Self::IndicatorBodyDegreeExceedsBound {
+                relation: relation.into(),
+                actual_degrees: actual_degrees
+                    .into_iter()
+                    .map(|(id, degree)| (id.into(), degree.into_inner()))
+                    .collect(),
+                bound: PolynomialRequirement(bound),
+            },
+            ommx::InstanceClassMismatch::IndicatorBodyFunctionNotPolynomial {
+                relation,
+                constraint_ids,
+            } => Self::IndicatorBodyFunctionNotPolynomial {
+                relation: relation.into(),
+                constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
+            },
+            ommx::InstanceClassMismatch::OneHotConstraintsNotAllowed { constraint_ids } => {
+                Self::OneHotConstraintsNotAllowed {
+                    constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
+                }
+            }
+            ommx::InstanceClassMismatch::Sos1ConstraintsNotAllowed { constraint_ids } => {
+                Self::Sos1ConstraintsNotAllowed {
+                    constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
+                }
+            }
+            ommx::InstanceClassMismatch::SenseNotAllowed {
+                sense,
+                allowed_senses,
+            } => Self::SenseNotAllowed {
+                sense: sense.into(),
+                allowed_senses: allowed_senses.into_iter().map(Into::into).collect(),
+            },
+            other => Self::Unknown {
+                message: other.to_string(),
+            },
+        }
+    }
+}
+
+/// Membership result for one conjunctive instance-class clause.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass(eq, frozen)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InstanceClassClauseReport(pub ommx::InstanceClassClauseReport);
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl InstanceClassClauseReport {
+    #[getter]
+    pub fn clause_index(&self) -> usize {
+        self.0.clause_index()
+    }
+
+    #[getter]
+    pub fn clause_label(&self) -> &str {
+        self.0.clause_label()
+    }
+
+    #[getter]
+    pub(crate) fn mismatches(&self) -> Vec<InstanceClassMismatch> {
+        self.0
+            .mismatches()
+            .iter()
+            .cloned()
+            .map(Into::into)
+            .collect()
+    }
+
+    #[getter]
+    pub fn is_member(&self) -> bool {
+        self.0.is_member()
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "InstanceClassClauseReport(clause_index={}, clause_label={:?}, is_member={})",
+            self.clause_index(),
+            self.clause_label(),
+            self.is_member()
+        )
+    }
+}
+
+/// Side-effect-free membership report for an :class:`InstanceClass`.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass(eq, frozen)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InstanceClassMembershipReport(pub ommx::InstanceClassMembershipReport);
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl InstanceClassMembershipReport {
+    #[getter]
+    pub fn clause_reports(&self) -> Vec<InstanceClassClauseReport> {
+        self.0
+            .clause_reports()
+            .iter()
+            .cloned()
+            .map(InstanceClassClauseReport)
+            .collect()
+    }
+
+    #[getter]
+    pub fn is_member(&self) -> bool {
+        self.0.is_member()
+    }
+
+    #[getter]
+    pub fn matching_clauses(&self) -> Vec<(usize, String)> {
+        self.0
+            .matching_clauses()
+            .map(|(index, label)| (index, label.to_string()))
+            .collect()
+    }
+
+    pub fn __str__(&self) -> String {
+        self.0.to_string()
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "InstanceClassMembershipReport(is_member={}, matching_clauses={:?})",
+            self.is_member(),
+            self.matching_clauses()
+        )
+    }
+}

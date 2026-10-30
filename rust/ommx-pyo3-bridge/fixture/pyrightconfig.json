@@ -1,0 +1,5 @@
+{
+  "include": ["tests/typing_check.py"],
+  "extraPaths": ["."],
+  "typeCheckingMode": "strict"
+}

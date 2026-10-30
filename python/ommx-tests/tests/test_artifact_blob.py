@@ -25,7 +25,7 @@ def test_get_blob_rejects_digest_string():
 def test_high_level_layer_annotations_reject_reserved_namespace():
     builder = ArtifactDraft.new_anonymous()
 
-    with pytest.raises(Exception, match="reserved for OMMX metadata"):
+    with pytest.raises(ValueError, match="reserved for OMMX metadata"):
         builder.add_json(
             {"value": 1},
             annotation_namespace="org.ommx.v1.instance",

@@ -15,15 +15,20 @@ mod evaluate;
 mod evaluate_bound;
 mod logical_memory;
 mod mul;
+pub(crate) mod operation;
 mod parse;
 mod reduce_binary_power;
 mod serialize;
 mod sub;
 mod substitute;
 
+pub use arbitrary::FunctionParameters;
+pub use operation::{Expression, FunctionEvaluationError};
+
 /// A real-valued function of decision variables used for objective and constraint functions.
 ///
-/// This can be up to polynomial currently, but it will be extended to exponential and logarithm in the future.
+/// Polynomial functions use compact coefficient maps. Other functions use a
+/// validated, non-recursive reverse-Polish expression program.
 #[derive(Clone, PartialEq, From, Default)]
 pub enum Function {
     #[default]
@@ -33,6 +38,23 @@ pub enum Function {
     Linear(Linear),
     Quadratic(Quadratic),
     Polynomial(Polynomial),
+    Expression(Expression),
+}
+
+#[derive(serde::Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum ExpressionRef<'a> {
+    Expression {
+        instructions: &'a [operation::Instruction],
+    },
+}
+
+#[derive(serde::Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum ExpressionOwned {
+    Expression {
+        instructions: Vec<operation::Instruction>,
+    },
 }
 
 impl serde::Serialize for Function {
@@ -55,6 +77,10 @@ impl serde::Serialize for Function {
             Function::Linear(l) => l.serialize(serializer),
             Function::Quadratic(q) => q.serialize(serializer),
             Function::Polynomial(p) => p.serialize(serializer),
+            Function::Expression(expression) => ExpressionRef::Expression {
+                instructions: operation::instructions(expression),
+            }
+            .serialize(serializer),
         }
     }
 }
@@ -64,9 +90,19 @@ impl<'de> serde::Deserialize<'de> for Function {
     where
         D: serde::Deserializer<'de>,
     {
-        // Always deserialize as Polynomial
-        let polynomial = Polynomial::deserialize(deserializer)?;
-        Ok(Function::Polynomial(polynomial))
+        #[derive(serde::Deserialize)]
+        #[serde(untagged)]
+        enum Repr {
+            Expression(ExpressionOwned),
+            Polynomial(Polynomial),
+        }
+
+        match Repr::deserialize(deserializer)? {
+            Repr::Polynomial(polynomial) => Ok(Function::Polynomial(polynomial).normalize()),
+            Repr::Expression(ExpressionOwned::Expression { instructions }) => {
+                operation::from_instructions_exact(instructions).map_err(serde::de::Error::custom)
+            }
+        }
     }
 }
 
@@ -130,34 +166,53 @@ impl_into_function_for_macro!(
 );
 
 impl Function {
-    pub fn constant_term(&self) -> f64 {
+    /// Return whether this value uses the compact polynomial representation.
+    pub fn is_polynomial(&self) -> bool {
+        !matches!(self, Function::Expression(_))
+    }
+
+    pub fn as_polynomial(&self) -> Option<Cow<'_, Polynomial>> {
         match self {
-            Function::Zero => 0.0,
-            Function::Constant(c) => c.into_inner(),
-            Function::Linear(l) => l.constant_term(),
-            Function::Quadratic(q) => q.constant_term(),
-            Function::Polynomial(p) => p.constant_term(),
+            Function::Zero => Some(Cow::Owned(Polynomial::zero())),
+            Function::Constant(c) => Some(Cow::Owned((*c).into())),
+            Function::Linear(l) => Some(Cow::Owned(l.clone().into())),
+            Function::Quadratic(q) => Some(Cow::Owned(q.clone().into())),
+            Function::Polynomial(p) => Some(Cow::Borrowed(p)),
+            Function::Expression(_) => None,
         }
     }
 
-    pub fn linear_terms(&self) -> Box<dyn Iterator<Item = (VariableID, Coefficient)> + '_> {
+    pub fn constant_term(&self) -> Option<f64> {
         match self {
-            Function::Zero => Box::new(std::iter::empty()),
-            Function::Constant(_) => Box::new(std::iter::empty()),
+            Function::Zero => Some(0.0),
+            Function::Constant(c) => Some(c.into_inner()),
+            Function::Linear(l) => Some(l.constant_term()),
+            Function::Quadratic(q) => Some(q.constant_term()),
+            Function::Polynomial(p) => Some(p.constant_term()),
+            Function::Expression(_) => None,
+        }
+    }
+
+    pub fn linear_terms(&self) -> Option<Box<dyn Iterator<Item = (VariableID, Coefficient)> + '_>> {
+        Some(match self {
+            Function::Zero | Function::Constant(_) => Box::new(std::iter::empty()),
             Function::Linear(l) => Box::new(l.linear_terms()),
             Function::Quadratic(q) => Box::new(q.linear_terms()),
             Function::Polynomial(p) => Box::new(p.linear_terms()),
-        }
+            Function::Expression(_) => return None,
+        })
     }
 
-    pub fn quadratic_terms(&self) -> Box<dyn Iterator<Item = (VariableIDPair, Coefficient)> + '_> {
-        match self {
-            Function::Zero => Box::new(std::iter::empty()),
-            Function::Constant(_) => Box::new(std::iter::empty()),
+    pub fn quadratic_terms(
+        &self,
+    ) -> Option<Box<dyn Iterator<Item = (VariableIDPair, Coefficient)> + '_>> {
+        Some(match self {
+            Function::Zero | Function::Constant(_) => Box::new(std::iter::empty()),
             Function::Linear(l) => Box::new(l.quadratic_terms()),
             Function::Quadratic(q) => Box::new(q.quadratic_terms()),
             Function::Polynomial(p) => Box::new(p.quadratic_terms()),
-        }
+            Function::Expression(_) => return None,
+        })
     }
 
     pub fn as_linear(&self) -> Option<Cow<'_, Linear>> {
@@ -167,6 +222,7 @@ impl Function {
             Function::Linear(l) => Some(Cow::Borrowed(l)),
             Function::Quadratic(q) => q.try_into().map(Cow::Owned).ok(),
             Function::Polynomial(p) => p.try_into().map(Cow::Owned).ok(),
+            Function::Expression(_) => None,
         }
     }
 
@@ -177,41 +233,46 @@ impl Function {
             Function::Linear(l) => Some(Cow::Owned(l.clone().into())),
             Function::Quadratic(q) => Some(Cow::Borrowed(q)),
             Function::Polynomial(p) => p.try_into().map(Cow::Owned).ok(),
+            Function::Expression(_) => None,
         }
     }
 
-    pub fn num_terms(&self) -> usize {
+    pub fn num_terms(&self) -> Option<usize> {
         match self {
-            Function::Zero => 0,
-            Function::Constant(_) => 1,
-            Function::Linear(l) => l.num_terms(),
-            Function::Quadratic(q) => q.num_terms(),
-            Function::Polynomial(p) => p.num_terms(),
+            Function::Zero => Some(0),
+            Function::Constant(_) => Some(1),
+            Function::Linear(l) => Some(l.num_terms()),
+            Function::Quadratic(q) => Some(q.num_terms()),
+            Function::Polynomial(p) => Some(p.num_terms()),
+            Function::Expression(_) => None,
         }
     }
 
-    pub fn degree(&self) -> Degree {
+    pub fn degree(&self) -> Option<Degree> {
         match self {
-            Function::Zero => 0.into(),
-            Function::Constant(_) => 0.into(),
-            Function::Linear(l) => l.degree(),
-            Function::Quadratic(q) => q.degree(),
-            Function::Polynomial(p) => p.degree(),
+            Function::Zero | Function::Constant(_) => Some(0.into()),
+            Function::Linear(l) => Some(l.degree()),
+            Function::Quadratic(q) => Some(q.degree()),
+            Function::Polynomial(p) => Some(p.degree()),
+            Function::Expression(_) => None,
         }
     }
 
-    pub fn iter(&self) -> Box<dyn Iterator<Item = (MonomialDyn, &Coefficient)> + '_> {
-        match self {
+    pub fn iter(&self) -> Option<Box<dyn Iterator<Item = (MonomialDyn, &Coefficient)> + '_>> {
+        Some(match self {
             Function::Zero => Box::new(std::iter::empty()),
             Function::Constant(c) => Box::new(std::iter::once((MonomialDyn::default(), c))),
             Function::Linear(l) => Box::new(l.iter().map(|(k, v)| (MonomialDyn::from(*k), v))),
             Function::Quadratic(q) => Box::new(q.iter().map(|(k, v)| (MonomialDyn::from(*k), v))),
             Function::Polynomial(p) => Box::new(p.iter().map(|(k, v)| (k.clone(), v))),
-        }
+            Function::Expression(_) => return None,
+        })
     }
 
-    pub fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (MonomialDyn, &mut Coefficient)> + '_> {
-        match self {
+    pub fn iter_mut(
+        &mut self,
+    ) -> Option<Box<dyn Iterator<Item = (MonomialDyn, &mut Coefficient)> + '_>> {
+        Some(match self {
             Function::Zero => Box::new(std::iter::empty()),
             Function::Constant(c) => Box::new(std::iter::once((MonomialDyn::default(), c))),
             Function::Linear(l) => Box::new(l.iter_mut().map(|(k, v)| (MonomialDyn::from(*k), v))),
@@ -219,42 +280,47 @@ impl Function {
                 Box::new(q.iter_mut().map(|(k, v)| (MonomialDyn::from(*k), v)))
             }
             Function::Polynomial(p) => Box::new(p.iter_mut().map(|(k, v)| (k.clone(), v))),
-        }
+            Function::Expression(_) => return None,
+        })
     }
 
-    pub fn values(&self) -> Box<dyn Iterator<Item = &Coefficient> + '_> {
-        match self {
+    pub fn values(&self) -> Option<Box<dyn Iterator<Item = &Coefficient> + '_>> {
+        Some(match self {
             Function::Zero => Box::new(std::iter::empty()),
             Function::Constant(c) => Box::new(std::iter::once(c)),
             Function::Linear(l) => Box::new(l.values()),
             Function::Quadratic(q) => Box::new(q.values()),
             Function::Polynomial(p) => Box::new(p.values()),
-        }
+            Function::Expression(_) => return None,
+        })
     }
 
-    pub fn values_mut(&mut self) -> Box<dyn Iterator<Item = &mut Coefficient> + '_> {
-        match self {
+    pub fn values_mut(&mut self) -> Option<Box<dyn Iterator<Item = &mut Coefficient> + '_>> {
+        Some(match self {
             Function::Zero => Box::new(std::iter::empty()),
             Function::Constant(c) => Box::new(std::iter::once(c)),
             Function::Linear(l) => Box::new(l.values_mut()),
             Function::Quadratic(q) => Box::new(q.values_mut()),
             Function::Polynomial(p) => Box::new(p.values_mut()),
-        }
+            Function::Expression(_) => return None,
+        })
     }
 
-    pub fn keys(&self) -> Box<dyn Iterator<Item = MonomialDyn> + '_> {
-        match self {
+    pub fn keys(&self) -> Option<Box<dyn Iterator<Item = MonomialDyn> + '_>> {
+        Some(match self {
             Function::Zero => Box::new(std::iter::empty()),
             Function::Constant(_) => Box::new(std::iter::once(MonomialDyn::default())),
             Function::Linear(l) => Box::new(l.keys().map(|k| MonomialDyn::from(*k))),
             Function::Quadratic(q) => Box::new(q.keys().map(|k| MonomialDyn::from(*k))),
             Function::Polynomial(p) => Box::new(p.keys().cloned()),
-        }
+            Function::Expression(_) => return None,
+        })
     }
 
     /// Get a minimal positive factor `a` which make all coefficients of `a * self` integer.
     ///
     /// This returns `1` for zero function. See also <https://en.wikipedia.org/wiki/Primitive_part_and_content>.
+    /// Returns an error for a composed, non-polynomial function.
     pub fn content_factor(&self) -> crate::Result<Coefficient> {
         match self {
             Function::Zero => Ok(Coefficient::one()),
@@ -264,6 +330,61 @@ impl Function {
             Function::Linear(l) => l.content_factor(),
             Function::Quadratic(q) => q.content_factor(),
             Function::Polynomial(p) => p.content_factor(),
+            Function::Expression(_) => {
+                anyhow::bail!("content_factor is only defined for polynomial functions")
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod serde_tests {
+    use super::*;
+
+    #[test]
+    fn composed_function_json_rejects_stack_underflow() {
+        let serialized =
+            r#"{"type":"expression","instructions":[{"instruction":"unary","value":"abs"}]}"#;
+        let error = serde_json::from_str::<Function>(serialized).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("requires 1 stack values, found 0"));
+    }
+
+    #[test]
+    fn composed_function_deserialization_preserves_rpn_order() {
+        let serialized = r#"{"type":"expression","instructions":[{"instruction":"push","value":{"type":"zero"}},{"instruction":"push","value":{"type":"zero"}},{"instruction":"associative","value":"mul"}]}"#;
+        let function = serde_json::from_str::<Function>(serialized).unwrap();
+        let Function::Expression(expression) = function else {
+            panic!("deserialization must preserve an explicit expression program");
+        };
+        assert_eq!(
+            operation::instructions(&expression),
+            &[
+                operation::Instruction::Push(operation::Atom::Zero),
+                operation::Instruction::Push(operation::Atom::Zero),
+                operation::Instruction::Associative(operation::AssociativeOperator::Mul),
+            ]
+        );
+    }
+
+    #[test]
+    fn parameterized_unary_operator_json_roundtrip() {
+        let function = Function::zero().powi(-2);
+        let serialized = serde_json::to_string(&function).unwrap();
+        let deserialized = serde_json::from_str::<Function>(&serialized).unwrap();
+
+        assert_eq!(deserialized, function);
+    }
+
+    #[test]
+    fn composed_function_with_polynomial_and_constant_json_roundtrip() {
+        let numerator = Function::from(crate::linear!(1)).abs();
+        let function = (numerator / Function::try_from(2.0).unwrap()).unwrap();
+
+        let serialized = serde_json::to_string(&function).unwrap();
+        let deserialized = serde_json::from_str::<Function>(&serialized).unwrap();
+
+        assert_eq!(deserialized, function);
     }
 }

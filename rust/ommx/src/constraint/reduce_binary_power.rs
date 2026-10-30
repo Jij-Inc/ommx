@@ -11,7 +11,29 @@ impl Constraint<Created> {
         &mut self,
         binary_ids: &VariableIDSet,
     ) -> Result<bool, CoefficientError> {
-        self.stage.function.reduce_binary_power(binary_ids)
+        let Some(replacement) = self.plan_binary_power_reduction(binary_ids)? else {
+            return Ok(false);
+        };
+        *self = replacement;
+        Ok(true)
+    }
+
+    /// Build a replacement without cloning an unchanged constraint.
+    ///
+    /// Crate-internal: `Instance` uses this cross-module planning contract to
+    /// preserve all-or-nothing mutation across its active constraint rows.
+    pub(crate) fn plan_binary_power_reduction(
+        &self,
+        binary_ids: &VariableIDSet,
+    ) -> Result<Option<Self>, CoefficientError> {
+        Ok(self
+            .stage
+            .function
+            .plan_binary_power_reduction(binary_ids)?
+            .map(|function| Constraint {
+                equality: self.equality,
+                stage: CreatedData { function },
+            }))
     }
 }
 

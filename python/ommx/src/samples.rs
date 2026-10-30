@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::OmmxPyResult;
 use ommx::{Message, Parse, SampleID};
 use pyo3::{
     exceptions::{PyKeyError, PyTypeError},
@@ -8,27 +8,11 @@ use pyo3::{
 };
 use std::collections::{BTreeSet, HashMap};
 
+#[pyo3_stub_gen::derive::gen_stub_pyclass(skip_stub_type, module = "ommx._ommx_rust")]
+#[doc = include_str!("docstrings/ommx/Samples.md")]
 #[pyclass(skip_from_py_object)]
 #[derive(Clone, Default)]
 pub struct Samples(pub ommx::Sampled<ommx::v1::State>);
-
-// Manual PyClassInfo submission (instead of #[gen_stub_pyclass])
-pyo3_stub_gen::inventory::submit! {
-    pyo3_stub_gen::type_info::PyClassInfo {
-        pyclass_name: "Samples",
-        struct_id: || std::any::TypeId::of::<Samples>(),
-        doc: "Collection of State samples",
-        module: Some("ommx._ommx_rust"),
-        bases: &[],
-        getters: &[],
-        setters: &[],
-        has_eq: false,
-        has_hash: false,
-        has_ord: false,
-        has_str: false,
-        subclass: false,
-    }
-}
 
 // PyStubType: input uses ToSamples, output uses Samples
 impl pyo3_stub_gen::PyStubType for Samples {
@@ -158,7 +142,7 @@ fn samples_from_any(entries: Bound<PyAny>) -> PyResult<Samples> {
             if let Ok(state) = extract_state(&value) {
                 sample_cand
                     .append(std::iter::once(SampleID::from(sample_id)), state)
-                    .unwrap(); // safe unwrap since key is unique
+                    .expect("Python dict keys are unique");
                 continue;
             }
             return Err(type_error());
@@ -187,7 +171,7 @@ fn samples_from_any(entries: Bound<PyAny>) -> PyResult<Samples> {
             if let Ok(state) = extract_state(&item) {
                 sampled
                     .append(std::iter::once(sample_id), state)
-                    .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+                    .expect("enumerate produces unique sample IDs");
                 continue;
             }
             return Err(type_error());
@@ -198,7 +182,7 @@ fn samples_from_any(entries: Bound<PyAny>) -> PyResult<Samples> {
     Err(type_error())
 }
 
-fn extract_state(value: &Bound<PyAny>) -> Result<ommx::v1::State, PyErr> {
+fn extract_state(value: &Bound<PyAny>) -> PyResult<ommx::v1::State> {
     if let Ok(state) = value.extract::<crate::State>() {
         return Ok(state.0);
     }
@@ -219,8 +203,9 @@ impl Samples {
     }
 
     #[staticmethod]
-    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let v1_inner = ommx::v1::Samples::decode(bytes.as_bytes())?;
+    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
+        let v1_inner: ommx::v1::Samples =
+            crate::message_io::decode(bytes.as_bytes(), "ommx.v1.Samples")?;
         let inner = v1_inner.parse(&())?;
         Ok(Self(inner))
     }
@@ -230,17 +215,21 @@ impl Samples {
         Ok(PyBytes::new(py, &v1_samples.encode_to_vec()))
     }
 
-    /// Get the number of samples
+    /// Number of sample IDs, including separate IDs with identical assignments.
     pub fn num_samples(&self) -> usize {
         self.0.num_samples()
     }
 
-    /// Get all sample IDs
+    /// All sample IDs as an independent set of integers.
     pub fn sample_ids(&self) -> BTreeSet<u64> {
         self.0.ids().into_iter().map(|id| id.into_inner()).collect()
     }
 
-    /// Get the state for a specific sample ID
+    /// Return an independent State for one sample ID.
+    ///
+    /// Raises KeyError if the sample ID is not present. This returns raw candidate
+    /// values, not a feasibility assessment; use {meth}`~ommx.Instance.evaluate_samples`
+    /// to obtain evaluated results.
     pub fn get_state(&self, sample_id: u64) -> PyResult<crate::State> {
         let id = ommx::SampleID::from(sample_id);
         Ok(crate::State(
@@ -251,12 +240,14 @@ impl Samples {
         ))
     }
 
-    /// Append a sample with the given sample IDs and state
-    pub fn append(&mut self, sample_ids: Vec<u64>, state: crate::State) -> PyResult<()> {
+    /// Append a sample with the given sample IDs and state.
+    ///
+    /// Raises {class}`ValueError` if an ID already exists in this collection
+    /// or occurs more than once in `sample_ids`. The collection is unchanged
+    /// when validation fails.
+    pub fn append(&mut self, sample_ids: Vec<u64>, state: crate::State) -> OmmxPyResult<()> {
         let ids: Vec<ommx::SampleID> = sample_ids.into_iter().map(ommx::SampleID::from).collect();
-        self.0
-            .append(ids, state.0)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+        self.0.append(ids, state.0)?;
         Ok(())
     }
 }

@@ -17,13 +17,17 @@ workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+# Doc comments in this binding crate are Python/Sphinx doctests, not Rustdoc.
+doc = false
+doctest = false
 
 [[bin]]
 name = "stub_gen"
 doc = false
 
 [features]
-default = ["remote-artifact", "tracing-bridge"]
+default = ["cli", "remote-artifact", "tracing-bridge"]
+cli = ["ommx/cli"]
 remote-artifact = ["ommx/remote-artifact"]
 # Bridge Rust `tracing` spans to Python OpenTelemetry via `pyo3-tracing-opentelemetry`.
 # Disabled on pyodide/wasm32-unknown-emscripten builds because the opentelemetry
@@ -35,7 +39,7 @@ path = "../../rust/ommx"
 default-features = false
 
 [dependencies]
-anyhow.workspace = true
+ommx-pyo3-bridge = { path = "../../rust/ommx-pyo3-bridge", default-features = false }
 approx.workspace = true
 derive_more.workspace = true
 fnv.workspace = true

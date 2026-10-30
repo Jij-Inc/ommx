@@ -4,7 +4,7 @@ use pyo3::prelude::*;
 ///
 /// See {class}`~ommx.Provenance` for details.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, hash, frozen)]
+#[pyclass(eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ProvenanceKind {
     /// The regular constraint was generated from an indicator constraint.
@@ -18,6 +18,10 @@ pub enum ProvenanceKind {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl ProvenanceKind {
+    fn __hash__(&self) -> isize {
+        *self as isize
+    }
+
     fn __repr__(&self) -> &'static str {
         match self {
             ProvenanceKind::IndicatorConstraint => "ProvenanceKind.IndicatorConstraint",
@@ -31,7 +35,8 @@ impl ProvenanceKind {
 ///
 /// When a special constraint (indicator / one-hot / SOS1) is converted into a
 /// regular {class}`~ommx.Constraint` — for example via
-/// `Instance.convert_one_hot_to_constraint` or `Instance.reduce_capabilities` —
+/// {meth}`~ommx.Instance.convert_one_hot_to_constraint` or
+/// {meth}`~ommx.Instance.lower_special_constraints` —
 /// the generated constraint records a {class}`Provenance` entry naming the
 /// original special constraint. This lets callers trace a regular constraint
 /// back to the special constraint it was derived from.
@@ -77,8 +82,19 @@ impl Provenance {
 
     /// The ID of the original special constraint (before transformation).
     #[getter]
-    pub fn original_id(&self) -> u64 {
-        self.original_id
+    pub fn original_id(&self) -> crate::constraint_id::AnyConstraintID {
+        use crate::constraint_id::AnyConstraintID;
+        match self.kind {
+            ProvenanceKind::IndicatorConstraint => AnyConstraintID::Indicator(
+                ommx::IndicatorConstraintID::from(self.original_id).into(),
+            ),
+            ProvenanceKind::OneHotConstraint => {
+                AnyConstraintID::OneHot(ommx::OneHotConstraintID::from(self.original_id).into())
+            }
+            ProvenanceKind::Sos1Constraint => {
+                AnyConstraintID::Sos1(ommx::Sos1ConstraintID::from(self.original_id).into())
+            }
+        }
     }
 
     pub fn __repr__(&self) -> String {

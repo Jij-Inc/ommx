@@ -1,4 +1,3 @@
-use anyhow::Result as AnyhowResult;
 use pyo3::types::{PyAnyMethods, PyDictMethods};
 use std::collections::HashMap;
 
@@ -63,9 +62,8 @@ pub fn flat_annotations<T: ommx::FlatAnnotations>(value: &T) -> HashMap<String, 
 pub fn replace_annotations<T: ommx::FlatAnnotations>(
     value: &mut T,
     annotations: HashMap<String, String>,
-) -> AnyhowResult<()> {
+) {
     ommx::FlatAnnotations::replace_annotations(value, annotations);
-    Ok(())
 }
 
 pub fn description_mut(
@@ -210,7 +208,7 @@ macro_rules! impl_instance_annotations {
             pub fn replace_annotations(
                 &mut self,
                 annotations: std::collections::HashMap<String, String>,
-            ) -> anyhow::Result<()> {
+            ) {
                 $crate::annotations::replace_annotations(&mut self.inner, annotations)
             }
 
@@ -275,10 +273,9 @@ macro_rules! impl_instance_annotations {
             }
 
             #[setter]
-            pub fn set_title(&mut self, value: String) -> anyhow::Result<()> {
+            pub fn set_title(&mut self, value: String) {
                 $crate::annotations::description_mut(&mut self.inner.description).name =
                     Some(value);
-                Ok(())
             }
 
             #[getter]
@@ -290,10 +287,9 @@ macro_rules! impl_instance_annotations {
             }
 
             #[setter]
-            pub fn set_license(&mut self, value: String) -> anyhow::Result<()> {
+            pub fn set_license(&mut self, value: String) {
                 $crate::annotations::description_mut(&mut self.inner.description).license =
                     Some(value);
-                Ok(())
             }
 
             #[getter]
@@ -305,10 +301,9 @@ macro_rules! impl_instance_annotations {
             }
 
             #[setter]
-            pub fn set_dataset(&mut self, value: String) -> anyhow::Result<()> {
+            pub fn set_dataset(&mut self, value: String) {
                 $crate::annotations::description_mut(&mut self.inner.description).dataset =
                     Some(value);
-                Ok(())
             }
 
             #[getter]
@@ -321,9 +316,8 @@ macro_rules! impl_instance_annotations {
             }
 
             #[setter]
-            pub fn set_authors(&mut self, value: Vec<String>) -> anyhow::Result<()> {
+            pub fn set_authors(&mut self, value: Vec<String>) {
                 $crate::annotations::description_mut(&mut self.inner.description).authors = value;
-                Ok(())
             }
 
             #[getter]
@@ -388,7 +382,7 @@ macro_rules! impl_solution_annotations {
             pub fn replace_annotations(
                 &mut self,
                 annotations: std::collections::HashMap<String, String>,
-            ) -> anyhow::Result<()> {
+            ) {
                 $crate::annotations::replace_annotations(&mut self.inner, annotations)
             }
 
@@ -453,10 +447,9 @@ macro_rules! impl_solution_annotations {
             }
 
             #[setter]
-            pub fn set_instance_digest(&mut self, value: String) -> anyhow::Result<()> {
+            pub fn set_instance_digest(&mut self, value: String) {
                 $crate::annotations::process_metadata_mut(&mut self.inner.metadata).instance =
                     Some(value);
-                Ok(())
             }
 
             #[getter]
@@ -567,7 +560,7 @@ macro_rules! impl_solution_annotations {
 
             #[setter]
             #[pyo3(name = "instance")]
-            pub fn set_instance_alias(&mut self, value: String) -> anyhow::Result<()> {
+            pub fn set_instance_alias(&mut self, value: String) {
                 self.set_instance_digest(value)
             }
 

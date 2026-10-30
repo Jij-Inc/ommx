@@ -1,3 +1,4 @@
+use crate::constraint_base::ConstraintView;
 use crate::{ConstraintHost, Equality, EvaluatedConstraint, Function, Instance, State};
 use fnv::FnvHashMap;
 use ommx::Evaluate;
@@ -33,14 +34,14 @@ impl Constraint {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Constraint {
-    /// Class constant for equality type: equal to zero (==)
+    /// Compatibility alias for {attr}`Equality.EqualToZero`.
     #[classattr]
     #[pyo3(name = "EQUAL_TO_ZERO")]
     fn class_equal_to_zero() -> Equality {
         Equality::EqualToZero
     }
 
-    /// Class constant for equality type: less than or equal to zero (<=)
+    /// Compatibility alias for {attr}`Equality.LessThanOrEqualToZero`.
     #[classattr]
     #[pyo3(name = "LESS_THAN_OR_EQUAL_TO_ZERO")]
     fn class_less_than_or_equal_to_zero() -> Equality {
@@ -143,18 +144,18 @@ impl Constraint {
     /// - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
     /// - `atol`: Optional absolute tolerance for evaluation
     ///
-    /// **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value and feasibility
+    /// **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value. Query feasibility with ``is_feasible(atol=...)``
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<EvaluatedConstraint> {
+    pub fn evaluate(
+        &self,
+        state: State,
+        atol: Option<f64>,
+    ) -> crate::error::OmmxPyResult<EvaluatedConstraint> {
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        let evaluated = self
-            .0
-            .evaluate(&state.0, atol)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let evaluated = self.0.evaluate(&state.0, atol)?;
         Ok(EvaluatedConstraint::from_parts(evaluated, self.1.clone()))
     }
 
@@ -169,15 +170,16 @@ impl Constraint {
     ///
     /// **Returns:** Self (modified in-place) for method chaining
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn partial_evaluate(&mut self, state: State, atol: Option<f64>) -> PyResult<Self> {
+    pub fn partial_evaluate(
+        &mut self,
+        state: State,
+        atol: Option<f64>,
+    ) -> crate::error::OmmxPyResult<Self> {
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        self.0
-            .partial_evaluate(&state.0, atol)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        self.0.partial_evaluate(&state.0, atol)?;
         Ok(self.clone())
     }
 
@@ -273,13 +275,17 @@ impl Constraint {
 /// reason. As with [`Constraint`], the context snapshot does not propagate
 /// back to the originating instance — it is read-only context for inspection.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
-#[derive(Clone)]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(Clone, PartialEq)]
 pub struct RemovedConstraint {
     pub constraint: ommx::Constraint,
     pub context: ommx::ConstraintContext,
     pub removed_reason: ommx::RemovedReason,
 }
+crate::constraint_base::constraint_subclass!(
+    RemovedConstraint,
+    crate::constraint_base::ConstraintView
+);
 
 impl RemovedConstraint {
     pub fn from_parts(
@@ -429,11 +435,16 @@ impl RemovedConstraint {
 /// The handle keeps the parent host alive through a refcount; drop the
 /// wrapper to release the back-reference.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(PartialEq)]
 pub struct AttachedConstraint {
     pub(crate) host: ConstraintHost,
     pub(crate) id: ommx::ConstraintID,
 }
+crate::constraint_base::constraint_subclass!(
+    AttachedConstraint,
+    crate::constraint_base::ConstraintView
+);
 
 impl AttachedConstraint {
     pub fn new(host: ConstraintHost, id: ommx::ConstraintID) -> Self {
@@ -486,8 +497,8 @@ fn lookup_constraint_parametric(
 impl AttachedConstraint {
     /// The id this handle points at.
     #[getter]
-    pub fn constraint_id(&self) -> u64 {
-        self.id.into_inner()
+    pub fn constraint_id(&self) -> crate::ConstraintID {
+        self.id.into()
     }
 
     /// The parent host this constraint lives in
@@ -569,25 +580,24 @@ impl AttachedConstraint {
         py: Python<'_>,
         state: State,
         atol: Option<f64>,
-    ) -> PyResult<EvaluatedConstraint> {
+    ) -> crate::error::OmmxPyResult<EvaluatedConstraint> {
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
         match &self.host {
             ConstraintHost::Instance(p) => {
                 let inst = p.borrow(py);
-                let evaluated = lookup_constraint(&inst.inner, self.id)?
-                    .evaluate(&state.0, atol)
-                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+                let evaluated =
+                    lookup_constraint(&inst.inner, self.id)?.evaluate(&state.0, atol)?;
                 let context = inst.inner.constraint_context().collect_for(self.id);
                 Ok(EvaluatedConstraint::from_parts(evaluated, context))
             }
             ConstraintHost::Parametric(_) => Err(pyo3::exceptions::PyValueError::new_err(
                 "AttachedConstraint.evaluate is not supported on a ParametricInstance host; \
                  substitute parameters via ParametricInstance.with_parameters first",
-            )),
+            )
+            .into()),
         }
     }
 

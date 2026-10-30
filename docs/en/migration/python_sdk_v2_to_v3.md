@@ -36,7 +36,7 @@ from ommx.v1.solution_pb2 import State
 
 **After (v3)**:
 ```python
-from ommx import Constraint, Equality, Function, Linear, State
+from ommx import Constraint, Equality, Function, Kind, Linear, Sense, State
 ```
 
 The `.from_protobuf()` / `.to_protobuf()` bridge methods on `Constraint`, `RemovedConstraint`, `DecisionVariable`, etc. are removed along with the protobuf objects they produced. Use explicit versioned bytes APIs on whole serialization roots instead. Prefer `to_v2_bytes` / `from_v2_bytes` when producing new serialized bytes; use `to_v1_bytes` / `from_v1_bytes` only when you need to interoperate with legacy v1 payloads.
@@ -112,14 +112,14 @@ s1 = Sos1Constraint(id=11, variables=[0, 1])
 
 **After (v3)**:
 ```python
-c  = Constraint(function=x + y, equality=Constraint.EQUAL_TO_ZERO, name="cap")
+c  = Constraint(function=x + y, equality=Equality.EqualToZero, name="cap")
 xs = [DecisionVariable.binary(i) for i in range(3)]
 oh = OneHotConstraint(variables=xs)
 s1 = Sos1Constraint(variables=xs[:2])
 
 # IDs are assigned by the enclosing Instance:
 instance = Instance.from_components(
-    sense=Instance.MINIMIZE,
+    sense=Sense.Minimize,
     objective=...,
     decision_variables=[...],
     constraints={5: c},
@@ -178,7 +178,7 @@ Instance.from_components(
 **After (v3)**:
 ```python
 Instance.from_components(
-    sense=Instance.MINIMIZE,
+    sense=Sense.Minimize,
     objective=obj,
     decision_variables=[x0, x1],
     constraints={0: c0, 1: c1},           # dict keyed by constraint ID
@@ -191,7 +191,7 @@ Instance.from_components(
 All arguments are keyword-only. `ParametricInstance.from_components` takes the same `constraints: Mapping[int, Constraint]` shape.
 
 (42-constraint-accessors-on-instance--parametricinstance--solution-return-dicts)=
-### 4.2 Constraint accessors on `Instance` / `ParametricInstance` / `Solution` return dicts (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
+### 4.2 Constraint access uses typed-ID collections
 
 **Before (v2.5.1)**:
 ```python
@@ -211,26 +211,30 @@ for oh in hints.one_hot_constraints:
 
 **After (v3)**:
 ```python
-for cid, c in instance.constraints.items():              # dict[int, AttachedConstraint]
-    print(cid, c.function)
+from ommx import ConstraintID, OneHotConstraintID
 
-for cid, rc in instance.removed_constraints.items():     # dict[int, RemovedConstraint]
-    ...
+for cid in instance.constraints:  # all families, typed IDs
+    if isinstance(cid, ConstraintID):
+        print(cid, instance.constraints[cid].function)
+    elif isinstance(cid, OneHotConstraintID):
+        print(cid, instance.constraints[cid].variables)
 
-for cid, ec in solution.constraints.items():             # dict[int, EvaluatedConstraint]
-    print(cid, ec.evaluated_value)
+for cid, removed in instance.removed_constraints.items():
+    print(cid, removed.removed_reason)
 
-# First-class constraint dicts replace constraint_hints:
-for hid, oh in instance.one_hot_constraints.items(): ...
-for hid, sc in instance.sos1_constraints.items():    ...
-for hid, ic in instance.indicator_constraints.items(): ...
+for cid in solution.constraints:
+    if isinstance(cid, ConstraintID):
+        print(cid, solution.constraints[cid].evaluated_value)
 ```
 
-The dict shape itself landed in 3.0.0a2 with snapshot `Constraint` values. In 3.0.0a3 the constraint dicts on `Instance` / `ParametricInstance` switched to write-through `AttachedX` handles — see §11 for the read / write semantics. `Solution.constraints` keeps a snapshot value type (`EvaluatedConstraint`) since it has no edit lifecycle. `Instance.removed_constraints` still surfaces `RemovedConstraint` snapshots; relax/restore go through `Instance.relax_constraint` / `Instance.restore_constraint` rather than mutating values inside this dict.
+In v3 final, `.constraints` is a live collection over all constraint families.
+`Instance` and `ParametricInstance` return attached handles for active rows;
+`.removed_constraints` returns removed snapshots. `Solution` and `SampleSet`
+return individual result snapshots, including retained removed rows. See the
+[typed collection migration](#typed-constraint-ids-and-live-collections).
+`SampleSet.decision_variables` and `.named_functions` remain lists.
 
-`SampleSet.constraints` / `.decision_variables` / `.named_functions` remain `list`.
-
-## 5. Renames and signature changes
+## 5. Renames, signature changes, and behavior changes
 
 ### 5.1 `write_mps` → `save_mps` (`3.0.0a1`, [#775](https://github.com/Jij-Inc/ommx/pull/775))
 
@@ -299,6 +303,144 @@ from ommx import Linear
 Linear(terms={int(j): float(c) for j, c in enumerate(row)}, constant=float(-b))
 ```
 
+### 5.6 `to_qubo()` / `to_hubo()` preserve the input objective in evaluated output (`3.0.0`, [#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+The driver methods remain available and still mutate their input. In v3, the
+mutated `Instance` keeps the minimization energy sent to the QUBO or HUBO
+solver as its active objective, while `evaluate()` and `evaluate_samples()`
+retain the objective semantics that the instance exposed before conversion.
+Python SDK v2 instead restored the active sense and evaluated the final
+penalized energy, mixing solver input with user-facing output.
+
+Code that reads `Instance.objective` therefore sees the solver energy; code
+that consumes `Solution` or `SampleSet` sees the preserved input objective.
+The executable postconditions are documented on {meth}`~ommx.Instance.to_qubo`,
+{meth}`~ommx.Instance.to_hubo`, {meth}`~ommx.Instance.evaluate`, and
+{meth}`~ommx.Instance.evaluate_samples`.
+
+An `Instance` or `ParametricInstance` with an explicit output objective cannot
+be represented losslessly by the v1 wire format. Its `to_v1_bytes()` method
+raises `RuntimeError`; use `to_v2_bytes()` for these models.
+
+The same pipeline can be run explicitly with
+{meth}`~ommx.Instance.prepare` followed by
+{meth}`~ommx.Instance.as_qubo_format` or
+{meth}`~ommx.Instance.as_hubo_format`. The matching target classes and editable
+policies are provided by {meth}`~ommx.InstanceClass.qubo`,
+{meth}`~ommx.InstanceClass.hubo`,
+{meth}`~ommx.PreparationPolicy.for_qubo`, and
+{meth}`~ommx.PreparationPolicy.for_hubo`.
+
+### 5.7 Adapter `solve()` / `sample()` prepare inputs automatically (`3.0.0`, [#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+For the usual workflow, pass the original Instance directly to `solve()` or
+`sample()`. The Adapter applies its recommended Preparation without modifying
+that Instance:
+
+```python
+from ommx_highs_adapter import OMMXHighsAdapter
+
+solution = OMMXHighsAdapter.solve(instance)
+```
+
+When the application needs a custom Preparation policy, prepare the Instance
+in place and use the preparation-free API:
+
+```python
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# Customize policy here.
+instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
+solution = OMMXHighsAdapter.solve_without_preparation(instance)
+```
+
+Custom Adapter implementations must provide `solve_without_preparation()` or
+`sample_without_preparation()`. Declare every additional option with an
+explicit typed signature rather than a catch-all `**kwargs`. An easy method may
+forward an option whose meaning survives Preparation. When an option depends on
+the exact prepared Adapter input and the Adapter defines no way to transport it
+through Preparation, the concrete Adapter may instead expose that option only
+on its preparation-free method.
+
+HiGHS and Python-MIP no longer attach dual values when the Adapter input has an
+`output_objective`.
+
+(constraint-violation-migration)=
+### 5.8 Constraint violation metrics ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
+
+Rename `solution.total_violation_l1()` to {meth}`~ommx.Solution.total_violation`.
+`total_violation_l2()` is removed. The total is the sum of one nonnegative scalar
+per constraint, including removed constraints and all special constraint kinds.
+Regular equality and inequality violations retain their existing definitions.
+
+```python
+from ommx import OneHotConstraintID
+solution.total_violation()
+solution.constraint_violation(OneHotConstraintID(30))
+solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+```
+
+Indicator constraints contribute the inner violation when active and zero otherwise.
+OneHot uses the minimum sum of absolute changes to make exactly one member 1 and
+the rest 0. SOS1 uses the minimum sum of absolute changes to leave at most one
+nonzero member. These definitions do not depend on Big-M lowering.
+
+Every constraint is feasible exactly when `violation <= atol`. For OneHot and
+SOS1, tolerance applies to the total absolute change, rather than to each member
+independently. For example, SOS1 values `(1, 0.00006, 0.00006)` have violation
+`0.00012` and are infeasible with `atol=0.0001`, although each small member is
+individually within tolerance of zero.
+
+Variable bounds and kinds are checked separately. Discrete-value canonicalization
+happens before constraint evaluation; the metric uses the resulting values.
+Solution feasibility requires each constraint to pass its own threshold, not
+the total violation to be within one shared threshold.
+
+SampleSet feasibility and best-feasible selection also check variable bounds
+and kinds at the saved tolerance, matching the extracted Solution. A sample can
+therefore have zero `total_violation()` and still be infeasible because a
+variable is outside its domain.
+
+Constraint-level queries require an explicit tolerance. Replace
+`evaluated.feasible` with `evaluated.is_feasible(atol=...)` and
+`sampled.feasible` with `sampled.feasible(atol=...)` (a sample-ID-to-bool map).
+Solution/SampleSet keep their existing feasibility properties and expose
+`feasibility_atol` so extracted constraints can use the same threshold:
+
+```python
+from ommx import ConstraintID
+evaluated = solution.constraints[ConstraintID(1)]
+evaluated.is_feasible(atol=solution.feasibility_atol)
+evaluated.is_feasible(atol=1e-8)  # A separate query on the same stored violation
+```
+
+Changing the query tolerance does not repeat input canonicalization or activation
+classification. Tolerances are retained only with tolerance-dependent decisions:
+regular constraint values retain none, while special-constraint activation
+records retain the conditions used to classify them. The separation of tolerance
+roles and the persisted evaluation context is tracked in
+[issue #1180](https://github.com/Jij-Inc/ommx/issues/1180).
+
+The v2 protobuf format retains `feasible` flags/maps and `feasibility_atol` on
+Solution/SampleSet. Consumers can read the result and its tolerance without an
+OMMX SDK. The protobuf schema is unchanged. When loading the data, the SDK
+recomputes OneHot/SOS1 violations from the saved variable values and validates
+the flags using the persisted tolerance.
+
+The legacy v1 format cannot store the tolerance or native special constraints.
+`to_v1_bytes()` recomputes feasibility from the retained regular constraints and
+variable values using the SDK's default tolerance, as `from_v1_bytes()` does.
+Use the same default tolerance when writing and reading v1 data. This conversion
+may change feasibility; use v2 to preserve the original tolerance and special
+constraints.
+
+Partial evaluation rejects a fixing when eliminating an approximately zero
+structural member could change feasibility under the sum of member errors and
+the constraint must remain active. Exact-zero elimination remains supported.
+Evaluate the complete state, or lower special constraints before partial evaluation; lowering
+has its own violation metrics as described below.
+Lowering need not preserve the total: retained originals and generated constraints
+each contribute. See {meth}`~ommx.Solution.total_violation` for the full definitions.
+
 ## 6. Return-type changes
 
 ### 6.1 `Constraint.name` / `Constraint.description` are `Optional[str]` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771))
@@ -333,21 +475,29 @@ polynomial.terms()
 
 `Linear.linear_terms`, `Quadratic.linear_terms` / `quadratic_terms`, and `Polynomial.constant_term` stay properties.
 
-### 6.3 `DecisionVariable.BINARY`/`INTEGER`/… are `int` sentinels (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770))
+### 6.3 `DecisionVariable.kind` is a typed `Kind` enum
 
-In v2.5.1 these class constants were `Kind` enum members. In v3 they are the underlying `int` values, and `DecisionVariable.kind` returns `int` (the protobuf wire value).
+The initial v3 alpha migration in `3.0.0a1` ([#770](https://github.com/Jij-Inc/ommx/pull/770)) accidentally exposed the protobuf integer representation through the `DecisionVariable` constructor and `kind` properties. The v3 API now consistently accepts and returns the top-level `Kind` enum for detached, attached, evaluated, and sampled decision variables.
+
+Use `Kind.Binary`, `Kind.Integer`, and the other `Kind` members in new code. The old `DecisionVariable.BINARY`/`INTEGER`/… names remain as typed compatibility aliases with the same enum values.
+
+The same compatibility policy applies to `Constraint.EQUAL_TO_ZERO` / `LESS_THAN_OR_EQUAL_TO_ZERO` and `Instance.MINIMIZE` / `MAXIMIZE`: they remain typed aliases, while new code should use `Equality.*` and `Sense.*`.
 
 ```python
-# v2.5.1
-DecisionVariable.BINARY        # Kind.Binary
-if var.kind == DecisionVariable.INTEGER:  # Kind.Integer == Kind.Integer
-    ...
+from ommx import Bound, DecisionVariable, Kind
 
-# v3
-DecisionVariable.BINARY        # 1 (int)
-if var.kind == DecisionVariable.INTEGER:  # int == int
-    ...
-# If you want the enum, construct it: Kind(var.kind)
+var = DecisionVariable(0, Kind.Binary, Bound(0, 1))
+assert var.kind == Kind.Binary
+
+# Typed compatibility alias.
+assert DecisionVariable.BINARY == Kind.Binary
+```
+
+The enums retain comparison and hash compatibility with their protobuf integer values, so explicit boundary checks continue to work. The regular SDK constructor and properties nevertheless use the enum type.
+
+```python
+assert Kind.Binary == 1
+assert hash(Kind.Binary) == hash(1)
 ```
 
 ### 6.4 `SampleSet.sample_ids` changed from list-property to set-method (`3.0.0a1`, [#775](https://github.com/Jij-Inc/ommx/pull/775))
@@ -361,9 +511,9 @@ ids: set[int]  = sample_set.sample_ids()         # method
 ids: list[int] = sample_set.sample_ids_list      # separate property when you need a list
 ```
 
-### 6.5 `evaluate` / `partial_evaluate` raise `ValueError`, not `RuntimeError` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770))
+### 6.5 Evaluation input errors raise `ValueError`, not `RuntimeError` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770))
 
-Every `.evaluate(state)` / `.partial_evaluate(state)` method on `Linear`, `Quadratic`, `Polynomial`, `Function`, `Constraint`, `NamedFunction`, and `Instance` now raises `ValueError` (e.g. `ValueError: Missing entry for id: 2`) when the state is missing a required decision-variable ID or the atol is invalid. In v2.5.1 the same error surfaced as `RuntimeError` via anyhow. Update `except` clauses accordingly.
+Every `.evaluate(state)` method on `Linear`, `Quadratic`, `Polynomial`, `Function`, `Constraint`, `NamedFunction`, and `Instance` now raises `ValueError` (e.g. `ValueError: state is missing required variable IDs: {VariableID(2)}`) when the state is missing a required decision-variable ID or the atol is invalid. Partial evaluation intentionally accepts missing IDs, but raises `ValueError` for invalid provided entries, invalid tolerance, or inconsistent or unverifiable dependent-variable assertions. In v2.5.1 these errors surfaced as `RuntimeError` via anyhow. Update `except` clauses accordingly.
 
 ```python
 # v2.5.1
@@ -381,7 +531,7 @@ except ValueError as e:
 
 ### 6.6 `ParametricInstance.parameters` returns `list[Parameter]`, use `parameters_df()` for the DataFrame (`3.0.0a1`, [#774](https://github.com/Jij-Inc/ommx/pull/774); `3.0.0a3`, [#846](https://github.com/Jij-Inc/ommx/pull/846))
 
-The DataFrame view moved to a separate `_df` accessor, mirroring `decision_variables` / `decision_variables_df()` and `constraints` / `constraints_df()`. The bare `parameters` attribute is now an ordered `list[Parameter]`. The split itself landed in 3.0.0a1 (#774) when `ParametricInstance` became a Rust re-export; the `_df` accessor flipped from a `#[getter]` property to a method call in 3.0.0a3 (#846), at which point every `*_df` on `Instance` / `ParametricInstance` / `Solution` / `SampleSet` requires parentheses (see §9 below).
+The DataFrame view moved to a separate `_df` accessor, mirroring `decision_variables` / `decision_variables_df()` and `constraints` / `constraints_df(kind="regular")`. The bare `parameters` attribute is now an ordered `list[Parameter]`. The split itself landed in 3.0.0a1 (#774) when `ParametricInstance` became a Rust re-export; the `_df` accessor flipped from a `#[getter]` property to a method call in 3.0.0a3 (#846), at which point every `*_df` on `Instance` / `ParametricInstance` / `Solution` / `SampleSet` requires parentheses (see §9 below).
 
 ```python
 # v2.5.1 (DataFrame view)
@@ -392,13 +542,84 @@ parametric_instance.parameters            # -> list[Parameter]
 parametric_instance.parameters_df()       # -> pandas.DataFrame  (method, not property)
 ```
 
-## 7. Removed helpers (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#776](https://github.com/Jij-Inc/ommx/pull/776), [#782](https://github.com/Jij-Inc/ommx/pull/782); `3.0.0a2`, [#798](https://github.com/Jij-Inc/ommx/pull/798))
+### 6.7 `Function.degree()` / `num_terms()` are optional for composed functions (`3.0.0`, [#1158](https://github.com/Jij-Inc/ommx/pull/1158))
+
+In v2.5.1 every `Function` was a polynomial, so `degree()` and `num_terms()`
+always returned `int`. A v3 `Function` can also represent a composed scalar
+expression such as an absolute value, pointwise minimum or maximum, division,
+or signed integer power. These two methods return `None` for that representation.
+The polynomial coefficient properties (`terms`, `linear_terms`,
+`quadratic_terms`, and `constant_term`) and `content_factor()` raise `TypeError`
+for a composed function.
+
+```python
+# v2.5.1
+degree: int = function.degree()
+terms = function.terms
+
+# v3
+degree: int | None = function.degree()
+if degree is None:
+    # Inspect or evaluate the composed expression without treating it as a
+    # coefficient map.
+    value = function.evaluate(state, atol=1e-6)
+else:
+    terms = function.terms
+```
+
+Use explicit multiplication when you need a non-negative integer power to
+remain an expanded polynomial. `function.powi(n)` and `function**n` deliberately
+construct composed power expressions, including when `n >= 0`.
+
+## 7. Removed helpers (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#776](https://github.com/Jij-Inc/ommx/pull/776), [#782](https://github.com/Jij-Inc/ommx/pull/782); `3.0.0a2`, [#798](https://github.com/Jij-Inc/ommx/pull/798); `3.0.0`, [#1087](https://github.com/Jij-Inc/ommx/pull/1087))
 
 - `Linear.from_object(x)` — construct via `Linear.single_term(...)`, `Linear.constant(...)`, or the arithmetic operators.
 - `Linear.equals_to(other)` — use `linear.almost_equal(other, atol=...)`. (Available on every expression type.)
-- `instance.constraint_hints` — replaced by `instance.one_hot_constraints` / `sos1_constraints` / `indicator_constraints`.
+- `instance.constraint_hints` — replaced by the all-family `instance.constraints` collection.
 - `Parameters` / `OneHot` / `Sos1` / `ConstraintHints` — see §1.2.
 - `Artifact` low-level types (`ArtifactArchive`, `ArtifactDir`, `ArtifactArchiveBuilder`, `ArtifactDirBuilder`) — replaced by unified `Artifact` / `ArtifactDraft`.
+- `ommx_openjij_adapter.response_to_samples(response)` — use `decode_to_samples(response)`.
+- `ommx_openjij_adapter.sample_qubo_sa(...)` — use
+  `OMMXOpenJijSAAdapter.sample(instance)`. The replacement leaves `instance`
+  unchanged and returns an evaluated `SampleSet`, rather than raw `Samples`.
+
+In v2, the OpenJij Adapter constructor, `sample()`, and `solve()` accepted
+`uniform_penalty_weight`, `penalty_weights`, and
+`inequality_integer_slack_max_range` directly. In v3 these choices moved to the
+recommended `PreparationPolicy`:
+
+- `uniform_penalty_weight` and `penalty_weights` map to `policy.fixed_penalty`;
+- `inequality_integer_slack_max_range` maps to `policy.integer_slack`.
+
+Direct constructor calls remain preparation-free and must receive an Instance
+that has already been prepared for `OMMXOpenJijSAAdapter.INPUT_CLASS`.
+
+OpenJij `initial_state` is defined over the solver-variable representation of
+that exact prepared input; dictionary keys are those variable IDs. In v3 it is
+accepted by the exact-input constructor, `sample_without_preparation()`, and
+`solve_without_preparation()`, but not by the easy methods.
+
+The usual `sample()` / `solve()` workflow is described in §5.7. When a model
+requires a fixed penalty, the application must choose its magnitude; v3 no
+longer supplies v2's implicit uniform weight of `1.0`. Apply the customized
+policy to the Instance, then call the preparation-free method:
+
+```python
+from ommx import FixedPenaltyPreparation
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
+
+policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
+policy.fixed_penalty = (
+    FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=20.0)
+)
+source.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
+samples = OMMXOpenJijSAAdapter.sample_without_preparation(source)
+```
+
+`prepare()` modifies `source` in place. The returned `SampleSet` reports the
+objective and sense exposed by `source` before Preparation (§5.6). The
+[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) covers policy
+details and penalty selection.
 
 ```python
 # v2.5.1
@@ -450,27 +671,27 @@ df = instance.removed_constraints_df     # separate active vs. removed
 df = solution.constraints_df
 
 # v3
-df = instance.constraints_df()           # method; default kind="regular"
+df = instance.constraints_df(kind="regular")           # method; kind is required
 df = instance.constraints_df(kind="indicator")
 df = instance.constraints_df(kind="regular", removed=True)
                                          # active + removed merged in id order
-df = solution.constraints_df()           # no removed= (no active/removed
+df = solution.constraints_df(kind="regular")           # no removed= (no active/removed
                                          # distinction at the evaluated stage)
 ```
 
-`kind` accepts `Literal["regular", "indicator", "one_hot", "sos1"]` (default `"regular"`); unknown values raise `ValueError`. Solution / SampleSet have no `removed=` parameter — at the evaluated / sampled stage every row is materialized regardless of how it was lifecycled, and reason data is gated by `"removed_reason"` in `include=` instead.
+`kind` is a required keyword argument accepting `Literal["regular", "indicator", "one_hot", "sos1"]`; unknown values raise `ValueError`. Solution / SampleSet have no `removed=` parameter — at the evaluated / sampled stage every row is materialized regardless of how it was lifecycled, and reason data is gated by `"removed_reason"` in `include=` instead.
 
 `include` accepts a `Sequence[str]` of `"label"` / `"parameters"` / `"removed_reason"` (singular). The default (`None`) preserves the v2 wide shape (`("label", "parameters")`); `include=[]` drops every optional column family.
 
 ```python
 # Default — v2-equivalent shape (label + parameters columns)
-df = instance.constraints_df()
+df = instance.constraints_df(kind="regular")
 
 # Core only — drop label and parameters
-df = instance.constraints_df(include=[])
+df = instance.constraints_df(kind="regular", include=[])
 
 # Active + removed in one DataFrame; reason columns auto-added
-df = instance.constraints_df(removed=True)
+df = instance.constraints_df(kind="regular", removed=True)
 # columns include: equality, function_type, used_ids,
 #                  name, subscripts, description, parameters.{key},
 #                  removed_reason, removed_reason.{key}
@@ -482,7 +703,7 @@ df = instance.decision_variables_df(include=[])
 
 `"removed_reason"` is a unit flag — it gates both the `removed_reason` column and the `removed_reason.{key}` parameter columns together. The `removed_reason` column is **schema-stable**: when the flag is on it always appears in the resulting DataFrame, NA-filled if no row carries a reason, so downstream code that branches on schema doesn't need to special-case empty data.
 
-The wide `constraints_df()` index column was renamed from unqualified `id` to `{kind}_constraint_id` (`regular_constraint_id`, `indicator_constraint_id`, `one_hot_constraint_id`, `sos1_constraint_id`). `decision_variables_df()` keeps `id` as its index name (only one variable ID space, so disambiguation isn't load-bearing); the long-format variable sidecars in §10 do use `variable_id`. The kind-qualified constraint names make cross-ID-space joins (which would silently produce wrong-but-shaped output when `int64` indexes line up) visible in `df.head()` / `df.info()` and IDE inspection.
+The wide `constraints_df(kind="regular")` index column was renamed from unqualified `id` to `{kind}_constraint_id` (`regular_constraint_id`, `indicator_constraint_id`, `one_hot_constraint_id`, `sos1_constraint_id`). `decision_variables_df()` keeps `id` as its index name (only one variable ID space, so disambiguation isn't load-bearing); the long-format variable sidecars in §10 do use `variable_id`. Constraint indexes now contain family-specific ID objects. Constraint numbers must be unique across all families, including removed constraints, within each instance. The ID type still identifies the constraint family.
 
 ## 10. Long-format sidecar DataFrames (`3.0.0a3`, [#846](https://github.com/Jij-Inc/ommx/pull/846))
 
@@ -507,9 +728,9 @@ instance.variable_labels_df()
 instance.variable_parameters_df()
 ```
 
-Use these for tidy-data joins / aggregation; reach for the wide `constraints_df()` (with `include=`) when you want one row per id with columns alongside.
+Use these for tidy-data joins / aggregation; reach for the wide `constraints_df(kind="regular")` (with `include=`) when you want one row per id with columns alongside.
 
-`provenance` is intentionally not folded into `constraints_df()` via `include=`: chains have variable length, and a wide pivot would either explode the column space or produce an object-dtype list column. Pivot the long-format `constraint_provenance_df()` yourself if you need a wide view.
+`provenance` is intentionally not folded into `constraints_df(kind="regular")` via `include=`: chains have variable length, and a wide pivot would either explode the column space or produce an object-dtype list column. Pivot the long-format `constraint_provenance_df(kind="regular")` yourself if you need a wide view.
 
 ## 11. Constraint and variable accessors return `AttachedX` write-through handles (`3.0.0a3`, [#849](https://github.com/Jij-Inc/ommx/pull/849), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#852](https://github.com/Jij-Inc/ommx/pull/852))
 
@@ -522,23 +743,23 @@ c = instance.get_constraint_by_id(5)
 c.add_name("balance")                              # mutated the local snapshot
 print(instance.get_constraint_by_id(5).name)       # still None — fresh snapshot
 
-# v3 — dict accessor returns a write-through handle
-c = instance.constraints[5]                        # AttachedConstraint (live)
+# v3 — collection lookup returns a write-through handle
+c = instance.constraints[ConstraintID(5)]                        # AttachedConstraint (live)
 c.set_name("balance")                              # writes through to the SoA store
-print(instance.constraints[5].name)                # "balance"
+print(instance.constraints[ConstraintID(5)].name)                # "balance"
 ```
 
-Affected return types (the column for `3.0.0a2` reflects the post-§4.2 state with snapshot value types; this section's change is the wrap into `AttachedX`):
+Affected return types (the column for `3.0.0a2` shows the earlier snapshot dictionaries; the current API uses collections):
 
-| Accessor | v2.5.1 | 3.0.0a2 | v3 final (3.0.0a3) |
+| Accessor | v2.5.1 | 3.0.0a2 | Current v3 |
 |---|---|---|---|
-| `instance.constraints` | `list[Constraint]` | `dict[int, Constraint]` | `dict[int, AttachedConstraint]` |
-| `instance.indicator_constraints` | — (no indicator type) | `dict[int, IndicatorConstraint]` | `dict[int, AttachedIndicatorConstraint]` |
-| `instance.one_hot_constraints` | via `constraint_hints` (legacy `OneHot`) | `dict[int, OneHotConstraint]` | `dict[int, AttachedOneHotConstraint]` |
-| `instance.sos1_constraints` | via `constraint_hints` (legacy `Sos1`) | `dict[int, Sos1Constraint]` | `dict[int, AttachedSos1Constraint]` |
+| `instance.constraints` | `list[Constraint]` | `dict[int, Constraint]` | `ConstraintCollection` |
+| `instance.indicator_constraints` | — (no indicator type) | `dict[int, IndicatorConstraint]` | Use `constraints[IndicatorConstraintID(...)]` |
+| `instance.one_hot_constraints` | via `constraint_hints` (legacy `OneHot`) | `dict[int, OneHotConstraint]` | Use `constraints[OneHotConstraintID(...)]` |
+| `instance.sos1_constraints` | via `constraint_hints` (legacy `Sos1`) | `dict[int, Sos1Constraint]` | Use `constraints[Sos1ConstraintID(...)]` |
 | `instance.decision_variables` | `list[DecisionVariable]` | `list[DecisionVariable]` | `list[AttachedDecisionVariable]` |
 
-The list → dict shape change happened in 3.0.0a2 ([§4.2](#42-constraint-accessors-on-instance--parametricinstance--solution-return-dicts)); the 3.0.0a3 wave wraps each value in an `AttachedX` write-through handle. The same change applies on `ParametricInstance`. Solution / SampleSet evaluated / sampled wrappers stay as snapshots — those collections have no edit lifecycle.
+The list → dict shape change happened in 3.0.0a2, and 3.0.0a3 introduced `AttachedX` write-through handles. The current `ConstraintCollection` retains that attached behavior and unifies all families under typed-ID lookup. The same behavior applies on `ParametricInstance`. Solution / SampleSet evaluated / sampled values remain individual snapshots fetched from their owning result.
 
 The snapshot wrapper types (`Constraint`, `IndicatorConstraint`, `OneHotConstraint`, `Sos1Constraint`, `DecisionVariable`) are unchanged in shape and remain the modeling-input type — operator overloading (`x + y == 1`), expression building, and `Instance.from_components(constraints={...})` all keep accepting / returning them. New `add_*` entry points consume snapshots and return the matching attached handle:
 
@@ -629,7 +850,7 @@ dv      = DecisionVariable.from_bytes(dv_blob)
 # After (3.0.0a3) — wrap in the enclosing container and round-trip that.
 # Use v2 bytes for newly serialized payloads.
 instance      = Instance.from_components(
-    sense=Instance.MINIMIZE,
+    sense=Sense.Minimize,
     objective=my_function,
     decision_variables=[decision_variable],
     constraints={},
@@ -818,24 +1039,26 @@ expr = 2 * p + 3  # Linear
 - [ ] Remove reads of `constraint.id`; iterate with `.items()` on constraint dicts instead.
 - [ ] Remove any use of `next_constraint_id()` / `set_constraint_id_counter(...)` / related counter helpers.
 - [ ] Update `Instance.from_components(constraints=[...])` to pass a `dict[int, Constraint]`. Same for `indicator_constraints`, `one_hot_constraints`, `sos1_constraints`.
-- [ ] Replace `constraint_hints` reads with `instance.{one_hot,sos1,indicator}_constraints` (all `dict[int, T]`).
+- [ ] Replace `constraint_hints` reads with `instance.constraints`, using typed IDs to distinguish constraint families.
 - [ ] Rename `write_mps(...)` → `save_mps(...)`.
 - [ ] Rename `instance.used_decision_variable_ids()` / `function.used_decision_variable_ids()` → `required_ids()`.
 - [ ] Replace `Parameter.new(id=...)` with `Parameter(id, ...)`.
 - [ ] Replace `pi.with_parameters(Parameters(entries={...}))` with `pi.with_parameters({...})`.
+- [ ] Use Adapter `solve()` / `sample()` directly for recommended Preparation; when customizing the policy, call `Instance.prepare()` and then `solve_without_preparation()` / `sample_without_preparation()`. Add the preparation-free method to custom Adapters, and declare every Adapter-specific option with an explicit typed signature. A concrete Adapter may restrict an option to the preparation-free API when it depends on the exact prepared input and no transport through Preparation is defined.
 - [ ] Update `constraint.name` / `constraint.description` handling for `None` return (was `""`).
 - [ ] Update code that used `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` as a property — they are methods now.
 - [ ] `SampleSet.sample_ids` is a method returning `set[int]`; use `sample_set.sample_ids_list` if you need a `list`.
 - [ ] Change `except RuntimeError` around `.evaluate(...)` / `.partial_evaluate(...)` calls to `except ValueError`.
 - [ ] Switch `parametric_instance.parameters` DataFrame reads to `parametric_instance.parameters_df()` (now a method; `.parameters` returns `list[Parameter]`).
+- [ ] Update `Function.degree()` / `num_terms()` annotations to accept `None`, and guard polynomial coefficient-property access when a function may be composed.
 - [ ] Audit chained `Constraint.add_name(...).add_subscripts(...)` calls — the chain operates on a clone after the first method, so only the first mutation lands in the original wrapper. Assign the chain to a fresh binding (`c = (...).add_name(...).add_subscripts(...)`), or use the live `AttachedConstraint` from `instance.constraints[id]` for write-through mutation.
 - [ ] Replace `ArtifactArchive` / `ArtifactDir` usage with `Artifact.import_archive(...)` for code that needs archive contents, `Artifact.inspect_archive(...)` for read-only archive inspection, or `Artifact.load(...)` for remote / registry refs.
 - [ ] Remove any `Linear.from_object(...)` / `Linear.equals_to(...)` calls.
-- [ ] Add parentheses to every `*_df` access — `instance.constraints_df` → `instance.constraints_df()` etc. (every `*_df` accessor is a method now).
+- [ ] Add parentheses to every `*_df` access — `instance.constraints_df` → `instance.constraints_df(kind="regular")` etc. (every `*_df` accessor is a method now).
 - [ ] Replace per-kind `instance.indicator_constraints_df` / `one_hot_constraints_df` / `sos1_constraints_df` and `removed_*_constraints_df` / `*_removed_reasons_df` calls with `constraints_df(kind=..., removed=...)` on the same host.
 - [ ] If you depended on the unqualified `id` index column on a wide constraint `*_df`, switch to the kind-qualified `{kind}_constraint_id` name. `decision_variables_df()` keeps `id` (only one variable ID space); long-format variable sidecars use `variable_id`.
 - [ ] Drop the in-place `c.add_name(...)` mutation pattern on snapshot wrappers retrieved from an instance — those calls return a new object and don't write through to the host. Use the live handle returned by `instance.constraints[id]` (an `AttachedConstraint`) and call its `set_*` / `add_*` methods, or re-add via `from_components`.
-- [ ] Update return-type annotations / static analysis for `instance.constraints` etc. to expect `AttachedX` (`dict[int, AttachedConstraint]`, `list[AttachedDecisionVariable]`, …). Call `.detach()` if you need an independent snapshot.
+- [ ] Update return-type annotations / static analysis for `instance.constraints` etc. to expect `AttachedX` (`ConstraintCollection`, `list[AttachedDecisionVariable]`, …). Call `.detach()` if you need an independent snapshot.
 - [ ] Replace detached `DecisionVariable.substituted_value` reads with owner-side queries: `Instance.fixed_decision_variables()`, `instance.attached_decision_variable(id).substituted_value`, or `instance.decision_variables_df()["substituted_value"]`.
 - [ ] Replace `decision_variable_analysis()` reads with `decision_variable_roles()`, `decision_variable_role(id)`, `fixed_decision_variables()`, `dependent_decision_variable_ids()`, `irrelevant_decision_variable_ids()`, or `decision_variables_df()["state_role"]`.
 - [ ] Replace element-level `to_bytes()` / `from_bytes()` calls on `Function` / `Linear` / `Quadratic` / `Polynomial` / `Parameter` / the `NamedFunction` family / the `DecisionVariable` family with whole-`Instance` / `Solution` / `SampleSet` round-trips. Use `to_v2_bytes()` for newly serialized top-level payloads; keep `to_v1_bytes()` only for legacy v1 interop or the `State` / `Samples` / `Parameters` DTOs used by evaluate plumbing. See §12.
@@ -844,3 +1067,60 @@ expr = 2 * p + 3  # Linear
 - [ ] Replace `Artifact.load_archive(file)` with `Artifact.import_archive(file)` (registry-write semantics, returns a full handle) for code that wants to use the archive's contents. Use `Artifact.inspect_archive(file)` for the side-effect-free read of the manifest / layer descriptors (returns an `ArchiveManifest`). The v3 `load_archive` raises a migration error pointing at both. See §13.3.
 - [ ] Update any `ommx push <archive-file>` invocation to the two-step `ommx load <file>` + `ommx push <image_name>` flow. See §13.4.
 - [ ] Add periodic `ommx artifact prune-anonymous` to clean accumulated entries if your workflow makes heavy use of `ArtifactDraft.new_anonymous`. See §13.5.
+
+(typed-constraint-ids-and-live-collections)=
+## Typed constraint IDs and live collections
+
+All four root types expose `.constraints` as a live, read-only collection of all
+constraint families. Replace `instance.constraints[5]` with
+`instance.constraints[ConstraintID(5)]`; use `IndicatorConstraintID`,
+`OneHotConstraintID`, or `Sos1ConstraintID` for the other families. The old
+family-specific properties are consolidated into `.constraints` and
+`.removed_constraints`. `get_constraint_by_id`, `get_removed_constraint_by_id`,
+and result `constraint_ids` are replaced by indexing and key iteration.
+There is no `get_constraints` method.
+
+```python
+row = instance.constraints.of_kind("regular")[5]  # AttachedConstraint
+snapshot = row.detach()  # Explicit independent Constraint copy
+removed = instance.removed_constraints.of_kind("regular")[7]  # RemovedConstraint snapshot
+```
+
+The metadata methods `constraint_context_df`, `constraint_parameters_df`,
+`constraint_provenance_df`, and `constraint_removed_reasons_df` require
+keyword-only `kind`, just like `constraints_df`. They no longer default to regular
+constraints. This applies to `Instance`, `ParametricInstance`, `Solution`, and `SampleSet`.
+
+`SampleSet.summary_with_constraints` is removed. Use `samples.summary` for sample
+objectives and overall feasibility, and `samples.constraints` or
+`samples.constraints_df(kind=...)` for per-constraint results.
+
+The collection property does not materialize rows. Model accesses return
+`Attached*` handles; result accesses return individual snapshots. Retained
+collection views observe owner mutations. Use `dict(owner.constraints)` when
+an independent mapping is needed. Use `constraints.of_kind("sos1")` when
+inspecting one family. `constraints_df(*, kind=...)` requires `kind` on every root.
+Models select active rows by default and support `removed=True`; results include
+retained removed rows. See {class}`collection semantics <ommx.ConstraintCollection>`.
+
+For heterogeneous enumeration, use `ConstraintIDBase` and `ConstraintView`
+instead of a union of the currently known families. Adding a special family
+does not change these public return types. Concrete-ID indexing retains its
+specific return type. Consumers that translate or solve models must reject
+unsupported families explicitly; filtering them out would relax the problem.
+
+Family-specific method arguments and `from_components` keys still accept
+integers and promote them, rejecting IDs from another family. Mixed-family collection
+indexing, membership, and `get` require typed IDs; views selected with `of_kind`
+promote integers to the selected family. IDs remain typed in returned
+values, diagnostics, provenance, and DataFrame indexes. They have no `int()` or
+integer-index conversion. `constraint_violation(id)` infers the family from its
+typed ID and has no `kind` argument. Variable and sample IDs remain integers.
+
+`extract_constraints(name)` now searches every family. On `Instance` and
+`ParametricInstance` it returns attached objects keyed by subscript tuples; on
+`Solution` and `SampleSet` it returns nonnegative violations. **Regular constraints
+now return violations instead of signed function values.** Parameters are ignored,
+as in variable extraction; duplicate subscripts across families raise `ValueError`.
+
+For signed regular values, use `solution.get_constraint_value(id)` or `row.evaluated_value`. See {meth}`name-based extraction <ommx.Solution.extract_constraints>`.

@@ -1,8 +1,9 @@
-use crate::pandas::{
-    constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
-    PyDataFrame, ToPandasEntry,
+use crate::constraint_id::ConstraintIDInput;
+use crate::{
+    constraint_kind::{constraint_kind_collection, ConstraintKind},
+    error::OmmxPyResult,
+    pandas::{constraint_id_col, entries_to_dataframe, PyDataFrame, ToPandasEntry},
 };
-use anyhow::Result;
 use pyo3::{
     exceptions::PyKeyError,
     exceptions::PyRuntimeError,
@@ -12,10 +13,117 @@ use pyo3::{
 };
 use std::collections::BTreeSet;
 
-/// Python SDK domain type for evaluated optimization results.
+/// A candidate evaluated against a particular optimization problem.
 ///
-/// This class contains annotations persisted in protobuf payloads and mirrored
-/// to OMMX Artifact descriptors.
+/// A {class}`~ommx.State` maps variable IDs to values; it does not say whether
+/// those values satisfy a problem. A Solution adds the objective value,
+/// feasibility results, evaluated variables and constraints, and their modeling
+/// labels. Use {meth}`~ommx.Instance.evaluate` with a State or an ID-to-value
+/// dictionary to obtain one, whether the candidate came from a solver or was
+/// supplied manually.
+///
+/// **Evaluate a candidate**
+///
+/// This problem maximizes ``x + y`` while forbidding both binary variables
+/// from being 1. Evaluation checks one assignment; it does not search for a
+/// better assignment or prove optimality.
+///
+/// >>> from ommx import Instance, Optimality, State
+/// >>> instance = Instance.maximize()
+/// >>> x = instance.new_binary("x")
+/// >>> y = instance.new_binary("y")
+/// >>> instance.objective = x + y
+/// >>> exclusive = instance.add_constraint(x * y == 0, "exclusive")
+/// >>> state = State({x.id: 1, y.id: 0})
+/// >>> solution = instance.evaluate(state)
+/// >>> assert solution.state.entries == {x.id: 1.0, y.id: 0.0}
+/// >>> assert solution.feasible
+/// >>> assert solution.objective == 1.0
+/// >>> assert solution.optimality == Optimality.Unspecified
+///
+/// **Read feasibility, objective, and optimality separately**
+///
+/// | Property | Meaning | Does not establish |
+/// | --- | --- | --- |
+/// | {attr}`~ommx.Solution.feasible` | Variable domains and all retained constraints are satisfied | No better candidate exists |
+/// | {attr}`~ommx.Solution.objective` | The candidate's reported objective value | Feasibility or optimality |
+/// | {attr}`~ommx.Solution.optimality` | Recorded optimality status, for example supplied by an adapter | A proof performed by ``evaluate`` |
+///
+/// An infeasible candidate can still have an objective value when its
+/// expressions can be evaluated. It cannot be selected as a better feasible
+/// solution merely because that value looks preferable.
+///
+/// >>> infeasible = instance.evaluate({x.id: 1, y.id: 1})
+/// >>> assert infeasible.objective == 2.0
+/// >>> assert not infeasible.feasible
+///
+/// Feasibility includes variable ``kind`` and bounds, not only constraints.
+/// Floating-point checks use the tolerance supplied to ``evaluate(..., atol=...)``;
+/// {attr}`~ommx.Solution.feasibility_atol` records it. The exact rules for
+/// discrete-value normalization, reconstruction, and omitted values belong to
+/// {meth}`~ommx.Instance.populate_state`.
+///
+/// **Inspect evaluated values**
+///
+/// {meth}`~ommx.Solution.decision_variables_df` combines variable definitions
+/// and labels with evaluated values. {meth}`~ommx.Solution.constraints_df`
+/// selects one constraint family and includes its evaluation diagnostics.
+/// For a regular constraint ``f(x) <= 0``, the signed value ``f(x)`` and the
+/// nonnegative violation ``max(0, f(x))`` are different quantities.
+///
+/// For queries without pandas, {attr}`~ommx.Solution.constraints` is a live
+/// {class}`~ommx.EvaluatedConstraintCollection` indexed by typed constraint IDs.
+/// It includes active constraints and constraints retained after removal.
+/// Each fetched row is an independent snapshot; editing it does not update
+/// the Solution. Use an owner method such as
+/// {meth}`~ommx.Solution.set_dual_variable` when changing result data.
+/// {class}`~ommx.ConstraintFamilyView` documents family-filtered queries, and
+/// {class}`~ommx.ConstraintIDBase` documents the extensible ID interface.
+///
+/// {meth}`~ommx.Solution.extract_decision_variables` and
+/// {meth}`~ommx.Solution.extract_constraints` use names and subscript tuples to
+/// retrieve variable values and constraint violations for application-level
+/// analysis. {class}`~ommx.NamedFunction` expressions registered on the Instance
+/// provide additional reported metrics through
+/// {meth}`~ommx.Solution.extract_named_functions` or
+/// {meth}`~ommx.Solution.named_functions_df`. These metrics do not add an
+/// objective or a feasibility condition.
+///
+/// **Evaluate a transformed problem**
+///
+/// Evaluate a solver's returned State with the transformed Instance that was
+/// supplied to it. That Instance retains the fixed values, dependencies,
+/// removed constraints, and output objective needed to interpret the result.
+/// Passing the State directly to the original Instance may lose that context
+/// or leave required original variables unspecified.
+///
+/// >>> from ommx import Instance, Optimality, Sense
+/// >>> original = Instance.maximize()
+/// >>> x = original.new_binary("x")
+/// >>> y = original.new_binary("y")
+/// >>> original.objective = 3 * x + y
+/// >>> prepared = original.partial_evaluate({x.id: 1})
+/// >>> assert prepared.convert_active_objective(Sense.Minimize)
+/// >>> restored = prepared.evaluate({y.id: 0})
+/// >>> assert restored.state.entries == {x.id: 1.0, y.id: 0.0}
+/// >>> assert prepared.objective.evaluate({y.id: 0}) == -3.0
+/// >>> assert (restored.sense, restored.objective) == (Sense.Maximize, 3.0)
+/// >>> assert restored.optimality == Optimality.Unspecified
+///
+/// Fixed and dependent values are reconstructed. Otherwise irrelevant variables
+/// omitted from the candidate receive defaults; a default is not a value found
+/// by the solver. Supply such a value when it matters to reported metrics.
+/// Distinguish successful reconstruction, feasibility including removed
+/// constraints, and transport of objective or optimality information.
+/// {attr}`~ommx.Solution.feasible_relaxed` excludes removed constraints but
+/// still checks variable domains. Output objective and optimality transport
+/// follow {attr}`~ommx.Instance.output_objective` and
+/// {meth}`~ommx.Instance.map_active_optimality`, respectively.
+///
+/// Use {class}`~ommx.SampleSet` to evaluate multiple candidates with the same
+/// rules. Being best among the candidates obtained does not establish global
+/// optimality. Solution annotations can also be persisted in protobuf payloads
+/// and mirrored to OMMX Artifact descriptors.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
@@ -28,8 +136,20 @@ impl_solution_annotations!(Solution);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Solution {
+    /// Unique names across all constraint families, as a set of strings.
+    ///
+    /// Retained removed constraints are included; no sample ID is needed.
+    /// The scope matches `extract_constraints`. Unnamed constraints are excluded;
+    /// an explicitly empty name is included. Duplicate names appear once, even
+    /// when extraction would reject duplicate subscripts.
+    /// Each access returns a fresh set; editing it does not change this owner.
+    #[getter]
+    fn constraint_names(&self) -> BTreeSet<String> {
+        self.inner.constraint_names()
+    }
+
     #[staticmethod]
-    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
         Ok(Self {
             inner: ommx::Solution::from_v1_bytes(bytes.as_bytes())?,
@@ -37,7 +157,7 @@ impl Solution {
     }
 
     #[staticmethod]
-    pub fn from_v2_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v2_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
         Ok(Self {
             inner: ommx::Solution::from_v2_bytes(bytes.as_bytes())?,
@@ -75,21 +195,34 @@ impl Solution {
         crate::Relaxation::LpRelaxed
     }
 
-    /// Get the objective function value
+    /// The reported objective value of this candidate.
+    ///
+    /// Evaluation uses the Instance's preserved output objective when one is
+    /// present; otherwise it uses the active objective. Read the value together
+    /// with {attr}`~ommx.Solution.sense` and {attr}`~ommx.Solution.feasible`.
+    /// An infeasible candidate can have an objective value, and the value alone
+    /// establishes neither feasibility nor optimality.
     #[getter]
     pub fn objective(&self) -> f64 {
         *self.inner.objective()
     }
 
-    /// Get the solution state containing variable values
+    /// An independent State containing the evaluated variable values.
+    ///
+    /// Includes retained fixed and dependent values restored by evaluation and
+    /// defaults supplied for omitted irrelevant variables. See
+    /// {meth}`~ommx.Instance.populate_state` for the reconstruction rules.
     #[getter]
     pub fn state(&self) -> crate::State {
         crate::State(self.inner.state())
     }
 
-    /// Feasibility of the solution in terms of all constraints, including removed constraints.
+    /// Whether all retained constraints and variable domains are satisfied.
     ///
-    /// This is an alias for `feasible_unrelaxed`.
+    /// Checks all regular and special constraints, including removed constraints,
+    /// together with the kind and bounds of every retained variable, using
+    /// {attr}`~ommx.Solution.feasibility_atol`. This is an alias for
+    /// {attr}`~ommx.Solution.feasible_unrelaxed`; it does not establish optimality.
     ///
     /// Compatibility: The meaning of this property has changed from Python SDK 1.7.0.
     /// Previously, this property represents the feasibility of the remaining constraints only,
@@ -102,21 +235,53 @@ impl Solution {
         self.inner.feasible()
     }
 
-    /// Feasibility of the solution in terms of remaining constraints, not including relaxed (removed) constraints.
+    /// Whether active constraints and all retained variable domains are satisfied.
+    ///
+    /// Excludes constraints retained after removal, across all constraint families.
+    /// Variable kind and bound checks are still applied with
+    /// {attr}`~ommx.Solution.feasibility_atol`. A result can satisfy this property
+    /// while failing {attr}`~ommx.Solution.feasible` because a removed constraint
+    /// is violated.
+    ///
+    /// >>> from ommx import Instance
+    /// >>> instance = Instance.minimize()
+    /// >>> x = instance.new_binary("x")
+    /// >>> instance.objective = x
+    /// >>> required = instance.add_constraint(x == 1, "required")
+    /// >>> instance.relax_constraint(required.constraint_id, "manual relaxation")
+    /// >>> solution = instance.evaluate({x.id: 0})
+    /// >>> assert solution.feasible_relaxed
+    /// >>> assert not solution.feasible
+    /// >>> assert solution.constraints[required.constraint_id].violation() == 1.0
     #[getter]
     pub fn feasible_relaxed(&self) -> bool {
         self.inner.feasible_relaxed()
     }
 
-    /// Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.
+    /// Alias for {attr}`~ommx.Solution.feasible`, including removed constraints
+    /// and every retained variable's kind and bounds.
     #[getter]
     pub fn feasible_unrelaxed(&self) -> bool {
         self.inner.feasible()
     }
 
-    /// Get the optimization sense (minimize or maximize)
+    /// Absolute tolerance associated with the stored evaluation and feasibility results.
+    ///
+    /// Pass this to an extracted constraint's explicit feasibility query to use
+    /// the enclosing result's threshold.
     #[getter]
-    pub fn sense(&self) -> Result<crate::Sense> {
+    pub fn feasibility_atol(&self) -> f64 {
+        self.inner.feasibility_atol().into_inner()
+    }
+
+    /// The optimization sense associated with the reported objective value.
+    ///
+    /// This is the preserved output sense when an output objective is recorded
+    /// on the evaluated Instance, and otherwise its active sense. It can differ
+    /// from the solver-facing sense after a transformation. Raises RuntimeError
+    /// for older serialized results that do not record a sense.
+    #[getter]
+    pub fn sense(&self) -> PyResult<crate::Sense> {
         let sense = (*self.inner.sense()).ok_or_else(|| {
             PyRuntimeError::new_err(
                 "This property is available for ommx.Solution generated by OMMX v2.0.0 or later.",
@@ -125,7 +290,13 @@ impl Solution {
         Ok(sense.into())
     }
 
-    /// Get the optimality status
+    /// The recorded optimality status, not a result of candidate evaluation.
+    ///
+    /// {meth}`~ommx.Instance.evaluate` produces ``Optimality.Unspecified``.
+    /// An adapter may attach a solver's status, or a caller may set this property;
+    /// setting it does not prove the claim. For a transformed formulation, use
+    /// {meth}`~ommx.Instance.map_active_optimality` to determine which status
+    /// transports to the reported output problem.
     #[getter]
     pub fn optimality(&self) -> crate::Optimality {
         self.inner.optimality.into()
@@ -167,20 +338,40 @@ impl Solution {
             .collect()
     }
 
-    /// Get evaluated constraints as a dict keyed by constraint ID
+    /// Live mapping of all constraint families, including removed results.
+    ///
+    /// Typed IDs select the family. Rows are fetched only when indexed, as
+    /// independent snapshots with labels, provenance, removal reasons, and
+    /// evaluation diagnostics. Changing a snapshot does not update this
+    /// Solution; subsequent lookups read the owner's current result.
+    /// Use {meth}`~ommx.Solution.set_dual_variable` to update a stored regular
+    /// constraint's dual value.
+    ///
+    /// >>> from ommx import Instance
+    /// >>> instance = Instance.minimize()
+    /// >>> x = instance.new_binary("x")
+    /// >>> capacity = instance.add_constraint(x <= 2, "capacity")
+    /// >>> solution = instance.evaluate({x.id: 0})
+    /// >>> rows = solution.constraints
+    /// >>> row = rows[capacity.constraint_id]
+    /// >>> assert row.evaluated_value == -2.0
+    /// >>> assert row.violation() == 0.0
+    /// >>> assert row.is_feasible(atol=solution.feasibility_atol)
+    /// >>> row.dual_variable = 9.0
+    /// >>> assert rows[capacity.constraint_id].dual_variable is None
+    /// >>> solution.set_dual_variable(capacity.constraint_id, 2.0)
+    /// >>> assert rows[capacity.constraint_id].dual_variable == 2.0
+    /// >>> assert row.dual_variable == 9.0
+    ///
+    /// {class}`~ommx.EvaluatedConstraintCollection` specifies membership,
+    /// lookup, iteration, and equality. Its ``of_kind`` method returns a
+    /// {class}`~ommx.ConstraintFamilyView` for one family without collecting
+    /// rows. Use {meth}`~ommx.Solution.constraints_df` for a materialized table.
     #[getter]
-    pub fn constraints(&self) -> std::collections::BTreeMap<u64, crate::EvaluatedConstraint> {
-        let context = self.inner.evaluated_constraints().context();
-        self.inner
-            .evaluated_constraints()
-            .iter()
-            .map(|(id, ec)| {
-                (
-                    id.into_inner(),
-                    crate::EvaluatedConstraint::from_parts(ec.clone(), context.collect_for(*id)),
-                )
-            })
-            .collect()
+    pub fn constraints(
+        slf: Bound<'_, Self>,
+    ) -> crate::constraint_collection::EvaluatedConstraintCollection {
+        crate::constraint_collection::EvaluatedConstraintCollection::new(slf.unbind())
     }
 
     /// Get evaluated named functions as a list sorted by ID
@@ -203,35 +394,24 @@ impl Solution {
             .collect()
     }
 
-    #[getter]
-    pub fn constraint_ids(&self) -> BTreeSet<u64> {
-        self.inner
-            .constraint_ids()
-            .iter()
-            .map(|id| id.into_inner())
-            .collect()
-    }
-
     /// Get all unique decision variable names in this solution.
     ///
     /// Returns a set of all unique variable names. Variables without names are not included.
     ///
     /// # Examples
     ///
-    /// ```python
-    /// >>> from ommx import Instance, DecisionVariable
+    /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     /// >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x + y,
     /// ...     objective=sum(x) + sum(y),
-    /// ...     constraints=[],
-    /// ...     sense=Instance.MAXIMIZE,
+    /// ...     constraints={},
+    /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> solution = instance.evaluate({i: 1 for i in range(5)})
     /// >>> sorted(solution.decision_variable_names)
     /// ['x', 'y']
-    /// ```
     #[getter]
     pub fn decision_variable_names(&self) -> BTreeSet<String> {
         self.inner.decision_variable_names()
@@ -252,32 +432,51 @@ impl Solution {
         self.inner.named_function_names()
     }
 
-    /// Extract the values of decision variables based on the `name` with `subscripts` key.
+    /// Extract evaluated variable values using their model name and subscript tuples.
     ///
-    /// Raises ValueError if a decision variable with parameters is found, or if the same subscript is found.
+    /// Use labels such as product, facility, or time indices to return results
+    /// to application code. The result is a dictionary: ``(i,)`` identifies a
+    /// one-dimensional subscript, ``(i, j)`` a pair, and ``()`` a scalar variable
+    /// without subscripts. Names and subscripts are labels, not variable IDs;
+    /// ``parameters`` and ``description`` do not distinguish extraction keys.
     ///
-    /// # Examples
+    /// Raises KeyError if no decision variable has the requested name, and
+    /// ValueError if the same subscript is found more than once.
     ///
-    /// ```python
-    /// >>> from ommx import Instance, DecisionVariable
-    /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
-    /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=x,
-    /// ...     objective=sum(x),
-    /// ...     constraints=[sum(x) == 1],
-    /// ...     sense=Instance.MAXIMIZE,
-    /// ... )
-    /// >>> solution = instance.evaluate({i: 1 for i in range(3)})
-    /// >>> solution.extract_decision_variables("x")
-    /// {(0,): 1.0, (1,): 1.0, (2,): 1.0}
-    /// ```
+    /// >>> from ommx import Instance
+    /// >>> instance = Instance.maximize()
+    /// >>> x = [instance.new_binary("x", subscripts=[i]) for i in range(2)]
+    /// >>> y = instance.new_integer("y", lower=0, upper=3)
+    /// >>> instance.objective = 3 * x[0] + 5 * x[1] + y
+    /// >>> _ = instance.add_constraint(x[0] + x[1] <= 1)
+    /// >>> solution = instance.evaluate({x[0].id: 1, x[1].id: 0, y.id: 2})
+    /// >>> assert solution.feasible
+    /// >>> assert solution.extract_decision_variables("x") == {(0,): 1.0, (1,): 0.0}
+    /// >>> assert solution.extract_decision_variables("y") == {(): 2.0}
+    /// >>> named_values = solution.extract_all_decision_variables()
+    /// >>> assert named_values == {"x": {(0,): 1.0, (1,): 0.0}, "y": {(): 2.0}}
+    /// >>> table = solution.decision_variables_df()
+    /// >>> x_rows = table.loc[table["name"] == "x", ["subscripts", "value"]]
+    /// >>> assert x_rows["value"].to_dict() == {x[0].id: 1.0, x[1].id: 0.0}
+    ///
+    /// {meth}`~ommx.Solution.extract_all_decision_variables` groups all named
+    /// variables. {meth}`~ommx.Solution.decision_variables_df` also includes
+    /// unnamed variables and keeps variable IDs as its index; its ``subscripts``
+    /// column contains lists, while the dictionaries above use tuple keys.
+    /// {meth}`~ommx.SampleSet.extract_decision_variables` provides the same query
+    /// for a selected sample ID.
+    ///
+    /// To reuse values in a rebuilt model, use
+    /// {meth}`~ommx.Instance.state_from_named_values` on the receiving Instance.
+    /// It resolves that model's IDs by labels; it does not establish feasibility.
     pub fn extract_decision_variables<'py>(
         &self,
         py: Python<'py>,
         name: &str,
-    ) -> Result<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
+        let extracted = self.inner.extract_decision_variables(name)?;
         let dict = PyDict::new(py);
-        for (subscripts, value) in self.inner.extract_decision_variables(name)? {
+        for (subscripts, value) in extracted {
             let key_tuple = PyTuple::new(py, &subscripts)?;
             dict.set_item(key_tuple, value)?;
         }
@@ -289,21 +488,28 @@ impl Solution {
     /// Returns a mapping from variable name to a mapping from subscripts to values.
     /// This is useful for extracting all variables at once in a structured format.
     /// Variables without names are not included in the result.
+    /// Scalar variables use the empty tuple ``()`` as their inner key.
+    /// Names and subscripts select matches; parameters and descriptions are ignored.
     ///
-    /// Raises ValueError if a decision variable with parameters is found, or if the same
-    /// name and subscript combination is found multiple times.
+    /// Raises ValueError if the same name and subscript combination is found
+    /// multiple times. Distinct IDs do not disambiguate duplicate labels in this
+    /// format. Use {attr}`~ommx.Solution.state` or
+    /// {meth}`~ommx.Solution.decision_variables_df` for values keyed by ID.
+    /// See {meth}`~ommx.Solution.extract_decision_variables` for the complete
+    /// single-name, grouped, and table workflow, and
+    /// {meth}`~ommx.Instance.state_from_named_values` to map these values into
+    /// another Instance.
     ///
     /// # Examples
     ///
-    /// ```python
-    /// >>> from ommx import Instance, DecisionVariable
+    /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     /// >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x + y,
     /// ...     objective=sum(x) + sum(y),
-    /// ...     constraints=[],
-    /// ...     sense=Instance.MAXIMIZE,
+    /// ...     constraints={},
+    /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> solution = instance.evaluate({i: 1 for i in range(5)})
     /// >>> all_vars = solution.extract_all_decision_variables()
@@ -311,13 +517,13 @@ impl Solution {
     /// {(0,): 1.0, (1,): 1.0, (2,): 1.0}
     /// >>> all_vars["y"]
     /// {(0,): 1.0, (1,): 1.0}
-    /// ```
     pub fn extract_all_decision_variables<'py>(
         &self,
         py: Python<'py>,
-    ) -> Result<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
+        let extracted = self.inner.extract_all_decision_variables()?;
         let result_dict = PyDict::new(py);
-        for (name, variables) in self.inner.extract_all_decision_variables()? {
+        for (name, variables) in extracted {
             let var_dict = PyDict::new(py);
             for (subscripts, value) in variables {
                 let key_tuple = PyTuple::new(py, &subscripts)?;
@@ -328,58 +534,126 @@ impl Solution {
         Ok(result_dict)
     }
 
-    /// Extract the values of constraints based on the `name` with `subscripts` key.
+    /// Extract nonnegative violations of all constraint families by name, keyed by subscript tuples.
     ///
-    /// Raises ValueError if the constraint with parameters is found, or if the same subscript is found.
+    /// Discover available names with {attr}`~ommx.Solution.constraint_names`.
+    /// Matching uses the name and subscripts only; a scalar constraint has the
+    /// key ``()``. The returned dictionary captures values at extraction time.
+    ///
+    /// Raises KeyError if no constraint has the requested name. Raises
+    /// ValueError if matching constraints share subscripts, including across families.
+    /// Parameters and descriptions are ignored. Retained removed constraints are
+    /// included. Regular constraints return violations, not signed function values.
+    /// Indicator violations account for activation, while OneHot and SOS1 use
+    /// their respective metrics; see {meth}`~ommx.Solution.total_violation`.
+    /// Use {meth}`~ommx.Solution.get_constraint_value` or the regular row's
+    /// ``evaluated_value`` when the signed value is needed.
+    ///
+    /// A transformation may copy a source constraint's labels onto generated
+    /// constraints. If both survive in the result with the same name and
+    /// subscripts, distinguish them through typed-ID lookup in
+    /// {attr}`~ommx.Solution.constraints` instead of name extraction.
+    ///
+    /// Related methods on {meth}`~ommx.Instance.extract_constraints` and
+    /// {meth}`~ommx.ParametricInstance.extract_constraints` return attached
+    /// handles for active constraints; {meth}`~ommx.SampleSet.extract_constraints`
+    /// returns violations for a selected sample, including removed constraints.
     ///
     /// # Examples
     ///
-    /// ```python
-    /// >>> from ommx import Instance, DecisionVariable
+    /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> c0 = (x[0] + x[1] == 1).set_name("c").add_subscripts([0])
     /// >>> c1 = (x[1] + x[2] == 1).set_name("c").add_subscripts([1])
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints=[c0, c1],
-    /// ...     sense=Instance.MAXIMIZE,
+    /// ...     constraints={0: c0, 1: c1},
+    /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
     /// >>> solution.extract_constraints("c")
     /// {(0,): 0.0, (1,): 0.0}
-    /// ```
-    pub fn extract_constraints<'py>(
+    ///
+    /// A feasible inequality can have a negative signed value and zero violation:
+    ///
+    /// >>> from ommx import Instance
+    /// >>> named = Instance.minimize()
+    /// >>> x = named.new_binary("x")
+    /// >>> capacity = named.add_constraint(x <= 2, "capacity", subscripts=[0])
+    /// >>> assert named.constraint_names == {"capacity"}
+    /// >>> assert named.extract_constraints("capacity")[(0,)] == capacity
+    /// >>> assert named.as_parametric_instance().extract_constraints("capacity")[(0,)].name == "capacity"
+    /// >>> solution = named.evaluate({x.id: 0})
+    /// >>> assert solution.extract_constraints("capacity") == {(0,): 0.0}
+    /// >>> assert solution.get_constraint_value(capacity.constraint_id) == -2.0
+    /// >>> samples = named.evaluate_samples({7: {x.id: 0}})
+    /// >>> assert samples.extract_constraints("capacity", 7) == {(0,): 0.0}
+    fn extract_constraints(
         &self,
-        py: Python<'py>,
         name: &str,
-    ) -> Result<Bound<'py, PyDict>> {
-        let dict = PyDict::new(py);
-        for (subscripts, value) in self.inner.extract_constraints(name)? {
-            let key_tuple = PyTuple::new(py, &subscripts)?;
-            dict.set_item(key_tuple, value)?;
-        }
-        Ok(dict)
+    ) -> OmmxPyResult<crate::subscript_map::SubscriptMap<f64>> {
+        Ok(crate::subscript_map::SubscriptMap(
+            self.inner.extract_constraints(name)?,
+        ))
     }
 
-    /// Extract named functions by name with subscripts as key (returns a Python dict)
+    /// Extract named functions by name with subscripts as key (returns a Python dict).
+    ///
+    /// Named functions report additional metrics for the evaluated candidate;
+    /// registering one does not change the objective or add a constraint.
+    /// Discover names with {attr}`~ommx.Solution.named_function_names`, or use
+    /// {meth}`~ommx.Solution.named_functions_df` for a table including labels.
+    /// A scalar metric uses the empty tuple ``()`` as its key.
+    /// Names and subscripts select matches; parameters and descriptions are ignored.
+    /// The {class}`~ommx.NamedFunction` class example covers registration,
+    /// single-candidate and multi-candidate evaluation, and reporting-only variables.
+    ///
+    /// Raises KeyError if no named function has the requested name, and
+    /// ValueError if the same subscript is found more than once.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, NamedFunction, Sense
+    /// >>> x = DecisionVariable.binary(0, name="selected")
+    /// >>> cost = NamedFunction(id=10, function=4 * x, name="cost")
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={},
+    /// ...     sense=Sense.Maximize, named_functions=[cost],
+    /// ... )
+    /// >>> solution = instance.evaluate({x.id: 1})
+    /// >>> assert solution.objective == 1.0
+    /// >>> assert solution.extract_named_functions("cost") == {(): 4.0}
+    /// >>> assert solution.named_functions_df().loc[cost.id, "value"] == 4.0
     pub fn extract_named_functions<'py>(
         &self,
         py: Python<'py>,
         name: &str,
-    ) -> Result<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
+        let extracted = self.inner.extract_named_functions(name)?;
         let dict = PyDict::new(py);
-        for (subscripts, value) in self.inner.extract_named_functions(name)? {
+        for (subscripts, value) in extracted {
             let key_tuple = PyTuple::new(py, &subscripts)?;
             dict.set_item(key_tuple, value)?;
         }
         Ok(dict)
     }
 
-    /// Extract all named functions grouped by name (returns a Python dict)
-    pub fn extract_all_named_functions<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+    /// Extract all named functions grouped by name (returns a Python dict).
+    ///
+    /// The outer keys are names; each inner dictionary maps subscript tuples to
+    /// evaluated values, with ``()`` for a scalar metric. Entries without names
+    /// are excluded. Parameters and descriptions are ignored when grouping.
+    /// Use {meth}`~ommx.Solution.named_functions_df` to include unnamed entries
+    /// and retain their IDs.
+    ///
+    /// Raises ValueError if the same name and subscript combination is found
+    /// multiple times.
+    pub fn extract_all_named_functions<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
+        let extracted = self.inner.extract_all_named_functions()?;
         let result_dict = PyDict::new(py);
-        for (name, functions) in self.inner.extract_all_named_functions()? {
+        for (name, functions) in extracted {
             let func_dict = PyDict::new(py);
             for (subscripts, value) in functions {
                 let key_tuple = PyTuple::new(py, &subscripts)?;
@@ -390,12 +664,17 @@ impl Solution {
         Ok(result_dict)
     }
 
-    /// Set the dual variable value for a specific constraint by ID
-    pub fn set_dual_variable(&mut self, constraint_id: u64, value: Option<f64>) -> PyResult<()> {
+    /// Set the dual variable value for a specific constraint by ID.
+    ///
+    /// Raises KeyError if the constraint ID does not exist.
+    pub(crate) fn set_dual_variable(
+        &mut self,
+        constraint_id: ConstraintIDInput,
+        value: Option<f64>,
+    ) -> OmmxPyResult<()> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
-        self.inner
-            .set_dual_variable(constraint_id, value)
-            .map_err(|e| PyKeyError::new_err(e.to_string()))
+        self.inner.set_dual_variable(constraint_id, value)?;
+        Ok(())
     }
 
     /// Get a specific evaluated decision variable by ID
@@ -421,54 +700,21 @@ impl Solution {
     }
 
     /// Get the evaluated value of a specific constraint by ID
-    pub fn get_constraint_value(&self, constraint_id: u64) -> PyResult<f64> {
+    pub(crate) fn get_constraint_value(
+        &self,
+        constraint_id: ConstraintIDInput,
+    ) -> OmmxPyResult<f64> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
-        self.inner
-            .evaluated_constraints()
-            .get(&constraint_id)
-            .map(|ec| ec.stage.evaluated_value)
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!(
-                    "Unknown constraint ID: {}",
-                    constraint_id.into_inner()
-                ))
-            })
+        Ok(self.inner.get_constraint_value(constraint_id)?)
     }
 
     /// Get the dual variable value for a specific constraint by ID
-    pub fn get_dual_variable(&self, constraint_id: u64) -> PyResult<Option<f64>> {
+    pub(crate) fn get_dual_variable(
+        &self,
+        constraint_id: ConstraintIDInput,
+    ) -> OmmxPyResult<Option<f64>> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
-        self.inner
-            .evaluated_constraints()
-            .get(&constraint_id)
-            .map(|ec| ec.stage.dual_variable)
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!(
-                    "Unknown constraint ID: {}",
-                    constraint_id.into_inner()
-                ))
-            })
-    }
-
-    /// Get a specific evaluated constraint by ID
-    pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<crate::EvaluatedConstraint> {
-        let constraint_id = ommx::ConstraintID::from(constraint_id);
-        let context = self.inner.evaluated_constraints().context();
-        self.inner
-            .evaluated_constraints()
-            .get(&constraint_id)
-            .map(|ec| {
-                crate::EvaluatedConstraint::from_parts(
-                    ec.clone(),
-                    context.collect_for(constraint_id),
-                )
-            })
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!(
-                    "Unknown constraint ID: {}",
-                    constraint_id.into_inner()
-                ))
-            })
+        Ok(self.inner.get_dual_variable(constraint_id)?)
     }
 
     /// Get a specific evaluated named function by ID
@@ -497,9 +743,29 @@ impl Solution {
             })
     }
 
-    /// DataFrame of evaluated decision variables
+    /// A materialized DataFrame of variable definitions, labels, and evaluated values.
     ///
-    /// Columns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value
+    /// The integer ``id`` index identifies variables. Columns include ``kind``,
+    /// ``lower``, ``upper``, and ``value``, plus modeling labels such as ``name``,
+    /// ``subscripts``, ``description``, and ``parameters.{key}``. Evaluated rows
+    /// have no ``substituted_value`` field, so that compatibility column is NA;
+    /// read the populated value from ``value``. ``include`` selects optional
+    /// label/sidecar columns as on {meth}`~ommx.Instance.decision_variables_df`.
+    /// The table includes variables without names. ``subscripts`` holds lists
+    /// such as ``[0]``; {meth}`~ommx.Solution.extract_decision_variables` uses
+    /// tuples as dictionary keys instead. Editing this table does not update
+    /// the Solution.
+    ///
+    /// >>> from ommx import Instance
+    /// >>> instance = Instance.maximize()
+    /// >>> x = instance.new_binary("selected", subscripts=[0])
+    /// >>> instance.objective = x
+    /// >>> solution = instance.evaluate({x.id: 1})
+    /// >>> table = solution.decision_variables_df()
+    /// >>> assert table.loc[x.id, "name"] == "selected"
+    /// >>> assert table.loc[x.id, "value"] == 1.0
+    /// >>> table.loc[x.id, "value"] = 0.0
+    /// >>> assert solution.state.entries[x.id] == 1.0
     #[pyo3(signature = (include = None))]
     pub fn decision_variables_df<'py>(
         &self,
@@ -527,7 +793,19 @@ impl Solution {
         )
     }
 
-    /// DataFrame of evaluated constraints, dispatched on `kind=`. See
+    /// DataFrame of evaluated constraints, including `feasible` and `violation` for every kind.
+    ///
+    /// ``kind`` is required: ``"regular"``, ``"indicator"``, ``"one_hot"``, or
+    /// ``"sos1"``. The index contains typed IDs of the selected family. Rows
+    /// retain their labels and evaluation diagnostics; editing this materialized
+    /// table does not update the Solution.
+    ///
+    /// For regular constraints, ``value`` is the signed left-hand-side value:
+    /// equality requires zero and inequality requires a nonpositive value,
+    /// within {attr}`~ommx.Solution.feasibility_atol`. The nonnegative
+    /// ``violation`` column and per-row ``feasible`` are therefore distinct
+    /// from ``value``. Per-constraint feasibility does not check variable domains.
+    /// The `violation` column uses {meth}`constraint_violation`. See
     /// {meth}`ommx.Instance.constraints_df` for column / `kind=` /
     /// `include=` semantics.
     ///
@@ -536,7 +814,21 @@ impl Solution {
     /// `"removed_reason"` in `include=`. When the flag is on, rows for
     /// constraints removed before evaluation get `removed_reason` /
     /// `removed_reason.{key}` columns populated; other rows have NA.
-    #[pyo3(signature = (kind = ConstraintKind::Regular, include = None))]
+    /// The related metadata queries {meth}`~ommx.Solution.constraint_context_df`,
+    /// {meth}`~ommx.Solution.constraint_parameters_df`,
+    /// {meth}`~ommx.Solution.constraint_provenance_df`, and
+    /// {meth}`~ommx.Solution.constraint_removed_reasons_df` also require ``kind``.
+    ///
+    /// >>> from ommx import Instance
+    /// >>> instance = Instance.minimize()
+    /// >>> x = instance.new_binary("x")
+    /// >>> capacity = instance.add_constraint(x <= 2, "capacity")
+    /// >>> solution = instance.evaluate({x.id: 0})
+    /// >>> table = solution.constraints_df(kind="regular")
+    /// >>> assert table.loc[capacity.constraint_id, "value"] == -2.0
+    /// >>> assert table.loc[capacity.constraint_id, "violation"] == 0.0
+    /// >>> assert table.loc[capacity.constraint_id, "feasible"]
+    #[pyo3(signature = (*, kind, include = None))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
@@ -560,8 +852,12 @@ impl Solution {
                 let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
                 for (id, c) in coll.inner().iter() {
                     let m = meta.collect_for(*id);
-                    let dict = crate::pandas::WithModelingContext::new((*id, c), &m)
-                        .to_pandas_entry(py)?;
+                    let dict = crate::pandas::WithModelingContext::new(
+                        (*id, c, self.inner.feasibility_atol()),
+                        &m,
+                    )
+                    .to_pandas_entry(py)?;
+                    dict.set_item("violation", self.constraint_violation((*id).into())?)?;
                     if flags.removed_reason {
                         // Always emit the `removed_reason` column when
                         // requested so its existence in the resulting
@@ -582,9 +878,12 @@ impl Solution {
         )
     }
 
-    /// DataFrame of evaluated named functions
+    /// DataFrame of evaluated named functions, including entries without names.
     ///
     /// Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}
+    ///
+    /// The index is the named-function ID, and ``value`` is its evaluated metric.
+    /// See {class}`~ommx.NamedFunction` for a complete registration-to-table example.
     #[pyo3(signature = (include = None))]
     pub fn named_functions_df<'py>(
         &self,
@@ -616,7 +915,7 @@ impl Solution {
     /// Constraint context DataFrame (id-indexed). See
     /// {meth}`ommx.Instance.constraint_context_df` for column / `kind=`
     /// semantics. Reads from the evaluated collection's context store.
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_context_df<'py>(
         &self,
         py: Python<'py>,
@@ -644,7 +943,7 @@ impl Solution {
     }
 
     /// Constraint parameters DataFrame (long format).
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_parameters_df<'py>(
         &self,
         py: Python<'py>,
@@ -672,7 +971,7 @@ impl Solution {
     }
 
     /// Constraint provenance DataFrame (long format).
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_provenance_df<'py>(
         &self,
         py: Python<'py>,
@@ -700,7 +999,7 @@ impl Solution {
     }
 
     /// Removed-constraint reasons DataFrame (long format).
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
@@ -757,21 +1056,44 @@ impl Solution {
         self.clone()
     }
 
-    /// Calculate total constraint violation using L1 norm (sum of absolute violations)
+    /// Sum the nonnegative scalar violation of every constraint, including removed constraints.
     ///
-    /// Returns the sum of violations across all constraints (including removed constraints):
-    /// - For equality constraints: $\sum |f(x)|$
-    /// - For inequality constraints: $\sum \max(0, f(x))$
-    pub fn total_violation_l1(&self) -> f64 {
-        self.inner.total_violation_l1()
+    /// - Equality: `abs(f(x))`; inequality: `max(0, f(x))`.
+    /// - Indicator: the inner violation when active, otherwise zero.
+    /// - OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.
+    /// - SOS1: `min_i sum_{j != i} abs(x_j)`.
+    ///
+    /// Each constraint is feasible exactly when its violation is at most the
+    /// evaluation tolerance. This threshold applies to each constraint separately,
+    /// not to the total. Zero therefore implies that all constraints are feasible.
+    /// Variable bound and kind violations
+    /// are not added. Values use the evaluated state after discrete-value
+    /// canonicalization. Lowering need not preserve the metric: a retained
+    /// original and its generated constraints each contribute.
+    ///
+    /// Use {meth}`constraint_violation` for individual values, also available in
+    /// the `violation` column of {meth}`constraints_df` for every constraint kind.
+    pub fn total_violation(&self) -> f64 {
+        self.inner.total_violation()
     }
 
-    /// Calculate total constraint violation using L2 norm squared (sum of squared violations)
+    /// Get one constraint's nonnegative scalar violation.
     ///
-    /// Returns the sum of squared violations across all constraints (including removed constraints):
-    /// - For equality constraints: $\sum (f(x))^2$
-    /// - For inequality constraints: $\sum (\max(0, f(x)))^2$
-    pub fn total_violation_l2(&self) -> f64 {
-        self.inner.total_violation_l2()
+    /// Uses the definitions in {meth}`total_violation`, including for removed
+    /// constraints. The ID type selects its family. Raises `KeyError` when
+    /// the ID is absent from that constraint family.
+    pub fn constraint_violation(
+        &self,
+        constraint_id: crate::constraint_id::AnyConstraintID,
+    ) -> PyResult<f64> {
+        use crate::constraint_id::AnyConstraintID;
+        let violation = match constraint_id {
+            AnyConstraintID::Regular(id) => self.inner.constraint_violation(id.into()),
+            AnyConstraintID::Indicator(id) => self.inner.indicator_constraint_violation(id.into()),
+            AnyConstraintID::OneHot(id) => self.inner.one_hot_constraint_violation(id.into()),
+            AnyConstraintID::Sos1(id) => self.inner.sos1_constraint_violation(id.into()),
+        };
+        violation
+            .ok_or_else(|| PyKeyError::new_err(format!("Unknown constraint ID: {constraint_id:?}")))
     }
 }

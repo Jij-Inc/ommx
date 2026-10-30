@@ -6,8 +6,6 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
-
 ### 🆕 finite-domain 決定変数 ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
 
 {class}`~ommx.DecisionVariable` で、明示的に列挙した数値の集合を正確な
@@ -28,36 +26,832 @@ assert x.values == [0.1, 0.3, 0.5, 1.0]
 値の集合は空ではなく、重複のない有限な数値を含む必要があります。OMMX は
 評価、サンプリング、v1/v2 serialization を通してこの集合を正確に保持します。
 これは連続区間の離散化ではありません。定義域と DataFrame での表現については
-[決定変数](../user_guide/instance.md) を参照してください。
+{meth}`~ommx.DecisionVariable.finite_domain` を参照してください。
 
-### 🆕 remote Artifact lookup の型付き error ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
+## 3.0.0 Beta 8
 
-{meth}`~ommx.artifact.Artifact.load` と
-{meth}`~ommx.experiment.Experiment.load` は、OCI transport の error を含む
-汎用的な `RuntimeError` ではなく、OMMX が所有する exception として
-remote lookup の失敗を通知するようになりました。exact ref が存在しない
-場合だけを処理するには
-{class}`~ommx.artifact.RemoteArtifactNotFoundError` を catch してください。
-authentication、authorization、registry transport、invalid Artifact の失敗を
-誤って「存在しない」と扱わずに済みます。すべての remote lookup exception は
-{class}`~ommx.artifact.RemoteArtifactError` を継承します。
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b8-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b8)
+
+### 🛠 HiGHSの双対値を制約IDへ正しく対応付ける ([#1300](https://github.com/Jij-Inc/ommx/pull/1300))
+
+HiGHSの各行とOMMX制約IDの対応を保持します。IDが飛び番の場合や、実行可能な定数制約を
+ソルバーのモデルから省略した場合も、双対値を正しい制約へ戻せます。
+
+### 🛠 制約IDの枯渇をpanicではなくエラーとして報告 ([#1269](https://github.com/Jij-Inc/ommx/pull/1269))
+
+OneHot・Indicatorの単体変換と一括変換は、生成する通常制約のIDが足りない場合、
+panicではなく `RuntimeError` を返します。一括変換では必要なIDの総数を事前に
+確認するため、容量不足でInstanceが途中まで変更されることはありません。
+最後のIDまで使い切る変換や、通常制約を生成しない変換は引き続き成功します。
+
+### 🛠 SCIP の二次目的関数に対する初期解を修正 ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
+
+SCIP の目的関数用補助変数にも、指定した初期値から計算した値を設定するようになりました。
+元の問題で実行可能な初期値が、補助変数の未設定により実行不能になる問題を修正します。
+`State`、ID キー辞書、`NamedState` のすべてに適用されます。
+初期値を一部だけ指定した場合、SCIP の省略座標はゼロとして目的値を計算します。
+
+### 🛠 penalty構築前の整数エンコードと一括置換 ([#1253](https://github.com/Jij-Inc/ommx/pull/1253))
+
+`Instance.prepare()` は、slack変換の後、固定penaltyの前に整数エンコードを
+実行します。`to_qubo()` と `to_hubo()` もこの順序を使うため、制約を二乗して
+目的関数の項が増える前に書き換えます。非循環の置換は、置換同士の依存関係を
+先に解決し、各多項式の項を一度走査してまとめて処理します。
+
+penaltyによって除去される制約には、エンコード後の式が保存されます。
+制約の評価値と元の出力目的値は、決定変数の復元を通じて保持されます。
+詳しくは {meth}`~ommx.Instance.prepare` を参照してください。
+
+### ⚠ 全種類の制約でIDの番号を一意にする ([#1309](https://github.com/Jij-Inc/ommx/pull/1309))
+
+`Instance`・`ParametricInstance`内では、removedを含む通常制約・Indicator・OneHot・SOS1の
+全種類を通じてIDの番号が一意になります。自動追加や変換もこの共通空間から採番し、
+評価後の`Solution`・`SampleSet`でもIDを維持します。
+
+構築時とprotobuf読み込み時には種類間の番号重複をエラーとし、自動再採番はしません。
+3.0.0 beta期間中に作成したデータも、番号が重複している場合は読み込めなくなります。
+詳細は[特殊制約のID](../user_guide/special_constraints.md)を参照してください。
+
+### ⚠ 型付き制約IDとnativeな結果取得 ([#1289](https://github.com/Jij-Inc/ommx/pull/1289))
+
+`Instance`・`ParametricInstance`・`Solution`・`SampleSet` は、全種類の制約を
+所有元に追従する `.constraints` コレクションとして公開します。
 
 ```python
-from ommx.artifact import Artifact, RemoteArtifactNotFoundError
+from ommx import ConstraintID
 
-try:
-    artifact = Artifact.load("registry.example/team/model:latest")
-except RemoteArtifactNotFoundError:
-    artifact = None
+rows = solution.constraints
+row = rows[ConstraintID(7)]
+frame = solution.constraints_df(kind="regular")
 ```
 
-個別の exception として
-{class}`~ommx.artifact.RemoteArtifactAuthenticationError`、
-{class}`~ommx.artifact.RemoteArtifactAuthorizationError`、
-{class}`~ommx.artifact.RemoteArtifactTransportError`、
-{class}`~ommx.artifact.InvalidRemoteArtifactError` も利用できます。exception の
-message には元の registry / transport context が保持されます。両方の load
-entry point は同じ PyO3 error conversion の境界を使用します。
+コレクションは所有元を保持し、型付きIDで参照された行だけを取得します。整数キーは拒否します。
+モデルの値はAttachedハンドル、結果の値は削除済み制約の情報も含む個別のスナップショットです。
+種類別プロパティは `.constraints` と `.removed_constraints` に統合し、
+`get_constraint_by_id`・`get_removed_constraint_by_id`と結果の`constraint_ids`は
+添字アクセスと列挙へ置き換えます。モデルの独立したコピーが必要ならAttachedの行を`.detach()`します。
+`constraints_df`と4種類の制約メタデータDataFrameは、全所有元でキーワード引数`kind`が必須です。
+`get_constraints`メソッドはありません。
+
+`SampleSet.summary_with_constraints`は廃止します。サンプルごとの目的値と全体の実行可能性には
+`summary`を、制約別の結果には`constraints`または`constraints_df(kind=...)`を使います。
+
+`constraints.of_kind("sos1")`は、キーと行の具体型を保持するライブな`ConstraintFamilyView`を
+返します。`constraints_df`と同じkind文字列を受け取り、整数の検索キーを選択した種類へ
+自動昇格します。別種類のIDは拒否します。モデルの`removed_constraints`と結果の
+コレクションでも同じ絞り込みを使えます。
+
+モデル・結果のAPI、変換、診断、provenance、DataFrameで制約IDの種類を保持します。
+IDの型は `ConstraintID`、`IndicatorConstraintID`、`OneHotConstraintID`、
+`Sos1ConstraintID` です。種類が決まる入力では整数を自動昇格し、別種類のIDは拒否します。
+返り値と辞書キーは常に型付きです。別種類のIDは等しくならず、`int()` や整数
+インデックスへの変換機能もありません。`constraint_violation(id)` は型から種類を
+判断するため、整数は拒否します。決定変数IDとサンプルIDは整数のままで、保存形式も変わりません。
+
+詳しくは{class}`制約の評価結果の取得 <ommx.EvaluatedConstraintCollection>`と
+[移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
+種類を横断する取得には、拡張可能な `ConstraintIDBase` と `ConstraintView` を使います。
+特殊制約の種類が追加されても公開返り値型を変えず、具体的なIDによる添字アクセスでは
+具体型を返します。ソルバー側は未対応種類を黙って除外せず、明示的に拒否します。
+
+Attachedの行は所有元の同一性と型付きIDで比較し、Removedと結果の行は
+スナップショットのデータとメタデータで比較します。コレクションとそのビューも
+この比較に従います。型付きIDは `copy`・`deepcopy` に対応し、`.get()` は
+具体的な行の型と代わりの値の型を保持します。不正な検索キーへのエラーは、
+内部enumの抽出失敗を列挙せず、必要な型付きIDの指定方法を示します。
+
+`extract_constraints(name)`は全種類を検索します。`Instance`・`ParametricInstance`では
+添字タプルからAttachedオブジェクトへの辞書、`Solution`・`SampleSet`では違反量への辞書を
+返します。**通常制約も符号付きの式の値から非負の違反量に変わります。** 決定変数の
+抽出と同様にparametersは無視し、種類をまたぐ添字の重複は`ValueError`にします。
+
+全4種類の所有元に`constraint_names: set[str]`を追加し、`extract_constraints`と同じ
+対象の名前を列挙できます。`ParametricInstance.decision_variable_names`も追加しました。
+未設定の名前とパラメータ名は除外し、同名は1件にまとめます。
+
+### 🆕 変数の名前と添字から State を作成 ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
+
+`Instance.state_from_named_values()` で `NamedState` を対象インスタンスの
+変数 ID に変換できます。モデルの再生成で ID が変わっても、初期値を再利用できます。
+
+```python
+state = instance.state_from_named_values({"x": {(0,): 1.0, (1,): 4.0}})
+```
+
+見つからないキーは `KeyError`、複数の変数に一致する名前・添字は `ValueError` になります。
+文字列・整数への正規化でキーが重複する入力も `ValueError` になります。
+SCIP アダプターの `initial_state` に `NamedState` を直接渡すこともできます。
+SCIP での利用例は {ref}`名前と添字で初期値を指定する <named-initial-state>`
+を参照してください。
+
+### 🆕 同梱のエージェントプラグインとスキルを取得 ([#1264](https://github.com/Jij-Inc/ommx/pull/1264))
+
+`uv run ommx plugin path` と `uv run ommx plugin marketplace path` で、同梱プラグイン
+と Claude Code のローカルマーケットプレイスを取得できます。`uv run ommx skill path`
+はスキルの親ディレクトリ、`uv run ommx skill path ommx` は個別のスキルディレクトリを
+返します。Agent Plugins と Claude Code の manifest を含む bundle は CLI に
+埋め込まれ、内容と CLI バージョンに対応するキャッシュに展開されます。
+現在の `SKILL.md` は配布確認用の
+プレースホルダーで、OMMX の利用方法を説明する本文は別途追加します。
+導入・更新手順は [OMMX のエージェントプラグインとスキルを取得・導入する](../user_guide/agent_skills.md)
+を参照してください。
+
+### 🆕 Python SDK から OMMX CLI を実行 ([#1263](https://github.com/Jij-Inc/ommx/pull/1263))
+
+Python SDK をインストールすると `ommx` コマンドも使えるようになります。
+`ommx` に依存する uv プロジェクトでは、次のように実行できます。
+
+```bash
+uv run ommx --help
+uv run ommx list
+```
+
+console script は Rust 実行ファイルと引数解析・コマンド実行・表示を共有し、
+`OMMX_LOCAL_REGISTRY_ROOT` にも従います。`inspect` が表示する JSON のキー順も
+一定になりました。導入手順は [OMMX CLI のインストールと実行](../how_to/manage_local_registry.md)、
+Registry の管理は {ref}`Local Registry の cleanup workflow <experiment-cleanup-workflow>`
+を参照してください。
+
+## 3.0.0 Beta 7
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b7-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b7)
+
+### 🛠 HiGHS のモデル構築時に求解を実行しないよう修正 ([#1237](https://github.com/Jij-Inc/ommx/pull/1237))
+
+`OMMXHighsAdapter(instance)` はモデル構築のみを行うようになりました。
+従来は、定数でない目的関数を設定するときに、制約を追加する前のモデルで求解を
+実行していました。定数目的関数についても、定数値と最小化・最大化の方向を
+HiGHS モデルに保持するようにしました。
+
+モデル構築から求解・解の復元まで行う場合は `OMMXHighsAdapter.solve(instance)` を、
+構築済みモデルを求解する場合は `adapter.solver_input.run()` を使ってください。
+詳細は [Adapter チュートリアル](../tutorial/solve_with_ommx_adapter)を参照してください。
+
+項数の多い線形目的関数や制約を構築する際には、加算のたびに蓄積済みの式全体を
+コピーせず、項を追加するようにしました。
+
+### 🆕 Adapter パッケージの Python バージョン上限制限を撤廃 ([#1245](https://github.com/Jij-Inc/ommx/pull/1245))
+
+HiGHS・PySCIPOpt・OpenJij の Adapter パッケージから、Python の要件 `<3.14` を
+取り除きました。Python-MIP を含む 4 つの Adapter パッケージすべてで、
+`requires-python = ">=3.10"` を指定しています。
+
+これにより、Adapter 自体のメタデータによって Python 3.14 へのインストールが
+拒否されなくなります。インストールには引き続き、利用する Python バージョンと
+プラットフォームに対応した OMMX・ソルバー・その他の依存パッケージが必要です。
+
+## 3.0.0 Beta 6
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b6-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b6)
+
+### 🛠 QPLIB 読み込み時の二次係数を修正 ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
+
+QPLIB の二次目的関数と二次制約を、元の問題どおりに読み込めるようにしました。
+従来は形式上必要な係数 `1/2` が適用されず、二次項の寄与が 2 倍になっていました。
+そのため、目的関数値が変わったり、公開されている実行可能解が実行不可能と判定されたりする場合がありました。
+
+{meth}`~ommx.Instance.load_qplib` で作成して保存したモデルは、元の `.qplib`
+ファイルから読み込み直してください。`ommx.dataset.qplib` は OMMX 2.8.0 向けに
+公開した修正済みの配布を読み込むようになりました。旧配布がキャッシュされていても、
+修正済みの配布を使います。詳細は [既存の問題を読み込むHow-to](../how_to/load_existing_instance.md)を参照してください。
+
+### 🛠 MPS・MIPLIB 読み込み時にバイナリ変数を保持 ([#1202](https://github.com/Jij-Inc/ommx/pull/1202), [#1205](https://github.com/Jij-Inc/ommx/pull/1205))
+
+MPS ファイルには、変数を整数として指定し、上下限を省略する書き方があります。
+{meth}`~ommx.Instance.load_mps` と `ommx.mps.load_file()` は、Gurobi・HiGHS の
+規約に従い、このような変数をバイナリ変数（`0` または `1`）として読み込むようになりました。
+従来は上限のない一般整数変数として読み込まれ、解く問題が変わる場合がありました。
+ファイルに上下限が明示されている場合は、その指定が優先されます。
+
+影響を受ける保存済みモデルは、元の MPS ファイルから読み込み直してください。
+`ommx.dataset.miplib2017` は OMMX 2.7.0 向けに公開した修正済みの MIPLIB 配布を
+読み込むようになりました。旧配布がキャッシュされていても、修正済みの配布を使います。
+詳細は [既存の問題を読み込むHow-to](../how_to/load_existing_instance.md)を参照してください。
+
+### 🛠 変数の上下限と制約で許容誤差の判定を統一 ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
+
+変数の値が上下限の範囲内にあるかどうかを、不等式制約と同じ絶対許容誤差の規則で
+判定するようにしました。範囲内で許される整数値・バイナリ値を求めるときにも同じ規則を使います。
+境界付近の値では、以前のプレリリースと判定が変わる場合があります。
+詳しい規則は{meth}`~ommx.Bound.contains`を参照してください。
+
+### 🛠 変数の種類を列挙型に統一 ([#1196](https://github.com/Jij-Inc/ommx/pull/1196))
+
+{class}`~ommx.DecisionVariable` が変数の種類を受け取るときも返すときも、
+{class}`~ommx.Kind` を使うように統一し、v2 と同じ動作に戻しました。
+v3 プレリリースのコードで種類を整数値として直接渡している場合は、
+`Kind.Binary` や `Kind.Integer` などに置き換えてください。
+`DecisionVariable.binary()` などのコンストラクタや `DecisionVariable.BINARY` などの
+別名は引き続き利用できます。詳細は [移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
+### ⚠ すべての特殊制約に違反量を導入し、実行可能性判定を統一 ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
+
+すべての特殊制約（Indicator・OneHot・SOS1）に非負の制約違反量（violation）を導入し、
+各制約にどの程度違反しているかを数値で確認できるようになりました。
+通常制約を含むすべての制約の実行可能性判定を **`violation <= atol`** に統一しました。
+この規則は、個々の制約に対して適用します。
+
+Indicator の違反量は、条件が有効なときは内側の制約の違反量、無効なときは 0 です。
+OneHot（ちょうど 1 つの変数が `1`、残りが `0`）と SOS1（非ゼロの変数が高々 1 つ）では、
+制約を満たすために必要な変数値の変更量を絶対値で合計した最小値を使います。
+許容誤差をこの合計に適用するため、個々には小さなずれでも、合計すると実行不可能と
+判定される場合があります。
+
+コードの移行では、`total_violation_l1()` を {meth}`~ommx.Solution.total_violation`
+に置き換えてください。`total_violation_l2()` は削除しました。
+合計には通常制約・Indicator・OneHot・SOS1 に加え、変換などで除去された制約の違反量も含みます。
+
+```python
+solution.total_violation()
+solution.constraint_violation(30, kind="one_hot")  # 既存の OneHot 制約 ID
+solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+```
+
+個別の制約では、`EvaluatedConstraint.feasible` を `is_feasible(atol=...)` に
+置き換え、`SampledConstraint.feasible(atol=...)` はメソッドとして呼び出してください。
+元の評価と同じ許容誤差を使うには、`solution.feasibility_atol` または
+`sample_set.feasibility_atol` を渡します。Solution・SampleSet 全体の実行可能性を
+確認するプロパティは引き続き利用できます。
+
+SampleSet の実行可能性の判定と最良実行可能解の選択でも、
+変数の上下限・種類を確認するようになり、取り出した Solution の判定と一致します。
+変数に対するこれらの確認は `total_violation()` の合計には含まれないため、
+合計が 0 であることだけでは解が実行可能とは限りません。
+
+独自の許容誤差や特殊制約を含む結果を保存するときは、v2 形式を使ってください。
+旧 v1 形式への書き出しでは、保持できる通常制約と変数値について SDK の既定の
+許容誤差で実行可能性を計算し直します。
+詳細は {ref}`移行ガイド <constraint-violation-migration>` を参照してください。
+
+### ⚠ Big-M 定式化から SOS1 制約への変換をバッチ化 ([#1197](https://github.com/Jij-Inc/ommx/pull/1197), [#1223](https://github.com/Jij-Inc/ommx/pull/1223), [#1221](https://github.com/Jij-Inc/ommx/pull/1221))
+
+「非ゼロの変数は高々 1 つ」という条件を、選択用のバイナリ変数と Big-M 不等式で
+表している場合、{meth}`~ommx.Instance.promote_sos1_big_m` で明示的な SOS1 制約に
+変換できます。変換時には、元と同じ数学的な問題を表していることを検証します。
+
+リクエストは、選択用の変数の和を制限する制約の ID をキーとして、複数の定式化を
+まとめる形式になりました。たとえば、バイナリ変数に対する既存の定式化
+`x[2] + x[3] <= 1` が通常制約 ID `202` にある場合は次のように指定します。
+
+```python
+from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
+
+request = Sos1BigMPromotionRequest({
+    202: {
+        2: Sos1BigMSelectorClaim.reused(),
+        3: Sos1BigMSelectorClaim.reused(),
+    },
+})
+report = instance.promote_sos1_big_m(request)
+print(report.promoted)    # 元の制約 ID -> 新しい SOS1 制約 ID
+print(report.rejections)  # 元の制約 ID -> 変換できなかった理由
+```
+
+既定の `mode="best_effort"` では、独立に変換できる定式化を適用し、変換できなかった
+ものは理由を返します。すべての変換が成功することを要求するには `mode="strict"` を
+使ってください。1 つでも変換できなければ {class}`~ommx.Sos1BigMPromotionBatchRejectedError`
+が発生し、インスタンス全体を変更せずに終了します。
+
+以前の `atol` 引数は取り除いてください。変換は評価時の許容誤差とは独立に、
+数学的な同値性を検証するようになりました。また、指定された Big-M 不等式から
+変数の上下限を絞り込み、変換が成功したものと一緒に適用します。
+たとえば、`0 <= y <= 10`、`y <= 3*z`、`z` がバイナリ変数なら、`y` の上限を `3` にできます。
+元の変数に対する目的関数と実行可能な値の組み合わせは保持しますが、
+違反量や許容誤差の境界付近での判定は変わる場合があります。
+選択用の変数を別に持つ場合の指定方法と移行例は、
+{ref}`SOS1 変換ガイド <sos1-big-m-formulation>` を参照してください。
+
+### 🆕 線形制約を使って変数の上下限を絞り込む ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
+
+制約に含まれる情報から、変数の上下限を狭められるようになりました。
+たとえば、整数変数について `x + y <= 7` と `y >= 2` から `x <= 5` を導けます。
+
+```python
+from ommx import DecisionVariable, Instance, Sense
+
+x = DecisionVariable.integer(0, lower=0, upper=10)
+y = DecisionVariable.integer(1, lower=2, upper=10)
+instance = Instance.from_components(
+    decision_variables=[x, y], objective=x,
+    constraints={100: x + y <= 7}, sense=Sense.Minimize,
+)
+changed = instance.tighten_bounds_simultaneously_once()
+assert changed[0].upper == 5
+```
+
+このメソッドはインスタンスを更新し、変更された変数の ID と新しい上下限の辞書を返します。
+利用する制約を指定する場合は、
+`instance.tighten_bounds_simultaneously_once_using_constraints({100})` を使います。
+各呼び出しは開始時の上下限を使って 1 回だけ計算します。
+新しい上下限を他の制約へ反映させるには、再度呼び出してください。
+
+対象となるのは対応する線形制約です。非線形制約・合成式・特殊制約や、
+変数項が `max_terms`（既定値: 32）を超える線形制約はスキップします。
+丸め誤差により、許容誤差の境界付近で実行可能性の判定が変わる場合があります。
+対応する変数の種類と許容誤差の扱いは
+{meth}`~ommx.Instance.tighten_bounds_simultaneously_once` のAPI Referenceを参照してください。
+
+### 🆕 QPLIB の公開解を読み込む ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
+
+公開されている `.sol` ファイルを読み込み、対応する問題で評価することで、
+目的関数値と実行可能性を確認できるようになりました。
+
+```python
+from ommx import Instance, State
+
+instance = Instance.load_qplib("QPLIB_0018.qplib")
+state = State.load_qplib_solution(
+    "QPLIB_0018.sol", num_variables=len(instance.decision_variables)
+)
+solution = instance.evaluate(state, atol=1e-8)
+```
+
+解ファイルで省略された変数には 0 を設定します。記載された目的関数値 `objvar` は
+変数として扱わず、モデルの評価によって目的関数値を計算します。
+`ommx.qplib.load_solution` も利用できます。
+対応するファイルは [既存の問題と候補解を評価するTutorial](../tutorial/evaluate_existing_candidate)を参照してください。
+
+### 🆕 Rust 拡張からのデータ受け渡しに共通の例外を導入 ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
+
+外部の Rust 拡張から Python SDK に OMMX オブジェクトを渡せない場合に、
+{class}`~ommx.BridgeError` を捕捉できるようになりました。
+転送方式の不一致や受け取り処理の登録失敗、転送中の失敗を扱います。
+独立にビルドされた拡張からも同じ例外クラスが送出されます。
+転送中の失敗では、元の Python 例外を `__cause__` から確認できます。
+SDK または必要な bridge API が見つからない場合は `ImportError` になります。
+
+## 3.0.0 Beta 5
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b5-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b5)
+
+### 🛠 境界を含む `atol` 判定 ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+絶対許容誤差の比較は、差がちょうど`atol`となる境界を一貫して含むようになりました。
+等式のresidualは $|f(x)| \leq \mathtt{atol}$ のときfeasible、不等式のresidualは
+$f(x) < 0$ または $|f(x)| \leq \mathtt{atol}$ のときfeasibleです。scalar / sample
+evaluation、regular / Indicator constraint、`Solution` / `SampleSet`の検証、v1 / v2の
+deserializeで同じ規則を使います。
+
+Functionのゼロ依存演算、Indicatorのactivation、OneHot / SOS1の分類、solver stateの
+離散値canonicalization、fixed valueの整合性検証でも、targetとの差がちょうど`atol`の
+値を含みます。境界をわずかに超える値は引き続き範囲外です。有限値の検証を所有するAPIは、
+domain errorや整合性errorを返す前にNaNと無限大を引き続き拒否します。
+
+### 🛠 evaluation時のsolver stateをcanonicalize ([#1174](https://github.com/Jij-Inc/ommx/pull/1174), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+{meth}`~ommx.Instance.populate_state`、{meth}`~ommx.Instance.evaluate`、
+{meth}`~ommx.Instance.evaluate_samples`は、fixedでもdependentでもない有限な入力値と、
+dependent targetの導出値を、decision variableのkindと呼び出し側の`atol`に従って
+canonicalizeするようになりました。これらの値について、`0`または`1`との差が`atol`
+以下のBinary値と、整数との差が`atol`以下のInteger / SemiInteger値は、境界上の値も含めて
+対応する厳密な離散値として格納されます。canonicalizationとは
+別に、kindとboundのfeasibilityを既存の規則で判定します。
+ContinuousとSemiContinuousは丸めません。それ以外の有限値は、返された
+{class}`~ommx.Solution`がfeasibilityを判定できるように保持し、非有限なstate値は
+引き続き拒否します。
+
+呼び出し側がfixedまたはdependent variableの値を渡した場合、その値は引き続き
+整合性assertionとして扱います。検証後のstateには、Instanceが所有するfixed valueを
+変更せずに格納するか、dependencyから導出してtarget kindに従いcanonicalizeした値を
+格納します。dependencyはcanonicalized inputから評価するため、丸め前のsolver vectorを
+もとに明示したdependent assertionが、導出値の`atol`内に入らず拒否される場合があります。
+scalar / sample evaluationは同じ規則を使い、SampleIDの対応関係を保持します。
+
+{meth}`~ommx.Instance.partial_evaluate`も、入力を検証した後、special constraintのpropagation、
+expressionへの代入、定数化したdependencyの評価より前に同じ規則を適用します。そのため、
+書き換え後のInstanceを評価した結果は、元のInstanceを直接評価した場合と同じcanonical
+coordinateを使います。Instanceが既に所有するfixed valueは変更せず、既存のkind / bound
+検証でpartial evaluationの受理範囲外となる値は引き続き拒否します。
+
+### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178), [#1181](https://github.com/Jij-Inc/ommx/pull/1181), [#1184](https://github.com/Jij-Inc/ommx/pull/1184))
+
+{class}`~ommx.Function` はcompactなpolynomialに加えて、複合式も表現できるように
+なりました。絶対値、符号関数、最小値、最大値、除算、符号付き32 bit整数による
+累乗をPythonから直接構築できます。
+
+```python
+from ommx import DecisionVariable, Function
+
+x = Function(DecisionVariable.continuous(1))
+y = Function(DecisionVariable.continuous(2))
+z = Function(DecisionVariable.continuous(3))
+
+f = abs(x - 2).maximum(y) / (z + 1)
+g = f**2
+h = f.powi(-2)
+```
+
+名前付きの演算には {meth}`~ommx.Function.signum`、
+{meth}`~ommx.Function.minimum`、{meth}`~ommx.Function.maximum` を使用します。
+`f**n` と {meth}`~ommx.Function.powi` は同じ演算です。浮動小数や関数値の指数、
+および反転累乗はサポートしません。評価時には、境界を含む
+`abs(value) <= atol`をゼロと判定します。`signum`は`0`を返し、そのように
+判定された値を分母にする除算や負の整数による累乗は`ValueError`になります。
+複合式はOMMX protobuf payloadへ
+flat な逆ポーランド記法（RPN）の命令列としてserializeされます。現在提供している
+HiGHS、Python-MIP、PySCIPOpt、OpenJijの全adapterはpolynomialのみを受け付ける
+input classを宣言しているため、各adapterが受け付けるfunction positionの複合式を
+拒否します。
+
+ゼロに依存する`Signum`、`Div`、負の`Powi`ノードは、式の構築、代入、部分評価を
+経ても保持されます。後続の評価処理に渡す`atol`が、結果または定義域エラーを
+決定します。特に、`Function`を定数や係数で除算した場合も複合式のままです。
+`Function.evaluate_bound(..., atol=...)`も同じゼロ判定を区間評価へ適用します。
+IndicatorのBig-M変換、特殊制約のlowering、integer slack変換も、導出するbound用の
+`atol=`を受け取ります。これによりFunction bodyのゼロ判定は整合しますが、代数的な
+loweringは離散値が厳密であることを仮定し、0や1に近いsolver出力を丸める処理は
+行いません。省略時は`DEFAULT_ATOL`が使われます。integer slack変換は係数の正規化前に、
+評価と同じ境界を含む条件 $f(x) < 0$ または
+$|f(x)| \leq \mathtt{atol}$ で不等式を分類するため、微小な正値が
+scaleによって暗黙に再分類されることはありません。厳密な多項式正規化は有限かつ
+非ゼロの係数をすべて保持し、許容誤差によるcleanupを暗黙には行いません。近似的な
+cleanupを将来提供する場合は、別の明示的なAPIになります。減算も、右辺を符号反転して
+加算する場合と同じcanonicalizationに従います。そのため `x - (-y)` は可能ならcompact
+polynomialへ戻り、係数overflowは遅延せず直ちに`ValueError`として通知されます。
+
+`Function`が常にpolynomialとは限らなくなったため、複合式に対する
+{meth}`~ommx.Function.degree` と {meth}`~ommx.Function.num_terms` は`None`を返します。
+polynomial termのaccessorと {meth}`~ommx.Function.content_factor` は、複合式を空の
+polynomialとして扱わず`TypeError`を送出します。演算順序、evaluation error、
+serializationの詳細は {class}`FunctionのAPI Reference <ommx.Function>` を参照してください。
+
+Instance class APIでは、このpolynomial要件を名前から明示するようにしました。
+Python SDK 3.0.0 Beta 4で公開したAPIから、次の破壊的なrenameが含まれます。
+
+| 変更前 | 変更後 |
+|---|---|
+| `DegreeBound` | `PolynomialRequirement` |
+| `DegreeBound.at_most(n)` | `PolynomialRequirement.at_most(n)` |
+| `DegreeBound.unbounded()` | `PolynomialRequirement.any_degree()` |
+| `bound.maximum` | `requirement.maximum_degree` |
+| `bound.includes(degree)` | `requirement.accepts_degree(degree)` |
+| `objective_degree_bound` | `objective_polynomial_requirement` |
+| `regular_constraint_degree_bounds` | `regular_constraint_polynomial_requirements` |
+| `indicator_constraint_degree_bounds` | `indicator_body_polynomial_requirements` |
+
+`PolynomialRequirement.any_degree()`が受け付けるのは任意次数のpolynomialであり、
+複合された非polynomialの`Function`は含みません。
+
+### 🆕 検証付きSOS1 Big-M promotion ([#1186](https://github.com/Jij-Inc/ommx/pull/1186))
+
+{ref}`SOS1制約 <sos1-constraint>`は、memberのうち高々1つだけが
+非零となる制約です。{ref}`Big-M formulation <sos1-big-m-formulation>`は、
+この条件をbinary selector、memberとselectorのlink制約、およびselectorの
+cardinality制約で表します。
+
+{class}`~ommx.Sos1BigMPromotionRequest`は、現在の`Instance`がこの
+formulationを持つことを申請します。これは独立した変形申請であり、loweringの
+rollbackや逆変換ではありません。promotion checkerは、現在の変数、domain、rowが
+申請したformulationのrowをfirst-classなSOS1制約へ置き換えることを正当化する
+十分条件を満たすことを検証します。
+
+```python
+from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
+
+request = Sos1BigMPromotionRequest({
+    102: {
+        0: Sos1BigMSelectorClaim.reused(),
+        1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101),
+    },
+})
+report = instance.promote_sos1_big_m(request, mode="strict")
+sos1_id = report.promoted[102]
+```
+
+この例は、現在のstrict batch APIで1件のrequestを呼び出す形です。申請した
+formulationの検証に失敗すると
+{class}`~ommx.Sos1BigMPromotionBatchRejectedError`となり、`Instance`は
+変更されません。戻り値の{class}`~ommx.Sos1BigMPromotion`はbatch全体のReportで、
+`promoted` Mapから新しいSOS1 IDを取得できます。member、selectorの復元、
+removed rowの情報はInstanceから参照できます。
+
+### 🆕 区間で定義する決定変数の逐次作成 ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
+
+{class}`~ommx.Instance` が数値IDを自動で割り当てながら、既存の区間で定義する
+すべての決定変数kindを作成できるようになりました。
+{meth}`~ommx.Instance.new_binary` に加えて、
+{meth}`~ommx.Instance.new_integer`、
+{meth}`~ommx.Instance.new_continuous`、
+{meth}`~ommx.Instance.new_semi_integer`、
+{meth}`~ommx.Instance.new_semi_continuous` を利用できます。
+
+```python
+from ommx import Instance
+
+instance = Instance.minimize()
+count = instance.new_integer("count", lower=0, upper=10)
+amount = instance.new_continuous("amount", lower=0)
+batch = instance.new_semi_integer("batch", lower=2, upper=10)
+rate = instance.new_semi_continuous("rate", lower=0.5, upper=4)
+```
+
+どのメソッドも式にそのまま利用できる
+{class}`~ommx.AttachedDecisionVariable` を返します。`name` は引き続き省略可能な
+位置引数で、`subscripts`、`parameters`、`description` はキーワード専用です。
+新しい4メソッドでは、`lower` と `upper` もキーワード専用で指定できます。
+さらに `new_integer` と `new_semi_integer` はキーワード専用の `atol` を受け取り、
+省略時には {func}`~ommx.get_default_atol` が返す現在の既定値を使います。この2メソッドでは、
+有限な lower endpoint を `ceil(lower - atol)`、有限な upper endpoint を
+`floor(upper + atol)` へ正規化します。正規化後の区間に整数がない場合、`new_integer` は
+`ValueError` を返し、`new_semi_integer` はゼロの選択肢を `[0, 0]` として保持します。
+逐次modeling workflowの詳細は
+{class}`~ommx.Instance`のAPI Referenceを参照してください。
+
+各constructorは決定変数の定義全体を検証してから、rowとmodeling labelをまとめて
+{class}`~ommx.Instance` へ追加します。boundまたはtoleranceが不正な場合や、既存の
+決定変数IDの最大値が `2**64 - 1` で、それより大きい自動IDを割り当てられない場合も、
+変数やlabelの一部だけが残ることはありません。
+
+## 3.0.0 Beta 4
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b4-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b4)
+
+### ⚠ `solve()`と`sample()`が入力を自動的にPrepare ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+`SolverAdapter.solve()`と`SamplerAdapter.sample()`は実行前にAdapterの推奨Preparationを
+適用し、渡された{class}`~ommx.Instance`自体は変更しないようになりました。
+Preparationをcustomizeするapplicationでは、Instanceをin-placeでPrepareし、代わりに
+`solve_without_preparation()`または`sample_without_preparation()`を呼びます。
+
+既存コードで移行が必要な破壊的変更は次の2点です。
+
+- `OMMXOpenJijSAAdapter.sample(..., initial_state=...)`と
+  `OMMXOpenJijSAAdapter.solve(..., initial_state=...)`は利用できなくなりました。Instanceを
+  明示的にPrepareしてから、
+  `OMMXOpenJijSAAdapter.sample_without_preparation(instance, initial_state=...)`または
+  `OMMXOpenJijSAAdapter.solve_without_preparation(instance, initial_state=...)`を呼びます。
+- 独自Adapterは`solve_without_preparation()`または`sample_without_preparation()`を実装し、
+  backendの実行処理をそこへ移します。Adapter固有optionを`solve()`または`sample()`でも
+  提供する場合、これらのmethodではcopyをPrepareし、optionをpreparation-free methodへ
+  転送します。
+
+Adapter inputに`output_objective`がある場合、HiGHSとPython-MIPはdual valueを省略します。
+2つの呼び出し方は
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
+### ⚠ Solver Preparationで入力objectiveを保持 ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+`to_qubo()`と`to_hubo()`は、変換後のactive `Instance`にsolverが使う
+minimization energyを保持しつつ、`Solution`と`SampleSet`には入力instanceが
+公開していたobjective semanticsを保持するようになりました。
+
+```python
+from ommx import DecisionVariable, Instance, Sense
+
+x = DecisionVariable.binary(0)
+instance = Instance.from_components(
+    sense=Sense.Maximize,
+    objective=x,
+    decision_variables=[x],
+    constraints={0: x == 1},
+)
+
+instance.to_qubo(uniform_penalty_weight=2.0)
+state = {0: 0.0}
+
+assert instance.sense == Sense.Minimize
+assert instance.objective.evaluate(state) == 2.0
+assert instance.evaluate(state).sense == Sense.Maximize
+assert instance.evaluate(state).objective == 0.0
+assert instance.evaluate_samples({0: state}).sense == Sense.Maximize
+assert instance.evaluate_samples({0: state}).objectives[0] == 0.0
+```
+
+従来のdriverはactive senseを戻し、penalized solver energyを評価結果に使っていたため、
+これは最新stable Python SDKからのbreakingな修正です。返すQUBO/HUBO係数の
+意味は変わりません。
+
+明示的なoutput objectiveを持つ`Instance`または`ParametricInstance`は、v1 wire formatで
+losslessに表現できません。この場合`to_v1_bytes()`は`RuntimeError`を送出するため、
+`to_v2_bytes()`を使用してください。
+
+Penalty変換後のoptimalityも保守的に変換され、active formulationのproofを
+移せない評価結果は`Optimality.Unspecified`のままです。実行可能な事後条件は
+{meth}`~ommx.Instance.to_qubo`、{meth}`~ommx.Instance.to_hubo`、
+{meth}`~ommx.Instance.evaluate`、{meth}`~ommx.Instance.evaluate_samples`に記載されています。
+明示的なPreparation workflowは
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
+### ⚠ Adapter applicability を `INPUT_CLASS` だけで定義 ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
+
+`SolverAdapter.check_applicability()` と `require_applicable()` は、完全な
+applicability 条件として `INPUT_CLASS` membership だけを使うようになりました。
+Adapter が所有していた第2の precondition 層は廃止し、
+`AdapterPreconditionViolation`、`ConstraintRef`、`_check_preconditions()`、report の
+`preconditions_checked` と `precondition_violations` field を削除しました。
+
+両 method は `InstanceClassMembershipReport` を直接返すようになり、
+`AdapterApplicabilityReport` wrapper は削除されました。`report.is_applicable` は
+`report.is_member`、`report.input_membership` は `report` に置き換えてください。
+`AdapterNotApplicableError` では、`error.report` が membership report そのものであり、
+Adapter identity は `error.adapter` から取得できます。
+
+Adapter 実装は、受け入れる model の条件をすべて `INPUT_CLASS` で表現する必要があります。
+Converter 固有の表現検査や backend の上限検査は solver input の構築経路に残りますが、
+その失敗は `AdapterNotApplicableError` ではなく conversion または backend の error です。
+特に OpenJij の signed ID と finite coefficient の検査は sampler input の構築時に
+行われるようになりました。責務境界の詳細は
+[Adapterのexact input（INPUT_CLASS）](../user_guide/instance_class.md)と
+[Developer Guide: OMMX Adapterを実装する](../developer_guide/adapter.md)を参照してください。
+
+### Adapter の input class 宣言を必須化 ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
+
+具体的な `SolverAdapter` / `SamplerAdapter` 実装では、`INPUT_CLASS` を
+非 Optional の `ClassVar[InstanceClass]` として宣言する必要があり、`None` は
+有効な宣言ではありません。リポジトリ内の Adapter も `InstanceClass` を直接公開するため、
+呼び出し側は `is not None` の確認なしで `Adapter.INPUT_CLASS` を
+{meth}`~ommx.Instance.prepare` に渡せます。宣言がない場合は、applicability の確認時に
+引き続き明確な `TypeError` を送出します。契約の全体像は
+[Developer Guide: OMMX Adapterを実装する](../developer_guide/adapter.md)を参照してください。
+
+## 3.0.0 Beta 3
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b3-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b3)
+
+### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
+
+Function、polynomial、constraint、named function、`Instance` のevaluation APIは、
+RustからPythonへの共通error boundaryを直接使います。呼び出し側が渡したstateの不足・
+未知のID・不正な値と、回復可能なdependent-variable assertionは`ValueError`になります。
+Functionとpolynomialを直接partial evaluationする場合は`CoefficientError`を保持し、
+`Instance`が所有するdependencyの正規化と{attr}`removed constraint <ommx.Instance.removed_constraints>`の復元で発生した
+coefficient failureは`RuntimeError`にfallbackします。
+
+Decision variableの追加とsubstitution、`Function.content_factor`、OneHot/SOS1の
+構築も、このboundaryを直接使います。Decision variable / parameter IDの衝突、
+不正なsubstitution、表現できないcontent factor、空の特殊制約は、Rust SDKの
+signal ownerを保持したまま`ValueError`になります。型付けされていないdefensive
+invariant failureは、引き続き`RuntimeError`にfallbackします。
+
+`Samples.append`も同じboundaryへ重複sample IDを伝播し、変更前に入力IDをすべて
+検証するため、失敗してもcollectionは変更されません。`Instance.random_samples`は、
+state group数とsample数の不整合、およびinclusiveなsample ID rangeの容量不足を
+`ValueError`として通知します。`u64`全域のID rangeと正しい正数partitionは、
+integer overflowやstrategy panicなしで生成できます。
+
+### 🆕 Solver Adapter 共通のモデル準備フロー ([#1147](https://github.com/Jij-Inc/ommx/pull/1147)、[#1152](https://github.com/Jij-Inc/ommx/pull/1152)、[#1153](https://github.com/Jij-Inc/ommx/pull/1153)、[#1154](https://github.com/Jij-Inc/ommx/pull/1154))
+
+Solverごとに受け付けるモデルの形は異なります。Beta 3では、使いたいSolverに合わせて
+{class}`~ommx.Instance` を変換する操作を、共通のフローで行えるようになりました。
+Adapterの推奨Policyを取得し、application固有の選択を必要に応じて変更して、
+{meth}`~ommx.Instance.prepare` を呼び出します。その同じinstanceをAdapterへ渡します。
+Adapterの直接呼び出しは引き続き厳格であり、受け付けられる形にするためのpreparationや
+instanceの変更を暗黙には行いません。
+
+```python
+from ommx_highs_adapter import OMMXHighsAdapter
+
+input_class = OMMXHighsAdapter.INPUT_CLASS
+assert input_class is not None
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# Applicationに異なる選択が必要なら、ここでPolicyを調整します。
+
+instance.prepare(input_class, policy)
+solution = OMMXHighsAdapter.solve(instance)
+```
+
+HiGHS、Python-MIP、PySCIPOpt、OpenJijはいずれもこのフローを利用できます。各Adapterの
+推奨Policyには、そのSolverで一般的に必要となるモデル変換が設定されています。一方、
+安全な共通defaultを決められない選択はユーザーが制御します。例えばBeta 3では、制約付き
+モデルをOpenJij向けに準備する際、最小化・最大化に適した向きで固定penaltyを適用しますが、
+その大きさはユーザーが選択します。
+
+`prepare()` はinstanceをin-placeで更新します。Solverが返したsolutionやsampleを評価する
+ときは、変換前の変数値を復元し、preparation中に取り除かれた制約を検査できます。後の
+preparation stepが失敗した場合、それより前に完了した変更はinstanceに残ります。v2または
+Beta 2から移行する場合は、OpenJijのモデル変換optionとpre-release版の
+`OpenJijPreparation*` APIを、この共通フローに置き換えてください。exact inputの意味は
+[Adapter の exact input（INPUT_CLASS）](../user_guide/instance_class.md)、Policyと実行の責任境界は
+[Instance Preparation と PreparationPolicy](../user_guide/preparation_policy.md)、完全な利用例は
+[OpenJijによるサンプリング](../tutorial/tsp_sampling_with_openjij_adapter)、対応するAPIの
+置き換えは[Python SDK v2からv3へのマイグレーションガイド](../migration/python_sdk_v2_to_v3.md)
+を参照してください。
+
+## 3.0.0 Beta 2
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b2-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b2)
+
+### ⚠ `SolverAdapter.INPUT_CLASS` と明示的な OpenJij preparation ([#1084](https://github.com/Jij-Inc/ommx/pull/1084)、[#1085](https://github.com/Jij-Inc/ommx/pull/1085)、[#1086](https://github.com/Jij-Inc/ommx/pull/1086)、[#1087](https://github.com/Jij-Inc/ommx/pull/1087)、[#1088](https://github.com/Jij-Inc/ommx/pull/1088))
+
+{class}`~ommx.adapter.SolverAdapter` に、変換なしでAdapterが直接扱える
+{class}`~ommx.Instance` の集合を表す `INPUT_CLASS` を導入しました。
+source instanceを `INPUT_CLASS` に属するinputへ変換する操作を `Prepare` と呼びます。
+現時点でpreparationを提供するのはOpenJijだけですが、今後のupdateで
+`SolverAdapter` の共通workflowとして標準化する予定です
+（[#1111](https://github.com/Jij-Inc/ommx/issues/1111)）。
+
+`INPUT_CLASS` は、{class}`~ommx.InstanceClassClause` の有限和である
+{class}`~ommx.InstanceClass` です。各clauseには、使用中の変数kind、目的関数と制約の
+次数、通常制約とIndicator制約のrelation、OneHot / SOS1制約の有無、最適化senseを
+指定できます。例えば、線形目的関数と線形制約だけを受け入れるclassを記述できます。
+指定できる条件の詳細は {class}`~ommx.InstanceClassClause` を参照してください。
+membershipは渡されたinputそのものについて評価し、
+{class}`~ommx.InstanceClassMembershipReport` がclauseごとの構造化されたmismatchを
+返します。
+
+`OMMXHighsAdapter`、`OMMXPythonMIPAdapter`、`OMMXPySCIPOptAdapter`、
+`OMMXOpenJijSAAdapter` は、それぞれ具体的なinput classを宣言します。class外の入力は
+backend構築前に {class}`~ommx.adapter.AdapterNotApplicableError` で拒否されます。
+構造化された不一致は `check_applicability()` で確認できます。HiGHSとPython-MIPは
+線形モデル、PySCIPOptは対応する二次・Indicator・SOS1形式、OpenJijは制約なしBinary
+最小化問題を受け入れます。Adapterは特殊制約を暗黙にlowerしません。
+特殊制約は {attr}`~ommx.Instance.active_special_constraint_kinds` で確認し、
+{meth}`~ommx.Instance.lower_special_constraints` で選択したkindだけを明示的にlowerします。
+この操作はinput classへのmembershipとは独立しています。
+
+OpenJijの `sample()` / `solve()` は、Integer encoding、sense反転、slack変換、
+特殊制約lowering、penalty選択を暗黙に行いません。別の入力を明示的に準備し、
+変換元の意味が必要な場合は結果をsource modelに対して評価します。
+
+```python
+from ommx_openjij_adapter import (
+    OMMXOpenJijSAAdapter,
+    OpenJijPreparationConfig,
+)
+
+config = OpenJijPreparationConfig(
+    uniform_penalty_weight=20.0,
+)
+preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
+prepared_samples = OMMXOpenJijSAAdapter.sample(preparation.input)
+source_samples = preparation.evaluate_source(prepared_samples)
+```
+
+有限penaltyとapproximate integer slackは明示的なopt-inが必要です。prepare後の値は
+別の {class}`~ommx.Instance` なので、sourceから推論せず `preparation.input` 自体の
+applicabilityを確認してください。受け入れるmodel classとpreparationの詳細は
+[Adapter の exact input（INPUT_CLASS）](../user_guide/instance_class.md) と
+[Instance Preparation と PreparationPolicy](../user_guide/preparation_policy.md) および
+[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) を参照してください。
+
+2.6.1から移行する場合、非対応入力にはAdapter固有exceptionではなく
+`AdapterNotApplicableError`をcatchしてください。infeasibilityのcanonicalな型は
+`ommx.InfeasibleDetected` です（既存の `ommx.adapter` aliasも利用できます）。
+`response_to_samples()` は `decode_to_samples()` に、`sample_qubo_sa()` は上記の明示的な
+workflowに置き換えてください。新しいAPIはraw `Samples`ではなく評価済みの`SampleSet`を
+返します。
+
+### 🆕 Experiment / Run の lifecycle reason を永続化 ([#1109](https://github.com/Jij-Inc/ommx/pull/1109))
+
+failed / interrupted になった Experiment と Run に、簡潔な理由を Experiment
+config 内へ保存できるようになりました。Python の context manager は exception
+の型と message を自動的に記録し、永続化された値を
+{attr}`~ommx.experiment.Experiment.lifecycle_reason` と
+{attr}`~ommx.experiment.SealedRun.lifecycle_reason` から取得できます。
+
+```python
+from ommx.experiment import Experiment
+
+try:
+    with Experiment("example.com/team/experiment:latest") as experiment:
+        with experiment.run():
+            raise RuntimeError("solver process exited")
+except RuntimeError:
+    pass
+
+assert experiment.lifecycle_reason == "RuntimeError: solver process exited"
+assert experiment.runs[0].lifecycle_reason == "RuntimeError: solver process exited"
+```
+
+reason は archive や registry transport をまたいで保持されます。Python の context
+manager が取得する exception reason は空白を正規化し、Unicode 文字で512文字に制限
+します。超過した値の末尾は省略記号になります。この制限は永続化する metadata の
+サイズを抑えますが、内容を秘匿化するものではありません。lifecycle reason は adapter
+diagnostics ではないため、secret、traceback、local variable、environment value を
+含めないでください。outcome detail を持たない既存の Experiment Artifact は、従来どおり
+`None` として読み込めます。
+
+### 🛠 Rust SDK error を一貫した Python exception として通知 ([#1087](https://github.com/Jij-Inc/ommx/pull/1087)、[#1090](https://github.com/Jij-Inc/ommx/pull/1090)、[#1096](https://github.com/Jij-Inc/ommx/pull/1096)、[#1097](https://github.com/Jij-Inc/ommx/pull/1097)、[#1099](https://github.com/Jij-Inc/ommx/pull/1099)、[#1100](https://github.com/Jij-Inc/ommx/pull/1100)、[#1101](https://github.com/Jij-Inc/ommx/pull/1101)、[#1102](https://github.com/Jij-Inc/ommx/pull/1102))
+
+Python binding は、Rust SDK が返す OMMX-owned signal type を entry point
+ごとに個別変換せず、共通の PyO3 error boundary で Python exception へ変換する
+ようになりました。failure の所有者と意味に応じて、次のように分類します。
+
+- 不正な入力、不正な OMMX protobuf / QPLIB data、および domain 上の前提を
+  満たせない操作は `ValueError`
+- 存在しない variable、constraint、sample、named function、Artifact layer、
+  Experiment / Run attachment は `KeyError`
+- 未分類の SDK / infrastructure failure は `RuntimeError` への fallback
+
+Python の引数抽出 failure は引き続き `TypeError` で、Python code が送出した
+exception も変更せず伝播します。error messageにはOMMX fieldとsource contextが保持
+されます。この方針はmodel操作、parser、Artifact / Experiment API、attachment、
+registry操作、solver / sampler loggingに一貫して適用されます。
+
+remoteの {meth}`~ommx.artifact.Artifact.load` と
+{meth}`~ommx.experiment.Experiment.load` のfailureも同じ方針に従います。すべて
+{class}`~ommx.artifact.RemoteArtifactError` を継承し、exact refが存在しない場合だけを
+authentication、authorization、transport、invalid Artifactと区別するには
+{class}`~ommx.artifact.RemoteArtifactNotFoundError` をcatchしてください。
+
+Integer preparationのoperationには、`RuntimeError` と互換性のある3つの具体的な
+exceptionも追加しました。{meth}`~ommx.Instance.log_encode` は、要求された変数を
+exactにencodeできない場合に {class}`~ommx.LogEncodingError`、exact slack変換を
+明示的な近似で置き換えられる場合に {class}`~ommx.ExactIntegerSlackError`、boundから
+infeasibleが証明された場合に {class}`~ommx.InfeasibleDetected` を送出します。
+既存の `except RuntimeError` はそのまま機能しますが、回復理由を区別する場合は
+これらの具体的な型をcatchしてください。
 
 ### 🆕 構造制約の `VariableIDLike` 入力 ([#1078](https://github.com/Jij-Inc/ommx/pull/1078))
 
@@ -98,7 +892,7 @@ instance.objective = x + y
 instance.add_constraint(x - y == 1, "c1")
 ```
 
-`new_binary` と `add_constraint` には、`name`、`subscripts`、`parameters`、`description` からなる ModelingLabel 全体を指定できます。詳しい workflow は [Instance の User Guide](../user_guide/instance.md) を参照してください。
+`new_binary` と `add_constraint` には、`name`、`subscripts`、`parameters`、`description` からなる ModelingLabel 全体を指定できます。詳しい workflow は{class}`~ommx.Instance`のAPI Referenceを参照してください。
 決定変数 ID の最大値がすでに `2**64 - 1` の場合、`new_binary` は Rust の panic を伝播せず `ValueError` を送出します。
 
 ## 3.0.0 Beta 1
@@ -149,7 +943,7 @@ assert isinstance(output, SampleSet)
 
 `Run.log_sample(..., store_diagnostics=True)` では `Run.log_solve` と同じ adapter
 diagnostics channel を利用できます。SolveとSamplingの記録モデルは
-[実験管理チュートリアル](../tutorial/experiment_management.md) を参照してください。
+[ExperimentのGuide](../user_guide/experiment.md) を参照してください。
 
 ### 🆕 Attachment の透過圧縮と streaming write ([#1054](https://github.com/Jij-Inc/ommx/pull/1054))
 
@@ -439,7 +1233,7 @@ HiGHS Adapter は HiGHS の logging callback から MIP progress snapshot を記
 
 PySCIPOpt の progress history は、diagnostics に termination report が含まれる場合に synthetic な `TERMINATION` 行を含むようになりました。これにより、別の termination report を重複させずに、`progress_history_records` と `progress_history_df` から最終 solver state も確認できます。
 
-direct solve と Experiment 経由の workflow については [Adapter 固有 diagnostics](../user_guide/adapter_diagnostics.md) を参照してください。
+direct solve と Experiment 経由の workflow については [Adapter 固有 diagnostics](../how_to/inspect_adapter_diagnostics.md) を参照してください。
 
 ### 🆕 top-level root 向け versioned protobuf bytes API ([#989](https://github.com/Jij-Inc/ommx/pull/989))
 
@@ -459,7 +1253,7 @@ Artifact と Experiment の solve payload は、これらの top-level root を 
 
 {meth}`~ommx.experiment.Run.open_solve` で、Adapter API ではカバーしていない高度な solver 機能を使うための手動 Solve scope を開けるようになりました。scope 内で `solve.solver_input` から backend solver model を受け取って直接操作し、backend optimizer を実行した後、`solve.decode(...)` を呼ぶと decode された {class}`~ommx.Solution` が Experiment の Solve output として記録されます。手動で設定した adapter option は `solve.log_adapter_option(...)` で記録でき、`store_diagnostics=True` を指定すると `solve.diagnostics` に記録した diagnostics が scope 終了まで収集されます。scope 終了後は {attr}`~ommx.experiment.OpenSolve.terminal_state` から最終 outcome と trace / diagnostics の finalization state を確認できます。
 
-workflow 例は [実験管理チュートリアル](../tutorial/experiment_management.md) を参照してください。
+手動Solveの操作と利用条件は {meth}`~ommx.experiment.Run.open_solve` を参照してください。
 
 ## 3.0.0 Alpha 6
 
@@ -471,7 +1265,7 @@ Solver Adapter に、共通の {class}`~ommx.Solution` 結果には入らない 
 
 PySCIPOpt Adapter は、SCIP の `BESTSOLFOUND` と `DUALBOUNDIMPROVED` callback から {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` diagnostics を出力し、`model.optimize()` の後に {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` を出力するようになりました。termination report には SCIP の status、primal / dual bound、gap、incumbent objective value、node 数、LP / cut / solution counter、primal-dual integral、求解時間、SCIP / PySCIPOpt version metadata が含まれます。typed collector の中身や Experiment から読み出した dictionary は {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` で records または pandas DataFrame に後処理できます。direct collection では OMMX Solution へ decode する前に termination report が記録されるため、infeasible や unbounded の検出などで decode が adapter exception を投げる場合でも呼び出し側で確認できます。
 
-詳しい API の使い方と PySCIPOpt report の各 field については [Adapter 固有 diagnostics](../user_guide/adapter_diagnostics.md) を参照してください。
+収集・調査の手順は[Adapterのdiagnostics](../how_to/inspect_adapter_diagnostics.md)、reportの各fieldは{class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`のAPI Referenceを参照してください。
 
 ## 3.0.0 Alpha 5
 
@@ -483,7 +1277,7 @@ PySCIPOpt Adapter は、SCIP の `BESTSOLFOUND` と `DUALBOUNDIMPROVED` callback
 
 {class}`~ommx.experiment.Experiment`、{meth}`~ommx.experiment.Experiment.with_temp_local_registry`、{meth}`~ommx.experiment.Experiment.fork` が `store_trace=True` を受け取れるようになりました。有効化すると、各 `with experiment.run()` context 内で発生した OpenTelemetry span を capture し、close 済みの {class}`~ommx.experiment.SealedRun` に trace を 1 つ保存します。保存された trace は {attr}`~ommx.experiment.SealedRun.trace` から {class}`~ommx.tracing.TraceResult` として取得でき、commit、load、fork をまたいで保持されます。
 
-詳しい trace workflow、renderer、OpenTelemetry の設定については [トレースとプロファイリング](../user_guide/tracing.ipynb) を参照してください。
+詳しい trace workflow、renderer、OpenTelemetry の設定については [トレースとプロファイリング](../how_to/trace_execution) を参照してください。
 
 ```python
 from ommx.experiment import Experiment
@@ -640,7 +1434,7 @@ before / after コード例と移行チェックリストは {ref}`Python SDK v2
 
 実験の入力データ、実行条件、Solver/Sampler の結果を 1 つの OMMX Artifact として記録する `ommx.experiment` モジュールを追加しました。{class}`~ommx.experiment.Experiment`、{class}`~ommx.experiment.Run`、{class}`~ommx.experiment.Solve` を使って、Run ごとの比較パラメータ、attachment、solve 入出力を Local Registry に保存できます。
 
-基本的な使い方、Experiment の共有、保存済み Experiment の読み込み、fork による派生実験の作り方は [実験管理チュートリアル](../tutorial/experiment_management.md) を参照してください。
+基本的な記録と保存済み Experiment の読み込みは [実験管理チュートリアル](../tutorial/experiment_management)、fork による派生実験の作り方は [継続・復帰のHow-to](../how_to/continue_experiment.md) を参照してください。
 
 ### 🆕 `Run.log_solve` で solve 入出力と adapter options を記録 ([#902](https://github.com/Jij-Inc/ommx/pull/902))
 
@@ -722,7 +1516,7 @@ assert str(instance.objective) == "Function(x1 + 2*x2)"
 df = solution.constraints_df
 
 # After
-df = solution.constraints_df()
+df = solution.constraints_df(kind="regular")
 ```
 
 ワイドな `*_df` メソッドには `include` 引数が追加され、ラベル系・パラメータ系のカラムをそれぞれ ON/OFF できます。デフォルトの `include=("label", "parameters")` は v2 互換のワイド形を維持します:
@@ -734,7 +1528,7 @@ solution.decision_variables_df(include=["label"])      # core + label
 solution.decision_variables_df(include=["parameters"]) # core + parameters
 ```
 
-加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。`kind=` で対象の制約ファミリーを切り替えます (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`、デフォルト `"regular"`):
+加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。必須のキーワード引数`kind=`で対象の制約ファミリーを切り替えます (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`):
 
 - `constraint_context_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
 - `constraint_parameters_df(kind=...)` — long format (`{kind}_constraint_id` / `key` / `value`)
@@ -754,7 +1548,7 @@ v2.5.1 までは {meth}`Solution.constraints_df <ommx.Solution.constraints_df>` 
 df = solution.constraints_df  # 'removed_reason' カラムを含む
 
 # After (3.0.0a3 — `*_df` はメソッドになりました)
-df = solution.constraints_df()  # removed_reason カラムなし
+df = solution.constraints_df(kind="regular")  # removed_reason カラムなし
 df = solution.constraints_df(include=("label", "parameters", "removed_reason"))
 # ↳ removed_reason / removed_reason.{key} が追加（active 行は NA）
 ```
@@ -795,7 +1589,7 @@ assert instance.constraints[c.constraint_id].name == "budget"
 - **`%%ommx_trace`** — Jupyterセル単位でスパンツリーとChrome Trace JSONダウンロードリンクを表示するセルマジック
 - **`capture_trace` / `@traced`** — 通常のPythonスクリプト／テスト／CIから同じ機能を使うためのコンテキストマネージャとデコレータ
 
-詳しい使い方、独自 `TracerProvider` の設定方法、トラブルシューティングは [トレースとプロファイリング](../user_guide/tracing.ipynb) を参照してください。
+詳しい使い方、独自 `TracerProvider` の設定方法、トラブルシューティングは [トレースとプロファイリング](../how_to/trace_execution) を参照してください。
 
 ### 🆕 Solver / Sampler Adapter のトレーシング対応 ([#833](https://github.com/Jij-Inc/ommx/pull/833))
 
@@ -870,17 +1664,9 @@ Instance.from_components(..., constraints={5: c}, ...)
 - {class}`~ommx.OneHotConstraint` — 従来 `ConstraintHints.OneHot` として扱われていた one-hot 制約
 - {class}`~ommx.Sos1Constraint` — 従来 `ConstraintHints.Sos1` として扱われていた SOS1 制約
 
-具体的な使い方、評価結果の参照、Indicator 制約の relax / restore ワークフローについては [特殊制約型](../user_guide/special_constraints.md) を参照してください。
+具体的な使い方と評価結果の参照については [特殊制約の意味と評価](../user_guide/special_constraints.md)、Indicator 制約を含む active / removed の扱いについては [候補を評価して結果を判断する](../user_guide/evaluate_and_interpret.md) を参照してください。
 
 これに伴い旧 API である `ConstraintHints` / `OneHot` / `Sos1` クラス、`Instance.constraint_hints` プロパティ、PySCIPOpt Adapter の `use_sos1` フラグは削除されています。
-
-### 🆕 Adapter Capability モデル ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
-
-特殊制約の追加に伴い、Adapter が自身のサポートする制約型を `ADDITIONAL_CAPABILITIES` クラス属性で宣言する仕組みを導入しました。`super().__init__(instance)` が呼ばれると、未宣言の特殊制約は自動的に通常の制約へ変換（indicator/SOS1 は Big-M、one-hot は線形等式）されてから solver に渡されます。
-
-**既存の OMMX Adapter は Python SDK 3.0.0 に対応するため `super().__init__(instance)` を呼ぶよう変更する必要があります。** 現在 PySCIPOpt Adapter は Indicator 制約と SOS1 をサポート宣言しています。
-
-詳細および手動での変換 API については [Adapter Capability モデルと制約変換](../user_guide/capability_model.md) を参照してください。
 
 ### 🔄 numpy スカラ型のサポート ([#794](https://github.com/Jij-Inc/ommx/pull/794))
 

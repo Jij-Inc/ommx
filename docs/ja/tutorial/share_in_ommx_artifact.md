@@ -1,231 +1,119 @@
----
-jupytext:
-  text_representation:
-    extension: .md
-    format_name: myst
-    format_version: 0.13
-    jupytext_version: 1.19.1
-kernelspec:
-  display_name: ommx-update-books (3.9.23)
-  language: python
-  name: python3
----
+# 問題と評価結果をファイルで受け渡す
 
-# 様々なデータをOMMX Artifact形式で共有する
+**共有したいデータをArtifactに追加し、`commit()`してから`.ommx`ファイルに保存します。** 受け取る側は、そのファイルだけから問題・評価結果・分析メモを取り出せます。
 
-数理最適化のワークフローでは、多様なデータの生成と管理が不可欠です。これらのデータを適切に管理することで、計算結果の再現性が確保され、チーム内での効率的な共有が可能になります。
+Artifactは、複数のデータとその説明をまとめる入れ物です。ここでは二つの項目から一つまで選べる問題と、手元の候補の評価結果を渡します。`Instance`が問題、`State`が変数への値の割り当て、`Solution`がその候補を問題で評価した結果です。
 
-OMMXは、これらの多様なデータを効率的かつシンプルに管理する仕組みを提供します。具体的には、OMMX Artifactというデータ形式を定義し、最適化計算に関連する多様なデータの保存・管理・共有をOMMX SDKによって可能にします。
+## 準備
 
-+++
+[インストール手順](../getting_started/install.md)に従ってPython SDKを用意してください。Adapter、Experiment、リモートレジストリへのログインは不要です。
 
-## 事前準備：共有するデータ
+空の作業フォルダで、以下を二つのPythonファイルとして保存します。二つのスクリプトは**別々に実行**してください。送信側と受信側で保存場所を分け、受信側が送信側のメモリや保存済みデータに頼っていないことを確かめます。
 
-まず共有するべきデータを用意しましょう。ナップザック問題を表す `ommx.Instance` を作成し、SCIPによる最適化計算を行います。さらに最適化計算に対する分析結果も共有します。今回はこれらの処理の詳細は本題から離れるので省略します。
+## 送信側：三つのデータを一つのファイルに保存する
 
-```{code-cell} ipython3
-:tags: [hide-input]
+次を`send_artifact.py`として保存します。追加するデータの内容を識別する値をdigestと呼びます。この例では、問題と評価結果のdigestを分析メモにも残して、どのデータについてのメモかを示します。
 
-from ommx import Instance, DecisionVariable, Constraint
-from ommx_pyscipopt_adapter.adapter import OMMXPySCIPOptAdapter
-import pandas as pd
-
-# 0-1ナップサック問題のデータを用意する
-data = {
-    # 各アイテムの価値
-    "v": [10, 13, 18, 31, 7, 15],
-    # 各アイテムの重さ
-    "w": [11, 15, 20, 35, 10, 33],
-    # ナップサックの耐荷重
-    "W": 47,
-    # アイテムの総数
-    "N": 6,
-}
-
-# 決定変数を定義する
-x = [
-    # バイナリ変数 x_i を定義する
-    DecisionVariable.binary(
-        # 決定変数のIDを指定する
-        id=i,
-        # 決定変数の名前を指定する
-        name="x",
-        # 決定変数の添え字を指定する
-        subscripts=[i],
-    )
-    # バイナリ変数を num_items 個だけ用意する
-    for i in range(data["N"])
-]
-
-# 目的関数を定義する
-objective = sum(data["v"][i] * x[i] for i in range(data["N"]))
-
-# 制約条件を定義する
-constraint = Constraint(
-    # 制約条件の名前
-    name = "重量制限",
-    # 制約式の左辺を指定する
-    function=sum(data["w"][i] * x[i] for i in range(data["N"])) - data["W"],
-    # 等式制約 (==0) or 不等式制約 (<=0) を指定する
-    equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
-)
-
-# インスタンスを作成する
-instance = Instance.from_components(
-    # インスタンスに含まれる全ての決定変数を登録する
-    decision_variables=x,
-    # 目的関数を登録する
-    objective=objective,
-    # 全ての制約条件を登録する (キーは制約ID)
-    constraints={0: constraint},
-    # 最大化問題であることを指定する
-    sense=Instance.MAXIMIZE,
-)
-
-# SCIPで解く
-solution = OMMXPySCIPOptAdapter.solve(instance)
-
-# 最適解の分析をする
-df_vars = solution.decision_variables_df()
-df = pd.DataFrame.from_dict(
-    {
-        "アイテムの番号": df_vars.index,
-        "ナップサックに入れるか？": df_vars["value"].apply(lambda x: "入れる" if x == 1.0 else "入れない"),
-    }
-)
-```
-
-```{list-table}
-:header-rows: 1
-
-* - 変数名
-  - 説明
-* - `instance`
-  - 0-1ナップサック問題に対応する `ommx.Instance` オブジェクト
-* - `solution`
-  - 0-1ナップサック問題をSCIPで解いた計算結果が格納されている `ommx.Solution` オブジェクト
-* - `data`
-  - 0-1ナップサック問題の入力データ
-* - `df`
-  - 0-1ナップサック問題の最適解表す `pandas.DataFrame` オブジェクト
-```
-
-+++
-
-## ファイルとしてOMMX Artifactを作成する
-
-OMMX Artifactはファイルで管理する方法と、コンテナのように名前で管理する方法がありますが、ここではまずファイルを使った方法を紹介します。OMMX SDKを使って、上記のデータをOMMX Artifact形式の新しいファイル `my_instance.ommx` に保存しましょう。まず `ArtifactDraft` を用意します。
-
-```{code-cell} ipython3
-:tags: [remove-output]
-
+```python
 import os
+from pathlib import Path
+
+# この例専用の保存場所。初回に存在しないフォルダを指定する。
+registry = Path("artifact-sender-registry").resolve()
+registry.mkdir()
+os.environ["OMMX_LOCAL_REGISTRY_ROOT"] = str(registry)
+
+from ommx import Instance, State
 from ommx.artifact import ArtifactDraft
 
-# OMMX Artifactファイルの名前を指定する
-filename = "my_instance.ommx"
+instance = Instance.maximize()
+x = instance.new_binary("x")
+y = instance.new_binary("y")
+instance.objective = 3 * x + 2 * y
+instance.add_constraint(x + y <= 1)
 
-# 既にファイルが存在している場合は削除する
-if os.path.exists(filename):
-    os.remove(filename)
+solution = instance.evaluate(State({x.id: 1, y.id: 0}))
+assert solution.feasible
+assert solution.objective == 3
 
-# 1. draftを作成 (v3 では全アーティファクトが SQLite Local Registry に
-#    入るので、draft は image_name を要求します)。名前を考えるのが
-#    面倒なら `new_anonymous()` で自動生成できます。
 draft = ArtifactDraft.new_anonymous()
-```
-
-[`ArtifactDraft`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft) は主に 3 つのコンストラクタを持ちます。v3 では commit したアーティファクトは必ず SQLite Local Registry のエントリとして残り、`.ommx` ファイルとして共有したい場合は commit 後に `Artifact.save(path)` を呼びます。
-
-| コンストラクタ | 説明 |
-| --- | --- |
-| [`ArtifactDraft.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft.new) | 呼び出し側で image_name を指定する |
-| [`ArtifactDraft.new_anonymous`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft.new_anonymous) | `<レジストリ ID8>.ommx.local/anonymous:<ローカルタイムスタンプ>-<nonce>` 形式で名前を自動生成 |
-| [`ArtifactDraft.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft.for_github) | GitHub Container Registry に合わせてコンテナの名前を決める |
-
-`new_anonymous` のホスト名は `<レジストリ ID8>.ommx.local` 形式で、`.local` (mDNS) link-local TLD を使っているので誤って push しても実際のリモートレジストリには到達しません。先頭のレジストリ ID は各 `LocalRegistry` の初回作成時に一度だけ生成されてメタデータに保存される UUID で、同じレジストリで作られた anonymous artifact は同じ prefix を共有します。アーカイブを共有した際にも「どのレジストリで作られたか」が判別できます。蓄積した anonymous エントリは `ommx prune-anonymous` で確認し、`ommx prune-anonymous --delete` で一括削除できます (異なるレジストリ ID の prefix も含めて削除されます)。
-
-**タイムスタンプの注意**: 自動生成タグはdraft の**ローカルタイム** (TZ マーカー無し) です。異なるタイムゾーンの相手にアーカイブを共有すると、受信者は同じ数字を自分のローカルタイムとして読むため、絶対時刻としての意味はマシン間で失われます。タイムゾーンに関係なく安定したタグが必要なら `ArtifactDraft.new(...)` で明示的に名前を指定してください。
-
-どの方法で初期化しても同じように `ommx.Instance` や他のデータを保存することが出来ます。上で用意したデータを追加してみましょう。
-
-```{code-cell} ipython3
-# ommx.Instance オブジェクトを追加する
-desc_instance = draft.add_instance(instance)
-
-# ommx.Solution オブジェクトを追加する
-desc_solution = draft.add_solution(solution)
-
-# pandas.DataFrame オブジェクトを追加する
-desc_df = draft.add_dataframe(df, title="ナップサック問題の最適解")
-
-# JSONに変換可能なオブジェクトを追加する
-desc_json = draft.add_json(data, title="ナップサック問題のデータ")
-```
-
-OMMX Artifactではレイヤーという単位でデータを管理しますが、各レイヤーは中身がどんな種類のデータなのかを表現するためにMedia Typeを保持しており、`add_instance` などの関数はこれらを適切に設定した上でレイヤーを追加します。この関数は生成したレイヤーの情報を保持した `Description` オブジェクトを返します。
-
-```{code-cell} ipython3
-desc_json.to_dict()
-```
-
-`add_json` に追加した `title="..."` という部分はレイヤーのアノテーション（注釈）として保存されます。OMMX Artifactというのは人間のためのデータ形式なので、これは基本的には人間が読むための情報です。`ArtifactDraft.add_*` 関数はいずれも任意のキーワード引数を受け取り、自動的に `org.ommx.user.` 以下の名前空間に変換します。
-
-さて最後に `commit` で SQLite Local Registry に commit し、`save` で `.ommx` ファイルにエクスポートします。
-
-```{code-cell} ipython3
-# 3. SQLite Local Registry に commit
+instance_layer = draft.add_instance(instance)
+solution_layer = draft.add_solution(solution)
+_ = draft.add_json(
+    {
+        "instance_digest": instance_layer.digest,
+        "solution_digest": solution_layer.digest,
+        "selected": ["x"],
+        "note": "手元の候補を評価した結果。最適性の証明ではない。",
+    },
+    title="analysis",
+)
 artifact = draft.commit()
-
-# 4. 共有用に .ommx アーカイブにエクスポート
-artifact.save(filename)
+artifact.save("candidate.ommx")
+print("candidate.ommxに保存しました")
 ```
 
-ファイルが出来上がったか確認してみましょう：
+SDKを導入した環境で実行します。
 
-```{code-cell} ipython3
+```bash
+python send_artifact.py
+```
+
+`candidate.ommx`が共有用のファイルです。このファイルだけを相手に渡せます。`artifact-sender-registry`は送信側の**Local Registry**、つまりSDKのローカル保存場所であり、渡す必要はありません。
+
+`add_instance()`などは、データをArtifactの一部分である**レイヤー**として追加します。`commit()`はその一覧を確定してLocal Registryに保存し、`save()`は共有用のファイルを書き出します。この二つは別の操作です。
+
+## 受信側：新しいプロセスでファイルだけを読む
+
+`candidate.ommx`と同じ場所に、次を`receive_artifact.py`として保存します。送信側の変数名や返り値は使いません。
+
+```python
 import os
-print(os.path.exists(filename))
-```
+from pathlib import Path
 
-あとはこの `my_instance.ommx` を通常のファイル共有の方法で共有すれば、他の人とデータを共有することができます。
+# 空のLocal Registryから始める。送信側とは別の場所を指定する。
+registry = Path("artifact-receiver-registry").resolve()
+registry.mkdir()
+os.environ["OMMX_LOCAL_REGISTRY_ROOT"] = str(registry)
 
-+++
-
-## OMMX Artifact形式のファイルを読み取る
-
-次に保存したOMMX Artifactを読み込みましょう。v3 ではアーカイブ読み込みが 2 つのメソッドに分かれています: [`Artifact.import_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.import_archive) は アーカイブを SQLite Local Registry に import してフルハンドルを返します (全レイヤを読める)。[`Artifact.inspect_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.inspect_archive) は registry に書き込まずに manifest / layer descriptors だけを読みます。
-
-```{code-cell} ipython3
 from ommx.artifact import Artifact
 
-# ローカルにあるOMMX Artifactファイルを読み込む
-artifact = Artifact.import_archive(filename)
-```
+received = Artifact.import_archive("candidate.ommx")
+instance = received.instance
+solution = received.solution
 
-OMMX Artifactはレイヤーという単位でデータを管理しますが、このレイヤーのデータはマニフェスト（目録）として内包されており、アーカイブファイル全体を読み込まずに確認することが可能です。[`Artifact.layers`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.layers) によって含まれるレイヤーの `Descriptor` を取得できます。これにはそのレイヤーのMediaTypeとアノテーションが含まれています。
-
-```{code-cell} ipython3
-import pandas as pd
-
-# 見やすいように pandas.DataFrame に変換する
-pd.DataFrame({
-    "Media Type": desc.media_type,
-    "Size (Bytes)": desc.size
-  } | desc.annotations
-  for desc in artifact.layers
+analysis_layer = next(
+    layer
+    for layer in received.layers
+    if layer.annotations.get("org.ommx.user.title") == "analysis"
 )
+analysis = received.get_json(analysis_layer)
+
+checked = instance.evaluate(solution.state)
+assert checked.feasible == solution.feasible
+assert checked.objective == solution.objective
+print(solution.feasible, solution.objective)
+print(analysis["selected"])
 ```
 
-例えばレイヤー3に入っているJSONを取得するには [`Artifact.get_json`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.get_json) を使います。この関数はMedia Typeが `application/json` である事を確認し、バイト列をJSON文字列としてPythonオブジェクトに復元します。
+新しいPythonプロセスとして実行します。
 
-```{code-cell} ipython3
-artifact.get_json(artifact.layers[3])
+```bash
+python receive_artifact.py
 ```
 
-```{code-cell} ipython3
-:tags: [remove-cell]
+結果は`True 3.0`と`['x']`です。問題、候補の評価結果、JSONの分析メモを、ファイルから取得できました。`import_archive()`は内容を受信側のLocal Registryへ永続的に取り込みます。ファイルを開いたままその場で読むだけの操作ではありません。
 
-# Remove the created OMMX Artifact file to clean up
-os.remove(filename)
-```
+この例は各種類のデータを一つずつ保存しているため、`.instance`と`.solution`で最初の問題・評価結果を取り出しています。JSONは保存時の`title="analysis"`を手がかりに選びました。メモの`instance_digest`と`solution_digest`には、メモが参照するレイヤーの内容識別子を明示的に記録しています。複数の問題や結果を含めるときは、{meth}`~ommx.artifact.Artifact.get_layer_descriptor`と型別のgetterで対象を選べます。
+
+同じフォルダでスクリプトをやり直す場合は、既存データを消さず、作業フォルダまたは例中の保存先を新しい名前にしてください。`mkdir()`が失敗する場合は、前回の保存場所がすでに存在しています。
+
+## ここで終えてよいこと・次にできること
+
+受け渡したのは、入力した候補の評価結果です。保存・読み込みや候補の実行可能性だけで最適性が保証されるわけではありません。また、ソースコードや実行環境など、追加しなかった情報はこのファイルには入りません。
+
+- 保存場所と名前の意味を知りたい場合：[Artifactの保存と識別](../user_guide/artifact.md)
+- ファイルではなくレジストリで配布したい場合：[レジストリでArtifactを共有する](../how_to/share_artifact_registry.md)
+- 複数の試行の条件・結果を整理したい場合：[Experiment Tutorial](experiment_management)。このファイル受け渡しにExperimentは必要ありません。
+
+データ形式を別の言語やツールで扱う場合は、Pythonの手順ではなく[Artifact仕様](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/rust/ommx/doc/artifact_design.md)を参照してください。

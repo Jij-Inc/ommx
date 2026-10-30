@@ -11,32 +11,67 @@ kernelspec:
   name: python3
 ---
 
-# Adapter Capability Model and Conversions
+# Adapter Input Classes and Explicit Constraint Lowering
 
-OMMX treats [special constraints](./special_constraints.md) — `IndicatorConstraint`, `OneHotConstraint`, `Sos1Constraint` — as first-class citizens, but not every solver accepts them directly. To handle the differences uniformly, OMMX provides an **Adapter Capability Model**.
+OMMX separates two concepts that were previously described together as adapter capabilities:
+
+- An {class}`~ommx.InstanceClass` describes a set of exact `Instance` values. An adapter defines applicability by declaring that set as `INPUT_CLASS`.
+- {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` explicitly lowers selected special-constraint families on an instance. It does not declare an input class or establish adapter applicability.
 
 This page covers:
 
-- {class}`~ommx.AdditionalCapability` and {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` for describing what an instance requires
-- How an adapter declares its supported capabilities via `ADDITIONAL_CAPABILITIES`
-- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` for automatic conversion
+- `InstanceClass` membership and adapter applicability
+- {class}`~ommx.SpecialConstraintKind` and {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` as special-constraint family selectors
+- {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` for explicit lowering
 - Manual conversion APIs per constraint type
 - Auditing conversion results
 
-## AdditionalCapability and required_capabilities
+## Instance classes and adapter applicability
 
-{class}`~ommx.AdditionalCapability` is the enumeration of "extra constraint types" beyond regular constraints.
-
-| Capability | Constraint type |
-|---|---|
-| `AdditionalCapability.Indicator` | {class}`~ommx.IndicatorConstraint` |
-| `AdditionalCapability.OneHot` | {class}`~ommx.OneHotConstraint` |
-| `AdditionalCapability.Sos1` | {class}`~ommx.Sos1Constraint` |
-
-{attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` returns the set of `AdditionalCapability` values corresponding to the **special constraints the instance currently holds**. When the instance uses only regular constraints the set is empty.
+An `InstanceClass` is a finite union of complete, conjunctive {class}`~ommx.InstanceClassClause` values. Membership is evaluated against the exact input without mutating or preparing it.
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable, OneHotConstraint, AdditionalCapability
+from ommx import InstanceClass, InstanceClassClause, Kind, PolynomialRequirement, Sense
+
+binary_linear_with_one_hot = InstanceClass(
+    [
+        InstanceClassClause(
+            label="binary-linear-with-one-hot",
+            allowed_variable_kinds={Kind.Binary},
+            objective_polynomial_requirement=PolynomialRequirement.at_most(1),
+            allowed_senses={Sense.Maximize},
+            allows_one_hot=True,
+        )
+    ]
+)
+```
+
+Adapters declare their complete applicability condition as `INPUT_CLASS`. Use `check_applicability()` for a structured membership result or `require_applicable()` to raise when membership fails. Explicit preparation produces another input value, whose membership must be checked again.
+
+Applicability and solver-input construction are separate boundaries. Membership does not guarantee that every converter or backend operation succeeds. A converter may validate the representation consumed by a local helper, and a backend may reject a numeric value or implementation limit while solver input is built. Those failures are conversion or backend errors, not additional applicability conditions, and must not be reported as `AdapterNotApplicableError`.
+
+## SpecialConstraintKind and active_special_constraint_kinds
+
+{class}`~ommx.SpecialConstraintKind` enumerates the active special-constraint families that can be selected for explicit lowering to regular constraints. It is not an Adapter input declaration or a serialization feature.
+
+| Kind | Constraint type |
+|---|---|
+| `SpecialConstraintKind.Indicator` | {class}`~ommx.IndicatorConstraint` |
+| `SpecialConstraintKind.OneHot` | {class}`~ommx.OneHotConstraint` |
+| `SpecialConstraintKind.Sos1` | {class}`~ommx.Sos1Constraint` |
+
+{attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` returns the set of `SpecialConstraintKind` values corresponding to the **active special constraints the instance currently holds**. When the instance uses only regular constraints the set is empty.
+
+```{code-cell} ipython3
+from ommx import (
+    ConstraintID,
+    DecisionVariable,
+    Instance,
+    OneHotConstraint,
+    OneHotConstraintID,
+    Sense,
+    SpecialConstraintKind,
+)
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
 
@@ -45,47 +80,34 @@ instance = Instance.from_components(
     objective=sum(xs),
     constraints={},
     one_hot_constraints={0: OneHotConstraint(variables=xs)},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
-assert instance.required_capabilities == {AdditionalCapability.OneHot}
+assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
+assert binary_linear_with_one_hot.contains(instance)
 ```
 
-## Adapter-side declaration
+## Explicit lowering via lower_special_constraints
 
-Each OMMX Adapter declares which capabilities it supports via the `ADDITIONAL_CAPABILITIES` class attribute.
+{meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` is an explicit, mutating operation. For each family selected in `kinds_to_lower`, the corresponding conversion API (see below) is invoked when that family is active. Families omitted from the set remain active, and an empty set is a no-op.
 
-```python
-from ommx import AdditionalCapability
-from ommx.adapter import SolverAdapter
-
-class MySolverAdapter(SolverAdapter):
-    ADDITIONAL_CAPABILITIES = frozenset({AdditionalCapability.Indicator})
-```
-
-When the adapter's constructor calls `super().__init__(instance)`, **any constraint type not in `ADDITIONAL_CAPABILITIES` is automatically converted into regular constraints.** In other words, the adapter author only needs to handle the types declared plus regular constraints; any instance can be accepted.
-
-By default `ADDITIONAL_CAPABILITIES = frozenset()`, so every special constraint type is auto-converted. Adapters may also declare full support (for example, the PySCIPOpt Adapter currently declares Indicator and SOS1 support).
-
-## Automatic conversion via reduce_capabilities
-
-Inside `super().__init__`, {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` is called. For each capability in `required_capabilities` that is not in `supported`, the corresponding conversion API (see below) is invoked to turn that special constraint into regular constraints.
+When lowering Indicator constraints, pass `atol=` to select the zero semantics used by composed functions in their interval bounds. Omitting it uses {attr}`~ommx.DEFAULT_ATOL`. This aligns evaluation of the Function body; the algebraic lowering assumes exact discrete values and does not snap approximate solver output near 0 or 1.
 
 ```{code-cell} ipython3
-converted = instance.reduce_capabilities(supported=set())
-assert converted == {AdditionalCapability.OneHot}
+lowered = instance.lower_special_constraints({SpecialConstraintKind.OneHot})
+assert lowered == {SpecialConstraintKind.OneHot}
 ```
 
 ```{code-cell} ipython3
-assert instance.required_capabilities == set()
-assert instance.one_hot_constraints == {}
+assert instance.active_special_constraint_kinds == set()
+assert OneHotConstraintID(0) not in instance.constraints
 assert len(instance.constraints) == 1
 ```
 
-The OneHot constraint has been removed and a regular equality $x_0 + x_1 + x_2 - 1 = 0$ has been added in its place. `reduce_capabilities` mutates the instance in place. On success, `required_capabilities` becomes a subset of `supported`. The method returns an empty set when no conversion was needed.
+The OneHot constraint has been removed and a regular equality $x_0 + x_1 + x_2 - 1 = 0$ has been added in its place. `lower_special_constraints` mutates the instance in place and returns only the selected families that were active and actually lowered. The method returns an empty set when no selected family was active. Recheck Adapter applicability, equivalently `INPUT_CLASS` membership, on this resulting value.
 
 ## Manual conversion APIs
 
-`reduce_capabilities` is implemented by composing the per-type conversion APIs below. You can call these directly as well.
+`lower_special_constraints` is implemented by composing the per-type conversion APIs below. You can call these directly as well.
 
 ### One-hot → equality constraint
 
@@ -97,12 +119,12 @@ instance2 = Instance.from_components(
     objective=sum(xs),
     constraints={},
     one_hot_constraints={1: OneHotConstraint(variables=xs)},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 new_id = instance2.convert_one_hot_to_constraint(1)
-assert isinstance(new_id, int)
+assert isinstance(new_id, ConstraintID)
 assert set(instance2.constraints.keys()) == {new_id}
-assert instance2.one_hot_constraints == {}
+assert OneHotConstraintID(1) not in instance2.constraints
 ```
 
 Use {meth}`~ommx.Instance.convert_all_one_hots_to_constraints` to convert every active OneHot constraint in one call.
@@ -116,7 +138,7 @@ Use {meth}`~ommx.Instance.convert_all_one_hots_to_constraints` to convert every 
 3. Finally, the cardinality constraint $\sum_i y_i - 1 \leq 0$ is added.
 
 ```{code-cell} ipython3
-from ommx import Sos1Constraint
+from ommx import Sos1Constraint, Sos1ConstraintID
 
 ys = [DecisionVariable.binary(i, name="y", subscripts=[i]) for i in range(3)]
 instance3 = Instance.from_components(
@@ -124,13 +146,13 @@ instance3 = Instance.from_components(
     objective=sum(ys),
     constraints={},
     sos1_constraints={1: Sos1Constraint(variables=ys)},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 new_ids = instance3.convert_sos1_to_constraints(1)
 # An all-binary SOS1 collapses to a single cardinality constraint sum(x_i) - 1 <= 0
 assert len(new_ids) == 1
 assert set(instance3.constraints.keys()) == set(new_ids)
-assert instance3.sos1_constraints == {}
+assert Sos1ConstraintID(1) not in instance3.constraints
 ```
 
 Use {meth}`~ommx.Instance.convert_all_sos1_to_constraints` to convert every SOS1 constraint in one call. If a variable has a non-finite bound or a domain that excludes 0, conversion fails before any mutation occurs and the instance is left unchanged.
@@ -150,15 +172,17 @@ where $u \geq \sup f(x)$ and $l \leq \inf f(x)$.
 
 Use {meth}`~ommx.Instance.convert_all_indicators_to_constraints` to convert every indicator constraint in one call. If a required bound on $f(x)$ is non-finite, or if $f(x)$ references a semi-continuous / semi-integer variable, conversion fails before any mutation occurs.
 
+Both Indicator conversion methods accept `atol=`. This tolerance is passed to the interval evaluator for zero-sensitive `signum`, division, and negative-integer-power nodes; omitting it uses {attr}`~ommx.DEFAULT_ATOL`. The Big-M identities assume an exactly binary indicator value. They do not canonicalize an approximate solver value before evaluating the regular constraints.
+
 ## Auditing conversion results
 
-The original special constraints are not discarded; they are kept as "removed" entries in the following `removed_*_constraints` dicts.
+The original special constraints are not discarded; they are kept in the unified `removed_constraints` collection, keyed by typed IDs.
 
-| Original type | Removed dict | DataFrame |
+| Original type | Removed collection | DataFrame |
 |---|---|---|
-| OneHotConstraint | {attr}`~ommx.Instance.removed_one_hot_constraints` | `instance.constraints_df(kind="one_hot", removed=True)` |
-| Sos1Constraint | {attr}`~ommx.Instance.removed_sos1_constraints` | `instance.constraints_df(kind="sos1", removed=True)` |
-| IndicatorConstraint | {attr}`~ommx.Instance.removed_indicator_constraints` | `instance.constraints_df(kind="indicator", removed=True)` |
+| OneHotConstraint | {attr}`~ommx.Instance.removed_constraints` | `instance.constraints_df(kind="one_hot", removed=True)` |
+| Sos1Constraint | {attr}`~ommx.Instance.removed_constraints` | `instance.constraints_df(kind="sos1", removed=True)` |
+| IndicatorConstraint | {attr}`~ommx.Instance.removed_constraints` | `instance.constraints_df(kind="indicator", removed=True)` |
 
 `removed=True` returns active + removed rows in the same DataFrame and auto-adds the `removed_reason` / `removed_reason.{key}` columns so removed rows are distinguishable from active ones.
 
@@ -169,8 +193,8 @@ Each entry ({class}`~ommx.RemovedOneHotConstraint` / {class}`~ommx.RemovedSos1Co
 - **Indicator**: a comma-separated list of IDs under the `constraint_ids` key (empty when both Big-M sides are redundant)
 
 ```{code-cell} ipython3
-removed = instance2.removed_one_hot_constraints
-assert set(removed.keys()) == {1}
+removed = instance2.removed_constraints
+assert set(removed.keys()) == {OneHotConstraintID(1)}
 ```
 
 In addition, each generated regular constraint retains a reference back to its origin via the {attr}`Constraint.provenance <ommx.Constraint.provenance>` property. Each {class}`~ommx.Provenance` entry records the origin kind ({attr}`~ommx.Provenance.kind`, a {class}`~ommx.ProvenanceKind`) and the original ID ({attr}`~ommx.Provenance.original_id`), letting you trace which regular constraint was generated from which specific special constraint.
@@ -182,15 +206,17 @@ from ommx import ProvenanceKind
 for cid, c in instance2.constraints.items():
     for p in c.provenance:
         assert p.kind == ProvenanceKind.OneHotConstraint
-        assert p.original_id == 1
+        assert p.original_id == OneHotConstraintID(1)
 ```
 
 ## Summary
 
 | What you want to do | API |
 |---|---|
-| Inspect which capabilities an instance requires | {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` |
-| Declare supported capabilities on an adapter | The `ADDITIONAL_CAPABILITIES` class attribute |
-| Auto-convert every unsupported special constraint | {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` |
+| Describe a structural set of adapter inputs | {class}`~ommx.InstanceClass` |
+| Define adapter applicability | `INPUT_CLASS` |
+| Report or enforce `INPUT_CLASS` membership | `check_applicability()` / `require_applicable()` |
+| Inspect active special-constraint families | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
+| Explicitly lower selected special constraints | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
 | Convert individually to regular constraints | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
 | Audit conversion history | `instance.constraints_df(kind=..., removed=True)` / `solution.constraints_df(kind=..., include=("...","removed_reason"))` |

@@ -1,6 +1,10 @@
 """Tests for Constraint.provenance context (issue #819)."""
 
+from ommx import IndicatorConstraintID, OneHotConstraintID, Sos1ConstraintID
+
 from ommx import (
+    Sense,
+    Equality,
     Constraint,
     DecisionVariable,
     Instance,
@@ -19,11 +23,11 @@ def test_user_authored_constraint_has_empty_provenance():
         decision_variables=[x],
         objective=x,
         constraints={
-            5: Constraint(function=x, equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO),
+            5: Constraint(function=x, equality=Equality.LessThanOrEqualToZero),
         },
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
-    c = instance.get_constraint_by_id(5)
+    c = instance.constraints.of_kind("regular")[5]
     assert c.provenance == []
 
 
@@ -34,14 +38,14 @@ def test_convert_one_hot_populates_provenance():
         objective=sum(x),
         constraints={},
         one_hot_constraints={10: OneHotConstraint(variables=x)},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     new_id = instance.convert_one_hot_to_constraint(10)
 
-    c = instance.get_constraint_by_id(new_id)
+    c = instance.constraints[new_id]
     assert len(c.provenance) == 1
     assert c.provenance[0].kind == ProvenanceKind.OneHotConstraint
-    assert c.provenance[0].original_id == 10
+    assert c.provenance[0].original_id == OneHotConstraintID(10)
 
 
 def test_convert_sos1_populates_provenance_on_every_generated_constraint():
@@ -51,17 +55,17 @@ def test_convert_sos1_populates_provenance_on_every_generated_constraint():
         objective=sum(x),
         constraints={},
         sos1_constraints={7: Sos1Constraint(variables=x)},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     new_ids = instance.convert_sos1_to_constraints(7)
 
     assert new_ids, "convert_sos1_to_constraints should emit at least one constraint"
     for nid in new_ids:
-        c = instance.get_constraint_by_id(nid)
+        c = instance.constraints[nid]
         assert c.provenance, f"constraint {nid} has no provenance"
         last = c.provenance[-1]
         assert last.kind == ProvenanceKind.Sos1Constraint
-        assert last.original_id == 7
+        assert last.original_id == Sos1ConstraintID(7)
 
 
 def test_convert_indicator_populates_provenance():
@@ -71,7 +75,7 @@ def test_convert_indicator_populates_provenance():
 
     body = Constraint(
         function=x1 + x2 - 5,
-        equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
+        equality=Equality.LessThanOrEqualToZero,
     )
     indicator = body.with_indicator(y)
 
@@ -80,17 +84,17 @@ def test_convert_indicator_populates_provenance():
         objective=x1 + x2,
         constraints={},
         indicator_constraints={42: indicator},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     new_ids = instance.convert_indicator_to_constraint(42)
 
     assert new_ids
     for nid in new_ids:
-        c = instance.get_constraint_by_id(nid)
+        c = instance.constraints[nid]
         assert c.provenance
         last = c.provenance[-1]
         assert last.kind == ProvenanceKind.IndicatorConstraint
-        assert last.original_id == 42
+        assert last.original_id == IndicatorConstraintID(42)
 
 
 def test_provenance_is_preserved_through_evaluate():
@@ -100,16 +104,16 @@ def test_provenance_is_preserved_through_evaluate():
         objective=sum(x),
         constraints={},
         one_hot_constraints={10: OneHotConstraint(variables=x)},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     new_id = instance.convert_one_hot_to_constraint(10)
 
     solution = instance.evaluate(State({1: 0.0, 2: 1.0, 3: 0.0}))
-    evaluated = solution.get_constraint_by_id(new_id)
+    evaluated = solution.constraints[new_id]
 
     assert len(evaluated.provenance) == 1
     assert evaluated.provenance[0].kind == ProvenanceKind.OneHotConstraint
-    assert evaluated.provenance[0].original_id == 10
+    assert evaluated.provenance[0].original_id == OneHotConstraintID(10)
 
 
 def test_provenance_is_preserved_through_evaluate_samples():
@@ -119,7 +123,7 @@ def test_provenance_is_preserved_through_evaluate_samples():
         objective=sum(x),
         constraints={},
         one_hot_constraints={10: OneHotConstraint(variables=x)},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     new_id = instance.convert_one_hot_to_constraint(10)
 
@@ -130,11 +134,11 @@ def test_provenance_is_preserved_through_evaluate_samples():
         }
     )
     sample_set = instance.evaluate_samples(samples)
-    sampled = sample_set.get_constraint_by_id(new_id)
+    sampled = sample_set.constraints[new_id]
 
     assert len(sampled.provenance) == 1
     assert sampled.provenance[0].kind == ProvenanceKind.OneHotConstraint
-    assert sampled.provenance[0].original_id == 10
+    assert sampled.provenance[0].original_id == OneHotConstraintID(10)
 
 
 def test_provenance_equality_and_hash():
@@ -147,11 +151,11 @@ def test_provenance_equality_and_hash():
         objective=sum(x),
         constraints={},
         one_hot_constraints={10: OneHotConstraint(variables=x)},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     new_id = instance.convert_one_hot_to_constraint(10)
-    p1 = instance.get_constraint_by_id(new_id).provenance[0]
-    p2 = instance.get_constraint_by_id(new_id).provenance[0]
+    p1 = instance.constraints[new_id].provenance[0]
+    p2 = instance.constraints[new_id].provenance[0]
 
     assert p1 == p2
     assert ProvenanceKind.OneHotConstraint == ProvenanceKind.OneHotConstraint
