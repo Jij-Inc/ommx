@@ -1705,18 +1705,18 @@ impl Instance {
     /// - The active objective is stored as an expanded polynomial. Composed
     ///   expressions, including an unexpanded {meth}`~ommx.Function.powi`, are
     ///   rejected even if mathematically polynomial.
-    /// - Each nonconstant term retained by the numerical filtering below has
+    /// - Each nonzero nonconstant term has
     ///   at most two distinct variable IDs after applying the binary identity
     ///   ``x**n = x`` for positive integer powers. Terms with the same resulting
-    ///   pair are summed. A retained term with three distinct IDs is rejected;
+    ///   pair are summed. A term with three distinct IDs is rejected;
     ///   terms are not reduced using auxiliary variables.
     ///
     /// This method does not mutate the instance, encode variables, add penalties,
     /// or change the sense. Use {meth}`~ommx.Instance.prepare` or
     /// {meth}`~ommx.Instance.to_qubo` when preparation is needed.
     /// {meth}`~ommx.InstanceClass.qubo` checks the stored polynomial degree
-    /// (at most two), without this formatter's binary-power reduction or numerical
-    /// filtering. For example, an expanded ``x * x * x`` for Binary ``x`` can be
+    /// (at most two), without this formatter's binary-power reduction.
+    /// For example, an expanded ``x * x * x`` for Binary ``x`` can be
     /// formatted here even though it is outside that class. Membership checking,
     /// preparation, and coefficient formatting are separate operations.
     ///
@@ -1724,19 +1724,17 @@ impl Instance {
     ///
     /// Coefficients and the offset use double-precision floating-point arithmetic;
     /// aggregation can round or overflow, and resulting sums are not checked for
-    /// finiteness. Coefficients are not rescaled. The current implementation skips source
-    /// terms with ``abs(coefficient) <= 2**-52`` (approximately ``2.22e-16``),
-    /// including constants, before converting their keys. After summing terms
-    /// into a pair, it removes that pair when ``abs(sum) < 2**-52``.
-    /// This fixed absolute threshold is independent of evaluation tolerances and
-    /// can change energies and minimizers. Preservation of nonzero small
-    /// coefficients is tracked in [issue #1301](https://github.com/Jij-Inc/ommx/issues/1301);
-    /// the behavior described here is the current implementation.
+    /// finiteness. Coefficients are not rescaled or pruned by magnitude: finite
+    /// nonzero coefficients and constant offsets are retained even at or below
+    /// ``2**-52`` (approximately ``2.22e-16``). Terms with the same binary key
+    /// are summed, and only exact zero entries are omitted. Nonzero results of
+    /// that summation are retained regardless of magnitude. Evaluation
+    /// tolerances do not affect formatting.
     ///
     /// # Active and output objectives
     ///
-    /// The coefficients describe the active objective, subject to the numerical
-    /// filtering above. They do not carry {attr}`~ommx.Instance.output_objective`,
+    /// The coefficients describe the active objective. They do not carry
+    /// {attr}`~ommx.Instance.output_objective`,
     /// removed constraints, or value-recovery rules. Keep the instance and use
     /// {meth}`~ommx.Instance.evaluate` or {meth}`~ommx.Instance.evaluate_samples`
     /// to interpret candidates with its output semantics. Backend energy can
@@ -1759,6 +1757,14 @@ impl Instance {
     }
 
     /// Return the active objective in HUBO format without preparing the instance.
+    ///
+    /// Coefficients and the offset use double-precision floating-point arithmetic.
+    /// Finite nonzero coefficients and constant offsets are retained regardless
+    /// of magnitude, including values at or below ``2**-52``. Terms with the
+    /// same binary key are summed, and only exact zero entries are omitted.
+    /// Aggregation can round or overflow, and resulting sums are not checked for
+    /// finiteness. Coefficients are not rescaled, and evaluation tolerances do
+    /// not affect formatting. This method does not mutate the instance.
     ///
     /// # Postconditions
     ///
@@ -1785,6 +1791,9 @@ impl Instance {
     /// # Postconditions
     ///
     /// The driver is equivalent to QUBO Preparation followed by active-objective formatting and preserves the output semantics present on entry.
+    ///
+    /// Formatting follows the numerical contract of {meth}`~ommx.Instance.as_qubo_format`,
+    /// including preservation of nonzero coefficients regardless of magnitude.
     ///
     /// >>> import copy
     /// >>> from ommx import DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
@@ -1842,6 +1851,9 @@ impl Instance {
     /// # Postconditions
     ///
     /// The driver is equivalent to HUBO Preparation followed by active-objective formatting and preserves the output semantics present on entry.
+    ///
+    /// Formatting follows the numerical contract of {meth}`~ommx.Instance.as_hubo_format`,
+    /// including preservation of nonzero coefficients regardless of magnitude.
     ///
     /// >>> import copy
     /// >>> from ommx import DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
