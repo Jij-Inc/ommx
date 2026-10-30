@@ -36,7 +36,7 @@ The **Book** explains OMMX's concepts, capabilities, and choices, with examples 
 | Install the Python SDK and an optional adapter | [Installation guide](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/getting_started/install.html) · [日本語](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/getting_started/install.html) |
 | Inspect and exchange saved data from the command line | [OMMX CLI](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/cli.html) |
 
-Until the 3.0.0 stable release, both the Book and API Reference describe `main`. Follow the installation guide to use the SDK and adapters from the same checkout. Rust and Python SDK versions are managed independently.
+Until the 3.0.0 stable release, both the Book and API Reference describe `main`. The installation guide covers the latest published prerelease and installation from `main`; use `main` for features that have not been released yet. Rust and Python SDK versions are managed independently.
 
 | SDK | Package | API Reference |
 |:----|:--------|:--------------|

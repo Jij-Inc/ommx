@@ -10,7 +10,7 @@ Obtain the agent plugin or skill bundled with your installed OMMX, then install
 it in your coding agent. First follow
 [Install and Run the OMMX CLI](cli.md) to set up the `ommx` command.
 The commands below use the Python package's CLI through `uv run --no-sync`.
-If you built the standalone executable from the same checkout, use `ommx` in
+If you built the standalone executable from `main`, use `ommx` in
 place of `uv run --no-sync ommx`.
 
 These shell examples use a POSIX shell.

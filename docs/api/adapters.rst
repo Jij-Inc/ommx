@@ -21,7 +21,8 @@ Packages developed in this repository
 
 Until the 3.0.0 stable release, this Reference and the Book both describe
 ``main``. Follow the :doc:`installation guide </getting_started/install>` to
-install the SDK and adapters from the same checkout.
+choose the latest published prerelease or install the SDK and adapters from
+the same ``main`` checkout. Use ``main`` for features not yet released.
 
 .. list-table::
    :header-rows: 1

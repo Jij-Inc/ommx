@@ -6,7 +6,7 @@ OMMX（Open Mathematical prograMming eXchange; オミキス）は、**数理最�
 
 ## いまOMMXを使う理由
 
-3.0.0 stable releaseまでは、このBookとAPI Referenceはともに`main`の内容を説明します。[インストール手順](./getting_started/install.md)で、SDKとAdapterを同じcheckoutから導入できます。現在の実装では、次の作業を共通の問題表現に対して行えます。
+3.0.0 stable releaseまでは、このBookとAPI Referenceはともに`main`の内容を説明します。[インストール手順](./getting_started/install.md)には、最新の公開prereleaseと`main`からの導入方法を併記しています。未リリースの機能を使う場合は`main`を選んでください。現在の実装では、次の作業を共通の問題表現に対して行えます。
 
 | 利用者の目的 | OMMXに任せられること | 利用者が決めること |
 |---|---|---|

@@ -6,7 +6,7 @@ For example, developing a new solving method becomes harder if you must also rei
 
 ## Why use OMMX today?
 
-Until the 3.0.0 stable release, both this Book and the API Reference describe `main`. The [installation guide](./getting_started/install.md) sets up the SDK and adapters from the same checkout. The current implementation supports the following tasks on a common problem representation.
+Until the 3.0.0 stable release, both this Book and the API Reference describe `main`. The [installation guide](./getting_started/install.md) covers the latest published prerelease and installation from `main`; use `main` for features that have not been released yet. The current implementation supports the following tasks on a common problem representation.
 
 | Your goal | What OMMX can handle | What you decide |
 |---|---|---|

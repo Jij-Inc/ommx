@@ -5,7 +5,7 @@ Artifactは、InstanceやSolutionなどをまとめて保存・受け渡しす�
 求解やAdapter比較のために、この操作を覚える必要はありません。
 
 まず{ref}`CLIの導入手順 <install-cli>`を確認してください。以降はSDKに付属するCLIを
-checkoutのルートから`uv run --no-sync ommx`で呼び出します。
+SDKを導入した作業ディレクトリから`uv run --no-sync ommx`で呼び出します。
 単体CLIを導入した場合は`uv run --no-sync ommx`を`ommx`に置き換えます。
 利用できるコマンドやオプションは`uv run --no-sync ommx --help`と各サブコマンドの`--help`で確認できます。
 

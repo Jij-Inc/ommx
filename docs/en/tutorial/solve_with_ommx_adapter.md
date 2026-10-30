@@ -20,7 +20,7 @@ Here, we introduce how to solve a 0-1 Knapsack Problem via OMMX PySCIPOpt Adapte
 ## Installing the Required Libraries
 
 Follow the [installation guide](../getting_started/install.md)
-to install the Python SDK and PySCIPOpt Adapter from the same `main` checkout.
+to install the Python SDK and PySCIPOpt Adapter using the same route: latest prerelease or `main`.
 Use that environment as this notebook's kernel. Until the 3.0.0 stable release,
 the Book and API Reference describe `main`.
 

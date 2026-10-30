@@ -6,24 +6,24 @@ standalone executable or from the OMMX Python package.
 
 Until the 3.0.0 stable release, this Book and the API Reference describe `main`.
 Use the [installation guide](../getting_started/install.md)
-to obtain the checkout and its Python SDK environment.
+to choose the latest prerelease or a Python SDK environment built from `main`.
 
 ## Use the CLI included in the Python package
 
-The Python SDK includes the `ommx` console command. From the checkout root, run
+The Python SDK includes the `ommx` console command. From your working project or checkout root, run
 it in the environment prepared by the installation guide:
 
 ```bash
 uv run --no-sync ommx --help
 ```
 
-The command uses the same SDK checkout as your Python code. No separate CLI
+The command uses the same installed SDK as your Python code. No separate CLI
 installation is needed.
 
 ## Install the standalone executable from main
 
 To use the CLI without a Python environment, install the Rust toolchain and
-build it from the same checkout. Run this from the repository root:
+get the `main` source as described in the installation guide. Run this from the repository root:
 
 ```bash
 cargo install --locked --path rust/ommx --features cli

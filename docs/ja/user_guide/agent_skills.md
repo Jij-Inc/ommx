@@ -10,7 +10,7 @@
 コーディングエージェントに導入します。まず
 [OMMX CLI のインストールと実行](../how_to/manage_local_registry.md) に従って、`ommx` コマンドを利用できる
 状態にしてください。以下では Python パッケージに付属する CLI を `uv run --no-sync` で
-実行します。同じcheckoutから単体の実行ファイルを導入した場合は、
+実行します。`main`から単体の実行ファイルを導入した場合は、
 `uv run --no-sync ommx` を `ommx` に置き換えます。
 
 以下のシェル例は POSIX 系シェルを想定しています。

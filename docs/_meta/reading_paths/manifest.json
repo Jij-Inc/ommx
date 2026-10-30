@@ -3,7 +3,7 @@
   "title": "OMMX Book 概念とページの依存台帳",
   "created_at": "2026-10-26",
   "language": "ja",
-  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。日英の候補評価章と変換・解法選択章、変数復元・保持情報・特殊制約・InstanceClass・Preparation・Adapterの共有Reference移管を含む。その他の英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。 3.0.0安定版のリリースまではBookとAPI Referenceがともにmainを説明し、SDK・Adapter・CLIもその共通環境を使用する。",
+  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。日英の候補評価章と変換・解法選択章、変数復元・保持情報・特殊制約・InstanceClass・Preparation・Adapterの共有Reference移管を含む。その他の英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。 3.0.0安定版のリリースまではBookとAPI Referenceがともにmainを説明し、導入方法として最新の公開prereleaseとmainの両方を案内する。",
   "baseline": {
     "repository": "Jij-Inc/ommx",
     "source_revision": "0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2",
@@ -180,6 +180,29 @@
         "docs/en/release_note/ommx-3.0.md",
         "docs/en/tutorial/switching_adapters.md"
       ]
+    },
+    {
+      "design_source": "User direction in the current chat: offer main and the latest prerelease installation routes",
+      "base_revision": "b22152e4bd0deb2c0ac597c01164d5e9c6dfc4a8",
+      "target_revision": "codex/transformation-book",
+      "affected_pages": [
+        "README",
+        "HOME",
+        "HOME_EN",
+        "SETUP",
+        "SETUP.common",
+        "R_ADAPTERS",
+        "P5.named",
+        "P9",
+        "P9.python",
+        "P15",
+        "P16",
+        "T6",
+        "T8",
+        "R_API.named_function",
+        "R_API.instance.named_values"
+      ],
+      "note": "日英の導入ページに最新の公開prereleaseとmainの二つの経路を併記し、README・Book入口・Adapter一覧も両方へ案内する。BookとAPI Referenceの説明対象は3.0.0安定版までmainのままとし、未公開の機能を使う場合はmainを選ぶ。特定のプレビュー版には固定せず、導入方法の選択と個別APIの学習前提を区別する。既存の環境関連注記を選択したSDK環境に揃えるが、各ページの操作全体をprereleaseで実行確認したとはみなさない。歴史的baselineと従前の編集記録を保持し、本文照合記録はチャットに残す。"
     }
   ],
   "interpretation": {
@@ -1105,17 +1128,20 @@
     },
     {
       "id": "sdk.environment",
-      "label": "mainのSDK・Adapterと実行環境を揃える",
+      "label": "SDK・Adapterの導入方法と実行環境を選ぶ",
       "owner": "SETUP",
       "requires": [],
       "external": false,
       "aliases": [
         "uv sync",
+        "uv add",
+        "uv pip",
         "main",
+        "prerelease",
         "virtualenv",
         "venv"
       ],
-      "scope": "3.0.0安定版のリリースまではBookとAPI Referenceがmainを説明する。同じcheckoutからSDKと必要なAdapterを導入し、その環境で例を実行する。環境構築は個別APIの意味・操作・数学的保証の習得を含まない。"
+      "scope": "3.0.0安定版のリリースまではBookとAPI Referenceがmainを説明する。最新の公開prereleaseとmainからの導入を選び、必要なSDK・Adapterを同じ経路で揃える。未公開の機能はmainを使い、Notebookやスクリプトには選んだ環境を使う。環境構築は個別APIの意味・操作・数学的保証の習得を含まない。"
     },
     {
       "id": "wire.serialization",
@@ -1562,7 +1588,7 @@
       "aliases": [
         "state_from_named_values"
       ],
-      "scope": "名前照合による対象IDへの対応付けと、値・実行可能性の検査を区別する。BookとReferenceで共通のmain SDK環境を使う。結果抽出だけから名前照合の操作や検証済み候補が得られるとはみなさない。"
+      "scope": "名前照合による対象IDへの対応付けと、値・実行可能性の検査を区別する。BookとReferenceのどちらでもSETUPで選んだSDK環境を使う。結果抽出だけから名前照合の操作や検証済み候補が得られるとはみなさない。"
     },
     {
       "id": "bounds.tighten",
@@ -1932,7 +1958,7 @@
     },
     {
       "id": "SETUP",
-      "title": "mainのSDK・Adapterと実行環境 / Install the Python SDK and adapters",
+      "title": "Python SDK・Adapterの導入方法と実行環境 / Install the Python SDK and adapters",
       "slice": "K",
       "role": "setup",
       "status": "existing",
@@ -1960,7 +1986,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "日英の同じ節構造で、3.0.0安定版のリリースまではBookとAPI Referenceがともにmainを説明することを入口で示す。同じcheckoutからSDKを導入し、必要なAdapterだけ同じ環境へ追加する。Notebookのカーネル設定とmainの更新手順もここへ集約する。CLIはSDK同梱版とPython不要のRustからの導入を選べる。導入は個別APIの能力を付与せず、全Bookの実行確認を示すものでもない。source_urlsは日本語版の歴史的baselineであり、新しい英語版の現行本文はsource_pathsで追跡する。",
+      "notes": "日英の同じ節構造で、3.0.0安定版まではBookとAPI Referenceがともにmainを説明することと、最新の公開prerelease・mainの導入経路の違いを入口で示す。prereleaseはリポジトリ外のuvプロジェクト、mainはcheckoutのルートで作業する。SDKと必要なAdapterを選んだ経路で揃え、未公開の機能を使う場合はmainを選ぶ。Notebookのカーネル設定と各経路の更新方法もここへ集約する。CLIはSDK同梱版とPython不要のRustからの導入を選べる。導入は個別APIの能力を付与せず、全Bookの実行確認を示すものでもない。source_urlsは日本語版の歴史的baselineであり、新しい英語版の現行本文はsource_pathsで追跡する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -1991,7 +2017,7 @@
       ],
       "deferred": [],
       "parent_page": "SETUP",
-      "notes": "Rust/他言語読者がPython環境構築を前提にしないための将来の独立案内。現在のBookとReferenceがmainを説明する方針はSETUPとREADMEの入口で明示する。別の公開版を学習する分岐にはしない。",
+      "notes": "Rust/他言語読者がPython環境構築を前提にしないための将来の独立案内。現在のBookとReferenceがmainを説明する方針はSETUPとREADMEの入口で明示する。最新の公開prereleaseも導入方法の選択肢として示すが、説明対象を別の公開版へ切り替える学習経路にはしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": []
@@ -4149,7 +4175,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "共通のmain SDK環境だけの独立したBinaryモデルとsave_mpsの例。ファイルを渡す準備で終了し外部ツールの実行や候補取り込みを前提にしない。出力APIの受付範囲と情報境界、二次式の受け手側での確認はBookに要約し、正確な一覧・係数規約はsave_mps APIへ送る。lowering手順とArtifact保存はリンク先を訪問した場合だけ習得する。",
+      "notes": "SETUPで選んだSDK環境だけの独立したBinaryモデルとsave_mpsの例。ファイルを渡す準備で終了し外部ツールの実行や候補取り込みを前提にしない。出力APIの受付範囲と情報境界、二次式の受け手側での確認はBookに要約し、正確な一覧・係数規約はsave_mps APIへ送る。lowering手順とArtifact保存はリンク先を訪問した場合だけ習得する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -4572,7 +4598,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "mainのCLIの導入とPython同梱版・Rustからの導入の選択はSETUPの任意節へ集約する。受け取ったArtifactを調べる読者に作成・ファイル往復・Python SDKの習得は要求せず、Artifactの基本と可変の名前/タグ・内容のdigestを局所説明する。削除/復元とデータ回収の区別、報告のみの確認から明示削除へ進む手順、blobの経過時間による猶予期間は安全な操作のためBookに残す。Python検索とExperiment検索はそれぞれP9.python/P9.experimentの任意節とする。",
+      "notes": "CLIの導入とPython同梱版・Rustからの導入の選択はSETUPの任意節へ集約する。受け取ったArtifactを調べる読者に作成・ファイル往復・Python SDKの習得は要求せず、Artifactの基本と可変の名前/タグ・内容のdigestを局所説明する。削除/復元とデータ回収の区別、報告のみの確認から明示削除へ進む手順、blobの経過時間による猶予期間は安全な操作のためBookに残す。Python検索とExperiment検索はそれぞれP9.python/P9.experimentの任意節とする。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -4975,7 +5001,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "P12相当の概念前提は明示し、コード実行状態は引き継がない。TSP固有の定式化と可視化は局所説明。mainの共通SDK/OpenJij Adapter環境と追加matplotlibへ導入を接続する。任意応用だが本文と出力の検証対象。copyや手動State評価は前提にしない。",
+      "notes": "P12相当の概念前提は明示し、コード実行状態は引き継がない。TSP固有の定式化と可視化は局所説明。SETUPで選んだSDK/OpenJij Adapter環境と追加matplotlibへ導入を接続する。任意応用だが本文と出力の検証対象。copyや手動State評価は前提にしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -5904,7 +5930,7 @@
       ],
       "deferred": [],
       "parent_page": "R_API.instance",
-      "notes": "state_from_named_valuesの完全例で抽出元と受取先を構築し、IDが異なっても名前・添字で照合できることと、新しいboundへの違反を示す。照合は値・実行可能性の検査ではなく、入力にない値を埋めない。実行環境はSETUPで用意する共通のmain SDK環境であり、別の開発環境を既に持つことを前提にしない。",
+      "notes": "state_from_named_valuesの完全例で抽出元と受取先を構築し、IDが異なっても名前・添字で照合できることと、新しいboundへの違反を示す。照合は値・実行可能性の検査ではなく、入力にない値を埋めない。実行にはSETUPで選んだSDK環境を使い、別の開発環境を既に持つことを前提にしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -6761,7 +6787,7 @@
     },
     {
       "id": "named_values_reuse",
-      "title": "共通のmain環境から別Instanceへ値を対応付けて評価する",
+      "title": "選んだSDK環境から別Instanceへ値を対応付けて評価する",
       "initial": [
         "ext.math",
         "ext.python"
@@ -6931,15 +6957,15 @@
   "environment_requirements": [
     {
       "page": "SETUP",
-      "observed": "日英で同じ手順により、mainの同じcheckoutからSDKと必要なAdapterを一つの環境へ導入する。BookとAPI Referenceで実行環境を分けず、Notebookにはその環境のカーネルを使う。"
+      "observed": "日英で最新の公開prereleaseとmainの導入経路を併記する。prereleaseはリポジトリ外のuvプロジェクトにuv addでSDKと必要なAdapterを追加し、mainはcheckoutでuv syncする。BookとAPI Referenceはともにmainを説明し、未公開の機能はmainで使う。NotebookやCLIには選択した環境を使う。"
     },
     {
       "page": "P9",
-      "observed": "SETUPの任意CLI節からmainのCLIを使う。SDK同梱版は共通環境のuv run --no-sync ommxで実行し、Python不要の場合は同じcheckoutからRust CLIをcargo installで導入する。"
+      "observed": "SETUPの任意CLI節からSDK同梱CLIを使う。Python SDKの導入経路に対応する環境でuv run --no-sync ommxを実行し、Python不要の場合はmainのcheckoutからRust CLIをcargo installで導入する。"
     },
     {
       "page": "P5.named",
-      "observed": "ID指定の例と同じmain SDK・PySCIPOpt Adapter環境で名前照合を使う。別の開発環境への切替は前提にしない。"
+      "observed": "ID指定の例と同じSDK・PySCIPOpt Adapter環境で名前照合を使う。別の開発環境への切替は前提にしない。"
     },
     {
       "page": "P6.adapter",
@@ -6947,27 +6973,27 @@
     },
     {
       "page": "P9.python",
-      "observed": "共通のmain SDK環境を使う。CLIの操作とは独立した任意のPython検索例。"
+      "observed": "SETUPで選んだSDK環境を使う。CLIの操作とは独立した任意のPython検索例。"
     },
     {
       "page": "T6",
-      "observed": "共通のmain SDK環境のみ。送受信を別プロセス、受信を空のLocal Registryで実行する。ソルバー準備を要求しない。"
+      "observed": "SETUPで選んだSDK環境のみ。送受信を別プロセス、受信を空のLocal Registryで実行する。ソルバー準備を要求しない。"
     },
     {
       "page": "P16",
-      "observed": "共通のmain SDK環境のみ。小さなモデルを本文で作る。Adapter・ソルバー・ネットワークは出力例に不要。外部ツール自身のMPS拡張対応は受け手側で確認する。"
+      "observed": "SETUPで選んだSDK環境のみ。小さなモデルを本文で作る。Adapter・ソルバー・ネットワークは出力例に不要。外部ツール自身のMPS拡張対応は受け手側で確認する。"
     },
     {
       "page": "R_API.named_function",
-      "observed": "共通のmain SDK環境のみ。指標の登録・単候補/複数候補の取得とIntegerの省略/明示値の例を扱う。"
+      "observed": "SETUPで選んだSDK環境のみ。指標の登録・単候補/複数候補の取得とIntegerの省略/明示値の例を扱う。"
     },
     {
       "page": "R_API.instance.named_values",
-      "observed": "結果抽出と別Instanceへの名前照合は共通のmain SDK環境で実行する。照合と値・実行可能性の検査という意味上の違いは各APIの本文で説明する。"
+      "observed": "結果抽出と別Instanceへの名前照合はSETUPで選んだSDK環境で実行する。照合と値・実行可能性の検査という意味上の違いは各APIの本文で説明する。"
     },
     {
       "page": "P15",
-      "observed": "共通のmain SDK環境だけで自己完結する。一回分の更新を明示的に呼び、一般presolve統合を前提にしない。"
+      "observed": "SETUPで選んだSDK環境だけで自己完結する。一回分の更新を明示的に呼び、一般presolve統合を前提にしない。"
     }
   ],
   "review_notes": [
