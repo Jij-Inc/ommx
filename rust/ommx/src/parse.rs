@@ -75,6 +75,10 @@ pub enum RawParseError {
     )]
     UnsupportedV1Function,
 
+    /// The wire schema supports enumerated domains, but the 2.x model does not.
+    #[error("Finite-domain decision variables are unsupported by OMMX SDK 2.x. Use an SDK with finite-domain support.")]
+    UnsupportedFiniteDomain,
+
     /// OMMX metadata must be represented by its dedicated protobuf fields.
     #[error("Annotation key `{key}` is reserved for OMMX metadata; use description or metadata fields instead.")]
     ReservedAnnotationKey { key: String },

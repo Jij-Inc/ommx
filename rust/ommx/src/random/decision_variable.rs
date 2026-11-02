@@ -90,6 +90,7 @@ impl Arbitrary for DecisionVariable {
                     parameters,
                     description,
                     substituted_value: None,
+                    finite_domain: None,
                 },
             )
             .boxed()
