@@ -25,14 +25,11 @@ macro_rules! open_kind {
             fn __int__(&self) -> i32 {
                 self.__hash__() as i32
             }
-            fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
-                if let Ok(other) = other.extract::<Self>() {
-                    self.0 == other.0
-                } else if let Ok(code) = other.extract::<i32>() {
-                    self.__hash__() == code as isize
-                } else {
-                    false
-                }
+            fn __eq__(&self, other: $crate::enums::KindOperand<Self>) -> bool {
+                other.matches(self, self.__int__())
+            }
+            fn __ne__(&self, other: $crate::enums::KindOperand<Self>) -> bool {
+                !self.__eq__(other)
             }
             fn __repr__(&self) -> String {
                 $(if self.0 == <$core>::$core_variant {
@@ -67,6 +64,29 @@ macro_rules! open_kind {
 use pyo3::prelude::*;
 
 pub(crate) use open_kind;
+
+// PyO3's equality slots return NotImplemented when operand extraction fails,
+// allowing the other operand to implement the comparison.
+#[derive(FromPyObject)]
+pub(crate) enum KindOperand<K> {
+    Kind(K),
+    Code(i32),
+}
+
+impl<K: PartialEq> KindOperand<K> {
+    pub(crate) fn matches(self, kind: &K, code: i32) -> bool {
+        match self {
+            Self::Kind(other) => other == *kind,
+            Self::Code(other) => other == code,
+        }
+    }
+}
+
+impl<K> pyo3_stub_gen::PyStubType for KindOperand<K> {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::builtin("object")
+    }
+}
 
 // These classes expose SDK-owned constants and have no Python constructor.
 pyo3_stub_gen::inventory::submit! {

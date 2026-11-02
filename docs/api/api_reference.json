@@ -5861,7 +5861,7 @@
                     {
                       "name": "other",
                       "type_": {
-                        "display": "Any",
+                        "display": "object",
                         "link_target": null,
                         "children": []
                       },
@@ -5902,6 +5902,32 @@
                   "parameters": [],
                   "return_type": {
                     "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__ne__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
                     "link_target": null,
                     "children": []
                   }
@@ -18838,7 +18864,7 @@
                     {
                       "name": "other",
                       "type_": {
-                        "display": "Any",
+                        "display": "object",
                         "link_target": null,
                         "children": []
                       },
@@ -18879,6 +18905,32 @@
                   "parameters": [],
                   "return_type": {
                     "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__ne__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
                     "link_target": null,
                     "children": []
                   }
@@ -26666,7 +26718,7 @@
                     {
                       "name": "other",
                       "type_": {
-                        "display": "Any",
+                        "display": "object",
                         "link_target": null,
                         "children": []
                       },
@@ -26707,6 +26759,32 @@
                   "parameters": [],
                   "return_type": {
                     "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__ne__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
                     "link_target": null,
                     "children": []
                   }

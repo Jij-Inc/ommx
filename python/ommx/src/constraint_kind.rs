@@ -91,14 +91,11 @@ impl ConstraintKind {
     fn __int__(&self) -> i32 {
         self.0 as i32
     }
-    fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
-        if let Ok(other) = other.extract::<Self>() {
-            self.0 == other.0
-        } else {
-            other
-                .extract::<i32>()
-                .is_ok_and(|code| code == self.0 as i32)
-        }
+    fn __eq__(&self, other: crate::enums::KindOperand<Self>) -> bool {
+        other.matches(self, self.__int__())
+    }
+    fn __ne__(&self, other: crate::enums::KindOperand<Self>) -> bool {
+        !self.__eq__(other)
     }
     fn __repr__(&self) -> String {
         format!("ConstraintKind.{:?}", self.0)
