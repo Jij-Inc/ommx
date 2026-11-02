@@ -1000,7 +1000,11 @@ The structural match (8-hex registry-id prefix, timestamp-shaped tag, hex nonce)
 DataFrame layers use Apache Parquet (`application/vnd.apache.parquet`).
 `ArtifactDraft.add_dataframe()` and `Artifact.get_dataframe()` now use the Rust
 SDK for Parquet I/O and work without PyArrow. They support flat primitive
-columns, nullable dtypes, dates, timestamps and timedeltas.
+columns, nullable dtypes, dates, timestamps and timedeltas. Layers use Snappy
+compression. The Parquet schema determines each column's values and nulls.
+pandas/PyArrow conventions are supported only where the SDK can interpret
+them without changing those values. For example, a UINT64 column containing
+`2**64 - 1` and a null is read as a nullable integer.
 
 OMMX writes both `pandas` and `ommx.pandas` key-value metadata inside the
 Parquet file. The `pandas` entry describes fields and indexes for readers that
@@ -1014,10 +1018,16 @@ categorical column allows `low`, `medium`, `high` but contains only `low` and
   `ommx.pandas`. An unknown version raises `ValueError`. If another tool edits
   the schema and retains this metadata, it must keep the field references in
   sync. Each physical column must be accounted for exactly once as data or index.
+  A stored value outside its declared categories raises `ValueError`.
+  On write, column axes that OMMX cannot reconstruct, including a
+  `CategoricalIndex`, are rejected. To store only its observed labels, explicitly
+  convert it to a plain index first. DataFrame attributes must round-trip as
+  JSON values with string keys. A custom index frequency that cannot be
+  represented by its pandas frequency string is rejected before storage.
 - **Reading files without `ommx.pandas`.** This includes layers written by
   earlier OMMX releases through pandas/PyArrow. OMMX reads supported flat
-  columns and uses `pandas` metadata when present. It can restore MultiIndex
-  columns with string or numeric levels. Unsupported level types raise
+  columns and uses compatible `pandas` metadata when present. It can restore
+  string or numeric column labels, including MultiIndex levels. Unsupported level types raise
   `ValueError`. If `pandas` identifies a categorical column, OMMX raises
   `ValueError` because its reader cannot reconstruct the full category list and
   order from the decoded values. Read the blob with `pandas.read_parquet()`

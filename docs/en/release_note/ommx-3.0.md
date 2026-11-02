@@ -12,7 +12,9 @@ Artifact DataFrame layers use Rust to read and write Apache Parquet without
 PyArrow. OMMX writes `pandas` metadata for other readers and `ommx.pandas`
 to restore DataFrame details such as unused categories and their ordering.
 Other readers can access the primitive column values. OMMX can also read
-supported flat columns from files written by pandas/PyArrow. Categorical
+supported flat columns from files written by pandas/PyArrow. The Parquet
+schema determines their values and nulls; pandas metadata can supply labels
+and dtypes where these preserve the values. Categorical
 columns identified by `pandas` alone require conversion with PyArrow.
 See {ref}`the migration guide <python-native-parquet-dataframe-layers>`
 for schema limits and conversion steps.

@@ -62,6 +62,41 @@ def _restore_label(value: Any) -> Any:
     raise ValueError("Invalid pandas label in Parquet metadata")
 
 
+def _check_axis(original: pd.Index, restored: pd.Index) -> None:
+    if original.identical(restored) and not (
+        isinstance(original, pd.MultiIndex)
+        and isinstance(restored, pd.MultiIndex)
+        and not all(a.identical(b) for a, b in zip(original.levels, restored.levels))
+    ):
+        return
+    raise TypeError(
+        f"Cannot preserve this {type(original).__name__} in a Parquet DataFrame; "
+        "convert the axis to a plain index before saving"
+    )
+
+
+def _columns_index(labels: list[Any], description: dict[str, Any]) -> pd.Index:
+    names = [_restore_label(name) for name in description["column_names"]]
+    if description["multi_columns"]:
+        return pd.MultiIndex.from_tuples(labels, names=names)
+    if description["column_range"] is not None:
+        result = pd.RangeIndex(**description["column_range"], name=names[0])
+        if not result.equals(pd.Index(labels)):
+            raise ValueError("RangeIndex metadata does not match column labels")
+        return result
+    axis = pd.Index(
+        labels,
+        dtype=description.get("column_dtype"),
+        name=names[0],
+        tupleize_cols=False,
+    )
+    if axis.tolist() != labels:
+        raise ValueError(
+            "Column labels cannot be represented exactly by their declared dtype"
+        )
+    return axis
+
+
 def _column(series: pd.Series, field: str) -> tuple[dict[str, Any], dict[str, Any]]:
     dtype = series.dtype
     spec: dict[str, Any] = {"dtype": str(dtype)}
@@ -160,10 +195,14 @@ def _column(series: pd.Series, field: str) -> tuple[dict[str, Any], dict[str, An
             convert = days_since_epoch
         else:
             convert = _CASTS[kind]
-        values = [
-            None if missing else convert(value)
-            for value, missing in zip(series.tolist(), series.isna())
-        ]
+        if isinstance(dtype, np.dtype) and dtype.kind == "f":
+            # A NumPy float has no separate missing-value mask.
+            values = series.tolist()
+        else:
+            values = [
+                None if missing else convert(value)
+                for value, missing in zip(series.tolist(), series.isna())
+            ]
     return {"name": field, "data": {"type": kind, "values": values}}, spec
 
 
@@ -171,6 +210,10 @@ def to_columns(df: pd.DataFrame) -> tuple[list[dict[str, Any]], dict[str, str]]:
     """Extract primitive columns and explicitly describe pandas-only structure."""
     if not df.columns.is_unique:
         raise ValueError("Parquet requires unique DataFrame column labels")
+    if json.loads(json.dumps(df.attrs, allow_nan=False)) != df.attrs:
+        raise TypeError(
+            "DataFrame attrs must round-trip as JSON values with string keys"
+        )
     columns: list[dict[str, Any]] = []
     specs: dict[str, Any] = {}
     labels = []
@@ -214,7 +257,11 @@ def to_columns(df: pd.DataFrame) -> tuple[list[dict[str, Any]], dict[str, str]]:
         )
         return field
 
-    for index, (label, series) in enumerate(df.items()):
+    if isinstance(df.columns, pd.CategoricalIndex):
+        raise TypeError(
+            "Convert the CategoricalIndex column axis to a plain index before saving"
+        )
+    for label, series in df.items():
         field = add(series, str(label), label)
         labels.append({"field": field, "label": _label(label)})
     range_index = isinstance(df.index, pd.RangeIndex) and len(columns) > 0
@@ -231,6 +278,7 @@ def to_columns(df: pd.DataFrame) -> tuple[list[dict[str, Any]], dict[str, str]]:
     else:
         index_spec = {
             "kind": "columns",
+            "multi": isinstance(df.index, pd.MultiIndex),
             "fields": [],
             "names": [_label(name) for name in df.index.names],
             "range": {
@@ -241,20 +289,40 @@ def to_columns(df: pd.DataFrame) -> tuple[list[dict[str, Any]], dict[str, str]]:
             if isinstance(df.index, pd.RangeIndex)
             else None,
         }
+        index_levels = []
         for level in range(df.index.nlevels):
             name = df.index.names[level]
+            level_values = df.index.get_level_values(level)
+            index_levels.append(level_values)
             field = add(
-                pd.Series(df.index.get_level_values(level)),
+                pd.Series(level_values),
                 f"__index_level_{level}__",
                 name,
             )
             index_spec["fields"].append(field)
+        if isinstance(df.index, pd.MultiIndex):
+            _check_axis(
+                df.index, pd.MultiIndex.from_arrays(index_levels, names=df.index.names)
+            )
+        if (
+            isinstance(df.index, (pd.DatetimeIndex, pd.TimedeltaIndex))
+            and df.index.freq is not None
+        ):
+            freq = df.index.freqstr
+            if pd.tseries.frequencies.to_offset(freq) != df.index.freq:
+                raise TypeError(
+                    "Cannot preserve the custom frequency of this DataFrame index"
+                )
+            index_spec["frequency"] = freq
         pandas_index = index_spec["fields"]
     description = {
         "version": 1,
         "columns": labels,
         "column_names": [_label(name) for name in df.columns.names],
         "multi_columns": isinstance(df.columns, pd.MultiIndex),
+        "column_dtype": None
+        if isinstance(df.columns, pd.MultiIndex)
+        else str(df.columns.dtype),
         "column_range": {
             "start": df.columns.start,
             "stop": df.columns.stop,
@@ -266,6 +334,7 @@ def to_columns(df: pd.DataFrame) -> tuple[list[dict[str, Any]], dict[str, str]]:
         "specs": specs,
         "attrs": df.attrs,
     }
+    _check_axis(df.columns, _columns_index(list(df.columns), description))
     pandas_metadata = {
         "index_columns": pandas_index,
         "column_indexes": [
@@ -299,16 +368,37 @@ def _series(data: dict[str, Any], spec: dict[str, Any] | None = None) -> pd.Seri
     spec = spec or {}
     dtype = spec.get("dtype")
     if dtype == "category":
-        categories = _series(spec["categories"], spec["category_spec"])
-        decoded = _series(data, {"dtype": "object"})
+        definitions = spec["categories"]
+        if definitions["type"] != kind:
+            raise ValueError("Category metadata does not match the Parquet column type")
+        categories = _series(definitions, spec["category_spec"])
+
+        # Match on Parquet values, before converting the dictionary to pandas
+        # dates, durations or other dtypes. Only a Parquet null gets code -1.
+        def key(value: Any) -> Any:
+            return bytes(value) if kind == "binary" else value
+
+        codes = {key(v): i for i, v in enumerate(definitions["values"])}
+        try:
+            rows = [-1 if v is None else codes[key(v)] for v in values]
+        except KeyError as error:
+            raise ValueError(
+                f"Parquet value {error} is missing from the category metadata"
+            ) from error
         return pd.Series(
-            pd.Categorical(decoded, categories=categories, ordered=spec["ordered"])
+            pd.Categorical.from_codes(
+                rows, categories=categories, ordered=spec["ordered"]
+            )
         )
+    if dtype in _NUMERIC and _NUMERIC[dtype] != kind:
+        raise ValueError(f"pandas dtype {dtype!r} conflicts with Parquet type {kind!r}")
     if kind == "binary":
         values = [None if value is None else bytes(value) for value in values]
     if "timestamp_" in kind:
         unit = {"millis": "ms", "micros": "us", "nanos": "ns"}[kind.rsplit("_", 1)[-1]]
         # An integer array retains full nanosecond precision even with nulls.
+        if np.iinfo(np.int64).min in values:
+            raise ValueError("Parquet timestamp equals pandas' reserved NaT value")
         raw = np.array(
             [np.iinfo(np.int64).min if value is None else value for value in values],
             dtype=np.int64,
@@ -317,7 +407,16 @@ def _series(data: dict[str, Any], spec: dict[str, Any] | None = None) -> pd.Seri
         if kind.startswith("utc_"):
             result = result.dt.tz_localize("UTC")
         if dtype and dtype != "object":
-            return result.astype(dtype)
+            if not dtype.startswith("datetime64["):
+                raise ValueError(
+                    f"pandas dtype {dtype!r} conflicts with Parquet timestamp"
+                )
+            restored = result.astype(dtype)
+            if not restored.astype(result.dtype).equals(result):
+                raise ValueError(
+                    f"Timestamp values cannot be represented exactly as {dtype}"
+                )
+            return restored
         return result.astype(object) if dtype == "object" else result
     if kind == "date":
         values = [
@@ -327,9 +426,13 @@ def _series(data: dict[str, Any], spec: dict[str, Any] | None = None) -> pd.Seri
             for value in values
         ]
     if dtype and dtype.startswith("timedelta64["):
+        if kind != "int64":
+            raise ValueError(f"Duration metadata requires INT64, got {kind!r}")
         unit = dtype[len("timedelta64[") : -1]
         if unit not in {"s", "ms", "us", "ns"}:
             raise ValueError(f"Unsupported timedelta unit in Parquet metadata: {unit}")
+        if np.iinfo(np.int64).min in values:
+            raise ValueError("Parquet duration equals pandas' reserved NaT value")
         raw = np.array(
             [np.iinfo(np.int64).min if value is None else value for value in values],
             dtype=np.int64,
@@ -338,33 +441,42 @@ def _series(data: dict[str, Any], spec: dict[str, Any] | None = None) -> pd.Seri
     if dtype == "object" or kind == "binary" or kind == "date":
         return pd.Series(values, dtype=object)
     if dtype == "string":
+        if kind != "string":
+            raise ValueError(f"String metadata conflicts with Parquet type {kind!r}")
         return pd.Series(values, dtype=pd.StringDtype(storage="python"))
-    if dtype in ("Float32", "Float64"):
+    has_null = any(v is None for v in values)
+    if kind.startswith(("int", "uint")):
+        if has_null or (dtype and dtype[0].isupper()):
+            # Build from exact integers. Some pandas versions infer a float
+            # intermediate from a list of integers containing None.
+            mask = np.array([v is None for v in values], dtype=bool)
+            integers = np.array([0 if v is None else v for v in values], dtype=kind)
+            return pd.Series(pd.arrays.IntegerArray(integers, mask))
+        return pd.Series(values, dtype=kind)
+    if kind == "boolean":
+        return pd.Series(
+            values, dtype="boolean" if has_null or dtype == "boolean" else "bool"
+        )
+    if kind.startswith("float") and (
+        dtype in ("Float32", "Float64")
+        or has_null
+        and (dtype is None or any(v is not None and np.isnan(v) for v in values))
+    ):
         mask = np.array([value is None for value in values], dtype=bool)
-        floats = np.array(values, dtype=dtype.lower())
+        floats = np.array(values, dtype=kind)
         return pd.Series(pd.arrays.FloatingArray(floats, mask))
     if dtype in _NUMERIC:
-        if any(value is None for value in values) and dtype in {
-            "bool",
-            *[
-                f"{prefix}{bits}"
-                for prefix in ("int", "uint")
-                for bits in (8, 16, 32, 64)
-            ],
-        }:
-            # The pandas metadata keeps NumPy's non-nullable dtype
-            # even when Parquet has nulls; match pandas' normal promotion.
-            return pd.Series(values, dtype=object if dtype == "bool" else "float64")
-        return pd.Series(values, dtype=dtype)
-    if kind in {"boolean", "string"}:
+        result = pd.Series(values, dtype=dtype)
+        if dtype == "float16" and any(
+            v is not None and not np.isnan(v) and float(r) != v
+            for v, r in zip(values, result)
+        ):
+            raise ValueError("Parquet float cannot be represented exactly as float16")
+        return result
+    if kind == "string":
         return pd.Series(values, dtype=object)
-    if kind in _NUMERIC:
-        return pd.Series(
-            values,
-            dtype=kind
-            if not any(value is None for value in values) or kind.startswith("float")
-            else "float64",
-        )
+    if kind.startswith("float"):
+        return pd.Series(values, dtype=kind)
     raise ValueError(f"Unsupported pandas dtype in Parquet metadata: {dtype!r}")
 
 
@@ -412,18 +524,25 @@ def _pyarrow_column_index(
                 )
             values.append(item.value)
 
-    arrays = []
-    for values, level in zip(parts, levels):
-        dtype = level["numpy_type"]
-        if level["pandas_type"] == "unicode":
-            arrays.append(pd.Index(values, dtype=dtype))
-        elif dtype in _NUMERIC and dtype.lower().startswith(("int", "uint", "float")):
-            arrays.append(pd.Index(values).astype(dtype))
-        else:
-            raise ValueError(
-                f"Unsupported MultiIndex level dtype in pandas metadata: {dtype!r}"
-            )
+    arrays = [
+        _pandas_labels(pd.Index(values), level) for values, level in zip(parts, levels)
+    ]
     return pd.MultiIndex.from_arrays(arrays, names=[level["name"] for level in levels])
+
+
+def _pandas_labels(labels: pd.Index, level: dict[str, Any]) -> pd.Index:
+    dtype = level.get("numpy_type")
+    if dtype in (None, "object") or level.get("pandas_type") == "unicode":
+        return labels.rename(level.get("name"))
+    if dtype in _NUMERIC and dtype.lower().startswith(("int", "uint", "float")):
+        parse = float if dtype.lower().startswith("float") else int
+        numbers = [
+            parse(label) if isinstance(label, str) else label for label in labels
+        ]
+        result = pd.Index(numbers, dtype=dtype, name=level.get("name"))
+        if result.tolist() == numbers:
+            return result
+    raise ValueError(f"Unsupported column label dtype in pandas metadata: {dtype!r}")
 
 
 def from_columns(
@@ -444,16 +563,7 @@ def from_columns(
         labels = description["columns"]
         df = pd.DataFrame({i: fields[item["field"]] for i, item in enumerate(labels)})
         column_labels = [_restore_label(item["label"]) for item in labels]
-        column_names = [_restore_label(name) for name in description["column_names"]]
-        df.columns = (
-            pd.MultiIndex.from_tuples(column_labels, names=column_names)
-            if description["multi_columns"]
-            else pd.Index(column_labels, name=column_names[0], tupleize_cols=False)
-        )
-        if description.get("column_range") is not None:
-            df.columns = pd.RangeIndex(
-                **description["column_range"], name=column_names[0]
-            )
+        df.columns = _columns_index(column_labels, description)
         index_spec = description["index"]
         if index_spec["kind"] == "range":
             index = pd.RangeIndex(
@@ -467,11 +577,25 @@ def from_columns(
             names = [_restore_label(name) for name in index_spec["names"]]
             index = (
                 pd.MultiIndex.from_arrays(arrays, names=names)
-                if len(arrays) > 1
+                if index_spec.get("multi", len(arrays) > 1)
                 else pd.Index(arrays[0], name=names[0])
             )
             if index_spec.get("range"):
-                index = pd.RangeIndex(**index_spec["range"], name=names[0])
+                declared = pd.RangeIndex(**index_spec["range"], name=names[0])
+                if not declared.equals(index):
+                    raise ValueError(
+                        "RangeIndex metadata does not match Parquet index values"
+                    )
+                index = declared
+            if "frequency" in index_spec:
+                if isinstance(index, pd.DatetimeIndex):
+                    index = pd.DatetimeIndex(index, freq=index_spec["frequency"])
+                elif isinstance(index, pd.TimedeltaIndex):
+                    index = pd.TimedeltaIndex(index, freq=index_spec["frequency"])
+                else:
+                    raise ValueError(
+                        "Frequency metadata requires a datetime or timedelta index"
+                    )
         if not labels:
             df = pd.DataFrame(index=index, columns=df.columns)
         else:
@@ -518,8 +642,12 @@ def from_columns(
         df = df.rename(columns=names)
     column_indexes = pandas_metadata.get("column_indexes", [])
     if len(column_indexes) == 1:
-        df.columns.name = column_indexes[0].get("name")
+        df.columns = _pandas_labels(df.columns, column_indexes[0])
     elif len(column_indexes) > 1:
         df.columns = _pyarrow_column_index(df.columns, column_indexes)
+    if not df.columns.is_unique:
+        raise ValueError(
+            "pandas metadata maps multiple Parquet fields to the same column label"
+        )
     df.attrs = pandas_metadata.get("attributes", {})
     return df

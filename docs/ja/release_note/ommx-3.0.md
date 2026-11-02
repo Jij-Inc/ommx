@@ -11,6 +11,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 Artifact の DataFrame layer は、PyArrow を使わずに Rust で Apache Parquet を読み書きするようになりました。
 OMMX は他のツール向けに `pandas` を、未使用のカテゴリやその順序などを復元するために `ommx.pandas` を保存します。
 他のツールでも基本型の列の値は読み取れます。OMMX は pandas/PyArrow が書いたファイルからも対応するフラットな列を読めます。
+値と欠損は Parquet スキーマに従い、pandas 固有の列ラベルや dtype はその値を保てる範囲で復元します。
 `pandas` のみでカテゴリ列として記録されたファイルは PyArrow での変換が必要です。
 対応するスキーマと変換手順は {ref}`マイグレーションガイド <python-native-parquet-dataframe-layers>` を参照してください。
 

@@ -1615,7 +1615,9 @@ impl PyArtifactDraft {
     /// converted to primitive columns before saving. The file carries `pandas`
     /// metadata for other readers and `ommx.pandas` for OMMX to restore indexes,
     /// column labels, dtypes and categories, including unused categories and
-    /// their order. Unsupported pandas values raise {class}`TypeError`;
+    /// their order. Column axes that cannot be preserved (including a
+    /// categorical column axis) are rejected before storage. DataFrame attrs
+    /// must round-trip as JSON. Unsupported pandas values raise {class}`TypeError`;
     /// Parquet encoding failures raise {class}`RuntimeError`.
     ///
     /// >>> import pandas as pd

@@ -8,7 +8,7 @@ use crate::Result;
 use anyhow::{bail, ensure, Context};
 use bytes::Bytes;
 use parquet::{
-    basic::{LogicalType, Repetition, TimeUnit, Type as PhysicalType},
+    basic::{Compression, ConvertedType, LogicalType, Repetition, TimeUnit, Type as PhysicalType},
     column::reader::ColumnReader,
     data_type::{
         BoolType, ByteArray, ByteArrayType, DataType, DoubleType, FloatType, Int32Type, Int64Type,
@@ -164,6 +164,7 @@ impl Table {
             .collect();
         let properties = Arc::new(
             WriterProperties::builder()
+                .set_compression(Compression::SNAPPY)
                 .set_key_value_metadata(Some(metadata))
                 .build(),
         );
@@ -398,109 +399,64 @@ fn write_values<D: DataType, T>(
 }
 
 fn empty_column(field: &Type) -> Result<ColumnData> {
-    // Compare complete physical/logical pairs so unsupported logical types
-    // (e.g. decimal or JSON) are never silently interpreted as plain values.
-    let logical = field.get_basic_info().logical_type_ref();
-    if field.get_physical_type() == PhysicalType::BOOLEAN && logical.is_none() {
-        return Ok(ColumnData::Boolean(Vec::new()));
+    let info = field.get_basic_info();
+    let physical = field.get_physical_type();
+    let logical = info.logical_type_ref();
+    let converted = info.converted_type();
+    if logical.is_none() && converted == ConvertedType::NONE {
+        return match physical {
+            PhysicalType::BOOLEAN => Ok(ColumnData::Boolean(vec![])),
+            PhysicalType::INT32 => Ok(ColumnData::Int32(vec![])),
+            PhysicalType::INT64 => Ok(ColumnData::Int64(vec![])),
+            PhysicalType::FLOAT => Ok(ColumnData::Float32(vec![])),
+            PhysicalType::DOUBLE => Ok(ColumnData::Float64(vec![])),
+            PhysicalType::BYTE_ARRAY => Ok(ColumnData::Binary(vec![])),
+            _ => bail!(
+                "Unsupported Parquet type in column {:?}: {field:?}",
+                field.name()
+            ),
+        };
     }
-    if field.get_physical_type() == PhysicalType::INT32
-        && logical == Some(&LogicalType::integer(8, true))
-    {
-        return Ok(ColumnData::Int8(Vec::new()));
+    for candidate in [
+        ColumnData::Null(0),
+        ColumnData::String(vec![]),
+        ColumnData::Date(vec![]),
+        ColumnData::Int8(vec![]),
+        ColumnData::Int16(vec![]),
+        ColumnData::Int32(vec![]),
+        ColumnData::Int64(vec![]),
+        ColumnData::Uint8(vec![]),
+        ColumnData::Uint16(vec![]),
+        ColumnData::Uint32(vec![]),
+        ColumnData::Uint64(vec![]),
+        ColumnData::UtcTimestampMillis(vec![]),
+        ColumnData::UtcTimestampMicros(vec![]),
+        ColumnData::UtcTimestampNanos(vec![]),
+        ColumnData::TimestampMillis(vec![]),
+        ColumnData::TimestampMicros(vec![]),
+        ColumnData::TimestampNanos(vec![]),
+    ] {
+        let (expected_physical, expected_logical) = candidate.parquet_type();
+        if physical == expected_physical
+            && match logical {
+                Some(annotation) => Some(annotation) == expected_logical.as_ref(),
+                // The converted timestamp annotations describe UTC instants.
+                // Local timestamps require an explicit LogicalType.
+                None => {
+                    !matches!(
+                        candidate,
+                        ColumnData::TimestampMillis(_) | ColumnData::TimestampMicros(_)
+                    ) && converted == ConvertedType::from(expected_logical)
+                }
+            }
+        {
+            return Ok(candidate);
+        }
     }
-    if field.get_physical_type() == PhysicalType::INT32
-        && logical == Some(&LogicalType::integer(16, true))
-    {
-        return Ok(ColumnData::Int16(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::INT32
-        && logical == Some(&LogicalType::integer(32, true))
-    {
-        return Ok(ColumnData::Int32(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::INT64
-        && logical == Some(&LogicalType::integer(64, true))
-    {
-        return Ok(ColumnData::Int64(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::INT32
-        && logical == Some(&LogicalType::integer(8, false))
-    {
-        return Ok(ColumnData::Uint8(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::INT32
-        && logical == Some(&LogicalType::integer(16, false))
-    {
-        return Ok(ColumnData::Uint16(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::INT32
-        && logical == Some(&LogicalType::integer(32, false))
-    {
-        return Ok(ColumnData::Uint32(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::INT64
-        && logical == Some(&LogicalType::integer(64, false))
-    {
-        return Ok(ColumnData::Uint64(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::FLOAT && logical.is_none() {
-        return Ok(ColumnData::Float32(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::DOUBLE && logical.is_none() {
-        return Ok(ColumnData::Float64(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::BYTE_ARRAY
-        && logical == Some(&LogicalType::String)
-    {
-        return Ok(ColumnData::String(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::BYTE_ARRAY && logical.is_none() {
-        return Ok(ColumnData::Binary(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::INT32 && logical == Some(&LogicalType::Date) {
-        return Ok(ColumnData::Date(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::INT64
-        && logical == Some(&LogicalType::timestamp(false, TimeUnit::MILLIS))
-    {
-        return Ok(ColumnData::TimestampMillis(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::INT64
-        && logical == Some(&LogicalType::timestamp(true, TimeUnit::MILLIS))
-    {
-        return Ok(ColumnData::UtcTimestampMillis(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::INT64
-        && logical == Some(&LogicalType::timestamp(false, TimeUnit::MICROS))
-    {
-        return Ok(ColumnData::TimestampMicros(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::INT64
-        && logical == Some(&LogicalType::timestamp(true, TimeUnit::MICROS))
-    {
-        return Ok(ColumnData::UtcTimestampMicros(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::INT64
-        && logical == Some(&LogicalType::timestamp(false, TimeUnit::NANOS))
-    {
-        return Ok(ColumnData::TimestampNanos(Vec::new()));
-    }
-    if field.get_physical_type() == PhysicalType::INT64
-        && logical == Some(&LogicalType::timestamp(true, TimeUnit::NANOS))
-    {
-        return Ok(ColumnData::UtcTimestampNanos(Vec::new()));
-    }
-    // Unannotated signed integers are common in files from other producers.
-    match (field.get_physical_type(), logical) {
-        (PhysicalType::INT32, Some(LogicalType::Unknown)) => Ok(ColumnData::Null(0)),
-        (PhysicalType::INT32, None) => Ok(ColumnData::Int32(Vec::new())),
-        (PhysicalType::INT64, None) => Ok(ColumnData::Int64(Vec::new())),
-        _ => bail!(
-            "Unsupported Parquet type in column {:?}: {field:?}",
-            field.name()
-        ),
-    }
+    bail!(
+        "Unsupported Parquet type in column {:?}: {field:?}",
+        field.name()
+    )
 }
 
 fn read_values<D: DataType, T>(
@@ -709,6 +665,50 @@ mod tests {
         second.name = "other".into();
         second.data = ColumnData::Boolean(vec![]);
         assert!(Table::new(vec![column, second], BTreeMap::new()).is_err());
+    }
+
+    #[test]
+    fn converted_annotations_have_their_parquet_meaning() {
+        for (physical, annotation, expected) in [
+            (
+                PhysicalType::BYTE_ARRAY,
+                ConvertedType::UTF8,
+                ColumnData::String(vec![]),
+            ),
+            (
+                PhysicalType::INT64,
+                ConvertedType::UINT_64,
+                ColumnData::Uint64(vec![]),
+            ),
+            (
+                PhysicalType::INT64,
+                ConvertedType::TIMESTAMP_MICROS,
+                ColumnData::UtcTimestampMicros(vec![]),
+            ),
+        ] {
+            let field = Type::primitive_type_builder("value", physical)
+                .with_converted_type(annotation)
+                .build()
+                .unwrap();
+            assert_eq!(empty_column(&field).unwrap(), expected);
+        }
+        let json = Type::primitive_type_builder("value", PhysicalType::BYTE_ARRAY)
+            .with_converted_type(ConvertedType::JSON)
+            .build()
+            .unwrap();
+        assert!(empty_column(&json).is_err());
+    }
+
+    #[test]
+    fn writer_uses_snappy() {
+        let bytes = table(ColumnData::Int32(vec![Some(12)]))
+            .to_parquet()
+            .unwrap();
+        let file = SerializedFileReader::new(Bytes::from(bytes)).unwrap();
+        assert_eq!(
+            file.metadata().row_group(0).column(0).compression(),
+            Compression::SNAPPY
+        );
     }
 
     #[test]

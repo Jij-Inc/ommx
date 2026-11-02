@@ -632,7 +632,9 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 
 DataFrame layer のファイル形式は Apache Parquet（`application/vnd.apache.parquet`）です。
 `ArtifactDraft.add_dataframe()` と `Artifact.get_dataframe()` は Rust SDK で Parquet を読み書きするため、PyArrow が不要になりました。
-フラットな基本型の列、nullable dtype、日付、日時、時間差に対応します。
+フラットな基本型の列、nullable dtype、日付、日時、時間差に対応し、Snappy で圧縮します。
+列の値と欠損は Parquet スキーマに従います。pandas/PyArrow 固有の規約は、その値を変えずに解釈できる範囲で使います。
+たとえば `2**64 - 1` と null を持つ UINT64 列は、欠損を表現できる整数型として読み取ります。
 
 OMMX は Parquet ファイル内に `pandas` と `ommx.pandas` の2つのメタデータを書き込みます。
 `pandas` は、この規約に対応するツールに列やインデックスの構造を伝えます。
@@ -641,8 +643,11 @@ OMMX は Parquet ファイル内に `pandas` と `ommx.pandas` の2つのメタ�
 
 - **OMMX で読む場合。** `get_dataframe()` は `ommx.pandas` のバージョン1に対応し、未知のバージョンでは `ValueError` が発生します。
   他のツールで物理列を変更してこのメタデータを残す場合は、列の対応も更新してください。各物理列はデータ列またはインデックス列としてちょうど1回参照される必要があります。
+  列の値が宣言されたカテゴリに含まれない場合は `ValueError` が発生します。
+  列軸が `CategoricalIndex` など、OMMX で復元できない構造の場合は保存時にエラーになります。実際に使われているラベルだけを保存したい場合は、明示的に通常のインデックスに変換してください。
+  DataFrame の属性には、文字列キーを使い、JSON で往復できる値を指定してください。文字列から復元できないカスタムのインデックス頻度は保存時にエラーになります。
 - **`ommx.pandas` がないファイルを読む場合。** 以前の OMMX が pandas/PyArrow 経由で書いたレイヤーもこれに該当します。
-  OMMX は対応するフラットな列を読み、`pandas` メタデータがあればそれを使います。MultiIndex 列は各階層のラベルが文字列または数値なら復元でき、非対応の階層型では `ValueError` が発生します。
+  OMMX は対応するフラットな列を読み、互換性のある `pandas` メタデータを使って文字列・数値の列ラベルを復元します。MultiIndex 列も各階層のラベルが文字列または数値なら復元でき、非対応の階層型では `ValueError` が発生します。
   `pandas` がカテゴリ列を示している場合、OMMX の読み取り処理ではデコードした値からカテゴリの全要素と順序を復元できないため、`ValueError` が発生します。
   この場合は PyArrow を使って blob を `pandas.read_parquet()` で読み、得られた DataFrame を `add_dataframe()` で保存してください。
 - **OMMX が書いたファイルを他のツールで読む場合。** `ommx.pandas` を解釈しないツールでも Parquet の物理列は読めます。
