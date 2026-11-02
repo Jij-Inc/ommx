@@ -10,6 +10,14 @@ pub fn from_pandas(df: &Bound<'_, PyDataFrame>) -> OmmxPyResult<Table> {
         .import("ommx._dataframe")?
         .call_method1("to_columns", (df,))?;
     let (columns, metadata): (Bound<'_, PyList>, BTreeMap<String, String>) = converted.extract()?;
+    extract_table(&columns, metadata)
+}
+
+/// Extract the Python column boundary independently of pandas materialization.
+fn extract_table(
+    columns: &Bound<'_, PyList>,
+    metadata: BTreeMap<String, String>,
+) -> OmmxPyResult<Table> {
     let mut output = Vec::new();
     for column in columns.iter() {
         let name = column.get_item("name")?.extract()?;
@@ -58,4 +66,35 @@ pub fn to_pandas<'py>(py: Python<'py>, table: &Table) -> OmmxPyResult<Bound<'py,
         .import("ommx._dataframe")?
         .call_method1("from_columns", (columns, metadata))?
         .cast_into::<PyDataFrame>()?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn python_rust_columns_preserve_full_range_unsigned_values() {
+        Python::initialize();
+        Python::attach(|py| {
+            let expected = Table::new(
+                vec![Column {
+                    name: "unsigned".into(),
+                    data: ColumnData::Uint64(vec![Some(u64::MAX), None]),
+                }],
+                [("consumer".into(), "opaque metadata".into())].into(),
+            )
+            .unwrap();
+            // Exercise the Python integer/column boundary using built-in
+            // Python values; pandas, Parquet and registry storage are outside
+            // this contract.
+            let columns = serde_pyobject::to_pyobject(py, expected.columns())
+                .unwrap()
+                .cast_into::<PyList>()
+                .unwrap();
+            assert_eq!(
+                extract_table(&columns, expected.metadata().clone()).unwrap(),
+                expected
+            );
+        });
+    }
 }

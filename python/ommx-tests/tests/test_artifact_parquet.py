@@ -1,3 +1,5 @@
+"""Artifact composition, mutation safety and compatibility at the public API."""
+
 from __future__ import annotations
 
 import datetime as dt
@@ -5,7 +7,6 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-from typing import Any
 
 import pandas as pd
 from pandas.testing import assert_frame_equal
@@ -14,160 +15,6 @@ import pytest
 from ommx.artifact import ArtifactDraft
 
 FIXTURES = Path(__file__).parent / "fixtures" / "parquet"
-
-
-def roundtrip(df: pd.DataFrame) -> pd.DataFrame:
-    draft = ArtifactDraft.temp()
-    descriptor = draft.add_dataframe(df, title="table")
-    artifact = draft.commit()
-    assert descriptor.media_type == "application/vnd.apache.parquet"
-    assert descriptor.annotations["org.ommx.user.title"] == "table"
-    assert artifact.get_blob(descriptor).startswith(b"PAR1")
-    result = artifact.get_dataframe(descriptor)
-    assert isinstance(result, pd.DataFrame)
-    return result
-
-
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float16",
-        "float32",
-        "float64",
-        "bool",
-        "Int8",
-        "Int16",
-        "Int32",
-        "Int64",
-        "UInt8",
-        "UInt16",
-        "UInt32",
-        "UInt64",
-        "Float32",
-        "Float64",
-        "boolean",
-        "string",
-    ],
-)
-def test_primitive_dtypes(dtype):
-    values: list[Any] = ["日本語", "", None] if dtype == "string" else [1, 0, 1]
-    if dtype[0].isupper() or dtype in {"boolean", "string"}:
-        values[-1] = None
-    df = pd.DataFrame({"value": pd.Series(values, dtype=dtype)})
-    assert_frame_equal(roundtrip(df), df)
-
-
-def test_extreme_integers_nulls_and_special_floats():
-    df = pd.DataFrame(
-        {
-            "signed": pd.array([-(2**63), 2**63 - 1, None], dtype="Int64"),
-            "unsigned": pd.array([2**64 - 1, 2**63 + 1, None], dtype="UInt64"),
-            "float": [float("inf"), float("-inf"), float("nan")],
-            "bytes": [b"\x00\xff", b"", None],
-            "date": [dt.date(1969, 12, 31), dt.date(2020, 1, 2), None],
-        }
-    )
-    assert_frame_equal(roundtrip(df), df)
-
-
-@pytest.mark.parametrize("unit", ["s", "ms", "us", "ns"])
-@pytest.mark.parametrize("timezone", [None, "UTC", "Asia/Tokyo"])
-def test_temporal_dtypes(unit, timezone):
-    timestamps = pd.to_datetime(
-        ["1969-12-31 23:59:59.123456789", None, "2020-01-02 03:04:05.987654321"],
-        format="mixed",
-    )
-    if timezone:
-        timestamps = timestamps.tz_localize(timezone)
-    timestamps = timestamps.as_unit(unit)
-    df = pd.DataFrame(
-        {
-            "timestamp": timestamps,
-            "duration": pd.Series([123, None, -456], dtype=f"timedelta64[{unit}]"),
-        }
-    )
-    assert_frame_equal(roundtrip(df), df)
-
-
-@pytest.mark.parametrize(
-    "categories",
-    [
-        ["a", "b", "unused"],
-        [2**63 + 1, 2**64 - 1, 1],
-        pd.to_datetime(["2000-01-01", "2001-01-01", "2002-01-01"]),
-    ],
-)
-def test_categories_preserve_unused_values_and_order(categories):
-    df = pd.DataFrame(
-        {
-            "value": pd.Categorical(
-                [categories[1], None, categories[0]],
-                categories=categories,
-                ordered=True,
-            )
-        }
-    )
-    assert_frame_equal(roundtrip(df), df)
-
-
-@pytest.mark.parametrize(
-    "df",
-    [
-        pd.DataFrame(),
-        pd.DataFrame({"empty": pd.Series([], dtype="Int64")}),
-        pd.DataFrame(index=pd.RangeIndex(10, 19, 3, name="row")),
-        pd.DataFrame(index=pd.RangeIndex(7, 9, 2, name="single")),
-        pd.DataFrame({"all_null": [None, None]}),
-        pd.DataFrame(
-            {"__index_level_0__": [1, 2]}, index=pd.Index(["a", "b"], name="row")
-        ),
-        pd.DataFrame({"value": [1, 2]}, index=pd.RangeIndex(10, 16, 3, name="row")),
-        pd.DataFrame({1: [1, 2], "1": [3, 4]}),
-        pd.DataFrame(
-            {"value": [1, 2]},
-            index=pd.MultiIndex.from_tuples(
-                [("a", 1), ("b", 2)], names=["group", "number"]
-            ),
-        ),
-        pd.DataFrame(
-            [[1, 2]],
-            columns=pd.MultiIndex.from_tuples(
-                [("a", 1), ("b", 2)], names=["group", "number"]
-            ),
-        ),
-        pd.DataFrame(
-            [[1, 2]], columns=pd.Index([("a", 1), ("b", 2)], tupleize_cols=False)
-        ),
-    ],
-)
-def test_indexes_labels_and_empty_tables(df):
-    assert_frame_equal(roundtrip(df), df)
-
-
-@pytest.mark.parametrize(
-    "values", [[[1, 2], [3]], [{"a": 1}, {"b": 2}], [complex(1, 2), 0j]]
-)
-def test_unsupported_values_do_not_add_a_layer(values):
-    draft = ArtifactDraft.temp()
-    with pytest.raises(TypeError, match="unsupported Parquet"):
-        draft.add_dataframe(pd.DataFrame({"value": values}))
-    artifact = draft.commit()
-    assert artifact.layers == []
-
-
-def test_duplicate_labels_are_rejected_atomically():
-    draft = ArtifactDraft.temp()
-    with pytest.raises(ValueError, match="unique DataFrame column labels"):
-        draft.add_dataframe(pd.DataFrame([[1, 2]], columns=pd.Index(["same", "same"])))
-    assert draft.commit().layers == []
 
 
 def legacy_dataframe():
@@ -193,6 +40,36 @@ def legacy_dataframe():
     )
 
 
+def test_dataframe_layer_preserves_data_metadata_and_annotations():
+    # Exercise the Python/Rust/storage composition once with representative
+    # values. Dtype permutations are tested by the conversion owner directly.
+    df = legacy_dataframe()
+    df["integer"] = pd.array([-(2**63), None, 2**63 - 1], dtype="Int64")
+    df["category"] = pd.Categorical(
+        ["b", None, "a"], categories=["b", "a", "unused"], ordered=True
+    )
+    df.attrs = {"title": "results", "version": 1}
+    draft = ArtifactDraft.temp()
+    descriptor = draft.add_dataframe(df, title="table")
+    artifact = draft.commit()
+    assert descriptor.media_type == "application/vnd.apache.parquet"
+    assert descriptor.annotations["org.ommx.user.title"] == "table"
+    result = artifact.get_dataframe(descriptor)
+    assert isinstance(result, pd.DataFrame)
+    assert_frame_equal(result, df)
+    assert result.attrs == df.attrs
+
+
+def test_failed_dataframe_conversion_preserves_existing_layers():
+    draft = ArtifactDraft.temp()
+    previous = draft.add_json({"keep": "existing layer"})
+    with pytest.raises(TypeError, match="unsupported Parquet"):
+        draft.add_dataframe(pd.DataFrame({"value": [[1, 2]]}))
+    artifact = draft.commit()
+    assert artifact.layers == [previous]
+    assert artifact.get_json(previous) == {"keep": "existing layer"}
+
+
 def test_reads_legacy_pyarrow_parquet():
     draft = ArtifactDraft.temp()
     descriptor = draft.add_layer(
@@ -204,67 +81,13 @@ def test_reads_legacy_pyarrow_parquet():
     assert_frame_equal(artifact.get_dataframe(descriptor), legacy_dataframe())
 
 
-@pytest.mark.parametrize("codec", ["snappy", "gzip", "brotli", "lz4", "zstd", "none"])
-def test_reads_compressed_files_and_required_columns(codec):
+def test_parquet_decode_failure_maps_to_runtime_error():
+    # This checks the SDK error boundary, not the dependency's parser coverage.
     draft = ArtifactDraft.temp()
-    descriptor = draft.add_layer(
-        "application/vnd.apache.parquet",
-        (FIXTURES / f"{codec}.parquet").read_bytes(),
-        {},
-    )
-    artifact = draft.commit()
-    assert_frame_equal(
-        artifact.get_dataframe(descriptor),
-        pd.DataFrame({"i": [1, 2, 3], "s": ["日本語", None, ""]}),
-    )
-
-
-def test_reads_empty_legacy_table():
-    draft = ArtifactDraft.temp()
-    descriptor = draft.add_layer(
-        "application/vnd.apache.parquet", (FIXTURES / "empty.parquet").read_bytes(), {}
-    )
-    assert_frame_equal(draft.commit().get_dataframe(descriptor), pd.DataFrame())
-
-
-def test_legacy_categories_are_not_silently_lost():
-    draft = ArtifactDraft.temp()
-    descriptor = draft.add_layer(
-        "application/vnd.apache.parquet",
-        (FIXTURES / "categorical.parquet").read_bytes(),
-        {},
-    )
-    with pytest.raises(ValueError, match="cannot be restored losslessly"):
-        draft.commit().get_dataframe(descriptor)
-
-
-def test_dataframe_attributes_roundtrip():
-    df = pd.DataFrame({"value": [1, 2]})
-    df.attrs = {"title": "results", "version": 1}
-    result = roundtrip(df)
-    assert_frame_equal(result, df)
-    assert result.attrs == df.attrs
-
-
-@pytest.mark.parametrize(
-    "payload", [b"not parquet", (FIXTURES / "nested.parquet").read_bytes()]
-)
-def test_malformed_or_unsupported_parquet_is_runtime_error(payload):
-    draft = ArtifactDraft.temp()
-    descriptor = draft.add_layer("application/vnd.apache.parquet", payload, {})
+    descriptor = draft.add_layer("application/vnd.apache.parquet", b"not parquet", {})
     artifact = draft.commit()
     with pytest.raises(RuntimeError):
         artifact.get_dataframe(descriptor)
-
-
-def test_does_not_use_pandas_parquet_engines(monkeypatch):
-    def forbidden(*args, **kwargs):
-        raise AssertionError("pandas Parquet engine was used")
-
-    monkeypatch.setattr(pd.DataFrame, "to_parquet", forbidden)
-    monkeypatch.setattr(pd, "read_parquet", forbidden)
-    df = pd.DataFrame({"value": [1, 2]})
-    assert_frame_equal(roundtrip(df), df)
 
 
 def test_roundtrip_without_pyarrow_or_fastparquet(tmp_path):

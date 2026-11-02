@@ -1,8 +1,8 @@
-"""pandas conversion for the Rust Parquet codec (no PyArrow dependency).
+"""Convert pandas objects to and from OMMX's flat nullable table boundary.
 
-Parquet encoding and decoding belong to the Rust SDK. This module owns pandas
-dtypes, labels and indexes; it only exchanges primitive nullable columns with
-the binding.
+This module owns pandas dtypes, labels, indexes and category metadata. It
+exchanges primitive nullable columns and opaque metadata with the binding;
+it neither encodes Parquet bytes nor accesses Artifact storage.
 """
 
 from __future__ import annotations
