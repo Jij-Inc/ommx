@@ -98,11 +98,12 @@ getting_started/install
 ```
 
 ```{toctree}
-:caption: Tutorial
+:caption: 応用例
 :maxdepth: 1
 :hidden:
 
 tutorial/tsp_sampling_with_openjij_adapter
+examples/published_benchmarks
 ```
 
 ```{toctree}

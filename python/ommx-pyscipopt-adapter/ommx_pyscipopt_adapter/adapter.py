@@ -802,12 +802,8 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         with OMMX may require additional values. A starting point neither fixes
         the final assignment nor guarantees a shorter solve.
 
-        For a timing comparison on MIPLIB roll3000, save the
-        :download:`comparison script </api/examples/compare_scip_start.py>` and
-        :download:`starting values </api/examples/roll3000-start.json>` in one
-        directory. Run the script with the SDK and this adapter installed. It
-        loads the benchmark once and reports elapsed search time, termination
-        status and incumbent objective under the same 30-second solver limit.
+        The :ref:`roll3000 example <scip-start-comparison>` compares two SCIP
+        runs on the same benchmark with and without a proposed solution.
 
         Infeasible Problem
 

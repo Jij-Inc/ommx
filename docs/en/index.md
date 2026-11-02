@@ -96,11 +96,19 @@ getting_started/install
 ```
 
 ```{toctree}
-:caption: Tutorial
+:caption: Examples
 :maxdepth: 1
 :hidden:
 
 tutorial/tsp_sampling_with_openjij_adapter
+examples/published_benchmarks
+```
+
+```{toctree}
+:caption: Adapter development
+:maxdepth: 1
+:hidden:
+
 tutorial/implement_adapter
 ```
 

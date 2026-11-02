@@ -4285,7 +4285,8 @@
       "status": "existing",
       "source_paths": [
         "python/ommx/ommx/dataset.py",
-        "docs/api/examples/published_benchmarks.md"
+        "docs/en/examples/published_benchmarks.md",
+        "docs/ja/examples/published_benchmarks.md"
       ],
       "source_urls": [],
       "requires": [
@@ -4320,12 +4321,13 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "MIPLIBとQPLIBの引数、配布元、キャッシュ、注釈を説明する。ローカルファイルとArtifactからの読込みは対応APIへ案内する。 公開Artifactの取得からSCIPでの求解・注釈との照合までは共有の実行例にまとめる。",
+      "notes": "MIPLIBとQPLIBの引数、配布元、キャッシュ、注釈を説明する。ローカルファイルとArtifactからの読込みは対応APIへ案内する。 公開Artifactの取得からSCIPでの求解・注釈との照合までは日英の独立Examplesにまとめる。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
         "python/ommx/ommx/dataset.py",
-        "docs/api/examples/published_benchmarks.md"
+        "docs/en/examples/published_benchmarks.md",
+        "docs/ja/examples/published_benchmarks.md"
       ]
     },
     {

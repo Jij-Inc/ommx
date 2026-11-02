@@ -43,3 +43,13 @@ assert result.feasible
 
 If you already have candidate values, the {func}`QPLIB solution example
 <ommx.qplib.load_solution>` shows how to evaluate them without searching.
+
+(scip-start-comparison)=
+## Compare SCIP runs with and without a starting point
+
+Download the {download}`comparison script <../../examples/compare_scip_start.py>` and
+{download}`starting values <../../examples/roll3000-start.json>` into the same
+directory. Run `python compare_scip_start.py` in the environment with the SDK and
+PySCIPOpt adapter installed. It loads the MIPLIB roll3000 problem and reports
+the elapsed search time, termination status, and best objective found with and
+without the supplied candidate, using the same 30-second solver limit.
