@@ -6,32 +6,31 @@
 [![Discord-JP](https://img.shields.io/badge/Discord-日本語-default?logo=Discord)](https://discord.gg/CPd9ZsxtR5)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Jij-Inc/ommx)
 
-OMMX (Open Mathematical prograMming eXchange) is building a shared foundation for mathematical optimization: a common representation of problems and candidates, with reusable preprocessing, transformations, and evaluation in Python and Rust.
-
-Optimization techniques are often implemented inside a particular solver or repeated in each tool integration. OMMX aims to make those techniques reusable across modeling tools and solving methods. A new method should be able to build on accumulated problem-processing techniques, while improvements to those techniques should benefit the tools already using them.
+OMMX (Open Mathematical prograMming eXchange) lets you describe **what you want to solve** separately from **how you solve it**. Its Python and Rust SDKs provide a common representation for optimization problems and candidate solutions. You can change the formulation you send to a solver and still evaluate the result against the domains, constraints, and objective of your original problem.
 
 ## Why use OMMX?
 
-Use OMMX when you want to reuse problem processing as you change models, solving methods, or the source of candidate solutions. The current v3 development line provides:
+Suppose a production line can make up to 100 units per hour, but only 60 in reduced mode. You can record the conditional limit once as an **indicator constraint**. The PySCIPOpt adapter can pass this constraint directly to SCIP. To try a different formulation with the same solver, you can instead use OMMX to convert the rule to a linear inequality using the known upper bound of 100.
 
-- **Transform a shared problem representation.** Apply supported operations such as integer encoding, special-constraint lowering, and bound tightening without implementing them separately for each solver integration.
-- **Evaluate candidates independently of how they were obtained.** Compute objective values and constraint satisfaction for values from a solver, a heuristic, or your own code. Reconstruct recorded fixed and dependent variable values to interpret results after transformations.
-- **Connect to solvers and samplers through adapters.** Adapters translate supported problem representations into backend inputs and return results in OMMX's common model.
-- **Keep problems and results available for later use.** Optional Artifacts package data with metadata; Experiments record trials, settings, and results for comparison and sharing.
+Either way, a candidate that produces 65 units per hour in reduced mode violates the original rule. OMMX can check that rule for a candidate from either formulation, or even one proposed by a planner. You can try a new formulation without rewriting the requirement or the check. Checking feasibility tells you whether the candidate satisfies the model; proving optimality requires a separate guarantee.
 
-For example, a requirement that at most one variable is nonzero can remain an explicit SOS1 constraint in OMMX. A supporting adapter can pass it to a solver that handles SOS1 directly. For another solver, OMMX can convert it into ordinary constraints when the variable domains and finite bounds meet the conversion's requirements. Keeping this structure lets you choose when to convert it and reuse the conversion across integrations.
+The same division of work applies to other tasks:
 
-You still choose the mathematical model, solving method, and transformation policy, including any penalty weights. Each transformation has its own applicability conditions and guarantees: recovering variable values does not establish feasibility, and evaluating a feasible candidate does not prove optimality. The Book explains these choices; the API Reference specifies the individual operations.
+- **Prepare a problem for a solver or sampler.** Reuse supported operations such as integer encoding and bound tightening. You choose which transformations are appropriate and, when constraints become penalties, how to weight them. Adapters handle backend input and translate results back into OMMX.
+- **Compare candidates on the original problem.** Recover fixed or dependent variable values when a transformation records the information needed to do so. Evaluate candidates against the same constraints and objective regardless of where they came from.
+- **Save what you need for later.** Artifacts package problems and results with metadata. Experiments record trials and settings when you want to revisit a comparison.
 
-The longer-term goal is to select and combine preprocessing and transformations so that more of today's manual problem preparation can be delegated to this shared foundation. The current implementation supplies specific operations and preparation policies; general automatic selection of transformation sequences remains a development direction.
+Today, OMMX provides individual transformations and preparation policies. The longer-term goal is to use the structure of a problem to select and combine preprocessing steps. Developing these techniques on a common representation lets improvements benefit multiple modeling tools and gives new solving methods a body of work to build on.
 
 ## Find your next step
 
-The **Book** explains OMMX's concepts, capabilities, and choices, with examples you can follow independently. The **API Reference** provides detailed calls, conditions, and implementation recipes.
+The **Book** explains when to use each capability and how to interpret the results. The **API Reference** documents individual operations, their conditions, and executable usage examples.
 
 | Purpose | Start here |
 |:--------|:-----------|
 | Understand OMMX and explore its capabilities | [English Book](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/) · [日本語Book](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/) |
+| Choose how to represent a problem for a solver | [Transform a problem](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/transform_and_solve.html) · [日本語](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/user_guide/transform_and_solve.html) |
+| Check a candidate against your requirements | [Evaluate candidates](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/evaluate_and_interpret.html) · [日本語](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/user_guide/evaluate_and_interpret.html) |
 | Choose a solver or sampler integration | [Adapter packages and input contracts](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/api/adapters.html) |
 | Install the Python SDK and an optional adapter | [Installation guide](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/getting_started/install.html) · [日本語](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/getting_started/install.html) |
 | Inspect and exchange saved data from the command line | [OMMX CLI](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/cli.html) |
