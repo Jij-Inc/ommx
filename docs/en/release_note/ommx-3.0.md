@@ -8,9 +8,9 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ### 💥 Require Python 3.11 and add Python 3.15 SDK support ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
 
-The SDK now requires Python 3.11 or newer. Support for
-end-of-life Python 3.10 has been removed. The core SDK adds Python 3.15 support
-with PyO3 0.30.1, and ABI3 wheels now use Python 3.11 as their baseline.
+The SDK and adapter packages now require Python 3.11 or newer under a shared
+support policy that drops end-of-life Python 3.10. The core SDK adds Python 3.15
+support with PyO3 0.30.1, and ABI3 wheels now use Python 3.11 as their baseline.
 Python 3.15 support is introduced for the core SDK first; adapter availability
 also depends on the underlying solver's Python support.
 
