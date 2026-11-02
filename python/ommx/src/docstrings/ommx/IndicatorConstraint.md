@@ -18,7 +18,7 @@ variables exist and that the controlling variable is Binary when inserting it.
 The following model limits the amount to five only when the facility is enabled:
 
 ```pycon
->>> from ommx import Equality, IndicatorConstraintID, Instance
+>>> from ommx import ConstraintKind, Equality, IndicatorConstraintID, Instance
 >>> instance = Instance.maximize()
 >>> enabled = instance.new_binary("enabled")
 >>> amount = instance.new_continuous("amount", lower=0, upper=10)
@@ -33,8 +33,10 @@ The following model limits the amount to five only when the facility is enabled:
 >>> on = instance.evaluate({enabled.id: 1, amount.id: 5})
 >>> violated = instance.evaluate({enabled.id: 1, amount.id: 6})
 >>> assert off.feasible and on.feasible and not violated.feasible
->>> assert not off.constraints_df(kind="indicator").loc[cid, "indicator_active"]
->>> assert on.constraints_df(kind="indicator").loc[cid, "indicator_active"]
+>>> assert not off.constraints_df(kind=ConstraintKind.Indicator).loc[
+...     cid, "indicator_active"
+... ]
+>>> assert on.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_active"]
 
 ```
 

@@ -1,13 +1,13 @@
 """Tests for constraint violation calculation methods."""
 
+from ommx import ConstraintKind
+
 from ommx import (
     ConstraintID,
     IndicatorConstraintID,
     OneHotConstraintID,
     Sos1ConstraintID,
 )
-
-from typing import Literal
 
 import pytest
 from ommx import (
@@ -44,7 +44,9 @@ def test_explicit_feasibility_queries_preserve_evaluation_and_saved_conditions()
             atol=result.feasibility_atol
         )
         assert result.feasible
-        assert result.constraints_df(kind="regular").loc[ConstraintID(1), "feasible"]
+        assert result.constraints_df(kind=ConstraintKind.Regular).loc[
+            ConstraintID(1), "feasible"
+        ]
         assert result.to_v2_bytes() == wire
 
     samples = instance.evaluate_samples({7: {0: 0.0625}, 8: {0: 0.25}}, atol=0.125)
@@ -249,7 +251,7 @@ def test_total_violation_indicator(active, equality, removed, value):
         violation
     )
     assert solution.total_violation() == pytest.approx(violation)
-    assert solution.constraints_df(kind="indicator").loc[
+    assert solution.constraints_df(kind=ConstraintKind.Indicator).loc[
         IndicatorConstraintID(0), "violation"
     ] == pytest.approx(violation)
 
@@ -289,7 +291,7 @@ def test_one_hot_violation(values, violation):
             violation
         )
         assert result.total_violation() == pytest.approx(violation)
-        frame = result.constraints_df(kind="one_hot")
+        frame = result.constraints_df(kind=ConstraintKind.OneHot)
         assert frame.loc[OneHotConstraintID(0), "violation"] == pytest.approx(violation)
         if violation == 0:
             assert frame.loc[OneHotConstraintID(0), "feasible"]
@@ -330,7 +332,7 @@ def test_sos1_violation(values, violation):
             violation
         )
         assert result.total_violation() == pytest.approx(violation)
-        frame = result.constraints_df(kind="sos1")
+        frame = result.constraints_df(kind=ConstraintKind.Sos1)
         assert frame.loc[Sos1ConstraintID(0), "violation"] == pytest.approx(violation)
         if violation == 0:
             assert frame.loc[Sos1ConstraintID(0), "feasible"]
@@ -388,11 +390,11 @@ def test_total_is_sum_of_individual_and_dataframe_violations():
     one_hot_row = instance.convert_one_hot_to_constraint(2)
     sos1_rows = instance.convert_sos1_to_constraints(3)
     solution = instance.evaluate({0: 1, 1: 1, 2: 1})
-    kinds: list[Literal["regular", "indicator", "one_hot", "sos1"]] = [
-        "regular",
-        "indicator",
-        "one_hot",
-        "sos1",
+    kinds: list[ConstraintKind] = [
+        ConstraintKind.Regular,
+        ConstraintKind.Indicator,
+        ConstraintKind.OneHot,
+        ConstraintKind.Sos1,
     ]
     id_types = [
         ConstraintID,
@@ -456,7 +458,9 @@ def test_zero_constraint_violation_does_not_validate_variable_bounds():
     )
     solution = instance.evaluate({0: 10})
     assert solution.total_violation() == 0
-    assert solution.constraints_df(kind="sos1").loc[Sos1ConstraintID(0), "feasible"]
+    assert solution.constraints_df(kind=ConstraintKind.Sos1).loc[
+        Sos1ConstraintID(0), "feasible"
+    ]
     assert not solution.feasible
 
 
@@ -512,7 +516,7 @@ def test_sos1_feasibility_uses_total_member_error_across_evaluation_paths(
             )
         )
         assert result.total_violation() == pytest.approx(violation + regular_total)
-        row = result.constraints_df(kind="sos1").loc[Sos1ConstraintID(0)]
+        row = result.constraints_df(kind=ConstraintKind.Sos1).loc[Sos1ConstraintID(0)]
         assert row["violation"] == violation
         assert not row["feasible"]
         assert not result.feasible

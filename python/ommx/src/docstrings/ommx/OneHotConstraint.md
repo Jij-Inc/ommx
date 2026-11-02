@@ -15,7 +15,7 @@ referenced variable exists and is Binary when inserting the constraint.
 **Construct and evaluate a choice**
 
 ```pycon
->>> from ommx import Instance, OneHotConstraint, OneHotConstraintID
+>>> from ommx import ConstraintKind, Instance, OneHotConstraint, OneHotConstraintID
 >>> instance = Instance.maximize()
 >>> choices = [instance.new_binary("choice", subscripts=[i]) for i in range(3)]
 >>> instance.objective = sum(value * x for value, x in zip([5, 10, 3], choices))
@@ -28,7 +28,7 @@ referenced variable exists and is Binary when inserting the constraint.
 >>> assert chosen.feasible and chosen.objective == 10
 >>> assert not instance.evaluate({x.id: 0 for x in choices}).feasible
 >>> assert not instance.evaluate({x.id: 1 for x in choices}).feasible
->>> rows = chosen.constraints_df(kind="one_hot")
+>>> rows = chosen.constraints_df(kind=ConstraintKind.OneHot)
 >>> assert list(rows.index) == [cid]
 >>> assert rows.loc[cid, "violation"] == 0.0
 

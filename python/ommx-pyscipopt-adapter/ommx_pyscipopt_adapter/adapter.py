@@ -30,7 +30,7 @@ from ommx import (
     PreparationPolicy,
     Sense,
     Solution,
-    SpecialConstraintKind,
+    ConstraintKind,
     SpecialConstraintPreparation,
     State,
     ToState,
@@ -565,7 +565,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     ...     lambda value: "Include" if value > 0.5 else "Exclude"
     ... )
     >>> assert selection["choice"].value_counts().to_dict() == {"Exclude": 4, "Include": 2}
-    >>> constraints = solution.constraints_df(kind="regular")
+    >>> constraints = solution.constraints_df(kind=ConstraintKind.Regular)
     >>> residual = constraints.loc[weight_limit.constraint_id, "value"]
     >>> assert abs(residual - (sum(weights[i] for i in selected) - capacity)) < 1e-6
     >>> assert abs(residual - (-1.0)) < 1e-6
@@ -583,7 +583,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     it does not require either one to be selected. SCIP receives both
     structures directly:
 
-    >>> from ommx import Instance, Sos1Constraint, SpecialConstraintKind
+    >>> from ommx import Instance, Sos1Constraint, ConstraintKind
     >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
     >>> source = Instance.maximize()
     >>> enabled = source.new_binary("enabled")
@@ -600,7 +600,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     >>> assert solution.feasible
     >>> assert abs(solution.objective - 20.0) < 1e-6
     >>> assert source.active_special_constraint_kinds == {
-    ...     SpecialConstraintKind.Indicator, SpecialConstraintKind.Sos1,
+    ...     ConstraintKind.Indicator, ConstraintKind.Sos1,
     ... }
     >>> assert not source.removed_constraints
 
@@ -614,7 +614,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     Exactly one of the three binary variables must be one. The easy solve path
     lowers the OneHot constraint on its copy before encoding SCIP input:
 
-    >>> from ommx import Instance, OneHotConstraint, SpecialConstraintKind
+    >>> from ommx import Instance, OneHotConstraint, ConstraintKind
     >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
     >>> choice_model = Instance.maximize()
     >>> choices = [choice_model.new_binary("choice", subscripts=[i]) for i in range(3)]
@@ -624,7 +624,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     >>> solution = OMMXPySCIPOptAdapter.solve(choice_model)
     >>> assert solution.feasible
     >>> assert abs(solution.objective - 10.0) < 1e-6
-    >>> assert choice_model.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
+    >>> assert choice_model.active_special_constraint_kinds == {ConstraintKind.OneHot}
     >>> assert not choice_model.removed_constraints
 
     **SOS1 with continuous variables**
@@ -651,7 +651,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
     >>> from ommx import (
     ...     Instance, OneHotConstraint, PreparationPolicy, Sos1Constraint,
-    ...     SpecialConstraintKind, SpecialConstraintPreparation,
+    ...     ConstraintKind, SpecialConstraintPreparation,
     ... )
     >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
     >>> model = Instance.maximize()
@@ -662,12 +662,12 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     >>> _ = model.add_sos1_constraint(Sos1Constraint(variables=optional))
     >>> policy = PreparationPolicy(
     ...     special_constraints=SpecialConstraintPreparation.lower_special_constraints(
-    ...         kinds={SpecialConstraintKind.OneHot}
+    ...         kinds={ConstraintKind.OneHot}
     ...     )
     ... )
     >>> model.prepare(OMMXPySCIPOptAdapter.INPUT_CLASS, policy)
     >>> assert OMMXPySCIPOptAdapter.check_applicability(model).is_member
-    >>> assert model.active_special_constraint_kinds == {SpecialConstraintKind.Sos1}
+    >>> assert model.active_special_constraint_kinds == {ConstraintKind.Sos1}
     >>> solution = OMMXPySCIPOptAdapter.solve_without_preparation(model)
     >>> assert solution.feasible
     >>> assert abs(solution.objective - 14.0) < 1e-6
@@ -709,7 +709,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         """
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(
-                kinds={SpecialConstraintKind.OneHot}
+                kinds={ConstraintKind.OneHot}
             )
         )
 

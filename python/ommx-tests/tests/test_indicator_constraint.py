@@ -1,5 +1,7 @@
 """Tests for IndicatorConstraint Big-M conversion to regular constraints."""
 
+from ommx import ConstraintKind
+
 from ommx import IndicatorConstraintID
 
 import pandas as pd
@@ -186,7 +188,7 @@ def test_convert_all_is_atomic_on_error():
 
 
 def test_removed_indicator_constraints_df_surfaces_reason_and_ids(snapshot):
-    """`constraints_df(kind="indicator", removed=True)` surfaces the
+    """`constraints_df(kind=ConstraintKind.Indicator, removed=True)` surfaces the
     reason and comma-joined new-constraint IDs on removed rows."""
     y = DecisionVariable.binary(1)
     ic = IndicatorConstraint(
@@ -196,4 +198,7 @@ def test_removed_indicator_constraints_df_surfaces_reason_and_ids(snapshot):
     )
     instance = _instance(ic)
     instance.convert_indicator_to_constraint(7)
-    assert _df_snap(instance.constraints_df(kind="indicator", removed=True)) == snapshot
+    assert (
+        _df_snap(instance.constraints_df(kind=ConstraintKind.Indicator, removed=True))
+        == snapshot
+    )

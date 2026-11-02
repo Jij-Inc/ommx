@@ -1,8 +1,11 @@
-from ommx import ConstraintID
+from unittest.mock import ANY
+
+import numpy as np
 import pytest
 
 from ommx import (
     Constraint,
+    ConstraintID,
     DecisionVariable,
     DecisionVariableRole,
     Equality,
@@ -10,14 +13,28 @@ from ommx import (
     Kind,
     ProvenanceKind,
     Sense,
-    SpecialConstraintKind,
+    ConstraintKind,
 )
+
+
+@pytest.mark.parametrize(
+    "kind", [Kind.Binary, ConstraintKind.Indicator, ProvenanceKind.IndicatorConstraint]
+)
+def test_kind_comparisons_defer_to_the_other_operand(kind):
+    assert kind.__eq__(ANY) is NotImplemented
+    assert kind.__ne__(ANY) is NotImplemented
+    assert kind == ANY and ANY == kind
+    codes = np.array([1, 2])
+    np.testing.assert_array_equal(kind == codes, [True, False])
+    np.testing.assert_array_equal(codes == kind, [True, False])
+    np.testing.assert_array_equal(kind != codes, [False, True])
+    np.testing.assert_array_equal(codes != kind, [False, True])
 
 
 @pytest.mark.parametrize(
     ("member", "value"),
     [
-        (SpecialConstraintKind.Indicator, 1),
+        (ConstraintKind.Indicator, 1),
         (DecisionVariableRole.Used, 1),
         (Sense.Minimize, 1),
         (Sense.Maximize, 2),

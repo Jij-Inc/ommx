@@ -6,6 +6,26 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 種類の追加に対応する公開API ([#1329](https://github.com/Jij-Inc/ommx/pull/1329))
+
+`Kind`、`ConstraintKind`、`ProvenanceKind` の型ヒントを、網羅的な Enum から
+既知の定数を持つ値クラスに変更しました。既存の定数・比較・hash・整数変換と
+Kind の protobuf 変換は引き続き利用できます。種類や制約familyを処理するときは、
+未対応の値を明示的に拒否する分岐を残してください。
+`ConstraintKind` は `Regular` を含み、従来の特殊制約selectorと `"sos1"` などの文字列入力を置き換えます。
+`constraints.of_kind(ConstraintKind.Sos1)` や
+`constraints_df(kind=ConstraintKind.Sos1)` を使ってください。familyビューの具体的な型は維持します。
+V3の数値スカラーの拡張契約は[移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
+OneHot 制約 30 を含む解では、違反量は型付き ID で取得し、テーブルは制約の種類を指定して取得します。
+
+```python
+from ommx import ConstraintKind, OneHotConstraintID
+
+solution.constraint_violation(OneHotConstraintID(30))
+solution.constraints_df(kind=ConstraintKind.OneHot)
+```
+
 ### 🆕 finite-domain 決定変数 ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
 
 {class}`~ommx.DecisionVariable` で、明示的に列挙した数値の集合を正確な
@@ -263,6 +283,7 @@ OneHot（ちょうど 1 つの変数が `1`、残りが `0`）と SOS1（非ゼ�
 合計には通常制約・Indicator・OneHot・SOS1 に加え、変換などで除去された制約の違反量も含みます。
 
 ```python
+# Beta 6 の書式。現行の型付き ID の使い方は移行ガイドを参照。
 solution.total_violation()
 solution.constraint_violation(30, kind="one_hot")  # 既存の OneHot 制約 ID
 solution.constraints_df(kind="sos1")[["feasible", "violation"]]
@@ -1528,13 +1549,13 @@ solution.decision_variables_df(include=["label"])      # core + label
 solution.decision_variables_df(include=["parameters"]) # core + parameters
 ```
 
-加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。必須のキーワード引数`kind=`で対象の制約ファミリーを切り替えます (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`):
+加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。Alpha 3 では `kind` に `"regular"`（既定値）、`"indicator"`、`"one_hot"`、`"sos1"` を指定できます。
 
-- `constraint_context_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
+- `constraint_metadata_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
 - `constraint_parameters_df(kind=...)` — long format (`{kind}_constraint_id` / `key` / `value`)
 - `constraint_provenance_df(kind=...)` — long format (`{kind}_constraint_id` / `step` / `source_kind` / `source_id`)
 - `constraint_removed_reasons_df(kind=...)` — long format (`{kind}_constraint_id` / `reason` / `key` / `value`)
-- `variable_labels_df()` — id-indexed
+- `variable_metadata_df()` — id-indexed
 - `variable_parameters_df()` — long format
 
 Sidecar の index 名はファミリーごとに qualified (`regular_constraint_id` / `indicator_constraint_id` / `one_hot_constraint_id` / `sos1_constraint_id` / `variable_id`) になっており、別 ID 空間どうしを誤って `df.join()` した場合に `df.head()` 等で気づきやすくなっています。`*_parameters_df` / `*_removed_reasons_df` の行は `(id, key)` 順にソート済み、空の long-format DataFrame もスキーマ列だけ持つ形で返ります。
