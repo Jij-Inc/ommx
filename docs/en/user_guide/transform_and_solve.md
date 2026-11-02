@@ -7,11 +7,11 @@ A model expresses the requirements of an application; a solver or sampler search
 
 ## Keep meaningful structure until you choose how to use it
 
-Suppose two amounts satisfy $0\leq x,y\leq10$, and at most one may be nonzero. OMMX can keep this condition as an SOS1 constraint, with a meaning defined independently of a solver. For a supported model, the PySCIPOpt Adapter can pass that structure directly to SCIP. For HiGHS, OMMX can instead express it using Binary selectors and ordinary linear constraints, provided the conversion conditions and the adapter's input requirements hold.
+A production line can make up to 100 units per hour, but only 60 in reduced mode. Let $q$ be its hourly output and let $r$ be 1 in reduced mode and 0 otherwise. An **indicator constraint** enforces $q\leq60$ when $r=1$. The PySCIPOpt Adapter can pass this linear indicator directly to SCIP.
 
-Writing the condition once leaves this choice available later. The modeling tool need not implement a different conversion for each backend, and the conversion can be reused by another solving method. Keeping the original condition also helps interpret the resulting candidate in the terms of the model.
+To try a formulation with ordinary linear constraints in the same solver, OMMX can rewrite the rule as $q\leq100-40r$. At $r=0$ this gives the known upper bound of 100. At $r=1$ it gives 60. The difference of 40 comes from the two limits. If the line could actually produce more than 100 in normal mode, using 100 here would exclude valid plans. Keeping the indicator in the source problem lets you choose the solver formulation later.
 
-Rewriting a special constraint as ordinary constraints is called **lowering**. The reverse direction is useful too: OMMX can verify selected patterns of ordinary constraints and represent them as an SOS1 constraint through **promotion**. These are supported operations with specific conditions, rather than automatic recognition of every equivalent formulation. Their definitions, examples, and conversion contracts belong to the {class}`SOS1 Reference <ommx.Sos1Constraint>` and {meth}`promotion Reference <ommx.Instance.promote_sos1_big_m>`.
+Rewriting a special constraint as ordinary constraints is called **lowering**. The {meth}`indicator conversion Reference <ommx.Instance.convert_indicator_to_constraint>` explains how OMMX derives the bound and when the conversion applies. OMMX can also recognize some structures in the other direction. For example, it can check a specified pattern of ordinary constraints and recover an SOS1 constraint (at most one member may be nonzero). The {meth}`SOS1 promotion Reference <ommx.Instance.promote_sos1_big_m>` describes which patterns qualify.
 
 ## Separate input requirements from permitted transformations
 

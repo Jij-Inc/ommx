@@ -1,8 +1,8 @@
 # What is OMMX?
 
-OMMX (Open Mathematical prograMming eXchange) is an open project that aims to **make preprocessing and problem-transformation techniques reusable through a common representation of mathematical optimization problems**. Placing that representation between modeling tools and solvers lets different solving methods use the same transformation and evaluation machinery.
+OMMX (Open Mathematical prograMming eXchange) lets you describe **what you want to solve** separately from **how you solve it**. You can revise the formulation you send to a solver and still judge its candidates by the constraints and objective of the original problem.
 
-For example, developing a new solving method becomes harder if you must also reimplement problem conversion and candidate checking. Defining what a problem and a candidate mean independently of a solver lets those tasks be shared. OMMX provides a data format, Python and Rust SDKs for construction, evaluation, transformation, and storage, and adapters that connect to solvers.
+A modeling tool expresses your requirements. OMMX provides a common data format and Python and Rust SDKs to transform the problem and evaluate candidates. An adapter connects that representation to the solver or sampler that searches for candidates. Implementing transformations on this common representation makes them reusable across modeling tools and solving methods.
 
 ## Why use OMMX today?
 
@@ -10,41 +10,19 @@ Until the 3.0.0 stable release, both this Book and the API Reference describe `m
 
 | Your goal | What OMMX can handle | What you decide |
 |---|---|---|
-| Try another solver or solving method | Supported special-constraint conversions and integer encodings; exchange with backends through adapters | The method, permitted transformations, and solver settings |
+| Try a different formulation or solver | Supported special-constraint conversions and integer encodings; exchange with backends through adapters | The method, permitted transformations, and solver settings |
 | Check whether a candidate is usable | Evaluate variable domains, constraints, and the objective; reconstruct original variable values from information retained by supported transformations | How to model the requirements of your application and whether to accept the candidate |
 | Pass problems and results to another process | Read and write a common format; save and share Artifacts; record settings and results in Experiments | What to record and what to compare |
 
-You can use only the parts you need. Evaluating a candidate from your own algorithm with the SDK requires neither an adapter nor an Artifact. Modeling turns application requirements into variables, objectives, and constraints; OMMX supplies common processing of that problem; a solver or sampler searches for candidates.
+You choose the requirements the model must satisfy, including when an AI tool helps write the model. You can use the SDK just to check a candidate from your own algorithm.
 
 ## Evaluate a candidate you already have
 
-Variable values alone do not tell you what an optimization result means. You also need the variables' domains, the constraints they must satisfy, and the objective used for comparison. For example, you can describe a problem in which two items cannot both be selected and check a candidate:
-
-```python
-from ommx import Instance
-
-instance = Instance.maximize()
-x = instance.new_binary("x")
-y = instance.new_binary("y")
-instance.objective = x + y
-instance.add_constraint(x * y == 0)
-
-solution = instance.evaluate({x.id: 1, y.id: 0})
-assert solution.feasible
-assert solution.objective == 1
-```
-
-This candidate satisfies the constraint and has objective value 1. You can check candidates against the same problem whether they come from your own algorithm, a solver, or a person. Evaluating whether a candidate is feasible and searching for a better candidate are different operations. Evaluation alone does not establish optimality.
+A production line can make up to 100 units per hour, but only 60 in reduced mode. A plan that calls for 65 units in an hour of reduced operation violates that limit, whether the plan came from a solver or from a colleague. OMMX can evaluate either plan against the same problem. [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md) explains how to distinguish checking this rule, checking the whole model, and establishing optimality. The {class}`Solution Reference <ommx.Solution>` shows how to evaluate a candidate and inspect the result.
 
 ## Separate a problem's meaning from its representation for solving
 
-Solvers differ in which objectives and constraints they can handle directly. OMMX lets you change a problem's representation when needed instead of committing to one solver's representation at the outset.
-
-For example, the requirement to select exactly one of three binary variables can be represented as a OneHot special constraint. If ordinary linear constraints are needed, it can be converted to `x[0] + x[1] + x[2] == 1`. Keeping the explicit "select exactly one" structure makes its meaning available to later analysis and transformations. In v3, special constraints are objects that can be constructed, evaluated, and transformed, just like regular constraints.
-
-Which structures can remain explicit depends on the solving method. For supported models, the {class}`PySCIPOpt Adapter <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` passes Indicator and SOS1 constraints directly to SCIP. For another backend, OMMX can {meth}`lower special constraints to regular constraints <ommx.Instance.lower_special_constraints>` when the conversion conditions hold. [Transform a problem and connect it to a solving method](./user_guide/transform_and_solve.md) explains how to choose between these paths.
-
-What a transformation preserves depends on the operation. Some express the same condition in another form; others change the conditions imposed or the objective being compared. Feasibility, objective values, and optimality before and after a transformation are distinct guarantees. [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md) explains how to read transformed results. {meth}`~ommx.Instance.lower_special_constraints` covers supported conversions; individual operations' conditions and guarantees belong to the {doc}`API Reference <api/index>`.
+You can express the reduced-mode limit as an **indicator constraint**, which applies a condition when a binary variable takes a specified value. The {class}`PySCIPOpt Adapter <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` can pass this linear indicator directly to SCIP. You can also use the known upper bound on output to express the same rule as an ordinary inequality and try that formulation with SCIP. In either case, the planner specifies the production rule once. [Transform a problem and connect it to a solving method](./user_guide/transform_and_solve.md) derives the inequality and explains which guarantees to check for other transformations.
 
 ## Accumulate transformation techniques on a common representation
 
