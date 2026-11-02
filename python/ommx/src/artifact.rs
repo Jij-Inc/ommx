@@ -594,10 +594,11 @@ impl PyArtifact {
     /// A mismatched media type raises {class}`ValueError`; registry and storage
     /// and Parquet decoding failures raise {class}`RuntimeError`.
     /// pandas conversion exceptions are preserved. PyArrow is not required.
-    /// Only flat primitive Parquet schemas are supported. Legacy categorical
-    /// files without OMMX pandas metadata raise {class}`ValueError` because
-    /// their complete category order cannot be restored. Read those files with
-    /// pandas/PyArrow and save the DataFrame again with {meth}`~ommx.artifact.ArtifactDraft.add_dataframe`.
+    /// Reads supported flat schemas using `ommx.pandas` version 1 when present.
+    /// Without that key, the reader uses `pandas` metadata when available.
+    /// If it identifies a categorical column, the decoded values cannot recover
+    /// all categories and their order. This raises {class}`ValueError`. Read
+    /// the blob with pandas/PyArrow and save it with {meth}`~ommx.artifact.ArtifactDraft.add_dataframe`.
     pub fn get_dataframe<'py>(
         &mut self,
         py: Python<'py>,
@@ -1611,8 +1612,10 @@ impl PyArtifactDraft {
     /// Encoding uses the Rust SDK and does not require PyArrow. Flat primitive
     /// columns, nullable dtypes, categorical values, dates, timestamps and
     /// timedeltas are supported. Nested objects and decimal columns must be
-    /// converted to primitive columns before saving. Indexes and column labels
-    /// are preserved. Unsupported pandas values raise {class}`TypeError`;
+    /// converted to primitive columns before saving. The file carries `pandas`
+    /// metadata for other readers and `ommx.pandas` for OMMX to restore indexes,
+    /// column labels, dtypes and categories, including unused categories and
+    /// their order. Unsupported pandas values raise {class}`TypeError`;
     /// Parquet encoding failures raise {class}`RuntimeError`.
     ///
     /// >>> import pandas as pd

@@ -997,24 +997,38 @@ The structural match (8-hex registry-id prefix, timestamp-shaped tag, hex nonce)
 (python-native-parquet-dataframe-layers)=
 ### 13.6 DataFrame layers use the Rust Parquet backend
 
-`ArtifactDraft.add_dataframe()` and `Artifact.get_dataframe()` no longer require
-PyArrow. Their Parquet backend supports flat primitive columns, nullable dtypes,
-dates, timestamps and timedeltas. OMMX metadata preserves pandas indexes,
-column labels and categorical values, including unused categories and ordering.
+DataFrame layers use Apache Parquet (`application/vnd.apache.parquet`).
+`ArtifactDraft.add_dataframe()` and `Artifact.get_dataframe()` now use the Rust
+SDK for Parquet I/O and work without PyArrow. They support flat primitive
+columns, nullable dtypes, dates, timestamps and timedeltas.
 
-For older PyArrow files, OMMX restores MultiIndex column levels with string or
-numeric labels and raises `ValueError` for unsupported level types. If another
-tool changes the physical columns of an OMMX file, update its pandas metadata
-to describe the new schema. Missing, duplicated or unassigned field references
-raise `ValueError` on read.
+OMMX writes both `pandas` and `ommx.pandas` key-value metadata inside the
+Parquet file. The `pandas` entry describes fields and indexes for readers that
+understand the pandas convention. The versioned `ommx.pandas` entry records
+what OMMX needs to reconstruct the DataFrame, including column labels, index
+structure, dtypes and category definitions. For example, if an ordered
+categorical column allows `low`, `medium`, `high` but contains only `low` and
+`high`, the stored values alone cannot tell a reader where `medium` belongs.
 
-Nested columns, decimals and legacy INT96 timestamps are unsupported. Convert
-such data to supported primitive columns before adding a DataFrame. Existing
-Parquet layers with flat supported schemas remain readable. Legacy categorical
-files without OMMX metadata are rejected because the complete category order
-cannot be restored; read those blobs with pandas/PyArrow, then add the resulting
-DataFrame to a new Artifact. New categorical layers preserve their full pandas
-semantics when read through OMMX; other Parquet consumers see primitive values.
+- **Reading with OMMX.** `get_dataframe()` understands version 1 of
+  `ommx.pandas`. An unknown version raises `ValueError`. If another tool edits
+  the schema and retains this metadata, it must keep the field references in
+  sync. Each physical column must be accounted for exactly once as data or index.
+- **Reading files without `ommx.pandas`.** This includes layers written by
+  earlier OMMX releases through pandas/PyArrow. OMMX reads supported flat
+  columns and uses `pandas` metadata when present. It can restore MultiIndex
+  columns with string or numeric levels. Unsupported level types raise
+  `ValueError`. If `pandas` identifies a categorical column, OMMX raises
+  `ValueError` because its reader cannot reconstruct the full category list and
+  order from the decoded values. Read the blob with `pandas.read_parquet()`
+  using PyArrow, then save the DataFrame with `add_dataframe()`.
+- **Reading OMMX files with other tools.** Readers that ignore `ommx.pandas`
+  can read the physical Parquet columns. For example, they see the values
+  `low` and `high`; restoring the full ordered category requires a reader that
+  understands `ommx.pandas`.
+
+Nested columns, decimals and INT96 timestamps are outside the Rust backend's
+supported schema. Convert them to supported primitive columns before saving.
 
 See {meth}`~ommx.artifact.ArtifactDraft.add_dataframe` and
 {meth}`~ommx.artifact.Artifact.get_dataframe` for the supported input and errors.

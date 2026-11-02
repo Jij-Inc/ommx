@@ -8,15 +8,11 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ### ⚠ DataFrame layer の Parquet 処理を Rust に移行 ([#1334](https://github.com/Jij-Inc/ommx/pull/1334))
 
-Artifact の DataFrame layer は Rust SDK の Parquet backend を使うようになり、
-PyArrow が必須依存から外れました。フラットな基本型の列、nullable dtype、
-日付、日時、時間差に対応し、pandas の index、列ラベル、カテゴリを
-OMMX のメタデータに保存します。
-
-ネストした列、decimal、旧 INT96 timestamp、旧カテゴリ列を持つファイルは
-変換が必要です。対応範囲と移行手順は
-{ref}`マイグレーションガイド <python-native-parquet-dataframe-layers>`
-を参照してください。
+Artifact の DataFrame layer は、PyArrow を使わずに Rust で Apache Parquet を読み書きするようになりました。
+OMMX は他のツール向けに `pandas` を、未使用のカテゴリやその順序などを復元するために `ommx.pandas` を保存します。
+他のツールでも基本型の列の値は読み取れます。OMMX は pandas/PyArrow が書いたファイルからも対応するフラットな列を読めます。
+`pandas` のみでカテゴリ列として記録されたファイルは PyArrow での変換が必要です。
+対応するスキーマと変換手順は {ref}`マイグレーションガイド <python-native-parquet-dataframe-layers>` を参照してください。
 
 ### 🆕 finite-domain 決定変数 ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
 

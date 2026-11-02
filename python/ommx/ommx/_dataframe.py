@@ -352,7 +352,7 @@ def _series(data: dict[str, Any], spec: dict[str, Any] | None = None) -> pd.Seri
                 for bits in (8, 16, 32, 64)
             ],
         }:
-            # Legacy pandas/Arrow metadata keeps NumPy's non-nullable dtype
+            # The pandas metadata keeps NumPy's non-nullable dtype
             # even when Parquet has nulls; match pandas' normal promotion.
             return pd.Series(values, dtype=object if dtype == "bool" else "float64")
         return pd.Series(values, dtype=dtype)
@@ -389,7 +389,7 @@ def _validate_field_roles(
         )
 
 
-def _legacy_column_index(
+def _pyarrow_column_index(
     labels: pd.Index, levels: list[dict[str, Any]]
 ) -> pd.MultiIndex:
     # PyArrow writes the repr of a tuple of strings, plus each level's dtype.
@@ -399,13 +399,17 @@ def _legacy_column_index(
             expression = ast.parse(label, mode="eval").body
         except (TypeError, SyntaxError, ValueError) as error:
             raise ValueError(
-                f"Invalid legacy MultiIndex column label {label!r}"
+                f"Invalid MultiIndex column label in pandas metadata: {label!r}"
             ) from error
         if not isinstance(expression, ast.Tuple) or len(expression.elts) != len(parts):
-            raise ValueError(f"Invalid legacy MultiIndex column label {label!r}")
+            raise ValueError(
+                f"Invalid MultiIndex column label in pandas metadata: {label!r}"
+            )
         for values, item in zip(parts, expression.elts):
             if not isinstance(item, ast.Constant) or not isinstance(item.value, str):
-                raise ValueError(f"Invalid legacy MultiIndex column label {label!r}")
+                raise ValueError(
+                    f"Invalid MultiIndex column label in pandas metadata: {label!r}"
+                )
             values.append(item.value)
 
     arrays = []
@@ -416,7 +420,9 @@ def _legacy_column_index(
         elif dtype in _NUMERIC and dtype.lower().startswith(("int", "uint", "float")):
             arrays.append(pd.Index(values).astype(dtype))
         else:
-            raise ValueError(f"Unsupported legacy MultiIndex level dtype {dtype!r}")
+            raise ValueError(
+                f"Unsupported MultiIndex level dtype in pandas metadata: {dtype!r}"
+            )
     return pd.MultiIndex.from_arrays(arrays, names=[level["name"] for level in levels])
 
 
@@ -484,7 +490,7 @@ def from_columns(
             dtype = f"datetime64[{dtype[len('datetime64[') : -1]}, {timezone}]"
         if info.get("pandas_type") == "categorical":
             raise ValueError(
-                "Legacy categorical Parquet metadata cannot be restored losslessly by the Rust backend; "
+                "Without ommx.pandas, the full category list and its order cannot be restored losslessly; "
                 "read it with pandas.read_parquet and PyArrow, then save the DataFrame with add_dataframe"
             )
         series = _series(column["data"], {"dtype": dtype})
@@ -514,6 +520,6 @@ def from_columns(
     if len(column_indexes) == 1:
         df.columns.name = column_indexes[0].get("name")
     elif len(column_indexes) > 1:
-        df.columns = _legacy_column_index(df.columns, column_indexes)
+        df.columns = _pyarrow_column_index(df.columns, column_indexes)
     df.attrs = pandas_metadata.get("attributes", {})
     return df

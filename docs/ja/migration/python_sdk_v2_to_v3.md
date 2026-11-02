@@ -630,22 +630,25 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 (python-native-parquet-dataframe-layers)=
 ### 13.6 DataFrame layer の Parquet 処理を Rust に移行
 
-`ArtifactDraft.add_dataframe()` と `Artifact.get_dataframe()` は PyArrow を必要としなくなりました。
+DataFrame layer のファイル形式は Apache Parquet（`application/vnd.apache.parquet`）です。
+`ArtifactDraft.add_dataframe()` と `Artifact.get_dataframe()` は Rust SDK で Parquet を読み書きするため、PyArrow が不要になりました。
 フラットな基本型の列、nullable dtype、日付、日時、時間差に対応します。
-pandas の index、列ラベル、カテゴリの未使用値と順序は OMMX のメタデータに保存されます。
 
-旧 PyArrow ファイルの MultiIndex 列は、各階層のラベルが文字列または数値なら復元できます。
-非対応の階層型では `ValueError` が発生します。他のツールで OMMX ファイルの物理列を
-変更した場合は、新しいスキーマに合わせて pandas メタデータも更新してください。
-列の対応が一致しない場合、読み出し時に `ValueError` が発生します。
+OMMX は Parquet ファイル内に `pandas` と `ommx.pandas` の2つのメタデータを書き込みます。
+`pandas` は、この規約に対応するツールに列やインデックスの構造を伝えます。
+バージョン付きの `ommx.pandas` には、OMMX が DataFrame を復元するための列ラベル、インデックスの構造、dtype、カテゴリの定義などを記録します。
+たとえば「低・中・高」の順序付きカテゴリで、行には「低」と「高」しか現れない場合、列の値だけから「中」の存在や位置は推定できません。
 
-ネストした列、decimal、旧形式の INT96 timestamp は非対応です。
-保存する前に対応する基本型の列へ変換してください。
-既存の Parquet layer も、対応するフラットなスキーマであれば読み出せます。
-OMMX メタデータのない旧カテゴリ列はカテゴリ全体の順序を復元できないため、明示的にエラーにします。
-その場合は pandas/PyArrow で blob を読み、得られた DataFrame を新しい Artifact に追加してください。
-新しいカテゴリ列は OMMX 経由で読み出すと未使用値と順序を復元できます。
-他の Parquet consumer には基本型の値として見えます。
+- **OMMX で読む場合。** `get_dataframe()` は `ommx.pandas` のバージョン1に対応し、未知のバージョンでは `ValueError` が発生します。
+  他のツールで物理列を変更してこのメタデータを残す場合は、列の対応も更新してください。各物理列はデータ列またはインデックス列としてちょうど1回参照される必要があります。
+- **`ommx.pandas` がないファイルを読む場合。** 以前の OMMX が pandas/PyArrow 経由で書いたレイヤーもこれに該当します。
+  OMMX は対応するフラットな列を読み、`pandas` メタデータがあればそれを使います。MultiIndex 列は各階層のラベルが文字列または数値なら復元でき、非対応の階層型では `ValueError` が発生します。
+  `pandas` がカテゴリ列を示している場合、OMMX の読み取り処理ではデコードした値からカテゴリの全要素と順序を復元できないため、`ValueError` が発生します。
+  この場合は PyArrow を使って blob を `pandas.read_parquet()` で読み、得られた DataFrame を `add_dataframe()` で保存してください。
+- **OMMX が書いたファイルを他のツールで読む場合。** `ommx.pandas` を解釈しないツールでも Parquet の物理列は読めます。
+  上の例では「低」と「高」の値を取得できます。「中」を含めて元の順序付きカテゴリを復元するには、`ommx.pandas` を解釈する必要があります。
+
+Rust バックエンドはネストした列、decimal、INT96 timestamp に対応していません。保存前に対応する基本型の列へ変換してください。
 
 対応する入力と例外は {meth}`~ommx.artifact.ArtifactDraft.add_dataframe` と
 {meth}`~ommx.artifact.Artifact.get_dataframe` を参照してください。

@@ -1,4 +1,4 @@
-# Legacy Artifact compatibility fixture
+# Reading an Artifact layer written by pandas/PyArrow
 
 `pyarrow-22.parquet` is the single external fixture for the former OMMX
 DataFrame backend. It was written with PyArrow 22.0.0 and pandas 2.3.3.
@@ -19,7 +19,7 @@ Test ownership:
 | PyO3 boundary | typed Python/Rust extraction and reconstruction, including `u64::MAX` | `python/ommx/src/artifact/dataframe.rs`, no Parquet or registry |
 | Rust table adapter | table invariants, nullable column/type mapping and supported-schema policy | `artifact/parquet/table.rs`, generated tables/schemas |
 | Artifact | layer storage, annotations, descriptor ownership, mutation safety and error translation | `artifact/parquet.rs`, `test_artifact_parquet.py` |
-| Old OMMX backend compatibility | existing DataFrame layer values and pandas metadata | this fixture, read through `Artifact.get_dataframe()` |
+| pandas/PyArrow interoperability | existing DataFrame layer values and pandas metadata | this fixture, read through `Artifact.get_dataframe()` |
 | Dependency boundary | operation without PyArrow or fastparquet | isolated-process test in `test_artifact_parquet.py` |
 
 Regeneration uses a temporary development dependency, not a runtime or test
