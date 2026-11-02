@@ -27,6 +27,7 @@ fn extract_table(
         // Extract typed integers directly. Buffering an adjacent-tagged enum
         // through serde's deserialize_any would truncate Python's u64 range.
         let data = match kind.as_str() {
+            "null" => ColumnData::Null(values.extract()?),
             "boolean" => ColumnData::Boolean(values.extract()?),
             "int8" => ColumnData::Int8(values.extract()?),
             "int16" => ColumnData::Int16(values.extract()?),

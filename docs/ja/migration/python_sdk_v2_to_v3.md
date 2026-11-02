@@ -634,6 +634,11 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 フラットな基本型の列、nullable dtype、日付、日時、時間差に対応します。
 pandas の index、列ラベル、カテゴリの未使用値と順序は OMMX のメタデータに保存されます。
 
+旧 PyArrow ファイルの MultiIndex 列は、各階層のラベルが文字列または数値なら復元できます。
+非対応の階層型では `ValueError` が発生します。他のツールで OMMX ファイルの物理列を
+変更した場合は、新しいスキーマに合わせて pandas メタデータも更新してください。
+列の対応が一致しない場合、読み出し時に `ValueError` が発生します。
+
 ネストした列、decimal、旧形式の INT96 timestamp は非対応です。
 保存する前に対応する基本型の列へ変換してください。
 既存の Parquet layer も、対応するフラットなスキーマであれば読み出せます。

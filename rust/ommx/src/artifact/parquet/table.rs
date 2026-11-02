@@ -38,6 +38,8 @@ use std::{
 #[serde(tag = "type", content = "values", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum ColumnData {
+    /// Parquet NULL logical type. Every row is null.
+    Null(usize),
     /// Nullable Boolean values, in row order.
     Boolean(Vec<Option<bool>>),
     /// Nullable Int8 values, in row order.
@@ -238,6 +240,7 @@ impl ColumnData {
     /// Number of values, including nulls.
     pub fn len(&self) -> usize {
         match self {
+            Self::Null(rows) => *rows,
             Self::Boolean(values) => values.len(),
             Self::Int8(values) => values.len(),
             Self::Int16(values) => values.len(),
@@ -268,6 +271,7 @@ impl ColumnData {
 
     fn parquet_type(&self) -> (PhysicalType, Option<LogicalType>) {
         match self {
+            Self::Null(_) => (PhysicalType::INT32, Some(LogicalType::Unknown)),
             Self::Boolean(_) => (PhysicalType::BOOLEAN, None),
             Self::Int8(_) => (PhysicalType::INT32, Some(LogicalType::integer(8, true))),
             Self::Int16(_) => (PhysicalType::INT32, Some(LogicalType::integer(16, true))),
@@ -311,6 +315,17 @@ impl ColumnData {
 
     fn write(&self, writer: &mut SerializedColumnWriter<'_>) -> Result<()> {
         match self {
+            Self::Null(rows) => {
+                let levels = [0_i16; 8192];
+                let writer = writer.typed::<Int32Type>();
+                let mut remaining = *rows;
+                while remaining > 0 {
+                    let count = remaining.min(levels.len());
+                    writer.write_batch(&[], Some(&levels[..count]), None)?;
+                    remaining -= count;
+                }
+                Ok(())
+            }
             Self::Boolean(values) => write_values::<BoolType, _>(writer, values, |value| *value),
             Self::Int8(values) => {
                 write_values::<Int32Type, _>(writer, values, |value| *value as i32)
@@ -478,6 +493,7 @@ fn empty_column(field: &Type) -> Result<ColumnData> {
     }
     // Unannotated signed integers are common in files from other producers.
     match (field.get_physical_type(), logical) {
+        (PhysicalType::INT32, Some(LogicalType::Unknown)) => Ok(ColumnData::Null(0)),
         (PhysicalType::INT32, None) => Ok(ColumnData::Int32(Vec::new())),
         (PhysicalType::INT64, None) => Ok(ColumnData::Int64(Vec::new())),
         _ => bail!(
@@ -529,6 +545,12 @@ fn read_values<D: DataType, T>(
 
 fn read_column(column: &mut ColumnData, reader: ColumnReader, optional: bool) -> Result<()> {
     match column {
+        ColumnData::Null(rows) => {
+            let nulls = read_values::<Int32Type, ()>(reader, optional, |_| {
+                bail!("Non-null value in a Parquet NULL column")
+            })?;
+            *rows += nulls.len();
+        }
         ColumnData::Boolean(values) => {
             values.extend(read_values::<BoolType, _>(reader, optional, Ok)?)
         }
@@ -630,6 +652,7 @@ mod tests {
     #[test]
     fn primitive_types_and_nulls_roundtrip() {
         for data in [
+            ColumnData::Null(2),
             ColumnData::Boolean(vec![Some(true), None]),
             ColumnData::Int8(vec![Some(i8::MIN), None]),
             ColumnData::Int16(vec![Some(i16::MIN), None]),
@@ -695,6 +718,35 @@ mod tests {
             Table::from_parquet(empty.to_parquet().unwrap()).unwrap(),
             empty
         );
+    }
+
+    #[test]
+    fn null_logical_type_rejects_present_values() {
+        let field = Type::primitive_type_builder("nulls", PhysicalType::INT32)
+            .with_repetition(Repetition::OPTIONAL)
+            .with_logical_type(Some(LogicalType::Unknown))
+            .build()
+            .unwrap();
+        let schema = Type::group_type_builder("schema")
+            .with_fields(vec![Arc::new(field)])
+            .build()
+            .unwrap();
+        let mut bytes = Vec::new();
+        let mut file =
+            SerializedFileWriter::new(&mut bytes, Arc::new(schema), Default::default()).unwrap();
+        let mut group = file.next_row_group().unwrap();
+        let mut column = group.next_column().unwrap().unwrap();
+        column
+            .typed::<Int32Type>()
+            .write_batch(&[42], Some(&[1]), None)
+            .unwrap();
+        column.close().unwrap();
+        group.close().unwrap();
+        file.close().unwrap();
+        assert!(Table::from_parquet(bytes)
+            .unwrap_err()
+            .to_string()
+            .contains("Non-null value"));
     }
 
     #[test]

@@ -6,6 +6,7 @@ import datetime as dt
 import json
 from typing import Any
 
+import numpy as np
 import pandas as pd
 from pandas.testing import assert_frame_equal
 import pytest
@@ -16,6 +17,91 @@ from ommx._dataframe import from_columns, to_columns
 def convert_roundtrip(df: pd.DataFrame) -> pd.DataFrame:
     columns, metadata = to_columns(df)
     return from_columns(columns, metadata)
+
+
+@pytest.mark.parametrize(
+    "value", [2**53 + 1, np.int64(-(2**53 + 1)), np.uint64(2**64 - 1)]
+)
+def test_mixed_numeric_object_column_rejects_lossy_float_conversion(value):
+    with pytest.raises(ValueError, match="cannot be represented exactly"):
+        to_columns(pd.DataFrame({"v": pd.Series([value, 0.5], dtype=object)}))
+    exact = pd.DataFrame({"v": pd.Series([2**53 + 2, 0.5], dtype=object)})
+    assert_frame_equal(convert_roundtrip(exact), exact)
+
+
+@pytest.mark.parametrize("change", ["added", "removed", "duplicate", "index_overlap"])
+def test_metadata_must_account_for_every_physical_field_once(change):
+    frame = pd.DataFrame({"a": [1], "b": [2]}, index=pd.Index(["x"]))
+    columns, metadata = to_columns(frame)
+    desc = json.loads(metadata["ommx.pandas"])
+    if change == "added":
+        columns.append({"name": "c", "data": {"type": "int64", "values": [3]}})
+    elif change == "removed":
+        columns.pop()
+    elif change == "duplicate":
+        desc["columns"].append(desc["columns"][0])
+    else:
+        desc["index"]["fields"] = ["a"]
+    metadata["ommx.pandas"] = json.dumps(desc)
+    with pytest.raises(ValueError, match="exactly once"):
+        from_columns(columns, metadata)
+
+
+@pytest.mark.parametrize("dtype", ["float32", "float64"])
+def test_nullable_floats_preserve_valid_nan_and_null(dtype):
+    values = pd.arrays.FloatingArray(
+        np.array([np.nan, np.nan, 1], dtype=dtype), np.array([False, True, False])
+    )
+    frame = pd.DataFrame({"v": values})
+    result = convert_roundtrip(frame)
+    assert_frame_equal(result, frame)
+    assert result["v"].isna().tolist() == [False, True, False]
+    assert np.isnan(result["v"].iloc[0])
+
+
+@pytest.mark.parametrize("unit", ["ms", "us"])
+@pytest.mark.parametrize("zoned", [False, True])
+def test_timestamp_outside_nanosecond_range(unit, zoned):
+    series = pd.Series(["2500-01-01", None], dtype=f"datetime64[{unit}]")
+    if zoned:
+        series = series.dt.tz_localize("Asia/Tokyo")
+    frame = pd.DataFrame({"v": series})
+    assert_frame_equal(convert_roundtrip(frame), frame)
+
+
+def test_standard_pandas_metadata_restores_multiindex_level_values_and_names():
+    labels = [("x'y", 1), ("x'y", 2)]
+    fields = [repr((text, str(number))) for text, number in labels]
+    metadata = {
+        "pandas": json.dumps(
+            {
+                "columns": [
+                    {"field_name": name, "name": name, "numpy_type": "int64"}
+                    for name in fields
+                ],
+                "column_indexes": [
+                    {"name": "group", "pandas_type": "unicode", "numpy_type": "object"},
+                    {"name": "key", "pandas_type": "int64", "numpy_type": "int64"},
+                ],
+            }
+        )
+    }
+    columns = [
+        {"name": name, "data": {"type": "int64", "values": [i]}}
+        for i, name in enumerate(fields)
+    ]
+    expected = pd.DataFrame(
+        [[0, 1]], columns=pd.MultiIndex.from_tuples(labels, names=["group", "key"])
+    )
+    assert_frame_equal(from_columns(columns, metadata), expected)
+
+
+def test_legacy_logical_null_column_restores_object_dtype_and_length():
+    expected = pd.DataFrame({"empty": pd.Series([None, None], dtype=object)})
+    assert_frame_equal(
+        from_columns([{"name": "empty", "data": {"type": "null", "values": 2}}], {}),
+        expected,
+    )
 
 
 @pytest.mark.parametrize(

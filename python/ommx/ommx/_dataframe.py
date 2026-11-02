@@ -7,6 +7,7 @@ it neither encodes Parquet bytes nor accesses Artifact storage.
 
 from __future__ import annotations
 
+import ast
 import datetime as dt
 import json
 from typing import Any
@@ -139,11 +140,24 @@ def _column(series: pd.Series, field: str) -> tuple[dict[str, Any], dict[str, An
             raise TypeError(
                 f"Column {field!r} has unsupported Parquet dtype {dtype!s}; convert it to a primitive dtype before saving"
             )
-        if kind == "date":
+        if name == "object" and kind == "float64":
+
+            def checked_float(value: Any) -> float:
+                result = float(value)
+                if isinstance(value, (int, np.integer)) and int(value) != result:
+                    raise ValueError(
+                        f"Integer {value} in column {field!r} cannot be represented exactly as float64"
+                    )
+                return result
+
+            convert = checked_float
+        elif kind == "date":
             epoch = dt.date(1970, 1, 1)
 
-            def convert(value: Any) -> int:
+            def days_since_epoch(value: Any) -> int:
                 return (value - epoch).days
+
+            convert = days_since_epoch
         else:
             convert = _CASTS[kind]
         values = [
@@ -278,6 +292,9 @@ def to_columns(df: pd.DataFrame) -> tuple[list[dict[str, Any]], dict[str, str]]:
 
 def _series(data: dict[str, Any], spec: dict[str, Any] | None = None) -> pd.Series:
     kind = data["type"]
+    if kind == "null":
+        # A Parquet NULL column carries only its row count.
+        return pd.Series([None] * data["values"], dtype=object)
     values: list[Any] = data["values"]
     spec = spec or {}
     dtype = spec.get("dtype")
@@ -296,7 +313,9 @@ def _series(data: dict[str, Any], spec: dict[str, Any] | None = None) -> pd.Seri
             [np.iinfo(np.int64).min if value is None else value for value in values],
             dtype=np.int64,
         )
-        result = pd.Series(pd.to_datetime(raw, unit=unit, utc=kind.startswith("utc_")))
+        result = pd.Series(raw.view(f"datetime64[{unit}]"))
+        if kind.startswith("utc_"):
+            result = result.dt.tz_localize("UTC")
         if dtype and dtype != "object":
             return result.astype(dtype)
         return result.astype(object) if dtype == "object" else result
@@ -320,6 +339,10 @@ def _series(data: dict[str, Any], spec: dict[str, Any] | None = None) -> pd.Seri
         return pd.Series(values, dtype=object)
     if dtype == "string":
         return pd.Series(values, dtype=pd.StringDtype(storage="python"))
+    if dtype in ("Float32", "Float64"):
+        mask = np.array([value is None for value in values], dtype=bool)
+        floats = np.array(values, dtype=dtype.lower())
+        return pd.Series(pd.arrays.FloatingArray(floats, mask))
     if dtype in _NUMERIC:
         if any(value is None for value in values) and dtype in {
             "bool",
@@ -345,6 +368,58 @@ def _series(data: dict[str, Any], spec: dict[str, Any] | None = None) -> pd.Seri
     raise ValueError(f"Unsupported pandas dtype in Parquet metadata: {dtype!r}")
 
 
+def _validate_field_roles(
+    columns: list[dict[str, Any]], description: dict[str, Any]
+) -> None:
+    physical = {column["name"] for column in columns}
+    roles = [item["field"] for item in description["columns"]]
+    index = description["index"]
+    if index["kind"] == "columns":
+        roles.extend(index["fields"])
+    elif index["kind"] != "range":
+        raise ValueError("Unknown index kind in OMMX pandas metadata")
+    declared = set(roles)
+    if (
+        len(roles) != len(declared)
+        or declared != physical
+        or set(description["specs"]) != physical
+    ):
+        raise ValueError(
+            "OMMX pandas metadata must describe each physical column exactly once as data or index"
+        )
+
+
+def _legacy_column_index(
+    labels: pd.Index, levels: list[dict[str, Any]]
+) -> pd.MultiIndex:
+    # PyArrow writes the repr of a tuple of strings, plus each level's dtype.
+    parts: list[list[str]] = [[] for _ in levels]
+    for label in labels:
+        try:
+            expression = ast.parse(label, mode="eval").body
+        except (TypeError, SyntaxError, ValueError) as error:
+            raise ValueError(
+                f"Invalid legacy MultiIndex column label {label!r}"
+            ) from error
+        if not isinstance(expression, ast.Tuple) or len(expression.elts) != len(parts):
+            raise ValueError(f"Invalid legacy MultiIndex column label {label!r}")
+        for values, item in zip(parts, expression.elts):
+            if not isinstance(item, ast.Constant) or not isinstance(item.value, str):
+                raise ValueError(f"Invalid legacy MultiIndex column label {label!r}")
+            values.append(item.value)
+
+    arrays = []
+    for values, level in zip(parts, levels):
+        dtype = level["numpy_type"]
+        if level["pandas_type"] == "unicode":
+            arrays.append(pd.Index(values, dtype=dtype))
+        elif dtype in _NUMERIC and dtype.lower().startswith(("int", "uint", "float")):
+            arrays.append(pd.Index(values).astype(dtype))
+        else:
+            raise ValueError(f"Unsupported legacy MultiIndex level dtype {dtype!r}")
+    return pd.MultiIndex.from_arrays(arrays, names=[level["name"] for level in levels])
+
+
 def from_columns(
     columns: list[dict[str, Any]], metadata: dict[str, str]
 ) -> pd.DataFrame:
@@ -353,6 +428,7 @@ def from_columns(
         description = json.loads(metadata[_METADATA_KEY])
         if description["version"] != 1:
             raise ValueError("Unsupported OMMX pandas metadata version")
+        _validate_field_roles(columns, description)
         fields = {
             column["name"]: _series(
                 column["data"], description["specs"].get(column["name"])
@@ -437,5 +513,7 @@ def from_columns(
     column_indexes = pandas_metadata.get("column_indexes", [])
     if len(column_indexes) == 1:
         df.columns.name = column_indexes[0].get("name")
+    elif len(column_indexes) > 1:
+        df.columns = _legacy_column_index(df.columns, column_indexes)
     df.attrs = pandas_metadata.get("attributes", {})
     return df

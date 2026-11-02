@@ -1002,6 +1002,12 @@ PyArrow. Their Parquet backend supports flat primitive columns, nullable dtypes,
 dates, timestamps and timedeltas. OMMX metadata preserves pandas indexes,
 column labels and categorical values, including unused categories and ordering.
 
+For older PyArrow files, OMMX restores MultiIndex column levels with string or
+numeric labels and raises `ValueError` for unsupported level types. If another
+tool changes the physical columns of an OMMX file, update its pandas metadata
+to describe the new schema. Missing, duplicated or unassigned field references
+raise `ValueError` on read.
+
 Nested columns, decimals and legacy INT96 timestamps are unsupported. Convert
 such data to supported primitive columns before adding a DataFrame. Existing
 Parquet layers with flat supported schemas remain readable. Legacy categorical
