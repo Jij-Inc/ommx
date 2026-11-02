@@ -262,6 +262,19 @@
         "DEV_A"
       ],
       "note": "日英のAdapter比較の旧2原稿を共通AdapterモジュールのReferenceへ統合する。同じモデルの構築からHiGHS/SCIP求解、報告目的値・sense・実行可能性・最適性の表、名前による変数抽出と図示、DataFrame結合まで自己完結したdoctest例を所有する。P2をR_API.adapter.comparisonへ改称し、基本求解Referenceの既読を要求しない直接入口にする。比較基準と変換後の結果解釈は既存Book第3章に残す。日英Home・導入・評価章とAdapter一覧から使用例へ接続し、既存診断・実装ページはリンクだけを更新する。歴史的baselineと過去の編集記録を保持し、本文レビュー記録はチャットに残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "6e06d2d38f2b453b6ba645ff6c00f07fbe907a8d",
+      "target_revision": "codex/book-original-problem",
+      "affected_pages": [
+        "README",
+        "HOME",
+        "HOME_EN",
+        "B_TRANSFORM",
+        "B_EVALUATE"
+      ],
+      "note": "READMEと日英Bookの生産ラインの例を対応させる。変換章は既知の上限を使う線形化、評価章は候補を元の生産条件で判断することを、それぞれ独立して説明する。候補評価の実行例はSolutionのReferenceが所有する。"
     }
   ],
   "interpretation": {
