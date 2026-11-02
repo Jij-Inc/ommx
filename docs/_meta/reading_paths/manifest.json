@@ -262,6 +262,19 @@
         "DEV_A"
       ],
       "note": "日英のAdapter比較の旧2原稿を共通AdapterモジュールのReferenceへ統合する。同じモデルの構築からHiGHS/SCIP求解、報告目的値・sense・実行可能性・最適性の表、名前による変数抽出と図示、DataFrame結合まで自己完結したdoctest例を所有する。P2をR_API.adapter.comparisonへ改称し、基本求解Referenceの既読を要求しない直接入口にする。比較基準と変換後の結果解釈は既存Book第3章に残す。日英Home・導入・評価章とAdapter一覧から使用例へ接続し、既存診断・実装ページはリンクだけを更新する。歴史的baselineと過去の編集記録を保持し、本文レビュー記録はチャットに残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "6e06d2d38f2b453b6ba645ff6c00f07fbe907a8d",
+      "target_revision": "codex/book-original-problem",
+      "affected_pages": [
+        "README",
+        "HOME",
+        "HOME_EN",
+        "B_TRANSFORM",
+        "B_EVALUATE"
+      ],
+      "note": "READMEと日英Bookの生産ラインの例を対応させる。変換章は既知の上限を使う線形化、評価章は候補を元の生産条件で判断することを、それぞれ独立して説明する。候補評価の実行例はSolutionのReferenceが所有する。"
     }
   ],
   "interpretation": {
@@ -1819,7 +1832,7 @@
           ],
           "mentions": [
             "evaluation.basic",
-            "special.sos1",
+            "special.indicator",
             "transformation.guarantees",
             "adapter.basic",
             "artifact.roundtrip",
@@ -1839,7 +1852,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "数理最適化の基礎から、採用目的と次に読む先を選べる入口。SOS1の局所例は構造保持と変換の用途を説明し、追加・評価・loweringのAPI能力は付与しない。CLIの導入手順はリンク先の運用Referenceが所有する。",
+      "notes": "数理最適化の基礎から、採用目的と次に読む先を選べる入口。生産ラインのIndicator制約の例は構造保持と変換の用途を説明し、追加・評価・loweringのAPI能力は付与しない。CLIの導入手順はリンク先の運用Referenceが所有する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -1889,7 +1902,6 @@
             "ommx.adoption"
           ],
           "mentions": [
-            "instance.model",
             "evaluation.basic",
             "optimality.limit"
           ]
@@ -1901,9 +1913,7 @@
             "ommx.adoption"
           ],
           "mentions": [
-            "special.onehot",
             "special.indicator",
-            "special.sos1",
             "transformation.guarantees"
           ]
         },
@@ -1949,7 +1959,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、候補評価とOneHotの等式化で具体化する。コードは意味を読む小例で、Instance全体やState・evaluateの一般的な操作能力を付与しない。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。 基本求解・native特殊制約・HiGHSのcopy上の準備・OpenJijの重み付きsamplingは、共有Adapter Referenceの完結した例へ案内する。ナビゲーションからAPI操作の習得を付与しない。",
+      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、生産ラインの上限を使って候補評価とIndicatorの表現選択を具体化する。実行例はSolutionのReferenceが所有する。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。 基本求解・native特殊制約・HiGHSのcopy上の準備・OpenJijの重み付きsamplingは、共有Adapter Referenceの完結した例へ案内する。ナビゲーションからAPI操作の習得を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -1998,7 +2008,6 @@
             "ommx.adoption"
           ],
           "mentions": [
-            "instance.model",
             "evaluation.basic",
             "optimality.limit"
           ]
@@ -2010,9 +2019,7 @@
             "ommx.adoption"
           ],
           "mentions": [
-            "special.onehot",
             "special.indicator",
-            "special.sos1",
             "transformation.guarantees"
           ]
         },
@@ -2058,7 +2065,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、候補評価と特殊制約の例、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。 基本求解・native特殊制約・HiGHSのcopy上の準備・OpenJijの重み付きsamplingは、共有Adapter Referenceの完結した例へ案内する。ナビゲーションからAPI操作の習得を付与しない。",
+      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、生産ラインの上限による候補評価とIndicatorの表現選択、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。 基本求解・native特殊制約・HiGHSのcopy上の準備・OpenJijの重み付きsamplingは、共有Adapter Referenceの完結した例へ案内する。ナビゲーションからAPI操作の習得を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -3330,6 +3337,7 @@
           ],
           "uses": [],
           "mentions": [
+            "special.indicator",
             "special.sos1",
             "bigm.contract"
           ]
@@ -3400,7 +3408,7 @@
         "class.scope"
       ],
       "parent_page": null,
-      "notes": "数理最適化の基礎だけから直接入れる日英第2章。SOS1のnative/loweredの経路で共通表現の価値を導入し、入力条件・許す変換・数学的保証・設定・結果情報の選択へ進む。固定部分問題と不等式本体の二乗の反例は数式で読む。API操作や全特殊制約の詳細は紹介・リンクだけから付与しない。旧G7の保証判断とG11の選択軸を統合し、現在の明示的phase/一回bound更新と将来の自動選択・反復を区別する。第3章の既読を要求しない。",
+      "notes": "数理最適化の基礎だけから直接入れる日英第2章。同じソルバーへIndicatorを直接渡す経路と、既知の上限を使って線形化する経路で共通表現の価値を導入し、入力条件・許す変換・数学的保証・設定・結果情報の選択へ進む。固定部分問題と不等式本体の二乗の反例は数式で読む。API操作や全特殊制約の詳細は紹介・リンクだけから付与しない。旧G7の保証判断とG11の選択軸を統合し、現在の明示的phase/一回bound更新と将来の自動選択・反復を区別する。第3章の既読を要求しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -6280,7 +6288,7 @@
         "variables.roles"
       ],
       "parent_page": null,
-      "notes": "日英で構造を揃え、数理最適化の基礎から直接入れる第3章。クラスやAPIの操作を順番に教えず、短い数学例と説明から評価対象・値の出所・比較基準の判断へ進む。リンクだけからAPI操作能力を付与しない。",
+      "notes": "日英で構造を揃え、数理最適化の基礎から直接入れる第3章。クラスやAPIの操作を順番に教えず、低速運転時の上限違反を例に、評価対象・値の出所・比較基準の判断へ進む。リンクだけからAPI操作能力を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
