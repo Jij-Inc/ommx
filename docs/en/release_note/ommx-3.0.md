@@ -291,8 +291,10 @@ To migrate your code, use {meth}`~ommx.Solution.total_violation` in place of
 violations of regular, Indicator, OneHot, SOS1, and removed constraints.
 
 ```python
+from ommx import ConstraintKind, OneHotConstraintID
+
 solution.total_violation()
-solution.constraint_violation(30, kind=ConstraintKind.OneHot)  # existing OneHot constraint ID
+solution.constraint_violation(OneHotConstraintID(30))
 solution.constraints_df(kind=ConstraintKind.Sos1)[["feasible", "violation"]]
 ```
 
@@ -1608,7 +1610,7 @@ solution.decision_variables_df(include=["label"])      # core + label
 solution.decision_variables_df(include=["parameters"]) # core + parameters
 ```
 
-Six new long-format / id-indexed sidecar accessors read directly from the SoA label/context stores. Required keyword-only `kind=` selects the constraint family (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`):
+Six new long-format / id-indexed sidecar accessors read directly from the SoA label/context stores. For constraint tables, pass the family as the required `kind` keyword argument, for example `kind=ConstraintKind.OneHot`.
 
 - `constraint_context_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
 - `constraint_parameters_df(kind=...)` — long format (`{kind}_constraint_id` / `key` / `value`)
@@ -1628,8 +1630,12 @@ In v2.5.1 {meth}`Solution.constraints_df <ommx.Solution.constraints_df>` carried
 df = solution.constraints_df  # contains a 'removed_reason' column
 
 # After (3.0.0a3 — `*_df` are now methods)
+from ommx import ConstraintKind
+
 df = solution.constraints_df(kind=ConstraintKind.Regular)  # no removed_reason column
-df = solution.constraints_df(include=("label", "parameters", "removed_reason"))
+df = solution.constraints_df(
+    kind=ConstraintKind.Regular, include=("label", "parameters", "removed_reason")
+)
 # ↳ adds removed_reason / removed_reason.{key} (NA for active rows)
 ```
 

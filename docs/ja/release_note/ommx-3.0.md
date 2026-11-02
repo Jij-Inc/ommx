@@ -274,8 +274,10 @@ OneHot（ちょうど 1 つの変数が `1`、残りが `0`）と SOS1（非ゼ�
 合計には通常制約・Indicator・OneHot・SOS1 に加え、変換などで除去された制約の違反量も含みます。
 
 ```python
+from ommx import ConstraintKind, OneHotConstraintID
+
 solution.total_violation()
-solution.constraint_violation(30, kind=ConstraintKind.OneHot)  # 既存の OneHot 制約 ID
+solution.constraint_violation(OneHotConstraintID(30))
 solution.constraints_df(kind=ConstraintKind.Sos1)[["feasible", "violation"]]
 ```
 
@@ -1539,7 +1541,7 @@ solution.decision_variables_df(include=["label"])      # core + label
 solution.decision_variables_df(include=["parameters"]) # core + parameters
 ```
 
-加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。必須のキーワード引数`kind=`で対象の制約ファミリーを切り替えます (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`):
+加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。制約のテーブルでは、`kind=ConstraintKind.OneHot` のように必須のキーワード引数 `kind` で対象の制約ファミリーを指定します。
 
 - `constraint_context_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
 - `constraint_parameters_df(kind=...)` — long format (`{kind}_constraint_id` / `key` / `value`)
@@ -1559,8 +1561,12 @@ v2.5.1 までは {meth}`Solution.constraints_df <ommx.Solution.constraints_df>` 
 df = solution.constraints_df  # 'removed_reason' カラムを含む
 
 # After (3.0.0a3 — `*_df` はメソッドになりました)
+from ommx import ConstraintKind
+
 df = solution.constraints_df(kind=ConstraintKind.Regular)  # removed_reason カラムなし
-df = solution.constraints_df(include=("label", "parameters", "removed_reason"))
+df = solution.constraints_df(
+    kind=ConstraintKind.Regular, include=("label", "parameters", "removed_reason")
+)
 # ↳ removed_reason / removed_reason.{key} が追加（active 行は NA）
 ```
 

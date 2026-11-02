@@ -28,8 +28,9 @@ allows `x=1`, while the retained `x <= 0` condition rejects it:
 ```
 
 Inspect the removal reason on the model and the evaluated violation on the
-result. `kind=ConstraintKind.Regular` selects the regular-constraint family; the same table
-APIs also accept `"indicator"`, `"one_hot"`, and `"sos1"` for those families.
+result. Use `kind=ConstraintKind.Regular` for regular constraints. The same table
+APIs accept `ConstraintKind.Indicator`, `ConstraintKind.OneHot`, and `ConstraintKind.Sos1`
+for the corresponding special families.
 
 ```pycon
 >>> model_rows = instance.constraints_df(kind=ConstraintKind.Regular, removed=True)
