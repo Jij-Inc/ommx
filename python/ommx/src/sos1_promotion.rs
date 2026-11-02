@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 /// current variable domains and regular-constraint rows before mutating the
 /// instance.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, frozen)]
+#[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Sos1BigMSelectorClaim {
     inner: ommx::Sos1BigMSelectorClaim,
@@ -95,7 +95,7 @@ impl From<ommx::Sos1BigMSelectorClaim> for Sos1BigMSelectorClaim {
 /// occurs at most once. Bounds, kinds, coefficients, and row contents are
 /// read from the current {class}`Instance` when the batch is validated.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, frozen)]
+#[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sos1BigMPromotionRequest {
     inner: ommx::Sos1BigMPromotionRequest,

@@ -91,7 +91,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 /// Use {class}`~ommx.experiment.Experiment` separately when recording the
 /// conditions and results of multiple trials is useful.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct ParametricInstance {
     pub(crate) inner: ommx::ParametricInstance,

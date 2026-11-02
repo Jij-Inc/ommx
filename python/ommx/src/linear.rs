@@ -33,7 +33,7 @@ use std::collections::BTreeMap;
 ///
 /// >>> constraint = f == g  # Returns Constraint, not bool
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct Linear(pub ommx::Linear);
 

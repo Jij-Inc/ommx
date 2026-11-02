@@ -128,7 +128,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// defaults, and normalization. Choosing the best supplied candidate never
 /// establishes optimality of the original or transformed problem.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct SampleSet {
     pub(crate) inner: ommx::SampleSet,

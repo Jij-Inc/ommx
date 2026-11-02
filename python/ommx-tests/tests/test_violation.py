@@ -1,5 +1,7 @@
 """Tests for constraint violation calculation methods."""
 
+from numbers import Real
+
 from ommx import (
     ConstraintID,
     IndicatorConstraintID,
@@ -412,10 +414,11 @@ def test_total_is_sum_of_individual_and_dataframe_violations():
     assert sum(solution.constraint_violation(row) for row in sos1_rows) == 2
     # Generated rows and retained removed originals both contribute.
     assert solution.total_violation() == 11
-    assert (
-        sum(solution.constraints_df(kind=kind)["violation"].sum() for kind in kinds)
-        == 11
+    dataframe_total_violation = sum(
+        solution.constraints_df(kind=kind)["violation"].sum() for kind in kinds
     )
+    assert isinstance(dataframe_total_violation, Real)
+    assert dataframe_total_violation == 11
     assert solution.constraints[
         ConstraintID(0)
     ].violation() == solution.constraint_violation(ConstraintID(0))

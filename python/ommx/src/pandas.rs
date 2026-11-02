@@ -44,8 +44,6 @@ fn get_dataframe_type(py: Python<'_>) -> PyResult<&Bound<'_, PyType>> {
 }
 
 unsafe impl PyTypeCheck for PyDataFrame {
-    const NAME: &'static str = "DataFrame";
-
     fn type_check(object: &Bound<'_, PyAny>) -> bool {
         let py = object.py();
         match get_dataframe_type(py) {

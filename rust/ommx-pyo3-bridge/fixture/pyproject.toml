@@ -6,7 +6,7 @@ build-backend = "maturin"
 [project]
 name = "ommx-pyo3-bridge-fixture"
 dynamic = ["version"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = ["ommx"]
 
 [tool.maturin]

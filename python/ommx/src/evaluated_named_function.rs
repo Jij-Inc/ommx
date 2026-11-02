@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 /// Holds the Rust `EvaluatedNamedFunction` plus an owned snapshot of its
 /// label. See `NamedFunction` for the snapshot-model rationale.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct EvaluatedNamedFunction(
     pub ommx::NamedFunctionID,

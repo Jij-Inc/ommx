@@ -4,7 +4,7 @@ use pyo3::prelude::*;
 ///
 /// See {class}`~ommx.Provenance` for details.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, frozen)]
+#[pyclass(from_py_object, eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ProvenanceKind {
     /// The regular constraint was generated from an indicator constraint.
@@ -41,7 +41,7 @@ impl ProvenanceKind {
 /// original special constraint. This lets callers trace a regular constraint
 /// back to the special constraint it was derived from.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, hash, frozen)]
+#[pyclass(from_py_object, eq, hash, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Provenance {
     kind: ProvenanceKind,

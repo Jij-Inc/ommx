@@ -8,7 +8,7 @@ use pyo3::prelude::*;
 /// This is a transformation selector, not an adapter input declaration or an
 /// ``ommx.v2.Feature`` wire-format requirement.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, frozen)]
+#[pyclass(from_py_object, eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SpecialConstraintKind {
     /// Indicator constraints: binvar = 1 → f(x) <= 0
@@ -50,7 +50,7 @@ impl SpecialConstraintKind {
 /// {meth}`~ommx.Instance.populate_state` explains reconstruction, defaults,
 /// canonicalization, and consistency assertions with executable examples.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, frozen)]
+#[pyclass(from_py_object, eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DecisionVariableRole {
     /// Used by the objective or active constraints passed to solvers
@@ -133,7 +133,7 @@ impl From<SpecialConstraintKind> for ommx::SpecialConstraintKind {
 
 /// Sense of optimization (minimize or maximize)
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, frozen)]
+#[pyclass(from_py_object, eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Sense {
     /// Minimize the objective function
@@ -198,7 +198,7 @@ impl From<Sense> for ommx::Sense {
 
 /// Equality type for constraints
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, frozen)]
+#[pyclass(from_py_object, eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Equality {
     /// Equal to zero constraint (=)
@@ -266,7 +266,7 @@ impl From<Equality> for ommx::Equality {
 
 /// Kind of decision variable
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, frozen)]
+#[pyclass(from_py_object, eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Kind {
     /// Binary decision variable (0 or 1)
@@ -356,7 +356,7 @@ impl From<Kind> for ommx::Kind {
 
 /// Optimality status of a solution
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int)]
+#[pyclass(from_py_object, eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Optimality {
     /// The solver cannot determine whether the solution is optimal
@@ -424,7 +424,7 @@ impl From<Optimality> for ommx::v1::Optimality {
 
 /// Relaxation status of a solution
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int)]
+#[pyclass(from_py_object, eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Relaxation {
     /// No relaxation is used

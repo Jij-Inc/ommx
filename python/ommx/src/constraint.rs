@@ -15,7 +15,7 @@ use std::collections::HashMap;
 /// wrapper retrieved from an instance therefore do not propagate back; the
 /// caller must re-add the constraint to apply changes.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct Constraint(pub ommx::Constraint, pub ommx::ConstraintContext);
 
@@ -275,7 +275,7 @@ impl Constraint {
 /// reason. As with [`Constraint`], the context snapshot does not propagate
 /// back to the originating instance — it is read-only context for inspection.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, extends = ConstraintView)]
+#[pyclass(from_py_object, eq, extends = ConstraintView)]
 #[derive(Clone, PartialEq)]
 pub struct RemovedConstraint {
     pub constraint: ommx::Constraint,

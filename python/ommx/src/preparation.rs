@@ -16,7 +16,7 @@ fn resolve_atol(value: Option<f64>) -> OmmxPyResult<ommx::ATol> {
 /// Construct a value with an owner-operation factory. Validation and mutation
 /// semantics remain owned by that {class}`~ommx.Instance` operation.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, frozen)]
+#[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpecialConstraintPreparation {
     inner: ommx::SpecialConstraintPreparation,
@@ -70,7 +70,7 @@ impl From<ommx::SpecialConstraintPreparation> for SpecialConstraintPreparation {
 /// is retained; otherwise the pre-conversion objective and sense are captured
 /// there. Solution and sample evaluation retain the entry output semantics.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, frozen)]
+#[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Convert the active objective to ``target`` during Preparation.
 ///
@@ -127,7 +127,7 @@ impl From<ommx::ObjectivePreparation> for ObjectivePreparation {
 /// not an approximation of the original feasible set. Every other owner error
 /// is propagated unchanged.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, frozen)]
+#[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IntegerSlackPreparation {
     inner: ommx::IntegerSlackPreparation,
@@ -199,7 +199,7 @@ impl From<ommx::IntegerSlackPreparation> for IntegerSlackPreparation {
 /// Exactly one encoding owner operation is selected. Validation and mutation
 /// semantics remain owned by that operation.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, frozen)]
+#[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IntegerEncodingPreparation {
     inner: ommx::IntegerEncodingPreparation,
@@ -252,7 +252,7 @@ impl From<ommx::IntegerEncodingPreparation> for IntegerEncodingPreparation {
 /// solution and sample evaluation retain the entry output semantics.
 /// A coefficient error leaves the instance unchanged.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, frozen)]
+#[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct BinaryPowerPreparation {
     inner: ommx::BinaryPowerPreparation,
@@ -308,7 +308,7 @@ impl From<ommx::BinaryPowerPreparation> for BinaryPowerPreparation {
 /// the weight domain but cannot decide whether a weight is large enough for an
 /// application's penalty rule; that choice belongs to the caller.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, frozen)]
+#[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct FixedPenaltyPreparation {
     inner: ommx::FixedPenaltyPreparation,
@@ -373,7 +373,7 @@ impl From<ommx::FixedPenaltyPreparation> for FixedPenaltyPreparation {
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq)]
+#[pyclass(from_py_object, eq)]
 #[derive(Debug, Clone, PartialEq, Default)]
 #[doc = include_str!("docstrings/ommx/PreparationPolicy.md")]
 pub struct PreparationPolicy {
