@@ -5,19 +5,20 @@ A model expresses the requirements of an application; a solver or sampler search
 
 **Choose both the representation you need and the changes in meaning you permit.** A problem that a backend can read is not necessarily equivalent to the problem you started with. Reconstructing a candidate's variables, preserving feasibility, and preserving optimality are separate guarantees.
 
-## Keep meaningful structure until you choose how to use it
+(keep-meaningful-structure-until-you-choose-how-to-use-it)=
+## Choose the formulation to send to the solver
 
 A production line can make up to 100 units per hour, but only 60 in reduced mode. Let $q$ be its hourly output and let $r$ be 1 in reduced mode and 0 otherwise. An **indicator constraint** enforces $q\leq60$ when $r=1$. The PySCIPOpt Adapter can pass this linear indicator directly to SCIP.
 
 To try a formulation with ordinary linear constraints in the same solver, OMMX can rewrite the rule as $q\leq100-40r$. At $r=0$ this gives the known upper bound of 100. At $r=1$ it gives 60. The difference of 40 comes from the two limits. If the line could actually produce more than 100 in normal mode, using 100 here would exclude valid plans. Keeping the indicator in the source problem lets you choose the solver formulation later.
 
-Rewriting a special constraint as ordinary constraints is called **lowering**. The {meth}`indicator conversion Reference <ommx.Instance.convert_indicator_to_constraint>` explains how OMMX derives the bound and when the conversion applies. OMMX can also recognize some structures in the other direction. For example, it can check a specified pattern of ordinary constraints and recover an SOS1 constraint (at most one member may be nonzero). The {meth}`SOS1 promotion Reference <ommx.Instance.promote_sos1_big_m>` describes which patterns qualify.
+The {meth}`conversion to a linear inequality <ommx.Instance.convert_indicator_to_constraint>` in this example uses the output bound to determine the coefficient. When the solver supports special constraints directly, you may also want to make structure explicit. For example, OMMX can {meth}`express a group of linear constraints as an SOS1 constraint <ommx.Instance.promote_sos1_big_m>` when they match a supported pattern. The solver can then use the explicit condition that at most one member may be nonzero.
 
 ## Separate input requirements from permitted transformations
 
 An **Adapter** connects an Instance to a backend's input and output. Its input requirements describe the representation it can accept directly: variable kinds, expression forms, constraint families, and optimization direction. A familiar problem name alone is not enough to decide whether an input matches. Even mathematically equal expressions can have different stored forms.
 
-OMMX calls the process of applying selected transformations toward a target representation **Preparation**. The target says what the result must satisfy; the policy says which transformations may be used. A policy can allow one special-constraint family to be lowered while keeping another explicit. Creating a policy does not transform a problem, and reaching the target does not mean every allowed transformation was needed.
+OMMX calls the process of applying selected transformations toward a target representation **Preparation**. The target says what the result must satisfy; the policy says which transformations may be used. For example, you can choose to express linear indicator constraints as ordinary inequalities and pass SOS1 constraints directly to the solver. The API for converting selected families to ordinary constraints is {meth}`~ommx.Instance.lower_special_constraints`. Creating a policy does not transform a problem, and reaching the target does not mean every allowed transformation was needed.
 
 The {class}`input-class Reference <ommx.InstanceClass>` explains how to inspect the representation, and {meth}`Instance.prepare <ommx.Instance.prepare>` provides a complete transformation and candidate-evaluation example. A successful preparation establishes the requested input conditions. The mathematical correspondence with the original problem comes from the transformations used; converter or backend execution may still fail afterward.
 

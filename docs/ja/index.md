@@ -61,7 +61,7 @@ OMMX（Open Mathematical prograMming eXchange、オミキス）を使うと、**
 
 ## Adapterを使う・作る
 
-まず[Python SDKとAdapterのインストール](./getting_started/install.md)で実行環境を用意し、使いたいAdapterのReferenceで完全な使用例を選びます。{class}`PySCIPOpt <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`にはナップサック問題の求解、特殊制約の直接利用、明示的なPreparationの例があります。{class}`HiGHS <ommx_highs_adapter.OMMXHighsAdapter>`では、直接受け取れない特殊制約をOMMXがloweringする例を扱います。{class}`OpenJij SA <ommx_openjij_adapter.OMMXOpenJijSAAdapter>`では、利用者が重みを選び、samplingして候補を選ぶ例を扱います。各例はモデルをその場で作ります。ほかの接続先は{doc}`Adapterの一覧と入力契約 </api/adapters>`から探せます。
+まず[Python SDKとAdapterのインストール](./getting_started/install.md)で実行環境を用意し、使いたいAdapterのReferenceで完全な使用例を選びます。{class}`PySCIPOpt <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`にはナップサック問題の求解、特殊制約の直接利用、明示的なPreparationの例があります。{class}`HiGHS <ommx_highs_adapter.OMMXHighsAdapter>`では、HiGHSが直接受け取れない特殊制約を通常の制約で表す例を扱います。{class}`OpenJij SA <ommx_openjij_adapter.OMMXOpenJijSAAdapter>`では、利用者が重みを選び、samplingして候補を選ぶ例を扱います。各例はモデルをその場で作ります。ほかの接続先は{doc}`Adapterの一覧と入力契約 </api/adapters>`から探せます。
 
 同じ問題を複数ソルバーで解きたい場合は、API Referenceの{mod}`Adapter比較の完全な使用例 <ommx.adapter>`へ進んでください。[OpenJijのTSP Notebook](./tutorial/tsp_sampling_with_openjij_adapter)は、経路の描画まで扱う任意の応用例です。
 
