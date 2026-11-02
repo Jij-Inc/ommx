@@ -5,11 +5,13 @@ from __future__ import annotations
 import datetime as dt
 import json
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
 from pandas.testing import assert_frame_equal
 import pytest
+from dateutil import tz
 
 from ommx._dataframe import from_columns, to_columns
 
@@ -157,6 +159,95 @@ def test_parquet_nan_and_null_are_distinct_even_with_a_numpy_dtype_hint():
     assert np.isnan(result["v"].iloc[0])
     columns, _ = to_columns(pd.DataFrame({"v": [np.nan]}))
     assert np.isnan(columns[0]["data"]["values"][0])
+
+
+@pytest.mark.parametrize("prefix", [[], [1], [1.0]])
+def test_object_nan_and_null_survive_read_and_reencode(prefix):
+    frame = pd.DataFrame({"v": pd.Series([*prefix, np.nan, None], dtype=object)})
+    columns, metadata = to_columns(frame)
+    restored = from_columns(columns, metadata)
+    assert np.isnan(restored.v.iloc[-2])
+    assert restored.v.iloc[-1] is None
+    for encoded in (columns, to_columns(restored)[0]):
+        data = encoded[0]["data"]
+        assert data["type"] == "float64"
+        assert np.isnan(data["values"][-2]) and data["values"][-1] is None
+
+
+def test_nan_cannot_be_stored_as_a_null_string():
+    frame = pd.DataFrame({"v": pd.Series(["x", np.nan], dtype=object)})
+    with pytest.raises(TypeError, match="unsupported Parquet"):
+        to_columns(frame)
+
+
+@pytest.mark.parametrize(
+    "zone", [ZoneInfo("America/New_York"), dt.timezone(dt.timedelta(hours=9))]
+)
+def test_representable_timezone_preserves_local_time_across_dst(zone):
+    stamps = pd.date_range("2024-03-09", periods=3, tz=zone)
+    frame = pd.DataFrame({"v": stamps}, index=stamps)
+    assert_frame_equal(convert_roundtrip(frame), frame)
+
+
+@pytest.mark.parametrize(
+    "zone", [tz.gettz("Asia/Tokyo"), dt.timezone(dt.timedelta(hours=9), "UTC")]
+)
+def test_nonreconstructible_timezone_is_rejected_before_encoding(zone):
+    frame = pd.DataFrame({"v": pd.date_range("2020", periods=2, tz=zone)})
+    with pytest.raises(TypeError, match="convert it to UTC"):
+        to_columns(frame)
+
+
+def test_string_missing_convention_survives_comparison():
+    try:
+        dtype = pd.StringDtype(storage="python", na_value=np.nan)
+    except TypeError:
+        # Older pandas can read the file but cannot represent this dtype.
+        columns, metadata = to_columns(
+            pd.DataFrame({"v": pd.Series(["a", None], dtype="string")})
+        )
+        spec = json.loads(metadata["ommx.pandas"])
+        spec["specs"]["v"]["string_na"] = "nan"
+        metadata["ommx.pandas"] = json.dumps(spec)
+        with pytest.raises(TypeError, match="cannot restore a string dtype"):
+            from_columns(columns, metadata)
+        return
+    frame = pd.DataFrame({"v": pd.Series(["a", None], dtype=dtype)})
+    restored = convert_roundtrip(frame)
+    assert_frame_equal(restored, frame)
+    assert np.isnan(restored.v.iloc[1])
+    assert (restored.v == "a").tolist() == [True, False]
+
+
+@pytest.mark.parametrize("change", ["drop_level", "drop_name", "duplicate_label"])
+def test_axis_metadata_cannot_hide_fields(change):
+    frame = pd.DataFrame(
+        {"a": [1], "b": [2]}, index=pd.MultiIndex.from_tuples([("x", 42)])
+    )
+    columns, metadata = to_columns(frame)
+    desc = json.loads(metadata["ommx.pandas"])
+    if change == "drop_level":
+        desc["index"]["multi"] = False
+    elif change == "drop_name":
+        desc["index"]["names"].pop()
+    else:
+        desc["columns"][1]["label"] = "a"
+    metadata["ommx.pandas"] = json.dumps(desc)
+    with pytest.raises(
+        ValueError, match="number of Parquet index fields|same column label"
+    ):
+        from_columns(columns, metadata)
+
+
+@pytest.mark.parametrize("key", ["ommx.pandas", "pandas"])
+def test_range_metadata_cannot_invent_rows(key):
+    _, metadata = to_columns(pd.DataFrame({"v": [0]}))
+    desc = json.loads(metadata[key])
+    desc["columns"] = []
+    if key == "ommx.pandas":
+        desc["specs"] = {}
+    with pytest.raises(ValueError, match="Parquet row"):
+        from_columns([], {key: json.dumps(desc)})
 
 
 @pytest.mark.parametrize("dtype, label", [("int64", 1), ("float64", 0.25)])

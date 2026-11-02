@@ -11,6 +11,7 @@ import ast
 import datetime as dt
 import json
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -78,7 +79,15 @@ def _check_axis(original: pd.Index, restored: pd.Index) -> None:
 def _columns_index(labels: list[Any], description: dict[str, Any]) -> pd.Index:
     names = [_restore_label(name) for name in description["column_names"]]
     if description["multi_columns"]:
+        if not names or any(
+            not isinstance(label, tuple) or len(label) != len(names) for label in labels
+        ):
+            raise ValueError(
+                "MultiIndex column labels must match the declared number of levels"
+            )
         return pd.MultiIndex.from_tuples(labels, names=names)
+    if len(names) != 1:
+        raise ValueError("A single column axis must have exactly one name")
     if description["column_range"] is not None:
         result = pd.RangeIndex(**description["column_range"], name=names[0])
         if not result.equals(pd.Index(labels)):
@@ -95,6 +104,45 @@ def _columns_index(labels: list[Any], description: dict[str, Any]) -> pd.Index:
             "Column labels cannot be represented exactly by their declared dtype"
         )
     return axis
+
+
+def _timezone_spec(dtype: pd.DatetimeTZDtype, field: str) -> dict[str, Any]:
+    zone = dtype.tz
+    try:
+        if isinstance(zone, ZoneInfo):
+            if zone.key and ZoneInfo(zone.key) is zone:
+                return {"dtype": f"datetime64[{dtype.unit}]", "zoneinfo": zone.key}
+        else:
+            restored = pd.api.types.pandas_dtype(str(dtype))
+            if (
+                isinstance(restored, pd.DatetimeTZDtype)
+                and restored == dtype
+                and str(restored.tz) == str(zone)
+            ):
+                return {"dtype": str(dtype)}
+    except (TypeError, ValueError, KeyError):
+        pass
+    raise TypeError(
+        f"Cannot restore timezone {zone!r} for column {field!r}; "
+        "convert it to UTC or a named IANA timezone before saving"
+    )
+
+
+def _string_dtype(missing: str) -> pd.StringDtype:
+    if missing == "pd.NA":
+        return pd.StringDtype(storage="python")
+    if missing != "nan":
+        raise ValueError("Unknown string missing-value convention in Parquet metadata")
+    try:
+        return pd.StringDtype(storage="python", na_value=np.nan)
+    except TypeError as error:
+        raise TypeError(
+            "This pandas version cannot restore a string dtype with NaN semantics"
+        ) from error
+
+
+def _object_null(value: Any) -> bool:
+    return value is None or value is pd.NA or value is pd.NaT
 
 
 def _column(series: pd.Series, field: str) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -129,6 +177,8 @@ def _column(series: pd.Series, field: str) -> tuple[dict[str, Any], dict[str, An
         )
         if unit not in {"s", "ms", "us", "ns"}:
             raise TypeError(f"Unsupported Parquet timestamp unit {unit!r}")
+        if isinstance(dtype, pd.DatetimeTZDtype):
+            spec = _timezone_spec(dtype, field)
         storage_unit = "ms" if unit == "s" else unit
         raw = series.astype("int64").to_numpy()
         values = [
@@ -151,10 +201,16 @@ def _column(series: pd.Series, field: str) -> tuple[dict[str, Any], dict[str, An
         if isinstance(dtype, pd.StringDtype):
             kind = "string"
             spec["dtype"] = "string"
+            if dtype.na_value is not pd.NA:
+                _string_dtype("nan")
+                spec["string_na"] = "nan"
         elif name in _NUMERIC:
             kind = _NUMERIC[name]
         elif name == "object":
-            inferred = infer_dtype(series, skipna=True)
+            # In object columns NaN is a floating-point value. Remove only
+            # explicit null sentinels before inferring the physical type.
+            present = [v for v in series if not _object_null(v)]
+            inferred = infer_dtype(present, skipna=False)
             kinds = {
                 "string": "string",
                 "unicode": "string",
@@ -163,6 +219,7 @@ def _column(series: pd.Series, field: str) -> tuple[dict[str, Any], dict[str, An
                 "integer": "int64",
                 "floating": "float64",
                 "mixed-integer-float": "float64",
+                "integer-na": "float64",
                 "empty": "string",
                 "date": "date",
             }
@@ -198,6 +255,8 @@ def _column(series: pd.Series, field: str) -> tuple[dict[str, Any], dict[str, An
         if isinstance(dtype, np.dtype) and dtype.kind == "f":
             # A NumPy float has no separate missing-value mask.
             values = series.tolist()
+        elif name == "object":
+            values = [None if _object_null(v) else convert(v) for v in series]
         else:
             values = [
                 None if missing else convert(value)
@@ -411,7 +470,14 @@ def _series(data: dict[str, Any], spec: dict[str, Any] | None = None) -> pd.Seri
                 raise ValueError(
                     f"pandas dtype {dtype!r} conflicts with Parquet timestamp"
                 )
-            restored = result.astype(dtype)
+            target = (
+                pd.DatetimeTZDtype(
+                    unit=np.datetime_data(dtype)[0], tz=ZoneInfo(spec["zoneinfo"])
+                )
+                if "zoneinfo" in spec
+                else dtype
+            )
+            restored = result.astype(target)
             if not restored.astype(result.dtype).equals(result):
                 raise ValueError(
                     f"Timestamp values cannot be represented exactly as {dtype}"
@@ -443,7 +509,7 @@ def _series(data: dict[str, Any], spec: dict[str, Any] | None = None) -> pd.Seri
     if dtype == "string":
         if kind != "string":
             raise ValueError(f"String metadata conflicts with Parquet type {kind!r}")
-        return pd.Series(values, dtype=pd.StringDtype(storage="python"))
+        return pd.Series(values, dtype=_string_dtype(spec.get("string_na", "pd.NA")))
     has_null = any(v is None for v in values)
     if kind.startswith(("int", "uint")):
         if has_null or (dtype and dtype[0].isupper()):
@@ -457,11 +523,7 @@ def _series(data: dict[str, Any], spec: dict[str, Any] | None = None) -> pd.Seri
         return pd.Series(
             values, dtype="boolean" if has_null or dtype == "boolean" else "bool"
         )
-    if kind.startswith("float") and (
-        dtype in ("Float32", "Float64")
-        or has_null
-        and (dtype is None or any(v is not None and np.isnan(v) for v in values))
-    ):
+    if kind.startswith("float") and (has_null or dtype in ("Float32", "Float64")):
         mask = np.array([value is None for value in values], dtype=bool)
         floats = np.array(values, dtype=kind)
         return pd.Series(pd.arrays.FloatingArray(floats, mask))
@@ -487,6 +549,17 @@ def _validate_field_roles(
     roles = [item["field"] for item in description["columns"]]
     index = description["index"]
     if index["kind"] == "columns":
+        count = len(index["fields"])
+        multi = index.get("multi", count > 1)
+        if (
+            type(multi) is not bool
+            or not count
+            or len(index["names"]) != count
+            or (not multi and count != 1)
+        ):
+            raise ValueError(
+                "Index metadata does not match the number of Parquet index fields"
+            )
         roles.extend(index["fields"])
     elif index["kind"] != "range":
         raise ValueError("Unknown index kind in OMMX pandas metadata")
@@ -564,6 +637,10 @@ def from_columns(
         df = pd.DataFrame({i: fields[item["field"]] for i, item in enumerate(labels)})
         column_labels = [_restore_label(item["label"]) for item in labels]
         df.columns = _columns_index(column_labels, description)
+        if not df.columns.is_unique:
+            raise ValueError(
+                "OMMX metadata maps multiple Parquet fields to the same column label"
+            )
         index_spec = description["index"]
         if index_spec["kind"] == "range":
             index = pd.RangeIndex(
@@ -596,6 +673,8 @@ def from_columns(
                     raise ValueError(
                         "Frequency metadata requires a datetime or timedelta index"
                     )
+        if len(index) != len(next(iter(fields.values()), ())):
+            raise ValueError("Index metadata does not match the Parquet row count")
         if not labels:
             df = pd.DataFrame(index=index, columns=df.columns)
         else:
@@ -629,9 +708,12 @@ def from_columns(
     index_columns = pandas_metadata.get("index_columns", [])
     if index_columns and isinstance(index_columns[0], dict):
         spec = index_columns[0]
-        df.index = pd.RangeIndex(
+        index = pd.RangeIndex(
             spec["start"], spec["stop"], spec["step"], name=spec["name"]
         )
+        if len(index_columns) != 1 or len(index) != len(df):
+            raise ValueError("Index metadata does not match the Parquet rows or fields")
+        df.index = index
     elif index_columns:
         df = df.set_index(index_columns)
         df.index.names = [specs.get(field, {}).get("name") for field in index_columns]

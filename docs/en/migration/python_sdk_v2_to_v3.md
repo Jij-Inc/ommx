@@ -1004,7 +1004,9 @@ columns, nullable dtypes, dates, timestamps and timedeltas. Layers use Snappy
 compression. The Parquet schema determines each column's values and nulls.
 pandas/PyArrow conventions are supported only where the SDK can interpret
 them without changing those values. For example, a UINT64 column containing
-`2**64 - 1` and a null is read as a nullable integer.
+`2**64 - 1` and a null is read as a nullable integer. A floating-point column
+with a Parquet null uses a pandas nullable float so that saving it again keeps
+the null distinct from a valid NaN.
 
 OMMX writes both `pandas` and `ommx.pandas` key-value metadata inside the
 Parquet file. The `pandas` entry describes fields and indexes for readers that
@@ -1019,6 +1021,11 @@ categorical column allows `low`, `medium`, `high` but contains only `low` and
   the schema and retains this metadata, it must keep the field references in
   sync. Each physical column must be accounted for exactly once as data or index.
   A stored value outside its declared categories raises `ValueError`.
+  Index levels must use all declared index fields, column labels must be
+  unique, and the reconstructed row count must match the Parquet table.
+  String columns retain their NaN or `pd.NA` missing-value convention.
+  If a timestamp's timezone cannot be reconstructed, convert it to UTC or
+  a named IANA timezone before saving.
   On write, column axes that OMMX cannot reconstruct, including a
   `CategoricalIndex`, are rejected. To store only its observed labels, explicitly
   convert it to a plain index first. DataFrame attributes must round-trip as

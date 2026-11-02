@@ -60,11 +60,23 @@ def test_dataframe_layer_preserves_data_metadata_and_annotations():
     assert result.attrs == df.attrs
 
 
-def test_failed_dataframe_conversion_preserves_existing_layers():
+@pytest.mark.parametrize(
+    "values, message",
+    [
+        ([[1, 2]], "unsupported Parquet"),
+        (
+            pd.date_range(
+                "2020", periods=2, tz=dt.timezone(dt.timedelta(hours=9), "UTC")
+            ),
+            "convert it to UTC",
+        ),
+    ],
+)
+def test_failed_dataframe_conversion_preserves_existing_layers(values, message):
     draft = ArtifactDraft.temp()
     previous = draft.add_json({"keep": "existing layer"})
-    with pytest.raises(TypeError, match="unsupported Parquet"):
-        draft.add_dataframe(pd.DataFrame({"value": [[1, 2]]}))
+    with pytest.raises(TypeError, match=message):
+        draft.add_dataframe(pd.DataFrame({"value": values}))
     artifact = draft.commit()
     assert artifact.layers == [previous]
     assert artifact.get_json(previous) == {"keep": "existing layer"}
@@ -78,7 +90,15 @@ def test_reads_legacy_pyarrow_parquet():
         {},
     )
     artifact = draft.commit()
-    assert_frame_equal(artifact.get_dataframe(descriptor), legacy_dataframe())
+    expected = legacy_dataframe()
+    # PyArrow wrote the absent float as a Parquet null. Preserve its mask
+    # even though the file's pandas metadata describes a NumPy float64.
+    expected["real"] = pd.array([1.25, None, -2.5], dtype="Float64")
+    decoded = artifact.get_dataframe(descriptor)
+    assert_frame_equal(decoded, expected)
+    draft = ArtifactDraft.temp()
+    saved = draft.add_dataframe(decoded)
+    assert_frame_equal(draft.commit().get_dataframe(saved), expected)
 
 
 def test_parquet_decode_failure_maps_to_runtime_error():
