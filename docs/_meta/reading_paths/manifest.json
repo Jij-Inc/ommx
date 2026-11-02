@@ -304,9 +304,21 @@
         "R_API.experiment.run_trace",
         "R_API.adapter.implement",
         "R_API.instance.bounds",
-        "R_OP.trace_export"
+        "R_INTEGRATION.trace_export"
       ],
-      "note": "旧5原稿を移管。上下限の更新・Adapter実装・トレース・Run保存は所有APIの実行例へ、外部OTLP設定は日英operations/export_tracesへ集約する。"
+      "note": "旧5原稿を移管。上下限の更新・Adapter実装・トレース・Run保存は所有APIの実行例へ、外部OTLP設定は日英how_to/export_tracesへ集約する。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "fa1846671af281991eb13d2c9ce700004125e197",
+      "target_revision": "codex/adapter-tracing-bounds-reference",
+      "affected_pages": [
+        "README",
+        "HOME",
+        "HOME_EN",
+        "R_INTEGRATION.trace_export"
+      ],
+      "note": "日英のホームと目次を読者の目的で揃える。第1章から残り3章へ直接入り、応用例・API・形式仕様・外部接続などを必要に応じて選ぶ。公開済みの既存ページはURLを維持し、未公開のOTLP送信設定はhow_toへ移す。診断の移管は#1331で追跡する。"
     }
   ],
   "interpretation": {
@@ -1832,7 +1844,7 @@
     {
       "id": "trace.export",
       "label": "外部コレクターへスパンを送る",
-      "owner": "R_OP.trace_export",
+      "owner": "R_INTEGRATION.trace_export",
       "requires": [
         "sdk.environment"
       ],
@@ -1935,7 +1947,8 @@
           "mentions": [
             "adapter.basic",
             "artifact.roundtrip",
-            "experiment.record"
+            "experiment.record",
+            "parametric.materialize"
           ]
         },
         {
@@ -1977,32 +1990,24 @@
             "ommx.adoption"
           ],
           "mentions": [
-            "adapter.basic",
-            "class.membership",
-            "preparation.target",
-            "artifact.roundtrip",
-            "experiment.record",
-            "class.qubo",
-            "bigm.contract",
-            "parametric.materialize",
-            "expression.basics",
-            "named.outputs",
-            "solution.extract",
-            "expression.labels",
-            "results.evaluation_scope",
             "transform.structure",
-            "transform.preparation_choice",
-            "transform.backend_choice",
+            "results.evaluation_scope",
             "records.choice",
-            "records.scope",
-            "records.identity",
-            "records.reexecution"
+            "sdk.environment",
+            "model.import",
+            "adapter.basic",
+            "adapter.contract",
+            "artifact.registry",
+            "trace.export",
+            "aux.agent_skills",
+            "artifact.format",
+            "wire.serialization"
           ]
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、生産ラインの上限を使って候補評価とIndicatorの表現選択を具体化する。実行例はSolutionのReferenceが所有する。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。 基本求解・native特殊制約・HiGHSのcopy上の準備・OpenJijの重み付きsamplingは、共有Adapter Referenceの完結した例へ案内する。ナビゲーションからAPI操作の習得を付与しない。",
+      "notes": "数理最適化の基礎から入れるBook第1章。冒頭で目的と現在の採用理由を示し、生産ラインの例で候補評価と定式化の選択を説明する。目的別の案内の最初にBookの残り3章を置き、実行環境、題材を追うExamples、Artifactの扱い、外部ツール接続、API・形式仕様、移行・変更履歴へ分岐する。項目名やリンクから操作能力を推定しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2041,7 +2046,8 @@
           "mentions": [
             "adapter.basic",
             "artifact.roundtrip",
-            "experiment.record"
+            "experiment.record",
+            "parametric.materialize"
           ]
         },
         {
@@ -2083,32 +2089,24 @@
             "ommx.adoption"
           ],
           "mentions": [
-            "adapter.basic",
-            "class.membership",
-            "preparation.target",
-            "artifact.roundtrip",
-            "experiment.record",
-            "class.qubo",
-            "bigm.contract",
-            "parametric.materialize",
-            "expression.basics",
-            "named.outputs",
-            "solution.extract",
-            "expression.labels",
-            "results.evaluation_scope",
             "transform.structure",
-            "transform.preparation_choice",
-            "transform.backend_choice",
+            "results.evaluation_scope",
             "records.choice",
-            "records.scope",
-            "records.identity",
-            "records.reexecution"
+            "sdk.environment",
+            "model.import",
+            "adapter.basic",
+            "adapter.contract",
+            "artifact.registry",
+            "trace.export",
+            "aux.agent_skills",
+            "artifact.format",
+            "wire.serialization"
           ]
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、生産ラインの上限による候補評価とIndicatorの表現選択、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。 基本求解・native特殊制約・HiGHSのcopy上の準備・OpenJijの重み付きsamplingは、共有Adapter Referenceの完結した例へ案内する。ナビゲーションからAPI操作の習得を付与しない。",
+      "notes": "数理最適化の基礎から入れるBook第1章。冒頭で目的と現在の採用理由を示し、生産ラインの例で候補評価と定式化の選択を説明する。目的別の案内の最初にBookの残り3章を置き、実行環境、題材を追うExamples、Artifactの扱い、外部ツール接続、API・形式仕様、移行・変更履歴へ分岐する。項目名やリンクから操作能力を推定しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -6435,13 +6433,13 @@
       ]
     },
     {
-      "id": "R_OP.trace_export",
+      "id": "R_INTEGRATION.trace_export",
       "title": "スパンの外部送信を設定する",
-      "role": "operational-reference",
+      "role": "integration-reference",
       "status": "existing",
       "source_paths": [
-        "docs/en/operations/export_traces.md",
-        "docs/ja/operations/export_traces.md"
+        "docs/en/how_to/export_traces.md",
+        "docs/ja/how_to/export_traces.md"
       ],
       "source_urls": [],
       "requires": [
@@ -6469,8 +6467,8 @@
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/en/operations/export_traces.md",
-        "docs/ja/operations/export_traces.md"
+        "docs/en/how_to/export_traces.md",
+        "docs/ja/how_to/export_traces.md"
       ]
     }
   ],
@@ -7418,7 +7416,47 @@
       ],
       "steps": [
         "SETUP",
-        "R_OP.trace_export"
+        "R_INTEGRATION.trace_export"
+      ]
+    },
+    {
+      "id": "transform_from_home",
+      "title": "問題を変換して解法へ渡す：ホームからの入口",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        {
+          "alternatives": [
+            [
+              "HOME"
+            ],
+            [
+              "HOME_EN"
+            ]
+          ]
+        },
+        "B_TRANSFORM"
+      ]
+    },
+    {
+      "id": "evaluate_from_home",
+      "title": "候補を評価して結果を判断する：ホームからの入口",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        {
+          "alternatives": [
+            [
+              "HOME"
+            ],
+            [
+              "HOME_EN"
+            ]
+          ]
+        },
+        "B_EVALUATE"
       ]
     }
   ],

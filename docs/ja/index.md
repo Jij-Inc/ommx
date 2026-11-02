@@ -14,6 +14,8 @@ OMMX（Open Mathematical prograMming eXchange、オミキス）を使うと、**
 | 手元の候補が使えるか確かめる | 問題の定義域・制約・目的関数に基づく評価。対応する変換では、保持した情報による元の変数値の復元 | 業務上必要な条件のモデル化と、得られた候補を採用する判断 |
 | 問題や結果を別の処理へ渡す | 共通形式での読み書き、Artifactによる保存・共有、Experimentによる条件と結果の記録 | 何を記録し、何と比較するか |
 
+問題はモデラーや保存済みファイルから受け取ることも、SDKで作ることもできます。同じモデル構造に異なる入力値を当てはめる場合は、{class}`~ommx.ParametricInstance`でケースごとにパラメータを指定できます。
+
 モデルが満たすべき要件は、AIをモデル作成に使う場合も利用者が決めます。自作アルゴリズムの候補を確かめたいときは、SDKの評価機能だけでも使えます。
 
 ## 手元の候補を評価する
@@ -34,39 +36,19 @@ OMMX（Open Mathematical prograMming eXchange、オミキス）を使うと、**
 
 ## 目的に合わせて読み始める
 
-| やりたいこと | 最初に読むページ | この段階で学ぶこと |
-|---|---|---|
-| ソルバーで問題を解く | {class}`PySCIPOpt AdapterのReference <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` | Instanceを作り、求解して結果を読む |
-| 手元の問題と候補解を評価する | [候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md) | 評価する問題・目的・条件を揃え、実行可能性と最適性を区別する |
-| 目的関数以外の指標を評価する | {class}`~ommx.NamedFunction` | 費用とは別の距離などを候補ごとに計算する |
-| 結果を名前と添字で取り出す | {meth}`名前付きの変数値の抽出 <ommx.Solution.extract_decision_variables>` | 変数値を後処理用の辞書や表にする |
-| OpenJijでサンプリングする | {class}`OpenJij SA AdapterのReference <ommx_openjij_adapter.OMMXOpenJijSAAdapter>` | 重みを設定して問題を準備し、候補を目的値と実行可能性で読む |
-| 実行のトレースを調べる | {mod}`ommx.tracing` | 処理区間の親子関係を読み、タイムラインを保存する |
-| 独自のAdapterを実装する | {class}`Solver <ommx.adapter.SolverAdapter>`・{class}`Sampler <ommx.adapter.SamplerAdapter>` | 入力・変換・評価の契約と参照実装 |
-| 問題や候補解の意味を理解する | {class}`~ommx.Instance` → {class}`~ommx.Solution` | 変数の役割、実行可能性、目的値、最適性の違い |
-| 式を構築・評価する | {class}`~ommx.Function` | 式を作り、式の値と候補の実行可能性を区別する |
-| 固定した構造の数値条件を変える | {class}`~ommx.ParametricInstance` | 構造と変数・制約のIDを再利用し、パラメータの値を変えたInstanceを作る |
-| 特殊制約を使う | {class}`~ommx.IndicatorConstraint`・{class}`~ommx.OneHotConstraint`・{class}`~ommx.Sos1Constraint` | Indicator・OneHot・SOS1の成立条件 |
-| 問題を変換し、解法を選ぶ | [問題を変換して解法へ渡す](./user_guide/transform_and_solve.md) | 構造を保つ理由と、入力条件・変換の保証・設定を分ける |
-| 制約から変数の上下限を絞る | {meth}`上下限を更新する操作 <ommx.Instance.tighten_bounds_simultaneously_once>` | 一回の更新と、変更された変数を確認する |
-| 式を変数名で確認する | {meth}`ラベルを使った式の表示 <ommx.Instance.format_function>` | Instanceの名前・添字を使って式を読む |
-| 変換後の結果を解釈する | [候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md) | activeな問題と、元の条件を使った評価の違い |
-| 複数の候補を比較する | {class}`~ommx.SampleSet` | サンプルごとの評価と、得られた候補の中からの選択 |
-| 既存の問題を入手する | {mod}`~ommx.dataset` | MIPLIB/QPLIBや手元のファイルから問題を読み込む |
-| 外部ツールへモデルを渡す | {meth}`~ommx.Instance.save_mps` | 出力できるモデルと、OMMXとして保存する場合との違い |
-| 問題・結果・試行を保存して共有する | [記録する内容と方法を選ぶ](./user_guide/record_and_share.md) | 受け渡しと、後で結果や条件を調べるために残す情報 |
+この導入ではOMMXを採用する理由を説明しました。Bookの残りの3章は、それぞれの章から直接読み始められます。
 
-このBookでは、何ができるか、なぜ・いつ使うか、何を選び、結果をどう読むかを説明します。小さな例で意味をつかみ、実装に必要な詳しい呼び出し方や引数・前提条件・保証は{doc}`API Reference <api/index>`で確認してください。全ページを順に読む必要はありません。
+| 判断したいこと | Bookの章 |
+|---|---|
+| このモデルをソルバーに直接渡せるか。定式化を変えるなら、どの性質を保つ必要があるか | [問題を変換して解法へ渡す](./user_guide/transform_and_solve.md) |
+| 得られた候補は元の条件を満たすか。ソルバーが報告する目的値やboundから何が言えるか | [候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md) |
+| 別の人が結果を調べたり、試行を再実行したりするには、何を残す必要があるか | [問題・結果・試行を保存して共有する](./user_guide/record_and_share.md) |
 
-問題と候補の値がすでにある人は、[候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md)から始められます。具体的な評価の呼び出し方は{class}`~ommx.Solution`、ファイルから読み込む例は{func}`~ommx.qplib.load_solution`にあります。候補評価はAdapterから独立して使えます。手元の候補をSCIPの探索の開始に使う例は{meth}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter.solve`にあります。
+実行環境を用意するには、[SDKと必要なAdapterのインストール](./getting_started/install.md)から始めます。題材を通して試したい場合は、[公開ベンチマークを解いて結果を照合する例](./examples/published_benchmarks.md)や[巡回セールスマン問題の経路をサンプリングして描画する例](./tutorial/tsp_sampling_with_openjij_adapter)があります。
 
-## Adapterを使う・作る
+個々の操作は{doc}`Python API Reference <api/index>`から調べられます。例えば、候補の値と制約の違反を調べる例は{class}`~ommx.Solution`、ファイルから候補を読む例は{func}`~ommx.qplib.load_solution`にあります。{doc}`Adapterの一覧 <api/adapters>`から、各ソルバーの入力条件と求解例に進めます。自分の解法を接続する場合は{class}`~ommx.adapter.SolverAdapter`または{class}`~ommx.adapter.SamplerAdapter`を参照してください。
 
-まず[Python SDKとAdapterのインストール](./getting_started/install.md)で実行環境を用意し、使いたいAdapterのReferenceで完全な使用例を選びます。{class}`PySCIPOpt <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`にはナップサック問題の求解、特殊制約の直接利用、明示的なPreparationの例があります。{class}`HiGHS <ommx_highs_adapter.OMMXHighsAdapter>`では、HiGHSが直接受け取れない特殊制約を通常の制約で表す例を扱います。{class}`OpenJij SA <ommx_openjij_adapter.OMMXOpenJijSAAdapter>`では、利用者が重みを選び、samplingして候補を選ぶ例を扱います。各例はモデルをその場で作ります。ほかの接続先は{doc}`Adapterの一覧と入力契約 </api/adapters>`から探せます。
-
-同じ問題を複数ソルバーで解きたい場合は、API Referenceの{mod}`Adapter比較の完全な使用例 <ommx.adapter>`へ進んでください。[OpenJijのTSP Notebook](./tutorial/tsp_sampling_with_openjij_adapter)は、経路の描画まで扱う任意の応用例です。
-
-Adapterを実装する人は、{class}`SolverAdapter <ommx.adapter.SolverAdapter>`と{class}`SamplerAdapter <ommx.adapter.SamplerAdapter>`のReferenceで、入力・変換・評価の契約と実装例を確認できます。
+保存したデータを扱うには、[手元のArtifactを調べる手順](./how_to/manage_local_registry.md)や[レジストリで共有する手順](./how_to/share_artifact_registry.md)に進みます。外部ツールを接続するには、[エージェントプラグインの導入](./user_guide/agent_skills.md)や[OpenTelemetryコレクターへの送信設定](./how_to/export_traces.md)を参照してください。
 
 ## データの交換と共有を支える仕組み
 
@@ -91,7 +73,17 @@ Messageのスキーマは[Protocol Buffers](https://protobuf.dev/)で定義さ�
 Artifactには、問題と結果に加えて「何を、どの設定で解いたか」を記録できます。[OCI Artifact](https://opencontainers.org/)を利用しているため、GitHub Container Registryなど既存のregistryで配布することもできます。OMMXはこの仕組みでMIPLIBやQPLIBの問題を公開しています。形式を直接読み書きするツール向けのmanifest・layer・media typeの定義は、[Artifact形式仕様](https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/doc/artifact_design.md)を参照してください。
 
 ```{toctree}
-:caption: Getting Started
+:caption: OMMXを使う目的と判断
+:maxdepth: 1
+:hidden:
+
+user_guide/transform_and_solve
+user_guide/evaluate_and_interpret
+user_guide/record_and_share
+```
+
+```{toctree}
+:caption: 実行環境を用意する
 :maxdepth: 1
 :hidden:
 
@@ -99,74 +91,46 @@ getting_started/install
 ```
 
 ```{toctree}
-:caption: 応用例
+:caption: 題材を通して試す
 :maxdepth: 1
 :hidden:
 
-tutorial/tsp_sampling_with_openjij_adapter
 examples/published_benchmarks
+tutorial/tsp_sampling_with_openjij_adapter
 ```
 
 ```{toctree}
-:caption: How-to Guide
+:caption: Artifactを調べて共有する
 :maxdepth: 1
 :hidden:
 
+how_to/manage_local_registry
 how_to/share_artifact_registry
 ```
 
 ```{toctree}
-:caption: 問題を変換して解法へ渡す
+:caption: 外部ツールを接続する
 :maxdepth: 1
 :hidden:
 
-user_guide/transform_and_solve
-```
-
-```{toctree}
-:caption: 候補を評価して結果を判断する
-:maxdepth: 1
-:hidden:
-
-user_guide/evaluate_and_interpret
-```
-
-```{toctree}
-:caption: User Guide：変換とソルバー接続
-:maxdepth: 1
-:hidden:
-
-how_to/inspect_adapter_diagnostics
-```
-
-```{toctree}
-:caption: 問題・結果・試行を保存して共有する
-:maxdepth: 1
-:hidden:
-
-user_guide/record_and_share
-```
-
-```{toctree}
-:caption: User Guide：記録と運用
-:maxdepth: 1
-:hidden:
-
-operations/export_traces
-how_to/manage_local_registry
 user_guide/agent_skills
+how_to/export_traces
 ```
 
 ```{toctree}
-:caption: API Reference
-:maxdepth: 2
+:caption: API・形式仕様を調べる
+:maxdepth: 1
 :hidden:
 
 api/index
+ソルバーの診断情報 <how_to/inspect_adapter_diagnostics>
+Rust API（公開版） <https://docs.rs/ommx/>
+Message形式のスキーマ <https://github.com/Jij-Inc/ommx/tree/main/proto/ommx>
+Artifact形式仕様 <https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/doc/artifact_design.md>
 ```
 
 ```{toctree}
-:caption: Migration Guide
+:caption: SDKを移行する
 :maxdepth: 1
 :hidden:
 
@@ -175,7 +139,7 @@ migration/python_sdk_v1_to_v2
 ```
 
 ```{toctree}
-:caption: Release Note
+:caption: リリースごとの変更を確認する
 :maxdepth: 1
 :hidden:
 

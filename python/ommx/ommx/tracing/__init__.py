@@ -57,7 +57,7 @@ the trace is displayed and the exception propagates.
 For a solver breakdown, see :class:`ommx_highs_adapter.OMMXHighsAdapter`.
 To keep a trace with an Experiment, see :attr:`ommx.experiment.SealedRun.trace`.
 Local capture works without an external exporter. To send the same spans
-to a service, see :doc:`OTLP export settings </operations/export_traces>`.
+to a service, see :doc:`OTLP export settings </how_to/export_traces>`.
 """
 
 from __future__ import annotations

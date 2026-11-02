@@ -14,6 +14,8 @@ Until the 3.0.0 stable release, both this Book and the API Reference describe `m
 | Check whether a candidate is usable | Evaluate variable domains, constraints, and the objective; reconstruct original variable values from information retained by supported transformations | How to model the requirements of your application and whether to accept the candidate |
 | Pass problems and results to another process | Read and write a common format; save and share Artifacts; record settings and results in Experiments | What to record and what to compare |
 
+The problem can come from a modeling tool, a saved file, or the SDK. If the same model structure serves several sets of input values, a {class}`~ommx.ParametricInstance` lets you supply the parameters for each case.
+
 You choose the requirements the model must satisfy, including when an AI tool helps write the model. You can use the SDK just to check a candidate from your own algorithm.
 
 ## Evaluate a candidate you already have
@@ -34,37 +36,19 @@ The development direction is to combine these techniques and select or repeat th
 
 ## Start with your purpose
 
-| Your task | Start here | What you will learn |
-|---|---|---|
-| Solve a problem with a solver | {class}`PySCIPOpt Adapter Reference <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` | Create an Instance, solve it, and read the result |
-| Evaluate a candidate you already have | [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md) | Align the problem, objective, and conditions being evaluated; distinguish feasibility from optimality |
-| Evaluate metrics beyond the objective | {class}`~ommx.NamedFunction` | Compute distance or other reporting metrics for each candidate separately from the objective |
-| Extract results by name and subscript | {meth}`Named variable values <ommx.Solution.extract_decision_variables>` | Obtain evaluated variable values as dictionaries or tables for further processing |
-| Understand the problem representation | {class}`~ommx.Instance` | Describe variables, objectives, and constraints |
-| Construct and evaluate expressions | {class}`~ommx.Function` | Build scalar expressions and distinguish their values from a candidate's feasibility |
-| Inspect expressions using variable labels | {meth}`Expression formatting <ommx.Instance.format_function>` | Read expressions using the names and subscripts held by an Instance |
-| Change numeric conditions in a fixed problem structure | {class}`~ommx.ParametricInstance` | Reuse the structure and variable/constraint IDs with different parameter values |
-| Use special constraints | {class}`~ommx.IndicatorConstraint`, {class}`~ommx.OneHotConstraint`, {class}`~ommx.Sos1Constraint` | Understand Indicator, OneHot, and SOS1 constraints and their solver integration |
-| Transform a problem and choose a method | [Transform a problem and connect it to a solving method](./user_guide/transform_and_solve.md) | Preserve structure and distinguish input conditions, transformation guarantees, and settings |
-| Tighten variable bounds from constraints | {meth}`Bound tightening <ommx.Instance.tighten_bounds_simultaneously_once>` | Perform one update and inspect the changed bounds |
-| Compare multiple candidates | {class}`~ommx.SampleSet` | Read sample evaluations and select among the candidates obtained |
-| Sample with OpenJij | {class}`OpenJij SA Adapter Reference <ommx_openjij_adapter.OMMXOpenJijSAAdapter>` | Choose penalty weights, prepare a problem, and inspect the returned candidates |
-| Obtain existing problems | {mod}`~ommx.dataset` | Download a problem as an OMMX Instance |
-| Save and share problems, results, and trials | [Choose what to record](./user_guide/record_and_share.md) | Select a transfer format and the information needed to inspect or rerun work |
-| Inspect an execution trace | {mod}`ommx.tracing` | Read nested spans or save a timeline |
-| Connect your own solving tool | {class}`Solver <ommx.adapter.SolverAdapter>` or {class}`Sampler <ommx.adapter.SamplerAdapter>` | Translate backend inputs and outputs through the common adapter interface |
+This introduction explains why you might adopt OMMX. The other three Book chapters can each be read on their own.
 
-This Book explains what OMMX can do, why and when to use it, what to choose, and how to interpret results. Use small examples to understand the meaning, then consult the {doc}`API Reference <api/index>` for detailed calls, arguments, preconditions, and guarantees. You do not need to read every page in order.
+| What do you need to decide? | Book chapter |
+|---|---|
+| Can the solver use my model directly? If I change its formulation, which properties must I preserve? | [Transform a problem and connect it to a solving method](./user_guide/transform_and_solve.md) |
+| Does this candidate meet the original requirements? What does the solver's reported objective or bound tell me? | [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md) |
+| What should I keep so someone else can inspect a result or repeat a trial? | [Save and share problems, results, and trials](./user_guide/record_and_share.md) |
 
-If you already have a problem and candidate values, begin with [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md). Use {class}`~ommx.Solution` for evaluation examples or {func}`~ommx.qplib.load_solution` to check a published assignment. To start SCIP from a candidate, see {meth}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter.solve`. You can evaluate candidates independently of an Adapter.
+To run something yourself, [install the SDK and any adapter you need](./getting_started/install.md). Choose an example when you want to follow a whole task, such as [comparing a solver result with a published benchmark](./examples/published_benchmarks.md) or [sampling and plotting routes for a traveling salesperson](./tutorial/tsp_sampling_with_openjij_adapter).
 
-## Use or implement an Adapter
+For an individual operation, start in the {doc}`Python API Reference <api/index>`. For example, {class}`~ommx.Solution` shows how to inspect a candidate and {func}`~ommx.qplib.load_solution` reads one from a file. The {doc}`adapter catalogue <api/adapters>` lists solver inputs and links to complete solve examples. To connect your own backend, see {class}`~ommx.adapter.SolverAdapter` or {class}`~ommx.adapter.SamplerAdapter`.
 
-After [installing the SDK and an Adapter](./getting_started/install.md), choose a complete example from its Reference. {class}`PySCIPOpt <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` covers a knapsack model, native special constraints, and explicit preparation. {class}`HiGHS <ommx_highs_adapter.OMMXHighsAdapter>` shows how OMMX rewrites a special constraint as ordinary constraints that HiGHS can accept. {class}`OpenJij SA <ommx_openjij_adapter.OMMXOpenJijSAAdapter>` covers caller-chosen penalty weights, sampling, and selecting among returned candidates. Each example supplies its own model. The {doc}`Adapter packages and input contracts </api/adapters>` page lists the available integrations.
-
-To compare solvers, use the {mod}`complete Adapter comparison example <ommx.adapter>` in the API Reference. The [OpenJij TSP example](./tutorial/tsp_sampling_with_openjij_adapter) is an optional application that includes route visualization.
-
-If you are connecting your own solving tool, the {class}`SolverAdapter <ommx.adapter.SolverAdapter>` and {class}`SamplerAdapter <ommx.adapter.SamplerAdapter>` references explain how to translate its input and output through OMMX's common interface.
+To work with saved data, [inspect a local Artifact](./how_to/manage_local_registry.md) or [share it through a registry](./how_to/share_artifact_registry.md). To connect an external tool, [install an agent plugin](./user_guide/agent_skills.md) or [send spans to an OpenTelemetry collector](./how_to/export_traces.md).
 
 ## Support data exchange and sharing
 
@@ -89,69 +73,65 @@ Connect software through a common representation of problems and results.
 Alongside problems and results, Artifacts can record what was solved and with which settings. They use [OCI standards](https://opencontainers.org/), so they can also be distributed through existing registries such as GitHub Container Registry. OMMX uses this mechanism to publish MIPLIB and QPLIB problems. The [Artifact format specification](https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/doc/artifact_design.md) defines manifests, layers, and media types for tools that need to read or write the format directly.
 
 ```{toctree}
-:caption: Get started
-:maxdepth: 1
-:hidden:
-
-getting_started/install
-```
-
-```{toctree}
-:caption: Examples
-:maxdepth: 1
-:hidden:
-
-tutorial/tsp_sampling_with_openjij_adapter
-examples/published_benchmarks
-```
-
-```{toctree}
-:caption: Transform problems and connect solvers
+:caption: Understanding and using OMMX
 :maxdepth: 1
 :hidden:
 
 user_guide/transform_and_solve
-```
-
-```{toctree}
-:caption: Evaluate candidates and interpret results
-:maxdepth: 1
-:hidden:
-
 user_guide/evaluate_and_interpret
-```
-
-```{toctree}
-:caption: Save and share problems, results, and trials
-:maxdepth: 1
-:hidden:
-
 user_guide/record_and_share
 ```
 
 ```{toctree}
-:caption: User Guide
+:caption: Set up your environment
 :maxdepth: 1
 :hidden:
 
+getting_started/install
 user_guide/cli
-how_to/manage_local_registry
-how_to/share_artifact_registry
-user_guide/agent_skills
-user_guide/adapter_diagnostics
-operations/export_traces
 ```
 
 ```{toctree}
-:caption: API Reference
-:maxdepth: 2
+:caption: Work through examples
+:maxdepth: 1
+:hidden:
+
+examples/published_benchmarks
+tutorial/tsp_sampling_with_openjij_adapter
+```
+
+```{toctree}
+:caption: Inspect and share Artifacts
+:maxdepth: 1
+:hidden:
+
+how_to/manage_local_registry
+how_to/share_artifact_registry
+```
+
+```{toctree}
+:caption: Connect external tools
+:maxdepth: 1
+:hidden:
+
+user_guide/agent_skills
+how_to/export_traces
+```
+
+```{toctree}
+:caption: Look up APIs and formats
+:maxdepth: 1
 :hidden:
 
 api/index
+Solver diagnostics <user_guide/adapter_diagnostics>
+Rust API (published releases) <https://docs.rs/ommx/>
+Message schemas <https://github.com/Jij-Inc/ommx/tree/main/proto/ommx>
+Artifact format specification <https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/doc/artifact_design.md>
 ```
 
 ```{toctree}
-:caption: Migration Guide
+:caption: Migrate between SDK versions
 :maxdepth: 1
 :hidden:
 
@@ -160,7 +140,7 @@ migration/python_sdk_v1_to_v2
 ```
 
 ```{toctree}
-:caption: Release Note
+:caption: Changes by release
 :maxdepth: 1
 :hidden:
 
