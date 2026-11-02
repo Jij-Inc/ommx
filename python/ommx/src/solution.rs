@@ -1,6 +1,6 @@
 use crate::constraint_id::ConstraintIDInput;
 use crate::{
-    constraint_kind::{constraint_kind_collection, ConstraintKind},
+    constraint_kind::{constraint_kind_collection, ConstraintFamilyInput},
     error::OmmxPyResult,
     pandas::{constraint_id_col, entries_to_dataframe, PyDataFrame, ToPandasEntry},
 };
@@ -28,7 +28,7 @@ use std::collections::BTreeSet;
 /// from being 1. Evaluation checks one assignment; it does not search for a
 /// better assignment or prove optimality.
 ///
-/// >>> from ommx import Instance, Optimality, State
+/// >>> from ommx import ConstraintKind, Instance, Optimality, State
 /// >>> instance = Instance.maximize()
 /// >>> x = instance.new_binary("x")
 /// >>> y = instance.new_binary("y")
@@ -97,7 +97,7 @@ use std::collections::BTreeSet;
 /// Passing the State directly to the original Instance may lose that context
 /// or leave required original variables unspecified.
 ///
-/// >>> from ommx import Instance, Optimality, Sense
+/// >>> from ommx import ConstraintKind, Instance, Optimality, Sense
 /// >>> original = Instance.maximize()
 /// >>> x = original.new_binary("x")
 /// >>> y = original.new_binary("y")
@@ -243,7 +243,7 @@ impl Solution {
     /// while failing {attr}`~ommx.Solution.feasible` because a removed constraint
     /// is violated.
     ///
-    /// >>> from ommx import Instance
+    /// >>> from ommx import ConstraintKind, Instance
     /// >>> instance = Instance.minimize()
     /// >>> x = instance.new_binary("x")
     /// >>> instance.objective = x
@@ -347,7 +347,7 @@ impl Solution {
     /// Use {meth}`~ommx.Solution.set_dual_variable` to update a stored regular
     /// constraint's dual value.
     ///
-    /// >>> from ommx import Instance
+    /// >>> from ommx import ConstraintKind, Instance
     /// >>> instance = Instance.minimize()
     /// >>> x = instance.new_binary("x")
     /// >>> capacity = instance.add_constraint(x <= 2, "capacity")
@@ -400,7 +400,7 @@ impl Solution {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     /// >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
     /// >>> instance = Instance.from_components(
@@ -443,7 +443,7 @@ impl Solution {
     /// Raises KeyError if no decision variable has the requested name, and
     /// ValueError if the same subscript is found more than once.
     ///
-    /// >>> from ommx import Instance
+    /// >>> from ommx import ConstraintKind, Instance
     /// >>> instance = Instance.maximize()
     /// >>> x = [instance.new_binary("x", subscripts=[i]) for i in range(2)]
     /// >>> y = instance.new_integer("y", lower=0, upper=3)
@@ -502,7 +502,7 @@ impl Solution {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     /// >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
     /// >>> instance = Instance.from_components(
@@ -561,7 +561,7 @@ impl Solution {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> c0 = (x[0] + x[1] == 1).set_name("c").add_subscripts([0])
     /// >>> c1 = (x[1] + x[2] == 1).set_name("c").add_subscripts([1])
@@ -577,7 +577,7 @@ impl Solution {
     ///
     /// A feasible inequality can have a negative signed value and zero violation:
     ///
-    /// >>> from ommx import Instance
+    /// >>> from ommx import ConstraintKind, Instance
     /// >>> named = Instance.minimize()
     /// >>> x = named.new_binary("x")
     /// >>> capacity = named.add_constraint(x <= 2, "capacity", subscripts=[0])
@@ -612,7 +612,7 @@ impl Solution {
     /// Raises KeyError if no named function has the requested name, and
     /// ValueError if the same subscript is found more than once.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, NamedFunction, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, NamedFunction, Sense
     /// >>> x = DecisionVariable.binary(0, name="selected")
     /// >>> cost = NamedFunction(id=10, function=4 * x, name="cost")
     /// >>> instance = Instance.from_components(
@@ -756,7 +756,7 @@ impl Solution {
     /// tuples as dictionary keys instead. Editing this table does not update
     /// the Solution.
     ///
-    /// >>> from ommx import Instance
+    /// >>> from ommx import ConstraintKind, Instance
     /// >>> instance = Instance.maximize()
     /// >>> x = instance.new_binary("selected", subscripts=[0])
     /// >>> instance.objective = x
@@ -795,8 +795,8 @@ impl Solution {
 
     /// DataFrame of evaluated constraints, including `feasible` and `violation` for every kind.
     ///
-    /// ``kind`` is required: ``"regular"``, ``"indicator"``, ``"one_hot"``, or
-    /// ``"sos1"``. The index contains typed IDs of the selected family. Rows
+    /// ``kind`` is a required {class}`~ommx.ConstraintKind` selector.
+    /// The index contains typed IDs of the selected family. Rows
     /// retain their labels and evaluation diagnostics; editing this materialized
     /// table does not update the Solution.
     ///
@@ -819,12 +819,12 @@ impl Solution {
     /// {meth}`~ommx.Solution.constraint_provenance_df`, and
     /// {meth}`~ommx.Solution.constraint_removed_reasons_df` also require ``kind``.
     ///
-    /// >>> from ommx import Instance
+    /// >>> from ommx import ConstraintKind, Instance
     /// >>> instance = Instance.minimize()
     /// >>> x = instance.new_binary("x")
     /// >>> capacity = instance.add_constraint(x <= 2, "capacity")
     /// >>> solution = instance.evaluate({x.id: 0})
-    /// >>> table = solution.constraints_df(kind="regular")
+    /// >>> table = solution.constraints_df(kind=ConstraintKind.Regular)
     /// >>> assert table.loc[capacity.constraint_id, "value"] == -2.0
     /// >>> assert table.loc[capacity.constraint_id, "violation"] == 0.0
     /// >>> assert table.loc[capacity.constraint_id, "feasible"]
@@ -832,7 +832,7 @@ impl Solution {
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
         include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
@@ -919,7 +919,7 @@ impl Solution {
     pub fn constraint_context_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
@@ -947,7 +947,7 @@ impl Solution {
     pub fn constraint_parameters_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
@@ -975,7 +975,7 @@ impl Solution {
     pub fn constraint_provenance_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
@@ -1003,7 +1003,7 @@ impl Solution {
     pub fn constraint_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(

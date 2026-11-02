@@ -46,7 +46,7 @@ Both routes create a `.venv`. From the directory for your chosen route, run:
 uv run --no-sync python -c "from importlib.metadata import version; from ommx import Instance; print(version('ommx')); print(Instance.minimize())"
 ```
 
-To run an example saved as a script, use `uv run --no-sync python example.py`. Transforming a problem with {meth}`~ommx.Instance.prepare`, checking {class}`~ommx.InstanceClass` membership, and evaluating a candidate as a {class}`~ommx.Solution` require only the SDK. Downloading public problems from [MIPLIB](../tutorial/download_miplib_instance.md) or [QPLIB](../tutorial/download_qplib_instance.md) requires network access on the first retrieval.
+To run an example saved as a script, use `uv run --no-sync python example.py`. Transforming a problem with {meth}`~ommx.Instance.prepare`, checking {class}`~ommx.InstanceClass` membership, and evaluating a candidate as a {class}`~ommx.Solution` require only the SDK. Downloading public problems from {mod}`MIPLIB or QPLIB <ommx.dataset>` requires network access on the first retrieval.
 
 (install-adapters)=
 ## 2. Add an adapter when you need a solver

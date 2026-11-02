@@ -6,7 +6,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-### 💥 Python 3.11 以降を必須とし、SDK が Python 3.15 に対応 ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
+### Python 3.11 以降を必須とし、SDK が Python 3.15 に対応 ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
 
 Python 3.10 のサポート終了に伴う共通の方針として、SDK と Adapter パッケージの
 最低対応バージョンを Python 3.11 に引き上げました。コア SDK は
@@ -16,6 +16,26 @@ Adapter の利用可否は接続するソルバーの Python 対応状況にも�
 
 pandas 3 と PyArrow 26 を利用できるようになりました。PyArrow は引き続き、
 Artifact の DataFrame を Parquet 形式で保存・復元するための必須依存です。
+
+### 種類の追加に対応する公開API ([#1329](https://github.com/Jij-Inc/ommx/pull/1329))
+
+`Kind`、`ConstraintKind`、`ProvenanceKind` の型ヒントを、網羅的な Enum から
+既知の定数を持つ値クラスに変更しました。既存の定数・比較・hash・整数変換と
+Kind の protobuf 変換は引き続き利用できます。種類や制約familyを処理するときは、
+未対応の値を明示的に拒否する分岐を残してください。
+`ConstraintKind` は `Regular` を含み、従来の特殊制約selectorと `"sos1"` などの文字列入力を置き換えます。
+`constraints.of_kind(ConstraintKind.Sos1)` や
+`constraints_df(kind=ConstraintKind.Sos1)` を使ってください。familyビューの具体的な型は維持します。
+V3の数値スカラーの拡張契約は[移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
+OneHot 制約 30 を含む解では、違反量は型付き ID で取得し、テーブルは制約の種類を指定して取得します。
+
+```python
+from ommx import ConstraintKind, OneHotConstraintID
+
+solution.constraint_violation(OneHotConstraintID(30))
+solution.constraints_df(kind=ConstraintKind.OneHot)
+```
 
 ### 🆕 finite-domain 決定変数 ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
 
@@ -153,7 +173,7 @@ state = instance.state_from_named_values({"x": {(0,): 1.0, (1,): 4.0}})
 見つからないキーは `KeyError`、複数の変数に一致する名前・添字は `ValueError` になります。
 文字列・整数への正規化でキーが重複する入力も `ValueError` になります。
 SCIP アダプターの `initial_state` に `NamedState` を直接渡すこともできます。
-SCIP での利用例は {ref}`名前と添字で初期値を指定する <named-initial-state>`
+SCIP での利用例は {meth}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter.solve`
 を参照してください。
 
 ### 🆕 同梱のエージェントプラグインとスキルを取得 ([#1264](https://github.com/Jij-Inc/ommx/pull/1264))
@@ -225,7 +245,7 @@ QPLIB の二次目的関数と二次制約を、元の問題どおりに読み�
 {meth}`~ommx.Instance.load_qplib` で作成して保存したモデルは、元の `.qplib`
 ファイルから読み込み直してください。`ommx.dataset.qplib` は OMMX 2.8.0 向けに
 公開した修正済みの配布を読み込むようになりました。旧配布がキャッシュされていても、
-修正済みの配布を使います。詳細は [既存の問題を読み込むHow-to](../how_to/load_existing_instance.md)を参照してください。
+修正済みの配布を使います。詳細は {func}`~ommx.dataset.qplib`を参照してください。
 
 ### 🛠 MPS・MIPLIB 読み込み時にバイナリ変数を保持 ([#1202](https://github.com/Jij-Inc/ommx/pull/1202), [#1205](https://github.com/Jij-Inc/ommx/pull/1205))
 
@@ -238,7 +258,7 @@ MPS ファイルには、変数を整数として指定し、上下限を省略�
 影響を受ける保存済みモデルは、元の MPS ファイルから読み込み直してください。
 `ommx.dataset.miplib2017` は OMMX 2.7.0 向けに公開した修正済みの MIPLIB 配布を
 読み込むようになりました。旧配布がキャッシュされていても、修正済みの配布を使います。
-詳細は [既存の問題を読み込むHow-to](../how_to/load_existing_instance.md)を参照してください。
+詳細は {func}`~ommx.dataset.miplib2017`を参照してください。
 
 ### 🛠 変数の上下限と制約で許容誤差の判定を統一 ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
 
@@ -274,6 +294,7 @@ OneHot（ちょうど 1 つの変数が `1`、残りが `0`）と SOS1（非ゼ�
 合計には通常制約・Indicator・OneHot・SOS1 に加え、変換などで除去された制約の違反量も含みます。
 
 ```python
+# Beta 6 の書式。現行の型付き ID の使い方は移行ガイドを参照。
 solution.total_violation()
 solution.constraint_violation(30, kind="one_hot")  # 既存の OneHot 制約 ID
 solution.constraints_df(kind="sos1")[["feasible", "violation"]]
@@ -381,7 +402,7 @@ solution = instance.evaluate(state, atol=1e-8)
 解ファイルで省略された変数には 0 を設定します。記載された目的関数値 `objvar` は
 変数として扱わず、モデルの評価によって目的関数値を計算します。
 `ommx.qplib.load_solution` も利用できます。
-対応するファイルは [既存の問題と候補解を評価するTutorial](../tutorial/evaluate_existing_candidate)を参照してください。
+対応するファイルは {func}`~ommx.qplib.load_solution`を参照してください。
 
 ### 🆕 Rust 拡張からのデータ受け渡しに共通の例外を導入 ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
 
@@ -1539,13 +1560,13 @@ solution.decision_variables_df(include=["label"])      # core + label
 solution.decision_variables_df(include=["parameters"]) # core + parameters
 ```
 
-加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。必須のキーワード引数`kind=`で対象の制約ファミリーを切り替えます (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`):
+加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。Alpha 3 では `kind` に `"regular"`（既定値）、`"indicator"`、`"one_hot"`、`"sos1"` を指定できます。
 
-- `constraint_context_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
+- `constraint_metadata_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
 - `constraint_parameters_df(kind=...)` — long format (`{kind}_constraint_id` / `key` / `value`)
 - `constraint_provenance_df(kind=...)` — long format (`{kind}_constraint_id` / `step` / `source_kind` / `source_id`)
 - `constraint_removed_reasons_df(kind=...)` — long format (`{kind}_constraint_id` / `reason` / `key` / `value`)
-- `variable_labels_df()` — id-indexed
+- `variable_metadata_df()` — id-indexed
 - `variable_parameters_df()` — long format
 
 Sidecar の index 名はファミリーごとに qualified (`regular_constraint_id` / `indicator_constraint_id` / `one_hot_constraint_id` / `sos1_constraint_id` / `variable_id`) になっており、別 ID 空間どうしを誤って `df.join()` した場合に `df.head()` 等で気づきやすくなっています。`*_parameters_df` / `*_removed_reasons_df` の行は `(id, key)` 順にソート済み、空の long-format DataFrame もスキーマ列だけ持つ形で返ります。

@@ -71,6 +71,9 @@ impl std::fmt::Display for VariableID {
     serde::Deserialize,
     LogicalMemoryProfile,
 )]
+#[non_exhaustive]
+/// Numeric scalar domain classification. New kinds may be added by the SDK.
+/// Consumers must reject unsupported kinds rather than assume an exhaustive list.
 pub enum Kind {
     Continuous,
     Integer,

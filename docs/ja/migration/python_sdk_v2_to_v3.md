@@ -17,7 +17,7 @@ v3 では、v2 で始まった PyO3 移行が完了しました。SDK の domain
 2. `Constraint` は `id` を持たなくなりました。制約IDは `Instance.from_components(..., constraints={id: constraint})` に渡す `dict` の key が所有します。
 3. 全所有元の `.constraints` は型付きIDで参照する専用コレクションです。`decision_variables` は `list` のままです。
 4. `.raw`、`.from_raw()`、`.from_protobuf()`、`.to_protobuf()` など、protobuf 層を露出する bridge API は削除されました。
-5. `*_df` accessor は property ではなく method です。`instance.constraints_df(kind="regular")` のように呼び出してください。
+5. `*_df` accessor は property ではなく method です。`instance.constraints_df(kind=ConstraintKind.Regular)` のように呼び出してください。
 6. `instance.constraints[id]` や `instance.decision_variables` は、snapshot ではなく書き込みが host に反映される `AttachedX` handle を返します。
 
 ## 1. import の変更
@@ -81,7 +81,7 @@ instance.to_v2_bytes()
 
 ### 3.1 `id` / `set_id()` / `id=` は削除
 
-`Constraint`、`IndicatorConstraint`、`OneHotConstraint`、`Sos1Constraint`、`RemovedConstraint`、`EvaluatedConstraint`、`SampledConstraint` は、オブジェクト自身に ID を持ちません。ID は `Instance.from_components` に渡す辞書の key で決まります。
+作成直後の制約は detached で、ID を持ちません。モデルの構築時に ID を指定するには、`Instance.from_components` に渡す制約ファミリー別の辞書のキーを使います（§4）。既存のモデルに制約を追加するときは、モデルに ID を割り当てさせます（§3.3）。
 
 ```python
 # v2.5.1
@@ -128,7 +128,7 @@ Instance.from_components(..., constraints={0: c}, ...)
 
 ### 3.3 グローバルIDカウンタは削除
 
-`next_constraint_id()`、`set_constraint_id_counter(...)`、`get_constraint_id_counter()` などの module-level helper は削除されました。新しい制約IDが必要な場合は、所有者である `Instance` の `instance.next_constraint_id()` を使います。
+`next_constraint_id()`、`set_constraint_id_counter(...)`、`get_constraint_id_counter()` などのモジュールレベルの関数は削除されました。新しい通常制約 `c` は `instance.add_constraint(c).constraint_id` でモデルに追加し、割り当てられた `ConstraintID` を取得できます。
 
 ## 4. container type の変更
 
@@ -264,10 +264,10 @@ preparation-free methodだけに公開できます。Adapter inputに
 removed 制約とすべての特殊制約を含めます。通常の等式・不等式の違反量の定義は変わりません。
 
 ```python
-from ommx import OneHotConstraintID
+from ommx import ConstraintKind, OneHotConstraintID
 solution.total_violation()
 solution.constraint_violation(OneHotConstraintID(30))
-solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+solution.constraints_df(kind=ConstraintKind.Sos1)[["feasible", "violation"]]
 ```
 
 Indicator は有効時の内部制約の違反量、無効時は 0 です。OneHot は一つを 1、残りを 0 にする
@@ -346,12 +346,12 @@ quadratic.terms()
 polynomial.terms()
 ```
 
-v3 alpha の初期移行では、`DecisionVariable` の constructor と `kind` property が
-protobuf の整数表現を誤って公開していました。現在の v3 API は、detached、attached、
-evaluated、sampled の各 decision variable で top-level の `Kind` enum を一貫して
-受け取り、返します。新しいコードでは `Kind.Binary`、`Kind.Integer` などを使います。
-`DecisionVariable.BINARY` / `INTEGER` / … は、同じ enum 値を返す型付き互換 alias として
-残します。
+v3 alpha の初期移行では、`DecisionVariable` のコンストラクタと `kind` プロパティが
+protobuf の整数コードを公開していました。現在のコンストラクタは `Kind` の値を受け取り、
+detached・attached・evaluated・sampled の各変数の `.kind` も同じ型を返します。
+`Kind.Binary` や `Kind.Integer` などの既知の定数と比較し、今後追加される種類を受け取った場合の処理も用意してください。
+`Kind` は反復処理や `Enum.__members__` による列挙には対応しません。
+`DecisionVariable.BINARY` などの既存の別名は、対応する種類を引き続き参照します。
 
 同じ互換方針を `Constraint.EQUAL_TO_ZERO` / `LESS_THAN_OR_EQUAL_TO_ZERO` と
 `Instance.MINIMIZE` / `MAXIMIZE` にも適用します。これらは型付き alias として残しますが、
@@ -365,8 +365,7 @@ assert variable.kind == Kind.Binary
 assert DecisionVariable.BINARY == Kind.Binary
 ```
 
-各 enum は protobuf の整数値との比較・hash の互換性を維持します。通常の SDK
-constructor と property は enum 型を使います。
+既知の種類は対応する protobuf の整数コードと等しく、ハッシュ値も一致します。
 
 ```python
 assert Kind.Binary == 1
@@ -467,16 +466,20 @@ Preparation前に`source`が公開していたものです（§5.6）。Policy�
 df = instance.constraints_df
 
 # v3
-df = instance.constraints_df(kind="regular")
+from ommx import ConstraintKind
+
+df = instance.constraints_df(kind=ConstraintKind.Regular)
 ```
 
 kind 別や removed / active 別の DataFrame accessor は、`constraints_df(kind=..., removed=...)` に統合されています。
 
 ```python
-instance.constraints_df(kind="regular")
-instance.constraints_df(kind="one_hot")
-instance.constraints_df(kind="sos1", removed=True)
-solution.constraints_df(kind="indicator")
+from ommx import ConstraintKind
+
+instance.constraints_df(kind=ConstraintKind.Regular)
+instance.constraints_df(kind=ConstraintKind.OneHot)
+instance.constraints_df(kind=ConstraintKind.Sos1, removed=True)
+solution.constraints_df(kind=ConstraintKind.Indicator)
 ```
 
 ## 9. metadata と annotation
@@ -653,9 +656,11 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 `get_constraints` メソッドはありません。
 
 ```python
-row = instance.constraints.of_kind("regular")[5]  # AttachedConstraint
+from ommx import ConstraintKind
+
+row = instance.constraints.of_kind(ConstraintKind.Regular)[5]  # AttachedConstraint
 snapshot = row.detach()  # 独立したConstraintのコピーを明示的に取得
-removed = instance.removed_constraints.of_kind("regular")[7]  # RemovedConstraintのスナップショット
+removed = instance.removed_constraints.of_kind(ConstraintKind.Regular)[7]  # RemovedConstraintのスナップショット
 ```
 
 メタデータの`constraint_context_df`・`constraint_parameters_df`・`constraint_provenance_df`・
@@ -670,7 +675,7 @@ removed = instance.removed_constraints.of_kind("regular")[7]  # RemovedConstrain
 プロパティ取得時には制約を収集せず、モデルへのアクセスは `Attached*`、結果へのアクセスは
 個別のスナップショットを返します。保持したコレクションは所有元の変更を反映します。
 独立した辞書が必要な場合は `dict(owner.constraints)` を使います。1種類だけ調べる場合は、
-`constraints.of_kind("sos1")`で絞ります。`constraints_df(*, kind=...)` はすべての所有元で
+`constraints.of_kind(ConstraintKind.Sos1)`で絞ります。`constraints_df(*, kind=...)` はすべての所有元で
 `kind` が必須です。モデルは有効な行を選び、`removed=True` で削除済みも含めます。
 結果は保持された削除済みも含めます。詳細は{class}`コレクションの意味 <ommx.ConstraintCollection>`を参照してください。
 
@@ -693,3 +698,25 @@ removed = instance.removed_constraints.of_kind("regular")[7]  # RemovedConstrain
 抽出と同様にparametersは無視し、種類をまたぐ添字の重複は`ValueError`にします。
 
 通常制約の符号付き評価値には`solution.get_constraint_value(id)`か`row.evaluated_value`を使います。詳しくは{meth}`名前と添字による取得 <ommx.Solution.extract_constraints>`を参照してください。
+
+## 変数・制約の種類の拡張
+
+`Kind`、`ConstraintKind`、`ProvenanceKind` は、既知の定数を持つ不変な値クラスです。
+型ヒントは全種類を列挙する Enum を表しません。現在の全定数を処理した場合も、
+未対応の値を明示的に拒否する分岐を残してください。`assert_never` では対応の網羅性を保証できません。
+比較・hash・整数への変換と `Kind.from_pb()` / `to_pb()` は引き続き利用できます。
+未知の protobuf kind は拒否します。
+
+共通の制約コレクションは `ConstraintIDBase` と `ConstraintView` を返し、
+具体的な family の ID による取得では具体的な戻り値型を維持します。
+種類や family が追加されても、既存の adapter や変換がその意味に対応するとは限りません。
+V3 の拡張契約は数値スカラーのドメインを対象とし、非スカラー値の格納・評価は別途設計します。
+
+通常制約も含めたすべてのfamilyに `ConstraintKind` を使います。
+従来の `SpecialConstraintKind` と文字列selectorは、
+`collection.of_kind(ConstraintKind.Sos1)` や
+`model.constraints_df(kind=ConstraintKind.Sos1)` に置き換えてください。
+既知の定数が持つID型によって、familyビューの戻り値型の精度を維持します。
+通常、利用側で型引数を記述する必要はありません。
+`active_constraint_kinds` は `Regular` を含み、`active_special_constraint_kinds` は含みません。
+`lower_special_constraints` に `Regular` を指定すると、変換を適用する前に拒否します。

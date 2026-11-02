@@ -6,7 +6,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-### 💥 Require Python 3.11 and add Python 3.15 SDK support ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
+### Require Python 3.11 and add Python 3.15 SDK support ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
 
 The SDK and adapter packages now require Python 3.11 or newer under a shared
 support policy that drops end-of-life Python 3.10. The core SDK adds Python 3.15
@@ -16,6 +16,28 @@ also depends on the underlying solver's Python support.
 
 The SDK now allows pandas 3 and PyArrow 26. PyArrow remains a required runtime
 dependency for storing and loading Artifact DataFrames in Parquet format.
+
+### Extensible kind APIs ([#1329](https://github.com/Jij-Inc/ommx/pull/1329))
+
+`Kind`, `ConstraintKind`, and `ProvenanceKind` now have nominal value
+class type hints instead of exhaustive Enum hints. Known constants, comparisons,
+hashing, integer conversion, and Kind protobuf conversion remain available.
+Keep an explicit rejecting fallback when handling kinds or constraint families.
+`ConstraintKind` includes `Regular` and replaces both the former special-family
+selector and string inputs such as `"sos1"`. Use
+`constraints.of_kind(ConstraintKind.Sos1)` or
+`constraints_df(kind=ConstraintKind.Sos1)`; filtered views keep their precise types.
+See [the migration guide](../migration/python_sdk_v2_to_v3.md)
+for the V3 numeric scalar extension contract.
+
+For a solution containing OneHot constraint 30, look up its violation by typed ID and select its table by family.
+
+```python
+from ommx import ConstraintKind, OneHotConstraintID
+
+solution.constraint_violation(OneHotConstraintID(30))
+solution.constraints_df(kind=ConstraintKind.OneHot)
+```
 
 ### 🆕 Finite-domain decision variables ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
 
@@ -162,7 +184,7 @@ state = instance.state_from_named_values({"x": {(0,): 1.0, (1,): 4.0}})
 Unknown keys raise `KeyError`; ambiguous name/subscript pairs raise `ValueError`.
 Keys that collide after string or integer normalization also raise `ValueError`.
 The SCIP adapter also accepts `NamedState` directly through `initial_state`.
-See {ref}`Providing Values by Name and Subscripts <named-initial-state>`
+See {meth}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter.solve`
 for a SCIP example.
 
 ### 🆕 Discover the bundled coding-agent plugin and skill ([#1264](https://github.com/Jij-Inc/ommx/pull/1264))
@@ -236,7 +258,7 @@ published feasible solution to be reported as infeasible.
 If you used {meth}`~ommx.Instance.load_qplib` to create a saved model, reimport
 it from the original `.qplib` file. `ommx.dataset.qplib` now loads the corrected
 distribution published with OMMX 2.8.0, even if the older distribution is cached.
-See the [QPLIB tutorial](../tutorial/download_qplib_instance.md).
+See the {func}`~ommx.dataset.qplib`.
 
 ### 🛠 Preserve binary variables when importing MPS and MIPLIB ([#1202](https://github.com/Jij-Inc/ommx/pull/1202), [#1205](https://github.com/Jij-Inc/ommx/pull/1205))
 
@@ -250,7 +272,7 @@ precedence.
 Reimport affected saved models from the original MPS file.
 `ommx.dataset.miplib2017` now loads the corrected MIPLIB distribution published
 with OMMX 2.7.0, even if the older distribution is cached. See the
-[MIPLIB tutorial](../tutorial/download_miplib_instance.md).
+{func}`~ommx.dataset.miplib2017`.
 
 ### 🛠 Consistent tolerance for variable bounds and constraints ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
 
@@ -289,6 +311,7 @@ To migrate your code, use {meth}`~ommx.Solution.total_violation` in place of
 violations of regular, Indicator, OneHot, SOS1, and removed constraints.
 
 ```python
+# Beta 6 syntax. See the migration guide for the current typed-ID API.
 solution.total_violation()
 solution.constraint_violation(30, kind="one_hot")  # existing OneHot constraint ID
 solution.constraints_df(kind="sos1")[["feasible", "violation"]]
@@ -399,7 +422,7 @@ solution = instance.evaluate(state, atol=1e-8)
 Variables omitted from the solution file receive zero. The reported `objvar`
 is not treated as a variable; evaluation computes the objective from the model.
 `ommx.qplib.load_solution` is also available. See the
-[QPLIB tutorial](../tutorial/download_qplib_instance.md) for supported files.
+{func}`~ommx.qplib.load_solution` for supported files.
 
 ### 🆕 A shared exception for Rust extension transfers ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
 
@@ -1606,13 +1629,13 @@ solution.decision_variables_df(include=["label"])      # core + label
 solution.decision_variables_df(include=["parameters"]) # core + parameters
 ```
 
-Six new long-format / id-indexed sidecar accessors read directly from the SoA label/context stores. Required keyword-only `kind=` selects the constraint family (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`):
+Six new long-format / id-indexed sidecar accessors read directly from the SoA label/context stores. In Alpha 3, `kind` accepts `"regular"` (the default), `"indicator"`, `"one_hot"`, or `"sos1"`.
 
-- `constraint_context_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
+- `constraint_metadata_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
 - `constraint_parameters_df(kind=...)` — long format (`{kind}_constraint_id` / `key` / `value`)
 - `constraint_provenance_df(kind=...)` — long format (`{kind}_constraint_id` / `step` / `source_kind` / `source_id`)
 - `constraint_removed_reasons_df(kind=...)` — long format (`{kind}_constraint_id` / `reason` / `key` / `value`)
-- `variable_labels_df()` — id-indexed
+- `variable_metadata_df()` — id-indexed
 - `variable_parameters_df()` — long format
 
 Sidecar index names are kind-qualified (`regular_constraint_id` / `indicator_constraint_id` / `one_hot_constraint_id` / `sos1_constraint_id` / `variable_id`) so accidental cross-id-space `df.join()` mistakes surface in `df.head()` and friends. Long-format `*_parameters_df` / `*_removed_reasons_df` rows are sorted by `(id, key)`, and empty long-format DataFrames keep their column schema instead of returning a column-less frame.

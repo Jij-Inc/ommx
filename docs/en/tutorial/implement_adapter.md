@@ -246,9 +246,10 @@ def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dic
         model.addCons(constr_expr, name=str(constraint_id))
 ```
 
-Also, if the backend solver supports special constraints (e.g., [SOS constraints](https://en.wikipedia.org/wiki/Special_ordered_set)), you need to add functions to handle them.
+This converter accepts regular constraints. The adapter below declares that restriction in
+`INPUT_CLASS` and uses Preparation to convert special constraints to regular rows before solving.
 
-Now, we can construct a `pycscipopt.Model` from `ommx.Instance`.
+The helpers can now construct a `pyscipopt.Model` from an `ommx.Instance`.
 
 ### Converting Obtained Solutions to `ommx.State`
 
@@ -369,9 +370,9 @@ with {meth}`~ommx.Instance.prepare`, then pass that Instance to
 
 A recommendation can enable special-constraint lowering with these family selectors:
 
-- `SpecialConstraintKind.Indicator`: Indicator constraints (`binvar = 1 → f(x) <= 0`)
-- `SpecialConstraintKind.OneHot`: Exactly one of a set of binary variables is 1
-- `SpecialConstraintKind.Sos1`: At most one of a set of variables is non-zero
+- `ConstraintKind.Indicator`: Indicator constraints (`binvar = 1 → f(x) <= 0`)
+- `ConstraintKind.OneHot`: Exactly one of a set of binary variables is 1
+- `ConstraintKind.Sos1`: At most one of a set of variables is non-zero
 
 Use {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` to inspect the currently active families. The selected Preparation phase delegates to {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>`, which converts each selected active family into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot). The owner operation still defines its validation and mathematical meaning.
 
@@ -395,7 +396,7 @@ from ommx import (
     PolynomialRequirement,
     PreparationPolicy,
     Sense,
-    SpecialConstraintKind,
+    ConstraintKind,
     SpecialConstraintPreparation,
 )
 
@@ -410,11 +411,6 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     Equality.EqualToZero: PolynomialRequirement.at_most(2),
                     Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(2),
                 },
-                indicator_body_polynomial_requirements={
-                    Equality.EqualToZero: PolynomialRequirement.at_most(1),
-                    Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(1),
-                },
-                allows_sos1=True,
                 allowed_senses={Sense.Minimize, Sense.Maximize},
             )
         ]
@@ -424,7 +420,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     def recommended_preparation_policy(cls) -> PreparationPolicy:
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(
-                kinds={SpecialConstraintKind.OneHot}
+                kinds={ConstraintKind.Indicator, ConstraintKind.OneHot, ConstraintKind.Sos1}
             )
         )
 

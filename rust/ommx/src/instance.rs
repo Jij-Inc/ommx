@@ -76,33 +76,8 @@ use crate::{
     Evaluate, Function, ModelingLabel, NamedFunction, NamedFunctionTable, VariableID,
     VariableIDSet,
 };
+use crate::{ConstraintKind, ConstraintKinds};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-
-/// A special constraint family that can be explicitly lowered to regular constraints.
-///
-/// This enum selects model transformations; it does not declare native adapter
-/// input support. Native input is described by [`crate::InstanceClass`], while
-/// `ommx.v2.Feature` describes wire-format reconstruction requirements. These
-/// concepts are intentionally independent.
-///
-/// The [`PartialOrd`] / [`Ord`] derives follow variant declaration order
-/// (`Indicator < OneHot < Sos1`), which is also the order in which
-/// [`SpecialConstraintKinds`] iterates.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum SpecialConstraintKind {
-    /// Indicator constraints: binvar = 1 → f(x) <= 0
-    Indicator,
-    /// One-hot constraints: exactly one of a set of binary variables must be 1
-    OneHot,
-    /// SOS1 constraints: at most one of a set of variables can be non-zero
-    Sos1,
-}
-
-/// A set of [`SpecialConstraintKind`] transformation selectors.
-///
-/// Always represented as a [`std::collections::BTreeSet`] so iteration,
-/// formatting, and comparison are deterministic and sorted by variant order.
-pub type SpecialConstraintKinds = std::collections::BTreeSet<SpecialConstraintKind>;
 
 /// Signal that a decision-variable ID is already owned by a parameter in a
 /// [`ParametricInstance`].
@@ -250,7 +225,7 @@ impl OutputObjective {
 /// receive numbers from the instance-wide space; transformations retain source
 /// IDs in removed constraints and assign fresh numbers to generated constraints.
 ///
-/// [`SpecialConstraintKind`] identifies active special constraint families.
+/// [`ConstraintKind`] identifies active special constraint families.
 /// [`Instance::active_special_constraint_kinds`] inspects them, and
 /// [`Instance::lower_special_constraints`] explicitly lowers selected families.
 /// These APIs do not define membership in an [`crate::InstanceClass`]. After
@@ -810,21 +785,31 @@ impl Instance {
             .set_context_for_owner(id, context, "SOS1 constraint")
     }
 
+    /// Return all active constraint families, including regular constraints.
+    /// Removed rows are excluded; this is not an adapter support declaration.
+    pub fn active_constraint_kinds(&self) -> ConstraintKinds {
+        let mut kinds = self.active_special_constraint_kinds();
+        if !self.constraint_collection.active().is_empty() {
+            kinds.insert(ConstraintKind::Regular);
+        }
+        kinds
+    }
+
     /// Return the special constraint families active in this instance.
     ///
     /// Only active constraints are considered; removed constraints are
     /// excluded. The result does not describe an [`crate::InstanceClass`] or
     /// establish adapter applicability.
-    pub fn active_special_constraint_kinds(&self) -> SpecialConstraintKinds {
-        let mut kinds = SpecialConstraintKinds::new();
+    pub fn active_special_constraint_kinds(&self) -> ConstraintKinds {
+        let mut kinds = ConstraintKinds::new();
         if !self.indicator_constraint_collection.active().is_empty() {
-            kinds.insert(SpecialConstraintKind::Indicator);
+            kinds.insert(ConstraintKind::Indicator);
         }
         if !self.one_hot_constraint_collection.active().is_empty() {
-            kinds.insert(SpecialConstraintKind::OneHot);
+            kinds.insert(ConstraintKind::OneHot);
         }
         if !self.sos1_constraint_collection.active().is_empty() {
-            kinds.insert(SpecialConstraintKind::Sos1);
+            kinds.insert(ConstraintKind::Sos1);
         }
         kinds
     }
@@ -855,7 +840,7 @@ impl Instance {
     ///
     /// Returns the set of families that were requested and active, and therefore
     /// actually lowered. Families are processed in the deterministic order
-    /// `Indicator`, `OneHot`, `Sos1`, matching [`SpecialConstraintKinds`]'s
+    /// `Indicator`, `OneHot`, `Sos1`, matching [`ConstraintKinds`]'s
     /// iteration order. The set is empty when no selected family was active.
     ///
     /// # Errors
@@ -869,21 +854,32 @@ impl Instance {
     #[tracing::instrument(skip_all)]
     pub fn lower_special_constraints(
         &mut self,
-        kinds_to_lower: &SpecialConstraintKinds,
+        kinds_to_lower: &ConstraintKinds,
         atol: crate::ATol,
-    ) -> crate::Result<SpecialConstraintKinds> {
-        let mut lowered = SpecialConstraintKinds::new();
+    ) -> crate::Result<ConstraintKinds> {
+        // Validate the complete selector before applying any transformation.
+        for kind in kinds_to_lower {
+            match kind {
+                ConstraintKind::Regular => {
+                    crate::bail!("Regular constraints cannot be lowered as special constraints")
+                }
+                ConstraintKind::Indicator | ConstraintKind::OneHot | ConstraintKind::Sos1 => (),
+            }
+        }
+        let mut lowered = ConstraintKinds::new();
+
         // Iterate in a fixed order so logs / callers see deterministic output.
         for kind in [
-            SpecialConstraintKind::Indicator,
-            SpecialConstraintKind::OneHot,
-            SpecialConstraintKind::Sos1,
+            ConstraintKind::Indicator,
+            ConstraintKind::OneHot,
+            ConstraintKind::Sos1,
         ] {
             if !kinds_to_lower.contains(&kind) {
                 continue;
             }
             let lowered_any = match kind {
-                SpecialConstraintKind::Indicator => {
+                ConstraintKind::Regular => unreachable!("only special families are dispatched"),
+                ConstraintKind::Indicator => {
                     if self.indicator_constraint_collection.active().is_empty() {
                         false
                     } else {
@@ -891,7 +887,7 @@ impl Instance {
                         true
                     }
                 }
-                SpecialConstraintKind::OneHot => {
+                ConstraintKind::OneHot => {
                     if self.one_hot_constraint_collection.active().is_empty() {
                         false
                     } else {
@@ -899,7 +895,7 @@ impl Instance {
                         true
                     }
                 }
-                SpecialConstraintKind::Sos1 => {
+                ConstraintKind::Sos1 => {
                     if self.sos1_constraint_collection.active().is_empty() {
                         false
                     } else {
@@ -1479,7 +1475,7 @@ mod lower_special_constraints_tests {
     #[test]
     fn noop_when_no_kinds_are_selected() {
         let mut instance = instance_with_all_special_constraint_kinds();
-        let kinds_to_lower = SpecialConstraintKinds::new();
+        let kinds_to_lower = ConstraintKinds::new();
         let before_indicators = instance.indicator_constraints().clone();
         let before_one_hots = instance.one_hot_constraints().clone();
         let before_sos1 = instance.sos1_constraints().clone();
@@ -1497,12 +1493,9 @@ mod lower_special_constraints_tests {
     #[test]
     fn lowers_only_selected_kinds() {
         let mut instance = instance_with_all_special_constraint_kinds();
-        let kinds_to_lower: SpecialConstraintKinds = [
-            SpecialConstraintKind::Indicator,
-            SpecialConstraintKind::OneHot,
-        ]
-        .into_iter()
-        .collect();
+        let kinds_to_lower: ConstraintKinds = [ConstraintKind::Indicator, ConstraintKind::OneHot]
+            .into_iter()
+            .collect();
 
         let lowered = instance
             .lower_special_constraints(&kinds_to_lower, ATol::default())
@@ -1514,17 +1507,17 @@ mod lower_special_constraints_tests {
         assert!(!instance.sos1_constraints().is_empty());
         assert_eq!(
             instance.active_special_constraint_kinds(),
-            [SpecialConstraintKind::Sos1].into_iter().collect()
+            [ConstraintKind::Sos1].into_iter().collect()
         );
     }
 
     #[test]
     fn lowers_every_selected_kind() {
         let mut instance = instance_with_all_special_constraint_kinds();
-        let kinds_to_lower: SpecialConstraintKinds = [
-            SpecialConstraintKind::Indicator,
-            SpecialConstraintKind::OneHot,
-            SpecialConstraintKind::Sos1,
+        let kinds_to_lower: ConstraintKinds = [
+            ConstraintKind::Indicator,
+            ConstraintKind::OneHot,
+            ConstraintKind::Sos1,
         ]
         .into_iter()
         .collect();
@@ -1557,10 +1550,10 @@ mod lower_special_constraints_tests {
             .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(2), one_hot)]))
             .build()
             .unwrap();
-        let kinds_to_lower: SpecialConstraintKinds = [
-            SpecialConstraintKind::Indicator,
-            SpecialConstraintKind::OneHot,
-            SpecialConstraintKind::Sos1,
+        let kinds_to_lower: ConstraintKinds = [
+            ConstraintKind::Indicator,
+            ConstraintKind::OneHot,
+            ConstraintKind::Sos1,
         ]
         .into_iter()
         .collect();
@@ -1569,8 +1562,7 @@ mod lower_special_constraints_tests {
             .lower_special_constraints(&kinds_to_lower, ATol::default())
             .unwrap();
 
-        let expected: SpecialConstraintKinds =
-            [SpecialConstraintKind::OneHot].into_iter().collect();
+        let expected: ConstraintKinds = [ConstraintKind::OneHot].into_iter().collect();
         assert_eq!(lowered, expected);
         assert!(instance.one_hot_constraints().is_empty());
     }
@@ -1590,8 +1582,7 @@ mod lower_special_constraints_tests {
             .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
             .build()
             .unwrap();
-        let kinds_to_lower: SpecialConstraintKinds =
-            [SpecialConstraintKind::Sos1].into_iter().collect();
+        let kinds_to_lower: ConstraintKinds = [ConstraintKind::Sos1].into_iter().collect();
 
         let err = instance
             .lower_special_constraints(&kinds_to_lower, ATol::default())
@@ -1623,10 +1614,9 @@ mod lower_special_constraints_tests {
             .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
             .build()
             .unwrap();
-        let kinds_to_lower: SpecialConstraintKinds =
-            [SpecialConstraintKind::OneHot, SpecialConstraintKind::Sos1]
-                .into_iter()
-                .collect();
+        let kinds_to_lower: ConstraintKinds = [ConstraintKind::OneHot, ConstraintKind::Sos1]
+            .into_iter()
+            .collect();
 
         let err = instance
             .lower_special_constraints(&kinds_to_lower, ATol::default())
@@ -1639,7 +1629,7 @@ mod lower_special_constraints_tests {
         assert_eq!(instance.sos1_constraints().len(), 1);
         assert_eq!(
             instance.active_special_constraint_kinds(),
-            [SpecialConstraintKind::Sos1].into_iter().collect()
+            [ConstraintKind::Sos1].into_iter().collect()
         );
     }
 
@@ -1662,12 +1652,9 @@ mod lower_special_constraints_tests {
                 vec![ConstraintID::from(u64::MAX)],
             )]),
         );
-        let kinds_to_lower: SpecialConstraintKinds = [
-            SpecialConstraintKind::Indicator,
-            SpecialConstraintKind::OneHot,
-        ]
-        .into_iter()
-        .collect();
+        let kinds_to_lower: ConstraintKinds = [ConstraintKind::Indicator, ConstraintKind::OneHot]
+            .into_iter()
+            .collect();
 
         instance
             .lower_special_constraints(&kinds_to_lower, ATol::default())
@@ -1700,8 +1687,7 @@ mod lower_special_constraints_tests {
             .build()
             .unwrap();
 
-        let kinds_to_lower: SpecialConstraintKinds =
-            [SpecialConstraintKind::Sos1].into_iter().collect();
+        let kinds_to_lower: ConstraintKinds = [ConstraintKind::Sos1].into_iter().collect();
         let lowered = instance
             .lower_special_constraints(&kinds_to_lower, ATol::default())
             .unwrap();

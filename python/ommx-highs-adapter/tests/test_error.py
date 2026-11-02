@@ -116,6 +116,7 @@ def test_error_nonlinear_constraint():
 @pytest.mark.parametrize(
     ("variable", "kind"),
     [
+        (DecisionVariable.finite_domain(0, [0.1, 0.5, 1.0]), Kind.FiniteDomain),
         (DecisionVariable.semi_integer(0, lower=1, upper=3), Kind.SemiInteger),
         (
             DecisionVariable.semi_continuous(0, lower=1, upper=3),

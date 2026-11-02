@@ -129,6 +129,8 @@ mod v2_io;
 /// `cargo build` / `cargo check` output.
 #[cfg(doc)]
 pub mod doc {
+    #[doc = include_str!("../doc/extension_contract.md")]
+    pub mod extension_contract {}
     #[doc = include_str!("../doc/tutorial.md")]
     pub mod tutorial {
         #[doc = include_str!("../doc/tutorial/expressions.md")]

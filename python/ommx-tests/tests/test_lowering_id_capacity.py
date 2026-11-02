@@ -10,7 +10,7 @@ from ommx import (
     Instance,
     OneHotConstraint,
     Sense,
-    SpecialConstraintKind,
+    ConstraintKind,
 )
 
 
@@ -42,9 +42,9 @@ def test_lowering_id_exhaustion_returns_runtime_error_without_mutation(
     with pytest.raises(RuntimeError, match="Cannot allocate"):
         if entrypoint == "lower":
             kind = (
-                SpecialConstraintKind.OneHot
+                ConstraintKind.OneHot
                 if family == "one_hot"
-                else SpecialConstraintKind.Indicator
+                else ConstraintKind.Indicator
             )
             instance.lower_special_constraints({kind})
         elif family == "one_hot":

@@ -49,13 +49,13 @@ The development direction is to combine these techniques and select or repeat th
 | Tighten variable bounds from constraints | {meth}`Bound tightening <ommx.Instance.tighten_bounds_simultaneously_once>` | Perform one update and inspect the changed bounds |
 | Compare multiple candidates | {class}`~ommx.SampleSet` | Read sample evaluations and select among the candidates obtained |
 | Sample with OpenJij | {class}`OpenJij SA Adapter Reference <ommx_openjij_adapter.OMMXOpenJijSAAdapter>` | Choose penalty weights, prepare a problem, and inspect the returned candidates |
-| Obtain existing problems | [MIPLIB](./tutorial/download_miplib_instance.md) or [QPLIB](./tutorial/download_qplib_instance.md) | Download a problem as an OMMX Instance |
+| Obtain existing problems | {mod}`~ommx.dataset` | Download a problem as an OMMX Instance |
 | Save and share problems, results, and trials | [Choose what to record](./user_guide/record_and_share.md) | Select a transfer format and the information needed to inspect or rerun work |
 | Connect your own solving tool | [Implement an Adapter](./tutorial/implement_adapter.md) | Translate backend inputs and outputs through the common adapter interface |
 
 This Book explains what OMMX can do, why and when to use it, what to choose, and how to interpret results. Use small examples to understand the meaning, then consult the {doc}`API Reference <api/index>` for detailed calls, arguments, preconditions, and guarantees. You do not need to read every page in order.
 
-If you already have a problem and candidate values, begin with [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md). Use {class}`~ommx.Solution` for executable evaluation examples. You can evaluate candidates independently of an Adapter.
+If you already have a problem and candidate values, begin with [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md). Use {class}`~ommx.Solution` for evaluation examples or {func}`~ommx.qplib.load_solution` to check a published assignment. To start SCIP from a candidate, see {meth}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter.solve`. You can evaluate candidates independently of an Adapter.
 
 ## Use or implement an Adapter
 
@@ -85,7 +85,7 @@ Message schemas are defined with [Protocol Buffers](https://protobuf.dev/), with
 Connect software through a common representation of problems and results.
 ```
 
-Alongside problems and results, Artifacts can record what was solved and with which settings. They use [OCI standards](https://opencontainers.org/), so they can also be distributed through existing registries such as GitHub Container Registry. OMMX uses this mechanism to publish [MIPLIB](./tutorial/download_miplib_instance.md) and [QPLIB](./tutorial/download_qplib_instance.md) problems. The [Artifact format specification](https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/doc/artifact_design.md) defines manifests, layers, and media types for tools that need to read or write the format directly.
+Alongside problems and results, Artifacts can record what was solved and with which settings. They use [OCI standards](https://opencontainers.org/), so they can also be distributed through existing registries such as GitHub Container Registry. OMMX uses this mechanism to publish MIPLIB and QPLIB problems. The [Artifact format specification](https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/doc/artifact_design.md) defines manifests, layers, and media types for tools that need to read or write the format directly.
 
 ```{toctree}
 :caption: Get started
@@ -96,13 +96,19 @@ getting_started/install
 ```
 
 ```{toctree}
-:caption: Tutorial
+:caption: Examples
 :maxdepth: 1
 :hidden:
 
 tutorial/tsp_sampling_with_openjij_adapter
-tutorial/download_miplib_instance
-tutorial/download_qplib_instance
+examples/published_benchmarks
+```
+
+```{toctree}
+:caption: Adapter development
+:maxdepth: 1
+:hidden:
+
 tutorial/implement_adapter
 ```
 
@@ -140,7 +146,6 @@ how_to/manage_local_registry
 how_to/share_artifact_registry
 user_guide/agent_skills
 user_guide/adapter_diagnostics
-user_guide/adapter_initial_state
 user_guide/tracing
 ```
 
