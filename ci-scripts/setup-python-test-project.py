@@ -22,8 +22,8 @@ import re
 from ruamel.yaml import YAML
 
 SDK_PACKAGES = {"ommx", "ommx-tests"}
-# The Experiment SDK doctests solve small examples using the HiGHS adapter.
-SDK_TEST_DEPENDENCIES = {"ommx-highs-adapter"}
+# SDK doctests cover Experiment solves and comparisons between these adapters.
+SDK_TEST_DEPENDENCIES = {"ommx-highs-adapter", "ommx-pyscipopt-adapter"}
 
 
 ap = ArgumentParser()

@@ -26,6 +26,7 @@ classifiers = [
 dependencies = [
     "ommx >= 3.0.0b9, < 4.0.0",
     "ommx-highs-adapter >= 3.0.0b9, < 4.0.0",
+    "ommx-pyscipopt-adapter >= 3.0.0b9, < 4.0.0",
 ]
 
 [project.urls]
