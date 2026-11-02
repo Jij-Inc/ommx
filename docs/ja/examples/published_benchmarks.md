@@ -36,8 +36,3 @@ assert result.feasible
 ```
 
 手元に候補の値がある場合は、{func}`QPLIBの候補を読み込んで評価する例 <ommx.qplib.load_solution>`で、求解せずに候補を検査できます。
-
-(scip-start-comparison)=
-## 初期候補の有無でSCIPの結果を比較する
-
-{download}`比較スクリプト <../../examples/compare_scip_start.py>`と{download}`初期候補の値 <../../examples/roll3000-start.json>`を同じディレクトリに保存します。SDKとPySCIPOpt Adapterをインストールした環境で `python compare_scip_start.py` を実行してください。MIPLIBのroll3000を読み込み、初期候補を渡す場合と渡さない場合の両方を30秒の制限で解き、探索時間・終了理由・得られた最良の目的値を表示します。

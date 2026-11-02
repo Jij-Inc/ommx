@@ -4498,7 +4498,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "solveの実行例は候補の評価から初期候補の提示、最終解の確認までを扱う。速度比較は任意の独立スクリプト。",
+      "notes": "solveの実行例は候補の評価から初期候補の提示、最終解の確認までを扱う。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [

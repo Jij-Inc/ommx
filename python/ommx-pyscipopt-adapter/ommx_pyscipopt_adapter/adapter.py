@@ -802,9 +802,6 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         with OMMX may require additional values. A starting point neither fixes
         the final assignment nor guarantees a shorter solve.
 
-        The :ref:`roll3000 example <scip-start-comparison>` compares two SCIP
-        runs on the same benchmark with and without a proposed solution.
-
         Infeasible Problem
 
         .. doctest::
