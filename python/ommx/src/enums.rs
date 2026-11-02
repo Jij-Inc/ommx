@@ -68,6 +68,14 @@ use pyo3::prelude::*;
 
 pub(crate) use open_kind;
 
+// These classes expose SDK-owned constants and have no Python constructor.
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::derive::gen_methods_from_python! { r#"
+class Kind:
+    def __new__(cls, _unconstructible: typing.NoReturn, /) -> Kind: ...
+"# }
+}
+
 /// How a decision variable obtains its value in an {class}`~ommx.Instance`.
 ///
 /// Roles are derived from the Instance's current structure and can change after

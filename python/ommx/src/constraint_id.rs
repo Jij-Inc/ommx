@@ -18,8 +18,7 @@ pub(crate) trait ConstraintIDInputType: PyStubType {
     type ID: PyStubType;
 }
 
-/// Set input with covariant element typing and typed-ID output. Unlike map
-/// entries, repeated identities in a set can safely collapse during promotion.
+/// Set input with covariant element typing for constraint IDs and family selectors.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ConstraintSetInput<K>(BTreeSet<K>);
 
@@ -29,7 +28,7 @@ impl<'py, K: FromPyObjectOwned<'py> + Ord> FromPyObject<'_, 'py> for ConstraintS
     fn extract(value: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
         let set_type = value.py().import("collections.abc")?.getattr("Set")?;
         if !value.is_instance(&set_type)? {
-            return Err(PyTypeError::new_err("Expected a set of constraint IDs"));
+            return Err(PyTypeError::new_err("Expected a set"));
         }
         let mut result = BTreeSet::new();
         for item in value.try_iter()? {
@@ -64,7 +63,7 @@ impl<'py, K: IntoPyObject<'py> + Ord> IntoPyObject<'py> for ConstraintSetInput<K
     }
 }
 
-impl<K: ConstraintIDInputType> PyStubType for ConstraintSetInput<K> {
+impl<K: PyStubType> PyStubType for ConstraintSetInput<K> {
     fn type_input() -> TypeInfo {
         let mut info = K::type_input();
         info.name = format!("typing.AbstractSet[{}]", info.name);
@@ -74,7 +73,7 @@ impl<K: ConstraintIDInputType> PyStubType for ConstraintSetInput<K> {
     }
 
     fn type_output() -> TypeInfo {
-        BTreeSet::<K::ID>::type_output()
+        BTreeSet::<K>::type_output()
     }
 }
 

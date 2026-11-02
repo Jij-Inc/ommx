@@ -1,5 +1,12 @@
 use pyo3::prelude::*;
 
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::derive::gen_methods_from_python! { r#"
+class ProvenanceKind:
+    def __new__(cls, _unconstructible: typing.NoReturn, /) -> ProvenanceKind: ...
+"# }
+}
+
 crate::enums::open_kind! {
     /// Source constraint family. Additional provenance families may be added.
     ProvenanceKind, ommx::ConstraintKind, |kind| kind as i32;

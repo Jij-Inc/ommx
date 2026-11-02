@@ -115,7 +115,7 @@ on every root. There is no `get_constraints` method.
 and overall feasibility, and `constraints` or `constraints_df(kind=...)` for constraint results.
 
 `constraints.of_kind(ConstraintKind.Sos1)` returns a live `ConstraintFamilyView` with concrete
-key and row types. It accepts the same kind strings as `constraints_df`, promotes
+key and row types. It accepts the same `ConstraintKind` selectors as `constraints_df`, promotes
 integer lookups to the selected family, and rejects IDs of another family.
 The same filtering is available on model `removed_constraints` and result collections.
 

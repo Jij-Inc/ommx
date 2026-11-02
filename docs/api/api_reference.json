@@ -5162,7 +5162,7 @@
         {
           "kind": "Class",
           "name": "ConstraintFamilyView",
-          "doc": "Live, read-only mapping of one constraint family, created by ``of_kind``.\n\nThe selected family fixes the key type. Indexing, ``get``, and membership accept\nintegers as well as that family's typed IDs; an ID of another family raises\n``TypeError``. Iteration and dictionary keys retain typed IDs. A literal\n``kind`` also selects the concrete key and row types for static type checking.\n\n>>> from ommx import ConstraintKind, ConstraintID, Instance\n>>> model = Instance.minimize()\n>>> x = model.new_binary(\"x\")\n>>> rule = model.add_constraint(x <= 1, \"limit\")\n>>> regular = model.constraints.of_kind(ConstraintKind.Regular)\n>>> assert rule.constraint_id == ConstraintID(0)\n>>> assert regular[0] == regular[ConstraintID(0)]\n>>> assert list(regular) == [ConstraintID(0)]\n>>> assert 0 in regular\n>>> assert regular.get(99) is None\n>>> regular[0].set_name(\"capacity\")\n>>> assert model.constraints[ConstraintID(0)].name == \"capacity\"\n\nThe accepted strings are ``\"regular\"``, ``\"indicator\"``, ``\"one_hot\"``, and\n``\"sos1\"``, matching ``constraints_df(kind=...)``. An unknown ``kind`` raises\n``ValueError``. See {class}`~ommx.EvaluatedConstraintCollection` for the current\nID and result-type table.\n\nThe view retains its owner without collecting rows. It follows the row ownership,\nequality, and iterator snapshot rules of {class}`~ommx.ConstraintCollection`:\nactive model rows are attached handles, while removed and result rows are\nindependent snapshots. This applies to Instance and ParametricInstance active\nand removed collections, and to Solution and SampleSet result collections.\n\nFiltering is an inspection operation. Selecting one family does not establish\nthat a solver or transformation supports every constraint in the model. A\nconsumer must inspect all constraints and reject unsupported families; see\n{class}`~ommx.ConstraintIDBase`.",
+          "doc": "Live, read-only mapping of one constraint family, created by ``of_kind``.\n\nThe selected family fixes the key type. Indexing, ``get``, and membership accept\nintegers as well as that family's typed IDs; an ID of another family raises\n``TypeError``. Iteration and dictionary keys retain typed IDs. A known\n``ConstraintKind`` constant selects the concrete key and row types for static type checking.\n\n>>> from ommx import ConstraintKind, ConstraintID, Instance\n>>> model = Instance.minimize()\n>>> x = model.new_binary(\"x\")\n>>> rule = model.add_constraint(x <= 1, \"limit\")\n>>> regular = model.constraints.of_kind(ConstraintKind.Regular)\n>>> assert rule.constraint_id == ConstraintID(0)\n>>> assert regular[0] == regular[ConstraintID(0)]\n>>> assert list(regular) == [ConstraintID(0)]\n>>> assert 0 in regular\n>>> assert regular.get(99) is None\n>>> regular[0].set_name(\"capacity\")\n>>> assert model.constraints[ConstraintID(0)].name == \"capacity\"\n\nPass a {class}`~ommx.ConstraintKind` selector, as in ``constraints_df(kind=...)``.\nA string such as ``\"sos1\"`` raises ``TypeError``. See\n{class}`~ommx.EvaluatedConstraintCollection` for the current ID and result-type table.\n\nThe view retains its owner without collecting rows. It follows the row ownership,\nequality, and iterator snapshot rules of {class}`~ommx.ConstraintCollection`:\nactive model rows are attached handles, while removed and result rows are\nindependent snapshots. This applies to Instance and ParametricInstance active\nand removed collections, and to Solution and SampleSet result collections.\n\nFiltering is an inspection operation. Selecting one family does not establish\nthat a solver or transformation supports every constraint in the model. A\nconsumer must inspect all constraints and reject unsupported families; see\n{class}`~ommx.ConstraintIDBase`.",
           "bases": [
             {
               "display": "Mapping[_K, _V_co]",
@@ -5902,6 +5902,32 @@
                   "parameters": [],
                   "return_type": {
                     "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "_unconstructible",
+                      "type_": {
+                        "display": "NoReturn",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintKind",
                     "link_target": null,
                     "children": []
                   }
@@ -15382,7 +15408,7 @@
                     {
                       "name": "kinds_to_lower",
                       "type_": {
-                        "display": "set[_ommx_rust.ConstraintKind[ConstraintIDBase]]",
+                        "display": "AbstractSet[_ommx_rust.ConstraintKind[ConstraintIDBase]]",
                         "link_target": null,
                         "children": [
                           {
@@ -18853,6 +18879,32 @@
                   "parameters": [],
                   "return_type": {
                     "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "_unconstructible",
+                      "type_": {
+                        "display": "NoReturn",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Kind",
                     "link_target": null,
                     "children": []
                   }
@@ -26655,6 +26707,32 @@
                   "parameters": [],
                   "return_type": {
                     "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "_unconstructible",
+                      "type_": {
+                        "display": "NoReturn",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ProvenanceKind",
                     "link_target": null,
                     "children": []
                   }
@@ -36850,7 +36928,7 @@
                     {
                       "name": "kinds",
                       "type_": {
-                        "display": "set[_ommx_rust.ConstraintKind[ConstraintIDBase]]",
+                        "display": "AbstractSet[_ommx_rust.ConstraintKind[ConstraintIDBase]]",
                         "link_target": null,
                         "children": [
                           {

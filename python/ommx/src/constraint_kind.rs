@@ -60,6 +60,13 @@ family_constant!(Regular: crate::ConstraintID, Indicator: crate::IndicatorConstr
                  OneHot: crate::OneHotConstraintID, Sos1: crate::Sos1ConstraintID);
 
 pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::derive::gen_methods_from_python! { r#"
+class ConstraintKind:
+    def __new__(cls, _unconstructible: typing.NoReturn, /) -> ConstraintKind: ...
+"# }
+}
+
+pyo3_stub_gen::inventory::submit! {
     pyo3_stub_gen::type_info::PyClassInfo {
         pyclass_name: "ConstraintKind", struct_id: std::any::TypeId::of::<ConstraintKind>,
         getters: &[], setters: &[], module: Some("ommx._ommx_rust"),

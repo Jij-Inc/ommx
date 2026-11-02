@@ -1,8 +1,9 @@
+use crate::constraint_id::ConstraintSetInput;
 use crate::error::OmmxPyResult;
 use crate::{ConstraintKind, Instance, InstanceClass, Sense};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
 fn resolve_atol(value: Option<f64>) -> OmmxPyResult<ommx::ATol> {
     Ok(match value {
@@ -37,8 +38,8 @@ impl SpecialConstraintPreparation {
     /// {func}`~ommx.get_default_atol` is stored in the preparation step.
     #[staticmethod]
     #[pyo3(signature = (*, kinds, atol=None))]
-    pub fn lower_special_constraints(
-        kinds: HashSet<ConstraintKind>,
+    fn lower_special_constraints(
+        kinds: ConstraintSetInput<ConstraintKind>,
         atol: Option<f64>,
     ) -> OmmxPyResult<Self> {
         Ok(Self {

@@ -1996,8 +1996,8 @@ class ConstraintFamilyView(typing.Mapping[_K, _V_co]):
 
     The selected family fixes the key type. Indexing, ``get``, and membership accept
     integers as well as that family's typed IDs; an ID of another family raises
-    ``TypeError``. Iteration and dictionary keys retain typed IDs. A literal
-    ``kind`` also selects the concrete key and row types for static type checking.
+    ``TypeError``. Iteration and dictionary keys retain typed IDs. A known
+    ``ConstraintKind`` constant selects the concrete key and row types for static type checking.
 
     >>> from ommx import ConstraintKind, ConstraintID, Instance
     >>> model = Instance.minimize()
@@ -2012,10 +2012,9 @@ class ConstraintFamilyView(typing.Mapping[_K, _V_co]):
     >>> regular[0].set_name("capacity")
     >>> assert model.constraints[ConstraintID(0)].name == "capacity"
 
-    The accepted strings are ``"regular"``, ``"indicator"``, ``"one_hot"``, and
-    ``"sos1"``, matching ``constraints_df(kind=...)``. An unknown ``kind`` raises
-    ``ValueError``. See {class}`~ommx.EvaluatedConstraintCollection` for the current
-    ID and result-type table.
+    Pass a {class}`~ommx.ConstraintKind` selector, as in ``constraints_df(kind=...)``.
+    A string such as ``"sos1"`` raises ``TypeError``. See
+    {class}`~ommx.EvaluatedConstraintCollection` for the current ID and result-type table.
 
     The view retains its owner without collecting rows. It follows the row ownership,
     equality, and iterator snapshot rules of {class}`~ommx.ConstraintCollection`:
@@ -2188,6 +2187,7 @@ class ConstraintKind(typing.Generic[_C_co]):
     Indicator: ConstraintKind[IndicatorConstraintID]
     OneHot: ConstraintKind[OneHotConstraintID]
     Sos1: ConstraintKind[Sos1ConstraintID]
+    def __new__(cls, _unconstructible: typing.NoReturn, /) -> ConstraintKind: ...
     def __hash__(self) -> builtins.int: ...
     def __int__(self) -> builtins.int: ...
     def __eq__(self, other: typing.Any) -> builtins.bool: ...
@@ -5934,7 +5934,7 @@ class Instance:
         """
     def lower_special_constraints(
         self,
-        kinds_to_lower: builtins.set[ConstraintKind[ConstraintIDBase]],
+        kinds_to_lower: typing.AbstractSet[ConstraintKind[ConstraintIDBase]],
         *,
         atol: typing.Optional[builtins.float] = None,
     ) -> builtins.set[ConstraintKind[ConstraintIDBase]]:
@@ -9071,6 +9071,7 @@ class Kind:
     SemiInteger: Kind
     SemiContinuous: Kind
     FiniteDomain: Kind
+    def __new__(cls, _unconstructible: typing.NoReturn, /) -> Kind: ...
     def __hash__(self) -> builtins.int: ...
     def __int__(self) -> builtins.int: ...
     def __eq__(self, other: typing.Any) -> builtins.bool: ...
@@ -11038,6 +11039,7 @@ class ProvenanceKind:
     IndicatorConstraint: ProvenanceKind
     OneHotConstraint: ProvenanceKind
     Sos1Constraint: ProvenanceKind
+    def __new__(cls, _unconstructible: typing.NoReturn, /) -> ProvenanceKind: ...
     def __hash__(self) -> builtins.int: ...
     def __int__(self) -> builtins.int: ...
     def __eq__(self, other: typing.Any) -> builtins.bool: ...
@@ -14279,7 +14281,7 @@ class SpecialConstraintPreparation:
     @staticmethod
     def lower_special_constraints(
         *,
-        kinds: builtins.set[ConstraintKind[ConstraintIDBase]],
+        kinds: typing.AbstractSet[ConstraintKind[ConstraintIDBase]],
         atol: typing.Optional[builtins.float] = None,
     ) -> SpecialConstraintPreparation:
         r"""

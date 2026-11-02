@@ -1476,10 +1476,10 @@ impl Instance {
 
     #[doc = include_str!("docstrings/ommx/Instance.lower_special_constraints.md")]
     #[pyo3(signature = (kinds_to_lower, *, atol=None))]
-    pub fn lower_special_constraints(
+    fn lower_special_constraints(
         &mut self,
         py: Python<'_>,
-        kinds_to_lower: std::collections::HashSet<crate::ConstraintKind>,
+        kinds_to_lower: ConstraintSetInput<crate::ConstraintKind>,
         atol: Option<f64>,
     ) -> OmmxPyResult<std::collections::HashSet<crate::ConstraintKind>> {
         let _guard = crate::TRACING.attach_parent_context(py);

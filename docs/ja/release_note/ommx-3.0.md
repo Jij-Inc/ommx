@@ -108,7 +108,7 @@ frame = solution.constraints_df(kind=ConstraintKind.Regular)
 `summary`を、制約別の結果には`constraints`または`constraints_df(kind=...)`を使います。
 
 `constraints.of_kind(ConstraintKind.Sos1)`は、キーと行の具体型を保持するライブな`ConstraintFamilyView`を
-返します。`constraints_df`と同じkind文字列を受け取り、整数の検索キーを選択した種類へ
+返します。`constraints_df` と同じ `ConstraintKind` を受け取り、整数の検索キーを選択した種類へ
 自動昇格します。別種類のIDは拒否します。モデルの`removed_constraints`と結果の
 コレクションでも同じ絞り込みを使えます。
 
