@@ -134,6 +134,8 @@ impl State {
     /// Malformed input, duplicate IDs, nonfinite values, and out-of-range IDs
     /// raise `ValueError` with a line number. File read failures raise
     /// `RuntimeError`. Loading does not check bounds or feasibility.
+    /// See the {func}`published candidate example <ommx.qplib.load_solution>`
+    /// to read a matching problem, evaluate the assignment, and inspect violations.
     ///
     /// >>> import tempfile
     /// >>> from pathlib import Path

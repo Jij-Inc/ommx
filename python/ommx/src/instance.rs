@@ -2028,6 +2028,8 @@ impl Instance {
     /// better candidate or prove optimality. An infeasible candidate can still
     /// have an objective value. See {class}`~ommx.Solution` for a complete
     /// example and how to interpret the results.
+    /// The {func}`QPLIB example <ommx.qplib.load_solution>` evaluates a
+    /// candidate from a file and identifies violated constraints.
     ///
     /// Evaluate a solver's returned candidate with the transformed Instance
     /// used for that solve. Its recorded dependencies, removed constraints,

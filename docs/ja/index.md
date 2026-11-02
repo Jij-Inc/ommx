@@ -51,13 +51,13 @@ OMMX（Open Mathematical prograMming eXchange、オミキス）を使うと、**
 | 式を変数名で確認する | {meth}`ラベルを使った式の表示 <ommx.Instance.format_function>` | Instanceの名前・添字を使って式を読む |
 | 変換後の結果を解釈する | [候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md) | activeな問題と、元の条件を使った評価の違い |
 | 複数の候補を比較する | {class}`~ommx.SampleSet` | サンプルごとの評価と、得られた候補の中からの選択 |
-| 既存の問題を入手する | [既存の問題をInstanceとして読み込む](./how_to/load_existing_instance.md) | MIPLIB/QPLIBや手元のファイルから問題を読み込む |
+| 既存の問題を入手する | {mod}`~ommx.dataset` | MIPLIB/QPLIBや手元のファイルから問題を読み込む |
 | 外部ツールへモデルを渡す | {meth}`~ommx.Instance.save_mps` | 出力できるモデルと、OMMXとして保存する場合との違い |
 | 問題・結果・試行を保存して共有する | [記録する内容と方法を選ぶ](./user_guide/record_and_share.md) | 受け渡しと、後で結果や条件を調べるために残す情報 |
 
 このBookでは、何ができるか、なぜ・いつ使うか、何を選び、結果をどう読むかを説明します。小さな例で意味をつかみ、実装に必要な詳しい呼び出し方や引数・前提条件・保証は{doc}`API Reference <api/index>`で確認してください。全ページを順に読む必要はありません。
 
-問題と候補の値がすでにある人は、[候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md)から始められます。具体的な評価の呼び出し方は{class}`~ommx.Solution`、ファイルから読み込む例は[候補評価のTutorial](./tutorial/evaluate_existing_candidate)にあります。候補評価はAdapterから独立して使えます。
+問題と候補の値がすでにある人は、[候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md)から始められます。具体的な評価の呼び出し方は{class}`~ommx.Solution`、ファイルから読み込む例は{func}`~ommx.qplib.load_solution`にあります。候補評価はAdapterから独立して使えます。手元の候補をSCIPの探索の開始に使う例は{meth}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter.solve`にあります。
 
 ## Adapterを使う・作る
 
@@ -106,19 +106,10 @@ tutorial/tsp_sampling_with_openjij_adapter
 ```
 
 ```{toctree}
-:caption: Tutorial：候補を評価する
-:maxdepth: 1
-:hidden:
-
-tutorial/evaluate_existing_candidate
-```
-
-```{toctree}
 :caption: How-to Guide
 :maxdepth: 1
 :hidden:
 
-how_to/load_existing_instance
 how_to/tighten_bounds
 how_to/share_artifact_registry
 ```
@@ -145,7 +136,6 @@ user_guide/evaluate_and_interpret
 :hidden:
 
 how_to/inspect_adapter_diagnostics
-how_to/use_initial_state
 ```
 
 ```{toctree}

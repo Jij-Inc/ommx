@@ -20,6 +20,7 @@ Utilities
    ../autoapi/ommx/adapter/index
    ../autoapi/ommx/cli/index
    ../autoapi/ommx/dataset/index
+   examples/published_benchmarks
    ../autoapi/ommx/display/index
    ../autoapi/ommx/experiment/attachments/index
    ../autoapi/ommx/testing/index
