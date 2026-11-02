@@ -6,6 +6,17 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### ⚠ Native Rust Parquet backend for DataFrame layers ([#1334](https://github.com/Jij-Inc/ommx/pull/1334))
+
+Artifact DataFrame layers now use the Rust SDK's Parquet backend, and PyArrow
+is no longer a required dependency. Flat primitive columns, nullable dtypes,
+dates, timestamps and timedeltas are supported; OMMX metadata preserves pandas
+indexes, labels and categorical values.
+
+Nested columns, decimals, legacy INT96 timestamps and legacy categorical files
+require conversion. See {ref}`the migration guide <python-native-parquet-dataframe-layers>`
+for the supported scope and recovery steps.
+
 ### 🆕 Finite-domain decision variables ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
 
 {class}`~ommx.DecisionVariable` can now represent an exact, explicitly

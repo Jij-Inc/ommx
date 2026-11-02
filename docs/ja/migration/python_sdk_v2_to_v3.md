@@ -627,6 +627,7 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 - [ ] `ommx push <archive-file>` を `ommx load <file>` + `ommx push <image_name>` に置き換える。
 - [ ] anonymous Artifact を大量に作る場合は `ommx artifact prune-anonymous` を運用に入れる。
 
+(python-native-parquet-dataframe-layers)=
 ### 13.6 DataFrame layer の Parquet 処理を Rust に移行
 
 `ArtifactDraft.add_dataframe()` と `Artifact.get_dataframe()` は PyArrow を必要としなくなりました。

@@ -994,6 +994,7 @@ ommx artifact prune-anonymous                  # delete them
 
 The structural match (8-hex registry-id prefix, timestamp-shaped tag, hex nonce) prevents a human-pushed real ref like `myhost.ommx.local/anonymous:v1` from being misclassified as anonymous.
 
+(python-native-parquet-dataframe-layers)=
 ### 13.6 DataFrame layers use the Rust Parquet backend
 
 `ArtifactDraft.add_dataframe()` and `Artifact.get_dataframe()` no longer require
