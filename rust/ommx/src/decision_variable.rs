@@ -602,6 +602,7 @@ impl From<EvaluatedDecisionVariable> for crate::v1::DecisionVariable {
             id: eval_dv.id.into_inner(),
             kind: eval_dv.kind.into(),
             bound: Some(eval_dv.bound.into()),
+            finite_domain: None,
             substituted_value: Some(eval_dv.value),
             name: eval_dv.metadata.name,
             subscripts: eval_dv.metadata.subscripts,
@@ -757,6 +758,7 @@ mod tests {
                 upper: 10.0,
             }),
             substituted_value: Some(5.0),
+            finite_domain: None,
             name: Some("test_var".to_string()),
             subscripts: vec![1, 2],
             parameters: vec![("param1".to_string(), "value1".to_string())]
@@ -795,6 +797,7 @@ mod tests {
                 upper: 10.0,
             }),
             substituted_value: None, // Missing value should cause error
+            finite_domain: None,
             name: Some("test_var".to_string()),
             subscripts: vec![],
             parameters: Default::default(),
