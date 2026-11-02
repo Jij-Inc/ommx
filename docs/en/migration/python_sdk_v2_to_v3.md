@@ -994,6 +994,24 @@ ommx artifact prune-anonymous                  # delete them
 
 The structural match (8-hex registry-id prefix, timestamp-shaped tag, hex nonce) prevents a human-pushed real ref like `myhost.ommx.local/anonymous:v1` from being misclassified as anonymous.
 
+### 13.6 DataFrame layers use the Rust Parquet backend
+
+`ArtifactDraft.add_dataframe()` and `Artifact.get_dataframe()` no longer require
+PyArrow. Their Parquet backend supports flat primitive columns, nullable dtypes,
+dates, timestamps and timedeltas. OMMX metadata preserves pandas indexes,
+column labels and categorical values, including unused categories and ordering.
+
+Nested columns, decimals and legacy INT96 timestamps are unsupported. Convert
+such data to supported primitive columns before adding a DataFrame. Existing
+Parquet layers with flat supported schemas remain readable. Legacy categorical
+files without OMMX metadata are rejected because the complete category order
+cannot be restored; read those blobs with pandas/PyArrow, then add the resulting
+DataFrame to a new Artifact. New categorical layers preserve their full pandas
+semantics when read through OMMX; other Parquet consumers see primitive values.
+
+See {meth}`~ommx.artifact.ArtifactDraft.add_dataframe` and
+{meth}`~ommx.artifact.Artifact.get_dataframe` for the supported input and errors.
+
 ## 14. Convenience additions (not breaking)
 
 ### 14.1 `DecisionVariable.binary` / `integer` / `continuous` accept `lower` / `upper` kwargs

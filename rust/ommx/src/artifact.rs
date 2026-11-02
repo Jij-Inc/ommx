@@ -55,6 +55,8 @@ mod image_ref;
 pub mod local_registry;
 mod manifest;
 pub mod media_types;
+#[cfg(feature = "parquet")]
+pub mod parquet;
 #[cfg(feature = "remote-artifact")]
 mod push;
 #[cfg(feature = "remote-artifact")]

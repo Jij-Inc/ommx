@@ -627,6 +627,23 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 - [ ] `ommx push <archive-file>` を `ommx load <file>` + `ommx push <image_name>` に置き換える。
 - [ ] anonymous Artifact を大量に作る場合は `ommx artifact prune-anonymous` を運用に入れる。
 
+### 13.6 DataFrame layer の Parquet 処理を Rust に移行
+
+`ArtifactDraft.add_dataframe()` と `Artifact.get_dataframe()` は PyArrow を必要としなくなりました。
+フラットな基本型の列、nullable dtype、日付、日時、時間差に対応します。
+pandas の index、列ラベル、カテゴリの未使用値と順序は OMMX のメタデータに保存されます。
+
+ネストした列、decimal、旧形式の INT96 timestamp は非対応です。
+保存する前に対応する基本型の列へ変換してください。
+既存の Parquet layer も、対応するフラットなスキーマであれば読み出せます。
+OMMX メタデータのない旧カテゴリ列はカテゴリ全体の順序を復元できないため、明示的にエラーにします。
+その場合は pandas/PyArrow で blob を読み、得られた DataFrame を新しい Artifact に追加してください。
+新しいカテゴリ列は OMMX 経由で読み出すと未使用値と順序を復元できます。
+他の Parquet consumer には基本型の値として見えます。
+
+対応する入力と例外は {meth}`~ommx.artifact.ArtifactDraft.add_dataframe` と
+{meth}`~ommx.artifact.Artifact.get_dataframe` を参照してください。
+
 ## v2 から v3 へのチェックリスト
 
 - [ ] `ommx.v1.*_pb2` import と SDK domain class の `ommx.v1` import を、top-level `ommx` からの import に置き換える。

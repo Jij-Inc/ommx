@@ -11,7 +11,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use crate::pandas::PyDataFrame;
 use crate::{descriptor::as_descriptor, error::OmmxPyResult, PyArchiveDescriptor, PyDescriptor};
+mod dataframe;
 
 /// A local-registry image reference and its cached OCI Manifest projection.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -590,19 +592,22 @@ impl PyArtifact {
     /// Get a pandas DataFrame from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_dataframe`.
     ///
     /// A mismatched media type raises {class}`ValueError`; registry and storage
-    /// failures raise {class}`RuntimeError`. pandas exceptions are preserved.
+    /// and Parquet decoding failures raise {class}`RuntimeError`.
+    /// pandas conversion exceptions are preserved. PyArrow is not required.
+    /// Only flat primitive Parquet schemas are supported. Legacy categorical
+    /// files without OMMX pandas metadata raise {class}`ValueError` because
+    /// their complete category order cannot be restored. Read those files with
+    /// pandas/PyArrow and save the DataFrame again with {meth}`~ommx.artifact.ArtifactDraft.add_dataframe`.
     pub fn get_dataframe<'py>(
         &mut self,
         py: Python<'py>,
         descriptor: &PyDescriptor,
-    ) -> OmmxPyResult<Bound<'py, PyAny>> {
+    ) -> OmmxPyResult<Bound<'py, PyDataFrame>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         assert_media_type(descriptor, "application/vnd.apache.parquet")?;
         let blob = self.inner.get_blob(as_descriptor(descriptor))?;
-        let io = py.import("io")?;
-        let pandas = py.import("pandas")?;
-        let bytes_io = io.call_method1("BytesIO", (PyBytes::new(py, &blob),))?;
-        Ok(pandas.call_method1("read_parquet", (bytes_io,))?)
+        let table = ommx::artifact::parquet::Table::from_parquet(blob)?;
+        dataframe::to_pandas(py, &table)
     }
 
     /// Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_json`.
@@ -1603,6 +1608,13 @@ impl PyArtifactDraft {
 
     /// Add a pandas DataFrame to the artifact with parquet format.
     ///
+    /// Encoding uses the Rust SDK and does not require PyArrow. Flat primitive
+    /// columns, nullable dtypes, categorical values, dates, timestamps and
+    /// timedeltas are supported. Nested objects and decimal columns must be
+    /// converted to primitive columns before saving. Indexes and column labels
+    /// are preserved. Unsupported pandas values raise {class}`TypeError`;
+    /// Parquet encoding failures raise {class}`RuntimeError`.
+    ///
     /// >>> import pandas as pd
     /// >>> df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
     ///
@@ -1618,12 +1630,13 @@ impl PyArtifactDraft {
     #[pyo3(signature = (df, *, annotation_namespace = "org.ommx.user.", **annotations))]
     pub fn add_dataframe(
         &mut self,
-        df: &Bound<PyAny>,
+        df: &Bound<PyDataFrame>,
         annotation_namespace: &str,
         annotations: Option<&Bound<pyo3::types::PyDict>>,
     ) -> OmmxPyResult<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(df.py());
-        let blob: Vec<u8> = df.call_method0("to_parquet")?.extract()?;
+        let table = dataframe::from_pandas(df)?;
+        let blob = table.to_parquet()?;
         let ann = build_annotations(annotation_namespace, annotations)?;
         self.0
             .add_layer("application/vnd.apache.parquet", &blob, ann)

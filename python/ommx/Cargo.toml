@@ -37,6 +37,7 @@ tracing-bridge = ["dep:pyo3-tracing-opentelemetry"]
 [dependencies.ommx]
 path = "../../rust/ommx"
 default-features = false
+features = ["parquet"]
 
 [dependencies]
 ommx-pyo3-bridge = { path = "../../rust/ommx-pyo3-bridge", default-features = false }

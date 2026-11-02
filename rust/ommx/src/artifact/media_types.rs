@@ -28,6 +28,8 @@ pub const V2_SOLUTION_MEDIA_TYPE: &str = "application/org.ommx.v2.solution";
 pub const V2_SAMPLE_SET_MEDIA_TYPE: &str = "application/org.ommx.v2.sample-set";
 pub const TRACE_OTLP_PROTOBUF_MEDIA_TYPE: &str = "application/org.ommx.trace.otlp+protobuf";
 pub const DIAGNOSTIC_MSGPACK_MEDIA_TYPE: &str = "application/org.ommx.diagnostic+msgpack";
+/// A Parquet table stored as an artifact layer.
+pub const PARQUET: &str = "application/vnd.apache.parquet";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RootPayloadVersion {

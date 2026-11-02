@@ -759,12 +759,17 @@ class Artifact:
         A mismatched media type raises {class}`ValueError`; registry and storage
         failures raise {class}`RuntimeError`. NumPy exceptions are preserved.
         """
-    def get_dataframe(self, descriptor: Descriptor) -> typing.Any:
+    def get_dataframe(self, descriptor: Descriptor) -> pandas.DataFrame:
         r"""
         Get a pandas DataFrame from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_dataframe`.
 
         A mismatched media type raises {class}`ValueError`; registry and storage
-        failures raise {class}`RuntimeError`. pandas exceptions are preserved.
+        and Parquet decoding failures raise {class}`RuntimeError`.
+        pandas conversion exceptions are preserved. PyArrow is not required.
+        Only flat primitive Parquet schemas are supported. Legacy categorical
+        files without OMMX pandas metadata raise {class}`ValueError` because
+        their complete category order cannot be restored. Read those files with
+        pandas/PyArrow and save the DataFrame again with {meth}`~ommx.artifact.ArtifactDraft.add_dataframe`.
         """
     def get_json(self, descriptor: Descriptor) -> typing.Any:
         r"""
@@ -979,13 +984,20 @@ class ArtifactDraft:
         """
     def add_dataframe(
         self,
-        df: typing.Any,
+        df: pandas.DataFrame,
         *,
         annotation_namespace: builtins.str = "org.ommx.user.",
         **annotations: typing.Any,
     ) -> Descriptor:
         r"""
         Add a pandas DataFrame to the artifact with parquet format.
+
+        Encoding uses the Rust SDK and does not require PyArrow. Flat primitive
+        columns, nullable dtypes, categorical values, dates, timestamps and
+        timedeltas are supported. Nested objects and decimal columns must be
+        converted to primitive columns before saving. Indexes and column labels
+        are preserved. Unsupported pandas values raise {class}`TypeError`;
+        Parquet encoding failures raise {class}`RuntimeError`.
 
         >>> import pandas as pd
         >>> df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})

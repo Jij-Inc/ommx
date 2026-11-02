@@ -216,7 +216,7 @@ def test_python_serialization_exceptions_are_preserved(monkeypatch: pytest.Monke
             draft.add_ndarray(np.array([1]))
 
     with monkeypatch.context() as patch:
-        patch.setattr(pd.DataFrame, "to_parquet", raise_sentinel)
+        patch.setattr(pd.DataFrame, "items", raise_sentinel)
         with pytest.raises(SentinelError, match="sentinel Python codec error"):
             draft.add_dataframe(pd.DataFrame({"value": [1]}))
 
@@ -227,11 +227,7 @@ def test_python_deserialization_exceptions_are_preserved(
     draft = ArtifactDraft.new_anonymous()
     json_descriptor = draft.add_json({"value": 1})
     ndarray_descriptor = draft.add_ndarray(np.array([1]))
-    dataframe_descriptor = draft.add_layer(
-        "application/vnd.apache.parquet",
-        b"not read because pandas is patched",
-        {},
-    )
+    dataframe_descriptor = draft.add_dataframe(pd.DataFrame({"value": [1]}))
     artifact = draft.commit()
 
     with monkeypatch.context() as patch:
@@ -245,6 +241,6 @@ def test_python_deserialization_exceptions_are_preserved(
             artifact.get_ndarray(ndarray_descriptor)
 
     with monkeypatch.context() as patch:
-        patch.setattr(pd, "read_parquet", raise_sentinel)
+        patch.setattr(pd, "Series", raise_sentinel)
         with pytest.raises(SentinelError, match="sentinel Python codec error"):
             artifact.get_dataframe(dataframe_descriptor)
