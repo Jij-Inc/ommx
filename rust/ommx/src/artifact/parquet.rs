@@ -1,8 +1,8 @@
 //! Flat, nullable tables stored in Parquet artifact layers.
 //!
-//! Available with the `parquet` feature. This codec uses the native Rust
-//! Parquet implementation without its Arrow feature. It supports primitive
-//! boolean, integer, floating-point, UTF-8, binary, date and timestamp columns.
+//! This codec uses the native Rust Parquet implementation without its Arrow
+//! feature. It supports boolean, integer, floating-point, UTF-8, binary, date
+//! and timestamp columns.
 //! Nested, decimal, INT96 and other unsupported schemas are rejected explicitly.
 //! Metadata is preserved as strings; interpretation belongs to the consumer.
 //!
