@@ -44,7 +44,7 @@ Until the 3.0.0 stable release, both the Book and API Reference describe `main`.
 
 ## Development
 
-See [DEVELOPMENT.md](./DEVELOPMENT.md) to work on OMMX, or the [adapter implementation guide](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html) to connect your own solving tool. The [Rust-to-Python PyO3 bridge](https://crates.io/crates/ommx-pyo3-bridge) has its own [API Reference](https://docs.rs/ommx-pyo3-bridge).
+See [DEVELOPMENT.md](./DEVELOPMENT.md) to work on OMMX, or the [Adapter API Reference](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/autoapi/ommx/adapter/index.html#ommx.adapter.SolverAdapter) to connect your own solving tool. The [Rust-to-Python PyO3 bridge](https://crates.io/crates/ommx-pyo3-bridge) has its own [API Reference](https://docs.rs/ommx-pyo3-bridge).
 
 [![CodSpeed Badge](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://codspeed.io/Jij-Inc/ommx?utm_source=badge)
 

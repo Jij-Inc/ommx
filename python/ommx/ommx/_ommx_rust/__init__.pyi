@@ -5373,7 +5373,8 @@ class Instance:
         # Examples
 
         A second call can propagate a bound learned by the first call. These
-        methods perform a single pass each, rather than iterating to a fixed point.
+        methods perform a single pass each. An empty result means only that
+        this pass made no update; it does not establish feasibility.
 
         >>> from ommx import Bound, Instance
         >>> instance = Instance.minimize()
@@ -5382,7 +5383,9 @@ class Instance:
         >>> _ = instance.add_constraint(x <= 2)
         >>> _ = instance.add_constraint(y <= x)
         >>> assert instance.tighten_bounds_simultaneously_once() == {x.id: Bound(0, 2)}
+        >>> assert x.bound == Bound(0, 2) and y.bound == Bound(0, 10)
         >>> assert instance.tighten_bounds_simultaneously_once(max_terms=64) == {y.id: Bound(0, 2)}
+        >>> assert y.bound == Bound(0, 2)
         >>> assert instance.tighten_bounds_simultaneously_once() == {}
         """
     def tighten_bounds_simultaneously_once_using_constraints(
@@ -13009,6 +13012,24 @@ class SealedRun:
     def trace(self) -> typing.Optional[tracing.TraceResult]:
         r"""
         Stored trace for this run, or `None` when this run was recorded without trace storage.
+
+        With `store_trace=True`, the `Run` span covers the body of the Run
+        context manager. On exit the trace is stored in the Experiment Artifact.
+        Read it after reopening the record without rerunning the computation:
+
+        >>> from ommx import Instance
+        >>> from ommx.experiment import Experiment
+        >>> instance = Instance.minimize()
+        >>> with Experiment.with_temp_local_registry(store_trace=True) as experiment:
+        ...     with experiment.run() as run:
+        ...         run.log_solution("candidate", instance.evaluate({}))
+        >>> reopened = Experiment.from_artifact(experiment.artifact)
+        >>> trace = reopened.runs[0].trace
+        >>> assert trace is not None and any(span.name == "Run" for span in trace.spans)
+
+        Run trace storage requires using the context manager and is independent
+        of exporting spans to an external backend. Forking carries the recorded
+        traces; select `store_trace=True` on the fork to trace new Runs there.
         """
     @property
     def solves(self) -> builtins.list[Solve]:

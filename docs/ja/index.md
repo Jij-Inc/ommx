@@ -28,7 +28,7 @@ OMMX（Open Mathematical prograMming eXchange、オミキス）を使うと、**
 
 前処理や変換の技術を共通の表現に対して実装すれば、モデラーや解法ごとに同じ処理を作り直さずに活用できます。新しい解法も、問題の受け取り方と結果の返し方を接続することで、蓄積された共通処理を利用できます。このため、OMMXではデータの交換と、それに対する共通処理の両方を整備します。
 
-現在は、対応する変換とその適用条件を選び、候補を評価するための部品を提供しています。例えば制約から変数の範囲を絞る処理もありますが、[一回の更新を行う操作](./how_to/tighten_bounds.md)であり、前処理全体を自動で最適化する仕組みではありません。
+現在は、対応する変換とその適用条件を選び、候補を評価するための部品を提供しています。例えば制約から変数の範囲を絞る処理もありますが、{meth}`一回の更新を行う操作 <ommx.Instance.tighten_bounds_simultaneously_once>`であり、前処理全体を自動で最適化する仕組みではありません。
 
 今後は、こうした前処理や変換を組み合わせ、問題の構造に応じて選択・反復する仕組みを育てていくことを目指します。個々の技術だけでなく、その使い分けも蓄積し、人が個別に行ってきた準備をより多く共通基盤に任せられるようにする方向です。
 
@@ -41,13 +41,14 @@ OMMX（Open Mathematical prograMming eXchange、オミキス）を使うと、**
 | 目的関数以外の指標を評価する | {class}`~ommx.NamedFunction` | 費用とは別の距離などを候補ごとに計算する |
 | 結果を名前と添字で取り出す | {meth}`名前付きの変数値の抽出 <ommx.Solution.extract_decision_variables>` | 変数値を後処理用の辞書や表にする |
 | OpenJijでサンプリングする | {class}`OpenJij SA AdapterのReference <ommx_openjij_adapter.OMMXOpenJijSAAdapter>` | 重みを設定して問題を準備し、候補を目的値と実行可能性で読む |
-| 独自のAdapterを実装する | [Adapter Developer Guide](./developer_guide/adapter.md) | 入力・変換・評価の契約と参照実装 |
+| 実行のトレースを調べる | {mod}`ommx.tracing` | 処理区間の親子関係を読み、タイムラインを保存する |
+| 独自のAdapterを実装する | {class}`Solver <ommx.adapter.SolverAdapter>`・{class}`Sampler <ommx.adapter.SamplerAdapter>` | 入力・変換・評価の契約と参照実装 |
 | 問題や候補解の意味を理解する | {class}`~ommx.Instance` → {class}`~ommx.Solution` | 変数の役割、実行可能性、目的値、最適性の違い |
 | 式を構築・評価する | {class}`~ommx.Function` | 式を作り、式の値と候補の実行可能性を区別する |
 | 固定した構造の数値条件を変える | {class}`~ommx.ParametricInstance` | 構造と変数・制約のIDを再利用し、パラメータの値を変えたInstanceを作る |
 | 特殊制約を使う | {class}`~ommx.IndicatorConstraint`・{class}`~ommx.OneHotConstraint`・{class}`~ommx.Sos1Constraint` | Indicator・OneHot・SOS1の成立条件 |
 | 問題を変換し、解法を選ぶ | [問題を変換して解法へ渡す](./user_guide/transform_and_solve.md) | 構造を保つ理由と、入力条件・変換の保証・設定を分ける |
-| 制約から変数の上下限を絞る | [bound更新のHow-to](./how_to/tighten_bounds.md) | 一回の更新と、変更された変数を確認する |
+| 制約から変数の上下限を絞る | {meth}`上下限を更新する操作 <ommx.Instance.tighten_bounds_simultaneously_once>` | 一回の更新と、変更された変数を確認する |
 | 式を変数名で確認する | {meth}`ラベルを使った式の表示 <ommx.Instance.format_function>` | Instanceの名前・添字を使って式を読む |
 | 変換後の結果を解釈する | [候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md) | activeな問題と、元の条件を使った評価の違い |
 | 複数の候補を比較する | {class}`~ommx.SampleSet` | サンプルごとの評価と、得られた候補の中からの選択 |
@@ -65,7 +66,7 @@ OMMX（Open Mathematical prograMming eXchange、オミキス）を使うと、**
 
 同じ問題を複数ソルバーで解きたい場合は、API Referenceの{mod}`Adapter比較の完全な使用例 <ommx.adapter>`へ進んでください。[OpenJijのTSP Notebook](./tutorial/tsp_sampling_with_openjij_adapter)は、経路の描画まで扱う任意の応用例です。
 
-Adapterを実装する人は、利用者向けTutorialの通読ではなく、[Developer Guide](./developer_guide/adapter.md)から共通の入力・変換・評価の契約と参照実装を確認してください。
+Adapterを実装する人は、{class}`SolverAdapter <ommx.adapter.SolverAdapter>`と{class}`SamplerAdapter <ommx.adapter.SamplerAdapter>`のReferenceで、入力・変換・評価の契約と実装例を確認できます。
 
 ## データの交換と共有を支える仕組み
 
@@ -111,7 +112,6 @@ examples/published_benchmarks
 :maxdepth: 1
 :hidden:
 
-how_to/tighten_bounds
 how_to/share_artifact_registry
 ```
 
@@ -152,17 +152,9 @@ user_guide/record_and_share
 :maxdepth: 1
 :hidden:
 
-how_to/trace_execution
+operations/export_traces
 how_to/manage_local_registry
 user_guide/agent_skills
-```
-
-```{toctree}
-:caption: Developer Guide
-:maxdepth: 1
-:hidden:
-
-developer_guide/adapter
 ```
 
 ```{toctree}

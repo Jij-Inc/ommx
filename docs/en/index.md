@@ -51,7 +51,8 @@ The development direction is to combine these techniques and select or repeat th
 | Sample with OpenJij | {class}`OpenJij SA Adapter Reference <ommx_openjij_adapter.OMMXOpenJijSAAdapter>` | Choose penalty weights, prepare a problem, and inspect the returned candidates |
 | Obtain existing problems | {mod}`~ommx.dataset` | Download a problem as an OMMX Instance |
 | Save and share problems, results, and trials | [Choose what to record](./user_guide/record_and_share.md) | Select a transfer format and the information needed to inspect or rerun work |
-| Connect your own solving tool | [Implement an Adapter](./tutorial/implement_adapter.md) | Translate backend inputs and outputs through the common adapter interface |
+| Inspect an execution trace | {mod}`ommx.tracing` | Read nested spans or save a timeline |
+| Connect your own solving tool | {class}`Solver <ommx.adapter.SolverAdapter>` or {class}`Sampler <ommx.adapter.SamplerAdapter>` | Translate backend inputs and outputs through the common adapter interface |
 
 This Book explains what OMMX can do, why and when to use it, what to choose, and how to interpret results. Use small examples to understand the meaning, then consult the {doc}`API Reference <api/index>` for detailed calls, arguments, preconditions, and guarantees. You do not need to read every page in order.
 
@@ -63,7 +64,7 @@ After [installing the SDK and an Adapter](./getting_started/install.md), choose 
 
 To compare solvers, use the {mod}`complete Adapter comparison example <ommx.adapter>` in the API Reference. The [OpenJij TSP example](./tutorial/tsp_sampling_with_openjij_adapter) is an optional application that includes route visualization.
 
-If you are connecting your own solving tool, the [adapter implementation guide](./tutorial/implement_adapter.md) explains how to translate its input and output through OMMX's common interface.
+If you are connecting your own solving tool, the {class}`SolverAdapter <ommx.adapter.SolverAdapter>` and {class}`SamplerAdapter <ommx.adapter.SamplerAdapter>` references explain how to translate its input and output through OMMX's common interface.
 
 ## Support data exchange and sharing
 
@@ -105,14 +106,6 @@ examples/published_benchmarks
 ```
 
 ```{toctree}
-:caption: Adapter development
-:maxdepth: 1
-:hidden:
-
-tutorial/implement_adapter
-```
-
-```{toctree}
 :caption: Transform problems and connect solvers
 :maxdepth: 1
 :hidden:
@@ -146,7 +139,7 @@ how_to/manage_local_registry
 how_to/share_artifact_registry
 user_guide/agent_skills
 user_guide/adapter_diagnostics
-user_guide/tracing
+operations/export_traces
 ```
 
 ```{toctree}

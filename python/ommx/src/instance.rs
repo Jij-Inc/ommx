@@ -457,7 +457,8 @@ impl Instance {
     /// # Examples
     ///
     /// A second call can propagate a bound learned by the first call. These
-    /// methods perform a single pass each, rather than iterating to a fixed point.
+    /// methods perform a single pass each. An empty result means only that
+    /// this pass made no update; it does not establish feasibility.
     ///
     /// >>> from ommx import Bound, Instance
     /// >>> instance = Instance.minimize()
@@ -466,7 +467,9 @@ impl Instance {
     /// >>> _ = instance.add_constraint(x <= 2)
     /// >>> _ = instance.add_constraint(y <= x)
     /// >>> assert instance.tighten_bounds_simultaneously_once() == {x.id: Bound(0, 2)}
+    /// >>> assert x.bound == Bound(0, 2) and y.bound == Bound(0, 10)
     /// >>> assert instance.tighten_bounds_simultaneously_once(max_terms=64) == {y.id: Bound(0, 2)}
+    /// >>> assert y.bound == Bound(0, 2)
     /// >>> assert instance.tighten_bounds_simultaneously_once() == {}
     #[pyo3(signature = (*, max_terms=32, atol=None))]
     pub fn tighten_bounds_simultaneously_once(
