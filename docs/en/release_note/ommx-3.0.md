@@ -6,18 +6,28 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-### Extensible kind APIs ([#1329](https://github.com/Jij-Inc/ommx/pull/1329))
+## 3.0.0 Beta 9
 
-`Kind`, `ConstraintKind`, and `ProvenanceKind` now have nominal value
-class type hints instead of exhaustive Enum hints. Known constants, comparisons,
-hashing, integer conversion, and Kind protobuf conversion remain available.
-Keep an explicit rejecting fallback when handling kinds or constraint families.
-`ConstraintKind` includes `Regular` and replaces both the former special-family
-selector and string inputs such as `"sos1"`. Use
-`constraints.of_kind(ConstraintKind.Sos1)` or
-`constraints_df(kind=ConstraintKind.Sos1)`; filtered views keep their precise types.
-See [the migration guide](../migration/python_sdk_v2_to_v3.md)
-for the V3 numeric scalar extension contract.
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b9-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b9)
+
+### ⚠ Use `ConstraintKind` for constraint families ([#1329](https://github.com/Jij-Inc/ommx/pull/1329))
+
+When migrating from Beta 8, replace `SpecialConstraintKind` and string
+selectors such as `"sos1"` with `ConstraintKind` constants. For example,
+`constraints.of_kind(ConstraintKind.Sos1)` returns a view with SOS1 ID and
+row types, and `constraints_df(kind=ConstraintKind.Sos1)` selects the same
+family for a DataFrame.
+
+`Kind`, `ConstraintKind`, and `ProvenanceKind` expose known constants and allow
+new kinds in future SDKs. Code that interprets a domain or constraint family
+must handle unrecognized values explicitly. Comparison, hashing, integer
+conversion, and `Kind.from_pb()` / `Kind.to_pb()` remain available. See
+[the migration guide](../migration/python_sdk_v2_to_v3.md) for the numeric scalar extension contract.
+
+`instance.active_constraint_kinds` reports every family with active rows.
+`instance.active_special_constraint_kinds` reports only the special families.
+Passing `ConstraintKind.Regular` to `lower_special_constraints` raises an error
+before any selected family is converted.
 
 For a solution containing OneHot constraint 30, look up its violation by typed ID and select its table by family.
 
@@ -43,12 +53,16 @@ x = instance.new_finite_domain([0.1, 0.3, 0.5, 1.0], name="x")
 
 assert x.kind == DecisionVariable.FINITE_DOMAIN
 assert x.values == [0.1, 0.3, 0.5, 1.0]
+instance.objective = x
+assert instance.evaluate({x.id: 0.3}).feasible
+assert not instance.evaluate({x.id: 0.4}).feasible
 ```
 
 The value set must be non-empty and contain unique, finite numbers. OMMX
-preserves the exact set through evaluation, sampling, and v1/v2 serialization;
-it is not a discretization of a continuous interval. See {meth}`~ommx.DecisionVariable.finite_domain` for the domain and
-DataFrame representation.
+preserves the exact set through evaluation, sampling, and v1/v2 serialization.
+The bounds give its minimum and maximum. MPS export rejects a solver-used
+finite-domain variable because bounds cannot represent an arbitrary set of allowed values.
+See {meth}`~ommx.DecisionVariable.finite_domain` for the domain and DataFrame representation.
 
 ## 3.0.0 Beta 8
 
