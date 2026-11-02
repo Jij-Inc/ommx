@@ -90,7 +90,7 @@ def _columns_index(labels: list[Any], description: dict[str, Any]) -> pd.Index:
         raise ValueError("A single column axis must have exactly one name")
     if description["column_range"] is not None:
         result = pd.RangeIndex(**description["column_range"], name=names[0])
-        if not result.equals(pd.Index(labels)):
+        if not _matches_range(result, labels):
             raise ValueError("RangeIndex metadata does not match column labels")
         return result
     axis = pd.Index(
@@ -104,6 +104,14 @@ def _columns_index(labels: list[Any], description: dict[str, Any]) -> pd.Index:
             "Column labels cannot be represented exactly by their declared dtype"
         )
     return axis
+
+
+def _matches_range(index: pd.RangeIndex, values: list[Any]) -> bool:
+    # Index.equals can compare integers through float64 and accept booleans.
+    return len(index) == len(values) and all(
+        type(value) is int and value == expected
+        for expected, value in zip(index, values)
+    )
 
 
 def _timezone_spec(dtype: pd.DatetimeTZDtype, field: str) -> dict[str, Any]:
@@ -281,12 +289,17 @@ def to_columns(df: pd.DataFrame) -> tuple[list[dict[str, Any]], dict[str, str]]:
     # fields and allowing non-string labels.
     used: set[str] = set()
 
-    def add(series: pd.Series, preferred: str, label: Any) -> str:
+    def add(series: pd.Series, preferred: str, label: Any, codes=None) -> str:
         field = preferred
         while field in used:
             field = "_" + field
         used.add(field)
         column, spec = _column(series, field)
+        if codes is not None:
+            level = column["data"]["values"]
+            column["data"]["values"] = [
+                None if code == -1 else level[code] for code in codes
+            ]
         columns.append(column)
         specs[field] = spec
         kind = column["data"]["type"]
@@ -348,20 +361,25 @@ def to_columns(df: pd.DataFrame) -> tuple[list[dict[str, Any]], dict[str, str]]:
             if isinstance(df.index, pd.RangeIndex)
             else None,
         }
-        index_levels = []
-        for level in range(df.index.nlevels):
-            name = df.index.names[level]
-            level_values = df.index.get_level_values(level)
-            index_levels.append(level_values)
+        row_index = df.index
+        for level, name in enumerate(row_index.names):
+            if isinstance(row_index, pd.MultiIndex):
+                level_index, codes = row_index.levels[level], row_index.codes[level]
+            else:
+                level_index, codes = row_index, None
             field = add(
-                pd.Series(level_values),
+                pd.Series(level_index),
                 f"__index_level_{level}__",
                 name,
+                codes,
             )
             index_spec["fields"].append(field)
-        if isinstance(df.index, pd.MultiIndex):
+        if isinstance(row_index, pd.MultiIndex):
             _check_axis(
-                df.index, pd.MultiIndex.from_arrays(index_levels, names=df.index.names)
+                df.index,
+                _row_multi_index(
+                    columns[-df.index.nlevels :], specs, list(df.index.names)
+                ),
             )
         if (
             isinstance(df.index, (pd.DatetimeIndex, pd.TimedeltaIndex))
@@ -435,7 +453,12 @@ def _series(data: dict[str, Any], spec: dict[str, Any] | None = None) -> pd.Seri
         # Match on Parquet values, before converting the dictionary to pandas
         # dates, durations or other dtypes. Only a Parquet null gets code -1.
         def key(value: Any) -> Any:
-            return bytes(value) if kind == "binary" else value
+            if kind == "binary":
+                return bytes(value)
+            if kind.startswith("float"):
+                # pandas equates +0.0 and -0.0, but the Parquet values differ.
+                return float(value).hex()
+            return value
 
         codes = {key(v): i for i, v in enumerate(definitions["values"])}
         try:
@@ -574,6 +597,49 @@ def _validate_field_roles(
         )
 
 
+def _row_multi_index(
+    columns: list[dict[str, Any]], specs: dict[str, Any], names: list[Any]
+) -> pd.MultiIndex:
+    # pandas infers missing keys when factorizing an array. Use the Parquet
+    # mask instead: only a null gets code -1, and integers never pass through
+    # a float array just because a different row has a missing key.
+    levels = []
+    codes = []
+    for column in columns:
+        data = column["data"]
+        values = data["values"]
+        if data["type"] == "null":
+            levels.append(pd.Index([], dtype=object))
+            codes.append(np.full(values, -1, dtype=np.intp))
+            continue
+        present = np.array([v is not None for v in values], dtype=bool)
+        nonnull = [v for v in values if v is not None]
+        spec = specs[column["name"]]
+        if data["type"].startswith("float"):
+            if len({bool(np.signbit(v)) for v in nonnull if v == 0}) > 1:
+                raise ValueError(
+                    "A MultiIndex level cannot distinguish positive and negative zero"
+                )
+            if spec.get("dtype") in (None, "object", data["type"]) and any(
+                np.isnan(v) for v in nonnull
+            ):
+                # A NumPy float level treats NaN as a missing key, even
+                # when Parquet says it is present.
+                spec = {"dtype": data["type"].capitalize()}
+        valid = _series({**data, "values": nonnull}, spec)
+        level_codes, level = pd.Index(valid).factorize(sort=True, use_na_sentinel=False)
+        row_codes = np.full(len(values), -1, dtype=np.intp)
+        row_codes[present] = level_codes
+        levels.append(level)
+        codes.append(row_codes)
+    index = pd.MultiIndex(levels=levels, codes=codes, names=names)
+    if any(not np.array_equal(a, b) for a, b in zip(codes, index.codes)):
+        raise ValueError(
+            "A non-null Parquet value cannot be represented as a MultiIndex key"
+        )
+    return index
+
+
 def _pyarrow_column_index(
     labels: pd.Index, levels: list[dict[str, Any]]
 ) -> pd.MultiIndex:
@@ -627,14 +693,14 @@ def from_columns(
         if description["version"] != 1:
             raise ValueError("Unsupported OMMX pandas metadata version")
         _validate_field_roles(columns, description)
-        fields = {
-            column["name"]: _series(
-                column["data"], description["specs"].get(column["name"])
-            )
-            for column in columns
-        }
+        physical = {column["name"]: column for column in columns}
+        specs = description["specs"]
+
+        def decode(field: str) -> pd.Series:
+            return _series(physical[field]["data"], specs[field])
+
         labels = description["columns"]
-        df = pd.DataFrame({i: fields[item["field"]] for i, item in enumerate(labels)})
+        df = pd.DataFrame({i: decode(item["field"]) for i, item in enumerate(labels)})
         column_labels = [_restore_label(item["label"]) for item in labels]
         df.columns = _columns_index(column_labels, description)
         if not df.columns.is_unique:
@@ -650,16 +716,21 @@ def from_columns(
                 name=_restore_label(index_spec["name"]),
             )
         else:
-            arrays = [fields[field] for field in index_spec["fields"]]
+            index_fields = index_spec["fields"]
             names = [_restore_label(name) for name in index_spec["names"]]
             index = (
-                pd.MultiIndex.from_arrays(arrays, names=names)
-                if index_spec.get("multi", len(arrays) > 1)
-                else pd.Index(arrays[0], name=names[0])
+                _row_multi_index([physical[f] for f in index_fields], specs, names)
+                if index_spec.get("multi", len(index_fields) > 1)
+                else pd.Index(decode(index_fields[0]), name=names[0])
             )
             if index_spec.get("range"):
                 declared = pd.RangeIndex(**index_spec["range"], name=names[0])
-                if not declared.equals(index):
+                data = physical[index_fields[0]]["data"]
+                if (
+                    isinstance(index, pd.MultiIndex)
+                    or not data["type"].startswith(("int", "uint"))
+                    or not _matches_range(declared, data["values"])
+                ):
                     raise ValueError(
                         "RangeIndex metadata does not match Parquet index values"
                     )
@@ -673,7 +744,7 @@ def from_columns(
                     raise ValueError(
                         "Frequency metadata requires a datetime or timedelta index"
                     )
-        if len(index) != len(next(iter(fields.values()), ())):
+        if index_spec["kind"] == "range" and len(index) != len(df):
             raise ValueError("Index metadata does not match the Parquet row count")
         if not labels:
             df = pd.DataFrame(index=index, columns=df.columns)
@@ -684,6 +755,12 @@ def from_columns(
 
     pandas_metadata = json.loads(metadata.get("pandas", "{}"))
     specs = {item["field_name"]: item for item in pandas_metadata.get("columns", [])}
+    index_columns = pandas_metadata.get("index_columns", [])
+    multi_row = len(index_columns) > 1 and all(
+        isinstance(f, str) for f in index_columns
+    )
+    index_specs = {}
+    index_data = {}
     fields = {}
     for column in columns:
         info = specs.get(column["name"], {})
@@ -696,6 +773,10 @@ def from_columns(
                 "Without ommx.pandas, the full category list and its order cannot be restored losslessly; "
                 "read it with pandas.read_parquet and PyArrow, then save the DataFrame with add_dataframe"
             )
+        if multi_row and column["name"] in index_columns:
+            index_specs[column["name"]] = {"dtype": dtype}
+            index_data[column["name"]] = column
+            continue
         series = _series(column["data"], {"dtype": dtype})
         if timezone and "timestamp" in column["data"]["type"]:
             series = (
@@ -705,7 +786,6 @@ def from_columns(
             )
         fields[column["name"]] = series
     df = pd.DataFrame(fields)
-    index_columns = pandas_metadata.get("index_columns", [])
     if index_columns and isinstance(index_columns[0], dict):
         spec = index_columns[0]
         index = pd.RangeIndex(
@@ -714,6 +794,16 @@ def from_columns(
         if len(index_columns) != 1 or len(index) != len(df):
             raise ValueError("Index metadata does not match the Parquet rows or fields")
         df.index = index
+    elif multi_row:
+        if len(set(index_columns)) != len(index_columns) or set(index_data) != set(
+            index_columns
+        ):
+            raise ValueError("Invalid Parquet index fields in pandas metadata")
+        df.index = _row_multi_index(
+            [index_data[f] for f in index_columns],
+            index_specs,
+            [specs.get(f, {}).get("name") for f in index_columns],
+        )
     elif index_columns:
         df = df.set_index(index_columns)
         df.index.names = [specs.get(field, {}).get("name") for field in index_columns]

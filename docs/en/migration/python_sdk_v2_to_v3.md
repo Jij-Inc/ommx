@@ -1023,6 +1023,8 @@ categorical column allows `low`, `medium`, `high` but contains only `low` and
   A stored value outside its declared categories raises `ValueError`.
   Index levels must use all declared index fields, column labels must be
   unique, and the reconstructed row count must match the Parquet table.
+  In a row MultiIndex, a missing key is a Parquet null. For example, a level
+  containing the integer `2**53 + 1` and a missing key keeps that exact integer.
   String columns retain their NaN or `pd.NA` missing-value convention.
   If a timestamp's timezone cannot be reconstructed, convert it to UTC or
   a named IANA timezone before saving.

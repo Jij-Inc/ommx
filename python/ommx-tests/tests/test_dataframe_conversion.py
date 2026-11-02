@@ -64,7 +64,7 @@ def test_nullable_floats_preserve_valid_nan_and_null(dtype):
 @pytest.mark.parametrize("unit", ["ms", "us"])
 @pytest.mark.parametrize("zoned", [False, True])
 def test_timestamp_outside_nanosecond_range(unit, zoned):
-    series = pd.Series(["2500-01-01", None], dtype=f"datetime64[{unit}]")
+    series = pd.Series(np.array(["2500-01-01", "NaT"], dtype=f"datetime64[{unit}]"))
     if zoned:
         series = series.dt.tz_localize("Asia/Tokyo")
     frame = pd.DataFrame({"v": series})
@@ -248,6 +248,68 @@ def test_range_metadata_cannot_invent_rows(key):
         desc["specs"] = {}
     with pytest.raises(ValueError, match="Parquet row"):
         from_columns([], {key: json.dumps(desc)})
+
+
+def test_multiindex_missing_keys_use_parquet_nulls_without_rounding():
+    index = pd.MultiIndex(
+        levels=[[2**53 + 1], [1.5], ["x"]],
+        codes=[[0, -1], [-1, 0], [0, -1]],
+        names=["id", "weight", "label"],
+    )
+    frame = pd.DataFrame(index=index)
+    columns, metadata = to_columns(frame)
+    for column, expected in zip(columns, ([2**53 + 1, None], [None, 1.5], ["x", None])):
+        assert column["data"]["values"] == expected
+    restored = from_columns(columns, metadata)
+    assert_frame_equal(restored, frame)
+    assert to_columns(restored)[0] == columns
+
+
+def test_multiindex_keeps_present_nan_separate_from_null_after_resaving():
+    columns = [
+        {"name": "v", "data": {"type": "float64", "values": [np.nan, None]}},
+        {"name": "i", "data": {"type": "int64", "values": [0, 0]}},
+    ]
+    frame = from_columns(columns, {"pandas": json.dumps({"index_columns": ["v", "i"]})})
+    for _ in range(2):
+        columns, metadata = to_columns(frame)
+        values = columns[0]["data"]["values"]
+        assert np.isnan(values[0]) and values[1] is None
+        frame = from_columns(columns, metadata)
+
+
+@pytest.mark.parametrize(
+    "kind,values,start",
+    [
+        ("float64", [float(2**53)], 2**53 + 1),
+        ("boolean", [False, True], 0),
+        ("int64", [2**53], 2**53 + 1),
+    ],
+)
+def test_range_metadata_cannot_replace_parquet_values(kind, values, start):
+    columns, metadata = to_columns(
+        pd.DataFrame(index=pd.RangeIndex(start, start + len(values)))
+    )
+    columns[0]["data"] = {"type": kind, "values": values}
+    desc = json.loads(metadata["ommx.pandas"])
+    desc["specs"][columns[0]["name"]] = {}
+    with pytest.raises(ValueError, match="RangeIndex metadata"):
+        from_columns(columns, {"ommx.pandas": json.dumps(desc)})
+
+
+def test_grouping_cannot_change_the_sign_of_a_physical_zero():
+    frame = pd.DataFrame({"v": pd.Categorical([-0.0])})
+    columns, metadata = to_columns(frame)
+    columns[0]["data"]["values"][0] = 0.0
+    with pytest.raises(ValueError, match="missing from the category"):
+        from_columns(columns, metadata)
+
+    columns = [
+        {"name": "v", "data": {"type": "float64", "values": [0.0, -0.0]}},
+        {"name": "i", "data": {"type": "int64", "values": [0, 0]}},
+    ]
+    with pytest.raises(ValueError, match="negative zero"):
+        from_columns(columns, {"pandas": json.dumps({"index_columns": ["v", "i"]})})
 
 
 @pytest.mark.parametrize("dtype, label", [("int64", 1), ("float64", 0.25)])

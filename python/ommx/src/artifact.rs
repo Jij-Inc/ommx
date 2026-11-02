@@ -605,7 +605,7 @@ impl PyArtifact {
         descriptor: &PyDescriptor,
     ) -> OmmxPyResult<Bound<'py, PyDataFrame>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        assert_media_type(descriptor, "application/vnd.apache.parquet")?;
+        assert_media_type(descriptor, ommx::artifact::media_types::PARQUET)?;
         let blob = self.inner.get_blob(as_descriptor(descriptor))?;
         let table = ommx::artifact::parquet::Table::from_parquet(blob)?;
         dataframe::to_pandas(py, &table)
@@ -1641,10 +1641,8 @@ impl PyArtifactDraft {
     ) -> OmmxPyResult<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(df.py());
         let table = dataframe::from_pandas(df)?;
-        let blob = table.to_parquet()?;
         let ann = build_annotations(annotation_namespace, annotations)?;
-        self.0
-            .add_layer("application/vnd.apache.parquet", &blob, ann)
+        Ok(self.0.as_mut()?.add_parquet(&table, ann)?.into())
     }
 
     /// Add a JSON object to the artifact.
