@@ -173,7 +173,7 @@ state = instance.state_from_named_values({"x": {(0,): 1.0, (1,): 4.0}})
 Unknown keys raise `KeyError`; ambiguous name/subscript pairs raise `ValueError`.
 Keys that collide after string or integer normalization also raise `ValueError`.
 The SCIP adapter also accepts `NamedState` directly through `initial_state`.
-See {ref}`Providing Values by Name and Subscripts <named-initial-state>`
+See {meth}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter.solve`
 for a SCIP example.
 
 ### 🆕 Discover the bundled coding-agent plugin and skill ([#1264](https://github.com/Jij-Inc/ommx/pull/1264))
@@ -247,7 +247,7 @@ published feasible solution to be reported as infeasible.
 If you used {meth}`~ommx.Instance.load_qplib` to create a saved model, reimport
 it from the original `.qplib` file. `ommx.dataset.qplib` now loads the corrected
 distribution published with OMMX 2.8.0, even if the older distribution is cached.
-See the [QPLIB tutorial](../tutorial/download_qplib_instance.md).
+See the {func}`~ommx.dataset.qplib`.
 
 ### 🛠 Preserve binary variables when importing MPS and MIPLIB ([#1202](https://github.com/Jij-Inc/ommx/pull/1202), [#1205](https://github.com/Jij-Inc/ommx/pull/1205))
 
@@ -261,7 +261,7 @@ precedence.
 Reimport affected saved models from the original MPS file.
 `ommx.dataset.miplib2017` now loads the corrected MIPLIB distribution published
 with OMMX 2.7.0, even if the older distribution is cached. See the
-[MIPLIB tutorial](../tutorial/download_miplib_instance.md).
+{func}`~ommx.dataset.miplib2017`.
 
 ### 🛠 Consistent tolerance for variable bounds and constraints ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
 
@@ -411,7 +411,7 @@ solution = instance.evaluate(state, atol=1e-8)
 Variables omitted from the solution file receive zero. The reported `objvar`
 is not treated as a variable; evaluation computes the objective from the model.
 `ommx.qplib.load_solution` is also available. See the
-[QPLIB tutorial](../tutorial/download_qplib_instance.md) for supported files.
+{func}`~ommx.qplib.load_solution` for supported files.
 
 ### 🆕 A shared exception for Rust extension transfers ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
 

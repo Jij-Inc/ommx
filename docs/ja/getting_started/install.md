@@ -46,7 +46,7 @@ uv sync --locked --package ommx --no-default-groups --python 3.12
 uv run --no-sync python -c "from importlib.metadata import version; from ommx import Instance; print(version('ommx')); print(Instance.minimize())"
 ```
 
-サンプルをスクリプトとして保存したら、`uv run --no-sync python example.py`で実行できます。{meth}`~ommx.Instance.prepare`による問題の変換、{class}`~ommx.InstanceClass`への所属判定、[既存の問題と候補解の評価](../tutorial/evaluate_existing_candidate)にはSDKだけを使います。[既存問題の入手](../how_to/load_existing_instance.md)で公開データを初めて取得するときは、ネットワーク接続が必要です。
+サンプルをスクリプトとして保存したら、`uv run --no-sync python example.py`で実行できます。{meth}`~ommx.Instance.prepare`による問題の変換、{class}`~ommx.InstanceClass`への所属判定、{func}`既存の問題と候補の評価 <ommx.qplib.load_solution>`にはSDKだけを使います。{mod}`既存問題の入手 <ommx.dataset>`で公開データを初めて取得するときは、ネットワーク接続が必要です。
 
 (install-adapters)=
 ## 2. ソルバーを使う場合だけAdapterを追加する
@@ -84,7 +84,7 @@ main：
 uv sync --locked --package ommx-highs-adapter --no-default-groups --inexact
 ```
 
-{class}`~ommx_highs_adapter.OMMXHighsAdapter`のReferenceに、特殊制約を準備して解く完全な使用例があります。モデルをその場で作るため、HiGHSとSDKだけで実行できます。[複数のAdapterで結果を比較する](../how_to/compare_adapters.md)場合は、両方のAdapterと、後述の手順でmatplotlibを用意します。
+{class}`~ommx_highs_adapter.OMMXHighsAdapter`のReferenceに、特殊制約を準備して解く完全な使用例があります。モデルをその場で作るため、HiGHSとSDKだけで実行できます。{mod}`Adapter比較の使用例 <ommx.adapter>`を実行する場合は、両方のAdapterと、後述の手順でmatplotlibを用意します。
 
 (install-openjij-adapter)=
 ### OpenJij Adapter

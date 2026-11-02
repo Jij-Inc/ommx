@@ -7,6 +7,9 @@ does not determine the search method or its optimality guarantees. See
 :class:`~ommx.adapter.SolverAdapter` and :class:`~ommx.adapter.SamplerAdapter`
 for the common contract.
 
+The :mod:`Adapter comparison example <ommx.adapter>` constructs one model, solves
+it with HiGHS and SCIP, and compares the returned values in tables and a plot.
+
 Inspect the concrete Adapter's ``INPUT_CLASS`` for the exact input it accepts.
 The recommended preparation policy is an editable starting point; constructing
 it neither changes an Instance nor guarantees that a particular problem can be

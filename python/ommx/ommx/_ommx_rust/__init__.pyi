@@ -6459,6 +6459,8 @@ class Instance:
         better candidate or prove optimality. An infeasible candidate can still
         have an objective value. See {class}`~ommx.Solution` for a complete
         example and how to interpret the results.
+        The {func}`QPLIB example <ommx.qplib.load_solution>` evaluates a
+        candidate from a file and identifies violated constraints.
 
         Evaluate a solver's returned candidate with the transformed Instance
         used for that solve. Its recorded dependencies, removed constraints,
@@ -14353,6 +14355,8 @@ class State:
         Malformed input, duplicate IDs, nonfinite values, and out-of-range IDs
         raise `ValueError` with a line number. File read failures raise
         `RuntimeError`. Loading does not check bounds or feasibility.
+        See the {func}`published candidate example <ommx.qplib.load_solution>`
+        to read a matching problem, evaluate the assignment, and inspect violations.
 
         >>> import tempfile
         >>> from pathlib import Path

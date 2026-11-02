@@ -3,6 +3,7 @@ import importlib
 import inspect
 import pkgutil
 from collections.abc import Iterator
+from pathlib import Path
 from types import ModuleType
 
 import ommx
@@ -109,7 +110,12 @@ NON_HERMETIC_SETUP_EXAMPLES = {
 
 
 @pytest.mark.parametrize("test", DOCTESTS, ids=lambda test: test.name)
-def test_doctest(test: doctest.DocTest) -> None:
+def test_doctest(test: doctest.DocTest, monkeypatch: pytest.MonkeyPatch) -> None:
+    if test.name == "ommx.qplib.load_solution":
+        # The Reference asks readers to download this published file pair.
+        monkeypatch.chdir(
+            Path(__file__).resolve().parents[3] / "rust/ommx/tests/fixtures"
+        )
     doctest.DebugRunner(optionflags=doctest.ELLIPSIS).run(test)
 
 

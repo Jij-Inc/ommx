@@ -3,7 +3,7 @@
   "title": "OMMX Book 概念とページの依存台帳",
   "created_at": "2026-10-26",
   "language": "ja",
-  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。日英の候補評価章と変換・解法選択章、変数復元・保持情報・特殊制約・InstanceClass・Preparation・Adapterの共有Reference移管を含む。日英の保存・共有章とArtifact/Experiment/MPSの共有Reference、日英のCLI/Registry運用Referenceへの移管を含む。日英の基本求解・特殊制約のnative実行・HiGHSの自動準備・OpenJijの小さなsampling例の共有Adapter Referenceへの移管を含む。その他の英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。 3.0.0安定版のリリースまではBookとAPI Referenceがともにmainを説明し、導入方法として最新の公開prereleaseとmainの両方を案内する。",
+  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。日英の候補評価章と変換・解法選択章、変数復元・保持情報・特殊制約・InstanceClass・Preparation・Adapterの共有Reference移管を含む。日英の保存・共有章とArtifact/Experiment/MPSの共有Reference、日英のCLI/Registry運用Referenceへの移管を含む。日英の基本求解・特殊制約のnative実行・HiGHSの自動準備・OpenJijの小さなsampling例の共有Adapter Referenceへの移管を含む。その他の英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。 3.0.0安定版のリリースまではBookとAPI Referenceがともにmainを説明し、導入方法として最新の公開prereleaseとmainの両方を案内する。 日英のAdapter比較手順は共通AdapterモジュールのReferenceへ統合する。",
   "baseline": {
     "repository": "Jij-Inc/ommx",
     "source_revision": "0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2",
@@ -245,6 +245,51 @@
         "T8"
       ],
       "note": "日英solve_with_ommx_adapter、日本語のnative特殊制約求解・HiGHS向けPreparation・小さなOpenJij samplingの旧5原稿を共有Adapter Referenceへ統合する。基本例・モデル構築・求解/サンプリング・結果読出しを所有クラス内で完結させる。旧T1/T2/T3/P12をReferenceの意味的な所有先へ移し、HiGHSとOpenJijは他のAdapterを前提としない直接入口を持つ。日英Home/導入と旧ページへの導線を実在する使用例へ接続し、Bookの紹介だけからAPI操作能力を付与しない。比較・診断・初期値・Adapter実装契約の全文移管は後続のまとまりとして保持する。歴史的baselineと過去の編集記録は保持し、本文レビュー記録はチャットに残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "95976282a1ddf9de4e95bd646d8f62d2a19e82ac",
+      "target_revision": "codex/adapter-comparison-reference",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "SETUP",
+        "B_EVALUATE",
+        "R_ADAPTERS",
+        "R_API.adapter",
+        "R_API.adapter.comparison",
+        "P15",
+        "DEV_A"
+      ],
+      "note": "日英のAdapter比較の旧2原稿を共通AdapterモジュールのReferenceへ統合する。同じモデルの構築からHiGHS/SCIP求解、報告目的値・sense・実行可能性・最適性の表、名前による変数抽出と図示、DataFrame結合まで自己完結したdoctest例を所有する。P2をR_API.adapter.comparisonへ改称し、基本求解Referenceの既読を要求しない直接入口にする。比較基準と変換後の結果解釈は既存Book第3章に残す。日英Home・導入・評価章とAdapter一覧から使用例へ接続し、既存診断・実装ページはリンクだけを更新する。歴史的baselineと過去の編集記録を保持し、本文レビュー記録はチャットに残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "6e06d2d38f2b453b6ba645ff6c00f07fbe907a8d",
+      "target_revision": "codex/book-original-problem",
+      "affected_pages": [
+        "README",
+        "HOME",
+        "HOME_EN",
+        "B_TRANSFORM",
+        "B_EVALUATE"
+      ],
+      "note": "READMEと日英Bookの生産ラインの例を対応させる。変換章は既知の上限を使う線形化、評価章は候補を元の生産条件で判断することを、それぞれ独立して説明する。候補評価の実行例はSolutionのReferenceが所有する。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "684b2cbdeabdd7afdde03edd5e9df92d4ef6f0e7",
+      "target_revision": "codex/candidate-input-reference",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "SETUP",
+        "R_API.qplib.candidate",
+        "R_API.dataset",
+        "R_API.adapter.initial",
+        "R_API.adapter.initial.named"
+      ],
+      "note": "日英6原稿を既存問題の入手、公開候補の評価、SCIPへの初期候補の提示というまとまりで共有API Referenceへ移す。ホーム・セットアップ・リリースノートの入口を更新する。"
     }
   ],
   "interpretation": {
@@ -1122,7 +1167,7 @@
     {
       "id": "adapter.initial_state",
       "label": "初期候補を実行系へ渡す",
-      "owner": "P5",
+      "owner": "R_API.adapter.initial",
       "requires": [
         "adapter.basic",
         "state.values"
@@ -1154,7 +1199,7 @@
     {
       "id": "model.import",
       "label": "外部モデルやデータからInstanceを得る",
-      "owner": "P3",
+      "owner": "R_API.dataset",
       "requires": [
         "instance.model"
       ],
@@ -1802,7 +1847,7 @@
           ],
           "mentions": [
             "evaluation.basic",
-            "special.sos1",
+            "special.indicator",
             "transformation.guarantees",
             "adapter.basic",
             "artifact.roundtrip",
@@ -1822,7 +1867,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "数理最適化の基礎から、採用目的と次に読む先を選べる入口。SOS1の局所例は構造保持と変換の用途を説明し、追加・評価・loweringのAPI能力は付与しない。CLIの導入手順はリンク先の運用Referenceが所有する。",
+      "notes": "数理最適化の基礎から、採用目的と次に読む先を選べる入口。生産ラインのIndicator制約の例は構造保持と変換の用途を説明し、追加・評価・loweringのAPI能力は付与しない。CLIの導入手順はリンク先の運用Referenceが所有する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -1872,7 +1917,6 @@
             "ommx.adoption"
           ],
           "mentions": [
-            "instance.model",
             "evaluation.basic",
             "optimality.limit"
           ]
@@ -1884,9 +1928,7 @@
             "ommx.adoption"
           ],
           "mentions": [
-            "special.onehot",
             "special.indicator",
-            "special.sos1",
             "transformation.guarantees"
           ]
         },
@@ -1932,7 +1974,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、候補評価とOneHotの等式化で具体化する。コードは意味を読む小例で、Instance全体やState・evaluateの一般的な操作能力を付与しない。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。 基本求解・native特殊制約・HiGHSのcopy上の準備・OpenJijの重み付きsamplingは、共有Adapter Referenceの完結した例へ案内する。ナビゲーションからAPI操作の習得を付与しない。",
+      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、生産ラインの上限を使って候補評価とIndicatorの表現選択を具体化する。実行例はSolutionのReferenceが所有する。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。 基本求解・native特殊制約・HiGHSのcopy上の準備・OpenJijの重み付きsamplingは、共有Adapter Referenceの完結した例へ案内する。ナビゲーションからAPI操作の習得を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -1981,7 +2023,6 @@
             "ommx.adoption"
           ],
           "mentions": [
-            "instance.model",
             "evaluation.basic",
             "optimality.limit"
           ]
@@ -1993,9 +2034,7 @@
             "ommx.adoption"
           ],
           "mentions": [
-            "special.onehot",
             "special.indicator",
-            "special.sos1",
             "transformation.guarantees"
           ]
         },
@@ -2041,7 +2080,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、候補評価と特殊制約の例、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。 基本求解・native特殊制約・HiGHSのcopy上の準備・OpenJijの重み付きsamplingは、共有Adapter Referenceの完結した例へ案内する。ナビゲーションからAPI操作の習得を付与しない。",
+      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、生産ラインの上限による候補評価とIndicatorの表現選択、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。 基本求解・native特殊制約・HiGHSのcopy上の準備・OpenJijの重み付きsamplingは、共有Adapter Referenceの完結した例へ案内する。ナビゲーションからAPI操作の習得を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2340,13 +2379,13 @@
       ]
     },
     {
-      "id": "T4",
-      "title": "既存の問題と候補を評価する",
+      "id": "R_API.qplib.candidate",
+      "title": "QPLIBの公開候補を元問題で評価する",
       "slice": "E",
-      "role": "tutorial",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/tutorial/evaluate_existing_candidate.ipynb"
+        "python/ommx/ommx/qplib.py"
       ],
       "source_urls": [],
       "requires": [
@@ -2418,11 +2457,11 @@
         "artifact.format"
       ],
       "parent_page": null,
-      "notes": "E/T4の独立Notebookは公式QPLIB_0018の問題と公開候補を読み、evaluateと変数/制約の表を示す。全変数0の別候補でFalseの制約行を抽出する。初回は公式サイトへの接続が必要だが、モデル自作・Adapter・Artifact/Experiment・別Tutorialの実行状態は不要。表だけの判定と候補全体のfeasible、許容誤差、最適性の限界を局所説明する。歴史的baselineとproposed statusは保持する。",
+      "notes": "QPLIB_0018の二つのファイルを同じ名前で用意し、候補と全ゼロ割当てを評価して違反行を調べる。SDKだけで実行できる共有Reference。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/tutorial/evaluate_existing_candidate.ipynb"
+        "python/ommx/ommx/qplib.py"
       ]
     },
     {
@@ -3313,6 +3352,7 @@
           ],
           "uses": [],
           "mentions": [
+            "special.indicator",
             "special.sos1",
             "bigm.contract"
           ]
@@ -3383,7 +3423,7 @@
         "class.scope"
       ],
       "parent_page": null,
-      "notes": "数理最適化の基礎だけから直接入れる日英第2章。SOS1のnative/loweredの経路で共通表現の価値を導入し、入力条件・許す変換・数学的保証・設定・結果情報の選択へ進む。固定部分問題と不等式本体の二乗の反例は数式で読む。API操作や全特殊制約の詳細は紹介・リンクだけから付与しない。旧G7の保証判断とG11の選択軸を統合し、現在の明示的phase/一回bound更新と将来の自動選択・反復を区別する。第3章の既読を要求しない。",
+      "notes": "数理最適化の基礎だけから直接入れる日英第2章。同じソルバーへIndicatorを直接渡す経路と、既知の上限を使って線形化する経路で共通表現の価値を導入し、入力条件・許す変換・数学的保証・設定・結果情報の選択へ進む。固定部分問題と不等式本体の二乗の反例は数式で読む。API操作や全特殊制約の詳細は紹介・リンクだけから付与しない。旧G7の保証判断とG11の選択軸を統合し、現在の明示的phase/一回bound更新と将来の自動選択・反復を区別する。第3章の既読を要求しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -4154,44 +4194,61 @@
       ]
     },
     {
-      "id": "P2",
-      "title": "同じ問題の結果をAdapter間で比較する",
-      "slice": "J",
-      "role": "how-to",
-      "status": "revise",
+      "id": "R_API.adapter.comparison",
+      "title": "共通Adapter Reference：同じモデルの求解結果を比較・図示する",
+      "slice": "Adapter comparison Reference migration",
+      "role": "reference-section",
+      "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/compare_adapters.md"
+        "python/ommx/ommx/adapter.py"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/how_to/compare_adapters.md"
-      ],
+      "source_urls": [],
       "requires": [
+        "ext.math",
         "ext.python",
-        "sdk.environment",
-        "instance.build",
-        "variable.basics",
-        "constraint.basics",
-        "adapter.basic",
-        "solution.read",
-        "feasibility.basic",
-        "optimality.limit"
+        "ext.table",
+        "sdk.environment"
       ],
       "sections": [
         {
-          "id": "execute",
+          "id": "model",
           "introduces": [
-            "adapter.auto_prepare"
+            "instance.model",
+            "variable.basics",
+            "variables.metadata",
+            "expression.basics",
+            "constraint.basics",
+            "sense",
+            "instance.build"
           ],
           "uses": [
-            "adapter.basic",
-            "solution.read"
+            "instance.build"
           ],
           "mentions": []
         },
         {
-          "id": "compare",
-          "introduces": [],
+          "id": "execute",
+          "introduces": [
+            "adapter.basic",
+            "adapter.auto_prepare"
+          ],
           "uses": [
+            "adapter.basic",
+            "adapter.auto_prepare"
+          ],
+          "mentions": [
+            "policy.select"
+          ]
+        },
+        {
+          "id": "compare",
+          "introduces": [
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "uses": [
+            "solution.read",
             "feasibility.basic",
             "optimality.limit"
           ],
@@ -4202,37 +4259,36 @@
         {
           "id": "extract",
           "introduces": [
-            "variables.metadata",
             "solution.extract"
           ],
           "uses": [
-            "solution.extract"
+            "solution.extract",
+            "ext.table"
           ],
           "mentions": []
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "Jでは変換不要の共通Instanceを2つのAdapterへ渡し、報告目的値・報告sense・実行可能性・最適性を先に比較する。特殊制約の習得を付与しない。図示の直前にnameによる抽出とsubscriptsのtupleの対応を局所説明する。backendのbound/gapと元の問題の評価を混同しない解釈はBookに残し、exact契約はAPIへ送る。",
+      "parent_page": "R_API.adapter",
+      "notes": "共通Adapterモジュール冒頭のCompare results from multiple adapters節を直接入口とする。変換不要の小さなナップサックをその場で作り、両Adapterのsolveが独立copyを準備すること、報告目的値・sense・実行可能性・最適性を分けて読むことを説明する。変数のIDとname/subscriptsを区別し、抽出辞書のtupleキー、重複時エラーと名前による選択、図示とDataFrame結合を所有する。一般の変換保証・backendのbound/gap・性能比較の習得を付与せず、判断はBook第3章、詳細は診断Referenceへ案内する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/compare_adapters.md"
+        "python/ommx/ommx/adapter.py"
       ]
     },
     {
-      "id": "P3",
-      "title": "モデルとデータセットを取り込む",
+      "id": "R_API.dataset",
+      "title": "既存の問題を取得する",
       "slice": "E",
-      "role": "how-to",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/load_existing_instance.md"
+        "python/ommx/ommx/dataset.py",
+        "docs/en/examples/published_benchmarks.md",
+        "docs/ja/examples/published_benchmarks.md"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/download_miplib_instance.md",
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/download_qplib_instance.md"
-      ],
+      "source_urls": [],
       "requires": [
         "ext.math",
         "ext.python",
@@ -4258,19 +4314,20 @@
           "introduces": [],
           "uses": [],
           "mentions": [
-            "metadata.edit",
-            "mps.export",
-            "mps.information-boundary"
+            "artifact.roundtrip",
+            "evaluation.basic"
           ]
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "E/P3はMIPLIBとQPLIBの入手を統合し、求解を必須にしない。手元MPS/QPLIB/Artifactとモデラーからの入口を分ける。配布名前空間・SDK版・wire schemaを後段で区別し、Artifact取り込みの永続副作用を明示。入手の選択肢を説明するが、Artifact作成/共有やモデラー互換性の習得・完了は主張しない。source_urlsは統合前の歴史的baselineを指す。",
+      "notes": "MIPLIBとQPLIBの引数、配布元、キャッシュ、注釈を説明する。ローカルファイルとArtifactからの読込みは対応APIへ案内する。 公開Artifactの取得からSCIPでの求解・注釈との照合までは日英の独立Examplesにまとめる。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/load_existing_instance.md"
+        "python/ommx/ommx/dataset.py",
+        "docs/en/examples/published_benchmarks.md",
+        "docs/ja/examples/published_benchmarks.md"
       ]
     },
     {
@@ -4407,17 +4464,15 @@
       ]
     },
     {
-      "id": "P5",
-      "title": "初期候補を渡す",
+      "id": "R_API.adapter.initial",
+      "title": "SCIPに初期候補を渡す",
       "slice": "J",
-      "role": "how-to",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/use_initial_state.md"
+        "python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/adapter_initial_state.md"
-      ],
+      "source_urls": [],
       "requires": [
         "ext.python",
         "sdk.environment",
@@ -4443,21 +4498,21 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "IDから値への辞書を候補として局所作成・評価し、solveへ渡して返ったSolutionと区別する。初期候補による高速化は保証しない。Stateへの包み方までを公開版の主導線とし、名前付き入力は対応開発環境をすでに持つ読者向けの任意節P5.namedへ分離する。",
+      "notes": "solveの実行例は候補の評価から初期候補の提示、最終解の確認までを扱う。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/use_initial_state.md"
+        "python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py"
       ]
     },
     {
-      "id": "P5.named",
-      "title": "名前と添字から初期候補を対応付ける",
+      "id": "R_API.adapter.initial.named",
+      "title": "名前と添字で初期候補を渡す",
       "slice": "J",
-      "role": "how-to-section",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/use_initial_state.md"
+        "python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py"
       ],
       "source_urls": [],
       "requires": [
@@ -4480,12 +4535,12 @@
         }
       ],
       "deferred": [],
-      "parent_page": "P5",
-      "notes": "名前とtuple添字をStateへ照合する例。ID指定と同じmain SDK環境を使い、厳密な照合・例外契約はstate_from_named_values APIへ送る。環境を共通化しても、名前照合の操作の理解をID指定の能力から自動的に付与しない。",
+      "parent_page": "R_API.adapter.initial",
+      "notes": "同じ問題で名前と添字を照合し、Stateへの変換とSCIPへの直接指定を説明する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/use_initial_state.md"
+        "python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py"
       ]
     },
     {
@@ -6246,7 +6301,7 @@
         "variables.roles"
       ],
       "parent_page": null,
-      "notes": "日英で構造を揃え、数理最適化の基礎から直接入れる第3章。クラスやAPIの操作を順番に教えず、短い数学例と説明から評価対象・値の出所・比較基準の判断へ進む。リンクだけからAPI操作能力を付与しない。",
+      "notes": "日英で構造を揃え、数理最適化の基礎から直接入れる第3章。クラスやAPIの操作を順番に教えず、低速運転時の上限違反を例に、評価対象・値の出所・比較基準の判断へ進む。リンクだけからAPI操作能力を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -6299,7 +6354,7 @@
       ],
       "deferred": [],
       "parent_page": "R_API",
-      "notes": "SolverAdapter/SamplerAdapterがINPUT_CLASSの完全な適用条件、freshな推奨Policy、easy APIのcopyとprepare、constructor/strict APIの準備済み入力要件を所有する。membershipとconverter/backend失敗を分ける。具体的な実行例はPySCIPOpt Referenceで扱い、package一覧だけから実行能力を付与しない。",
+      "notes": "SolverAdapter/SamplerAdapterがINPUT_CLASSの完全な適用条件、freshな推奨Policy、easy APIのcopyとprepare、constructor/strict APIの準備済み入力要件を所有する。membershipとconverter/backend失敗を分ける。具体的な実行例はPySCIPOpt Referenceで扱い、package一覧だけから実行能力を付与しない。 複数Adapterの自己完結した比較例は同モジュール冒頭の独立入口R_API.adapter.comparisonが所有する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -6472,7 +6527,7 @@
       ],
       "steps": [
         "SETUP",
-        "T4"
+        "R_API.qplib.candidate"
       ]
     },
     {
@@ -6561,8 +6616,7 @@
       ],
       "steps": [
         "SETUP",
-        "R_API.adapter.solve",
-        "P2"
+        "R_API.adapter.comparison"
       ]
     },
     {
@@ -6591,7 +6645,7 @@
       ],
       "steps": [
         "SETUP",
-        "T4",
+        "R_API.qplib.candidate",
         "P6"
       ]
     },
@@ -6606,7 +6660,7 @@
       ],
       "steps": [
         "SETUP",
-        "T4",
+        "R_API.qplib.candidate",
         "P6",
         "R_API.experiment.example",
         "P6.experiment"
@@ -6623,7 +6677,7 @@
       ],
       "steps": [
         "SETUP",
-        "T4",
+        "R_API.qplib.candidate",
         "P6",
         "P6.adapter"
       ]
@@ -6728,7 +6782,7 @@
       "steps": [
         "SETUP",
         "R_API.adapter.solve",
-        "P5"
+        "R_API.adapter.initial"
       ]
     },
     {
@@ -6750,7 +6804,7 @@
     },
     {
       "id": "initial_named",
-      "title": "初期候補から開発版の名前付き入力へ進む",
+      "title": "初期候補を名前と添字で指定する",
       "initial": [
         "ext.math",
         "ext.python",
@@ -6760,8 +6814,8 @@
       "steps": [
         "SETUP",
         "R_API.adapter.solve",
-        "P5",
-        "P5.named"
+        "R_API.adapter.initial",
+        "R_API.adapter.initial.named"
       ]
     },
     {
@@ -6899,7 +6953,7 @@
               "R_API.adapter.solve"
             ],
             [
-              "T4"
+              "R_API.qplib.candidate"
             ]
           ]
         },
@@ -6941,7 +6995,7 @@
       ],
       "steps": [
         "SETUP",
-        "P3",
+        "R_API.dataset",
         "R_API.instance.mps_export"
       ]
     },
@@ -7351,7 +7405,7 @@
       "observed": "SETUPの任意CLI節からSDK同梱CLIを使う。Python SDKの導入経路に対応する環境でuv run --no-sync ommxを実行し、Python不要の場合はmainのcheckoutからRust CLIをcargo installで導入する。"
     },
     {
-      "page": "P5.named",
+      "page": "R_API.adapter.initial.named",
       "observed": "ID指定の例と同じSDK・PySCIPOpt Adapter環境で名前照合を使う。別の開発環境への切替は前提にしない。"
     },
     {

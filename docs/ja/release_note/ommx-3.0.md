@@ -162,7 +162,7 @@ state = instance.state_from_named_values({"x": {(0,): 1.0, (1,): 4.0}})
 見つからないキーは `KeyError`、複数の変数に一致する名前・添字は `ValueError` になります。
 文字列・整数への正規化でキーが重複する入力も `ValueError` になります。
 SCIP アダプターの `initial_state` に `NamedState` を直接渡すこともできます。
-SCIP での利用例は {ref}`名前と添字で初期値を指定する <named-initial-state>`
+SCIP での利用例は {meth}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter.solve`
 を参照してください。
 
 ### 🆕 同梱のエージェントプラグインとスキルを取得 ([#1264](https://github.com/Jij-Inc/ommx/pull/1264))
@@ -234,7 +234,7 @@ QPLIB の二次目的関数と二次制約を、元の問題どおりに読み�
 {meth}`~ommx.Instance.load_qplib` で作成して保存したモデルは、元の `.qplib`
 ファイルから読み込み直してください。`ommx.dataset.qplib` は OMMX 2.8.0 向けに
 公開した修正済みの配布を読み込むようになりました。旧配布がキャッシュされていても、
-修正済みの配布を使います。詳細は [既存の問題を読み込むHow-to](../how_to/load_existing_instance.md)を参照してください。
+修正済みの配布を使います。詳細は {func}`~ommx.dataset.qplib`を参照してください。
 
 ### 🛠 MPS・MIPLIB 読み込み時にバイナリ変数を保持 ([#1202](https://github.com/Jij-Inc/ommx/pull/1202), [#1205](https://github.com/Jij-Inc/ommx/pull/1205))
 
@@ -247,7 +247,7 @@ MPS ファイルには、変数を整数として指定し、上下限を省略�
 影響を受ける保存済みモデルは、元の MPS ファイルから読み込み直してください。
 `ommx.dataset.miplib2017` は OMMX 2.7.0 向けに公開した修正済みの MIPLIB 配布を
 読み込むようになりました。旧配布がキャッシュされていても、修正済みの配布を使います。
-詳細は [既存の問題を読み込むHow-to](../how_to/load_existing_instance.md)を参照してください。
+詳細は {func}`~ommx.dataset.miplib2017`を参照してください。
 
 ### 🛠 変数の上下限と制約で許容誤差の判定を統一 ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
 
@@ -391,7 +391,7 @@ solution = instance.evaluate(state, atol=1e-8)
 解ファイルで省略された変数には 0 を設定します。記載された目的関数値 `objvar` は
 変数として扱わず、モデルの評価によって目的関数値を計算します。
 `ommx.qplib.load_solution` も利用できます。
-対応するファイルは [既存の問題と候補解を評価するTutorial](../tutorial/evaluate_existing_candidate)を参照してください。
+対応するファイルは {func}`~ommx.qplib.load_solution`を参照してください。
 
 ### 🆕 Rust 拡張からのデータ受け渡しに共通の例外を導入 ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
 
