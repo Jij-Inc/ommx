@@ -6,6 +6,17 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 💥 Python 3.11 以降を必須とし、SDK が Python 3.15 に対応 ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
+
+SDK と Adapter パッケージの最低対応バージョンを Python 3.11 に引き上げ、
+サポート終了を迎えた Python 3.10 への対応を終了しました。コア SDK は
+PyO3 0.30.1 に更新して Python 3.15 に対応し、ABI3 wheel のベースラインも
+Python 3.11 に引き上げています。Python 3.15 への対応はコア SDK で先行し、
+Adapter の利用可否は接続するソルバーの Python 対応状況にも依存します。
+
+pandas 3 と PyArrow 26 を利用できるようになりました。PyArrow は引き続き、
+Artifact の DataFrame を Parquet 形式で保存・復元するための必須依存です。
+
 ### 🆕 finite-domain 決定変数 ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
 
 {class}`~ommx.DecisionVariable` で、明示的に列挙した数値の集合を正確な
