@@ -34,7 +34,7 @@ from ommx.v1.linear_pb2 import Linear
 from ommx.v1.solution_pb2 import State
 
 # v3
-from ommx import ConstraintKind, Constraint, Equality, Function, Linear, Sense, State
+from ommx import Constraint, Equality, Function, Linear, Sense, State
 ```
 
 `.from_protobuf()` / `.to_protobuf()` は、protobuf object と一緒に削除されています。`Instance` / `Solution` / `SampleSet` など全体をシリアライズする場合は、protobuf version を名前に含む bytes API を使います。新しく byte 列を作る場合は `to_v2_bytes()` / `from_v2_bytes(...)` を使い、legacy な v1 payload との互換が必要な場合だけ `to_v1_bytes()` / `from_v1_bytes(...)` を使ってください。
@@ -50,7 +50,7 @@ legacy v1 の `ConstraintHints` は、v3 で読み込む際も advisory metadata
 from ommx.v1 import OneHot, Sos1, ConstraintHints, Parameters
 
 # v3
-from ommx import ConstraintKind, OneHotConstraint, Sos1Constraint, IndicatorConstraint
+from ommx import OneHotConstraint, Sos1Constraint, IndicatorConstraint
 
 # Parameters wrapper の代わりに plain dict を渡します
 parametric_instance.with_parameters({parameter_id: 1.0})
@@ -81,7 +81,7 @@ instance.to_v2_bytes()
 
 ### 3.1 `id` / `set_id()` / `id=` は削除
 
-`Constraint`、`IndicatorConstraint`、`OneHotConstraint`、`Sos1Constraint`、`RemovedConstraint`、`EvaluatedConstraint`、`SampledConstraint` は、オブジェクト自身に ID を持ちません。ID は `Instance.from_components` に渡す辞書の key で決まります。
+作成直後の制約は detached で、ID を持ちません。モデルの構築時に ID を指定するには、`Instance.from_components` に渡す制約ファミリー別の辞書のキーを使います（§4）。既存のモデルに制約を追加するときは、モデルに ID を割り当てさせます（§3.3）。
 
 ```python
 # v2.5.1
@@ -128,7 +128,7 @@ Instance.from_components(..., constraints={0: c}, ...)
 
 ### 3.3 グローバルIDカウンタは削除
 
-`next_constraint_id()`、`set_constraint_id_counter(...)`、`get_constraint_id_counter()` などの module-level helper は削除されました。新しい制約IDが必要な場合は、所有者である `Instance` の `instance.next_constraint_id()` を使います。
+`next_constraint_id()`、`set_constraint_id_counter(...)`、`get_constraint_id_counter()` などのモジュールレベルの関数は削除されました。新しい通常制約 `c` は `instance.add_constraint(c).constraint_id` でモデルに追加し、割り当てられた `ConstraintID` を取得できます。
 
 ## 4. container type の変更
 
@@ -169,7 +169,7 @@ for c in instance.constraints:
     print(c.id, c.function)
 
 # v3
-from ommx import ConstraintKind, ConstraintID
+from ommx import ConstraintID
 
 for cid in instance.constraints:
     if isinstance(cid, ConstraintID):
@@ -295,7 +295,7 @@ Solution/SampleSet の feasibility プロパティは引き続き利用できま
 `feasibility_atol` プロパティから、取り出した制約にも同じ判定条件を渡せます。
 
 ```python
-from ommx import ConstraintKind, ConstraintID
+from ommx import ConstraintID
 evaluated = solution.constraints[ConstraintID(1)]
 evaluated.is_feasible(atol=solution.feasibility_atol)
 evaluated.is_feasible(atol=1e-8)  # 保存済みの同じ違反量に対する別の問い合わせ
@@ -346,27 +346,26 @@ quadratic.terms()
 polynomial.terms()
 ```
 
-v3 alpha の初期移行では、`DecisionVariable` の constructor と `kind` property が
-protobuf の整数表現を誤って公開していました。現在の v3 API は、detached、attached、
-evaluated、sampled の各 decision variable で top-level の `Kind` enum を一貫して
-受け取り、返します。新しいコードでは `Kind.Binary`、`Kind.Integer` などを使います。
-`DecisionVariable.BINARY` / `INTEGER` / … は、同じ enum 値を返す型付き互換 alias として
-残します。
+v3 alpha の初期移行では、`DecisionVariable` のコンストラクタと `kind` プロパティが
+protobuf の整数コードを公開していました。現在のコンストラクタは `Kind` の値を受け取り、
+detached・attached・evaluated・sampled の各変数の `.kind` も同じ型を返します。
+`Kind.Binary` や `Kind.Integer` などの既知の定数と比較し、今後追加される種類を受け取った場合の処理も用意してください。
+`Kind` は反復処理や `Enum.__members__` による列挙には対応しません。
+`DecisionVariable.BINARY` などの既存の別名は、対応する種類を引き続き参照します。
 
 同じ互換方針を `Constraint.EQUAL_TO_ZERO` / `LESS_THAN_OR_EQUAL_TO_ZERO` と
 `Instance.MINIMIZE` / `MAXIMIZE` にも適用します。これらは型付き alias として残しますが、
 新しいコードでは `Equality.*` と `Sense.*` を使います。
 
 ```python
-from ommx import ConstraintKind, Bound, DecisionVariable, Kind
+from ommx import Bound, DecisionVariable, Kind
 
 variable = DecisionVariable(0, Kind.Binary, Bound(0, 1))
 assert variable.kind == Kind.Binary
 assert DecisionVariable.BINARY == Kind.Binary
 ```
 
-各 enum は protobuf の整数値との比較・hash の互換性を維持します。通常の SDK
-constructor と property は enum 型を使います。
+既知の種類は対応する protobuf の整数コードと等しく、ハッシュ値も一致します。
 
 ```python
 assert Kind.Binary == 1
@@ -443,7 +442,7 @@ applicationがそのmagnitudeを選ぶ必要があります。v3はv2の暗黙�
 使用しません。customizeしたPolicyをInstanceへ適用し、preparation-free methodを呼びます。
 
 ```python
-from ommx import ConstraintKind, FixedPenaltyPreparation
+from ommx import FixedPenaltyPreparation
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
@@ -467,12 +466,16 @@ Preparation前に`source`が公開していたものです（§5.6）。Policy�
 df = instance.constraints_df
 
 # v3
+from ommx import ConstraintKind
+
 df = instance.constraints_df(kind=ConstraintKind.Regular)
 ```
 
 kind 別や removed / active 別の DataFrame accessor は、`constraints_df(kind=..., removed=...)` に統合されています。
 
 ```python
+from ommx import ConstraintKind
+
 instance.constraints_df(kind=ConstraintKind.Regular)
 instance.constraints_df(kind=ConstraintKind.OneHot)
 instance.constraints_df(kind=ConstraintKind.Sos1, removed=True)
@@ -496,7 +499,7 @@ instance.replace_annotations({"team": "optimization"})
 `instance.constraints[id]` や `instance.decision_variables` は、host に書き戻す `AttachedX` handle を返します。
 
 ```python
-from ommx import ConstraintKind, ConstraintID
+from ommx import ConstraintID
 c = instance.constraints[ConstraintID(5)]
 c.set_name("balance")
 assert instance.constraints[ConstraintID(5)].name == "balance"
@@ -505,7 +508,7 @@ assert instance.constraints[ConstraintID(5)].name == "balance"
 detached snapshot が必要な場合は `detach()` を使います。
 
 ```python
-from ommx import ConstraintKind, ConstraintID
+from ommx import ConstraintID
 snapshot = instance.constraints[ConstraintID(5)].detach()
 ```
 
@@ -653,6 +656,8 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 `get_constraints` メソッドはありません。
 
 ```python
+from ommx import ConstraintKind
+
 row = instance.constraints.of_kind(ConstraintKind.Regular)[5]  # AttachedConstraint
 snapshot = row.detach()  # 独立したConstraintのコピーを明示的に取得
 removed = instance.removed_constraints.of_kind(ConstraintKind.Regular)[7]  # RemovedConstraintのスナップショット

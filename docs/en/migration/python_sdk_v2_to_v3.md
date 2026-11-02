@@ -14,8 +14,8 @@ v3 completes the PyO3 migration that started in v2: SDK domain classes are now i
 Themes you will encounter:
 
 1. Every trace of the protobuf Python layer is gone — imports from `ommx.v1.*_pb2` or `ommx.v1` must switch to top-level `ommx` for SDK domain classes, and bridge methods like `.raw`/`from_protobuf`/`to_protobuf` are removed.
-2. `Constraint` no longer has an `id` — constraint IDs live only as the keys of the `dict[int, Constraint]` you pass to `Instance.from_components`. All `.id` getters, `set_id()` / `id=` kwargs, and global ID-counter helpers are gone.
-3. Container types flipped: every constraint-valued argument and getter on `Instance` / `ParametricInstance` / `Solution` is now `dict[int, T]`, not `list[T]`. `decision_variables` stays a `list`.
+2. A detached `Constraint` has no ID. With `Instance.from_components`, supply the ID as the key in the mapping for that family, for example `constraints={5: constraint}`.
+3. On models and results, `.constraints` is a read-only collection keyed by typed IDs. Look up that regular constraint with `instance.constraints[ConstraintID(5)]`. The `decision_variables` property still returns a list.
 4. A handful of renames and small signature changes (`write_mps` → `save_mps`, `Parameters(entries=...)` → plain `dict`, …).
 5. Every `*_df` accessor is a method now, with `kind=` / `include=` / `removed=` parameters consolidating the per-kind / active-vs-removed family. Long-format sidecar DataFrames (`constraint_context_df`, `constraint_provenance_df`, `variable_parameters_df`, …) are new.
 6. `instance.constraints[id]` and `instance.decision_variables` return write-through `AttachedX` handles instead of snapshot wrappers; label/context updates through them propagate back to the host.
@@ -36,7 +36,7 @@ from ommx.v1.solution_pb2 import State
 
 **After (v3)**:
 ```python
-from ommx import ConstraintKind, Constraint, Equality, Function, Kind, Linear, Sense, State
+from ommx import Constraint, Equality, Function, Kind, Linear, Sense, State
 ```
 
 The `.from_protobuf()` / `.to_protobuf()` bridge methods on `Constraint`, `RemovedConstraint`, `DecisionVariable`, etc. are removed along with the protobuf objects they produced. Use explicit versioned bytes APIs on whole serialization roots instead. Prefer `to_v2_bytes` / `from_v2_bytes` when producing new serialized bytes; use `to_v1_bytes` / `from_v1_bytes` only when you need to interoperate with legacy v1 payloads.
@@ -54,7 +54,7 @@ from ommx.v1 import OneHot, Sos1, ConstraintHints, Parameters
 
 **After (v3)**:
 ```python
-from ommx import ConstraintKind, OneHotConstraint, Sos1Constraint, IndicatorConstraint
+from ommx import OneHotConstraint, Sos1Constraint, IndicatorConstraint
 # Parameters is gone — pass a plain dict[int, float] to ParametricInstance.with_parameters
 ```
 
@@ -93,7 +93,7 @@ The dataclass-style constructors (`Instance(raw=..., annotations=...)`) are also
 
 ### 3.1 No more `id` / `set_id()` / `id=` kwarg (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
 
-`Constraint` (and `IndicatorConstraint`, `OneHotConstraint`, `Sos1Constraint`, `RemovedConstraint`, `EvaluatedConstraint`, `SampledConstraint`) no longer carry an ID. The constraint object is **detached** — it gets an ID only when it is placed in the `dict[int, Constraint]` you pass to `Instance.from_components` (see §4).
+A newly constructed constraint is **detached** and has no ID. To choose its ID during construction, supply the key in the corresponding family mapping passed to `Instance.from_components` (see §4). When adding a constraint to an existing model, let the model assign the ID (§3.3).
 
 **Before (v2.5.1)**:
 ```python
@@ -156,9 +156,9 @@ These module-level names are gone from `ommx._ommx_rust`:
 - `update_constraint_id_counter(...)`
 - `get_constraint_id_counter()`
 
-Constraint IDs no longer exist outside the `BTreeMap` keys inside an `Instance`. If you need a fresh ID for a new constraint, call `instance.next_constraint_id()`.
+For a new regular constraint `c`, `instance.add_constraint(c).constraint_id` adds the constraint and returns its assigned `ConstraintID`.
 
-## 4. Container-type changes (`list` → `dict[int, T]`)
+## 4. Constructing and looking up constraints by ID
 
 ### 4.1 `Instance.from_components(constraints=...)` expects a `dict[int, Constraint]` (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
 
@@ -211,7 +211,7 @@ for oh in hints.one_hot_constraints:
 
 **After (v3)**:
 ```python
-from ommx import ConstraintKind, ConstraintID, OneHotConstraintID
+from ommx import ConstraintID, OneHotConstraintID
 
 for cid in instance.constraints:  # all families, typed IDs
     if isinstance(cid, ConstraintID):
@@ -299,7 +299,7 @@ Linear(
 )
 
 # v3
-from ommx import ConstraintKind, Linear
+from ommx import Linear
 Linear(terms={int(j): float(c) for j, c in enumerate(row)}, constant=float(-b))
 ```
 
@@ -407,7 +407,7 @@ Solution/SampleSet keep their existing feasibility properties and expose
 `feasibility_atol` so extracted constraints can use the same threshold:
 
 ```python
-from ommx import ConstraintKind, ConstraintID
+from ommx import ConstraintID
 evaluated = solution.constraints[ConstraintID(1)]
 evaluated.is_feasible(atol=solution.feasibility_atol)
 evaluated.is_feasible(atol=1e-8)  # A separate query on the same stored violation
@@ -475,16 +475,16 @@ polynomial.terms()
 
 `Linear.linear_terms`, `Quadratic.linear_terms` / `quadratic_terms`, and `Polynomial.constant_term` stay properties.
 
-### 6.3 `DecisionVariable.kind` is a typed `Kind` enum
+### 6.3 Working with `DecisionVariable.kind`
 
-The initial v3 alpha migration in `3.0.0a1` ([#770](https://github.com/Jij-Inc/ommx/pull/770)) accidentally exposed the protobuf integer representation through the `DecisionVariable` constructor and `kind` properties. The v3 API now consistently accepts and returns the top-level `Kind` enum for detached, attached, evaluated, and sampled decision variables.
+The initial v3 alpha migration in `3.0.0a1` ([#770](https://github.com/Jij-Inc/ommx/pull/770)) exposed protobuf integer codes through the `DecisionVariable` constructor and `kind` properties. The current constructor accepts a `Kind` value, and detached, attached, evaluated, and sampled variables return that type from `.kind`.
 
-Use `Kind.Binary`, `Kind.Integer`, and the other `Kind` members in new code. The old `DecisionVariable.BINARY`/`INTEGER`/… names remain as typed compatibility aliases with the same enum values.
+Compare against known constants such as `Kind.Binary` and `Kind.Integer`. New SDKs can add kinds, so handle any remaining value explicitly. `Kind` does not support iteration or `Enum.__members__`. Existing aliases such as `DecisionVariable.BINARY` still refer to the corresponding kind.
 
 The same compatibility policy applies to `Constraint.EQUAL_TO_ZERO` / `LESS_THAN_OR_EQUAL_TO_ZERO` and `Instance.MINIMIZE` / `MAXIMIZE`: they remain typed aliases, while new code should use `Equality.*` and `Sense.*`.
 
 ```python
-from ommx import ConstraintKind, Bound, DecisionVariable, Kind
+from ommx import Bound, DecisionVariable, Kind
 
 var = DecisionVariable(0, Kind.Binary, Bound(0, 1))
 assert var.kind == Kind.Binary
@@ -493,7 +493,7 @@ assert var.kind == Kind.Binary
 assert DecisionVariable.BINARY == Kind.Binary
 ```
 
-The enums retain comparison and hash compatibility with their protobuf integer values, so explicit boundary checks continue to work. The regular SDK constructor and properties nevertheless use the enum type.
+Each known kind compares equal to its protobuf integer code and has the same hash.
 
 ```python
 assert Kind.Binary == 1
@@ -605,7 +605,7 @@ longer supplies v2's implicit uniform weight of `1.0`. Apply the customized
 policy to the Instance, then call the preparation-free method:
 
 ```python
-from ommx import ConstraintKind, FixedPenaltyPreparation
+from ommx import FixedPenaltyPreparation
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
@@ -671,6 +671,8 @@ df = instance.removed_constraints_df     # separate active vs. removed
 df = solution.constraints_df
 
 # v3
+from ommx import ConstraintKind
+
 df = instance.constraints_df(kind=ConstraintKind.Regular)           # method; kind is required
 df = instance.constraints_df(kind=ConstraintKind.Indicator)
 df = instance.constraints_df(kind=ConstraintKind.Regular, removed=True)
@@ -688,6 +690,8 @@ of how it was lifecycled, and reason data is gated by `"removed_reason"` in `inc
 `include` accepts a `Sequence[str]` of `"label"` / `"parameters"` / `"removed_reason"` (singular). The default (`None`) preserves the v2 wide shape (`("label", "parameters")`); `include=[]` drops every optional column family.
 
 ```python
+from ommx import ConstraintKind
+
 # Default — v2-equivalent shape (label + parameters columns)
 df = instance.constraints_df(kind=ConstraintKind.Regular)
 
@@ -714,6 +718,8 @@ The wide `constraints_df(kind=ConstraintKind.Regular)` index column was renamed 
 `Instance` / `ParametricInstance` / `Solution` / `SampleSet` gained six long-format / id-indexed sidecar DataFrame methods that read directly from the SoA label/context stores:
 
 ```python
+from ommx import ConstraintKind
+
 # Constraint-side — kind= dispatches across the four constraint families
 instance.constraint_context_df(kind=ConstraintKind.Regular)
                                           # name, subscripts, description
@@ -748,6 +754,8 @@ c.add_name("balance")                              # mutated the local snapshot
 print(instance.get_constraint_by_id(5).name)       # still None — fresh snapshot
 
 # v3 — collection lookup returns a write-through handle
+from ommx import ConstraintID
+
 c = instance.constraints[ConstraintID(5)]                        # AttachedConstraint (live)
 c.set_name("balance")                              # writes through to the SoA store
 print(instance.constraints[ConstraintID(5)].name)                # "balance"
@@ -1025,7 +1033,7 @@ x.id == y.id        # True
 ### 14.3 `Parameter` supports the same operators as `DecisionVariable`
 
 ```python
-from ommx import ConstraintKind, Parameter, DecisionVariable
+from ommx import Parameter, DecisionVariable
 
 p = Parameter(1, name="param1")
 x = DecisionVariable.integer(2, lower=0, upper=10)
@@ -1037,10 +1045,10 @@ expr = 2 * p + 3  # Linear
 
 ## Migration checklist
 
-- [ ] Replace every `from ommx.v1.*_pb2 import ...` and `from ommx.v1 import ...` SDK-domain import with `from ommx import ConstraintKind, ...`.
+- [ ] Import SDK domain classes from top-level `ommx`, for example `from ommx import DecisionVariable, Instance`.
 - [ ] Remove all `.raw`, `from_raw(...)`, `from_protobuf(...)`, `to_protobuf(...)` usage; use `from_v2_bytes` / `to_v2_bytes` for newly serialized top-level payloads, `from_v1_bytes` / `to_v1_bytes` for legacy v1 interop, or direct properties.
 - [ ] Replace `Constraint(id=N, ...)` / `.set_id(N)` / `(expr <= 0).set_id(N)` with `{N: (expr <= 0)}` in the `constraints=` dict.
-- [ ] Remove reads of `constraint.id`; iterate with `.items()` on constraint dicts instead.
+- [ ] To read constraint IDs alongside their rows, iterate over `instance.constraints.items()`.
 - [ ] Remove any use of `next_constraint_id()` / `set_constraint_id_counter(...)` / related counter helpers.
 - [ ] Update `Instance.from_components(constraints=[...])` to pass a `dict[int, Constraint]`. Same for `indicator_constraints`, `one_hot_constraints`, `sos1_constraints`.
 - [ ] Replace `constraint_hints` reads with `instance.constraints`, using typed IDs to distinguish constraint families.
@@ -1085,6 +1093,8 @@ and result `constraint_ids` are replaced by indexing and key iteration.
 There is no `get_constraints` method.
 
 ```python
+from ommx import ConstraintKind
+
 row = instance.constraints.of_kind(ConstraintKind.Regular)[5]  # AttachedConstraint
 snapshot = row.detach()  # Explicit independent Constraint copy
 removed = instance.removed_constraints.of_kind(ConstraintKind.Regular)[7]  # RemovedConstraint snapshot
