@@ -14,6 +14,7 @@ impl Parse for v1::decision_variable::Kind {
             Binary => Ok(Kind::Binary),
             SemiContinuous => Ok(Kind::SemiContinuous),
             SemiInteger => Ok(Kind::SemiInteger),
+            FiniteDomain => Err(RawParseError::UnsupportedFiniteDomain.into()),
             _ => Err(RawParseError::UnknownEnumValue {
                 enum_name: "ommx.v1.decision_variable.Kind",
                 value: self as i32,
@@ -55,6 +56,9 @@ impl Parse for v1::DecisionVariable {
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.DecisionVariable";
         let kind = self.kind().parse_as(&(), message, "kind")?;
+        if self.finite_domain.is_some() {
+            return Err(RawParseError::UnsupportedFiniteDomain.context(message, "finite_domain"));
+        }
         let bound = self
             .bound
             .unwrap_or_default()
@@ -114,6 +118,7 @@ impl From<DecisionVariable> for v1::DecisionVariable {
             id: id.into_inner(),
             kind: kind.into(),
             bound: Some(bound.into()),
+            finite_domain: None,
             substituted_value,
             name: metadata.name,
             subscripts: metadata.subscripts,
@@ -182,6 +187,25 @@ impl From<SampledDecisionVariable> for v1::SampledDecisionVariable {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejects_finite_domain_instead_of_dropping_its_values() {
+        use v1::decision_variable::Kind::{FiniteDomain, Integer};
+        for kind in [FiniteDomain, Integer] {
+            let wire = v1::DecisionVariable {
+                kind: kind as i32,
+                finite_domain: Some(v1::FiniteDomain {
+                    values: vec![1.0, 3.0],
+                }),
+                ..Default::default()
+            };
+            let error = wire.parse(&()).unwrap_err();
+            assert!(matches!(
+                error.error,
+                RawParseError::UnsupportedFiniteDomain
+            ));
+        }
+    }
 
     #[test]
     fn test_parse_decision_variable() {

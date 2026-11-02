@@ -45,6 +45,33 @@ class Bound(google.protobuf.message.Message):
 global___Bound = Bound
 
 @typing.final
+class FiniteDomain(google.protobuf.message.Message):
+    """An explicitly enumerated, non-empty finite numeric domain.
+
+    Values are the exact feasible values of the decision variable, not
+    discretization points approximating a continuous interval. Writers must emit
+    finite, unique values in ascending order.
+    """
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    VALUES_FIELD_NUMBER: builtins.int
+    @property
+    def values(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
+        builtins.float
+    ]: ...
+    def __init__(
+        self,
+        *,
+        values: collections.abc.Iterable[builtins.float] | None = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["values", b"values"]) -> None: ...
+
+global___FiniteDomain = FiniteDomain
+
+@typing.final
 class DecisionVariable(google.protobuf.message.Message):
     """Decison variable which mathematical programming solver will optimize.
     It must have its kind, i.e. binary, integer, real or others and unique identifier of 64-bit integer.
@@ -72,6 +99,8 @@ class DecisionVariable(google.protobuf.message.Message):
         """Semi-integer decision variable is a decision variable that can take only integer values in the given range or zero."""
         KIND_SEMI_CONTINUOUS: DecisionVariable._Kind.ValueType  # 5
         """Semi-continuous decision variable is a decision variable that can take only continuous values in the given range or zero."""
+        KIND_FINITE_DOMAIN: DecisionVariable._Kind.ValueType  # 6
+        """Finite-domain decision variable whose exact feasible values are explicitly enumerated."""
 
     class Kind(_Kind, metaclass=_KindEnumTypeWrapper):
         """Kind of the decision variable"""
@@ -84,6 +113,8 @@ class DecisionVariable(google.protobuf.message.Message):
     """Semi-integer decision variable is a decision variable that can take only integer values in the given range or zero."""
     KIND_SEMI_CONTINUOUS: DecisionVariable.Kind.ValueType  # 5
     """Semi-continuous decision variable is a decision variable that can take only continuous values in the given range or zero."""
+    KIND_FINITE_DOMAIN: DecisionVariable.Kind.ValueType  # 6
+    """Finite-domain decision variable whose exact feasible values are explicitly enumerated."""
 
     @typing.final
     class ParametersEntry(google.protobuf.message.Message):
@@ -111,6 +142,7 @@ class DecisionVariable(google.protobuf.message.Message):
     PARAMETERS_FIELD_NUMBER: builtins.int
     DESCRIPTION_FIELD_NUMBER: builtins.int
     SUBSTITUTED_VALUE_FIELD_NUMBER: builtins.int
+    FINITE_DOMAIN_FIELD_NUMBER: builtins.int
     id: builtins.int
     """Decision variable ID.
 
@@ -127,7 +159,9 @@ class DecisionVariable(google.protobuf.message.Message):
     @property
     def bound(self) -> global___Bound:
         """Bound of the decision variable
-        If the bound is not specified, the decision variable is considered as unbounded.
+        When omitted, binary variables have bound [0, 1] and other interval-domain
+        kinds are unbounded. For KIND_FINITE_DOMAIN, this field must be absent and
+        the convex-hull bound is derived from finite_domain.values.
         """
 
     @property
@@ -142,6 +176,12 @@ class DecisionVariable(google.protobuf.message.Message):
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
         """Additional parameters for decision variables"""
 
+    @property
+    def finite_domain(self) -> global___FiniteDomain:
+        """Exact domain for KIND_FINITE_DOMAIN. Must be absent for every other kind.
+        `bound` must be absent for KIND_FINITE_DOMAIN because it is derived from these values.
+        """
+
     def __init__(
         self,
         *,
@@ -153,6 +193,7 @@ class DecisionVariable(google.protobuf.message.Message):
         parameters: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
         description: builtins.str | None = ...,
         substituted_value: builtins.float | None = ...,
+        finite_domain: global___FiniteDomain | None = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -161,6 +202,8 @@ class DecisionVariable(google.protobuf.message.Message):
             b"_bound",
             "_description",
             b"_description",
+            "_finite_domain",
+            b"_finite_domain",
             "_name",
             b"_name",
             "_substituted_value",
@@ -169,6 +212,8 @@ class DecisionVariable(google.protobuf.message.Message):
             b"bound",
             "description",
             b"description",
+            "finite_domain",
+            b"finite_domain",
             "name",
             b"name",
             "substituted_value",
@@ -182,6 +227,8 @@ class DecisionVariable(google.protobuf.message.Message):
             b"_bound",
             "_description",
             b"_description",
+            "_finite_domain",
+            b"_finite_domain",
             "_name",
             b"_name",
             "_substituted_value",
@@ -190,6 +237,8 @@ class DecisionVariable(google.protobuf.message.Message):
             b"bound",
             "description",
             b"description",
+            "finite_domain",
+            b"finite_domain",
             "id",
             b"id",
             "kind",
@@ -212,6 +261,10 @@ class DecisionVariable(google.protobuf.message.Message):
     def WhichOneof(
         self, oneof_group: typing.Literal["_description", b"_description"]
     ) -> typing.Literal["description"] | None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_finite_domain", b"_finite_domain"]
+    ) -> typing.Literal["finite_domain"] | None: ...
     @typing.overload
     def WhichOneof(
         self, oneof_group: typing.Literal["_name", b"_name"]
