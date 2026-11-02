@@ -20,7 +20,7 @@ def load_solution(path: str, *, num_variables: int) -> State:
     QPLIB credits Andrea Scozzari for this instance and distributes it under
     `CC BY 4.0 <https://creativecommons.org/licenses/by/4.0/>`_.
 
-    >>> from ommx import Instance
+    >>> from ommx import ConstraintKind, Instance
     >>> from ommx.qplib import load_solution
     >>> instance = Instance.load_qplib("QPLIB_0018.qplib")
     >>> candidate = load_solution("QPLIB_0018.sol", num_variables=len(instance.decision_variables))
@@ -45,7 +45,7 @@ def load_solution(path: str, *, num_variables: int) -> State:
     >>> rejected = instance.evaluate(zeros, atol=1e-8)
     >>> rejected.feasible, rejected.objective
     (False, 0.0)
-    >>> rows = rejected.constraints_df(kind="regular")
+    >>> rows = rejected.constraints_df(kind=ConstraintKind.Regular)
     >>> rows.loc[~rows["feasible"], "violation"].tolist()
     [1.0]
 

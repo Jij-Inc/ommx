@@ -6,7 +6,36 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-### 🆕 finite-domain 決定変数 ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
+## 3.0.0 Beta 9
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b9-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b9)
+
+### ⚠ 制約の種類を `ConstraintKind` で指定する ([#1329](https://github.com/Jij-Inc/ommx/pull/1329))
+
+Beta 8 から移行するときは、`SpecialConstraintKind` や `"sos1"` などの文字列を
+`ConstraintKind` の定数に置き換えてください。例えば `constraints.of_kind(ConstraintKind.Sos1)` が
+返すビューは SOS1 固有の ID 型と行型を保持します。`constraints_df(kind=ConstraintKind.Sos1)`
+で同じ種類の制約を DataFrame として取得できます。
+
+`Kind`、`ConstraintKind`、`ProvenanceKind` には既知の定数があり、今後の SDK で種類が
+増えることがあります。変数の定義域や制約の意味を解釈するコードでは、未知の種類を受け取った
+場合の処理を用意してください。比較・ハッシュ・整数変換と `Kind.from_pb()` / `Kind.to_pb()`
+は引き続き使えます。数値スカラーを対象とする拡張契約は[移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
+`instance.active_constraint_kinds` は有効な制約が存在するすべての種類を返し、
+`instance.active_special_constraint_kinds` は特殊制約の種類だけを返します。
+`lower_special_constraints` に `ConstraintKind.Regular` を渡すと、どの種類も変換する前にエラーになります。
+
+OneHot 制約 30 を含む解では、違反量は型付き ID で取得し、テーブルは制約の種類を指定して取得します。
+
+```python
+from ommx import ConstraintKind, OneHotConstraintID
+
+solution.constraint_violation(OneHotConstraintID(30))
+solution.constraints_df(kind=ConstraintKind.OneHot)
+```
+
+### 🆕 値を列挙して決定変数の定義域を指定する ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
 
 {class}`~ommx.DecisionVariable` で、明示的に列挙した数値の集合を正確な
 定義域として表現できるようになりました。Instance を段階的に構築する場合は
@@ -21,11 +50,15 @@ x = instance.new_finite_domain([0.1, 0.3, 0.5, 1.0], name="x")
 
 assert x.kind == DecisionVariable.FINITE_DOMAIN
 assert x.values == [0.1, 0.3, 0.5, 1.0]
+instance.objective = x
+assert instance.evaluate({x.id: 0.3}).feasible
+assert not instance.evaluate({x.id: 0.4}).feasible
 ```
 
 値の集合は空ではなく、重複のない有限な数値を含む必要があります。OMMX は
-評価、サンプリング、v1/v2 serialization を通してこの集合を正確に保持します。
-これは連続区間の離散化ではありません。定義域と DataFrame での表現については
+評価、サンプリング、v1/v2 シリアライズを通してこの集合を正確に保持します。
+上下限は集合の最小値と最大値です。上下限だけを書き出すと集合に含まれない値まで許してしまうため、
+ソルバー入力に有限定義域変数を使う問題を MPS に出力するとエラーになります。定義域と DataFrame での表現については
 {meth}`~ommx.DecisionVariable.finite_domain` を参照してください。
 
 ## 3.0.0 Beta 8
@@ -263,6 +296,7 @@ OneHot（ちょうど 1 つの変数が `1`、残りが `0`）と SOS1（非ゼ�
 合計には通常制約・Indicator・OneHot・SOS1 に加え、変換などで除去された制約の違反量も含みます。
 
 ```python
+# Beta 6 の書式。現行の型付き ID の使い方は移行ガイドを参照。
 solution.total_violation()
 solution.constraint_violation(30, kind="one_hot")  # 既存の OneHot 制約 ID
 solution.constraints_df(kind="sos1")[["feasible", "violation"]]
@@ -1528,13 +1562,13 @@ solution.decision_variables_df(include=["label"])      # core + label
 solution.decision_variables_df(include=["parameters"]) # core + parameters
 ```
 
-加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。必須のキーワード引数`kind=`で対象の制約ファミリーを切り替えます (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`):
+加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。Alpha 3 では `kind` に `"regular"`（既定値）、`"indicator"`、`"one_hot"`、`"sos1"` を指定できます。
 
-- `constraint_context_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
+- `constraint_metadata_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
 - `constraint_parameters_df(kind=...)` — long format (`{kind}_constraint_id` / `key` / `value`)
 - `constraint_provenance_df(kind=...)` — long format (`{kind}_constraint_id` / `step` / `source_kind` / `source_id`)
 - `constraint_removed_reasons_df(kind=...)` — long format (`{kind}_constraint_id` / `reason` / `key` / `value`)
-- `variable_labels_df()` — id-indexed
+- `variable_metadata_df()` — id-indexed
 - `variable_parameters_df()` — long format
 
 Sidecar の index 名はファミリーごとに qualified (`regular_constraint_id` / `indicator_constraint_id` / `one_hot_constraint_id` / `sos1_constraint_id` / `variable_id`) になっており、別 ID 空間どうしを誤って `df.join()` した場合に `df.head()` 等で気づきやすくなっています。`*_parameters_df` / `*_removed_reasons_df` の行は `(id, key)` 順にソート済み、空の long-format DataFrame もスキーマ列だけ持つ形で返ります。

@@ -15,7 +15,7 @@ referenced variables exist when inserting the constraint.
 **Construct and evaluate alternative amounts**
 
 ```pycon
->>> from ommx import Instance, Sos1Constraint, Sos1ConstraintID
+>>> from ommx import ConstraintKind, Instance, Sos1Constraint, Sos1ConstraintID
 >>> instance = Instance.maximize()
 >>> amounts = [
 ...     instance.new_continuous("amount", lower=-10, upper=10, subscripts=[i])
@@ -36,7 +36,7 @@ referenced variables exist when inserting the constraint.
 >>> assert not instance.evaluate(
 ...     {amounts[0].id: 7, amounts[1].id: 1, amounts[2].id: 0}
 ... ).feasible
->>> rows = one.constraints_df(kind="sos1")
+>>> rows = one.constraints_df(kind=ConstraintKind.Sos1)
 >>> assert list(rows.index) == [cid]
 >>> assert rows.loc[cid, "violation"] == 0.0
 
