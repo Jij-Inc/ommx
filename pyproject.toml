@@ -51,7 +51,6 @@ build = [
 ]
 maintenance = [
   "packaging",
-  "ruamel-yaml>=0.18.10",
   "tomlkit>=0.13.2",
 ]
 docs = [

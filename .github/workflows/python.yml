@@ -85,10 +85,13 @@ jobs:
         include:
           # OpenJij and its dependencies do not support Python 3.15 yet.
           - python-version: "3.15"
+            wheel: wheels-3.15
             test-scope: --sdk-only
           - python-version: "3.14t"
+            wheel: wheels-3.14t
             test-scope: --sdk-only
           - python-version: "3.15t"
+            wheel: wheels-3.15
             test-scope: --sdk-only
     steps:
       - uses: actions/checkout@v7
@@ -100,19 +103,16 @@ jobs:
       - name: Download wheel
         uses: actions/download-artifact@v8
         with:
-          pattern: wheels-*
-          merge-multiple: true
+          name: ${{ matrix.wheel || 'wheels-3.11' }}
           path: wheels
       - name: Transform Python Project to run tests
-        run: |
-          # Keep the project-rewrite tooling independent of the target Python.
-          uv sync --python 3.11 --locked --only-group maintenance --no-install-workspace
-          uv run --python 3.11 --no-sync ci-scripts/setup-python-test-project.py ${{ matrix.python-version }} ${{ matrix.test-scope }}
-          cat pyproject.toml
+        run: >-
+          uv run --isolated --locked --python 3.11 --only-group maintenance
+          ci-scripts/setup-python-test-project.py ${{ matrix.python-version }} wheels/ommx-*.whl ${{ matrix.test-scope }}
       - name: Install deps
         run: task python:sync
       - name: Test
-        run: task python:test-ci
+        run: task ${{ matrix.test-scope && 'python:ommx:pytest' || 'python:test-ci' }}
 
       - name: Check PyO3 bridge generated stub and typing
         if: matrix.python-version == '3.11'
@@ -141,15 +141,12 @@ jobs:
       - name: Download wheel
         uses: actions/download-artifact@v8
         with:
-          pattern: wheels-*
-          merge-multiple: true
+          name: wheels-3.11
           path: wheels
       - name: Transform Python Project to run tests
-        run: |
-          # Keep the project-rewrite tooling independent of the target Python.
-          uv sync --python 3.11 --locked --only-group maintenance --no-install-workspace
-          uv run --python 3.11 --no-sync ci-scripts/setup-python-test-project.py ${{ env.python-version }}
-          cat pyproject.toml
+        run: >-
+          uv run --isolated --locked --python 3.11 --only-group maintenance
+          ci-scripts/setup-python-test-project.py ${{ env.python-version }} wheels/ommx-*.whl
       - name: Install deps
         run: task python:sync
       - name: Test Book (${{ matrix.lang }})
@@ -169,10 +166,10 @@ jobs:
         run: uv sync --locked --only-group lint --no-install-workspace
 
       - name: Format
-        run: uv run --no-sync ruff format --check python
+        run: uv run --no-sync ruff format --check python ci-scripts
 
       - name: Lint
-        run: uv run --no-sync ruff check python
+        run: uv run --no-sync ruff check python ci-scripts
 
       - name: Test CI project setup
         run: |

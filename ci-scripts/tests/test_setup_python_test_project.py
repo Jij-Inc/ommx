@@ -1,93 +1,71 @@
-import shutil
 import platform
+import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
-import tomlkit
-from ruamel.yaml import YAML
+from packaging.markers import Marker
 
 
 REPO = Path(__file__).resolve().parents[2]
-WHEELS = {
-    "abi3": "ommx-3.0.0b9-cp311-abi3-manylinux_2_28_x86_64.whl",
-    "cp314t": "ommx-3.0.0b9-cp314-cp314t-manylinux_2_28_x86_64.whl",
-    "abi3t": "ommx-3.0.0b9-cp315-abi3t.abi3-manylinux_2_28_x86_64.whl",
-}
 
 
-class SetupPythonTestProjectTests(unittest.TestCase):
-    def test_ci_workspace_matches_interpreter_and_test_scope(self):
-        cases = [
-            ("3.11", False, "abi3"),
-            ("3.12", False, "abi3"),
-            ("3.14t", True, "cp314t"),
-            ("3.15", True, "abi3t"),
-            ("3.15t", True, "abi3t"),
-        ]
-        for version, sdk_only, abi in cases:
+class TestWheelWorkspace(unittest.TestCase):
+    def test_workspace_scope(self):
+        for version, flags in [("3.12", []), ("3.15t", ["--sdk-only"])]:
             with self.subTest(version=version), tempfile.TemporaryDirectory() as tmp:
-                project = Path(tmp)
+                root = Path(tmp)
+                project = root / "pyproject.toml"
                 shutil.copy(REPO / "pyproject.toml", project)
-                (project / "python").mkdir()
-                shutil.copy(REPO / "python/Taskfile.yml", project / "python")
-                for metadata in (REPO / "python").glob("ommx*/pyproject.toml"):
-                    package = project / "python" / metadata.parent.name
-                    package.mkdir()
-                    shutil.copy(metadata, package)
-                (project / "wheels").mkdir()
-                for name in WHEELS.values():
-                    (project / "wheels" / name).touch()
-
-                command = [
-                    sys.executable,
-                    str(REPO / "ci-scripts/setup-python-test-project.py"),
-                    version,
-                ]
-                if sdk_only:
-                    command.append("--sdk-only")
-                subprocess.run(command, cwd=project, check=True, capture_output=True)
-                config = tomlkit.parse((project / "pyproject.toml").read_text())
-                uv = config["tool"]["uv"]
-                groups = config["dependency-groups"]
-                self.assertEqual(
-                    uv["environments"],
+                wheel = (
+                    Path("ommx-1-cp315-abi3.abi3t-linux_x86_64.whl")
+                    if flags
+                    else Path("ommx-1-cp311-abi3-linux_x86_64.whl")
+                )
+                (root / wheel).touch()
+                subprocess.run(
                     [
-                        f"python_version == '{version.rstrip('t')}' and sys_platform == '{sys.platform}' and platform_machine == '{platform.machine()}'"
+                        sys.executable,
+                        REPO / "ci-scripts/setup-python-test-project.py",
+                        version,
+                        wheel,
+                        *flags,
                     ],
+                    cwd=root,
+                    check=True,
                 )
-                self.assertEqual(uv["sources"]["ommx"]["path"], f"wheels/{WHEELS[abi]}")
-                self.assertTrue(
-                    any(dep.startswith("sphinx>=") for dep in groups["docs"])
-                )
-                selected = uv.get("default-groups", ["dev"])
-                if sdk_only:
+                uv = tomllib.loads(project.read_text())["tool"]["uv"]
+                self.assertEqual(uv["sources"]["ommx"], {"path": str(wheel)})
+                marker = Marker(uv["environments"][0])
+                target = {
+                    "python_version": version.rstrip("t"),
+                    "sys_platform": sys.platform,
+                    "platform_machine": platform.machine(),
+                }
+                self.assertTrue(marker.evaluate(target))
+                for key, value in [
+                    ("python_version", "3.10"),
+                    ("sys_platform", "emscripten"),
+                    ("platform_machine", "wasm32"),
+                ]:
+                    self.assertFalse(marker.evaluate(target | {key: value}))
+                self.assertIn("python/ommx", uv["workspace"]["exclude"])
+                if flags:
                     self.assertCountEqual(
-                        selected, ["benchmark", "docs", "build", "typecheck"]
+                        uv["workspace"]["members"],
+                        [
+                            "python/ommx-tests",
+                            "python/ommx-highs-adapter",
+                            "python/ommx-pyscipopt-adapter",
+                        ],
+                    )
+                    self.assertCountEqual(
+                        uv["default-groups"],
+                        ["benchmark", "docs", "build", "typecheck"],
                     )
                 else:
-                    self.assertIn("dev", selected)
-                    self.assertIn({"include-group": "tutorials"}, groups["dev"])
-                self.assertIn("python/ommx-tests", uv["workspace"]["members"])
-                for adapter in ["highs", "pyscipopt"]:
-                    self.assertIn(
-                        f"python/ommx-{adapter}-adapter", uv["workspace"]["members"]
-                    )
-                tasks = YAML().load((project / "python/Taskfile.yml").read_text())
-                if sdk_only:
-                    self.assertEqual(
-                        tasks["tasks"]["test-ci"]["cmds"], [{"task": "ommx:pytest"}]
-                    )
-                else:
-                    self.assertEqual(len(tasks["tasks"]["test-ci"]["cmds"]), 5)
-                # Interpreter restrictions belong to this CI workspace, never
-                # to the packages' published requires-python metadata.
-                for metadata in (project / "python").glob("ommx*/pyproject.toml"):
-                    self.assertEqual(
-                        metadata.read_text(),
-                        (
-                            REPO / "python" / metadata.parent.name / "pyproject.toml"
-                        ).read_text(),
-                    )
+                    self.assertEqual(uv["workspace"]["members"], ["python/ommx*"])
+                    self.assertNotIn("default-groups", uv)
