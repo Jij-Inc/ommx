@@ -15,7 +15,7 @@ use crate::{descriptor::as_descriptor, error::OmmxPyResult, PyArchiveDescriptor,
 
 /// A local-registry image reference and its cached OCI Manifest projection.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(module = "ommx._ommx_rust", name = "ArtifactRef")]
 #[derive(Debug, Clone)]
 pub struct PyArtifactRef {
@@ -739,7 +739,7 @@ impl PyArchiveManifest {
 
 /// Blob entry reported by Local Registry GC.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(module = "ommx._ommx_rust", name = "GcBlob")]
 #[derive(Debug, Clone)]
 pub struct PyGcBlob {
@@ -786,7 +786,7 @@ impl PyGcBlob {
 
 /// Root that made blobs reachable during Local Registry GC.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(module = "ommx._ommx_rust", name = "GcRoot")]
 #[derive(Debug, Clone)]
 pub struct PyGcRoot {
@@ -869,7 +869,7 @@ impl PyGcRoot {
 
 /// Blob referenced by a reachable manifest but missing from the Local Registry.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(module = "ommx._ommx_rust", name = "GcMissingBlob")]
 #[derive(Debug, Clone)]
 pub struct PyGcMissingBlob {
@@ -917,7 +917,7 @@ impl PyGcMissingBlob {
 
 /// Reachable manifest blob that could not be parsed as an OCI Image Manifest.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(module = "ommx._ommx_rust", name = "GcInvalidManifest")]
 #[derive(Debug, Clone)]
 pub struct PyGcInvalidManifest {
@@ -972,7 +972,7 @@ impl PyGcInvalidManifest {
 
 /// Report returned by {func}`gc`.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(module = "ommx._ommx_rust", name = "GcReport")]
 #[derive(Debug, Clone)]
 pub struct PyGcReport {
@@ -1128,7 +1128,7 @@ impl PyGcReport {
 
 /// Anonymous Artifact or Experiment ref matched by {func}`prune_anonymous`.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(module = "ommx._ommx_rust", name = "AnonymousArtifactRef")]
 #[derive(Debug, Clone)]
 pub struct PyAnonymousArtifactRef {
@@ -1205,7 +1205,7 @@ impl PyAnonymousArtifactRef {
 
 /// Report returned by {func}`prune_anonymous`.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(module = "ommx._ommx_rust", name = "PruneAnonymousReport")]
 #[derive(Debug, Clone)]
 pub struct PyPruneAnonymousReport {

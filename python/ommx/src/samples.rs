@@ -10,7 +10,7 @@ use std::collections::{BTreeSet, HashMap};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass(skip_stub_type, module = "ommx._ommx_rust")]
 #[doc = include_str!("docstrings/ommx/Samples.md")]
-#[pyclass(skip_from_py_object)]
+#[pyclass]
 #[derive(Clone, Default)]
 pub struct Samples(pub ommx::Sampled<ommx::v1::State>);
 

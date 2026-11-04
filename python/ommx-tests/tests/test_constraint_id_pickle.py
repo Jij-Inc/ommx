@@ -67,6 +67,7 @@ def test_constraint_dataframe_pickle(kind, id_type, _row_type):
         frame.to_pickle(buffer)
         buffer.seek(0)
         restored = pd.read_pickle(buffer)
+        assert isinstance(restored, pd.DataFrame)
         pd.testing.assert_frame_equal(restored, frame)
         assert type(restored.index[0]) is id_type
         assert type(restored.at[id_type(NUMBERS[id_type]), "constraint_id"]) is id_type

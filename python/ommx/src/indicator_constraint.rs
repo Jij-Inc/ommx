@@ -7,7 +7,7 @@ use crate::{ConstraintHost, Equality, Function, VariableIDInput};
 
 #[gen_stub_pyclass]
 #[doc = include_str!("docstrings/ommx/IndicatorConstraint.md")]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct IndicatorConstraint(pub ommx::IndicatorConstraint, pub ommx::ConstraintContext);
 
@@ -137,7 +137,7 @@ impl IndicatorConstraint {
 
 /// A removed indicator constraint together with the reason it was removed.
 #[gen_stub_pyclass]
-#[pyclass(eq, extends = ConstraintView)]
+#[pyclass(from_py_object, eq, extends = ConstraintView)]
 #[derive(Clone, PartialEq)]
 pub struct RemovedIndicatorConstraint {
     pub constraint: ommx::IndicatorConstraint,

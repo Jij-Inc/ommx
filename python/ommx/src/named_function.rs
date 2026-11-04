@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[doc = include_str!("docstrings/ommx/NamedFunction.md")]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct NamedFunction(
     pub ommx::NamedFunctionID,
