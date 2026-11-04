@@ -5,7 +5,7 @@
 
 ## 自分のコードで確認する箇所
 
-- **モデルを作るコード**では、制約に番号を付ける場所が変わります。[同じ問題の移行例](#migration-compare-model)で、構築・評価から結果の取得までを比較できます。
+- **モデルを作るコード**では、外部の制約番号を引き継ぐなら[番号を指定する移行例](#migration-compare-model)、プログラム内で番号を振っていただけなら[モデルに採番を任せる例](#migration-automatic-ids)を参照してください。
 - **結果を集計するコード**では、符号付きの制約式の値と非負の違反量を区別します。DataFrameはメソッドとして呼び、制約の種類を指定します。詳しくは{class}`~ommx.Solution`と{class}`~ommx.SampleSet`を参照してください。
 - **ソルバーを呼ぶコード**では、推奨の準備をAdapterに任せるか、自分で変換を指定するかを決めます。[Adapter一覧](../api/adapters)から使用中のAdapterへ進めます。
 - **保存済みデータを読むコード**では、v2.9.4の `Instance.to_bytes()` が出力したバイト列を `Instance.from_v1_bytes(data)` で読みます。`.ommx` アーカイブの読込みには[Artifactの移行手順](#13-artifact-api-archive-becomes-an-exchange-format)を使います。
@@ -117,9 +117,27 @@ assert result.get_constraint_value(ConstraintID(7)) == -1.0
 
 両方とも制約番号は7です。v2では式に番号を付け、v3ではモデル構築時に辞書のキーで渡します。候補は同じ上限を満たしています。v2で得た $x-1=-1$ は符号付きの値、v3で得た $0$ は違反量です。式の値を使う集計には {meth}`~ommx.Solution.get_constraint_value` を選んでください。
 
-### 3.3 グローバルIDカウンタは削除
+(migration-automatic-ids)=
+### 3.3 変数と制約のIDをモデルに割り当てさせる
 
-`next_constraint_id()`、`set_constraint_id_counter(...)`、`get_constraint_id_counter()` などのモジュールレベルの関数は削除されました。新しい通常制約 `c` は `instance.add_constraint(c).constraint_id` でモデルに追加し、割り当てられた `ConstraintID` を取得できます。
+v2で変数の作成時に連番を渡したり、制約のグローバルカウンタをリセットしたりしていた場合は、v3ではモデルを先に作り、変数と制約を順に追加できます。`Instance.minimize()` または `Instance.maximize()` で始めます。次の例では、追加時の戻り値から変数IDと制約IDを取得し、そのまま候補の評価に使います。
+
+```python
+from ommx import Instance
+
+model = Instance.maximize()
+x = model.new_binary("x")
+y = model.new_binary("y")
+model.objective = x + y
+limit = model.add_constraint(x + y <= 1, "limit")
+
+result = model.evaluate({x.id: 1, y.id: 1})
+assert result.constraint_violation(limit.constraint_id) == 1.0
+```
+
+`Instance` には `new_binary` のほかに `new_integer`、`new_continuous`、`new_semi_integer`、`new_semi_continuous`、`new_finite_domain` があり、いずれも変数IDを自動で割り当てます。すでに番号のある変数を追加する {meth}`~ommx.Instance.add_decision_variable` は、その番号を使います。
+
+`Instance` と `ParametricInstance` では、通常制約の `add_constraint` と特殊制約の `add_indicator_constraint`、`add_one_hot_constraint`、`add_sos1_constraint` がモデル内で未使用の番号を割り当てます。v2の `next_constraint_id()` や `set_constraint_id_counter()` は不要です。既存データが特定の制約番号を参照しているときは、前節の {meth}`~ommx.Instance.from_components` でその番号を明示してください。
 
 ## 4. container type の変更
 

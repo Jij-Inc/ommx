@@ -5,7 +5,7 @@ This guide compares [Python SDK 2.9.4](https://pypi.org/project/ommx/2.9.4/) wit
 
 ## Find the changes that affect your code
 
-- **If you build models**, change where you assign constraint numbers. The [side-by-side example](#migration-compare-model) follows the same model through construction, evaluation, and result lookup.
+- **If you build models**, [keep explicit IDs](#migration-compare-model) when other data refers to those numbers. If your application only numbered rows for model construction, [let the model assign IDs](#migration-automatic-ids).
 - **If you analyze results**, distinguish a signed constraint value from a nonnegative violation. Call DataFrame accessors as methods and select the constraint family. See {class}`~ommx.Solution` and {class}`~ommx.SampleSet` for executable examples.
 - **If you call a solver**, decide whether to use the adapter's recommended preparation or specify your own transformations. Find your backend in the [adapter catalogue](../api/adapters).
 - **If you read saved data**, use `Instance.from_v1_bytes(data)` for payloads produced by `Instance.to_bytes()` in 2.9.4. For a `.ommx` archive, follow the [Artifact migration](#13-artifact-api-archive-becomes-an-exchange-format).
@@ -129,17 +129,27 @@ assert result.get_constraint_value(ConstraintID(7)) == -1.0
 
 The constraint number is 7 in both versions. In v2 you assign it to the expression. In v3 you supply it as a mapping key when building the model. The candidate meets the same limit in both. The v2 lookup returns the signed value $x-1=-1$ and the v3 lookup returns zero violation. Use {meth}`~ommx.Solution.get_constraint_value` if your analysis needs the signed value.
 
-### 3.3 Global ID-counter helpers removed (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
+(migration-automatic-ids)=
+### 3.3 Let the model assign variable and constraint IDs
 
-These module-level names are gone from `ommx._ommx_rust`:
+If your v2 code numbered variables in a loop or reset the global constraint counter, build the model incrementally in v3. Start with `Instance.minimize()` or `Instance.maximize()`. Each addition returns a handle whose ID you can use to supply candidate values or look up a constraint result.
 
-- `CONSTRAINT_ID_COUNTER`
-- `next_constraint_id()`
-- `set_constraint_id_counter(...)`
-- `update_constraint_id_counter(...)`
-- `get_constraint_id_counter()`
+```python
+from ommx import Instance
 
-For a new regular constraint `c`, `instance.add_constraint(c).constraint_id` adds the constraint and returns its assigned `ConstraintID`.
+model = Instance.maximize()
+x = model.new_binary("x")
+y = model.new_binary("y")
+model.objective = x + y
+limit = model.add_constraint(x + y <= 1, "limit")
+
+result = model.evaluate({x.id: 1, y.id: 1})
+assert result.constraint_violation(limit.constraint_id) == 1.0
+```
+
+Besides `new_binary`, `Instance` assigns variable IDs through `new_integer`, `new_continuous`, `new_semi_integer`, `new_semi_continuous`, and `new_finite_domain`. To insert a variable that already has an ID, {meth}`~ommx.Instance.add_decision_variable` preserves its number.
+
+On both `Instance` and `ParametricInstance`, `add_constraint`, `add_indicator_constraint`, `add_one_hot_constraint`, and `add_sos1_constraint` allocate unused constraint numbers within the model. The v2 helpers `next_constraint_id()` and `set_constraint_id_counter()` are gone. If existing data refers to a particular constraint number, pass it explicitly to {meth}`~ommx.Instance.from_components` as in the preceding example.
 
 ## 4. Constructing and looking up constraints by ID
 
