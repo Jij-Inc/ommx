@@ -52,6 +52,7 @@ To inspect a solver's search progress and termination report, see the {class}`SC
 
 To work with saved data, [inspect a local Artifact](./how_to/manage_local_registry.md) or [share it through a registry](./how_to/share_artifact_registry.md). To connect an external tool, [install an agent plugin](./user_guide/agent_skills.md) or [send spans to an OpenTelemetry collector](./how_to/export_traces.md).
 
+(exchange-formats)=
 ## Support data exchange and sharing
 
 Giving problems and results common meanings helps both software and people work with the same data. OMMX supports these handoffs through the following components:

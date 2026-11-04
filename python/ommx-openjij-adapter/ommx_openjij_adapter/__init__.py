@@ -12,6 +12,9 @@ class OMMXOpenJijSAAdapter(_OMMXOpenJijSAAdapter):
     objective must be a polynomial minimization, and no regular or special
     constraints may remain active. Polynomial degree is not limited to two:
     OpenJij's QUBO and Binary-HUBO paths are supported.
+    When constructing the backend input, used variable IDs must fit signed
+    64-bit integers and the converted interaction coefficients must be finite.
+    Violations are reported as conversion errors.
 
     :meth:`sample` returns an evaluated :class:`ommx.SampleSet`; :meth:`solve`
     selects its best feasible candidate as a :class:`ommx.Solution`. Both easy

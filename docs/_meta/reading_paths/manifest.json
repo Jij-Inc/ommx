@@ -336,6 +336,18 @@
         "RELEASE"
       ],
       "note": "日英の旧診断2原稿と重複PNGを共有Referenceへ統合。SCIP/HiGHSの自己完結した収集・終了報告・失敗時の例を各Analyzerが所有し、Experiment保存はSCIP側の任意節へ移す。air05を一度取得して実測診断と条件を保存し、求解不要の図再生成と図・データ・スクリプトの同期検査を用意する。Book第3章は用途とbound/gapの解釈を保持し、日英Home/Releaseから実在するReferenceへ接続する。過去baselineと履歴は保持し、本文レビュー記録はチャットに残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "2e2deb56c1893cd1682db3cf98612f4b0e4ae855",
+      "target_revision": "codex/book-final-reading-paths",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "SETUP",
+        "R_ADAPTERS"
+      ],
+      "note": "4つのAdapterのパッケージREADMEから日英の導入節と共有API Referenceへ接続する。Python-MIPの導入節を両言語に追加し、旧URLの転送先を現行の章・仕様・APIへ対応付ける。各ページの学習前提は変わらない。"
     }
   ],
   "interpretation": {
@@ -2162,7 +2174,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "日英の同じ節構造で、3.0.0安定版まではBookとAPI Referenceがともにmainを説明することと、最新の公開prerelease・mainの導入経路の違いを入口で示す。prereleaseはリポジトリ外のuvプロジェクト、mainはcheckoutのルートで作業する。SDKと必要なAdapterを選んだ経路で揃え、未公開の機能を使う場合はmainを選ぶ。Notebookのカーネル設定と各経路の更新方法もここへ集約する。CLIはSDK同梱版とPython不要のRustからの導入を選べる。導入は個別APIの能力を付与せず、全Bookの実行確認を示すものでもない。source_urlsは日本語版の歴史的baselineであり、新しい英語版の現行本文はsource_pathsで追跡する。 各Adapterの導入節から、PySCIPOptの基本求解・HiGHSの自動準備・OpenJijの明示penalty samplingを所有する共有Referenceへ直接進める。",
+      "notes": "日英の同じ節構造で、3.0.0安定版まではBookとAPI Referenceがともにmainを説明することと、最新の公開prerelease・mainの導入経路の違いを入口で示す。prereleaseはリポジトリ外のuvプロジェクト、mainはcheckoutのルートで作業する。SDKと必要なAdapterを選んだ経路で揃え、未公開の機能を使う場合はmainを選ぶ。Notebookのカーネル設定と各経路の更新方法もここへ集約する。CLIはSDK同梱版とPython不要のRustからの導入を選べる。導入は個別APIの能力を付与せず、全Bookの実行確認を示すものでもない。source_urlsは日本語版の歴史的baselineであり、新しい英語版の現行本文はsource_pathsで追跡する。 各Adapterの導入節から、PySCIPOptの基本求解・HiGHSの自動準備・OpenJijの明示penalty sampling・Python-MIPの求解とモデル取り込みを所有する共有Referenceへ直接進める。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [

@@ -52,6 +52,7 @@ OMMX（Open Mathematical prograMming eXchange、オミキス）を使うと、**
 
 保存したデータを扱うには、[手元のArtifactを調べる手順](./how_to/manage_local_registry.md)や[レジストリで共有する手順](./how_to/share_artifact_registry.md)に進みます。外部ツールを接続するには、[エージェントプラグインの導入](./user_guide/agent_skills.md)や[OpenTelemetryコレクターへの送信設定](./how_to/export_traces.md)を参照してください。
 
+(exchange-formats)=
 ## データの交換と共有を支える仕組み
 
 問題や解に共通の意味を与えることで、ソフトウェア間だけでなく、担当者間でも同じ問題と結果を扱えます。OMMXは次の要素でその受け渡しを支えます。
