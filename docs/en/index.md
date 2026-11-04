@@ -48,6 +48,8 @@ To run something yourself, [install the SDK and any adapter you need](./getting_
 
 For an individual operation, start in the {doc}`Python API Reference <api/index>`. For example, {class}`~ommx.Solution` shows how to inspect a candidate and {func}`~ommx.qplib.load_solution` reads one from a file. The {doc}`adapter catalogue <api/adapters>` lists solver inputs and links to complete solve examples. To connect your own backend, see {class}`~ommx.adapter.SolverAdapter` or {class}`~ommx.adapter.SamplerAdapter`.
 
+To inspect a solver's search progress and termination report, see the {class}`SCIP <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>` or {class}`HiGHS <ommx_highs_adapter.HighsDiagnosticsAnalyzer>` diagnostic reference.
+
 To work with saved data, [inspect a local Artifact](./how_to/manage_local_registry.md) or [share it through a registry](./how_to/share_artifact_registry.md). To connect an external tool, [install an agent plugin](./user_guide/agent_skills.md) or [send spans to an OpenTelemetry collector](./how_to/export_traces.md).
 
 ## Support data exchange and sharing
@@ -124,7 +126,6 @@ how_to/export_traces
 :hidden:
 
 api/index
-Solver diagnostics <user_guide/adapter_diagnostics>
 Rust API (published releases) <https://docs.rs/ommx/>
 Message schemas <https://github.com/Jij-Inc/ommx/tree/main/proto/ommx>
 Artifact format specification <https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/doc/artifact_design.md>

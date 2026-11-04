@@ -288,6 +288,57 @@ def _get_incumbent_objective(
 class SCIPDiagnosticsAnalyzer:
     """Pandas-like post-processor for PySCIPOpt diagnostics.
 
+    Inspect why SCIP stopped and how its search progressed. A
+    :class:`~ommx.Solution` evaluates a candidate against the OMMX problem;
+    diagnostics report what the backend observed or proved about the formulation
+    it solved. A feasible candidate alone does not establish optimality.
+
+    .. rubric:: Collect a final report
+
+    Install the SDK and PySCIPOpt Adapter using the
+    :doc:`installation guide </getting_started/install>`. This example builds a
+    small binary problem: choose at most one item and maximize its value.
+    It needs neither an external dataset nor an Experiment.
+
+    >>> from ommx import Instance
+    >>> from ommx.adapter import DiagnosticCollector
+    >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter, SCIPDiagnosticsAnalyzer
+    >>> instance = Instance.maximize()
+    >>> x = instance.new_binary("x")
+    >>> y = instance.new_binary("y")
+    >>> instance.objective = 3 * x + 2 * y
+    >>> _ = instance.add_constraint(x + y <= 1)
+    >>> collector = DiagnosticCollector()
+    >>> solution = OMMXPySCIPOptAdapter.solve(instance, diagnostics=collector)
+    >>> analysis = SCIPDiagnosticsAnalyzer(collector.diagnostics)
+    >>> solution.objective, solution.feasible
+    (3.0, True)
+    >>> solution.decision_variables_df()[["name", "value"]].to_dict("records")
+    [{'name': 'x', 'value': 1.0}, {'name': 'y', 'value': 0.0}]
+    >>> result = analysis.termination_result
+    >>> assert result is not None
+    >>> result["status"], result["primal_bound"], result["dual_bound"], result["gap"]
+    ('optimal', 3.0, 3.0, 0.0)
+
+    The candidate selects ``x=1, y=0``. ``status == "optimal"`` is SCIP's final
+    optimality report; it is distinct from OMMX's feasibility check. A time-limited
+    solve can return a feasible candidate without proving optimality.
+
+    ``primal_bound`` is the best feasible objective bound found by the solver;
+    ``dual_bound`` bounds how good the optimum can still be. For maximization,
+    the primal bound is a lower bound and the dual bound an upper bound; their
+    roles as upper/lower bounds reverse for minimization. ``gap`` is SCIP's
+    reported relative gap, not simply their arithmetic difference. Bounds and
+    gaps need not be finite when, for example, no candidate has been found.
+    SCIP may also represent infinity by a large finite sentinel.
+
+    These values concern the solver-facing objective. After sign, scale, or
+    penalty changes, do not treat them as bounds on the reported OMMX objective
+    without the corresponding transformation guarantee. See
+    :doc:`result interpretation </user_guide/evaluate_and_interpret>`.
+
+    .. rubric:: Read progress observations
+
     The analyzer accepts either typed diagnostics collected by
     :class:`ommx.adapter.DiagnosticCollector` or dictionaries loaded from
     :attr:`ommx.experiment.Solve.diagnostics`.
@@ -299,6 +350,94 @@ class SCIPDiagnosticsAnalyzer:
     ``solving_time_sec`` and imports pandas lazily. Time-series properties such
     as :attr:`dual_bound` return pandas Series with the same index.
     :attr:`termination_result` returns the terminal SCIP report as a dictionary.
+
+    >>> history = analysis.progress_history_df
+    >>> history.index.name
+    'solving_time_sec'
+    >>> history.iloc[-1]["event"]
+    'TERMINATION'
+    >>> float(analysis.dual_bound.iloc[-1]), float(analysis.gap.iloc[-1])
+    (3.0, 0.0)
+    >>> assert analysis.incumbent_objective.iloc[-1] == solution.objective
+    >>> assert analysis.progress_history_records[-1]["event"] == "TERMINATION"
+
+    Small problems may have few intermediate points. SCIP records
+    :class:`SCIPProgressSnapshot` at ``BESTSOLFOUND`` and ``DUALBOUNDIMPROVED``
+    callbacks, plus a final ``TERMINATION`` snapshot. Callbacks can run before
+    aggregate statistics are updated; read terminal values from the final row
+    or :class:`SCIPTerminationReport`. The report also includes node/LP/cut
+    counters, primal-dual integral, timings, and solver version metadata.
+
+    .. rubric:: Plot a recorded bound and gap history
+
+    Use the elapsed-time index to plot the bounds and gap from your own
+    run. SCIP can return its infinity sentinel before a finite bound is
+    available. Mask these entries so an unknown bound does not look like
+    a large observed value.
+
+    >>> from matplotlib import pyplot as plt
+    >>> from pyscipopt import Model
+    >>> values = history[["primal_bound", "dual_bound", "gap"]].astype(float)
+    >>> visible = values.where(values.abs() < Model().infinity())
+    >>> fig, (bounds_ax, gap_ax) = plt.subplots(2, sharex=True)
+    >>> _ = visible[["primal_bound", "dual_bound"]].plot(ax=bounds_ax)
+    >>> _ = visible["gap"].plot(ax=gap_ax, ylabel="Relative gap")
+    >>> plt.close(fig)
+
+    .. figure:: /../assets/scip_air05/bounds.png
+       :alt: SCIP upper and lower bounds converge at 26374 and the relative gap reaches zero.
+
+       SCIP 10.0.2 minimizing MIPLIB air05 with the adapter defaults.
+       The incumbent gives an upper bound and the dual bound gives a lower
+       bound. Lines connect recorded observations. At termination the bounds
+       meet at 26,374 and SCIP reports a relative gap of zero.
+
+    .. rubric:: Inspect a report when no Solution is returned
+
+    The Adapter records termination before decoding the solver result. If
+    decoding raises an adapter exception, the collector can therefore retain
+    the final report. This unbounded problem has no finite optimum:
+
+    >>> from ommx.adapter import UnboundedDetected
+    >>> unbounded = Instance.maximize()
+    >>> z = unbounded.new_continuous("z", lower=0)
+    >>> unbounded.objective = z
+    >>> collector = DiagnosticCollector()
+    >>> try:
+    ...     OMMXPySCIPOptAdapter.solve(unbounded, diagnostics=collector)
+    ... except UnboundedDetected:
+    ...     failure = SCIPDiagnosticsAnalyzer(collector.diagnostics).termination_result
+    >>> assert failure is not None and failure["status"] == "unbounded"
+
+    Errors before the backend finishes need not produce a termination report;
+    :attr:`termination_result` is ``None`` when no such report was collected.
+
+    .. rubric:: Read diagnostics saved with an Experiment
+
+    Recording is optional. :meth:`~ommx.experiment.Run.log_solve` owns the
+    ``diagnostics`` keyword; pass ``store_diagnostics=True`` instead of a
+    collector. Collection is disabled by default. The following example uses
+    the small model above and a temporary Local Registry.
+
+    >>> from ommx.experiment import Experiment
+    >>> with Experiment.with_temp_local_registry() as experiment:
+    ...     with experiment.run() as run:
+    ...         solution = run.log_solve(
+    ...             OMMXPySCIPOptAdapter, instance, store_diagnostics=True,
+    ...         )
+    >>> stored = experiment.runs[0].solves[0].diagnostics
+    >>> assert stored and all(isinstance(report, dict) for report in stored)
+    >>> saved = SCIPDiagnosticsAnalyzer(stored)
+    >>> assert saved.termination_result["status"] == "optimal"
+    >>> assert saved.dual_bound.iloc[-1] == 3.0
+
+    Stored reports are dictionaries rather than the original Python dataclasses.
+    Both forms support the same records, DataFrame, and Series views. If an
+    Adapter raises, ``log_solve`` records a failed/interrupted Solve without an
+    output Solution when possible, including diagnostics collected before the
+    failure. :meth:`~ommx.experiment.Run.log_sample` records sampling outcomes
+    separately. Persistence is best-effort; consult those methods for failure
+    handling and the reserved keyword contract.
     """
 
     _progress_snapshots: tuple[SCIPProgressSnapshot, ...]

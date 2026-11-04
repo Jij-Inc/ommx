@@ -48,6 +48,8 @@ OMMX（Open Mathematical prograMming eXchange、オミキス）を使うと、**
 
 個々の操作は{doc}`Python API Reference <api/index>`から調べられます。例えば、候補の値と制約の違反を調べる例は{class}`~ommx.Solution`、ファイルから候補を読む例は{func}`~ommx.qplib.load_solution`にあります。{doc}`Adapterの一覧 <api/adapters>`から、各ソルバーの入力条件と求解例に進めます。自分の解法を接続する場合は{class}`~ommx.adapter.SolverAdapter`または{class}`~ommx.adapter.SamplerAdapter`を参照してください。
 
+探索の進捗や終了理由を調べる手順は、{class}`SCIP <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>`と{class}`HiGHS <ommx_highs_adapter.HighsDiagnosticsAnalyzer>`の診断情報のReferenceにあります。
+
 保存したデータを扱うには、[手元のArtifactを調べる手順](./how_to/manage_local_registry.md)や[レジストリで共有する手順](./how_to/share_artifact_registry.md)に進みます。外部ツールを接続するには、[エージェントプラグインの導入](./user_guide/agent_skills.md)や[OpenTelemetryコレクターへの送信設定](./how_to/export_traces.md)を参照してください。
 
 ## データの交換と共有を支える仕組み
@@ -123,7 +125,6 @@ how_to/export_traces
 :hidden:
 
 api/index
-ソルバーの診断情報 <how_to/inspect_adapter_diagnostics>
 Rust API（公開版） <https://docs.rs/ommx/>
 Message形式のスキーマ <https://github.com/Jij-Inc/ommx/tree/main/proto/ommx>
 Artifact形式仕様 <https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/doc/artifact_design.md>
