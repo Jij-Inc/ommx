@@ -5653,7 +5653,8 @@
       "role": "migration",
       "status": "existing",
       "source_paths": [
-        "docs/ja/migration/python_sdk_v2_to_v3.md"
+        "docs/ja/migration/python_sdk_v2_to_v3.md",
+        "docs/en/migration/python_sdk_v2_to_v3.md"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/migration/python_sdk_v2_to_v3.md"
@@ -5681,11 +5682,12 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "旧版経験者向け。旧namespaceの出現を現在APIの導入とみなさない。",
+      "notes": "Python SDK 2.9.4からmainへ移行する読者向け。同じモデルと候補で符号付きの値と違反量を比較する。旧namespaceの出現を現在APIの導入とみなさない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/migration/python_sdk_v2_to_v3.md"
+        "docs/ja/migration/python_sdk_v2_to_v3.md",
+        "docs/en/migration/python_sdk_v2_to_v3.md"
       ]
     },
     {
