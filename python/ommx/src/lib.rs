@@ -1,6 +1,8 @@
 mod artifact;
 mod bound;
 mod builder;
+#[cfg(feature = "cli")]
+mod cli;
 mod constraint;
 mod constraint_hints;
 #[cfg(feature = "remote-artifact")]
@@ -78,6 +80,9 @@ pub fn get_default_atol() -> f64 {
 #[pymodule(gil_used = false)]
 fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     pyo3_log::init();
+
+    #[cfg(feature = "cli")]
+    m.add_function(wrap_pyfunction!(cli::_run_cli, m)?)?;
 
     // OMMX Artifact
     m.add_class::<ArtifactArchive>()?;
