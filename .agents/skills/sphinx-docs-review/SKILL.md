@@ -119,7 +119,7 @@ the project environment.
 
 Book code is explanatory pseudocode: review its meaning, without requiring or
 claiming execution. Working API examples belong in Reference docstrings checked
-by `python/ommx-tests/tests/test_doctests.py`; runnable end-to-end workflows belong
+by `python/ommx/tests/test_doctests.py`; runnable end-to-end workflows belong
 in standalone Examples and their existing tests. This separation does not
 authorize disabling, weakening, or adding skips to existing Notebook tests.
 Do not add Notebook reruns or enable execution for a Book review. An HTML build
@@ -136,7 +136,7 @@ verifies publication, not code execution.
   for changes to `Instance`:
   ```
   task python:sync
-  uv run --no-sync pytest -vv python/ommx-tests/tests/test_doctests.py -k 'ommx.Instance'
+  uv run --no-sync pytest -vv python/ommx/tests/test_doctests.py -k 'ommx.Instance'
   ```
   Use `task python:ommx:pytest-doctest` when the full doctest suite is appropriate.
   Report the selected doctests separately from publication checks; neither a

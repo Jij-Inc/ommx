@@ -47,6 +47,10 @@ dependencies = [
 [project.scripts]
 ommx = "ommx.cli:_console_main"
 
+[tool.pyright]
+# Pytest puts this directory on sys.path for imports between test modules.
+executionEnvironments = [{ root = "tests" }]
+
 [project.urls]
 Documentation = "https://jij-inc-ommx.readthedocs-hosted.com/en/latest/api/index.html"
 Repository = "https://github.com/Jij-Inc/ommx"

@@ -37,7 +37,7 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 - `proto/`: Protocol Buffer schema and generated-message sources.
 - `rust/ommx/`: Rust SDK crate and Rust-side documentation.
 - `python/ommx/`: Main Python package, including PyO3 binding code in `python/ommx/src/`.
-- `python/ommx-tests/`: Core Python SDK tests.
+- `python/ommx/tests/`: Core Python SDK tests.
 - `python/ommx-*-adapter/`: Solver adapter packages, each with its own tests.
 - `docs/`: Sphinx documentation and generated API reference assets.
 
@@ -160,7 +160,7 @@ from ommx._ommx_rust import Function  # Binding-internal only
 ## Critical Development Rules
 
 ### 🧪 Testing & Quality
-- Python tests: `python/ommx-tests/tests` for core SDK, each adapter has its own `tests/` directory
+- Python tests: `python/ommx/tests` for core SDK, each adapter has its own `tests/` directory
 - Always run `task format` before committing
 - After pushing a PR update, do not wait for remote CI checks by default, and do not report pending checks or merely-started check runs. Report once the requested work, focused local validation, commit, and push are done. Check or wait for CI only when the user explicitly asks, when debugging a failing check, or when the next action depends on the final CI result.
 

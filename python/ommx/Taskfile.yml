@@ -29,44 +29,44 @@ tasks:
   pytest-doctest:
     desc: Run only doctest modules
     cmds:
-      - uv run pytest -vv --doctest-modules python/ommx-tests/tests/test_doctests.py
+      - uv run pytest -vv --doctest-modules python/ommx/tests/test_doctests.py
     dir: ../..
 
   pytest-bench:
     desc: Run persistent benchmark guardrails as tests
     cmds:
-      - uv run pytest -vv python/ommx-tests/tests/test_bench_*.py -m benchmark_guardrail
+      - uv run pytest -vv python/ommx/tests/test_bench_*.py -m benchmark_guardrail
     dir: ../..
 
   pytest-unit:
     desc: Run unit tests (excluding doctest and bench)
     cmds:
-      - uv run pytest -vv python/ommx-tests/tests --ignore=python/ommx-tests/tests/test_doctests.py --ignore-glob=python/ommx-tests/tests/test_bench_*.py
+      - uv run pytest -vv python/ommx/tests --ignore=python/ommx/tests/test_doctests.py --ignore-glob=python/ommx/tests/test_bench_*.py
     dir: ../..
 
   pyright:
     desc: Type check OMMX Python SDK
     cmds:
-      - uv run pyright python/ommx python/ommx-tests
+      - uv run pyright --project python/ommx python/ommx
     dir: ../..
 
   lint:
     desc: Lint by ruff check
     cmds:
       - uv sync --locked --only-group lint --no-install-workspace --inexact
-      - uv run --no-sync ruff check python/ommx python/ommx-tests
+      - uv run --no-sync ruff check python/ommx
     dir: ../..
 
   bench:
     desc: Run the full benchmark suite for OMMX Python SDK
     cmds:
-      - uv run pytest python/ommx-tests/tests/test_bench_*.py --codspeed
+      - uv run pytest python/ommx/tests/test_bench_*.py --codspeed
     dir: ../..
 
   bench-guardrail:
     desc: Run persistent benchmark guardrails for OMMX Python SDK
     cmds:
-      - uv run pytest python/ommx-tests/tests/test_bench_*.py --codspeed -m benchmark_guardrail
+      - uv run pytest python/ommx/tests/test_bench_*.py --codspeed -m benchmark_guardrail
     dir: ../..
 
   build:pyodide:
