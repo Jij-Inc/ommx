@@ -64,7 +64,9 @@ class SetupPythonTestProjectTests(unittest.TestCase):
                 )
                 selected = uv.get("default-groups", ["dev"])
                 if sdk_only:
-                    self.assertCountEqual(selected, ["benchmark", "docs", "build"])
+                    self.assertCountEqual(
+                        selected, ["benchmark", "docs", "build", "typecheck"]
+                    )
                 else:
                     self.assertIn("dev", selected)
                     self.assertIn({"include-group": "tutorials"}, groups["dev"])

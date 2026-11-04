@@ -89,7 +89,7 @@ if sdk_only:
     # only by executable Book tutorials (which are tested in separate jobs).
     # benchmark includes test; build supplies maturin for the bridge fixture.
     # Publishing tools (twine/keyring) are only needed in release jobs.
-    uv["default-groups"] = ["benchmark", "docs", "build"]
+    uv["default-groups"] = ["benchmark", "docs", "build", "typecheck"]
 
 sources = uv["sources"]
 if not isinstance(sources, dict):
