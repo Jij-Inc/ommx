@@ -154,6 +154,8 @@ jobs:
         run: task python:sync
       - name: Test Book (${{ matrix.lang }})
         run: task python:book:test:${{ matrix.lang }}
+      - name: Check published entry links (${{ matrix.lang }})
+        run: uv run --no-sync python ci-scripts/check-book-entry-links.py ${{ matrix.lang }} docs/${{ matrix.lang }}/_build/html
 
   ruff:
     runs-on: ubuntu-latest

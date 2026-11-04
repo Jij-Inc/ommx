@@ -53,6 +53,7 @@ To run an example saved as a script, use `uv run --no-sync python example.py`. T
 
 Use the commands for the same installation route as your SDK. For prereleases, `uv add` resolves the SDK and adapters together in your working project. For `main`, `--inexact` keeps other adapters and Notebook packages you have already added.
 
+(install-pyscipopt-adapter)=
 ### PySCIPOpt Adapter
 
 Latest prerelease:
@@ -85,6 +86,23 @@ uv sync --locked --package ommx-highs-adapter --no-default-groups --inexact
 ```
 
 The {class}`~ommx_highs_adapter.OMMXHighsAdapter` Reference includes a complete example of preparing special constraints and solving the resulting model. It constructs its own input and needs only HiGHS and the SDK. To run the {mod}`Adapter comparison example <ommx.adapter>`, install both HiGHS and PySCIPOpt, then add matplotlib as described below.
+
+(install-python-mip-adapter)=
+### Python-MIP Adapter
+
+Latest prerelease:
+
+```sh
+uv add --prerelease=allow ommx-python-mip-adapter
+```
+
+main:
+
+```sh
+uv sync --locked --package ommx-python-mip-adapter --no-default-groups --inexact
+```
+
+Use {class}`~ommx_python_mip_adapter.OMMXPythonMIPAdapter` to solve an OMMX problem, or {func}`~ommx_python_mip_adapter.model_to_instance` to import an existing Python-MIP model.
 
 (install-openjij-adapter)=
 ### OpenJij Adapter

@@ -28,5 +28,6 @@ dependencies = [
 ]
 
 [project.urls]
+Documentation = "https://jij-inc-ommx.readthedocs-hosted.com/en/latest/autoapi/ommx_python_mip_adapter/index.html"
 Repository = "https://github.com/Jij-Inc/ommx"
 Issues = "https://github.com/Jij-Inc/ommx/issues"

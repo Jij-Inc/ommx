@@ -22,5 +22,6 @@ classifiers = [
 dependencies = ["ommx >= 3.0.0b10, < 4.0.0","highspy>=1.9.0", "numpy>=1.17.3"]
 
 [project.urls]
+Documentation = "https://jij-inc-ommx.readthedocs-hosted.com/en/latest/autoapi/ommx_highs_adapter/index.html"
 Repository = "https://github.com/Jij-Inc/ommx"
 Issues = "https://github.com/Jij-Inc/ommx/issues"

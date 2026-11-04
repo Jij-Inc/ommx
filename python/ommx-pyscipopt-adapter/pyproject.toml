@@ -21,5 +21,6 @@ classifiers = [
 dependencies = ["ommx >= 3.0.0b10, < 4.0.0","PySCIPOpt >= 6.1.0, < 7.0.0"]
 
 [project.urls]
+Documentation = "https://jij-inc-ommx.readthedocs-hosted.com/en/latest/autoapi/ommx_pyscipopt_adapter/index.html"
 Repository = "https://github.com/Jij-Inc/ommx"
 Issues = "https://github.com/Jij-Inc/ommx/issues"
