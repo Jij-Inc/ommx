@@ -53,6 +53,7 @@ uv run --no-sync python -c "from importlib.metadata import version; from ommx im
 
 SDKと同じ導入方法のコマンドを使ってください。prereleaseでは、`uv add`が作業用プロジェクト内でSDKとAdapterの依存関係をまとめて解決します。`main`では、`--inexact`がすでに追加した別のAdapterやNotebook用パッケージを残します。
 
+(install-pyscipopt-adapter)=
 ### PySCIPOpt Adapter
 
 最新prerelease：
@@ -85,6 +86,23 @@ uv sync --locked --package ommx-highs-adapter --no-default-groups --inexact
 ```
 
 {class}`~ommx_highs_adapter.OMMXHighsAdapter`のReferenceに、特殊制約を準備して解く完全な使用例があります。モデルをその場で作るため、HiGHSとSDKだけで実行できます。{mod}`Adapter比較の使用例 <ommx.adapter>`を実行する場合は、両方のAdapterと、後述の手順でmatplotlibを用意します。
+
+(install-python-mip-adapter)=
+### Python-MIP Adapter
+
+最新prerelease：
+
+```sh
+uv add --prerelease=allow ommx-python-mip-adapter
+```
+
+main:
+
+```sh
+uv sync --locked --package ommx-python-mip-adapter --no-default-groups --inexact
+```
+
+OMMXの問題を解く例は{class}`~ommx_python_mip_adapter.OMMXPythonMIPAdapter`、既存のPython-MIPモデルを取り込む例は{func}`~ommx_python_mip_adapter.model_to_instance`にあります。
 
 (install-openjij-adapter)=
 ### OpenJij Adapter
