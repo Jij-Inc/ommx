@@ -69,11 +69,32 @@ Look up a regular constraint as `model.constraints[ConstraintID(7)]`. The collec
 
 On a model, an active row is an attached handle. Calling `row.set_name("limit")` updates the model. Call `row.detach()` to keep an independent copy. Replace v2's `add_name` and `add_description` with `set_name` and `set_description`. Use `set_parameters` to replace the whole mapping and `add_parameters` to merge entries. Read fixed variable values from `model.fixed_decision_variables()`. The model owns that state even when a variable definition has been detached. See {class}`~ommx.ConstraintCollection` and {class}`~ommx.DecisionVariable`.
 
-```{toctree}
-:maxdepth: 1
+(migration-constraint-metadata)=
+### Check where a metadata edit lands
 
-v2_to_v3/constraint_metadata
+```{index} Constraint.add_name (v2), Constraint.add_description (v2), Instance.get_constraint_by_id (v2), Instance.decision_variable_analysis (v2)
 ```
+
+In 2.9.4, editing the constraint returned by `get_constraint_by_id` only modified that Python snapshot. When translating this code, decide whether you intended to edit the model or just a copy for display. Both operations are explicit in v3.
+
+```python
+from ommx import Instance
+
+model = Instance.minimize()
+x = model.new_binary("x")
+live = model.add_constraint(x <= 1, "original")
+local = live.detach()
+local.set_name("display")
+assert model.constraints[live.constraint_id].name == "original"
+live.set_name("capacity")
+assert model.constraints[live.constraint_id].name == "capacity"
+```
+
+A dictionary made with `dict(model.constraints)` still holds attached rows. Detach each active row you want to copy. On a detached constraint, a setter changes the receiver and returns a clone. To apply several edits to the same detached object, call its setters separately.
+
+### Replace a variable analysis query
+
+For one variable, use {meth}`~ommx.Instance.decision_variable_role`. For a report over many variables, use `decision_variables_df()` and its `state_role` and `substituted_value` columns. If your adapter only needs variables sent to the solver, use `used_decision_variables`. These queries answer different questions when fixed or dependent variables remain available for evaluating candidates.
 
 ### Carry over the mathematical structure
 
@@ -92,11 +113,39 @@ For the adapter's recommended preparation, pass your model to `solve()` or `samp
 
 **Exporting coefficients yourself.** {meth}`~ommx.Instance.to_qubo` and {meth}`~ommx.Instance.to_hubo` mutate the instance and expose the energy sent to the backend. In v3, evaluating a candidate with this instance returns the objective it exposed before preparation. Keep the backend energy separately if your application compares penalties or solver scores.
 
-```{toctree}
-:maxdepth: 1
+(migration-openjij-penalties)=
+### Move OpenJij penalty options into the preparation policy
 
-v2_to_v3/openjij_penalties
+```{index} sample_qubo_sa (v2), uniform_penalty_weight (v2), penalty_weights (v2), inequality_integer_slack_max_range (v2)
 ```
+
+If your v2 call passed `uniform_penalty_weight` or relied on the implicit weight of 1, choose a weight for the original objective scale. Here selecting both options gains two points over the best allowed choice. A weight of four offsets that gain. Keep the source model so that another weight can be tried on a fresh copy. Install the OpenJij adapter to run this example.
+
+```python
+from copy import copy
+
+from ommx import FixedPenaltyPreparation, Instance, Sense
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
+
+source = Instance.maximize()
+x, y = source.new_binary("x"), source.new_binary("y")
+source.objective = 3 * x + 2 * y
+source.add_constraint(x + y == 1)
+prepared = copy(source)
+policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
+policy.fixed_penalty = (
+    FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=4.0)
+)
+prepared.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
+samples = OMMXOpenJijSAAdapter.sample_without_preparation(prepared, num_reads=2, seed=42)
+assert samples.sense == Sense.Maximize
+```
+
+The sampling result reports the original objective. If your application also reads dual values, note that HiGHS and Python-MIP omit them when the prepared input has an explicit output objective.
+
+### Update downstream consumers
+
+The v2 helper `sample_qubo_sa` returned raw samples. The v3 adapter returns an evaluated {class}`~ommx.SampleSet`. For code that already has a native OpenJij response and only needs to decode it, replace `response_to_samples` with `decode_to_samples`. If you change a penalty, start again from the original model: preparing an already applicable input does not replace the penalty stored in its objective.
 
 ### If you implement an adapter
 
@@ -150,11 +199,33 @@ Call the `*_df` methods. In particular, replace `solution.constraints_df` with `
 
 For multiple samples, use `samples.summary` for objectives and overall feasibility, and `samples.constraints_df(kind=...)` for per-constraint results. `samples.sample_ids()` returns a set. Use `samples.sample_ids_list` when the consumer needs a list. See {class}`~ommx.Solution` and {class}`~ommx.SampleSet` for complete examples.
 
-```{toctree}
-:maxdepth: 1
+(migration-constraint-tables)=
+### Migrate a join on constraint ID
 
-v2_to_v3/constraint_tables
+```{index} Instance.constraints_df (v2), Instance.removed_constraints_df (v2), SampleSet.summary_with_constraints (v2)
 ```
+
+In v2 a report might join the `id` index of `instance.constraints_df` to a table keyed by integers. In v3 the regular-constraint index is named `regular_constraint_id` and contains `ConstraintID` objects. Convert the keys in the application's lookup table to the appropriate ID type before joining.
+
+```python
+import pandas as pd
+from ommx import ConstraintID, ConstraintKind, DecisionVariable, Instance, Sense
+
+x = DecisionVariable.binary(0)
+model = Instance.from_components(
+    decision_variables=[x], objective=x, constraints={7: x <= 1}, sense=Sense.Maximize,
+)
+rows = model.constraints_df(kind=ConstraintKind.Regular, include=[])
+owners = pd.Series({ConstraintID(7): "planning"}, name="owner")
+report = rows.join(owners)
+assert report.loc[ConstraintID(7), "owner"] == "planning"
+```
+
+Use `include=["label", "parameters"]` for a wide table with metadata. For a join with one row per key/value, use `constraint_parameters_df(kind=...)`. Transformation history is in `constraint_provenance_df(kind=...)`, with one row per provenance step. For a model, `removed=True` includes active rows as well: filter the non-null `removed_reason` values if your old report contained only removed rows.
+
+### Compare feasibility near the tolerance
+
+A threshold is applied to each constraint's violation. For SOS1, leaving at most one nonzero value in `(1, 0.00006, 0.00006)` takes total absolute change `0.00012`. At a tolerance of `0.0001` the row fails, even though each of the two small values is below that threshold. When reconciling reports, use the stored evaluation tolerance and compare the same constraint family. A new query tolerance does not rerun discrete-value canonicalization. See {meth}`~ommx.Solution.total_violation`.
 
 (migration-storage)=
 ## 5. Bring saved models and Artifacts forward
@@ -181,11 +252,40 @@ If you export MPS to another tool, replace `write_mps` with {meth}`~ommx.Instanc
 
 See {class}`~ommx.artifact.Artifact` for the archive API. For cleanup, `ommx prune-anonymous` previews refs and `ommx gc` previews unreachable blobs. Each requires `--delete` to perform deletion. See [Manage the Local Registry](../how_to/manage_local_registry.md).
 
-```{toctree}
-:maxdepth: 1
+(migration-artifact-archives)=
+### Replace an archive builder and reopen its output
 
-v2_to_v3/artifact_archives
+```{index} ArtifactBuilder.new_archive (v2), ArtifactBuilder.new_archive_unnamed (v2), Artifact.load_archive (v2)
 ```
+
+A v2 archive builder wrote a file when `build()` was called. In v3, `commit()` writes to the local registry and `save()` exports a file. This example creates an anonymous registry entry and uses a fresh directory for the archive.
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from ommx import Instance
+from ommx.artifact import Artifact, ArtifactDraft
+
+model = Instance.minimize()
+model.title = "Archive migration"
+draft = ArtifactDraft.new_anonymous()
+draft.add_instance(model)
+artifact = draft.commit()
+with TemporaryDirectory() as directory:
+    path = Path(directory) / "model.ommx"
+    artifact.save(path)
+    manifest = Artifact.inspect_archive(path)
+    assert manifest.image_name == artifact.image_name
+    restored = Artifact.import_archive(path).get_instance()
+    assert restored.title == model.title
+```
+
+For an existing unnamed v2 archive without an image-name annotation, `import_archive` assigns an anonymous local name. Read the returned Artifact's `image_name` if a later step needs to load it by name. Choose a fresh output path when exporting: `save` refuses to overwrite an existing file.
+
+### Read files from another SDK
+
+Use {meth}`~ommx.artifact.Artifact.inspect_archive` to inventory an archive without writing to the local registry. The manifest describes layers, but reading a model from a layer requires {meth}`~ommx.artifact.Artifact.import_archive`. For old archives with annotations on layer descriptors, protobuf metadata takes precedence if both sources specify the same OMMX key. Check titles and application annotations when migrating stored experiments.
 
 (migration-verify)=
 ## 6. Verify your application's results
@@ -202,13 +302,13 @@ The site-wide {ref}`general index <genindex>` also lists the detailed examples u
 | Old API or use | v3 replacement | Section |
 |---|---|---|
 | `.raw` / `from_raw` / `from_protobuf` / `to_protobuf` | Public properties and constructors | {ref}`1 <migration-imports>` |
-| `add_name` / `add_description` | `set_name` / `set_description` | {doc}`v2_to_v3/constraint_metadata` |
-| `ArtifactArchive` / `ArtifactDir` / `ArtifactBuilder` | `Artifact` / `ArtifactDraft` | {doc}`v2_to_v3/artifact_archives` |
-| `Artifact.load_archive` | `Artifact.import_archive` / `Artifact.inspect_archive` | {doc}`v2_to_v3/artifact_archives` |
+| `add_name` / `add_description` | `set_name` / `set_description` | {ref}`migration-constraint-metadata` |
+| `ArtifactArchive` / `ArtifactDir` / `ArtifactBuilder` | `Artifact` / `ArtifactDraft` | {ref}`migration-artifact-archives` |
+| `Artifact.load_archive` | `Artifact.import_archive` / `Artifact.inspect_archive` | {ref}`migration-artifact-archives` |
 | `Constraint.id` / `set_id` / `next_constraint_id` | `add_constraint` / `from_components` | {ref}`2 <migration-build>` |
 | `constraint_hints` / `OneHot` / `Sos1` | `OneHotConstraint` / `Sos1Constraint` | {ref}`2 <migration-build>` |
-| `constraints_df` / `removed_constraints_df` | `constraints_df(kind=...)` / `constraints_df(kind=..., removed=True)` | {doc}`v2_to_v3/constraint_tables` |
-| `decision_variable_analysis()` | `decision_variable_roles()` / `fixed_decision_variables()` | {doc}`v2_to_v3/constraint_metadata` |
+| `constraints_df` / `removed_constraints_df` | `constraints_df(kind=...)` / `constraints_df(kind=..., removed=True)` | {ref}`migration-constraint-tables` |
+| `decision_variable_analysis()` | `decision_variable_roles()` / `fixed_decision_variables()` | {ref}`migration-constraint-metadata` |
 | `DecisionVariable.substituted_value` | `model.fixed_decision_variables()` | {ref}`2 <migration-build>` |
 | `evaluated.feasible` / `sampled.feasible` | `evaluated.is_feasible(atol=...)` / `sampled.feasible(atol=...)` | {ref}`4 <migration-results>` |
 | `extract_constraints(name)` | extract_constraints for violations, get_constraint_value for signed regular values | {ref}`4 <migration-results>` |
@@ -218,11 +318,11 @@ The site-wide {ref}`general index <genindex>` also lists the detailed examples u
 | `ommx.v1` / `ommx.v1.*_pb2` | `ommx` | {ref}`1 <migration-imports>` |
 | `Parameter.new` / `Parameters(entries=...)` | `Parameter(id, ...)` / `with_parameters({id: value})` | {ref}`2 <migration-build>` |
 | `ParametricInstance.parameters (DataFrame)` | `parameters_df()` | {ref}`2 <migration-build>` |
-| `response_to_samples` / `sample_qubo_sa` | `decode_to_samples` / `OMMXOpenJijSAAdapter.sample` | {doc}`v2_to_v3/openjij_penalties` |
+| `response_to_samples` / `sample_qubo_sa` | `decode_to_samples` / `OMMXOpenJijSAAdapter.sample` | {ref}`migration-openjij-penalties` |
 | `SampleSet.sample_ids` / `summary_with_constraints` | `sample_ids()` / `summary + constraints_df(kind=...)` | {ref}`4 <migration-results>` |
 | `Solution.total_violation_l1` / `total_violation_l2` | total_violation (sum of per-constraint violations); no L2 aggregate | {ref}`4 <migration-results>` |
 | `to_bytes` / `from_bytes` | `to_v2_bytes` / `from_v2_bytes` / `from_v1_bytes` | {ref}`5 <migration-storage>` |
-| `uniform_penalty_weight` / `penalty_weights` / `inequality_integer_slack_max_range` | `policy.fixed_penalty` / `policy.integer_slack` | {doc}`v2_to_v3/openjij_penalties` |
+| `uniform_penalty_weight` / `penalty_weights` / `inequality_integer_slack_max_range` | `policy.fixed_penalty` / `policy.integer_slack` | {ref}`migration-openjij-penalties` |
 | `used_decision_variable_ids() (Instance, Function)` | `required_ids()` | {ref}`2 <migration-build>` |
 | `write_mps(path)` | `save_mps(path)` | {ref}`5 <migration-storage>` |
 

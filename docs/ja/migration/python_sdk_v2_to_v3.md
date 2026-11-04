@@ -69,11 +69,32 @@ assert model.constraints[limit.constraint_id].name == "limit"
 
 モデルから取得した有効な行は、モデルに接続されたハンドルです。`row.set_name("limit")` はモデル上の名前を更新します。独立したコピーが必要なら `row.detach()` を呼びます。v2の `add_name` と `add_description` は `set_name` と `set_description` に置き換えます。パラメータ全体の置換には `set_parameters`、指定したキーだけの更新には `add_parameters` を使います。変数の固定値は変数定義をコピーしてもモデル側に残るため、`model.fixed_decision_variables()` から取得します。詳しくは {class}`~ommx.ConstraintCollection` と {class}`~ommx.DecisionVariable` を参照してください。
 
-```{toctree}
-:maxdepth: 1
+(migration-constraint-metadata)=
+### メタデータの編集先を確認する
 
-v2_to_v3/constraint_metadata
+```{index} Constraint.add_name (v2), Constraint.add_description (v2), Instance.get_constraint_by_id (v2), Instance.decision_variable_analysis (v2)
 ```
+
+2.9.4では、`get_constraint_by_id` で取り出した制約の名前を変更しても、変更先は取り出したコピーだけでした。このコードを移行するときは、モデルの名前を更新したかったのか、表示用のコピーだけを編集したかったのかを確認してください。v3では次のように書き分けます。
+
+```python
+from ommx import Instance
+
+model = Instance.minimize()
+x = model.new_binary("x")
+live = model.add_constraint(x <= 1, "original")
+local = live.detach()
+local.set_name("display")
+assert model.constraints[live.constraint_id].name == "original"
+live.set_name("capacity")
+assert model.constraints[live.constraint_id].name == "capacity"
+```
+
+`dict(model.constraints)` で辞書を作っても、値は引き続きモデルに接続されています。独立させたい有効な行ごとに `detach()` を呼んでください。切り離した制約のsetterは呼出し元を変更してコピーを返すため、一つのオブジェクトに複数の変更を加えるときは、そのオブジェクトに対して個別に呼びます。
+
+### 変数の役割を読む処理を置き換える
+
+一変数の役割を判定するなら {meth}`~ommx.Instance.decision_variable_role`、複数の変数を帳票にまとめるなら `decision_variables_df()` の `state_role`・`substituted_value` 列を使います。Adapterでソルバーに渡す変数だけが必要なら `used_decision_variables` を使います。固定値や従属変数を候補の評価用に保持している場合、これらの問いの答えは異なります。
 
 ### 数式と制約の意味を引き継ぐ
 
@@ -92,11 +113,39 @@ Adapterの推奨設定で準備する場合は、元のモデルを `solve()` �
 
 **係数を取り出して解く場合**。{meth}`~ommx.Instance.to_qubo` と {meth}`~ommx.Instance.to_hubo` はモデルを変更し、ソルバーに渡すエネルギーを取り出せるようにします。v3では、このモデルで候補を評価すると準備前の目的関数の値を取得できます。ペナルティやソルバーのスコアを比較するアプリケーションでは、ソルバー側のエネルギーも別に保持してください。
 
-```{toctree}
-:maxdepth: 1
+(migration-openjij-penalties)=
+### OpenJijに渡していたペナルティを準備方針に移す
 
-v2_to_v3/openjij_penalties
+```{index} sample_qubo_sa (v2), uniform_penalty_weight (v2), penalty_weights (v2), inequality_integer_slack_max_range (v2)
 ```
+
+v2で `uniform_penalty_weight` を渡していた場合や暗黙の重み1に依存していた場合は、元の目的関数の大きさに合わせて重みを選びます。この例では、許される最良の選択に比べて両方を選ぶと目的値が2だけ増えるので、重み4でその利得を上回ります。重みを選び直せるよう、元のモデルをコピーしてから準備します。実行にはOpenJij Adapterが必要です。
+
+```python
+from copy import copy
+
+from ommx import FixedPenaltyPreparation, Instance, Sense
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
+
+source = Instance.maximize()
+x, y = source.new_binary("x"), source.new_binary("y")
+source.objective = 3 * x + 2 * y
+source.add_constraint(x + y == 1)
+prepared = copy(source)
+policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
+policy.fixed_penalty = (
+    FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=4.0)
+)
+prepared.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
+samples = OMMXOpenJijSAAdapter.sample_without_preparation(prepared, num_reads=2, seed=42)
+assert samples.sense == Sense.Maximize
+```
+
+サンプリング結果では元の目的関数を読めます。また、双対値を利用するコードでは、準備済み入力に出力用の目的関数が明示されているとHiGHSとPython-MIPは双対値を付けない点も確認してください。
+
+### サンプリング結果を受け取る側を更新する
+
+v2の `sample_qubo_sa` が返したのは生のサンプルです。v3のAdapterは評価済みの {class}`~ommx.SampleSet` を返します。手元のOpenJijのレスポンスをデコードするだけのコードなら、`response_to_samples` を `decode_to_samples` に変更します。重みを変更するときは元モデルから再度準備してください。すでに入力条件を満たすモデルを準備し直しても、目的関数に組み込まれたペナルティは置き換わりません。
 
 ### 独自Adapterを実装している場合
 
@@ -150,11 +199,33 @@ assert result.get_constraint_value(ConstraintID(7)) == -1.0
 
 複数サンプルでは `samples.summary` で目的値と全体の実行可能性を、`samples.constraints_df(kind=...)` で制約別の結果を取得します。`samples.sample_ids()` は集合を返します。リストを受け取るコードには `samples.sample_ids_list` を使ってください。使用例は {class}`~ommx.Solution` と {class}`~ommx.SampleSet` にあります。
 
-```{toctree}
-:maxdepth: 1
+(migration-constraint-tables)=
+### 制約IDで結合する集計を移行する
 
-v2_to_v3/constraint_tables
+```{index} Instance.constraints_df (v2), Instance.removed_constraints_df (v2), SampleSet.summary_with_constraints (v2)
 ```
+
+v2では `instance.constraints_df` のインデックス `id` を、整数をキーとする業務側の表に結合できました。v3で通常制約のインデックス名は `regular_constraint_id`、値は `ConstraintID` です。結合前に、業務側の表の番号を対応する型付きIDに変換します。
+
+```python
+import pandas as pd
+from ommx import ConstraintID, ConstraintKind, DecisionVariable, Instance, Sense
+
+x = DecisionVariable.binary(0)
+model = Instance.from_components(
+    decision_variables=[x], objective=x, constraints={7: x <= 1}, sense=Sense.Maximize,
+)
+rows = model.constraints_df(kind=ConstraintKind.Regular, include=[])
+owners = pd.Series({ConstraintID(7): "planning"}, name="owner")
+report = rows.join(owners)
+assert report.loc[ConstraintID(7), "owner"] == "planning"
+```
+
+ラベルとパラメータを列に含めるなら `include=["label", "parameters"]`、キーと値の組を1行ずつ結合するなら `constraint_parameters_df(kind=...)` を使います。変換履歴は `constraint_provenance_df(kind=...)` に由来のステップごとに記録されます。モデル側の `removed=True` は有効な行も含むので、削除済み制約だけの旧帳票を再現するには `removed_reason` が欠損していない行を選んでください。
+
+### 許容誤差付近で実行可能性を照合する
+
+判定では制約ごとの違反量に許容誤差を適用します。SOS1の値が `(1, 0.00006, 0.00006)` のとき、非ゼロ値を一つだけ残すには、合計 `0.00012` の変更が必要です。小さい二値はそれぞれ `0.0001` 未満でも、許容誤差 `0.0001` でこの制約は実行不可能です。帳票を照合するときは、評価時に保存された許容誤差を使い、同じ種類の制約を比較してください。問合せ時の許容誤差を変えても、離散値の正規化はやり直されません。定義は {meth}`~ommx.Solution.total_violation` にあります。
 
 (migration-storage)=
 ## 5. 保存済みモデルとArtifactを引き継ぐ
@@ -181,11 +252,40 @@ MPSを他のツールに渡す場合は `write_mps` を {meth}`~ommx.Instance.sa
 
 アーカイブのAPIは {class}`~ommx.artifact.Artifact` にあります。整理するときは `ommx prune-anonymous` で参照の削除候補を、`ommx gc` で到達できないblobを確認できます。どちらも削除を実行するには `--delete` が必要です。詳しくは[Local Registryの管理手順](../how_to/manage_local_registry.md)を参照してください。
 
-```{toctree}
-:maxdepth: 1
+(migration-artifact-archives)=
+### アーカイブを作ってモデルを読み戻す
 
-v2_to_v3/artifact_archives
+```{index} ArtifactBuilder.new_archive (v2), ArtifactBuilder.new_archive_unnamed (v2), Artifact.load_archive (v2)
 ```
+
+v2のアーカイブ用builderは `build()` でファイルを作りました。v3の `commit()` はLocal Registryへの保存、`save()` はファイルへの書出しです。次の例はレジストリに匿名の記録を作り、新しいディレクトリに書き出します。
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from ommx import Instance
+from ommx.artifact import Artifact, ArtifactDraft
+
+model = Instance.minimize()
+model.title = "Archive migration"
+draft = ArtifactDraft.new_anonymous()
+draft.add_instance(model)
+artifact = draft.commit()
+with TemporaryDirectory() as directory:
+    path = Path(directory) / "model.ommx"
+    artifact.save(path)
+    manifest = Artifact.inspect_archive(path)
+    assert manifest.image_name == artifact.image_name
+    restored = Artifact.import_archive(path).get_instance()
+    assert restored.title == model.title
+```
+
+旧版の無名アーカイブにイメージ名の注釈がない場合、`import_archive` がローカルの匿名名を付けます。後続処理で名前を使うなら戻り値の `image_name` を読んでください。書出し時の `save` は既存ファイルを上書きしないので、新しい出力先を指定します。
+
+### 別のSDKで作ったファイルを読む
+
+Local Registryに書き込まずにアーカイブの内容を調べるには {meth}`~ommx.artifact.Artifact.inspect_archive` を使います。マニフェストから分かるのはレイヤーの記述までで、モデルを取り出すときは {meth}`~ommx.artifact.Artifact.import_archive` が必要です。古いアーカイブのレイヤー記述に注釈がある場合、protobuf側にも同じOMMXキーがあればそちらが優先されます。保存済みの試行を移行するときはタイトルや利用者定義の注釈も照合してください。
 
 (migration-verify)=
 ## 6. 移行結果を確かめる
@@ -202,13 +302,13 @@ v2_to_v3/artifact_archives
 | 旧API・使用箇所 | v3の書き方 | 節 |
 |---|---|---|
 | `.raw` / `from_raw` / `from_protobuf` / `to_protobuf` | 公開プロパティ・コンストラクタ | {ref}`1 <migration-imports>` |
-| `add_name` / `add_description` | `set_name` / `set_description` | {doc}`v2_to_v3/constraint_metadata` |
-| `ArtifactArchive` / `ArtifactDir` / `ArtifactBuilder` | `Artifact` / `ArtifactDraft` | {doc}`v2_to_v3/artifact_archives` |
-| `Artifact.load_archive` | `Artifact.import_archive` / `Artifact.inspect_archive` | {doc}`v2_to_v3/artifact_archives` |
+| `add_name` / `add_description` | `set_name` / `set_description` | {ref}`migration-constraint-metadata` |
+| `ArtifactArchive` / `ArtifactDir` / `ArtifactBuilder` | `Artifact` / `ArtifactDraft` | {ref}`migration-artifact-archives` |
+| `Artifact.load_archive` | `Artifact.import_archive` / `Artifact.inspect_archive` | {ref}`migration-artifact-archives` |
 | `Constraint.id` / `set_id` / `next_constraint_id` | `add_constraint` / `from_components` | {ref}`2 <migration-build>` |
 | `constraint_hints` / `OneHot` / `Sos1` | `OneHotConstraint` / `Sos1Constraint` | {ref}`2 <migration-build>` |
-| `constraints_df` / `removed_constraints_df` | `constraints_df(kind=...)` / `constraints_df(kind=..., removed=True)` | {doc}`v2_to_v3/constraint_tables` |
-| `decision_variable_analysis()` | `decision_variable_roles()` / `fixed_decision_variables()` | {doc}`v2_to_v3/constraint_metadata` |
+| `constraints_df` / `removed_constraints_df` | `constraints_df(kind=...)` / `constraints_df(kind=..., removed=True)` | {ref}`migration-constraint-tables` |
+| `decision_variable_analysis()` | `decision_variable_roles()` / `fixed_decision_variables()` | {ref}`migration-constraint-metadata` |
 | `DecisionVariable.substituted_value` | `model.fixed_decision_variables()` | {ref}`2 <migration-build>` |
 | `evaluated.feasible` / `sampled.feasible` | `evaluated.is_feasible(atol=...)` / `sampled.feasible(atol=...)` | {ref}`4 <migration-results>` |
 | `extract_constraints(name)` | 違反量は `extract_constraints`、通常制約の式の値は `get_constraint_value` | {ref}`4 <migration-results>` |
@@ -218,11 +318,11 @@ v2_to_v3/artifact_archives
 | `ommx.v1` / `ommx.v1.*_pb2` | `ommx` | {ref}`1 <migration-imports>` |
 | `Parameter.new` / `Parameters(entries=...)` | `Parameter(id, ...)` / `with_parameters({id: value})` | {ref}`2 <migration-build>` |
 | `ParametricInstance.parameters (DataFrame)` | `parameters_df()` | {ref}`2 <migration-build>` |
-| `response_to_samples` / `sample_qubo_sa` | `decode_to_samples` / `OMMXOpenJijSAAdapter.sample` | {doc}`v2_to_v3/openjij_penalties` |
+| `response_to_samples` / `sample_qubo_sa` | `decode_to_samples` / `OMMXOpenJijSAAdapter.sample` | {ref}`migration-openjij-penalties` |
 | `SampleSet.sample_ids` / `summary_with_constraints` | `sample_ids()` / `summary + constraints_df(kind=...)` | {ref}`4 <migration-results>` |
 | `Solution.total_violation_l1` / `total_violation_l2` | `total_violation`（各制約の違反量の和）。L2集計は廃止 | {ref}`4 <migration-results>` |
 | `to_bytes` / `from_bytes` | `to_v2_bytes` / `from_v2_bytes` / `from_v1_bytes` | {ref}`5 <migration-storage>` |
-| `uniform_penalty_weight` / `penalty_weights` / `inequality_integer_slack_max_range` | `policy.fixed_penalty` / `policy.integer_slack` | {doc}`v2_to_v3/openjij_penalties` |
+| `uniform_penalty_weight` / `penalty_weights` / `inequality_integer_slack_max_range` | `policy.fixed_penalty` / `policy.integer_slack` | {ref}`migration-openjij-penalties` |
 | `used_decision_variable_ids() (Instance, Function)` | `required_ids()` | {ref}`2 <migration-build>` |
 | `write_mps(path)` | `save_mps(path)` | {ref}`5 <migration-storage>` |
 
