@@ -16,6 +16,7 @@ jobs:
     strategy:
       matrix:
         target: [x86_64, aarch64]
+        python-version: ["3.11", "3.14t", "3.15"]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -25,7 +26,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --strip --out dist --interpreter 3.11 3.14t 3.15t
+          args: --release --strip --out dist --interpreter ${{ matrix.python-version }}
           target: ${{ matrix.target }}
           working-directory: ./python/ommx
           manylinux: manylinux_2_28
@@ -33,27 +34,35 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v7
         with:
-          name: linux-${{ matrix.target }}
+          name: linux-${{ matrix.target }}-${{ matrix.python-version }}
           path: ./python/ommx/dist
           retention-days: 30
 
   macos:
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.14t", "3.15"]
     runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --strip --out dist --interpreter 3.11 3.14t 3.15t
+          args: --release --strip --out dist --interpreter ${{ matrix.python-version }}
           working-directory: ./python/ommx
 
       - name: Upload wheels
         uses: actions/upload-artifact@v7
         with:
-          name: macos
+          name: macos-${{ matrix.python-version }}
           path: ./python/ommx/dist
           retention-days: 30
 

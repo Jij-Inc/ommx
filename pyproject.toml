@@ -47,7 +47,7 @@ benchmark = [
 ]
 build = [
   "cibuildwheel",
-  "maturin>=1.12.2,<2.0.0",
+  "maturin>=1.14.1,<2.0.0",
 ]
 maintenance = [
   "packaging",

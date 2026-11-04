@@ -2,22 +2,24 @@
 # This do the following things:
 #
 # 1. Determine the wheel to be used from the argument
-#   - If the version is suffixed with `t', non-ABI, version-specific wheel is used
-#   - Otherwise, ABI3 wheel is used
+#   - Free-threaded Python 3.14 uses a version-specific wheel
+#   - Python 3.15+ (GIL-enabled or free-threaded) uses the ABI3t wheel
+#   - Older GIL-enabled Python uses the ABI3 wheel
 # 2. If --use_local_ommx is NOT specified:
 #   - Update the `ommx` source in the root `pyproject.toml` to point to the wheel
 #   - Remove `ommx` from the `workspace.members` in the root `pyproject.toml`.
 # 4. Filters out packages not supported by the Python version or test scope.
 # 4. Write the updated `pyproject.toml` back to the file.
 # 5. Tweaks python:test-ci Taskfile so that the CI doesn't run for the unsupported package.
-#   + NOTE: with free-threaded pythons, it currently tests OMMX only, as the
-#     adapter dependencies tend to provide ABI3 wheels only, which is unsupported with free-threaded pythons.
+#   + Free-threaded jobs run the core SDK suite; adapters used by SDK doctests
+#     remain available as test dependencies.
 import tomlkit
 import sys
 import glob
 from pathlib import Path
 from argparse import ArgumentParser
 from packaging.specifiers import SpecifierSet
+from packaging.utils import parse_wheel_filename
 import re
 from ruamel.yaml import YAML
 
@@ -39,11 +41,13 @@ free_thread = t.search(full_version) is not None
 sdk_only = args.sdk_only or free_thread
 version = t.sub("", full_version)
 print(f"Version: {version}, Free Thread: {free_thread}")
-if args.version[-1] == "t":
+if tuple(map(int, version.split("."))) >= (3, 15):
+    abis = {"abi3", "abi3t"}
+elif free_thread:
     short_ver = version.replace(".", "")
-    pat = f"ommx-*cp{short_ver}-cp{short_ver}t*.whl"
+    abis = {f"cp{short_ver}t"}
 else:
-    pat = "ommx-*abi3*.whl"
+    abis = {"abi3"}
 
 
 def check_version(version: str, dir: Path) -> bool:
@@ -77,7 +81,11 @@ if not isinstance(sources, dict):
     raise KeyError("Expected tool.uv.sources table in pyproject.toml")
 
 if not use_local_ommx:
-    whl = list(Path("wheels").glob(pat))
+    whl = [
+        wheel
+        for wheel in Path("wheels").glob("ommx-*.whl")
+        if {tag.abi for tag in parse_wheel_filename(wheel.name)[3]} == abis
+    ]
     if len(whl) != 1:
         print(
             f"Expected to find exactly one wheel in the wheels directory, \
