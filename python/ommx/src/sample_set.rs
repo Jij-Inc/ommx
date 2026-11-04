@@ -1,5 +1,5 @@
 use crate::{
-    constraint_kind::{constraint_kind_collection, ConstraintKind},
+    constraint_kind::{constraint_kind_collection, ConstraintFamilyInput},
     error::OmmxPyResult,
     pandas::{
         constraint_id_col, entries_to_dataframe, sorted_entries_to_dataframe, PyDataFrame,
@@ -128,7 +128,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// defaults, and normalization. Choosing the best supplied candidate never
 /// establishes optimality of the original or transformed problem.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct SampleSet {
     pub(crate) inner: ommx::SampleSet,
@@ -782,7 +782,7 @@ impl SampleSet {
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
         include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
@@ -872,7 +872,7 @@ impl SampleSet {
     pub fn constraint_context_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
@@ -900,7 +900,7 @@ impl SampleSet {
     pub fn constraint_parameters_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
@@ -928,7 +928,7 @@ impl SampleSet {
     pub fn constraint_provenance_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
@@ -956,7 +956,7 @@ impl SampleSet {
     pub fn constraint_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(

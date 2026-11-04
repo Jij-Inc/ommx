@@ -13,7 +13,7 @@ SDKを導入した作業ディレクトリから`uv run --no-sync ommx`で呼び
 
 受け取った`.ommx`ファイルのManifest（収録データを示す一覧）を見るには次を実行します。
 これはInstanceやSolutionを評価する操作ではありません。内容の取り出し方は
-[Artifact Tutorial](../tutorial/share_in_ommx_artifact.md)を参照してください。
+{class}`~ommx.artifact.Artifact`のAPI Referenceを参照してください。
 
 ```sh
 uv run --no-sync ommx inspect shared.ommx
@@ -30,42 +30,23 @@ uv run --no-sync ommx size example.com/team/result:trial-1
 
 末尾の`trial-1`はタグです。名前やタグは別の内容を指すように更新できますが、
 Manifestのdigestは内容の一覧から計算される識別子です。複数の名前が同じデータを参照する
-こともあるため、`size`の値を足しても実ディスク使用量にはなりません。
-詳しくは{ref}`名前とdigestの違い <artifact-identity>`を参照してください。
+こともあります。`size`はManifest自身、config、重複を除いたlayerの論理サイズを示し、
+親Artifactへのsubjectは含めません。別々の名前の共有データはそれぞれ数えられるため、
+`size`の値を足しても実ディスク使用量にはなりません。
+詳しくは{class}`Artifactの保存と識別 <ommx.artifact.Artifact>`を参照してください。
 
-## Pythonから絞り込んで探す
+## Pythonから記録を探す
 
-ここからは任意のPythonの例です。[SDKのインストール](../getting_started/install.md)で用意した
-環境を使います。空のRegistryでは結果も空です。
+{func}`~ommx.artifact.list_artifacts`は汎用ArtifactとExperimentを一覧します。
+Experiment専用の記録や、プロジェクトのannotationを使った絞り込みの完全な例は
+{func}`~ommx.experiment.list_experiments`を参照してください。
+Experiment全体の検索用メタデータと、試行ごとに記録する条件の使い分けも説明します。
+いずれもソルバーは必要ありません。
 
-```python
-from ommx.artifact import list_artifacts
-
-for record in list_artifacts("example.com/team"):
-    print(record.image_name, record.manifest_digest, record.annotations)
-```
-
-(registry-find-experiment)=
-### 任意：Experimentの記録を探す
-
-[Experiment Tutorial](../tutorial/experiment_management)で実験の記録方法を学んだ後、
-Experimentだけを探す場合は{py:func}`~ommx.experiment.list_experiments`を使います。
-検索したい全体条件は作成時に`experiment.set_annotation("com.example.study", "trial")`
-のように記録します。`org.ommx.*`は予約されているため使いません。Runごとに異なる条件は
-`run.log_parameter()`へ記録します。
-
-```python
-from ommx.experiment import Experiment, list_experiments
-
-for record in list_experiments("example.com/team"):
-    if record.annotations.get("com.example.study") == "trial":
-        loaded = Experiment.load(str(record.image_name))
-        print(loaded.run_parameters_df())
-```
-
-検索結果の名前は後から別の内容を指すことがあります。調査した正確な内容の識別には
-`manifest_digest`も残してください。中断した作業の復帰は
-[継続・checkpoint・forkのHow-to](continue_experiment.md)で扱います。
+中断した編集を探して復帰する場合は{func}`~ommx.experiment.list_experiment_checkpoints`と
+{meth}`~ommx.experiment.Experiment.restore_from_checkpoint`を使います。
+調べた内容を正確に特定するにはmanifest digestも残します。一覧にある名前は後から
+別の内容を指すことがあるためです。
 
 (experiment-cleanup-workflow)=
 ## 保存した記録を削除・復元し、保存領域を整理する
@@ -124,7 +105,8 @@ uv run --no-sync ommx prune-anonymous --root ./local-registry --experiments --ol
 uv run --no-sync ommx gc --root ./local-registry --delete
 ```
 
-残る名前やExperimentのcheckpointから参照されているデータは回収しません。
+残る名前やExperimentのcheckpoint、残した子から参照される親Artifactのデータは回収しません。
+名前を公開する前に中断した書き込みのデータは、参照されていない場合があります。
 参照されていないデータのうち、データ本体の最終更新から既定で24時間の
 猶予期間（grace period）が経過したものを回収します。名前を削除してから24時間の
 復元を保証するものではなく、古いデータは削除直後のGCでも回収される可能性があります。
@@ -134,3 +116,13 @@ uv run --no-sync ommx gc --root ./local-registry --delete
 Pythonから同じ操作を行う場合は、{py:func}`~ommx.artifact.remove_image`、
 {py:func}`~ommx.artifact.restore_image`、{py:func}`~ommx.artifact.prune_anonymous`、
 {py:func}`~ommx.artifact.gc`を使えます。引数や戻り値の詳細はAPI Referenceを参照してください。
+
+調査のために猶予期間を指定する場合、`--grace-period`は`s`・`m`・`h`・`d`を受け付けます。
+`0s`はその保存先に書き込むOMMXプロセスがない場合に限ります。通常の報告は件数と容量を示し、
+`--show-digests`を付けると欠損・不正・回収候補・猶予中のデータの識別子を確認できます。
+
+```sh
+uv run --no-sync ommx gc --root ./local-registry --grace-period 2h --show-digests
+```
+
+CAS・index・cacheの実装は[Rust Local Registryの資料](https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/src/artifact/local_registry/mod.rs)に分けています。

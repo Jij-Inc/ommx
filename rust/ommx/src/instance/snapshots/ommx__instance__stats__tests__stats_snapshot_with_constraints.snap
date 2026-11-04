@@ -10,6 +10,7 @@ decision_variables:
     continuous: 0
     semi_integer: 0
     semi_continuous: 0
+    finite_domain: 0
   by_usage:
     used_in_objective: 1
     used_in_constraints: 3

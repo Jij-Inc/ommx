@@ -37,7 +37,7 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 - `proto/`: Protocol Buffer schema and generated-message sources.
 - `rust/ommx/`: Rust SDK crate and Rust-side documentation.
 - `python/ommx/`: Main Python package, including PyO3 binding code in `python/ommx/src/`.
-- `python/ommx-tests/`: Core Python SDK tests.
+- `python/ommx/tests/`: Core Python SDK tests.
 - `python/ommx-*-adapter/`: Solver adapter packages, each with its own tests.
 - `docs/`: Sphinx documentation and generated API reference assets.
 
@@ -147,9 +147,10 @@ Run `task -l` to see all available commands.
 When developing solver adapters:
 - Import from top-level `ommx` — the public API surface
 - `ommx._ommx_rust` is an internal module and may change without notice
-- Declare only requirements of the adapter's own implementation in its package metadata. Base `requires-python` on the syntax and standard-library APIs it uses; add a Python upper bound only for a demonstrated incompatibility in the adapter itself.
+- Declare only runtime dependencies required by the adapter's own implementation in its package metadata.
+- Base `requires-python` on the syntax and standard-library APIs it uses. An explicitly adopted project-wide support policy, such as dropping an end-of-life Python release, may set a higher minimum across the SDK and adapters. Add a Python upper bound only for a demonstrated incompatibility in the adapter itself.
 - Do not copy a solver's or transitive dependency's Python bounds or wheel availability into the adapter's `requires-python`. Let dependency metadata and the package resolver enforce those constraints.
-- Keep development and CI environment restrictions in workspace configuration. Record tested Python versions in classifiers and the CI matrix separately from package requirements.
+- Each adapter declares its tested Python minors in `project.classifiers` (e.g. `Programming Language :: Python :: 3.15`). For a free-threaded CI job, the adapter must also declare `Programming Language :: Python :: Free Threading` or one of its support-level classifiers. CI applies this package-wide declaration to each declared minor in the free-threaded test matrix.
 
 ```python
 from ommx import Instance, DecisionVariable, Function, Solution  # Good
@@ -159,7 +160,7 @@ from ommx._ommx_rust import Function  # Binding-internal only
 ## Critical Development Rules
 
 ### 🧪 Testing & Quality
-- Python tests: `python/ommx-tests/tests` for core SDK, each adapter has its own `tests/` directory
+- Python tests: `python/ommx/tests` for core SDK, each adapter has its own `tests/` directory
 - Always run `task format` before committing
 - After pushing a PR update, do not wait for remote CI checks by default, and do not report pending checks or merely-started check runs. Report once the requested work, focused local validation, commit, and push are done. Check or wait for CI only when the user explicitly asks, when debugging a failing check, or when the next action depends on the final CI result.
 

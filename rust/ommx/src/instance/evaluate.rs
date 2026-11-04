@@ -371,6 +371,13 @@ impl<'a> PreparedStatePopulation<'a> {
                         decision_variable.bound().nearest_to_zero()
                     }
                     Kind::SemiInteger | Kind::SemiContinuous => 0.0,
+                    Kind::FiniteDomain => *decision_variable
+                        .finite_domain()
+                        .unwrap()
+                        .values()
+                        .iter()
+                        .min_by(|lhs, rhs| lhs.abs().total_cmp(&rhs.abs()))
+                        .unwrap(),
                 };
                 (*id, value)
             })
@@ -519,7 +526,8 @@ impl Instance {
     /// Supplied values follow the same canonicalization rules above. When
     /// omitted, Binary, Integer, and Continuous variables receive the value in
     /// their bound nearest to zero; SemiInteger and SemiContinuous variables
-    /// receive zero. Supply an irrelevant value explicitly when its choice
+    /// receive zero; FiniteDomain variables receive the enumerated value nearest
+    /// to zero. Supply an irrelevant value explicitly when its choice
     /// matters for output objectives, named functions, or removed constraints.
     pub fn populate_state(&self, state: v1::State, atol: ATol) -> Result<v1::State> {
         self.prepare_state_population().populate(state, atol)
@@ -1609,6 +1617,28 @@ mod tests {
             assert_eq!(supplied.state().entries[&2], explicit);
             assert_eq!(supplied.objective(), defaulted.objective());
         }
+    }
+
+    #[test]
+    fn evaluate_defaults_omitted_irrelevant_finite_domain_to_a_member() {
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::from([(
+                VariableID::from(1),
+                DecisionVariable::new_finite_domain(vec![-3.0, 2.0, 4.0]).unwrap(),
+            )]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let defaulted = instance
+            .evaluate(&v1::State::default(), ATol::default())
+            .unwrap();
+        assert_eq!(defaulted.state().entries[&1], 2.0);
+        let supplied = instance
+            .evaluate(&v1::State::from_iter([(1, -3.0)]), ATol::default())
+            .unwrap();
+        assert_eq!(supplied.state().entries[&1], -3.0);
     }
 
     #[test]

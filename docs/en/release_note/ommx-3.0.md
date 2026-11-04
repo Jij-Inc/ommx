@@ -15,6 +15,78 @@ machine epsilon. This also applies to `to_qubo()` and `to_hubo()` after
 Preparation. See {meth}`~ommx.Instance.as_qubo_format` for the floating-point
 contract.
 
+### Require Python 3.11 and add Python 3.15 SDK support ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
+
+The SDK and adapter packages now require Python 3.11 or newer under a shared
+support policy that drops end-of-life Python 3.10. The core SDK adds Python 3.15
+support with PyO3 0.30.1, and ABI3 wheels now use Python 3.11 as their baseline.
+Free-threaded support starts with Python 3.15, the baseline for ABI3t.
+On Linux and macOS, the same ABI3t wheel works with both GIL modes
+([#1351](https://github.com/Jij-Inc/ommx/pull/1351)).
+Python 3.15 support is introduced for the core SDK first; adapter availability
+also depends on the underlying solver's Python support.
+
+The SDK now allows pandas 3. PyArrow remains a required runtime
+dependency for storing and loading Artifact DataFrames in Parquet format.
+
+## 3.0.0 Beta 9
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b9-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b9)
+
+### ⚠ Use `ConstraintKind` for constraint families ([#1329](https://github.com/Jij-Inc/ommx/pull/1329))
+
+When migrating from Beta 8, replace `SpecialConstraintKind` and string
+selectors such as `"sos1"` with `ConstraintKind` constants. For example,
+`constraints.of_kind(ConstraintKind.Sos1)` returns a view with SOS1 ID and
+row types, and `constraints_df(kind=ConstraintKind.Sos1)` selects the same
+family for a DataFrame.
+
+`Kind`, `ConstraintKind`, and `ProvenanceKind` expose known constants and allow
+new kinds in future SDKs. Code that interprets a domain or constraint family
+must handle unrecognized values explicitly. Comparison, hashing, integer
+conversion, and `Kind.from_pb()` / `Kind.to_pb()` remain available. See
+[the migration guide](../migration/python_sdk_v2_to_v3.md) for the numeric scalar extension contract.
+
+`instance.active_constraint_kinds` reports every family with active rows.
+`instance.active_special_constraint_kinds` reports only the special families.
+Passing `ConstraintKind.Regular` to `lower_special_constraints` raises an error
+before any selected family is converted.
+
+For a solution containing OneHot constraint 30, look up its violation by typed ID and select its table by family.
+
+```python
+from ommx import ConstraintKind, OneHotConstraintID
+
+solution.constraint_violation(OneHotConstraintID(30))
+solution.constraints_df(kind=ConstraintKind.OneHot)
+```
+
+### 🆕 Finite-domain decision variables ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
+
+{class}`~ommx.DecisionVariable` can now represent an exact, explicitly
+enumerated numeric domain. Use {meth}`~ommx.Instance.new_finite_domain` while
+building an Instance incrementally, or {meth}`~ommx.DecisionVariable.finite_domain`
+when constructing components with explicit IDs.
+
+```python
+from ommx import DecisionVariable, Instance
+
+instance = Instance.minimize()
+x = instance.new_finite_domain([0.1, 0.3, 0.5, 1.0], name="x")
+
+assert x.kind == DecisionVariable.FINITE_DOMAIN
+assert x.values == [0.1, 0.3, 0.5, 1.0]
+instance.objective = x
+assert instance.evaluate({x.id: 0.3}).feasible
+assert not instance.evaluate({x.id: 0.4}).feasible
+```
+
+The value set must be non-empty and contain unique, finite numbers. OMMX
+preserves the exact set through evaluation, sampling, and v1/v2 serialization.
+The bounds give its minimum and maximum. MPS export rejects a solver-used
+finite-domain variable because bounds cannot represent an arbitrary set of allowed values.
+See {meth}`~ommx.DecisionVariable.finite_domain` for the domain and DataFrame representation.
+
 ## 3.0.0 Beta 8
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b8-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b8)
@@ -138,7 +210,7 @@ state = instance.state_from_named_values({"x": {(0,): 1.0, (1,): 4.0}})
 Unknown keys raise `KeyError`; ambiguous name/subscript pairs raise `ValueError`.
 Keys that collide after string or integer normalization also raise `ValueError`.
 The SCIP adapter also accepts `NamedState` directly through `initial_state`.
-See {ref}`Providing Values by Name and Subscripts <named-initial-state>`
+See {meth}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter.solve`
 for a SCIP example.
 
 ### 🆕 Discover the bundled coding-agent plugin and skill ([#1264](https://github.com/Jij-Inc/ommx/pull/1264))
@@ -183,7 +255,7 @@ sense in the HiGHS model.
 
 Use `OMMXHighsAdapter.solve(instance)` for model construction, solving, and
 solution recovery, or call `adapter.solver_input.run()` to solve a constructed
-model. See the [adapter tutorial](../tutorial/solve_with_ommx_adapter.md).
+model. See the {class}`HiGHS Adapter Reference <ommx_highs_adapter.OMMXHighsAdapter>` for a complete example.
 
 When assembling long linear objectives and constraints, the adapter now adds
 terms without repeatedly copying the accumulated expression.
@@ -212,7 +284,7 @@ published feasible solution to be reported as infeasible.
 If you used {meth}`~ommx.Instance.load_qplib` to create a saved model, reimport
 it from the original `.qplib` file. `ommx.dataset.qplib` now loads the corrected
 distribution published with OMMX 2.8.0, even if the older distribution is cached.
-See the [QPLIB tutorial](../tutorial/download_qplib_instance.md).
+See the {func}`~ommx.dataset.qplib`.
 
 ### 🛠 Preserve binary variables when importing MPS and MIPLIB ([#1202](https://github.com/Jij-Inc/ommx/pull/1202), [#1205](https://github.com/Jij-Inc/ommx/pull/1205))
 
@@ -226,7 +298,7 @@ precedence.
 Reimport affected saved models from the original MPS file.
 `ommx.dataset.miplib2017` now loads the corrected MIPLIB distribution published
 with OMMX 2.7.0, even if the older distribution is cached. See the
-[MIPLIB tutorial](../tutorial/download_miplib_instance.md).
+{func}`~ommx.dataset.miplib2017`.
 
 ### 🛠 Consistent tolerance for variable bounds and constraints ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
 
@@ -265,6 +337,7 @@ To migrate your code, use {meth}`~ommx.Solution.total_violation` in place of
 violations of regular, Indicator, OneHot, SOS1, and removed constraints.
 
 ```python
+# Beta 6 syntax. See the migration guide for the current typed-ID API.
 solution.total_violation()
 solution.constraint_violation(30, kind="one_hot")  # existing OneHot constraint ID
 solution.constraints_df(kind="sos1")[["feasible", "violation"]]
@@ -375,7 +448,7 @@ solution = instance.evaluate(state, atol=1e-8)
 Variables omitted from the solution file receive zero. The reported `objvar`
 is not treated as a variable; evaluation computes the objective from the model.
 `ommx.qplib.load_solution` is also available. See the
-[QPLIB tutorial](../tutorial/download_qplib_instance.md) for supported files.
+{func}`~ommx.qplib.load_solution` for supported files.
 
 ### 🆕 A shared exception for Rust extension transfers ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
 
@@ -679,7 +752,7 @@ in the solver-input construction path; their failures are conversion or backend
 errors rather than `AdapterNotApplicableError`. In particular, OpenJij signed-ID
 and finite-coefficient validation now occurs when sampler input is built. See
 {class}`~ommx.InstanceClass` and the
-[Adapter implementation tutorial](../tutorial/implement_adapter.md) for the
+{mod}`Adapter Reference <ommx.adapter>` for the
 responsibility boundary.
 
 ### Adapter input classes are required ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
@@ -689,7 +762,7 @@ Concrete `SolverAdapter` and `SamplerAdapter` implementations must declare
 declaration. In-repository adapters now expose `InstanceClass` directly, so
 callers can pass `Adapter.INPUT_CLASS` to {meth}`~ommx.Instance.prepare` without
 an `is not None` guard. A missing declaration still produces a clear `TypeError`
-when applicability is checked. See the [Adapter implementation tutorial](../tutorial/implement_adapter.md)
+when applicability is checked. See the {mod}`Adapter Reference <ommx.adapter>`
 for the complete contract.
 
 ## 3.0.0 Beta 3
@@ -990,8 +1063,7 @@ assert isinstance(output, SampleSet)
 ```
 
 `Run.log_sample(..., store_diagnostics=True)` uses the same adapter diagnostics
-channel as `Run.log_solve`. See the [Experiment management
-tutorial](../tutorial/experiment_management.md) for the Solve and Sampling recording model.
+channel as `Run.log_solve`. See {class}`~ommx.experiment.Experiment` for the Solve and Sampling recording model.
 
 ### 🆕 Transparent attachment compression and streaming writes ([#1054](https://github.com/Jij-Inc/ommx/pull/1054))
 
@@ -1029,7 +1101,7 @@ to another digest.
 `ommx.artifact.prune_anonymous()` now accepts `experiments=True` to include
 anonymous Experiment refs and `older_than="7d"` for age-based retention. The
 CLI exposes the same behavior through `ommx prune-anonymous --experiments
---older-than 7d`. See [Experiment cleanup](../user_guide/experiment.md)
+--older-than 7d`. See {ref}`Local Registry cleanup <experiment-cleanup-workflow>`
 for the complete reachability and GC workflow.
 
 ```python
@@ -1058,7 +1130,7 @@ experiment.set_autosave_policy(AutosavePolicy.every_n_runs(25))
 
 Use `AutosavePolicy.min_interval(seconds)` for time-based rate limiting or
 `AutosavePolicy.disabled()` when Run-close recovery checkpoints are not needed.
-See [Experiment Discovery, Recovery, and Cleanup](../user_guide/experiment.md)
+See {class}`~ommx.experiment.Experiment`
 for the recovery and storage tradeoffs.
 
 ### 🆕 Artifact and Experiment listing from the Local Registry ([#1029](https://github.com/Jij-Inc/ommx/pull/1029))
@@ -1288,7 +1360,7 @@ The HiGHS Adapter now records MIP progress snapshots from the HiGHS logging call
 
 PySCIPOpt progress histories now include a synthetic `TERMINATION` row when diagnostics include a termination report, so `progress_history_records` and `progress_history_df` include the final solver state without duplicating the separate termination report.
 
-See [Adapter-specific Diagnostics](../user_guide/adapter_diagnostics.md) for the direct and Experiment-based workflows.
+See the {class}`SCIP diagnostics Reference <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>` for the direct and Experiment-based workflows, and the {class}`HiGHS diagnostics Reference <ommx_highs_adapter.HighsDiagnosticsAnalyzer>` for HiGHS-specific reports.
 
 ### 🆕 Versioned protobuf bytes APIs for top-level roots ([#989](https://github.com/Jij-Inc/ommx/pull/989))
 
@@ -1308,7 +1380,7 @@ Artifact and Experiment solve payloads now store these top-level roots as `ommx.
 
 {meth}`~ommx.experiment.Run.open_solve` now opens a manual Solve scope for advanced solver features that are not covered by the Adapter API. Inside the scope, use `solve.solver_input` to operate the backend solver model directly, run the backend optimizer, then call `solve.decode(...)` so the decoded {class}`~ommx.Solution` becomes the Experiment Solve output. Manual adapter options can be recorded with `solve.log_adapter_option(...)`, and `store_diagnostics=True` stores diagnostics recorded through `solve.diagnostics` until the scope exits. After the scope closes, {attr}`~ommx.experiment.OpenSolve.terminal_state` exposes the final outcome plus trace and diagnostics finalization state for advanced debugging.
 
-See the [Experiment management tutorial](../tutorial/experiment_management.md) for the workflow example.
+See {class}`~ommx.experiment.OpenSolve` for the complete manual-solve example.
 
 ## 3.0.0 Alpha 6
 
@@ -1320,7 +1392,7 @@ Solver adapters now have an adapter-specific diagnostics channel for preserving 
 
 The PySCIPOpt Adapter now emits {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` diagnostics from SCIP `BESTSOLFOUND` and `DUALBOUNDIMPROVED` callbacks, plus {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` after `model.optimize()`. The termination report includes SCIP status, primal/dual bounds, gap, incumbent objective value, node counts, LP/cut/solution counters, primal-dual integral, timing, and SCIP/PySCIPOpt version metadata. {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` can post-process the typed collector contents or dictionaries loaded from an Experiment into records or pandas DataFrames. With direct collection, the termination report is recorded before decoding back to an OMMX Solution, so it remains available to the caller even when decoding raises an adapter exception such as infeasible or unbounded detection.
 
-See [Adapter-specific Diagnostics](../user_guide/adapter_diagnostics.md) for the full API workflow and the PySCIPOpt report field references.
+See the {class}`SCIP diagnostics Reference <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>` for the full API workflow and the PySCIPOpt report field references.
 
 ## 3.0.0 Alpha 5
 
@@ -1332,7 +1404,7 @@ See the GitHub Release above for full details. The following summarizes the main
 
 {class}`~ommx.experiment.Experiment`, {meth}`~ommx.experiment.Experiment.with_temp_local_registry`, and {meth}`~ommx.experiment.Experiment.fork` now accept `store_trace=True`. When enabled, each `with experiment.run()` context captures the OpenTelemetry spans emitted inside that Run and stores one trace on the closed {class}`~ommx.experiment.SealedRun`. The stored trace is returned as {class}`~ommx.tracing.TraceResult` from {attr}`~ommx.experiment.SealedRun.trace`, and is carried through commit, load, and fork.
 
-See [Tracing and Profiling](../user_guide/tracing.ipynb) for the full tracing workflow, renderers, and OpenTelemetry setup notes.
+See {mod}`ommx.tracing` and the [OTLP export guide](../how_to/export_traces.md) for the full tracing workflow, renderers, and OpenTelemetry setup notes.
 
 ```python
 from ommx.experiment import Experiment
@@ -1369,7 +1441,7 @@ Descriptor-oriented attachment views from earlier 3.0 alphas, including `Experim
 
 {class}`~ommx.experiment.Experiment` now publishes local checkpoints for partial experiment state. Closing a {class}`~ommx.experiment.Run` writes a best-effort draft checkpoint, and exiting an Experiment with an exception writes a failed or interrupted checkpoint instead of advancing the successful Experiment image reference. Closed Runs keep their attachments, solves, traces, and run parameters, including Runs closed as `"failed"` or `"interrupted"` after exceptions such as `KeyboardInterrupt`.
 
-See [Experiment Discovery, Recovery, and Cleanup](../user_guide/experiment.md) for Experiment catalog filtering, Run close boundaries, checkpoint restoration, and Local Registry cleanup behavior.
+See {func}`~ommx.experiment.list_experiments` for catalog filtering, {class}`~ommx.experiment.Experiment` for Run close boundaries and checkpoint restoration, and {ref}`Local Registry cleanup <experiment-cleanup-workflow>` for storage management.
 
 Use {meth}`~ommx.experiment.Experiment.restore_from_checkpoint` with the original Experiment image name to resume from the latest checkpoint:
 
@@ -1416,7 +1488,7 @@ and return structured report objects for notebook and script use.
 
 The new {class}`ommx.experiment.attachments.AttachmentCodec` protocol lets packages that own Python payload types define how those values are stored as Experiment attachments. A codec class provides a media type plus `encode` / `decode` methods, and OMMX calls it through `log_with_codec` and `get_with_codec` on both Experiment-level and Run-level attachments.
 
-See the {ref}`Attachable Data Formats <experiment-management-attachable-data-formats>` section of the Experiment management tutorial for a JijModeling `Problem` codec example.
+See {meth}`~ommx.experiment.Experiment.log_with_codec` for a complete custom-codec example. Codecs for external modeling objects belong in the package that owns their serialization format.
 
 ```python
 from ommx.experiment import Experiment
@@ -1483,13 +1555,13 @@ Alongside this storage model and the new `Experiment` API, the old `ArtifactBuil
 - New CLI `ommx prune-anonymous [--delete]` reports accumulated anonymous-commit entries by default and removes them only when `--delete` is passed.
 - `ommx.get_image_dir(...)` and the CLI `ommx image-dir <name>` subcommand are removed. The return value was a v2 disk-cache path (`<root>/<image_name>/<tag>/`) that no longer corresponds to any v3 storage location — the SQLite Local Registry stores blobs content-addressed and refs in SQLite — so pointing users at it was actively misleading. Existing v2 caches still migrate via `ommx import-legacy`.
 
-See the {ref}`Python SDK v2 to v3 Migration Guide §13 <13-artifact-api-archive-becomes-an-exchange-format>` for the full before/after code and migration checklist.
+See {ref}`Open or create an archive <13-artifact-api-archive-becomes-an-exchange-format>` for the replacements for the v2 archive APIs.
 
 ### 🆕 Artifact-backed experiment management API: `ommx.experiment` ([#882](https://github.com/Jij-Inc/ommx/pull/882), [#885](https://github.com/Jij-Inc/ommx/pull/885), [#886](https://github.com/Jij-Inc/ommx/pull/886), [#903](https://github.com/Jij-Inc/ommx/pull/903))
 
 The new `ommx.experiment` module records experiment inputs, run conditions, and Solver/Sampler results as one OMMX Artifact. Use {class}`~ommx.experiment.Experiment`, {class}`~ommx.experiment.Run`, and {class}`~ommx.experiment.Solve` to store per-run comparison parameters, attachments, and solve input/output data in the Local Registry.
 
-See the [Experiment management tutorial](../tutorial/experiment_management.md) for the basic workflow, sharing an Experiment, loading a committed Experiment, and creating derived experiments with fork.
+See {class}`~ommx.experiment.Experiment` for the basic workflow, sharing an Experiment, loading a committed Experiment, and creating derived experiments with fork.
 
 ### 🆕 `Run.log_solve` records solve input/output and adapter options ([#902](https://github.com/Jij-Inc/ommx/pull/902))
 
@@ -1583,13 +1655,13 @@ solution.decision_variables_df(include=["label"])      # core + label
 solution.decision_variables_df(include=["parameters"]) # core + parameters
 ```
 
-Six new long-format / id-indexed sidecar accessors read directly from the SoA label/context stores. Required keyword-only `kind=` selects the constraint family (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`):
+Six new long-format / id-indexed sidecar accessors read directly from the SoA label/context stores. In Alpha 3, `kind` accepts `"regular"` (the default), `"indicator"`, `"one_hot"`, or `"sos1"`.
 
-- `constraint_context_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
+- `constraint_metadata_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
 - `constraint_parameters_df(kind=...)` — long format (`{kind}_constraint_id` / `key` / `value`)
 - `constraint_provenance_df(kind=...)` — long format (`{kind}_constraint_id` / `step` / `source_kind` / `source_id`)
 - `constraint_removed_reasons_df(kind=...)` — long format (`{kind}_constraint_id` / `reason` / `key` / `value`)
-- `variable_labels_df()` — id-indexed
+- `variable_metadata_df()` — id-indexed
 - `variable_parameters_df()` — long format
 
 Sidecar index names are kind-qualified (`regular_constraint_id` / `indicator_constraint_id` / `one_hot_constraint_id` / `sos1_constraint_id` / `variable_id`) so accidental cross-id-space `df.join()` mistakes surface in `df.head()` and friends. Long-format `*_parameters_df` / `*_removed_reasons_df` rows are sorted by `(id, key)`, and empty long-format DataFrames keep their column schema instead of returning a column-less frame.
@@ -1644,7 +1716,7 @@ Two entry points ship under `ommx.tracing`:
 - **`%%ommx_trace`** — a Jupyter cell magic that renders a per-cell span tree and a Chrome Trace JSON download link
 - **`capture_trace` / `@traced`** — a context manager and decorator for the same workflow from regular Python scripts, tests, and CI
 
-See [Tracing and Profiling](../user_guide/tracing.ipynb) for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
+See {mod}`ommx.tracing` and the [OTLP export guide](../how_to/export_traces.md) for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
 
 ### 🆕 Tracing spans in solver/sampler adapters ([#833](https://github.com/Jij-Inc/ommx/pull/833))
 

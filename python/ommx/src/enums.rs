@@ -1,30 +1,99 @@
-use pyo3::prelude::*;
+// These selectors are nominal values, not a closed Python Enum. Keep the Rust
+// domain value inside the wrapper so future SDK kinds survive generic queries.
+macro_rules! open_kind {
+    ($(#[$doc:meta])* $name:ident, $core:ty, $code:expr; $( $variant:ident => $core_variant:ident ),+ $(,)?) => {
+        $(#[$doc])*
+        #[pyo3_stub_gen::derive::gen_stub_pyclass]
+        #[pyclass(from_py_object, frozen)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub struct $name($core);
 
-/// Kind of active special constraint in an instance.
-///
-/// Use these values with {attr}`~ommx.Instance.active_special_constraint_kinds` to
-/// inspect an instance and {meth}`~ommx.Instance.lower_special_constraints` to select
-/// special constraint families for explicit lowering to regular constraints.
-/// This is a transformation selector, not an adapter input declaration or an
-/// ``ommx.v2.Feature`` wire-format requirement.
-#[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, frozen)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SpecialConstraintKind {
-    /// Indicator constraints: binvar = 1 → f(x) <= 0
-    Indicator = 1,
-    /// One-hot constraints: exactly one of a set of binary variables must be 1
-    OneHot = 2,
-    /// SOS1 constraints: at most one of a set of variables can be non-zero
-    Sos1 = 3,
+        #[allow(non_upper_case_globals)]
+        #[pymethods]
+        impl $name {
+            $(#[classattr]
+            pub const $variant: $name = $name(<$core>::$core_variant);)+
+        }
+
+        #[pyo3_stub_gen::derive::gen_stub_pymethods]
+        #[pymethods]
+        impl $name {
+            fn __hash__(&self) -> isize {
+                let code: fn($core) -> i32 = $code;
+                code(self.0) as isize
+            }
+            fn __int__(&self) -> i32 {
+                self.__hash__() as i32
+            }
+            fn __eq__(&self, other: $crate::enums::KindOperand<Self>) -> bool {
+                other.matches(self, self.__int__())
+            }
+            fn __ne__(&self, other: $crate::enums::KindOperand<Self>) -> bool {
+                !self.__eq__(other)
+            }
+            fn __repr__(&self) -> String {
+                $(if self.0 == <$core>::$core_variant {
+                    return concat!(stringify!($name), ".", stringify!($variant)).to_string();
+                })+
+                format!("{}.{:?}", stringify!($name), self.0)
+            }
+        }
+        impl From<$core> for $name {
+            fn from(value: $core) -> Self { Self(value) }
+        }
+        impl From<$name> for $core {
+            fn from(value: $name) -> Self { value.0 }
+        }
+        // Const default generation emits a self-reference before the Python
+        // class exists. Record these typed attributes without that initializer.
+        pyo3_stub_gen::inventory::submit! {
+            pyo3_stub_gen::type_info::PyMethodsInfo {
+                struct_id: std::any::TypeId::of::<$name>,
+                attrs: &[$(pyo3_stub_gen::type_info::MemberInfo {
+                    name: stringify!($variant),
+                    r#type: <$name as pyo3_stub_gen::PyStubType>::type_output,
+                    doc: "", default: None, deprecated: None,
+                }),+],
+                getters: &[], setters: &[], methods: &[],
+                file: file!(), line: line!(), column: column!(),
+            }
+        }
+    };
 }
 
-#[pyo3_stub_gen::derive::gen_stub_pymethods]
-#[pymethods]
-impl SpecialConstraintKind {
-    fn __hash__(&self) -> isize {
-        *self as isize
+use pyo3::prelude::*;
+
+pub(crate) use open_kind;
+
+// PyO3's equality slots return NotImplemented when operand extraction fails,
+// allowing the other operand to implement the comparison.
+#[derive(FromPyObject)]
+pub(crate) enum KindOperand<K> {
+    Kind(K),
+    Code(i32),
+}
+
+impl<K: PartialEq> KindOperand<K> {
+    pub(crate) fn matches(self, kind: &K, code: i32) -> bool {
+        match self {
+            Self::Kind(other) => other == *kind,
+            Self::Code(other) => other == code,
+        }
     }
+}
+
+impl<K> pyo3_stub_gen::PyStubType for KindOperand<K> {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::builtin("object")
+    }
+}
+
+// These classes expose SDK-owned constants and have no Python constructor.
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::derive::gen_methods_from_python! { r#"
+class Kind:
+    def __new__(cls, _unconstructible: typing.NoReturn, /) -> Kind: ...
+"# }
 }
 
 /// How a decision variable obtains its value in an {class}`~ommx.Instance`.
@@ -50,7 +119,7 @@ impl SpecialConstraintKind {
 /// {meth}`~ommx.Instance.populate_state` explains reconstruction, defaults,
 /// canonicalization, and consistency assertions with executable examples.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, frozen)]
+#[pyclass(from_py_object, eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DecisionVariableRole {
     /// Used by the objective or active constraints passed to solvers
@@ -111,29 +180,9 @@ impl From<DecisionVariableRole> for ommx::DecisionVariableRole {
     }
 }
 
-impl From<ommx::SpecialConstraintKind> for SpecialConstraintKind {
-    fn from(kind: ommx::SpecialConstraintKind) -> Self {
-        match kind {
-            ommx::SpecialConstraintKind::Indicator => SpecialConstraintKind::Indicator,
-            ommx::SpecialConstraintKind::OneHot => SpecialConstraintKind::OneHot,
-            ommx::SpecialConstraintKind::Sos1 => SpecialConstraintKind::Sos1,
-        }
-    }
-}
-
-impl From<SpecialConstraintKind> for ommx::SpecialConstraintKind {
-    fn from(kind: SpecialConstraintKind) -> Self {
-        match kind {
-            SpecialConstraintKind::Indicator => ommx::SpecialConstraintKind::Indicator,
-            SpecialConstraintKind::OneHot => ommx::SpecialConstraintKind::OneHot,
-            SpecialConstraintKind::Sos1 => ommx::SpecialConstraintKind::Sos1,
-        }
-    }
-}
-
 /// Sense of optimization (minimize or maximize)
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, frozen)]
+#[pyclass(from_py_object, eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Sense {
     /// Minimize the objective function
@@ -198,7 +247,7 @@ impl From<Sense> for ommx::Sense {
 
 /// Equality type for constraints
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, frozen)]
+#[pyclass(from_py_object, eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Equality {
     /// Equal to zero constraint (=)
@@ -264,93 +313,42 @@ impl From<Equality> for ommx::Equality {
     }
 }
 
-/// Kind of decision variable
-#[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, frozen)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Kind {
-    /// Binary decision variable (0 or 1)
-    Binary = 1,
-    /// Integer decision variable
-    Integer = 2,
-    /// Continuous decision variable (real-valued)
-    Continuous = 3,
-    /// Semi-integer decision variable (integer in range or zero)
-    SemiInteger = 4,
-    /// Semi-continuous decision variable (continuous in range or zero)
-    SemiContinuous = 5,
+open_kind! {
+    /// Numeric scalar decision-variable domain kind.
+    ///
+    /// New kinds may be added. This value type does not promise an exhaustive
+    /// list. Inspect known constants and reject unsupported kinds in consumers
+    /// that interpret domain semantics. Generic metadata queries retain Kind.
+    Kind, ommx::Kind, |kind| ommx::v1::decision_variable::Kind::from(kind) as i32;
+    Binary => Binary, Integer => Integer, Continuous => Continuous,
+    SemiInteger => SemiInteger, SemiContinuous => SemiContinuous, FiniteDomain => FiniteDomain
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Kind {
-    fn __hash__(&self) -> isize {
-        *self as isize
-    }
-
-    /// Convert from Protocol Buffer kind value
+    /// Convert a known protobuf kind. Unknown semantic kinds are rejected.
     #[staticmethod]
     pub fn from_pb(value: i32) -> PyResult<Self> {
-        match value {
-            1 => Ok(Kind::Binary),
-            2 => Ok(Kind::Integer),
-            3 => Ok(Kind::Continuous),
-            4 => Ok(Kind::SemiInteger),
-            5 => Ok(Kind::SemiContinuous),
-            _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Invalid kind value: {value}"
-            ))),
-        }
+        let wire = ommx::v1::decision_variable::Kind::try_from(value).map_err(|_| {
+            pyo3::exceptions::PyValueError::new_err(format!("Invalid kind value: {value}"))
+        })?;
+        ommx::Kind::try_from(wire).map(Self).map_err(|_| {
+            pyo3::exceptions::PyValueError::new_err(format!("Invalid kind value: {value}"))
+        })
     }
-
-    /// Convert to Protocol Buffer kind value
+    /// Convert to the protobuf kind number.
     pub fn to_pb(&self) -> i32 {
-        *self as i32
+        ommx::v1::decision_variable::Kind::from(self.0) as i32
     }
-
-    fn __repr__(&self) -> String {
-        match self {
-            Kind::Binary => "Kind.Binary".to_string(),
-            Kind::Integer => "Kind.Integer".to_string(),
-            Kind::Continuous => "Kind.Continuous".to_string(),
-            Kind::SemiInteger => "Kind.SemiInteger".to_string(),
-            Kind::SemiContinuous => "Kind.SemiContinuous".to_string(),
-        }
-    }
-
     fn __str__(&self) -> String {
-        let rust_kind: ommx::Kind = (*self).into();
-        format!("{rust_kind:?}")
-    }
-}
-
-impl From<ommx::Kind> for Kind {
-    fn from(kind: ommx::Kind) -> Self {
-        match kind {
-            ommx::Kind::Binary => Kind::Binary,
-            ommx::Kind::Integer => Kind::Integer,
-            ommx::Kind::Continuous => Kind::Continuous,
-            ommx::Kind::SemiInteger => Kind::SemiInteger,
-            ommx::Kind::SemiContinuous => Kind::SemiContinuous,
-        }
-    }
-}
-
-impl From<Kind> for ommx::Kind {
-    fn from(kind: Kind) -> Self {
-        match kind {
-            Kind::Binary => ommx::Kind::Binary,
-            Kind::Integer => ommx::Kind::Integer,
-            Kind::Continuous => ommx::Kind::Continuous,
-            Kind::SemiInteger => ommx::Kind::SemiInteger,
-            Kind::SemiContinuous => ommx::Kind::SemiContinuous,
-        }
+        format!("{:?}", self.0)
     }
 }
 
 /// Optimality status of a solution
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int)]
+#[pyclass(from_py_object, eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Optimality {
     /// The solver cannot determine whether the solution is optimal
@@ -418,7 +416,7 @@ impl From<Optimality> for ommx::v1::Optimality {
 
 /// Relaxation status of a solution
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int)]
+#[pyclass(from_py_object, eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Relaxation {
     /// No relaxation is used

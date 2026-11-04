@@ -69,6 +69,28 @@
 //! - **Staged** is not a data-model state in the current design.
 //!   Payload blobs are stored eagerly; if a descriptor is kept in
 //!   unsealed state for a future commit, it is already stored.
+//!
+//! # Catalog caches and garbage collection
+//!
+//! Catalog caches retain the original Manifest and Experiment Config JSON
+//! under their content digests and verify those digests on reads. Missing
+//! rows are backfilled from the CAS when listed. Replacing or deleting refs
+//! prunes manifest cache rows without a remaining direct ref, and config
+//! cache rows unused by the retained manifest rows. Pruning these cached
+//! projections does not delete CAS blobs.
+//!
+//! Payloads are stored before their root manifest is sealed and published.
+//! Reusing existing content refreshes the blob's modification time, preserving
+//! the grace period for recent writes. A process that stops before publication
+//! can therefore leave stored bytes that are not reachable from any ref.
+//!
+//! Garbage collection computes reachability from all SQLite refs, including
+//! Experiment checkpoints, and explicitly protected digests. It walks manifest
+//! configs, layers, and OCI subject chains, then compares the reached digests
+//! with CAS files; there is no persistent orphan table. Unreachable blobs
+//! within the grace period are deferred. A deleting pass rechecks each
+//! candidate's modification time before unlinking it. See
+//! [`LocalRegistry::gc_report`] and [`LocalRegistry::gc`].
 
 mod index;
 pub(crate) mod registry;

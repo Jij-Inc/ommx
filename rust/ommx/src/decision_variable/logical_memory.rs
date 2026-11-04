@@ -1,5 +1,5 @@
-// DecisionVariable and DecisionVariableLabel use
-// `#[derive(LogicalMemoryProfile)]` on their definition sites.
+// DecisionVariable and DecisionVariableLabel implement logical-memory
+// profiling on their definition sites.
 
 #[cfg(test)]
 mod tests {
@@ -38,6 +38,20 @@ mod tests {
         insta::assert_snapshot!(folded, @r###"
         DecisionVariable.bound;Bound.lower 8
         DecisionVariable.bound;Bound.upper 8
+        DecisionVariable.kind 1
+        "###);
+    }
+
+    #[test]
+    fn test_finite_domain_snapshot() {
+        let dv = DecisionVariable::new_finite_domain(vec![0.1, 0.5, 1.0]).unwrap();
+        let folded = logical_memory_to_folded(&dv);
+
+        insta::assert_snapshot!(folded, @r###"
+        DecisionVariable.finite_domain;FiniteDomain.bound;Bound.lower 8
+        DecisionVariable.finite_domain;FiniteDomain.bound;Bound.upper 8
+        DecisionVariable.finite_domain;FiniteDomain.values 24
+        DecisionVariable.finite_domain;FiniteDomain.values;Vec[stack] 24
         DecisionVariable.kind 1
         "###);
     }

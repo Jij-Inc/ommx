@@ -14,6 +14,75 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 `to_qubo()` と `to_hubo()` のPreparation後の変換にも適用されます。
 浮動小数点演算の扱いは {meth}`~ommx.Instance.as_qubo_format` を参照してください。
 
+### Python 3.11 以降を必須とし、SDK が Python 3.15 に対応 ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
+
+Python 3.10 のサポート終了に伴う共通の方針として、SDK と Adapter パッケージの
+最低対応バージョンを Python 3.11 に引き上げました。コア SDK は
+PyO3 0.30.1 に更新して Python 3.15 に対応し、ABI3 wheel のベースラインも
+Python 3.11 に引き上げています。free-threaded 版は ABI3t が使える Python 3.15 以降を
+サポートします。Linux と macOS では通常版と free-threaded 版で同じ ABI3t wheel を
+利用できます（[#1351](https://github.com/Jij-Inc/ommx/pull/1351)）。
+Python 3.15 への対応はコア SDK で先行し、
+Adapter の利用可否は接続するソルバーの Python 対応状況にも依存します。
+
+pandas 3 を利用できるようになりました。PyArrow は引き続き、
+Artifact の DataFrame を Parquet 形式で保存・復元するための必須依存です。
+
+## 3.0.0 Beta 9
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b9-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b9)
+
+### ⚠ 制約の種類を `ConstraintKind` で指定する ([#1329](https://github.com/Jij-Inc/ommx/pull/1329))
+
+Beta 8 から移行するときは、`SpecialConstraintKind` や `"sos1"` などの文字列を
+`ConstraintKind` の定数に置き換えてください。例えば `constraints.of_kind(ConstraintKind.Sos1)` が
+返すビューは SOS1 固有の ID 型と行型を保持します。`constraints_df(kind=ConstraintKind.Sos1)`
+で同じ種類の制約を DataFrame として取得できます。
+
+`Kind`、`ConstraintKind`、`ProvenanceKind` には既知の定数があり、今後の SDK で種類が
+増えることがあります。変数の定義域や制約の意味を解釈するコードでは、未知の種類を受け取った
+場合の処理を用意してください。比較・ハッシュ・整数変換と `Kind.from_pb()` / `Kind.to_pb()`
+は引き続き使えます。数値スカラーを対象とする拡張契約は[移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
+`instance.active_constraint_kinds` は有効な制約が存在するすべての種類を返し、
+`instance.active_special_constraint_kinds` は特殊制約の種類だけを返します。
+`lower_special_constraints` に `ConstraintKind.Regular` を渡すと、どの種類も変換する前にエラーになります。
+
+OneHot 制約 30 を含む解では、違反量は型付き ID で取得し、テーブルは制約の種類を指定して取得します。
+
+```python
+from ommx import ConstraintKind, OneHotConstraintID
+
+solution.constraint_violation(OneHotConstraintID(30))
+solution.constraints_df(kind=ConstraintKind.OneHot)
+```
+
+### 🆕 値を列挙して決定変数の定義域を指定する ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
+
+{class}`~ommx.DecisionVariable` で、明示的に列挙した数値の集合を正確な
+定義域として表現できるようになりました。Instance を段階的に構築する場合は
+{meth}`~ommx.Instance.new_finite_domain`、明示的な ID を持つコンポーネントを
+作る場合は {meth}`~ommx.DecisionVariable.finite_domain` を使用します。
+
+```python
+from ommx import DecisionVariable, Instance
+
+instance = Instance.minimize()
+x = instance.new_finite_domain([0.1, 0.3, 0.5, 1.0], name="x")
+
+assert x.kind == DecisionVariable.FINITE_DOMAIN
+assert x.values == [0.1, 0.3, 0.5, 1.0]
+instance.objective = x
+assert instance.evaluate({x.id: 0.3}).feasible
+assert not instance.evaluate({x.id: 0.4}).feasible
+```
+
+値の集合は空ではなく、重複のない有限な数値を含む必要があります。OMMX は
+評価、サンプリング、v1/v2 シリアライズを通してこの集合を正確に保持します。
+上下限は集合の最小値と最大値です。上下限だけを書き出すと集合に含まれない値まで許してしまうため、
+ソルバー入力に有限定義域変数を使う問題を MPS に出力するとエラーになります。定義域と DataFrame での表現については
+{meth}`~ommx.DecisionVariable.finite_domain` を参照してください。
+
 ## 3.0.0 Beta 8
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b8-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b8)
@@ -128,7 +197,7 @@ state = instance.state_from_named_values({"x": {(0,): 1.0, (1,): 4.0}})
 見つからないキーは `KeyError`、複数の変数に一致する名前・添字は `ValueError` になります。
 文字列・整数への正規化でキーが重複する入力も `ValueError` になります。
 SCIP アダプターの `initial_state` に `NamedState` を直接渡すこともできます。
-SCIP での利用例は {ref}`名前と添字で初期値を指定する <named-initial-state>`
+SCIP での利用例は {meth}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter.solve`
 を参照してください。
 
 ### 🆕 同梱のエージェントプラグインとスキルを取得 ([#1264](https://github.com/Jij-Inc/ommx/pull/1264))
@@ -172,7 +241,7 @@ HiGHS モデルに保持するようにしました。
 
 モデル構築から求解・解の復元まで行う場合は `OMMXHighsAdapter.solve(instance)` を、
 構築済みモデルを求解する場合は `adapter.solver_input.run()` を使ってください。
-詳細は [Adapter チュートリアル](../tutorial/solve_with_ommx_adapter)を参照してください。
+完全な使用例は {class}`HiGHS AdapterのReference <ommx_highs_adapter.OMMXHighsAdapter>`を参照してください。
 
 項数の多い線形目的関数や制約を構築する際には、加算のたびに蓄積済みの式全体を
 コピーせず、項を追加するようにしました。
@@ -200,7 +269,7 @@ QPLIB の二次目的関数と二次制約を、元の問題どおりに読み�
 {meth}`~ommx.Instance.load_qplib` で作成して保存したモデルは、元の `.qplib`
 ファイルから読み込み直してください。`ommx.dataset.qplib` は OMMX 2.8.0 向けに
 公開した修正済みの配布を読み込むようになりました。旧配布がキャッシュされていても、
-修正済みの配布を使います。詳細は [既存の問題を読み込むHow-to](../how_to/load_existing_instance.md)を参照してください。
+修正済みの配布を使います。詳細は {func}`~ommx.dataset.qplib`を参照してください。
 
 ### 🛠 MPS・MIPLIB 読み込み時にバイナリ変数を保持 ([#1202](https://github.com/Jij-Inc/ommx/pull/1202), [#1205](https://github.com/Jij-Inc/ommx/pull/1205))
 
@@ -213,7 +282,7 @@ MPS ファイルには、変数を整数として指定し、上下限を省略�
 影響を受ける保存済みモデルは、元の MPS ファイルから読み込み直してください。
 `ommx.dataset.miplib2017` は OMMX 2.7.0 向けに公開した修正済みの MIPLIB 配布を
 読み込むようになりました。旧配布がキャッシュされていても、修正済みの配布を使います。
-詳細は [既存の問題を読み込むHow-to](../how_to/load_existing_instance.md)を参照してください。
+詳細は {func}`~ommx.dataset.miplib2017`を参照してください。
 
 ### 🛠 変数の上下限と制約で許容誤差の判定を統一 ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
 
@@ -249,6 +318,7 @@ OneHot（ちょうど 1 つの変数が `1`、残りが `0`）と SOS1（非ゼ�
 合計には通常制約・Indicator・OneHot・SOS1 に加え、変換などで除去された制約の違反量も含みます。
 
 ```python
+# Beta 6 の書式。現行の型付き ID の使い方は移行ガイドを参照。
 solution.total_violation()
 solution.constraint_violation(30, kind="one_hot")  # 既存の OneHot 制約 ID
 solution.constraints_df(kind="sos1")[["feasible", "violation"]]
@@ -356,7 +426,7 @@ solution = instance.evaluate(state, atol=1e-8)
 解ファイルで省略された変数には 0 を設定します。記載された目的関数値 `objvar` は
 変数として扱わず、モデルの評価によって目的関数値を計算します。
 `ommx.qplib.load_solution` も利用できます。
-対応するファイルは [既存の問題と候補解を評価するTutorial](../tutorial/evaluate_existing_candidate)を参照してください。
+対応するファイルは {func}`~ommx.qplib.load_solution`を参照してください。
 
 ### 🆕 Rust 拡張からのデータ受け渡しに共通の例外を導入 ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
 
@@ -639,7 +709,7 @@ Converter 固有の表現検査や backend の上限検査は solver input の�
 特に OpenJij の signed ID と finite coefficient の検査は sampler input の構築時に
 行われるようになりました。責務境界の詳細は
 {class}`~ommx.InstanceClass`と
-[Developer Guide: OMMX Adapterを実装する](../developer_guide/adapter.md)を参照してください。
+{mod}`Adapter Reference <ommx.adapter>`を参照してください。
 
 ### Adapter の input class 宣言を必須化 ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
 
@@ -649,7 +719,7 @@ Converter 固有の表現検査や backend の上限検査は solver input の�
 呼び出し側は `is not None` の確認なしで `Adapter.INPUT_CLASS` を
 {meth}`~ommx.Instance.prepare` に渡せます。宣言がない場合は、applicability の確認時に
 引き続き明確な `TypeError` を送出します。契約の全体像は
-[Developer Guide: OMMX Adapterを実装する](../developer_guide/adapter.md)を参照してください。
+{mod}`Adapter Reference <ommx.adapter>`を参照してください。
 
 ## 3.0.0 Beta 3
 
@@ -929,7 +999,7 @@ assert isinstance(output, SampleSet)
 
 `Run.log_sample(..., store_diagnostics=True)` では `Run.log_solve` と同じ adapter
 diagnostics channel を利用できます。SolveとSamplingの記録モデルは
-[ExperimentのGuide](../user_guide/experiment.md) を参照してください。
+{class}`~ommx.experiment.Experiment` を参照してください。
 
 ### 🆕 Attachment の透過圧縮と streaming write ([#1054](https://github.com/Jij-Inc/ommx/pull/1054))
 
@@ -967,7 +1037,7 @@ atomic に削除した Manifest digest、ref が存在しなければ `None` で
 Experiment refs も対象になり、`older_than="7d"` で経過時間に基づく retention を
 設定できます。CLI では `ommx prune-anonymous --experiments --older-than 7d` が
 同じ操作に対応します。到達可能性と GC を含む全体の workflow は
-[Experiment cleanup](../user_guide/experiment.md) を参照してください。
+{ref}`Local Registryの整理 <experiment-cleanup-workflow>` を参照してください。
 
 ```python
 from ommx.artifact import prune_anonymous, remove_image, restore_image
@@ -995,7 +1065,7 @@ experiment.set_autosave_policy(AutosavePolicy.every_n_runs(25))
 
 時間で頻度を制限する場合は `AutosavePolicy.min_interval(seconds)`、Run-close 時の
 復帰用 checkpoint が不要な場合は `AutosavePolicy.disabled()` を使います。復帰可能性と
-保存量の tradeoff は [Experiment の検索・復帰・cleanup](../user_guide/experiment.md) を
+保存量の tradeoff は {class}`~ommx.experiment.Experiment` を
 参照してください。
 
 ### 🆕 Local Registry からの Artifact/Experiment 一覧 ([#1029](https://github.com/Jij-Inc/ommx/pull/1029))
@@ -1219,7 +1289,7 @@ HiGHS Adapter は HiGHS の logging callback から MIP progress snapshot を記
 
 PySCIPOpt の progress history は、diagnostics に termination report が含まれる場合に synthetic な `TERMINATION` 行を含むようになりました。これにより、別の termination report を重複させずに、`progress_history_records` と `progress_history_df` から最終 solver state も確認できます。
 
-direct solve と Experiment 経由の workflow については [Adapter 固有 diagnostics](../how_to/inspect_adapter_diagnostics.md) を参照してください。
+direct solve と Experiment 経由の workflow は{class}`SCIPの診断Reference <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>`、HiGHS固有の報告は{class}`HiGHSの診断Reference <ommx_highs_adapter.HighsDiagnosticsAnalyzer>`を参照してください。
 
 ### 🆕 top-level root 向け versioned protobuf bytes API ([#989](https://github.com/Jij-Inc/ommx/pull/989))
 
@@ -1251,7 +1321,7 @@ Solver Adapter に、共通の {class}`~ommx.Solution` 結果には入らない 
 
 PySCIPOpt Adapter は、SCIP の `BESTSOLFOUND` と `DUALBOUNDIMPROVED` callback から {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` diagnostics を出力し、`model.optimize()` の後に {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` を出力するようになりました。termination report には SCIP の status、primal / dual bound、gap、incumbent objective value、node 数、LP / cut / solution counter、primal-dual integral、求解時間、SCIP / PySCIPOpt version metadata が含まれます。typed collector の中身や Experiment から読み出した dictionary は {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` で records または pandas DataFrame に後処理できます。direct collection では OMMX Solution へ decode する前に termination report が記録されるため、infeasible や unbounded の検出などで decode が adapter exception を投げる場合でも呼び出し側で確認できます。
 
-収集・調査の手順は[Adapterのdiagnostics](../how_to/inspect_adapter_diagnostics.md)、reportの各fieldは{class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`のAPI Referenceを参照してください。
+収集・調査の手順は{class}`SCIPの診断Reference <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>`、reportの各fieldは{class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`のAPI Referenceを参照してください。
 
 ## 3.0.0 Alpha 5
 
@@ -1263,7 +1333,7 @@ PySCIPOpt Adapter は、SCIP の `BESTSOLFOUND` と `DUALBOUNDIMPROVED` callback
 
 {class}`~ommx.experiment.Experiment`、{meth}`~ommx.experiment.Experiment.with_temp_local_registry`、{meth}`~ommx.experiment.Experiment.fork` が `store_trace=True` を受け取れるようになりました。有効化すると、各 `with experiment.run()` context 内で発生した OpenTelemetry span を capture し、close 済みの {class}`~ommx.experiment.SealedRun` に trace を 1 つ保存します。保存された trace は {attr}`~ommx.experiment.SealedRun.trace` から {class}`~ommx.tracing.TraceResult` として取得でき、commit、load、fork をまたいで保持されます。
 
-詳しい trace workflow、renderer、OpenTelemetry の設定については [トレースとプロファイリング](../how_to/trace_execution) を参照してください。
+詳しい trace workflow、renderer、OpenTelemetry の設定については {mod}`ommx.tracing`と[外部送信の設定](../how_to/export_traces.md) を参照してください。
 
 ```python
 from ommx.experiment import Experiment
@@ -1300,7 +1370,7 @@ for name in loaded.attachment_names:
 
 {class}`~ommx.experiment.Experiment` が途中状態を Local Registry の checkpoint として保存するようになりました。{class}`~ommx.experiment.Run` を close すると best-effort に draft checkpoint を書き、Experiment が例外で終了した場合は成功用の Experiment image reference を進めず、failed または interrupted checkpoint を書きます。close 済みの Run は attachment、solve、trace、run parameter を保持し、`KeyboardInterrupt` などで中断された Run も `"failed"` または `"interrupted"` の status として残ります。
 
-Experiment catalog の filter、Run close の境界、checkpoint からの復帰、Local Registry cleanup の挙動については [Experiment の検索・復帰・cleanup](../user_guide/experiment.md) を参照してください。
+catalogの絞り込みは {func}`~ommx.experiment.list_experiments`、Run closeの境界とcheckpointからの復帰は {class}`~ommx.experiment.Experiment`、保存領域の管理は {ref}`Local Registryの整理 <experiment-cleanup-workflow>` を参照してください。
 
 最新の checkpoint から再開するには、元の Experiment image name を {meth}`~ommx.experiment.Experiment.restore_from_checkpoint` に渡します:
 
@@ -1347,7 +1417,7 @@ registry を変更し、notebook や script で扱いやすい structured report
 
 新しい {class}`ommx.experiment.attachments.AttachmentCodec` protocol により、Python payload 型を所有するパッケージ側で、その値を Experiment attachment として保存・復元する方法を定義できるようになりました。Codec class は media type と `encode` / `decode` を提供し、OMMX は Experiment-level / Run-level の `log_with_codec` と `get_with_codec` からそれを呼び出します。
 
-JijModeling `Problem` 用の codec 例は、Experiment management tutorial の {ref}`添付できるデータ形式 <experiment-management-attachable-data-formats>` を参照してください。
+独自codecの完全な例は {meth}`~ommx.experiment.Experiment.log_with_codec` を参照してください。外部モデラーのオブジェクト用codecは、その保存形式を所有するパッケージが提供します。
 
 ```python
 from ommx.experiment import Experiment
@@ -1414,13 +1484,13 @@ v3 では Artifact のローカル保存実体を SQLite-based Local Registry �
 - 新 CLI `ommx prune-anonymous [--delete]` はデフォルトで蓄積した匿名 commit エントリを report し、`--delete` 指定時だけ削除します。
 - `ommx.get_image_dir(...)` と CLI `ommx image-dir <name>` を廃止しました。戻り値は v2 disk-cache の `<root>/<image_name>/<tag>/` パスで、v3 SQLite Local Registry の実際の保存先 (blob は content-addressed、ref は SQLite) とは無関係になっており、ユーザーをミスリードしていたため。既存の v2 cache は引き続き `ommx import-legacy` で移行できます。
 
-before / after コード例と移行チェックリストは {ref}`Python SDK v2 to v3 Migration Guide §13 <13-artifact-api-archive-becomes-an-exchange-format>` を参照してください。
+v2のアーカイブAPIの置き換え先は、移行ガイドの {ref}`アーカイブを開く・作る <13-artifact-api-archive-becomes-an-exchange-format>` を参照してください。
 
 ### 🆕 Artifact ベースの実験管理 API: `ommx.experiment` ([#882](https://github.com/Jij-Inc/ommx/pull/882), [#885](https://github.com/Jij-Inc/ommx/pull/885), [#886](https://github.com/Jij-Inc/ommx/pull/886), [#903](https://github.com/Jij-Inc/ommx/pull/903))
 
 実験の入力データ、実行条件、Solver/Sampler の結果を 1 つの OMMX Artifact として記録する `ommx.experiment` モジュールを追加しました。{class}`~ommx.experiment.Experiment`、{class}`~ommx.experiment.Run`、{class}`~ommx.experiment.Solve` を使って、Run ごとの比較パラメータ、attachment、solve 入出力を Local Registry に保存できます。
 
-基本的な記録と保存済み Experiment の読み込みは [実験管理チュートリアル](../tutorial/experiment_management)、fork による派生実験の作り方は [継続・復帰のHow-to](../how_to/continue_experiment.md) を参照してください。
+基本的な記録と保存済み Experiment の読み込みは {class}`~ommx.experiment.Experiment`、fork による派生実験の作り方は {meth}`~ommx.experiment.Experiment.fork` を参照してください。
 
 ### 🆕 `Run.log_solve` で solve 入出力と adapter options を記録 ([#902](https://github.com/Jij-Inc/ommx/pull/902))
 
@@ -1514,13 +1584,13 @@ solution.decision_variables_df(include=["label"])      # core + label
 solution.decision_variables_df(include=["parameters"]) # core + parameters
 ```
 
-加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。必須のキーワード引数`kind=`で対象の制約ファミリーを切り替えます (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`):
+加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。Alpha 3 では `kind` に `"regular"`（既定値）、`"indicator"`、`"one_hot"`、`"sos1"` を指定できます。
 
-- `constraint_context_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
+- `constraint_metadata_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
 - `constraint_parameters_df(kind=...)` — long format (`{kind}_constraint_id` / `key` / `value`)
 - `constraint_provenance_df(kind=...)` — long format (`{kind}_constraint_id` / `step` / `source_kind` / `source_id`)
 - `constraint_removed_reasons_df(kind=...)` — long format (`{kind}_constraint_id` / `reason` / `key` / `value`)
-- `variable_labels_df()` — id-indexed
+- `variable_metadata_df()` — id-indexed
 - `variable_parameters_df()` — long format
 
 Sidecar の index 名はファミリーごとに qualified (`regular_constraint_id` / `indicator_constraint_id` / `one_hot_constraint_id` / `sos1_constraint_id` / `variable_id`) になっており、別 ID 空間どうしを誤って `df.join()` した場合に `df.head()` 等で気づきやすくなっています。`*_parameters_df` / `*_removed_reasons_df` の行は `(id, key)` 順にソート済み、空の long-format DataFrame もスキーマ列だけ持つ形で返ります。
@@ -1575,7 +1645,7 @@ assert instance.constraints[c.constraint_id].name == "budget"
 - **`%%ommx_trace`** — Jupyterセル単位でスパンツリーとChrome Trace JSONダウンロードリンクを表示するセルマジック
 - **`capture_trace` / `@traced`** — 通常のPythonスクリプト／テスト／CIから同じ機能を使うためのコンテキストマネージャとデコレータ
 
-詳しい使い方、独自 `TracerProvider` の設定方法、トラブルシューティングは [トレースとプロファイリング](../how_to/trace_execution) を参照してください。
+詳しい使い方、独自 `TracerProvider` の設定方法、トラブルシューティングは {mod}`ommx.tracing`と[外部送信の設定](../how_to/export_traces.md) を参照してください。
 
 ### 🆕 Solver / Sampler Adapter のトレーシング対応 ([#833](https://github.com/Jij-Inc/ommx/pull/833))
 

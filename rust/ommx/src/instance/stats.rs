@@ -2,7 +2,10 @@ use super::DecisionVariableRole;
 use serde::{Deserialize, Serialize};
 
 /// Statistics about decision variables categorized by kind.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Additional kind counts may be added. Use `Default` when constructing counts.
+#[non_exhaustive]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct VariableStatsByKind {
     /// Number of binary variables
     pub binary: usize,
@@ -14,6 +17,8 @@ pub struct VariableStatsByKind {
     pub semi_integer: usize,
     /// Number of semi-continuous variables
     pub semi_continuous: usize,
+    /// Number of finite-domain variables
+    pub finite_domain: usize,
 }
 
 /// Statistics about decision variables categorized by usage.
@@ -36,7 +41,7 @@ pub struct VariableStatsByUsage {
 /// Statistics about decision variables in an instance.
 ///
 /// This struct provides counts of decision variables categorized by:
-/// - Kind: binary, integer, continuous, semi-integer, semi-continuous
+/// - Kind: binary, integer, continuous, semi-integer, semi-continuous, finite-domain
 /// - Usage: used (in objective or constraints), fixed, dependent, irrelevant
 ///
 /// Note on usage categories:
@@ -125,6 +130,11 @@ impl super::Instance {
                 .values()
                 .filter(|dv| dv.kind() == crate::Kind::SemiContinuous)
                 .count(),
+            finite_domain: self
+                .decision_variables()
+                .values()
+                .filter(|dv| dv.kind() == crate::Kind::FiniteDomain)
+                .count(),
         };
 
         let usage = self.decision_variable_usage();
@@ -173,6 +183,20 @@ impl super::Instance {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn kind_statistics_read_missing_counts_as_zero() {
+        let counts: super::VariableStatsByKind =
+            serde_json::from_str(r#"{"binary": 2, "integer": 3}"#).unwrap();
+        assert_eq!(counts.binary, 2);
+        assert_eq!(counts.integer, 3);
+        assert_eq!(counts.finite_domain, 0);
+        let expected = super::VariableStatsByKind {
+            binary: 2,
+            integer: 3,
+            ..Default::default()
+        };
+        assert_eq!(counts, expected);
+    }
     use super::*;
     use crate::{
         coeff, linear, Constraint, ConstraintID, DecisionVariable, Instance, Sense, VariableID,
@@ -307,9 +331,12 @@ mod tests {
             VariableID::from(3) => DecisionVariable::integer(),
             VariableID::from(4) => DecisionVariable::continuous(),
             VariableID::from(5) => DecisionVariable::semi_integer(),
+            VariableID::from(6) => DecisionVariable::new_finite_domain(vec![0.1, 0.5, 1.0]).unwrap(),
         };
 
-        let objective = (linear!(1) + linear!(2)).into();
+        let objective = ((linear!(1) + linear!(2)).unwrap() + linear!(6))
+            .unwrap()
+            .into();
 
         let instance = Instance::new(
             Sense::Minimize,

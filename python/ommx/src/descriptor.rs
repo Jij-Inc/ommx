@@ -14,7 +14,7 @@ use std::collections::HashMap;
 /// owner of its temporary registry, it is just inert metadata and cannot
 /// be used to access bytes.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(module = "ommx._ommx_rust", name = "Descriptor")]
 #[derive(Debug, Clone, PartialEq)]
 pub struct PyDescriptor(Descriptor);
@@ -32,7 +32,7 @@ impl From<StoredDescriptor<'_>> for PyDescriptor {
 
 /// Descriptor value read from an OCI archive manifest without importing it.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(module = "ommx._ommx_rust", name = "ArchiveDescriptor")]
 #[derive(Debug, Clone, PartialEq)]
 pub struct PyArchiveDescriptor(Descriptor);

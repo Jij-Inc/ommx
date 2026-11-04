@@ -7,7 +7,7 @@ use crate::{ConstraintHost, VariableIDInput};
 
 #[gen_stub_pyclass]
 #[doc = include_str!("docstrings/ommx/Sos1Constraint.md")]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct Sos1Constraint(pub ommx::Sos1Constraint, pub ommx::ConstraintContext);
 
@@ -126,7 +126,7 @@ impl Sos1Constraint {
 
 /// A removed SOS1 constraint together with the reason it was removed.
 #[gen_stub_pyclass]
-#[pyclass(eq, extends = ConstraintView)]
+#[pyclass(from_py_object, eq, extends = ConstraintView)]
 #[derive(Clone, PartialEq)]
 pub struct RemovedSos1Constraint {
     pub constraint: ommx::Sos1Constraint,

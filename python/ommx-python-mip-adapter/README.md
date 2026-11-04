@@ -1,48 +1,10 @@
-OMMX adapter for Python-MIP
-============================
-[![PyPI - Version](https://img.shields.io/pypi/v/ommx-python-mip-adapter)](https://pypi.org/project/ommx-python-mip-adapter/)
+# OMMX adapter for Python-MIP
 
-This package provides an adapter for the [Python-MIP](https://www.python-mip.com/) from/to [OMMX](https://github.com/Jij-Inc/ommx)
+Solve a linear OMMX Instance with [Python-MIP](https://www.python-mip.com/), or import a Python-MIP model as an OMMX Instance to evaluate it or use another solver.
 
-Python-MIP as a solver in OMMX toolchain
------------------------------------------
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant A as Adapter
-    participant P as Python-MIP
-    U->>A: ommx.Instance
-    A->>U: Python-MIP model
-    U->>P: Python-MIP model and Parameters for Python-MIP;
-    P->>P: Solve with CBC, Gurobi, or other solvers
-    P->>U: Optimized model
-    U->>A: Optimized model and ommx.Instance
-    A->>U: ommx.Solution
-```
+[Installation from a prerelease or `main`](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/getting_started/install.html#install-python-mip-adapter) · [日本語の導入手順](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/getting_started/install.html#install-python-mip-adapter)
 
-Python-MIP as a user interface to create OMMX instance
--------------------------------------------------------
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant A as Adapter
-    participant O as Other OMMX toolchain
-    U->>A: Python-MIP model
-    A->>U: ommx.Instance
-    U->>O: ommx.Instance and Parameters for other solver
-    O->>O: Solve the instance with other solver using other adapter
-    O->>U: ommx.Solution
-```
-
-Usage
-======
-`ommx-python-mip-adapter` can be installed from PyPI as follows:
-
-```bash
-pip install ommx-python-mip-adapter
-```
-
-Python-MIP can be used through `ommx-python-mip-adapter` by using the following:
+## Solve an OMMX problem
 
 ```python markdown-code-runner
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
@@ -56,13 +18,12 @@ ommx_instance = Instance.from_components(
     sense=Sense.Minimize,
 )
 
-# Create `ommx.Solution` from the `mip.Model`
 ommx_solution = OMMXPythonMIPAdapter.solve(ommx_instance)
 
 print(ommx_solution)
 ```
 
-You can get `ommx.Instance` from a Python-MIP model as the following:
+## Import a Python-MIP model
 
 ```python markdown-code-runner
 import mip
@@ -79,6 +40,8 @@ ommx_instance = adapter.model_to_instance(model)
 print(ommx_instance)
 ```
 
-Reference
-==============
-- [OMMX-Python-MIP-Adapter API Reference](https://jij-inc.github.io/ommx-python-mip-adapter/index.html)
+## Reference
+
+[Python-MIP adapter API](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/autoapi/ommx_python_mip_adapter/index.html#ommx_python_mip_adapter.OMMXPythonMIPAdapter) · [日本語サイトのAPI Reference](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/autoapi/ommx_python_mip_adapter/index.html#ommx_python_mip_adapter.OMMXPythonMIPAdapter)
+
+The [model conversion reference](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/autoapi/ommx_python_mip_adapter/index.html#ommx_python_mip_adapter.model_to_instance) covers the supported input and includes an executable example.

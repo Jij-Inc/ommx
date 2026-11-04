@@ -8,7 +8,7 @@ use crate::constraint_id::{
     OneHotConstraintIDInput, Sos1ConstraintIDInput,
 };
 use crate::{
-    constraint_kind::{constraint_kind_collection, ConstraintKind},
+    constraint_kind::{constraint_kind_collection, ConstraintFamilyInput},
     error::OmmxPyResult,
     pandas::{
         apply_include_filter, constraint_id_col, entries_to_dataframe, raw_entries_to_dataframe,
@@ -225,7 +225,7 @@ impl OutputObjective {
 /// variables. {meth}`~ommx.Instance.maximize` starts an empty maximization
 /// problem; use {meth}`~ommx.Instance.minimize` for minimization.
 ///
-/// >>> from ommx import Instance
+/// >>> from ommx import ConstraintKind, Instance
 /// >>> instance = Instance.maximize()
 /// >>> x = instance.new_binary("x")
 /// >>> y = instance.new_binary("y")
@@ -246,7 +246,7 @@ impl OutputObjective {
 /// explicit IDs. The Instance validates that expressions and special
 /// constraints refer to variables defined in that Instance.
 ///
-/// >>> from ommx import ConstraintID, DecisionVariable, Instance, Sense
+/// >>> from ommx import ConstraintKind, ConstraintID, DecisionVariable, Instance, Sense
 /// >>> a = DecisionVariable.binary(10, name="a")
 /// >>> assembled = Instance.from_components(
 /// ...     decision_variables=[a], objective=a, constraints={7: a <= 1},
@@ -263,7 +263,7 @@ impl OutputObjective {
 /// SemiInteger and SemiContinuous additionally allow zero even when zero is
 /// outside the specified interval.
 ///
-/// >>> from ommx import Instance
+/// >>> from ommx import ConstraintKind, Instance
 /// >>> typed = Instance.minimize()
 /// >>> flag = typed.new_binary("flag")
 /// >>> count = typed.new_integer("count", lower=0, upper=10)
@@ -316,7 +316,7 @@ impl OutputObjective {
 /// {attr}`~ommx.Instance.removed_constraints` exposes retained constraints
 /// that are no longer active.
 ///
-/// >>> from ommx import ConstraintID, Instance
+/// >>> from ommx import ConstraintKind, ConstraintID, Instance
 /// >>> model = Instance.minimize()
 /// >>> selected = model.new_binary("selected")
 /// >>> added = model.add_constraint(selected == 1, "required")
@@ -325,7 +325,7 @@ impl OutputObjective {
 /// >>> assert list(model.constraints) == [added.constraint_id]
 ///
 /// Use {meth}`~ommx.Instance.constraints_df` with an explicit ``kind``, such
-/// as ``kind="regular"``, to collect one family into a DataFrame. Collection
+/// as ``kind=ConstraintKind.Regular``, to collect one family into a DataFrame. Collection
 /// lookup and iteration contracts belong to {class}`~ommx.ConstraintCollection`.
 ///
 /// **Edit the Instance through attached handles**
@@ -339,7 +339,7 @@ impl OutputObjective {
 /// replace their fields; ``add_subscripts`` appends indices and
 /// ``add_parameter`` / ``add_parameters`` merge parameter entries.
 ///
-/// >>> from ommx import Instance
+/// >>> from ommx import ConstraintKind, Instance
 /// >>> labeled = Instance.maximize()
 /// >>> choice = labeled.new_binary("choice")
 /// >>> labeled.objective = choice
@@ -375,7 +375,7 @@ impl OutputObjective {
 /// remain defined so that evaluation can reconstruct their values, although
 /// the solver no longer chooses those values directly.
 ///
-/// >>> from ommx import Instance
+/// >>> from ommx import ConstraintKind, Instance
 /// >>> original = Instance.maximize()
 /// >>> x = original.new_binary("x")
 /// >>> y = original.new_binary("y")
@@ -404,7 +404,7 @@ impl OutputObjective {
 /// reported after evaluation, including when all solver-input variables have
 /// been fixed:
 ///
-/// >>> from ommx import DecisionVariable, Instance, Sense
+/// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
 /// >>> x = DecisionVariable.binary(0)
 /// >>> instance = Instance.from_components(
 /// ...     decision_variables=[x], objective=3 * x, constraints={},
@@ -457,16 +457,19 @@ impl Instance {
     /// # Examples
     ///
     /// A second call can propagate a bound learned by the first call. These
-    /// methods perform a single pass each, rather than iterating to a fixed point.
+    /// methods perform a single pass each. An empty result means only that
+    /// this pass made no update; it does not establish feasibility.
     ///
-    /// >>> from ommx import Bound, Instance
+    /// >>> from ommx import ConstraintKind, Bound, Instance
     /// >>> instance = Instance.minimize()
     /// >>> x = instance.new_integer("x", lower=0, upper=10)
     /// >>> y = instance.new_integer("y", lower=0, upper=10)
     /// >>> _ = instance.add_constraint(x <= 2)
     /// >>> _ = instance.add_constraint(y <= x)
     /// >>> assert instance.tighten_bounds_simultaneously_once() == {x.id: Bound(0, 2)}
+    /// >>> assert x.bound == Bound(0, 2) and y.bound == Bound(0, 10)
     /// >>> assert instance.tighten_bounds_simultaneously_once(max_terms=64) == {y.id: Bound(0, 2)}
+    /// >>> assert y.bound == Bound(0, 2)
     /// >>> assert instance.tighten_bounds_simultaneously_once() == {}
     #[pyo3(signature = (*, max_terms=32, atol=None))]
     pub fn tighten_bounds_simultaneously_once(
@@ -540,7 +543,7 @@ impl Instance {
     /// endpoint becomes ``2.9375``. Row 101 is not selected here and does not
     /// impose a lower bound.
     ///
-    /// >>> from ommx import Bound, ConstraintID, DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, Bound, ConstraintID, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.continuous(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=0, sense=Sense.Minimize,
@@ -795,7 +798,7 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import Instance, Sense
+    /// >>> from ommx import ConstraintKind, Instance, Sense
     /// >>> instance = Instance.minimize()
     /// >>> instance.sense == Sense.Minimize
     /// True
@@ -850,7 +853,7 @@ impl Instance {
     ///
     /// The property reports the active sense even when evaluation uses a distinct output sense.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
@@ -869,7 +872,7 @@ impl Instance {
     ///
     /// Assignment replaces the active objective and rebases subsequent output evaluation onto it.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
@@ -905,7 +908,7 @@ impl Instance {
     ///
     /// Absence and an explicit output objective equal to the active pair remain distinct.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
@@ -935,7 +938,7 @@ impl Instance {
 
     /// Create an ID-keyed {class}`~ommx.State` from values grouped by name and subscripts.
     ///
-    /// >>> from ommx import Instance, NamedState
+    /// >>> from ommx import ConstraintKind, Instance, NamedState
     /// >>> instance = Instance.minimize()
     /// >>> x = instance.new_binary("x", subscripts=[0])
     /// >>> values: NamedState = {"x": {(0,): 1.0}}
@@ -969,7 +972,7 @@ impl Instance {
     /// target. The source candidate is feasible here, but the target tightens
     /// the bound of ``y`` from 3 to 1:
     ///
-    /// >>> from ommx import Instance
+    /// >>> from ommx import ConstraintKind, Instance
     /// >>> source = Instance.maximize()
     /// >>> x = [source.new_binary("x", subscripts=[i]) for i in range(2)]
     /// >>> y = source.new_integer("y", lower=0, upper=3)
@@ -1255,6 +1258,39 @@ impl Instance {
         Ok(Self::attach_decision_variable(slf, id))
     }
 
+    /// Create and add a finite-domain decision variable with an automatically assigned ID.
+    ///
+    /// `values` is the exact feasible set, rather than a discretization of an
+    /// interval. Values must be non-empty, finite, and unique; OMMX stores them
+    /// in ascending order.
+    ///
+    /// **Args:**
+    /// - `values`: Exact feasible values of the variable.
+    /// - `name`: Optional human-readable modeling name. Names need not be unique.
+    /// - `subscripts`: Optional integer indices from the source model.
+    /// - `parameters`: Optional string-valued indices from the source model.
+    /// - `description`: Optional human-readable description.
+    ///
+    /// Raises {class}`ValueError` if `values` does not define a valid finite
+    /// domain or if no larger automatic ID can be assigned.
+    #[pyo3(signature = (values, name=None, *, subscripts=Vec::new(), parameters=StringMapping::default(), description=None))]
+    fn new_finite_domain(
+        slf: Bound<'_, Self>,
+        values: Vec<f64>,
+        name: Option<String>,
+        subscripts: Vec<i64>,
+        parameters: StringMapping,
+        description: Option<String>,
+    ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
+        let label = Self::decision_variable_label(name, subscripts, parameters, description);
+        let id = {
+            slf.borrow_mut()
+                .inner
+                .new_finite_domain(values, label, None, ommx::ATol::default())?
+        };
+        Ok(Self::attach_decision_variable(slf, id))
+    }
+
     /// Return an {class}`~ommx.AttachedDecisionVariable` bound to the
     /// given id — a write-through handle whose label setters update
     /// this instance's SoA store. The handle also participates in
@@ -1414,15 +1450,26 @@ impl Instance {
         ))
     }
 
+    /// All active constraint families, including {attr}`~ommx.ConstraintKind.Regular`.
+    /// Removed constraints are excluded. This is independent of adapter support.
+    #[getter]
+    pub fn active_constraint_kinds(&self) -> std::collections::HashSet<crate::ConstraintKind> {
+        self.inner
+            .active_constraint_kinds()
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
     /// The kinds of active special constraints this instance currently uses.
     ///
-    /// Returns the set of {class}`~ommx.SpecialConstraintKind` values corresponding
+    /// Returns the set of {class}`~ommx.ConstraintKind` values corresponding
     /// to non-empty active (non-removed) special constraint collections. An
     /// empty set means the instance has no active special constraints.
     #[getter]
     pub fn active_special_constraint_kinds(
         &self,
-    ) -> std::collections::HashSet<crate::SpecialConstraintKind> {
+    ) -> std::collections::HashSet<crate::ConstraintKind> {
         self.inner
             .active_special_constraint_kinds()
             .into_iter()
@@ -1432,18 +1479,18 @@ impl Instance {
 
     #[doc = include_str!("docstrings/ommx/Instance.lower_special_constraints.md")]
     #[pyo3(signature = (kinds_to_lower, *, atol=None))]
-    pub fn lower_special_constraints(
+    fn lower_special_constraints(
         &mut self,
         py: Python<'_>,
-        kinds_to_lower: std::collections::HashSet<crate::SpecialConstraintKind>,
+        kinds_to_lower: ConstraintSetInput<crate::ConstraintKind>,
         atol: Option<f64>,
-    ) -> OmmxPyResult<std::collections::HashSet<crate::SpecialConstraintKind>> {
+    ) -> OmmxPyResult<std::collections::HashSet<crate::ConstraintKind>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        let rust_kinds_to_lower: ommx::SpecialConstraintKinds =
+        let rust_kinds_to_lower: ommx::ConstraintKinds =
             kinds_to_lower.into_iter().map(|kind| kind.into()).collect();
         let lowered = self
             .inner
@@ -1509,7 +1556,7 @@ impl Instance {
     ///
     /// Serialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
@@ -1533,7 +1580,7 @@ impl Instance {
     ///
     /// A v2 round-trip preserves both active and output objective semantics.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
@@ -1564,7 +1611,7 @@ impl Instance {
     /// This method resolves names and subscripts from this instance without
     /// changing the expression or its value.
     ///
-    /// >>> from ommx import Instance
+    /// >>> from ommx import ConstraintKind, Instance
     /// >>> instance = Instance.minimize()
     /// >>> x0 = instance.new_binary("x", subscripts=[0])
     /// >>> x1 = instance.new_binary("x", subscripts=[1])
@@ -1614,7 +1661,7 @@ impl Instance {
     /// the complete expression. A character limit can cut through a term, so
     /// ``written_terms`` counts only terms written completely.
     ///
-    /// >>> from ommx import Instance
+    /// >>> from ommx import ConstraintKind, Instance
     /// >>> instance = Instance.minimize()
     /// >>> x = [instance.new_binary("x", subscripts=[i]) for i in range(3)]
     /// >>> preview = instance.display_function(sum(x), max_terms=2)
@@ -1646,7 +1693,7 @@ impl Instance {
     ///
     /// IDs referenced only by preserved output semantics are not required solver inputs.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
@@ -1719,7 +1766,7 @@ impl Instance {
     /// to interpret candidates with its output semantics. Backend energy can
     /// differ from the objective reported by those methods.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=3 * x + 5, constraints={}, sense=Sense.Maximize
@@ -1749,7 +1796,7 @@ impl Instance {
     ///
     /// The returned coefficients represent the active objective rather than preserved output semantics.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=3 * x + 5, constraints={}, sense=Sense.Maximize
@@ -1775,7 +1822,7 @@ impl Instance {
     /// including preservation of nonzero coefficients regardless of magnitude.
     ///
     /// >>> import copy
-    /// >>> from ommx import DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
@@ -1835,7 +1882,7 @@ impl Instance {
     /// including preservation of nonzero coefficients regardless of magnitude.
     ///
     /// >>> import copy
-    /// >>> from ommx import DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
@@ -1891,7 +1938,7 @@ impl Instance {
     ///
     /// Materializing the result without parameters preserves both active and output objective semantics.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
@@ -1931,8 +1978,8 @@ impl Instance {
     ///
     /// Penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
     ///
-    /// >>> from ommx import ConstraintID
-    /// >>> from ommx import DecisionVariable, Instance, Optimality, Sense
+    /// >>> from ommx import ConstraintKind, ConstraintID
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Optimality, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
@@ -1976,8 +2023,8 @@ impl Instance {
     ///
     /// Uniform-penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
     ///
-    /// >>> from ommx import ConstraintID
-    /// >>> from ommx import DecisionVariable, Instance, Optimality, Sense
+    /// >>> from ommx import ConstraintKind, ConstraintID
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Optimality, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
@@ -2007,6 +2054,8 @@ impl Instance {
     /// better candidate or prove optimality. An infeasible candidate can still
     /// have an objective value. See {class}`~ommx.Solution` for a complete
     /// example and how to interpret the results.
+    /// The {func}`QPLIB example <ommx.qplib.load_solution>` evaluates a
+    /// candidate from a file and identifies violated constraints.
     ///
     /// Evaluate a solver's returned candidate with the transformed Instance
     /// used for that solve. Its recorded dependencies, removed constraints,
@@ -2018,7 +2067,7 @@ impl Instance {
     /// assertion rules documented by {meth}`~ommx.Instance.populate_state`, then
     /// applies preserved output objective semantics to the populated state.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
@@ -2110,7 +2159,7 @@ impl Instance {
     /// rules documented by {meth}`~ommx.Instance.populate_state` before applying
     /// preserved output objective semantics. SampleID membership is preserved.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
@@ -2154,7 +2203,7 @@ impl Instance {
     ///
     /// Generate random state only for used variables
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Rng, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Rng, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(5)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
@@ -2205,7 +2254,7 @@ impl Instance {
     ///
     /// Generate samples for a simple instance:
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Rng, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Rng, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
@@ -2348,7 +2397,7 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense
+    /// >>> from ommx import ConstraintKind, Instance, DecisionVariable, OneHotConstraint, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
@@ -2385,7 +2434,7 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense
+    /// >>> from ommx import ConstraintKind, Instance, DecisionVariable, OneHotConstraint, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(4)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
@@ -2451,7 +2500,7 @@ impl Instance {
     ///
     /// All-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:
     ///
-    /// >>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint
+    /// >>> from ommx import ConstraintKind, Instance, DecisionVariable, Sense, Sos1Constraint
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
@@ -2486,7 +2535,7 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint
+    /// >>> from ommx import ConstraintKind, Instance, DecisionVariable, Sense, Sos1Constraint
     /// >>> x = [DecisionVariable.binary(i) for i in range(4)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
@@ -2656,7 +2705,7 @@ impl Instance {
     ///
     /// Encoding preserves existing output semantics, or captures the pre-encoding active objective when no output objective exists, while rewriting the active objective.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.integer(0, lower=0, upper=3)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
@@ -2725,7 +2774,7 @@ impl Instance {
     ///
     /// Encoding preserves existing output semantics, or captures the pre-encoding active objective when no output objective exists, while rewriting the active objective.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.integer(0, lower=2, upper=5, name="x")
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
@@ -2809,7 +2858,7 @@ impl Instance {
     /// encode one original binary variable. The original variable's domain
     /// and the equality together prevent both encoding variables from being 1.
     ///
-    /// >>> from ommx import Instance
+    /// >>> from ommx import ConstraintKind, Instance
     /// >>> linked = Instance.maximize()
     /// >>> original = linked.new_binary("original")
     /// >>> linked.objective = original
@@ -2825,7 +2874,7 @@ impl Instance {
     /// redundant for this particular encoding, but illustrates both sides of
     /// the domain constraint.
     ///
-    /// >>> from ommx import Instance
+    /// >>> from ommx import ConstraintKind, Instance
     /// >>> encoded = Instance.maximize()
     /// >>> original = encoded.new_binary("original")
     /// >>> encoded.objective = original
@@ -2843,7 +2892,7 @@ impl Instance {
     ///
     /// Substitution rewrites the active objective while output evaluation restores the substituted variable value.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> b = DecisionVariable.binary(1)
     /// >>> instance = Instance.from_components(
@@ -2892,8 +2941,8 @@ impl Instance {
     ///
     /// Let's consider a simple inequality constraint x0 + 2*x1 <= 5.
     ///
-    /// >>> from ommx import ConstraintID
-    /// >>> from ommx import DecisionVariable, Equality, Instance, Sense
+    /// >>> from ommx import ConstraintKind, ConstraintID
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Equality, Instance, Sense
     /// >>> x = [
     /// ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
     /// ...     for i in range(3)
@@ -2968,8 +3017,8 @@ impl Instance {
     ///
     /// Let's consider a simple inequality constraint x0 + 2*x1 <= 4.
     ///
-    /// >>> from ommx import ConstraintID
-    /// >>> from ommx import DecisionVariable, Equality, Instance, Sense
+    /// >>> from ommx import ConstraintKind, ConstraintID
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Equality, Instance, Sense
     /// >>> x = [
     /// ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
     /// ...     for i in range(3)
@@ -3091,7 +3140,8 @@ impl Instance {
     ///             "integer": int,
     ///             "continuous": int,
     ///             "semi_integer": int,
-    ///             "semi_continuous": int
+    ///             "semi_continuous": int,
+    ///             "finite_domain": int
     ///         },
     ///         "by_usage": {
     ///             "used_in_objective": int,
@@ -3112,7 +3162,7 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import Instance
+    /// >>> from ommx import ConstraintKind, Instance
     /// >>> instance = Instance.minimize()
     /// >>> stats = instance.stats()
     /// >>> stats["decision_variables"]["total"]
@@ -3158,9 +3208,9 @@ impl Instance {
 
     /// DataFrame of constraints, dispatched on `kind=`.
     ///
-    /// `kind` selects the constraint family — `"regular"`, `"indicator"`,
-    /// `"one_hot"`, or `"sos1"`. The DataFrame is indexed by the kind-
-    /// qualified id column (`{kind}_constraint_id`).
+    /// `kind` is a {class}`~ommx.ConstraintKind` family selector, including
+    /// `ConstraintKind.Regular`. The DataFrame uses a family-qualified ID
+    /// column, such as `regular_constraint_id` or `sos1_constraint_id`.
     ///
     /// `include` selects which optional column families to fold in. It
     /// accepts a sequence of `"label"` / `"parameters"` /
@@ -3177,7 +3227,7 @@ impl Instance {
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
         include: Option<Vec<String>>,
         removed: bool,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
@@ -3289,12 +3339,12 @@ impl Instance {
     /// One row per constraint id (active + removed) with columns
     /// `name`, `subscripts`, `description`. Index column is
     /// `{kind}_constraint_id`. `kind` selects which constraint family
-    /// to read: `"regular"`, `"indicator"`, `"one_hot"`, or `"sos1"`.
+    /// to read, using a {class}`~ommx.ConstraintKind` value.
     #[pyo3(signature = (*, kind))]
     pub fn constraint_context_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
@@ -3325,7 +3375,7 @@ impl Instance {
     pub fn constraint_parameters_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
@@ -3356,7 +3406,7 @@ impl Instance {
     pub fn constraint_provenance_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
@@ -3388,7 +3438,7 @@ impl Instance {
     pub fn constraint_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
-        kind: ConstraintKind,
+        kind: ConstraintFamilyInput,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
@@ -3460,7 +3510,7 @@ impl Instance {
     ///
     /// Conversion changes both active and output objective semantics and is idempotent at the target sense. An existing output objective remains explicit even if both objectives become structurally equal.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
@@ -3489,7 +3539,7 @@ impl Instance {
     ///
     /// Conversion changes both active and output objective semantics and is idempotent at the target sense. An existing output objective remains explicit even if both objectives become structurally equal.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Minimize
@@ -3527,7 +3577,7 @@ impl Instance {
     ///
     /// Optimality is preserved for equivalent objective conversion and discarded after penalty preparation.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Optimality, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Optimality, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> equivalent = Instance.from_components(
     /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
@@ -3593,7 +3643,7 @@ impl Instance {
     ///
     /// Reduction preserves existing output semantics, or captures the pre-reduction active objective when no output objective exists, while rewriting active expressions.
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Maximize
@@ -3614,69 +3664,7 @@ impl Instance {
         Ok(Self { inner: instance })
     }
 
-    /// Write the active formulation to an MPS file.
-    ///
-    /// # Parameters
-    ///
-    /// - ``path``: Destination file. Missing parent directories are created and
-    ///   an existing file is overwritten after model validation succeeds.
-    /// - ``compress``: Write gzip-compressed bytes when ``True`` (the default),
-    ///   or plain text when ``False``, independently of the filename extension.
-    ///
-    /// # Supported models
-    ///
-    /// The writer accepts both minimization and maximization. The active objective
-    /// and active regular constraint functions must be stored as expanded
-    /// polynomials of degree at most two. Quadratic terms are written using
-    /// ``QUADOBJ`` and ``QCMATRIX`` sections, with the coefficient convention
-    /// described below. Variables used by the active formulation must have
-    /// Binary, Integer, or Continuous kind. Active Indicator, OneHot, and SOS1
-    /// constraints are rejected; lower them before export if appropriate.
-    /// No preparation is performed automatically.
-    ///
-    /// Unsupported models raise ``RuntimeError`` before creating directories
-    /// or truncating the destination. Errors reported during path setup or
-    /// writing raise ``RuntimeError``. Writing is not atomic: created directories
-    /// and a truncated or partial destination may remain after failure.
-    /// With compression enabled, the current implementation does not propagate
-    /// errors that occur only while finishing the gzip stream. A normal return
-    /// therefore does not guarantee a complete gzip file. The instance is not
-    /// modified.
-    ///
-    /// # Quadratic coefficient convention
-    ///
-    /// The current writer emits each stored quadratic monomial coefficient once,
-    /// unchanged, in both sections. It does not double diagonal objective
-    /// coefficients or add mirrored off-diagonal constraint entries.
-    /// Receiving tools can therefore interpret a different model or reject the
-    /// file even when they recognize these section names.
-    ///
-    /// For example, [Gurobi's MPS convention](https://docs.gurobi.com/projects/optimizer/en/current/reference/fileformats/modelformats.html#quadobj-section)
-    /// applies a one-half multiplier to the objective matrix and requires a
-    /// symmetric constraint matrix. An objective ``6 * x * x`` is written here
-    /// as a diagonal coefficient of ``6``, which that objective convention
-    /// interprets as ``3 * x * x``. Check the receiving tool's conventions and
-    /// imported quadratic expressions before solving; this writer does not
-    /// adapt the coefficients to a selected external tool.
-    ///
-    /// # Information boundary
-    ///
-    /// The writer exports the active objective and sense, active regular
-    /// constraints, and the kinds and bounds of variables used by that model.
-    /// Quadratic coefficients follow the convention above.
-    /// Unused variables, including those referenced only by output semantics,
-    /// named functions, or removed constraints, are omitted. Unused variables
-    /// of unsupported kinds do not prevent export.
-    ///
-    /// ``description.name`` supplies the problem name. Variables and constraints
-    /// use generated names ``OMMX_VAR_<id>`` and ``OMMX_CONSTR_<id>``; their
-    /// modeling names, subscripts, and other labels are not preserved. Other
-    /// Instance information is not exported, including remaining description
-    /// fields, annotations, parameters, named functions, removed constraints,
-    /// dependencies, fixed-value recovery, and {attr}`~ommx.Instance.output_objective`.
-    /// MPS is therefore not a round-trip storage format for an OMMX Instance.
-    /// Retain the OMMX instance when its recovery and output semantics are needed
-    /// to interpret an external tool's candidates.
+    #[doc = include_str!("docstrings/ommx/Instance.save_mps.md")]
     #[pyo3(signature = (path, compress = true))]
     pub fn save_mps(&self, py: Python<'_>, path: String, compress: bool) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -3711,7 +3699,7 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
@@ -3728,7 +3716,7 @@ impl Instance {
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct InstanceDescription(pub(crate) ommx::v1::instance::Description);
 

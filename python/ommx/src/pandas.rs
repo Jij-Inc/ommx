@@ -1,7 +1,7 @@
 //! Thin wrapper around `pandas.DataFrame` for type-safe PyO3 bindings,
 //! plus shared helpers for building DataFrames from domain objects.
 
-use crate::constraint_kind::ConstraintKind;
+use crate::constraint_kind::ConstraintFamilyInput;
 use ommx::EvaluatedConstraintBehavior;
 use ommx::SampledConstraintBehavior;
 use std::collections::HashMap;
@@ -44,8 +44,6 @@ fn get_dataframe_type(py: Python<'_>) -> PyResult<&Bound<'_, PyType>> {
 }
 
 unsafe impl PyTypeCheck for PyDataFrame {
-    const NAME: &'static str = "DataFrame";
-
     fn type_check(object: &Bound<'_, PyAny>) -> bool {
         let py = object.py();
         match get_dataframe_type(py) {
@@ -138,12 +136,12 @@ const REMOVED_REASON_PREFIX: &str = "removed_reason.";
 /// Index column name for the chosen constraint kind. Each kind has a
 /// distinct ID space, so the qualified name keeps cross-kind joins
 /// visible (`regular_constraint_id` ≠ `indicator_constraint_id` etc.).
-pub fn constraint_id_col(kind: ConstraintKind) -> &'static str {
+pub fn constraint_id_col(kind: ConstraintFamilyInput) -> &'static str {
     match kind {
-        ConstraintKind::Regular => "regular_constraint_id",
-        ConstraintKind::Indicator => "indicator_constraint_id",
-        ConstraintKind::OneHot => "one_hot_constraint_id",
-        ConstraintKind::Sos1 => "sos1_constraint_id",
+        ConstraintFamilyInput::Regular => "regular_constraint_id",
+        ConstraintFamilyInput::Indicator => "indicator_constraint_id",
+        ConstraintFamilyInput::OneHot => "one_hot_constraint_id",
+        ConstraintFamilyInput::Sos1 => "sos1_constraint_id",
     }
 }
 
@@ -240,7 +238,7 @@ where
     let mut entries: Vec<Bound<'py, PyAny>> = Vec::new();
     for id in ids {
         for (step, p) in store.provenance(id).iter().enumerate() {
-            let (source_kind, source_id) = provenance_parts(p);
+            let (source_kind, source_id) = provenance_parts(p)?;
             let dict = PyDict::new(py);
             dict.set_item(id_col, typed_constraint_id(Into::<u64>::into(id), id_col)?)?;
             dict.set_item("step", step as u64)?;
@@ -393,21 +391,9 @@ pub fn variable_parameters_dataframe<'py>(
     long_format_dataframe(py, entries, &[id_col, "key", "value"])
 }
 
-fn provenance_parts(p: &Provenance) -> (&'static str, crate::constraint_id::AnyConstraintID) {
-    match *p {
-        Provenance::IndicatorConstraint(id) => (
-            "IndicatorConstraint",
-            crate::constraint_id::AnyConstraintID::Indicator(id.into()),
-        ),
-        Provenance::OneHotConstraint(id) => (
-            "OneHotConstraint",
-            crate::constraint_id::AnyConstraintID::OneHot(id.into()),
-        ),
-        Provenance::Sos1Constraint(id) => (
-            "Sos1Constraint",
-            crate::constraint_id::AnyConstraintID::Sos1(id.into()),
-        ),
-    }
+fn provenance_parts(p: &Provenance) -> PyResult<(String, crate::constraint_id::AnyConstraintID)> {
+    let row = crate::Provenance::from(p);
+    Ok((format!("{:?}Constraint", p.kind()), row.original_id()?))
 }
 
 /// Build a long-format DataFrame from pre-built entry dicts.
@@ -729,14 +715,18 @@ pub fn set_equality(dict: &Bound<PyDict>, equality: ommx::Equality) -> PyResult<
 
 /// Set kind column as a string.
 pub fn set_kind(dict: &Bound<PyDict>, kind: ommx::Kind) -> PyResult<()> {
-    let s = match kind {
-        ommx::Kind::Binary => "Binary",
-        ommx::Kind::Integer => "Integer",
-        ommx::Kind::Continuous => "Continuous",
-        ommx::Kind::SemiInteger => "SemiInteger",
-        ommx::Kind::SemiContinuous => "SemiContinuous",
-    };
-    dict.set_item("kind", s)
+    dict.set_item("kind", format!("{kind:?}"))
+}
+
+/// Set exact finite-domain values, or pandas.NA for interval-domain kinds.
+pub fn set_finite_domain(
+    dict: &Bound<PyDict>,
+    domain: Option<&ommx::FiniteDomain>,
+) -> PyResult<()> {
+    match domain {
+        Some(domain) => dict.set_item("values", domain.values().to_vec()),
+        None => dict.set_item("values", get_na(dict.py())?),
+    }
 }
 
 /// Set function type column as a string.
@@ -769,6 +759,7 @@ fn decision_variable_to_pandas_entry<'py>(
     set_kind(&dict, dv.kind())?;
     dict.set_item("lower", dv.bound().lower())?;
     dict.set_item("upper", dv.bound().upper())?;
+    set_finite_domain(&dict, dv.finite_domain())?;
     set_label_columns(
         &dict,
         label.name.as_deref(),
@@ -1268,6 +1259,7 @@ impl<'m> ToPandasEntry
         set_kind(&dict, *dv.kind())?;
         dict.set_item("lower", dv.bound().lower())?;
         dict.set_item("upper", dv.bound().upper())?;
+        set_finite_domain(&dict, dv.finite_domain())?;
         set_label_columns(
             &dict,
             m.name.as_deref(),
@@ -1366,6 +1358,7 @@ impl<'a, 'm> ToPandasEntry
         set_kind(&dict, *dv.kind())?;
         dict.set_item("lower", dv.bound().lower())?;
         dict.set_item("upper", dv.bound().upper())?;
+        set_finite_domain(&dict, dv.finite_domain())?;
         set_label_columns(
             &dict,
             m.name.as_deref(),

@@ -7,7 +7,7 @@ use crate::{ConstraintHost, VariableIDInput};
 
 #[gen_stub_pyclass]
 #[doc = include_str!("docstrings/ommx/OneHotConstraint.md")]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct OneHotConstraint(pub ommx::OneHotConstraint, pub ommx::ConstraintContext);
 
@@ -126,7 +126,7 @@ impl OneHotConstraint {
 
 /// A removed one-hot constraint together with the reason it was removed.
 #[gen_stub_pyclass]
-#[pyclass(eq, extends = ConstraintView)]
+#[pyclass(from_py_object, eq, extends = ConstraintView)]
 #[derive(Clone, PartialEq)]
 pub struct RemovedOneHotConstraint {
     pub constraint: ommx::OneHotConstraint,

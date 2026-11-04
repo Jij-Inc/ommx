@@ -46,13 +46,14 @@ uv sync --locked --package ommx --no-default-groups --python 3.12
 uv run --no-sync python -c "from importlib.metadata import version; from ommx import Instance; print(version('ommx')); print(Instance.minimize())"
 ```
 
-サンプルをスクリプトとして保存したら、`uv run --no-sync python example.py`で実行できます。{meth}`~ommx.Instance.prepare`による問題の変換、{class}`~ommx.InstanceClass`への所属判定、[既存の問題と候補解の評価](../tutorial/evaluate_existing_candidate)にはSDKだけを使います。[既存問題の入手](../how_to/load_existing_instance.md)で公開データを初めて取得するときは、ネットワーク接続が必要です。
+サンプルをスクリプトとして保存したら、`uv run --no-sync python example.py`で実行できます。{meth}`~ommx.Instance.prepare`による問題の変換、{class}`~ommx.InstanceClass`への所属判定、{func}`既存の問題と候補の評価 <ommx.qplib.load_solution>`にはSDKだけを使います。{mod}`既存問題の入手 <ommx.dataset>`で公開データを初めて取得するときは、ネットワーク接続が必要です。
 
 (install-adapters)=
 ## 2. ソルバーを使う場合だけAdapterを追加する
 
 SDKと同じ導入方法のコマンドを使ってください。prereleaseでは、`uv add`が作業用プロジェクト内でSDKとAdapterの依存関係をまとめて解決します。`main`では、`--inexact`がすでに追加した別のAdapterやNotebook用パッケージを残します。
 
+(install-pyscipopt-adapter)=
 ### PySCIPOpt Adapter
 
 最新prerelease：
@@ -67,7 +68,7 @@ main：
 uv sync --locked --package ommx-pyscipopt-adapter --no-default-groups --inexact
 ```
 
-[0-1ナップサック問題を解く例](../tutorial/solve_with_ommx_adapter)と[特殊制約をそのまま解く例](../tutorial/solve_special_constraints_with_pyscipopt_adapter.md)を参照してください。独自の変換方針を使う手順は、Referenceの{class}`明示的なPreparationと求解の例 <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`にあります。
+{class}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter`のReferenceに、ナップサック問題の求解と結果分析、特殊制約の直接利用、明示的なPreparationから求解までの完全な使用例があります。
 
 (install-highs-adapter)=
 ### HiGHS Adapter
@@ -84,7 +85,24 @@ main：
 uv sync --locked --package ommx-highs-adapter --no-default-groups --inexact
 ```
 
-[Adapter向けにInstanceを準備する例](../tutorial/prepare_instance_for_adapter.md)を参照してください。この例はモデルをその場で作るため、前のTutorialの実行状態やPySCIPOpt Adapterは不要です。[複数のAdapterで結果を比較する](../how_to/compare_adapters.md)場合は、両方のAdapterと、後述の手順でmatplotlibを用意します。
+{class}`~ommx_highs_adapter.OMMXHighsAdapter`のReferenceに、特殊制約を準備して解く完全な使用例があります。モデルをその場で作るため、HiGHSとSDKだけで実行できます。{mod}`Adapter比較の使用例 <ommx.adapter>`を実行する場合は、両方のAdapterと、後述の手順でmatplotlibを用意します。
+
+(install-python-mip-adapter)=
+### Python-MIP Adapter
+
+最新prerelease：
+
+```sh
+uv add --prerelease=allow ommx-python-mip-adapter
+```
+
+main:
+
+```sh
+uv sync --locked --package ommx-python-mip-adapter --no-default-groups --inexact
+```
+
+OMMXの問題を解く例は{class}`~ommx_python_mip_adapter.OMMXPythonMIPAdapter`、既存のPython-MIPモデルを取り込む例は{func}`~ommx_python_mip_adapter.model_to_instance`にあります。
 
 (install-openjij-adapter)=
 ### OpenJij Adapter
@@ -101,7 +119,7 @@ main：
 uv sync --locked --package ommx-openjij-adapter --no-default-groups --inexact
 ```
 
-OpenJij本体も依存関係として導入されます。ほかのAdapterやソルバーのライセンス設定は不要です。[小さな問題のサンプリング](../how_to/sample_with_openjij_adapter)を参照してください。任意の応用例である[TSPのNotebook](../tutorial/tsp_sampling_with_openjij_adapter)では、経路の描画にmatplotlibを使います。
+OpenJij本体も依存関係として導入されます。ほかのAdapterやソルバーのライセンス設定は不要です。{class}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter`のReferenceに、重みを選び、得られた候補を選択するまでの小さな使用例があります。任意の応用例である[TSPのNotebook](../tutorial/tsp_sampling_with_openjij_adapter)では、経路の描画にmatplotlibを使います。
 
 ## 3. 必要に応じてNotebook・描画用ツールを追加する
 

@@ -10,12 +10,25 @@ impl AbsDiffEq for DecisionVariable {
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        match (self.finite_domain(), other.finite_domain()) {
+            (Some(lhs), Some(rhs)) => {
+                return lhs.values().len() == rhs.values().len()
+                    && lhs
+                        .values()
+                        .iter()
+                        .zip(rhs.values())
+                        .all(|(lhs, rhs)| epsilon.approx_eq(*lhs, *rhs));
+            }
+            (Some(_), None) | (None, Some(_)) => return false,
+            (None, None) => {}
+        }
+
         // For different bounds, they are always different.
-        if !self.bound.abs_diff_eq(&other.bound, epsilon) {
+        if !self.bound().abs_diff_eq(&other.bound(), epsilon) {
             return false;
         }
         // If kinds are same and bounds are same, they are equal.
-        if self.kind == other.kind {
+        if self.kind() == other.kind() {
             return true;
         }
 
@@ -23,7 +36,7 @@ impl AbsDiffEq for DecisionVariable {
         // We may consider them mathematically equal in several cases.
 
         // We regard point bound Continuous[a, a] and Integer[a, a] are identical mathematically.
-        if let Some(lower) = self.bound.is_point(epsilon) {
+        if let Some(lower) = self.bound().is_point(epsilon) {
             // If both are point bounds and they are [0, 0], they are considered equal for any kind.
             if epsilon.approx_is_zero(lower) {
                 return true;
@@ -32,24 +45,24 @@ impl AbsDiffEq for DecisionVariable {
             // If a != 0, binary, integer, continuous are considered equal,
             // but semi-continuous and semi-integer are not because they can be a or 0.
             return same_kind_class(
-                self.kind,
-                other.kind,
+                self.kind(),
+                other.kind(),
                 &[Kind::Binary, Kind::Integer, Kind::Continuous],
                 &[Kind::SemiContinuous, Kind::SemiInteger],
             );
         }
-        if self.bound.contains(0.0, epsilon) {
+        if self.bound().contains(0.0, epsilon) {
             // Bound contains 0, so semi-integer and semi-continuous are equal to integer and continuous.
             same_kind_class(
-                self.kind,
-                other.kind,
+                self.kind(),
+                other.kind(),
                 &[Kind::Binary, Kind::Integer, Kind::SemiInteger],
                 &[Kind::Continuous, Kind::SemiContinuous],
             )
         } else {
             // Only binary and integer are considered equal.
             matches!(
-                (self.kind, other.kind),
+                (self.kind(), other.kind()),
                 (Kind::Binary, Kind::Integer) | (Kind::Integer, Kind::Binary)
             )
         }
@@ -65,6 +78,16 @@ mod tests {
     use super::*;
     use crate::{Bound, DecisionVariable};
     use ::approx::{assert_abs_diff_eq, assert_abs_diff_ne};
+
+    #[test]
+    fn finite_domain_comparison_rejects_overflowing_differences() {
+        let negative = DecisionVariable::new_finite_domain(vec![-f64::MAX]).unwrap();
+        let positive = DecisionVariable::new_finite_domain(vec![f64::MAX]).unwrap();
+        let atol = ATol::new(f64::INFINITY).unwrap();
+        assert!(!negative.abs_diff_eq(&positive, atol));
+        assert!(!positive.abs_diff_eq(&negative, atol));
+        assert!(negative.abs_diff_eq(&negative, atol));
+    }
 
     #[test]
     fn test_equal_rows_are_equal_independent_of_table_key() {

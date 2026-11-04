@@ -29,7 +29,7 @@ ommx
    _items/ommx.DecisionVariable
    _items/ommx.AttachedDecisionVariable
    _items/ommx.Parameter
-   _items/ommx.SpecialConstraintKind
+   _items/ommx.ConstraintKind
    _items/ommx.PolynomialRequirement
    _items/ommx.InstanceClassClause
    _items/ommx.InstanceClass

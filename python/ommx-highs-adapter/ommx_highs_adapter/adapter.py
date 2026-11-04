@@ -22,7 +22,7 @@ from ommx import (
     PreparationPolicy,
     Sense,
     Solution,
-    SpecialConstraintKind,
+    ConstraintKind,
     SpecialConstraintPreparation,
     State,
 )
@@ -207,9 +207,134 @@ class HighsTerminationReport:
 class HighsDiagnosticsAnalyzer:
     """Post-processor for HiGHS diagnostics.
 
+    Inspect the backend's termination reason and MIP progress separately from
+    the candidate evaluation in :class:`~ommx.Solution`.
+
+    .. rubric:: Collect a final report
+
+    Install the SDK and HiGHS Adapter using the
+    :doc:`installation guide </getting_started/install>`. This complete example
+    chooses at most one of two binary items and maximizes its value. No dataset,
+    other adapter, or Experiment is required.
+
+    >>> from ommx import Instance
+    >>> from ommx.adapter import DiagnosticCollector
+    >>> from ommx_highs_adapter import OMMXHighsAdapter, HighsDiagnosticsAnalyzer
+    >>> instance = Instance.maximize()
+    >>> x = instance.new_binary("x")
+    >>> y = instance.new_binary("y")
+    >>> instance.objective = 3 * x + 2 * y
+    >>> _ = instance.add_constraint(x + y <= 1)
+    >>> collector = DiagnosticCollector()
+    >>> solution = OMMXHighsAdapter.solve(instance, diagnostics=collector)
+    >>> analysis = HighsDiagnosticsAnalyzer(collector.diagnostics)
+    >>> solution.objective, solution.feasible
+    (3.0, True)
+    >>> solution.decision_variables_df()[["name", "value"]].to_dict("records")
+    [{'name': 'x', 'value': 1.0}, {'name': 'y', 'value': 0.0}]
+    >>> result = analysis.termination_result
+    >>> assert result is not None
+    >>> result["status"], result["objective_value"], result["mip_dual_bound"], result["mip_gap"]
+    ('Optimal', 3.0, 3.0, 0.0)
+
+    ``Optimal`` is HiGHS' report about the solved formulation. A feasible
+    candidate by itself does not prove optimality. The primal bound is the
+    objective bound from the best feasible candidate; the dual bound limits how
+    good the optimum can be. For maximization they bound the optimum from below
+    and above respectively; for minimization these directions reverse. ``gap``
+    is the backend's relative gap, whose definition can differ between solvers.
+    Bounds or gaps need not be finite before a candidate is found.
+
+    Bounds and gaps describe the solver-facing objective. Sign, scale, and
+    penalty transformations can separate it from OMMX's reported objective;
+    see :doc:`result interpretation </user_guide/evaluate_and_interpret>` before
+    interpreting them as guarantees about the original problem.
+
+    .. rubric:: Read progress and terminal values
+
     The analyzer accepts either typed diagnostics collected by
     :class:`ommx.adapter.DiagnosticCollector` or dictionaries loaded from
     :attr:`ommx.experiment.Solve.diagnostics`.
+
+    :attr:`progress_history_records` returns dictionaries without requiring
+    pandas. :attr:`progress_history_df` returns a DataFrame indexed by
+    ``solving_time_sec``. Series such as :attr:`primal_bound`, :attr:`dual_bound`,
+    and :attr:`gap` share that time index.
+
+    >>> analysis.progress_history_df.index.name
+    'solving_time_sec'
+    >>> assert len(analysis.dual_bound) == len(analysis.progress_history_records)
+    >>> assert analysis.termination_mip_dual_bound == 3.0
+    >>> assert analysis.termination_mip_gap == 0.0
+
+    :class:`HighsProgressSnapshot` records MIP logging callbacks, including node
+    counts, bounds, and gap. Small problems may finish with an empty history.
+    Unlike the SCIP Analyzer, this Analyzer does not append a termination row
+    to that history. Use :attr:`termination_result` or the ``termination_*``
+    properties for terminal scalar values, even when no callback was recorded.
+    :class:`HighsTerminationReport` includes status, objective, MIP bounds/gap,
+    iteration and node counts, violation summaries, runtime, and HiGHS versions.
+    Its field names are backend-specific (for example, ``mip_gap``).
+
+    To plot a collected history, select its bound columns and handle non-finite
+    values before drawing. This code works even if the history has no rows;
+    it requires matplotlib in addition to pandas.
+
+    >>> import numpy as np
+    >>> from matplotlib import pyplot as plt
+    >>> def plot_bounds(history, ax):
+    ...     bounds = history[["primal_bound", "dual_bound"]].astype(float)
+    ...     for column in bounds:
+    ...         series = bounds[column]
+    ...         ax.plot(series.index, series.where(np.isfinite(series)), label=column)
+    ...     ax.set(xlabel="Solver elapsed time (s)", ylabel="Solver objective bound")
+    ...     ax.legend()
+    >>> fig, ax = plt.subplots()
+    >>> plot_bounds(analysis.progress_history_df, ax)
+    >>> plt.close(fig)
+
+    With no callbacks there are no observations to plot. Converting the
+    columns to floats also works in this case, when pandas cannot infer
+    a numeric type from any rows:
+
+    >>> fig, ax = plt.subplots()
+    >>> plot_bounds(HighsDiagnosticsAnalyzer([]).progress_history_df, ax)
+    >>> [len(line.get_ydata()) for line in ax.lines]
+    [0, 0]
+    >>> plt.close(fig)
+
+    Call ``plt.show()`` before closing a figure when working
+    interactively. The :class:`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer`
+    Reference illustrates how the bounds and gap change during a recorded solve. Use the appropriate Analyzer and backend definitions
+    when drawing your own reports; the curves are observations, not a complete
+    trace of every internal update.
+
+    .. rubric:: Inspect a report when decoding fails
+
+    HiGHS records termination after ``model.run()`` and before decoding a
+    Solution, so a collector can retain the report when decoding raises an
+    adapter exception. This model has an unbounded objective:
+
+    >>> from ommx.adapter import UnboundedDetected
+    >>> unbounded = Instance.maximize()
+    >>> z = unbounded.new_continuous("z", lower=0)
+    >>> unbounded.objective = z
+    >>> collector = DiagnosticCollector()
+    >>> try:
+    ...     OMMXHighsAdapter.solve(unbounded, diagnostics=collector)
+    ... except UnboundedDetected:
+    ...     failure = HighsDiagnosticsAnalyzer(collector.diagnostics).termination_result
+    >>> assert failure is not None and failure["status"] == "Unbounded"
+
+    A failure before the backend finishes need not produce a final report;
+    :attr:`termination_result` is ``None`` when none was collected.
+
+    For optional persistence, :meth:`~ommx.experiment.Run.log_solve` and
+    :meth:`~ommx.experiment.Run.log_sample` reserve the ``diagnostics`` keyword.
+    Set ``store_diagnostics=True`` instead; collection is disabled by default.
+    Pass the resulting Solve/Sampling diagnostics dictionaries directly to this
+    Analyzer. Failure records and diagnostic persistence are best-effort, as
+    described by those logging methods.
     """
 
     _progress_snapshots: tuple[HighsProgressSnapshot, ...]
@@ -419,8 +544,85 @@ class OMMXHighsAdapter(SolverAdapter):
     """
     OMMX Adapter for HiGHS solver.
 
-    This adapter translates OMMX optimization problems (ommx.Instance) into HiGHS-compatible
-    formats and converts HiGHS solutions back to OMMX format (ommx.Solution).
+    This adapter encodes linear OMMX problems for HiGHS and returns an evaluated
+    :class:`ommx.Solution`. Install ``ommx-highs-adapter`` alongside a compatible
+    OMMX SDK to run these examples. :attr:`INPUT_CLASS` describes exact inputs;
+    :meth:`solve` prepares an isolated copy with the recommended policy before
+    solving. Constructors and :meth:`solve_without_preparation` instead require
+    an already applicable input.
+
+    **Solve a linear mixed-integer problem**
+
+    >>> from ommx_highs_adapter import OMMXHighsAdapter
+    >>> from ommx import Instance, Solution
+    >>> instance = Instance.maximize()
+    >>> x = instance.new_binary("x")
+    >>> y = instance.new_integer("y", lower=0, upper=10)
+    >>> instance.objective = 2 * x + 3 * y
+    >>> _ = instance.add_constraint(x + y <= 5)
+    >>> solution = OMMXHighsAdapter.solve(instance)
+    >>> assert solution.feasible
+    >>> assert solution.optimality == Solution.OPTIMAL
+    >>> assert abs(solution.objective - 15.0) < 1e-6
+    >>> assert solution.state.entries == {x.id: 0.0, y.id: 5.0}
+
+    The objective property describes the returned candidate; it is not by
+    itself a guarantee of optimality. :class:`ommx.Solution` explains how to
+    extract and interpret evaluated values.
+
+    **Prepare Indicator and SOS1 constraints without changing the source**
+
+    HiGHS input through this Adapter has only regular linear constraints.
+    The following model has an Indicator requiring ``option_a + option_b <= 1``
+    when ``enabled`` is one, and an SOS1 allowing at most one of ``option_b``
+    and ``option_c`` to be nonzero. The easy solve path lowers both on its copy.
+    This example is self-contained; it uses the same model that
+    :class:`ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter` can encode natively.
+
+    >>> from ommx import Instance, Sos1Constraint, ConstraintKind
+    >>> from ommx_highs_adapter import OMMXHighsAdapter
+    >>> source = Instance.maximize()
+    >>> enabled = source.new_binary("enabled")
+    >>> option_a = source.new_binary("option_a")
+    >>> option_b = source.new_binary("option_b")
+    >>> option_c = source.new_binary("option_c")
+    >>> source.objective = 10 * enabled + 6 * option_a + 5 * option_b + 4 * option_c
+    >>> _ = source.add_indicator_constraint((option_a + option_b <= 1).with_indicator(enabled))
+    >>> _ = source.add_sos1_constraint(
+    ...     Sos1Constraint(variables=[option_b, option_c], name="exclusive_options")
+    ... )
+    >>> assert not OMMXHighsAdapter.INPUT_CLASS.contains(source)
+    >>> solution = OMMXHighsAdapter.solve(source)
+    >>> assert solution.feasible
+    >>> assert abs(solution.objective - 20.0) < 1e-6
+    >>> assert source.active_special_constraint_kinds == {
+    ...     ConstraintKind.Indicator, ConstraintKind.Sos1,
+    ... }
+    >>> assert not source.removed_constraints
+
+    All variables here are Binary with finite bounds, so the recommended
+    lowering can construct the required linear rows. An arbitrary model need
+    not be preparable. :attr:`INPUT_CLASS` describes direct acceptance;
+    :meth:`recommended_preparation_policy` returns an editable recommendation,
+    not a guarantee of success. For an application-selected policy, call
+    :meth:`ommx.Instance.prepare` explicitly and then
+    :meth:`solve_without_preparation`; the PySCIPOpt Adapter Reference provides
+    a complete example of that sequence.
+
+    **Inspect conversion, search and decoding times**
+
+    >>> from ommx import Instance
+    >>> from ommx.tracing import capture_trace
+    >>> problem = Instance.minimize()
+    >>> x = problem.new_binary("x")
+    >>> problem.objective = -x
+    >>> with capture_trace("highs_solve") as trace:
+    ...     solution = OMMXHighsAdapter.solve(problem, verbose=False)
+    >>> assert solution.feasible and solution.objective == -1
+    >>> assert {"convert", "call", "decode"} <= {span.name for span in trace.spans}
+
+    Display the trace to read the stages within the solve. The parent
+    span includes the children's time. Each duration describes this run.
 
     Translation Specifications
     ==========================
@@ -532,7 +734,7 @@ class OMMXHighsAdapter(SolverAdapter):
     --------------
     **Unsupported Features**:
 
-    - Quadratic functions (HiGHS supports linear problems only)
+    - Quadratic functions (this Adapter encodes linear problems only)
     - Semi-integer variables (``Kind.SemiInteger``) - support planned
     - Semi-continuous variables (``Kind.SemiContinuous``) - support planned
     - Constraint types other than ``Equality.EqualToZero``/
@@ -560,28 +762,6 @@ class OMMXHighsAdapter(SolverAdapter):
 
        - ``Kind.SemiInteger`` support is planned but not yet implemented
        - ``Kind.SemiContinuous`` support is planned but not yet implemented
-
-    Examples
-    --------
-    >>> from ommx_highs_adapter import OMMXHighsAdapter
-    >>> from ommx import DecisionVariable, Instance, Sense
-    >>>
-    >>> # Define problem
-    >>> x = DecisionVariable.binary(0)
-    >>> y = DecisionVariable.integer(1, lower=0, upper=10)
-    >>> instance = Instance.from_components(
-    ...     decision_variables=[x, y],
-    ...     objective=2*x + 3*y,
-    ...     constraints={0: x + y <= 5},
-    ...     sense=Sense.Maximize,
-    ... )
-    >>>
-    >>> # Solve
-    >>> solution = OMMXHighsAdapter.solve(instance)
-    >>> print(f"Optimal value: {solution.objective}")
-    Optimal value: 15.0
-    >>> print(f"Variables: {solution.state.entries}")
-    Variables: {0: 0.0, 1: 5.0}
 
     """
 
@@ -613,9 +793,9 @@ class OMMXHighsAdapter(SolverAdapter):
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(
                 kinds={
-                    SpecialConstraintKind.Indicator,
-                    SpecialConstraintKind.OneHot,
-                    SpecialConstraintKind.Sos1,
+                    ConstraintKind.Indicator,
+                    ConstraintKind.OneHot,
+                    ConstraintKind.Sos1,
                 }
             )
         )

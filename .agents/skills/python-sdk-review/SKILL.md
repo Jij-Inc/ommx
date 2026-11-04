@@ -97,7 +97,7 @@ through the project environment.
   ```
 - For Python SDK behavior:
   ```
-  uv run pytest python/ommx-tests/tests/<target>.py
+  uv run pytest python/ommx/tests/<target>.py
   ```
 - For generated-file hygiene:
   ```

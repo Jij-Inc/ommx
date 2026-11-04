@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass(skip_stub_type, module = "ommx._ommx_rust")]
 #[doc = include_str!("docstrings/ommx/Function.md")]
-#[pyclass(skip_from_py_object)]
+#[pyclass]
 #[derive(Clone)]
 pub struct Function(pub ommx::Function);
 

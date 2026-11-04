@@ -1,3 +1,145 @@
+"""Common interfaces for solving and sampling an OMMX Instance.
+
+.. rubric:: Compare results from multiple adapters
+
+Use the same :class:`~ommx.Instance` with different adapters to compare their
+returned :class:`~ommx.Solution` objects. This complete example needs the SDK,
+``ommx-highs-adapter``, ``ommx-pyscipopt-adapter``, pandas, and matplotlib; follow
+the :doc:`installation guide </getting_started/install>` to install compatible
+versions. No external data or previous example state is needed.
+
+.. rubric:: Build one problem and solve it twice
+
+Choose items to maximize their total value without exceeding a weight capacity
+of 47. Each binary variable is 1 when the corresponding item is selected. The
+variable name ``x`` and its subscript ``i`` retain that correspondence for result
+extraction later. OMMX also assigns each variable an ID within the Instance;
+names and subscripts are labels, not those IDs. The Instance holds the variables,
+objective expression, and capacity constraint together.
+
+>>> from ommx import Instance
+>>> values = [10, 13, 18, 31, 7, 15]
+>>> weights = [11, 25, 20, 35, 10, 33]
+>>> instance = Instance.maximize()
+>>> x = [instance.new_binary("x", subscripts=[i]) for i in range(len(values))]
+>>> instance.objective = sum(value * var for value, var in zip(values, x))
+>>> _ = instance.add_constraint(
+...     sum(weight * var for weight, var in zip(weights, x)) <= 47,
+...     "weight capacity",
+... )
+
+Both HiGHS and SCIP can directly accept this linear binary model. Each adapter's
+``solve`` prepares an isolated copy, so the same source Instance can be reused.
+Other models can require different preparation for each backend. See
+:class:`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter` for explicit policy selection
+and :doc:`Adapter packages and input contracts </api/adapters>` for other backends.
+
+>>> from ommx_highs_adapter import OMMXHighsAdapter
+>>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+>>> adapters = {"highs": OMMXHighsAdapter, "scip": OMMXPySCIPOptAdapter}
+>>> solutions = {name: adapter.solve(instance) for name, adapter in adapters.items()}
+
+.. rubric:: Compare reported values and guarantees
+
+The reported objective is OMMX's evaluated value; the optimization direction
+(``sense``) tells you whether larger or smaller is better. Feasibility includes
+variable domains and constraints. A feasible candidate, matching objective
+values, and a proven optimum are separate observations. In this small example,
+both adapters return an optimal feasible solution with objective 41.
+
+>>> import pandas as pd
+>>> comparison = pd.DataFrame([
+...     {
+...         "adapter": name,
+...         "sense": repr(solution.sense),
+...         "objective": solution.objective,
+...         "feasible": solution.feasible,
+...         "optimality": repr(solution.optimality),
+...     }
+...     for name, solution in solutions.items()
+... ]).set_index("adapter")
+>>> print(comparison.to_string())  # doctest: +NORMALIZE_WHITESPACE
+                  sense  objective  feasible          optimality
+adapter
+highs    Sense.Maximize       41.0      True  Optimality.Optimal
+scip     Sense.Maximize       41.0      True  Optimality.Optimal
+
+This demonstrates a comparison procedure, not which solver is generally better.
+Align the following conditions before drawing conclusions:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Information
+     - Conditions for comparison
+   * - Reported objective and sense
+     - Same problem and objective meaning.
+   * - Feasibility for the original problem
+     - Same evaluated conditions and numerical tolerances.
+   * - Optimality
+     - Check the problem and guarantee represented by each adapter's result.
+   * - Backend bounds, gaps, and termination reasons
+     - Check the solved formulation, solver-facing objective, and backend definitions.
+   * - Runtime
+     - Measure separately with defined data, settings, environment, and repetitions.
+
+If you explicitly solve a transformed Instance, evaluate the candidate against
+the original Instance as needed. Reconstructed values and membership in an
+adapter's input class alone do not establish original feasibility or global
+optimality. See :doc:`Transform problems and choose a solving method
+</user_guide/transform_and_solve>` and :doc:`Evaluate candidates and interpret
+results </user_guide/evaluate_and_interpret>` for choosing the evaluation target.
+
+The :class:`~ommx_highs_adapter.HighsDiagnosticsAnalyzer` and
+:class:`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` references explain backend
+reports. A bound on a sign-changed or penalized objective is not automatically a
+bound on the original objective. :class:`~ommx.experiment.Experiment` can organize
+repeated runs, but is not required for this comparison.
+
+.. rubric:: Plot and tabulate the selected items
+
+:meth:`~ommx.Solution.extract_decision_variables` selects variables named ``x``
+and returns their values keyed by subscript tuples. Here ``(i,)`` corresponds to
+item ``i``; sort these keys to put the items in model order. Variables without
+the requested name are omitted. Duplicate subscript tuples under that name are
+an error rather than silently overwriting a value; use distinct labels or inspect
+the ID-indexed DataFrame when labels are not unique.
+
+>>> selected = solutions["highs"].extract_decision_variables("x")
+>>> [selected[(i,)] for i in range(len(values))]
+[1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+>>> from matplotlib import pyplot as plt
+>>> fig, ax = plt.subplots()
+>>> marks = {"highs": "o", "scip": "+"}
+>>> for name, solution in solutions.items():
+...     selected = solution.extract_decision_variables("x")
+...     keys = sorted(selected)
+...     _ = ax.plot(
+...         [key[0] for key in keys], [selected[key] for key in keys],
+...         marks[name], label=name,
+...     )
+>>> _ = ax.set(xlabel="Item", ylabel="Selected (1) or not selected (0)")
+>>> _ = ax.legend()
+>>> len(ax.lines)
+2
+
+Display ``fig`` in a notebook or call ``plt.show()`` interactively. Close the
+figure when finished to release its resources.
+
+>>> plt.close(fig)
+
+For tabular analysis, :meth:`~ommx.Solution.decision_variables_df` provides one
+row per variable. Add a solver column before concatenating the tables so the
+origin of each row remains explicit; variable IDs can repeat across solutions.
+
+>>> decision_variables = pd.concat([
+...     solution.decision_variables_df().assign(solver=name)
+...     for name, solution in solutions.items()
+... ])
+>>> decision_variables.groupby("solver").size().to_dict()
+{'highs': 6, 'scip': 6}
+"""
+
 from __future__ import annotations
 
 import copy
@@ -67,9 +209,6 @@ class SolverAdapter(ABC):
     """
     An abstract interface for OMMX Solver Adapters, defining how solvers should be used with OMMX.
 
-    See the `Adapter implementation tutorial <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html>`_
-    for the complete implementation contract and reference implementation.
-
     Subclasses declare ``INPUT_CLASS`` as the OMMX-defined structural class of
     exact inputs they can encode. Membership in that class is the complete
     applicability condition: ``check_applicability`` only checks membership and
@@ -100,6 +239,65 @@ class SolverAdapter(ABC):
     to the exact input encoded for the backend. The Instance owns population of
     fixed, dependent, and irrelevant variables and construction of the final
     :class:`ommx.Solution`.
+
+    **Implement a solver for independent binary choices**
+
+    Suppose a backend minimizes a linear cost with no constraints. For
+    each variable it selects the allowed bit with the smaller cost. Its
+    output is positional, so retain the OMMX IDs used to build its input:
+
+    >>> from ommx import (DecisionVariable, Instance, InstanceClass, InstanceClassClause,
+    ...                   Kind, PolynomialRequirement, Sense, State)
+    >>> from ommx.adapter import InfeasibleDetected, SolverAdapter
+    >>> class BinaryCostAdapter(SolverAdapter):
+    ...     INPUT_CLASS = InstanceClass([InstanceClassClause(
+    ...         label="independent binary costs", allowed_variable_kinds={Kind.Binary},
+    ...         objective_polynomial_requirement=PolynomialRequirement.at_most(1),
+    ...         allowed_senses={Sense.Minimize},
+    ...     )])
+    ...
+    ...     def __init__(self, instance):
+    ...         self.require_applicable(instance)
+    ...         self.instance = instance
+    ...         self.variables = list(instance.used_decision_variables)
+    ...
+    ...     @property
+    ...     def solver_input(self):
+    ...         costs = self.instance.objective.linear_terms
+    ...         return [(costs.get(v.id, 0), v.bound) for v in self.variables]
+    ...
+    ...     def decode(self, bits):
+    ...         state = State({v.id: bit for v, bit in zip(self.variables, bits, strict=True)})
+    ...         return self.instance.evaluate(state)
+    ...
+    ...     @classmethod
+    ...     def solve_without_preparation(cls, ommx_instance, *, diagnostics=None):
+    ...         adapter = cls(ommx_instance)
+    ...         bits = []
+    ...         for cost, bound in adapter.solver_input:
+    ...             allowed = [b for b in (0, 1) if bound.lower <= b <= bound.upper]
+    ...             if not allowed:
+    ...                 raise InfeasibleDetected("No binary value lies within the bounds")
+    ...             bits.append(min(allowed, key=lambda b: cost * b))
+    ...         return adapter.decode(bits)
+    >>> x, y = DecisionVariable.binary(3), DecisionVariable.binary(17)
+    >>> problem = Instance.from_components(decision_variables=[x, y], constraints={},
+    ...     objective=x - 2*y, sense=Sense.Minimize)
+    >>> solution = BinaryCostAdapter.solve(problem)
+    >>> assert solution.feasible and solution.state.entries == {3: 0, 17: 1}
+
+    The evaluated objective includes any constant term omitted from the
+    search. Evaluation alone does not set an optimality status. When a backend
+    proves optimality, translate that status with :meth:`ommx.Instance.map_active_optimality`.
+    Expose backend options with explicit keyword parameters. If an option has
+    the same meaning across preparation, forward it to the strict method after
+    preparing a copy. Reserve ``diagnostics`` for the caller's diagnostic sink.
+
+    The `PySCIPOpt implementation <https://github.com/Jij-Inc/ommx/blob/main/python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py>`_
+    shows how a solver with its own variable names constructs expressions,
+    sends supported Indicator and SOS1 constraints to SCIP, handles solver
+    statuses and maps returned values back to OMMX IDs. See
+    :class:`ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter` for executable usage.
     """
 
     INPUT_CLASS: ClassVar[InstanceClass]
@@ -197,9 +395,6 @@ class SamplerAdapter(SolverAdapter):
     """
     An abstract interface for OMMX Sampler Adapters, defining how samplers should be used with OMMX.
 
-    See the `Adapter implementation tutorial <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html>`_
-    for the complete implementation contract and reference implementations.
-
     The exact-input, easy-API preparation, strict preparation-free API, and
     used-variable contracts of :class:`SolverAdapter` also apply to sampler
     adapters. A sampler whose
@@ -211,6 +406,31 @@ class SamplerAdapter(SolverAdapter):
     identical to the encoded exact input. Backend formats that omit a
     zero-interaction variable therefore need an adapter-owned decoding default
     consistent with that format.
+
+    Implement :meth:`sample_without_preparation`, :attr:`sampler_input` and
+    :meth:`decode_to_sampleset`. The inherited solver interface selects
+    the best feasible sample. A backend may return one row with an occurrence
+    count for repeated observations. Give each occurrence its own sample ID
+    while preserving the correspondence between backend columns and variables:
+
+    >>> from ommx import DecisionVariable, Instance, Samples, Sense
+    >>> x, y = DecisionVariable.binary(3), DecisionVariable.binary(17)
+    >>> instance = Instance.from_components(decision_variables=[x, y],
+    ...     constraints={}, objective=x - 2*y, sense=Sense.Minimize)
+    >>> columns = [17, 3]  # IDs in the order returned by this backend
+    >>> samples = Samples({})
+    >>> next_id = 0
+    >>> for bits, count in [([1, 0], 2), ([0, 1], 1)]:
+    ...     samples.append(list(range(next_id, next_id + count)), dict(zip(columns, bits, strict=True)))
+    ...     next_id += count
+    >>> result = instance.evaluate_samples(samples)
+    >>> assert result.num_samples() == 3 and result.best_feasible.objective == -2
+
+    The `OpenJij implementation <https://github.com/Jij-Inc/ommx/tree/main/python/ommx-openjij-adapter/ommx_openjij_adapter>`_
+    shows these three hooks together, including how to supply values for used
+    variables absent from the backend response. The
+    :class:`ommx_openjij_adapter.OMMXOpenJijSAAdapter` Reference illustrates
+    preparation, sampling, and selecting a result on an actual backend.
     """
 
     @classmethod

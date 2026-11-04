@@ -1,16 +1,10 @@
 # OMMX adapter for SCIP
 
-This package provides an adapter for the [SCIP](https://www.scipopt.org/) from [OMMX](https://github.com/Jij-Inc/ommx)
+Solve an OMMX Instance with [SCIP](https://www.scipopt.org/) through PySCIPOpt. The adapter can pass supported indicator and SOS1 constraints directly to SCIP.
 
-## Usage
+[Installation from a prerelease or `main`](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/getting_started/install.html#install-pyscipopt-adapter) · [日本語の導入手順](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/getting_started/install.html#install-pyscipopt-adapter)
 
-`ommx-pyscipopt-adapter` can be installed from PyPI as follows:
-
-```bash
-pip install ommx-pyscipopt-adapter
-```
-
-SCIP can be used through `ommx-pyscipopt-adapter` by using the following:
+## Solve an OMMX problem
 
 ```python markdown-code-runner
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
@@ -24,16 +18,12 @@ ommx_instance = Instance.from_components(
     sense=Sense.Minimize,
 )
 
-# Create `ommx.Solution` from the `pyscipot.Model`
 ommx_solution = OMMXPySCIPOptAdapter.solve(ommx_instance)
 
 print(ommx_solution)
 ```
 
-## Initial solution by variable name
-
-Resolve names and tuple subscripts against the instance you are solving, so
-the same initial values can be reused when variable IDs change.
+## Supply a previous candidate by name
 
 ```python markdown-code-runner
 from ommx import Instance, NamedState
@@ -53,9 +43,8 @@ assert solution.state.entries == {x.id: 5.0, y.id: 0.0}
 state = instance.state_from_named_values(initial_values)
 ```
 
-For scalar variables use `()` as the subscript key. The conversion raises
-`KeyError` for unknown names/subscripts and `ValueError` for ambiguous pairs.
-
 ## Reference
 
-TBW
+[SCIP adapter API](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/autoapi/ommx_pyscipopt_adapter/index.html#ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter) · [日本語サイトのAPI Reference](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/autoapi/ommx_pyscipopt_adapter/index.html#ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter)
+
+For the termination report and the bound/gap history, see the [SCIP diagnostics reference](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/autoapi/ommx_pyscipopt_adapter/index.html#ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer).

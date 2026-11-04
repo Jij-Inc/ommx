@@ -1,695 +1,330 @@
 (python-sdk-v2-to-v3-migration-guide)=
-# Python SDK v2 から v3 へのマイグレーションガイド
+# Python SDK v2からv3への移行ガイド
 
-```{warning}
-この v2 から v3 へのマイグレーションガイドはまだ準備中です。英語版も現時点では未完成であり、Python SDK v3 の API 変更作業も進行中です。英語版が完成したら、この日本語版もそれに合わせて同期します。それまでは、このページを確定版の移行手順ではなく mock として扱ってください。
+このガイドでは [OMMX 2.9.4](https://pypi.org/project/ommx/2.9.4/) のコードを `main` のv3 APIに移行します。v2環境を残し、[導入手順](../getting_started/install.md)に従って別の環境にv3を用意してください。コードを変更する前に、代表的なモデルと候補を一つ選び、アプリケーションで使っている結果を保存します。{ref}`第6節 <migration-verify>`で移行後の結果と比較します。
+
+**移行の最初に、手元のスクリプトを1本、型チェッカーにかけてください。** これまで使ったことがなくても、v3で書き換えが必要な呼び出しの多くをその場で見つけて直せます。まず{ref}`Pyrightを初めて実行する手順 <migration-first-type-check>`を試してください。指摘された旧API名は{ref}`巻末の索引 <migration-index>`から引けます。
+
+```{contents} 移行ガイドの目次
+:local:
+:depth: 1
 ```
 
-この節の基準バージョンは **v2.5.1**（tag `python-2.5.1`）です。それ以前の 2.x から移行する場合は、[v1 から v2 へのマイグレーションガイド](python_sdk_v1_to_v2.md) も確認してください。
+(migration-imports)=
+## 1. SDKの読み込みとオブジェクトの扱いを変える
 
-## 概要
+(migration-first-type-check)=
+### 手元のスクリプトを型チェッカーにかける
 
-v3 では、v2 で始まった PyO3 移行が完了しました。SDK の domain class は top-level `ommx` から import し、内部 extension `ommx._ommx_rust` から re-export される Rust 実装の型になっています。`ommx.v1` は Python SDK の object namespace ではなく、protobuf の wire-format schema/package 名や media type などを指す名前として扱います。
+v3をインストールしたプロジェクトのディレクトリで、次のコマンドを実行します。`solve.py` は、普段OMMXを使っているPythonスクリプトのパスに置き換えてください。uvがこの実行用にPyrightを用意します。型注釈や設定ファイルを追加する前に、今あるコードのままで試せます。
 
-移行で特に注意する点は次の通りです。
+```sh
+uv run --no-sync --with pyright pyright solve.py
+```
 
-1. `ommx.v1.*_pb2` は削除されました。SDK domain class は top-level `ommx` から import します。
-2. `Constraint` は `id` を持たなくなりました。制約IDは `Instance.from_components(..., constraints={id: constraint})` に渡す `dict` の key が所有します。
-3. 全所有元の `.constraints` は型付きIDで参照する専用コレクションです。`decision_variables` は `list` のままです。
-4. `.raw`、`.from_raw()`、`.from_protobuf()`、`.to_protobuf()` など、protobuf 層を露出する bridge API は削除されました。
-5. `*_df` accessor は property ではなく method です。`instance.constraints_df(kind="regular")` のように呼び出してください。
-6. `instance.constraints[id]` や `instance.decision_variables` は、snapshot ではなく書き込みが host に反映される `AttachedX` handle を返します。
+PyrightはOMMXに同梱された型情報を使い、スクリプトを実行せずに、呼び出しが合わないファイルと行を示します。古い `ommx.v1` のimportが指摘されたら、まずそこを直すと、その先で使っているSDKオブジェクトの型も分かるようになります。たとえば `instance.write_mps(path)` が見つからないと表示されたら、`instance.save_mps(path)` に変えて同じコマンドを再実行します。残りの指摘を順に直したら、次のスクリプトに進んでください。
 
-## 1. import の変更
+| Pyrightが指摘する箇所 | 書き換え方 |
+|---|---|
+| `Instance.from_components` の `constraints` にリストを渡している | 各制約の追加には {meth}`~ommx.Instance.add_constraint` を使う。 |
+| `instance.write_mps` が見つからない | {meth}`~ommx.Instance.save_mps` を使う。 |
+| `solution.constraints_df()` の引数が足りない | 通常制約なら `kind=ConstraintKind.Regular` のように種類を指定する。 |
 
-### 1.1 protobuf submodule は削除
+型が同じでも意味が変わる場合があります。たとえば {meth}`~ommx.Solution.extract_constraints` で取得する値は引き続き浮動小数ですが、通常制約では違反量を表すようになりました。この値を使う帳票は、{ref}`同じ候補を両方のSDKで評価する例 <migration-compare-model>` に沿って照合してください。
 
-`ommx.v1.*_pb2` module と `ommx.v1.annotation` は削除されました。SDK class は top-level `ommx` から import します。
+### 公開APIのimportに切り替える
+
+`Function`、`Constraint`、`DecisionVariable`、`Instance`、`ParametricInstance`、`Solution`、`SampleSet` は、2.9.4でも `ommx` から直接importできます。この7クラスはv2環境のうちにimport先を変更できます。v3では `Linear`、`Parameter`、`Equality`、`Sense` などのモデリング用の型も `ommx` からimportします。
+
+`ommx.v1.*_pb2` や `.raw` を使っていた箇所は、何を取り出していたかで置き換え先が決まります。たとえば目的関数の向きは `instance.sense` で読めます。モデルは {meth}`~ommx.Instance.minimize` または {meth}`~ommx.Instance.maximize` で作り、変数と制約を順に追加します。バイト列を受け渡す場合は{ref}`形式に応じた読込み方法 <migration-storage>`を選んでください。protobufスキーマ名のv1は引き続きデータ形式を表します。v3のPython SDKでは生成済みprotobufモジュールと `from_raw`、`from_protobuf`、`to_protobuf` は廃止されました。
+
+(migration-build)=
+## 2. モデルを組み立て、編集する
+
+(migration-automatic-ids)=
+### モデルに採番を任せるか、外部のIDを引き継ぐか
+
+v2でモデル構築のためだけに変数や制約に連番を振っていた場合は、v3では {class}`~ommx.Instance` に採番を任せられます。最初に最大化か最小化かを指定してモデルを作り、返された変数をそのまま式に使います。制約を追加したときの戻り値から、その制約に割り当てられたIDを取得できます。
 
 ```python
-# v2.5.1
-from ommx.v1.constraint_pb2 import Constraint, Equality
-from ommx.v1.function_pb2 import Function
-from ommx.v1.linear_pb2 import Linear
-from ommx.v1.solution_pb2 import State
+from ommx import Instance
 
-# v3
-from ommx import Constraint, Equality, Function, Linear, Sense, State
+model = Instance.maximize()
+x = model.new_binary("x")
+y = model.new_binary("y")
+model.objective = x + y
+limit = model.add_constraint(x + y <= 1, "limit")
+assert model.constraints[limit.constraint_id].name == "limit"
 ```
 
-`.from_protobuf()` / `.to_protobuf()` は、protobuf object と一緒に削除されています。`Instance` / `Solution` / `SampleSet` など全体をシリアライズする場合は、protobuf version を名前に含む bytes API を使います。新しく byte 列を作る場合は `to_v2_bytes()` / `from_v2_bytes(...)` を使い、legacy な v1 payload との互換が必要な場合だけ `to_v1_bytes()` / `from_v1_bytes(...)` を使ってください。
+整数・連続・半整数・半連続・有限集合を値域とする変数にも、それぞれ `new_integer`、`new_continuous`、`new_semi_integer`、`new_semi_continuous`、`new_finite_domain` があります。`Instance` と `ParametricInstance` では、`add_constraint`、`add_indicator_constraint`、`add_one_hot_constraint`、`add_sos1_constraint` が各制約の番号を割り当てます。
 
-### 1.2 constraint hint helper は first-class constraint type へ
-
-`ConstraintHints`、`OneHot`、`Sos1`、`Parameters` wrapper は export されなくなりました。
-
-legacy v1 の `ConstraintHints` は、v3 で読み込む際も advisory metadata として扱われます。`Instance.from_v1_bytes(...)` と `ParametricInstance.from_v1_bytes(...)` は hint を無視して通常制約を保持し、first-class 特殊制約へ自動昇格しません。特殊制約として扱う必要がある場合は、無視された hint だけを根拠にせず、信頼できる modeling input から対応する first-class constraint を構築してください。
-
-```python
-# v2.5.1
-from ommx.v1 import OneHot, Sos1, ConstraintHints, Parameters
-
-# v3
-from ommx import OneHotConstraint, Sos1Constraint, IndicatorConstraint
-
-# Parameters wrapper の代わりに plain dict を渡します
-parametric_instance.with_parameters({parameter_id: 1.0})
-```
-
-## 2. `.raw` と bridge method の削除
-
-v3 の各型は直接 Rust 実装を持つため、別の underlying object はありません。`.raw`、`from_raw`、`from_protobuf`、`to_protobuf` を使っていた箇所は、公開 property / method に置き換えます。
-
-```python
-# v2.5.1
-linear.raw.linear_terms
-instance.raw.sense
-solution.raw.optimality = Optimality.Optimal
-Constraint.from_protobuf(pb_constraint)
-dv.to_protobuf()
-
-# v3
-linear.linear_terms
-instance.sense
-solution.optimality = Optimality.Optimal
-instance.to_v2_bytes()
-```
-
-`Constraint` や `Function` などの要素単体は、ID や host context を持てないため、原則として単体で bytes round-trip しません。`Instance` / `Solution` / `SampleSet` のような所有者単位でシリアライズしてください。
-
-## 3. 制約IDは `Constraint` ではなく host 側が所有
-
-### 3.1 `id` / `set_id()` / `id=` は削除
-
-`Constraint`、`IndicatorConstraint`、`OneHotConstraint`、`Sos1Constraint`、`RemovedConstraint`、`EvaluatedConstraint`、`SampledConstraint` は、オブジェクト自身に ID を持ちません。ID は `Instance.from_components` に渡す辞書の key で決まります。
-
-```python
-# v2.5.1
-c = Constraint(
-    function=x + y,
-    equality=Constraint.EQUAL_TO_ZERO,
-    id=5,
-    name="cap",
-)
-c.set_id(6)
-
-# v3
-c = Constraint(function=x + y, equality=Equality.EqualToZero, name="cap")
-
-instance = Instance.from_components(
-    sense=Sense.Minimize,
-    objective=objective,
-    decision_variables=decision_variables,
-    constraints={5: c},
-)
-```
-
-`OneHotConstraint.variables` と `Sos1Constraint.variables` は `VariableIDLike`、すなわち変数 ID、detached な `DecisionVariable`、または `AttachedDecisionVariable` を受け取ります。ここでは変数の identity だけが使われます。参照する変数は引き続き host の `decision_variables` に含まれている必要があります。
-
-```python
-xs = [DecisionVariable.binary(i) for i in range(3)]
-oh = OneHotConstraint(variables=xs)
-s1 = Sos1Constraint(variables=xs[:2])
-```
-
-### 3.2 比較演算子は detached な `Constraint` を返す
-
-`==`、`<=`、`>=` は引き続き `Constraint` を作りますが、その時点では ID を持ちません。
-
-```python
-# v2.5.1
-c = (x + y <= 5).set_id(0)
-Instance.from_components(..., constraints=[c], ...)
-
-# v3
-c = x + y <= 5
-Instance.from_components(..., constraints={0: c}, ...)
-```
-
-### 3.3 グローバルIDカウンタは削除
-
-`next_constraint_id()`、`set_constraint_id_counter(...)`、`get_constraint_id_counter()` などの module-level helper は削除されました。新しい制約IDが必要な場合は、所有者である `Instance` の `instance.next_constraint_id()` を使います。
-
-## 4. container type の変更
-
-### 4.1 `Instance.from_components(constraints=...)` は `dict[int, Constraint]`
-
-制約系の引数はすべて ID を key にした `dict` です。`decision_variables` は `Sequence[DecisionVariable]` のままです。
-
-```python
-# v2.5.1
-Instance.from_components(
-    sense=Instance.MINIMIZE,
-    objective=obj,
-    decision_variables=[x0, x1],
-    constraints=[c0, c1],
-    constraint_hints=ConstraintHints(...),
-)
-
-# v3
-Instance.from_components(
-    sense=Sense.Minimize,
-    objective=obj,
-    decision_variables=[x0, x1],
-    constraints={0: c0, 1: c1},
-    indicator_constraints={10: ic},
-    one_hot_constraints={20: oh},
-    sos1_constraints={30: sc},
-)
-```
-
-`ParametricInstance.from_components` も同じ shape を取ります。
+外部のアプリケーションがモデル内の変数0や制約7をその番号で参照する必要がある場合は、**その番号を維持します**。変数は作成時にIDを指定します。制約はv2の `constraints=[(x <= 1).set_id(7)]` を、{meth}`~ommx.Instance.from_components` に渡す `constraints={7: x <= 1}` に置き換えます。モデルに属していない制約はIDを持ちません。一つのモデルでは削除済みを含めて全種類の制約が番号を共有し、構築時や読込み時に重複を拒否します。
 
 (42-constraint-accessors-on-instance--parametricinstance--solution-return-dicts)=
-### 4.2 制約の参照を型付きIDのコレクションへ統一
+(typed-constraint-ids-and-live-collections)=
+### 編集する行を選ぶ
 
-```python
-# v2.5.1
-for c in instance.constraints:
-    print(c.id, c.function)
+通常制約7は `model.constraints[ConstraintID(7)]` で参照します。全種類を含むコレクションでは、検索キーに制約の種類を示す型付きIDが必要です。通常制約だけに絞った `model.constraints.of_kind(ConstraintKind.Regular)[7]` なら整数も使えます。反復すると型付きIDが得られます。IDと行の両方を使う場合は `.items()` を呼びます。
 
-# v3
-from ommx import ConstraintID
+モデルから取得した有効な行は、モデルに接続されたハンドルです。`row.set_name("limit")` はモデル上の名前を更新します。独立したコピーが必要なら `row.detach()` を呼びます。v2の `add_name` と `add_description` は `set_name` と `set_description` に置き換えます。パラメータ全体の置換には `set_parameters`、指定したキーだけの更新には `add_parameters` を使います。変数の固定値は変数定義をコピーしてもモデル側に残るため、`model.fixed_decision_variables()` から取得します。詳しくは {class}`~ommx.ConstraintCollection` と {class}`~ommx.DecisionVariable` を参照してください。
 
-for cid in instance.constraints:
-    if isinstance(cid, ConstraintID):
-        print(cid, instance.constraints[cid].function)
+(migration-constraint-metadata)=
+### メタデータの編集先を確認する
+
+```{index} Constraint.add_name (v2), Constraint.add_description (v2), Instance.get_constraint_by_id (v2), Instance.decision_variable_analysis (v2)
 ```
 
-`Instance` / `ParametricInstance` の `.constraints` は、型付きIDで参照すると `AttachedX` handle を返します。`Solution.constraints` と `SampleSet.constraints` も全種類を含む専用コレクションで、各アクセス時に評価結果のsnapshotを返します。`SampleSet.decision_variables` と `.named_functions` は `list` のままです。
-
-## 5. rename、signature、挙動の変更
-
-主な rename / signature 変更は次の通りです。
-
-| v2.5.1 | v3 |
-|---|---|
-| `instance.write_mps(path)` | `instance.save_mps(path)` |
-| `instance.used_decision_variable_ids()` | `instance.required_ids()` |
-| `func.used_decision_variable_ids()` | `func.required_ids()` |
-| `Parameter.new(id=..., ...)` | `Parameter(id, ...)` |
-| `Parameters(entries={...})` | plain `dict[int, float]` |
-| `Linear(terms=[Linear.Term(...)])` | `Linear(terms={id: coeff})` |
+2.9.4では、`get_constraint_by_id` で取り出した制約の名前を変更しても、変更先は取り出したコピーだけでした。このコードを移行するときは、モデルの名前を更新したかったのか、表示用のコピーだけを編集したかったのかを確認してください。v3では次のように書き分けます。
 
 ```python
-# v2.5.1
-instance.write_mps("out.mps.gz")
-p = Parameter.new(id=3, name="w")
-pi.with_parameters(Parameters(entries={p.id: 1.0}))
+from ommx import Instance
 
-# v3
-instance.save_mps("out.mps.gz")
-p = Parameter(3, name="w")
-pi.with_parameters({p.id: 1.0})
+model = Instance.minimize()
+x = model.new_binary("x")
+live = model.add_constraint(x <= 1, "original")
+local = live.detach()
+local.set_name("display")
+assert model.constraints[live.constraint_id].name == "original"
+live.set_name("capacity")
+assert model.constraints[live.constraint_id].name == "capacity"
 ```
 
-### 5.6 `to_qubo()` / `to_hubo()`は入力objectiveを評価結果に保持 (`3.0.0`, [#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+`dict(model.constraints)` で辞書を作っても、値は引き続きモデルに接続されています。独立させたい有効な行ごとに `detach()` を呼んでください。切り離した制約のsetterは呼出し元を変更してコピーを返すため、一つのオブジェクトに複数の変更を加えるときは、そのオブジェクトに対して個別に呼びます。
 
-Driver methodは引き続き利用でき、入力をin-placeに変更します。v3では変更後の
-`Instance`がQUBO/HUBO solverへ渡すminimization energyをactive objectiveとして保持し、
-`evaluate()`と`evaluate_samples()`は変換前のinstanceが公開していたobjective semanticsを
-保持します。Python SDK v2はactive senseを戻したうえで最終的なpenalty energyを評価しており、
-solver inputとuser-facing outputを混在させていました。
+### 変数の役割を読む処理を置き換える
 
-したがって`Instance.objective`はsolver energyを、`Solution`と`SampleSet`は保持された入力
-objectiveを表します。実行可能な事後条件は{meth}`~ommx.Instance.to_qubo`、
-{meth}`~ommx.Instance.to_hubo`、{meth}`~ommx.Instance.evaluate`、
-{meth}`~ommx.Instance.evaluate_samples`に記載されています。
+一変数の役割を判定するなら {meth}`~ommx.Instance.decision_variable_role`、複数の変数を帳票にまとめるなら `decision_variables_df()` の `state_role`・`substituted_value` 列を使います。Adapterでソルバーに渡す変数だけが必要なら `used_decision_variables` を使います。固定値や従属変数を候補の評価用に保持している場合、これらの問いの答えは異なります。
 
-明示的なoutput objectiveを持つ`Instance`または`ParametricInstance`は、v1 wire formatで
-losslessに表現できません。この場合`to_v1_bytes()`は`RuntimeError`を送出するため、
-`to_v2_bytes()`を使用してください。
+### 数式と制約の意味を引き継ぐ
 
-同じpipelineは{meth}`~ommx.Instance.prepare`と
-{meth}`~ommx.Instance.as_qubo_format`または
-{meth}`~ommx.Instance.as_hubo_format`で明示的に実行できます。対応するtarget classと
-編集可能なpolicyは{meth}`~ommx.InstanceClass.qubo`、
-{meth}`~ommx.InstanceClass.hubo`、{meth}`~ommx.PreparationPolicy.for_qubo`、
-{meth}`~ommx.PreparationPolicy.for_hubo`が提供します。
+- **制約ヒント**。v1のバイト列を読むと、通常制約は保持され、補助情報の `ConstraintHints` は無視されます。元のモデルでOneHotやSOS1が要件として定義されている場合は、対応する特殊制約をv3で直接作れます。ヒントだけを根拠に通常制約を取り除くと、許される解が変わることがあります。
+- **式**。展開済みの多項式では係数を取得できます。複合式を含む {class}`~ommx.Function` では `degree()` と `num_terms()` が `None` を返すことがあります。二乗した多項式の係数が必要な場合は多項式同士を乗算してください。`Function` のべき乗は複合式を作ります。
+- **パラメータ**。`Parameter(3, name="capacity")` で作り、`with_parameters` にはIDから値への辞書を渡します。{class}`~ommx.ParametricInstance` の `parameters` ではパラメータのオブジェクト、`parameters_df()` では表を取得できます。
 
-### 5.7 Adapterの`solve()` / `sample()`が入力を自動的にPrepare (`3.0.0`, [#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+整数IDを使う外部データがある場合は、どの種類のIDかも確認してください。変数IDとサンプルIDは整数のままです。制約IDは結果や由来の記録でも型付きで返り、`int()` で整数には変換できません。独自の変換では `ConstraintIDBase` と `ConstraintView` を共通型として扱い、既知の種類だけで網羅したと仮定しないでください。
 
-通常は元のInstanceをそのまま`solve()`または`sample()`へ渡します。AdapterはそのInstanceを
-変更せずに推奨Preparationを適用します。
+(migration-solve)=
+## 3. ソルバー・サンプラーに渡す
 
-```python
-from ommx_highs_adapter import OMMXHighsAdapter
+Adapterの推奨設定で準備する場合は、元のモデルを `solve()` または `sample()` に渡します。これらはコピーを準備します。変換方針を指定する場合は、変更してよいモデルに対して `instance.prepare(adapter.INPUT_CLASS, policy)` を呼び、準備した入力を `solve_without_preparation()` または `sample_without_preparation()` に渡します。各ソルバーの入力条件と実行例には[Adapter一覧](../api/adapters)から進めます。
 
-solution = OMMXHighsAdapter.solve(instance)
+**初期候補とペナルティ**。SCIPには2.9.4と同じく、変数名と添字で初期候補を渡せます。OpenJijの初期状態は、準備後にソルバーに渡す変数のIDで指定します。そのため、準備済みの入力を受け取るAPIに渡します。制約の変換に固定ペナルティが必要なら重みを明示してください。v2で直接渡していた重みは `policy.fixed_penalty`、整数のスラック変数の設定は `policy.integer_slack` に移します。一連の実行例は {class}`OpenJij AdapterのReference <ommx_openjij_adapter.OMMXOpenJijSAAdapter>` にあります。
+
+**係数を取り出して解く場合**。{meth}`~ommx.Instance.to_qubo` と {meth}`~ommx.Instance.to_hubo` はモデルを変更し、ソルバーに渡すエネルギーを取り出せるようにします。v3では、このモデルで候補を評価すると準備前の目的関数の値を取得できます。ペナルティやソルバーのスコアを比較するアプリケーションでは、ソルバー側のエネルギーも別に保持してください。
+
+(migration-openjij-penalties)=
+### OpenJijに渡していたペナルティを準備方針に移す
+
+```{index} sample_qubo_sa (v2), uniform_penalty_weight (v2), penalty_weights (v2), inequality_integer_slack_max_range (v2)
 ```
 
-application固有のPreparation Policyが必要な場合は、Instanceをin-placeでPrepareしてから
-preparation-free APIを使います。
+v2で `uniform_penalty_weight` を渡していた場合や暗黙の重み1に依存していた場合は、元の目的関数の大きさに合わせて重みを選びます。この例では、許される最良の選択に比べて両方を選ぶと目的値が2だけ増えるので、重み4でその利得を上回ります。重みを選び直せるよう、元のモデルをコピーしてから準備します。実行にはOpenJij Adapterが必要です。
 
 ```python
-policy = OMMXHighsAdapter.recommended_preparation_policy()
-# 必要に応じてpolicyを調整する。
-instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
-solution = OMMXHighsAdapter.solve_without_preparation(instance)
-```
+from copy import copy
 
-独自Adapterでは、`solve_without_preparation()`または`sample_without_preparation()`を実装します。
-追加optionは、それを公開する各APIで明示的な型付きsignatureとして宣言し、包括的な
-`**kwargs`は使いません。Preparationをまたいでも
-意味が変わらないoptionはeasy methodから転送できます。exactなprepared inputに
-意味が依存し、Preparation過程をまたぐtransportを定義しない場合、具体的なAdapterはそのoptionを
-preparation-free methodだけに公開できます。Adapter inputに
-`output_objective`がある場合、HiGHSとPython-MIPはdual valueを付与しません。
-
-(constraint-violation-migration)=
-### 5.8 制約の違反量 ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
-
-`solution.total_violation_l1()` は {meth}`~ommx.Solution.total_violation` に改名し、
-`total_violation_l2()` は削除しました。各制約に定義した非負のスカラー値を足し合わせ、
-removed 制約とすべての特殊制約を含めます。通常の等式・不等式の違反量の定義は変わりません。
-
-```python
-from ommx import OneHotConstraintID
-solution.total_violation()
-solution.constraint_violation(OneHotConstraintID(30))
-solution.constraints_df(kind="sos1")[["feasible", "violation"]]
-```
-
-Indicator は有効時の内部制約の違反量、無効時は 0 です。OneHot は一つを 1、残りを 0 にする
-絶対変更量の最小値、SOS1 は非ゼロを高々一つにする絶対変更量の最小値です。
-Big-M lowering に依存する定義ではありません。
-
-すべての制約を `violation <= atol` のときに feasible と判定します。OneHot と SOS1 では、
-許容誤差を各メンバーに個別に適用する方式から、絶対変更量の合計に適用する方式へ変わります。
-例えば SOS1 の値 `(1, 0.00006, 0.00006)` は違反量が `0.00012` なので、
-`atol=0.0001` では infeasible です。各小成分が個別にゼロの許容誤差内であることでは
-判定しません。
-
-変数の bounds・kind の判定は別です。離散値の丸めは制約評価より前に行われ、違反量には
-その後の値を使います。解の制約充足は各制約がそれぞれの閾値を満たすことで判定し、
-`total_violation <= atol` で判定するわけではありません。
-
-SampleSet の feasibility と最良実行可能解の選択も、保存された許容誤差で変数の
-bounds・kind を確認し、取り出した Solution の判定と一致します。そのため、
-`total_violation()` がゼロでも変数が定義域を外れていれば infeasible になります。
-
-制約単体の判定では、許容誤差を明示的に渡します。`evaluated.feasible` は
-`evaluated.is_feasible(atol=...)` に、`sampled.feasible` は
-`sampled.feasible(atol=...)`（sample ID から bool への map）に置き換えてください。
-Solution/SampleSet の feasibility プロパティは引き続き利用できます。
-`feasibility_atol` プロパティから、取り出した制約にも同じ判定条件を渡せます。
-
-```python
-from ommx import ConstraintID
-evaluated = solution.constraints[ConstraintID(1)]
-evaluated.is_feasible(atol=solution.feasibility_atol)
-evaluated.is_feasible(atol=1e-8)  # 保存済みの同じ違反量に対する別の問い合わせ
-```
-
-問い合わせの許容誤差を変えても、入力の丸めや活性判定はやり直しません。
-許容誤差に依存する判断結果を保持する場合に、その判断条件も保持します。
-通常制約の評価値は許容誤差を保持せず、特殊制約の活性判定には使用した条件を残します。
-許容誤差の役割分離と評価コンテキストの保存形式は
-[Issue #1180](https://github.com/Jij-Inc/ommx/issues/1180) で扱います。
-
-v2 protobuf 形式は `feasible` のフラグ・map と、Solution/SampleSet の
-`feasibility_atol` を引き続き保存します。OMMX SDK がなくても判定結果とその許容誤差を
-読み取れます。protobuf スキーマは変更しません。SDK は読み込み時に、保存された変数値から
-OneHot/SOS1 の違反量を再計算し、保存された許容誤差を使ってフラグの整合性を検証します。
-
-旧 v1 形式には許容誤差とネイティブの特殊制約を保存できません。
-`to_v1_bytes()` は、保存される通常制約と変数値から SDK の既定の許容誤差で
-feasibility を再計算します。`from_v1_bytes()` も同じ条件を使うため、v1 の書き出しと
-読み込みには同じ既定の許容誤差を使用してください。この変換で feasibility が変わる
-場合があります。元の許容誤差と特殊制約を保存するには v2 を使用してください。
-
-部分評価では、active に残る特殊制約から近似ゼロのメンバーを取り除くことで、誤差の合計に
-基づく feasibility が変わりうる場合、その固定を拒否します。
-正確にゼロのメンバーの除去は引き続き可能です。
-この場合は完全な状態を評価するか、特殊制約を lowering してから部分評価してください。
-lowering 後の違反量は、以下のとおり別の尺度になります。
-
-lowering 前後で総和の一致は保証しません。元の removed 制約と
-生成した制約が残っていれば、それぞれを集計します。数式は
-{meth}`~ommx.Solution.total_violation` を参照してください。
-
-## 6. return type の変更
-
-`Constraint.name` / `Constraint.description` などは、未設定時に空文字列ではなく `None` を返します。
-
-```python
-name = constraint.name
-if name is not None:
-    print(name)
-```
-
-`Linear.terms` / `Quadratic.terms` / `Polynomial.terms` は property ではなく method です。
-
-```python
-linear.terms()
-quadratic.terms()
-polynomial.terms()
-```
-
-v3 alpha の初期移行では、`DecisionVariable` の constructor と `kind` property が
-protobuf の整数表現を誤って公開していました。現在の v3 API は、detached、attached、
-evaluated、sampled の各 decision variable で top-level の `Kind` enum を一貫して
-受け取り、返します。新しいコードでは `Kind.Binary`、`Kind.Integer` などを使います。
-`DecisionVariable.BINARY` / `INTEGER` / … は、同じ enum 値を返す型付き互換 alias として
-残します。
-
-同じ互換方針を `Constraint.EQUAL_TO_ZERO` / `LESS_THAN_OR_EQUAL_TO_ZERO` と
-`Instance.MINIMIZE` / `MAXIMIZE` にも適用します。これらは型付き alias として残しますが、
-新しいコードでは `Equality.*` と `Sense.*` を使います。
-
-```python
-from ommx import Bound, DecisionVariable, Kind
-
-variable = DecisionVariable(0, Kind.Binary, Bound(0, 1))
-assert variable.kind == Kind.Binary
-assert DecisionVariable.BINARY == Kind.Binary
-```
-
-各 enum は protobuf の整数値との比較・hash の互換性を維持します。通常の SDK
-constructor と property は enum 型を使います。
-
-```python
-assert Kind.Binary == 1
-assert hash(Kind.Binary) == hash(1)
-```
-
-`SampleSet.sample_ids` は list property ではなく set を返す method になりました。list が必要な場合は `sample_ids_list` を使います。
-
-```python
-ids: set[int] = sample_set.sample_ids()
-ids_list: list[int] = sample_set.sample_ids_list
-```
-
-`evaluate` は、必要な decision variable ID が state にない場合や atol が不正な場合に、`RuntimeError` ではなく `ValueError` を投げます。`partial_evaluate` は不足 ID を許容しますが、与えた entry が不正な場合、atol が不正な場合、または dependent variable の assertion が不整合・検証不能な場合は `ValueError` を投げます。
-
-v2.5.1 の `Function` は常に polynomial だったため、`degree()` と
-`num_terms()` は常に `int` を返していました。v3 の `Function` は絶対値、
-点ごとの最小値・最大値、除算、符号付き整数べきなどの複合 scalar expression も
-表現できます。この表現では、両メソッドは `None` を返します。また、polynomial の
-係数 property（`terms`、`linear_terms`、`quadratic_terms`、`constant_term`）と
-`content_factor()` は `TypeError` を送出します。
-
-```python
-# v2.5.1
-degree: int = function.degree()
-terms = function.terms
-
-# v3
-degree: int | None = function.degree()
-if degree is None:
-    # 係数 map として扱わず、複合式のまま評価する
-    value = function.evaluate(state, atol=1e-6)
-else:
-    terms = function.terms
-```
-
-非負の整数べきを展開済み polynomial のまま保持したい場合は、明示的な乗算を
-使ってください。`function.powi(n)` と `function**n` は、`n >= 0` の場合も意図的に
-複合 power expression を構築します。
-
-## 7. 削除された helper
-
-次の helper は削除または置き換えられました。
-
-- `Linear.from_object(x)` - `Linear.single_term(...)`、`Linear.constant(...)`、または arithmetic operator を使います。
-- `Linear.equals_to(other)` - `linear.almost_equal(other, atol=...)` を使います。
-- `instance.constraint_hints` - `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に分かれました。
-- `ArtifactArchive` / `ArtifactDir` 系 - `Artifact` / `ArtifactDraft` に統合されました。
-- `ommx_openjij_adapter.response_to_samples(response)` - `decode_to_samples(response)` を使用します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
-- `ommx_openjij_adapter.sample_qubo_sa(...)` -
-  `OMMXOpenJijSAAdapter.sample(instance)`を使います。置き換え後は`instance`を変更せず、
-  raw `Samples`ではなく評価済みの`SampleSet`を返します
-  （`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
-
-v2のOpenJij Adapterでは、constructor、`sample()`、`solve()` が
-`uniform_penalty_weight`、`penalty_weights`、
-`inequality_integer_slack_max_range`を直接受け取っていました。v3ではこれらの選択を推奨
-`PreparationPolicy`へ移します。
-
-`INPUT_CLASS`が表す直接受け取れる範囲は{class}`~ommx.InstanceClass`、推奨Policyと呼び出し側の選択は{meth}`~ommx.Instance.prepare`を参照してください。独自のPolicyを適用する手順は{class}`明示的なPreparationと求解の例 <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`にまとめています。
-
-- `uniform_penalty_weight`と`penalty_weights`は`policy.fixed_penalty`へ移す。
-- `inequality_integer_slack_max_range`は`policy.integer_slack`へ移す。
-
-constructorを直接使う場合は自動的にPrepareされないため、あらかじめ
-`OMMXOpenJijSAAdapter.INPUT_CLASS`向けにPrepareしたInstanceを渡します。
-
-OpenJijの`initial_state`は、このexactなprepared inputのsolver変数表現に対して定義され、dictの
-keyはその変数IDです。そのためv3ではeasy methodではなく、exact-input constructor、
-`sample_without_preparation()`、`solve_without_preparation()`で受け取ります。
-
-通常の`sample()` / `solve()` workflowは§5.7で説明しています。固定penaltyが必要なmodelでは、
-applicationがそのmagnitudeを選ぶ必要があります。v3はv2の暗黙なuniform weight `1.0`を
-使用しません。customizeしたPolicyをInstanceへ適用し、preparation-free methodを呼びます。
-
-```python
-from ommx import FixedPenaltyPreparation
+from ommx import FixedPenaltyPreparation, Instance, Sense
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
+source = Instance.maximize()
+x, y = source.new_binary("x"), source.new_binary("y")
+source.objective = 3 * x + 2 * y
+source.add_constraint(x + y == 1)
+prepared = copy(source)
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
 policy.fixed_penalty = (
-    FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=20.0)
+    FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=4.0)
 )
-source.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
-samples = OMMXOpenJijSAAdapter.sample_without_preparation(source)
+prepared.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
+samples = OMMXOpenJijSAAdapter.sample_without_preparation(prepared, num_reads=2, seed=42)
+assert samples.sense == Sense.Maximize
 ```
 
-`prepare()`は`source`をin-placeで変更します。返される`SampleSet`のobjectiveとsenseは
-Preparation前に`source`が公開していたものです（§5.6）。Policyの詳細とpenaltyの選び方は
-[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter)を参照してください。
+サンプリング結果では元の目的関数を読めます。また、双対値を利用するコードでは、準備済み入力に出力用の目的関数が明示されているとHiGHSとPython-MIPは双対値を付けない点も確認してください。
 
-## 8. DataFrame accessor
+### サンプリング結果を受け取る側を更新する
 
-`*_df` は property ではなく method です。
+v2の `sample_qubo_sa` が返したのは生のサンプルです。v3のAdapterは評価済みの {class}`~ommx.SampleSet` を返します。手元のOpenJijのレスポンスをデコードするだけのコードなら、`response_to_samples` を `decode_to_samples` に変更します。重みを変更するときは元モデルから再度準備してください。すでに入力条件を満たすモデルを準備し直しても、目的関数に組み込まれたペナルティは置き換わりません。
+
+### 独自Adapterを実装している場合
+
+受け取れる入力を `INPUT_CLASS` で宣言し、`solve_without_preparation()` または `sample_without_preparation()` を実装します。ソルバー固有のオプションは型付き引数として定義します。準備後の変数に対するオプションは、変換前後で対応付ける方法がなければ、準備済み入力のAPIで受け取ります。未対応の制約を読み飛ばすと元の要件に反する解が許されるため、その種類を明示的に拒否します。詳しくは {class}`~ommx.adapter.SolverAdapter`、{class}`~ommx.adapter.SamplerAdapter` を参照してください。
+
+(migration-results)=
+## 4. 候補を評価し、結果を取り出す
+
+(migration-compare-model)=
+(constraint-violation-migration)=
+### 集計に必要なのは符号付きの値か、違反量か
+
+候補 $x=0$ に対して、制約 $x-1\leq0$ の式の値は $-1$、違反量は $0$ です。候補がこの制約を満たすという判定は両方のSDKで同じです。変わったのは名前で取得する数値の意味です。
+
+**v2.9.4**
 
 ```python
-# v2.5.1
-df = instance.constraints_df
+from ommx import DecisionVariable, Instance
 
-# v3
-df = instance.constraints_df(kind="regular")
+x = DecisionVariable.binary(0)
+limit = (x <= 1).set_id(7).add_name("limit")
+model = Instance.from_components(
+    decision_variables=[x], objective=x, constraints=[limit], sense=Instance.MAXIMIZE,
+)
+result = model.evaluate({0: 0})
+assert result.extract_constraints("limit")[()] == -1.0
 ```
 
-kind 別や removed / active 別の DataFrame accessor は、`constraints_df(kind=..., removed=...)` に統合されています。
+**v3（`main`）**
 
 ```python
-instance.constraints_df(kind="regular")
-instance.constraints_df(kind="one_hot")
-instance.constraints_df(kind="sos1", removed=True)
-solution.constraints_df(kind="indicator")
+from ommx import Instance
+
+model = Instance.maximize()
+x = model.new_binary("x")
+model.objective = x
+limit = model.add_constraint(x <= 1, "limit")
+result = model.evaluate({x.id: 0})
+assert result.extract_constraints("limit")[()] == 0.0
+assert result.get_constraint_value(limit.constraint_id) == -1.0
 ```
 
-## 9. metadata と annotation
+{meth}`~ommx.Solution.extract_constraints` は全種類の制約を検索し、添字タプルをキーとして非負の違反量を返します。同じ名前に対して添字が重複すると、種類が違っていても曖昧になります。通常制約の符号や余裕を使っていた集計では、上の例のように `get_constraint_value` で式の値を読んでください。型付きIDで違反量を調べる場合は `constraint_violation` を使います。評価済みの行で `row.is_feasible(atol=result.feasibility_atol)` を呼ぶと、結果と同じ許容誤差で判定できます。候補全体の実行可能性には変数の値域も影響するため、制約違反量の合計がゼロでも実行不可能な場合があります。
 
-`Instance` / `Solution` / `SampleSet` は Python dataclass ではありません。metadata は dedicated property や method で扱います。
+通常制約の違反量は、等式なら残差の絶対値、不等式なら上限を超えた量です。特殊制約にも種類ごとの違反量があります。`total_violation()` は、保持された削除済み制約も含めて各違反量を足します。変換で行を追加した場合、この合計は変換前と一致するとは限りません。定義と許容誤差は {meth}`~ommx.Solution.total_violation` を参照してください。`evaluate()` で必要な変数が不足した場合の例外処理は `ValueError` に更新します。`partial_evaluate()` には一部の変数だけを渡せます。
+
+### 表とサンプル集計を更新する
+
+`*_df` はメソッドとして呼びます。たとえば `solution.constraints_df` は `solution.constraints_df(kind=ConstraintKind.Regular)` に置き換えます。制約表のインデックスには種類別のIDオブジェクトが入るため、整数をキーにしていた表結合も見直してください。モデルの表では `removed=True` で有効な行と保持された削除済みの行を両方取得します。結果には保持された削除済み制約も含まれ、参照すると評価時点の行のコピーを返します。制約のコンテキスト、パラメータ、由来、削除理由を読む表でも `kind=` が必要です。
+
+複数サンプルでは `samples.summary` で目的値と全体の実行可能性を、`samples.constraints_df(kind=...)` で制約別の結果を取得します。`samples.sample_ids()` は集合を返します。リストを受け取るコードには `samples.sample_ids_list` を使ってください。使用例は {class}`~ommx.Solution` と {class}`~ommx.SampleSet` にあります。
+
+(migration-constraint-tables)=
+### 制約IDで結合する集計を移行する
+
+```{index} Instance.constraints_df (v2), Instance.removed_constraints_df (v2), SampleSet.summary_with_constraints (v2)
+```
+
+v2では `instance.constraints_df` のインデックス `id` を、整数をキーとする業務側の表に結合できました。v3で通常制約のインデックス名は `regular_constraint_id`、値は `ConstraintID` です。モデルを組み立てるときに、業務側の制約番号（例では7）と追加時に返ったIDの対応を記録し、それを使って結合します。
 
 ```python
-instance.title = "portfolio"
-instance.add_user_annotation("owner", "analytics")
-instance.replace_annotations({"team": "optimization"})
+import pandas as pd
+from ommx import ConstraintKind, Instance
+
+model = Instance.maximize()
+x = model.new_binary("x")
+model.objective = x
+limit = model.add_constraint(x <= 1, "limit")
+id_map = {7: limit.constraint_id}
+
+owners = pd.Series({7: "planning"}, name="owner")
+rows = model.constraints_df(kind=ConstraintKind.Regular, include=[])
+report = rows.join(owners.rename(index=id_map))
+assert report.loc[limit.constraint_id, "owner"] == "planning"
 ```
 
-`annotations` property は read-only projection です。直接 `obj.annotations[...] = ...` のようには変更できません。
+ラベルとパラメータを列に含めるなら `include=["label", "parameters"]`、キーと値の組を1行ずつ結合するなら `constraint_parameters_df(kind=...)` を使います。変換履歴は `constraint_provenance_df(kind=...)` に由来のステップごとに記録されます。モデル側の `removed=True` は有効な行も含むので、削除済み制約だけの旧帳票を再現するには `removed_reason` が欠損していない行を選んでください。
 
-## 10. `AttachedX` handle と snapshot
+### 許容誤差付近で実行可能性を照合する
 
-`instance.constraints[id]` や `instance.decision_variables` は、host に書き戻す `AttachedX` handle を返します。
+判定では制約ごとの違反量に許容誤差を適用します。SOS1の値が `(1, 0.00006, 0.00006)` のとき、非ゼロ値を一つだけ残すには、合計 `0.00012` の変更が必要です。小さい二値はそれぞれ `0.0001` 未満でも、許容誤差 `0.0001` でこの制約は実行不可能です。帳票を照合するときは、評価時に保存された許容誤差を使い、同じ種類の制約を比較してください。問合せ時の許容誤差を変えても、離散値の正規化はやり直されません。定義は {meth}`~ommx.Solution.total_violation` にあります。
 
-```python
-from ommx import ConstraintID
-c = instance.constraints[ConstraintID(5)]
-c.set_name("balance")
-assert instance.constraints[ConstraintID(5)].name == "balance"
-```
+(migration-storage)=
+## 5. 保存済みモデルとArtifactを引き継ぐ
 
-detached snapshot が必要な場合は `detach()` を使います。
+### モデルや結果のバイト列を読む
 
-```python
-from ommx import ConstraintID
-snapshot = instance.constraints[ConstraintID(5)].detach()
-```
+SDKの版とprotobufの形式には別々の番号があります。**SDK 2.9.4** の `Instance.to_bytes()` が出力したバイト列は **v1形式** です。v3では `Instance.from_v1_bytes(data)` で読みます。`ParametricInstance`、`Solution`、`SampleSet` でも同じ命名です。新しいファイルには所有元の `to_v2_bytes()` と、対になる `from_v2_bytes()` を使います。変数・式・制約を所属情報とともに保存したい場合は、それを含むモデルまたは結果をシリアライズします。
 
-### 10.1 fixed decision-variable values
+2.9.4でもモデルと結果のバイト列に注釈が保存されます。v3では `title` などの専用プロパティでメタデータを、`add_user_annotation` で利用者定義のキーを設定するため、`annotations` の辞書に直接書き込んでいた箇所を更新してください。
 
-detached な `DecisionVariable` は変数定義と label の snapshot であり、固定値は持ちません。`partial_evaluate(...)` や legacy protobuf の `substituted_value` 由来の固定値は、所有者である `Instance` / `ParametricInstance` に保存されます。
+出力を2.xのプログラムにも渡す場合は、形式に加えて受信側が扱える表現も確認します。たとえば2.9.4のスキーマには有限集合を値域とする変数がありますが、2.xのSDKはその変数を含むモデルの読込みを拒否します。また出力用の目的関数を明示したモデルは `to_v1_bytes()` では書き出せません。特殊制約や結果の実行可能性判定の許容誤差を保つにはv2形式を使います。
 
-```python
-fixed = instance.fixed_decision_variables()
-
-attached = instance.attached_decision_variable(1)
-assert attached.substituted_value == fixed.get(1)
-
-df = instance.decision_variables_df()
-print(df["substituted_value"])
-```
-
-### 10.2 `decision_variable_analysis()` の置き換え
-
-古い analysis object shape は公開されません。必要な role / role 由来の集合を、所有者である `Instance` から直接取得してください。
-
-```python
-roles = instance.decision_variable_roles()
-role = instance.decision_variable_role(1)
-
-fixed = instance.fixed_decision_variables()
-dependent = instance.dependent_decision_variable_ids()
-irrelevant = instance.irrelevant_decision_variable_ids()
-
-df = instance.decision_variables_df()
-print(df["state_role"])
-```
-
-Adapter が solver input の変数だけを必要とする場合は `instance.used_decision_variables` を使います。fixed / dependent / irrelevant の分類を見ていた移行コードは、上の role helper に置き換えてください。
-
-## 11. named function ID
-
-Named function 系も table-owned ID model に移行しています。`NamedFunction`、`EvaluatedNamedFunction`、`SampledNamedFunction` の row object 自身ではなく、host 側の table key が ID の source of truth です。
-
-Python API ではユーザーが移行しやすいように `.id` を参照できる箇所がありますが、実装上の所有者は host table です。新しいコードでは、collection を走査するときに key と value を分けて扱うことを優先してください。
-
-## 12. 要素単体の bytes round-trip
-
-`Function` / `Linear` / `Quadratic` / `Polynomial` / `Parameter` / `NamedFunction` family / `DecisionVariable` family の要素単体 `to_bytes()` / `from_bytes()` は削除されています。
-
-要素を永続化したい場合は、所有者である `Instance` / `Solution` / `SampleSet` へ入れてから全体を round-trip してください。新しく byte 列を作る場合は v2 bytes API を既定にします。v1 は既存の v1 consumer / file と互換を保つ必要がある場合にだけ使ってください。
-
-top-level root についても、protobuf version を名前に含まない `Instance.to_bytes()` / `Instance.from_bytes(...)`（および `ParametricInstance`、`Solution`、`SampleSet` の同名 API）は削除されています。通常は `to_v2_bytes()` / `from_v2_bytes(...)` に置き換え、legacy な v1 wire format が明示的に必要な場合だけ `to_v1_bytes()` / `from_v1_bytes(...)` を使ってください。
-
-```python
-instance_blob = instance.to_v2_bytes()
-restored = Instance.from_v2_bytes(instance_blob)
-```
+MPSを他のツールに渡す場合は `write_mps` を {meth}`~ommx.Instance.save_mps` に変更してください。ファイル形式に収まらない構造やメタデータも含めてモデルを復元するには、SDKのバイト列を保存します。
 
 (13-artifact-api-archive-becomes-an-exchange-format)=
-## 13. Artifact API: archive becomes an exchange format
+### `.ommx` アーカイブを開く・作る
 
-v3 では Artifact API が SQLite Local Registry を中心に整理され、`.ommx` file は registry から明示的に export / import する exchange format になりました。
+| v2のコードの用途 | v3での移行先 |
+|---|---|
+| `Artifact.load_archive(path)` で開く | マニフェストとレイヤーの記述を調べるだけなら `Artifact.inspect_archive(path)`。レイヤーの中身を読むなら `Artifact.import_archive(path)` でLocal Registryに取り込む。 |
+| `ArtifactBuilder.new_archive(path, name)` でファイルを作る | `ArtifactDraft.new(name)` で作成してレイヤーを追加し、コミット後に `artifact.save(path)` で書き出す。 |
+| `new_archive_unnamed(path)` で無名のアーカイブを作る | `ArtifactDraft.new_anonymous()` を使う。コミットすると名前が自動で付くため、`image_name is None` を前提にした判定を見直す。 |
+| `ommx push` でファイルを送る | `ommx load` で取り込み、イメージ名でpushする。 |
 
-### 13.1 `ArtifactBuilder.new_archive` / `new_archive_unnamed` は削除
+アーカイブのAPIは {class}`~ommx.artifact.Artifact` にあります。整理するときは `ommx prune-anonymous` で参照の削除候補を、`ommx gc` で到達できないblobを確認できます。どちらも削除を実行するには `--delete` が必要です。詳しくは[Local Registryの管理手順](../how_to/manage_local_registry.md)を参照してください。
 
-`.ommx` file を作る処理は、`ArtifactDraft` を commit した後の `Artifact.save(path)` に分離されました。
+(migration-artifact-archives)=
+### アーカイブを作ってモデルを読み戻す
 
-```python
-# v2
-builder = ArtifactBuilder.new_archive("my_instance.ommx", "ghcr.io/jij-inc/ommx/demo:v1")
-builder.add_instance(instance)
-artifact = builder.build()
-
-# v3
-draft = ArtifactDraft.new("ghcr.io/jij-inc/ommx/demo:v1")
-draft.add_instance(instance)
-artifact = draft.commit()
-artifact.save("my_instance.ommx")
+```{index} ArtifactBuilder.new_archive (v2), ArtifactBuilder.new_archive_unnamed (v2), Artifact.load_archive (v2)
 ```
 
-### 13.2 anonymous archive は `new_anonymous`
-
-`new_archive_unnamed(path)` は `ArtifactDraft.new_anonymous()` に置き換わりました。v3 の anonymous Artifact も Local Registry 内では image name を持つため、`artifact.image_name is None` を前提にしたコードは見直してください。
+v2のアーカイブ用builderは `build()` でファイルを作りました。v3の `commit()` はLocal Registryへの保存、`save()` はファイルへの書出しです。次の例はレジストリに匿名の記録を作り、新しいディレクトリに書き出します。
 
 ```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from ommx import Instance
+from ommx.artifact import Artifact, ArtifactDraft
+
+model = Instance.minimize()
+model.title = "Archive migration"
 draft = ArtifactDraft.new_anonymous()
-draft.add_instance(instance)
+draft.add_instance(model)
 artifact = draft.commit()
-artifact.save("my_instance.ommx")
+with TemporaryDirectory() as directory:
+    path = Path(directory) / "model.ommx"
+    artifact.save(path)
+    manifest = Artifact.inspect_archive(path)
+    assert manifest.image_name == artifact.image_name
+    restored = Artifact.import_archive(path).get_instance()
+    assert restored.title == model.title
 ```
 
-anonymous Artifact を多用する workflow では、定期的に `ommx artifact prune-anonymous` を実行してください。
+旧版の無名アーカイブにイメージ名の注釈がない場合、`import_archive` がローカルの匿名名を付けます。後続処理で名前を使うなら戻り値の `image_name` を読んでください。書出し時の `save` は既存ファイルを上書きしないので、新しい出力先を指定します。
 
-### 13.3 `Artifact.load_archive` は `import_archive` / `inspect_archive` に分割
+### 別のSDKで作ったファイルを読む
 
-v2 の `Artifact.load_archive(file)` は、v3 では目的別に分かれました。
+Local Registryに書き込まずにアーカイブの内容を調べるには {meth}`~ommx.artifact.Artifact.inspect_archive` を使います。マニフェストから分かるのはレイヤーの記述までで、モデルを取り出すときは {meth}`~ommx.artifact.Artifact.import_archive` が必要です。古いアーカイブのレイヤー記述に注釈がある場合、protobuf側にも同じOMMXキーがあればそちらが優先されます。保存済みの試行を移行するときはタイトルや利用者定義の注釈も照合してください。
 
-- `Artifact.import_archive(file)` - archive を Local Registry に import し、全 layer を読める `Artifact` handle を返します。
-- `Artifact.inspect_archive(file)` - registry に書き込まず、manifest / layer descriptor だけを読む read-only path です。
+(migration-verify)=
+## 6. 移行結果を確かめる
 
-```python
-# archive を使う
-artifact = Artifact.import_archive("my_instance.ommx")
+1. 同じ元モデルに対して同じ候補を評価し、目的関数の向き、目的値、実行可能性、判定に使った許容誤差を比較します。変換を行う場合も、元の要件を基準に結果を照合します。
+2. アプリケーションが実際に使う値を比較します。たとえば第4節で符号付きの値を使っていた帳票は、移行後も $-1$ を読む必要があります。違反量を表示する帳票なら、同じ候補に対して $0$ が期待値です。サンプルを表で集計する場合はサンプルIDと結合キーも確認します。
+3. ファイルや別プロセスにデータを渡す場合は、実際に2.9.4で保存したバイト列やアーカイブをv3で読み、外部ID・メタデータ・評価結果を一つずつ照合します。2.xの受信側も運用する場合は、v3からの出力をその環境で読めることも確かめます。
 
-# 中身を確認するだけ
-manifest = Artifact.inspect_archive("my_instance.ommx")
-```
+(migration-index)=
+## 付録　旧API名から置き換え先を探す
 
-### 13.4 CLI flow
+個別の詳しい移行例は、サイトの {ref}`総索引 <genindex>` から旧API名でも引けます。
 
-archive file を直接 push する flow は廃止されました。いったん load / import して Local Registry に入れてから、image name で push します。
+| 旧API・使用箇所 | v3の書き方 | 節 |
+|---|---|---|
+| `.raw` / `from_raw` / `from_protobuf` / `to_protobuf` | 例：{attr}`instance.sense <ommx.Instance.sense>` / {meth}`Instance.minimize <ommx.Instance.minimize>` | {ref}`1 <migration-imports>` |
+| `add_name` / `add_description` | {meth}`set_name <ommx.Constraint.set_name>` / {meth}`set_description <ommx.Constraint.set_description>` | {ref}`migration-constraint-metadata` |
+| `ArtifactArchive` / `ArtifactDir` / `ArtifactBuilder` | {class}`Artifact <ommx.artifact.Artifact>` / {class}`ArtifactDraft <ommx.artifact.ArtifactDraft>` | {ref}`migration-artifact-archives` |
+| `Artifact.load_archive` | {meth}`Artifact.import_archive <ommx.artifact.Artifact.import_archive>` / {meth}`Artifact.inspect_archive <ommx.artifact.Artifact.inspect_archive>` | {ref}`migration-artifact-archives` |
+| `Constraint.id` / `set_id` / `next_constraint_id` | {meth}`add_constraint <ommx.Instance.add_constraint>`。外部の制約番号を維持するときは {meth}`from_components <ommx.Instance.from_components>` | {ref}`2 <migration-build>` |
+| `constraint_hints` / `OneHot` / `Sos1` | {class}`OneHotConstraint <ommx.OneHotConstraint>` / {class}`Sos1Constraint <ommx.Sos1Constraint>` | {ref}`2 <migration-build>` |
+| `constraints_df` / `removed_constraints_df` | {meth}`constraints_df(kind=...) <ommx.Instance.constraints_df>` / {meth}`constraints_df(kind=..., removed=True) <ommx.Instance.constraints_df>` | {ref}`migration-constraint-tables` |
+| `decision_variable_analysis()` | {meth}`decision_variable_roles() <ommx.Instance.decision_variable_roles>` / {meth}`fixed_decision_variables() <ommx.Instance.fixed_decision_variables>` | {ref}`migration-constraint-metadata` |
+| `DecisionVariable.substituted_value` | {meth}`model.fixed_decision_variables() <ommx.Instance.fixed_decision_variables>` | {ref}`2 <migration-build>` |
+| `evaluated.feasible` / `sampled.feasible` | {meth}`evaluated.is_feasible(atol=...) <ommx.EvaluatedConstraint.is_feasible>` / {meth}`sampled.feasible(atol=...) <ommx.SampledConstraint.feasible>` | {ref}`4 <migration-results>` |
+| `extract_constraints(name)` | 違反量は {meth}`extract_constraints <ommx.Solution.extract_constraints>`、通常制約の式の値は {meth}`get_constraint_value <ommx.Solution.get_constraint_value>` | {ref}`4 <migration-results>` |
+| `get_constraint_by_id` / `get_removed_constraint_by_id` | {attr}`constraints[ConstraintID(n)] <ommx.Instance.constraints>` / {attr}`removed_constraints[ConstraintID(n)] <ommx.Instance.removed_constraints>` | {ref}`2 <migration-build>` |
+| `Linear.from_object` / `Linear.equals_to` | 式または {meth}`Linear.single_term <ommx.Linear.single_term>` / {meth}`almost_equal <ommx.Linear.almost_equal>` | {ref}`2 <migration-build>` |
+| `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` | {meth}`Linear.terms() <ommx.Linear.terms>` / {meth}`Quadratic.terms() <ommx.Quadratic.terms>` / {meth}`Polynomial.terms() <ommx.Polynomial.terms>` | {ref}`2 <migration-build>` |
+| `ommx.v1` / `ommx.v1.*_pb2` | {doc}`ommx </api/index>` | {ref}`1 <migration-imports>` |
+| `Parameter.new` / `Parameters(entries=...)` | {class}`Parameter(id, ...) <ommx.Parameter>` / {meth}`with_parameters({id: value}) <ommx.ParametricInstance.with_parameters>` | {ref}`2 <migration-build>` |
+| `ParametricInstance.parameters (DataFrame)` | {meth}`parameters_df() <ommx.ParametricInstance.parameters_df>` | {ref}`2 <migration-build>` |
+| `response_to_samples` / `sample_qubo_sa` | {func}`decode_to_samples <ommx_openjij_adapter.decode_to_samples>` / {meth}`OMMXOpenJijSAAdapter.sample <ommx_openjij_adapter.OMMXOpenJijSAAdapter.sample>` | {ref}`migration-openjij-penalties` |
+| `SampleSet.sample_ids` / `summary_with_constraints` | {meth}`sample_ids() <ommx.SampleSet.sample_ids>` / {attr}`summary <ommx.SampleSet.summary>` + {meth}`constraints_df(kind=...) <ommx.SampleSet.constraints_df>` | {ref}`4 <migration-results>` |
+| `Solution.total_violation_l1` / `total_violation_l2` | {meth}`total_violation <ommx.Solution.total_violation>`（各制約の違反量の和）。L2集計は廃止 | {ref}`4 <migration-results>` |
+| `to_bytes` / `from_bytes` | {meth}`to_v2_bytes <ommx.Instance.to_v2_bytes>` / {meth}`from_v2_bytes <ommx.Instance.from_v2_bytes>` / {meth}`from_v1_bytes <ommx.Instance.from_v1_bytes>` | {ref}`5 <migration-storage>` |
+| `uniform_penalty_weight` / `penalty_weights` / `inequality_integer_slack_max_range` | {attr}`policy.fixed_penalty <ommx.PreparationPolicy.fixed_penalty>` / {attr}`policy.integer_slack <ommx.PreparationPolicy.integer_slack>` | {ref}`migration-openjij-penalties` |
+| `used_decision_variable_ids() (Instance, Function)` | {meth}`Instance.required_ids() <ommx.Instance.required_ids>` / {meth}`Function.required_ids() <ommx.Function.required_ids>` | {ref}`2 <migration-build>` |
+| `write_mps(path)` | {meth}`save_mps(path) <ommx.Instance.save_mps>` | {ref}`5 <migration-storage>` |
 
-```bash
-ommx load my_instance.ommx
-ommx push ghcr.io/jij-inc/ommx/demo:v1
-```
-
-### 13.5 Artifact migration checklist
-
-- [ ] `ArtifactBuilder.new_archive(path, image_name).build()` を `ArtifactDraft.new(image_name).commit()` + `artifact.save(path)` に置き換える。
-- [ ] `ArtifactBuilder.new_archive_unnamed(path).build()` を `ArtifactDraft.new_anonymous().commit()` + `artifact.save(path)` に置き換える。
-- [ ] `Artifact.load_archive(file)` を、用途に応じて `Artifact.import_archive(file)` または `Artifact.inspect_archive(file)` に置き換える。
-- [ ] `ommx push <archive-file>` を `ommx load <file>` + `ommx push <image_name>` に置き換える。
-- [ ] anonymous Artifact を大量に作る場合は `ommx artifact prune-anonymous` を運用に入れる。
-
-## v2 から v3 へのチェックリスト
-
-- [ ] `ommx.v1.*_pb2` import と SDK domain class の `ommx.v1` import を、top-level `ommx` からの import に置き換える。
-- [ ] `.raw` / `from_raw` / `from_protobuf` / `to_protobuf` を削除する。新しく byte 列を作る場合は top-level root の `to_v2_bytes()` / `from_v2_bytes(...)` を使い、legacy v1 互換が必要な場合だけ `to_v1_bytes()` / `from_v1_bytes(...)` を使う。
-- [ ] `Constraint.id` / `set_id()` / `id=` を削除し、host dict の key で ID を渡す。
-- [ ] `constraints=[...]` を `constraints={id: constraint}` に置き換える。
-- [ ] `constraint_hints` を `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に置き換える。
-- [ ] Adapterの推奨Preparationを使う場合は`solve()` / `sample()`を直接呼ぶ。Policyをcustomizeする場合は`Instance.prepare()`後に`solve_without_preparation()` / `sample_without_preparation()`を呼ぶ。独自Adapterにはpreparation-free methodを追加し、Adapter固有optionは公開するAPIごとに明示的な型付きsignatureとして宣言して、包括的な`**kwargs`は使わない。exactなprepared inputに依存するoptionのtransportを定義しない場合は、preparation-free methodだけに公開できる。
-- [ ] `*_df` accessor に `()` を付ける。
-- [ ] `RuntimeError` を捕捉していた `evaluate` / `partial_evaluate` 周辺を `ValueError` に変える。
-- [ ] `Function.degree()` / `num_terms()` の型注釈を `None` も受け取る形に変更し、複合式の可能性がある場合は polynomial 係数 property への access を分岐する。
-- [ ] `decision_variable_analysis()` を `decision_variable_roles()` / `decision_variable_role(id)` / `fixed_decision_variables()` / `dependent_decision_variable_ids()` / `irrelevant_decision_variable_ids()` / `decision_variables_df()["state_role"]` に置き換える。
-- [ ] element-level `to_bytes()` / `from_bytes()` を、所有者全体の round-trip に置き換える。新規 payload は `to_v2_bytes()`、legacy v1 互換または evaluate 用 DTO では `to_v1_bytes()` を使う。
-- [ ] Artifact archive API を `ArtifactDraft` / `Artifact.save` / `Artifact.import_archive` / `Artifact.inspect_archive` に移行する。
-
-## 型付き制約IDと所有元を参照するコレクション
-
-4種類の所有元すべてで、`.constraints` は全種類の制約を扱う読み取り専用コレクションです。
-`instance.constraints[5]` は `instance.constraints[ConstraintID(5)]` に変更します。
-特殊制約には `IndicatorConstraintID`・`OneHotConstraintID`・`Sos1ConstraintID` を使います。
-種類別プロパティは `.constraints` と `.removed_constraints` に統合されます。
-`get_constraint_by_id`・`get_removed_constraint_by_id`と、結果の`constraint_ids`は
-添字アクセスとキー列挙に置き換えます。
-`get_constraints` メソッドはありません。
-
-```python
-row = instance.constraints.of_kind("regular")[5]  # AttachedConstraint
-snapshot = row.detach()  # 独立したConstraintのコピーを明示的に取得
-removed = instance.removed_constraints.of_kind("regular")[7]  # RemovedConstraintのスナップショット
-```
-
-メタデータの`constraint_context_df`・`constraint_parameters_df`・`constraint_provenance_df`・
-`constraint_removed_reasons_df`も、`constraints_df`と同じくキーワード引数`kind`を必須にします。
-省略時に通常制約を選ぶ動作は廃止します。`Instance`・`ParametricInstance`・`Solution`・
-`SampleSet`に共通です。
-
-`SampleSet.summary_with_constraints`は廃止します。サンプルごとの目的値と全体の
-実行可能性には`samples.summary`を、制約別の結果には`samples.constraints`または
-`samples.constraints_df(kind=...)`を使います。
-
-プロパティ取得時には制約を収集せず、モデルへのアクセスは `Attached*`、結果へのアクセスは
-個別のスナップショットを返します。保持したコレクションは所有元の変更を反映します。
-独立した辞書が必要な場合は `dict(owner.constraints)` を使います。1種類だけ調べる場合は、
-`constraints.of_kind("sos1")`で絞ります。`constraints_df(*, kind=...)` はすべての所有元で
-`kind` が必須です。モデルは有効な行を選び、`removed=True` で削除済みも含めます。
-結果は保持された削除済みも含めます。詳細は{class}`コレクションの意味 <ommx.ConstraintCollection>`を参照してください。
-
-種類を横断して列挙する型には、現在の種類のUnionではなく `ConstraintIDBase` と
-`ConstraintView` を使います。特殊制約の種類が追加されても、これらの公開返り値型は変わりません。
-具体的なIDによる添字アクセスは、具体的な返り値型を維持します。
-モデルを変換・求解するコードでは未対応種類を明示的に拒否してください。
-単に除外すると問題を緩和してしまいます。
-
-種類が決まるメソッド引数や `from_components` のキーは引き続き整数を自動昇格し、別種類のIDを拒否します。
-種類を横断するコレクションの添字アクセス・所属判定・`get`には型付きIDが必須です。
-`of_kind`で絞ったビューは、その種類の整数IDを自動昇格します。
-返り値・診断・provenance・DataFrameのインデックスも型付きIDを保持します。
-`int()` や整数インデックスへの変換はできません。`constraint_violation(id)` はIDの型から種類を判断し、
-`kind` 引数を取りません。変数IDとサンプルIDは引き続き整数です。
-
-`extract_constraints(name)`は全種類を検索します。`Instance`・`ParametricInstance`では
-添字タプルからAttachedオブジェクトへの辞書、`Solution`・`SampleSet`では違反量への辞書を
-返します。**通常制約も符号付きの式の値から非負の違反量に変わります。** 決定変数の
-抽出と同様にparametersは無視し、種類をまたぐ添字の重複は`ValueError`にします。
-
-通常制約の符号付き評価値には`solution.get_constraint_value(id)`か`row.evaluated_value`を使います。詳しくは{meth}`名前と添字による取得 <ommx.Solution.extract_constraints>`を参照してください。
+v3の各プレリリースでの変更経緯は[Python SDK 3.0のリリースノート](../release_note/ommx-3.0.md)を参照してください。

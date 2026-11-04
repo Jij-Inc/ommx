@@ -5,19 +5,22 @@ A model expresses the requirements of an application; a solver or sampler search
 
 **Choose both the representation you need and the changes in meaning you permit.** A problem that a backend can read is not necessarily equivalent to the problem you started with. Reconstructing a candidate's variables, preserving feasibility, and preserving optimality are separate guarantees.
 
-## Keep meaningful structure until you choose how to use it
+(keep-meaningful-structure-until-you-choose-how-to-use-it)=
+## Choose the formulation to send to the solver
 
-Suppose two amounts satisfy $0\leq x,y\leq10$, and at most one may be nonzero. OMMX can keep this condition as an SOS1 constraint, with a meaning defined independently of a solver. For a supported model, the PySCIPOpt Adapter can pass that structure directly to SCIP. For HiGHS, OMMX can instead express it using Binary selectors and ordinary linear constraints, provided the conversion conditions and the adapter's input requirements hold.
+A production line can make up to 100 units per hour, but only 60 in reduced mode. Let $q$ be its hourly output and let $r$ be 1 in reduced mode and 0 otherwise. An **indicator constraint** enforces $q\leq60$ when $r=1$. The PySCIPOpt Adapter can pass this linear indicator directly to SCIP.
 
-Writing the condition once leaves this choice available later. The modeling tool need not implement a different conversion for each backend, and the conversion can be reused by another solving method. Keeping the original condition also helps interpret the resulting candidate in the terms of the model.
+To try a formulation with ordinary linear constraints in the same solver, OMMX can {meth}`rewrite the rule as a linear inequality <ommx.Instance.convert_indicator_to_constraint>`, $q\leq100-40r$. At $r=0$ this gives the known upper bound of 100. At $r=1$ it gives 60. The difference of 40 comes from the two limits. If the line could actually produce more than 100 in normal mode, using 100 here would exclude valid plans. Keeping the indicator in the source problem lets you choose the solver formulation later.
 
-Rewriting a special constraint as ordinary constraints is called **lowering**. The reverse direction is useful too: OMMX can verify selected patterns of ordinary constraints and represent them as an SOS1 constraint through **promotion**. These are supported operations with specific conditions, rather than automatic recognition of every equivalent formulation. Their definitions, examples, and conversion contracts belong to the {class}`SOS1 Reference <ommx.Sos1Constraint>` and {meth}`promotion Reference <ommx.Instance.promote_sos1_big_m>`.
+The indicator states explicitly which operating mode activates the limit. The inequality expresses the same rule through variables and coefficients. This is a **lower level of abstraction**. With a valid upper bound of 100, both formulations allow exactly the same combinations of mode and output. This is the sense of `lower` in {meth}`~ommx.Instance.lower_special_constraints`, which rewrites selected families of special constraints as ordinary constraints.
+
+When the solver supports special constraints directly, you may also want to make structure explicit. For example, OMMX can {meth}`express a group of linear constraints as an SOS1 constraint <ommx.Instance.promote_sos1_big_m>` when they match a supported pattern. The solver can then use the explicit condition that at most one member may be nonzero.
 
 ## Separate input requirements from permitted transformations
 
 An **Adapter** connects an Instance to a backend's input and output. Its input requirements describe the representation it can accept directly: variable kinds, expression forms, constraint families, and optimization direction. A familiar problem name alone is not enough to decide whether an input matches. Even mathematically equal expressions can have different stored forms.
 
-OMMX calls the process of applying selected transformations toward a target representation **Preparation**. The target says what the result must satisfy; the policy says which transformations may be used. A policy can allow one special-constraint family to be lowered while keeping another explicit. Creating a policy does not transform a problem, and reaching the target does not mean every allowed transformation was needed.
+OMMX calls the process of applying selected transformations toward a target representation **Preparation**. The target says what the result must satisfy; the policy says which transformations may be used. For example, you can choose to express linear indicator constraints as ordinary inequalities and pass SOS1 constraints directly to the solver. Creating a policy does not transform a problem, and reaching the target does not mean every allowed transformation was needed.
 
 The {class}`input-class Reference <ommx.InstanceClass>` explains how to inspect the representation, and {meth}`Instance.prepare <ommx.Instance.prepare>` provides a complete transformation and candidate-evaluation example. A successful preparation establishes the requested input conditions. The mathematical correspondence with the original problem comes from the transformations used; converter or backend execution may still fail afterward.
 

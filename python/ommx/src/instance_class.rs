@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Polynomial requirement for one function position in an
 /// :class:`InstanceClassClause`.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, frozen)]
+#[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolynomialRequirement(pub ommx::PolynomialRequirement);
 
@@ -59,7 +59,7 @@ impl PolynomialRequirement {
 /// requirements describe stored polynomials, not a request to expand expressions.
 /// See {class}`~ommx.InstanceClass` for construction and membership examples.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(frozen)]
+#[pyclass(from_py_object, frozen)]
 #[derive(Debug, Clone)]
 pub struct InstanceClassClause(pub ommx::InstanceClassClause);
 
@@ -172,7 +172,7 @@ impl InstanceClassClause {
 
 #[doc = include_str!("docstrings/ommx/InstanceClass.md")]
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(frozen)]
+#[pyclass(from_py_object, frozen)]
 #[derive(Debug, Clone)]
 pub struct InstanceClass(pub ommx::InstanceClass);
 
@@ -294,7 +294,7 @@ impl InstanceClass {
 
 /// One structured reason an instance is outside a complete clause.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_complex_enum]
-#[pyclass(eq, frozen)]
+#[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum InstanceClassMismatch {
     VariableKindNotAllowed {
@@ -462,7 +462,7 @@ impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
 
 /// Membership result for one conjunctive instance-class clause.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, frozen)]
+#[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstanceClassClauseReport(pub ommx::InstanceClassClauseReport);
 
@@ -506,7 +506,7 @@ impl InstanceClassClauseReport {
 
 /// Side-effect-free membership report for an :class:`InstanceClass`.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, frozen)]
+#[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstanceClassMembershipReport(pub ommx::InstanceClassMembershipReport);
 

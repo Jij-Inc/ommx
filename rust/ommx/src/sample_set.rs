@@ -1208,11 +1208,9 @@ impl SampleSetBuilder {
         let mut feasible_relaxed = BTreeMap::new();
 
         for sample_id in sample_ids {
-            let variables_feasible = decision_variables.iter().all(|(id, variable)| {
-                variable
-                    .get(*id, *sample_id)
-                    .is_some_and(|value| value.is_valid(atol))
-            });
+            let variables_feasible = decision_variables
+                .iter()
+                .all(|(id, variable)| variable.is_valid_for(*id, *sample_id, atol));
             let f = variables_feasible
                 && constraints.is_feasible_for(*sample_id, atol)
                 && indicator_constraints.is_feasible_for(*sample_id, atol)
@@ -1241,6 +1239,43 @@ mod tests {
         SampledDecisionVariable, Sense, VariableID,
     };
     use std::collections::BTreeMap;
+
+    #[test]
+    fn builder_checks_exact_finite_domain_membership_with_tolerance() {
+        let id = VariableID::from(1);
+        let values = [1.0, 2.0, 3.0, 0.75, 1.25, 1.25_f64.next_up()];
+        let mut samples = crate::Sampled::default();
+        let mut objectives = crate::Sampled::default();
+        for (sample_id, value) in values.into_iter().enumerate() {
+            let sample_id = SampleID::from(sample_id as u64);
+            samples.append([sample_id], value).unwrap();
+            objectives.append([sample_id], 0.0).unwrap();
+        }
+        let variable = SampledDecisionVariable::new(
+            id,
+            DecisionVariable::new_finite_domain(vec![1.0, 3.0]).unwrap(),
+            samples,
+        )
+        .unwrap();
+        for (tolerance, expected) in [
+            (f64::EPSILON, [true, false, true, false, false, false]),
+            (0.25, [true, false, true, true, true, false]),
+        ] {
+            let result = SampleSet::builder()
+                .decision_variables(BTreeMap::from([(id, variable.clone())]))
+                .objectives(objectives.clone())
+                .constraints(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .feasibility_atol(ATol::new(tolerance).unwrap())
+                .build()
+                .unwrap();
+            for (sample_id, expected) in expected.into_iter().enumerate() {
+                let sample_id = SampleID::from(sample_id as u64);
+                assert_eq!(result.is_sample_feasible(sample_id), Some(expected));
+                assert_eq!(result.is_sample_feasible_relaxed(sample_id), Some(expected));
+            }
+        }
+    }
 
     #[test]
     fn builder_rejects_sampled_one_hot_side_map_id_mismatch() {
