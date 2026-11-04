@@ -3,7 +3,7 @@
 
 This guide takes code written for [OMMX 2.9.4](https://pypi.org/project/ommx/2.9.4/) to the v3 API on `main`. Keep the v2 environment and set up a separate v3 environment using the [installation guide](../getting_started/install.md). Before changing the code, save one model, a candidate, and the results your application actually uses. You will compare them in {ref}`section 6 <migration-verify>`.
 
-Start where your code uses OMMX. If you {ref}`construct models <migration-build>`, first decide who assigns IDs. If you {ref}`call a backend <migration-solve>`, check who prepares its inputs. If you only consume data, go straight to {ref}`interpreting results <migration-results>` or {ref}`loading saved data <migration-storage>`. To look up an error by its old method name, use the {ref}`API index <migration-index>`.
+**Start by running a type checker on one of your existing scripts.** Even if you have never used one, you can use its diagnostics to fix many incompatible calls immediately. {ref}`Run Pyright for the first time <migration-first-type-check>`, then use the {ref}`old API index <migration-index>` to look up a name in its diagnostics.
 
 ```{contents} Migration guide contents
 :local:
@@ -13,9 +13,16 @@ Start where your code uses OMMX. If you {ref}`construct models <migration-build>
 (migration-imports)=
 ## 1. Update imports and object access
 
-### Use the v3 type stubs to find incompatible calls
+(migration-first-type-check)=
+### Run a type checker on your first script
 
-Point your project's type checker at the environment containing OMMX v3 and run it on your application code. For a uv project with Pyright installed as a development dependency, run `uv run --no-sync pyright` from the project root. The SDK ships type stubs, so the checker can flag many changes before you run a solver.
+From the project directory where you installed v3, run the command below. Replace `solve.py` with the path to a Python script that uses OMMX. uv provides Pyright for this command. You can start with an ordinary script, without adding type annotations or a configuration file.
+
+```sh
+uv run --no-sync --with pyright pyright solve.py
+```
+
+Pyright reads the type information shipped with OMMX and reports incompatible calls with their file and line numbers without executing the script. Fix any old `ommx.v1` imports first so Pyright can identify the SDK objects. For example, if it flags `instance.write_mps(path)` as an unknown method, change it to `instance.save_mps(path)` and run the same command again. Work through the remaining diagnostics, then check the next script.
 
 | What Pyright flags | How to update the call |
 |---|---|
