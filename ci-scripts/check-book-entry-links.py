@@ -43,14 +43,6 @@ def entry_links():
         ):
             yield source, url
 
-    for source in sorted((ROOT / "docs/redirect").rglob("*.html")):
-        match = re.search(r'content="0;\s*url=([^"]+)"', source.read_text(), re.I)
-        if not match or not match[1].startswith(BOOK):
-            raise ValueError(
-                f"{source}: expected a redirect directly to the published Book"
-            )
-        yield source, match[1]
-
 
 def main():
     parser = ArgumentParser(description=__doc__)

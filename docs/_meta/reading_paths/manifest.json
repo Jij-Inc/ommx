@@ -342,12 +342,10 @@
       "base_revision": "2e2deb56c1893cd1682db3cf98612f4b0e4ae855",
       "target_revision": "codex/book-final-reading-paths",
       "affected_pages": [
-        "HOME",
-        "HOME_EN",
         "SETUP",
         "R_ADAPTERS"
       ],
-      "note": "4つのAdapterのパッケージREADMEから日英の導入節と共有API Referenceへ接続する。Python-MIPの導入節を両言語に追加し、旧URLの転送先を現行の章・仕様・APIへ対応付ける。各ページの学習前提は変わらない。"
+      "note": "4つのAdapterのパッケージREADMEから日英の導入節と共有API Referenceへ接続する。Python-MIPの導入節を両言語に追加する。各ページの学習前提は変わらない。"
     }
   ],
   "interpretation": {
