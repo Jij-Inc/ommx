@@ -26,7 +26,6 @@ members = [
     "ommx-openjij-adapter",
     "ommx-pyscipopt-adapter",
     "ommx-python-mip-adapter",
-    "ommx-tests",
 ]
 constraints = [{ name = "openjij", specifier = "==0.12.0" }]
 
@@ -49,12 +48,13 @@ dev = [
     { name = "matplotlib", specifier = ">=3.10.7" },
     { name = "maturin", specifier = ">=1.14.1,<2.0.0" },
     { name = "myst-nb", specifier = ">=1.0.0" },
-    { name = "packaging" },
+    { name = "ommx", editable = "python/ommx" },
+    { name = "ommx-highs-adapter", editable = "python/ommx-highs-adapter" },
+    { name = "ommx-pyscipopt-adapter", editable = "python/ommx-pyscipopt-adapter" },
     { name = "pyright", specifier = ">=1.1.394" },
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pytest-codspeed", specifier = ">=4.5.0" },
     { name = "pytest-github-actions-annotate-failures" },
-    { name = "ruamel-yaml", specifier = ">=0.18.10" },
     { name = "ruff", specifier = ">=0.16.0" },
     { name = "sphinx", specifier = ">=7.4.7" },
     { name = "sphinx-autoapi", specifier = ">=3.5.0" },
@@ -74,12 +74,28 @@ docs = [
     { name = "tomlkit", specifier = ">=0.13.2" },
 ]
 lint = [{ name = "ruff", specifier = ">=0.16.0" }]
-maintenance = [
-    { name = "packaging" },
-    { name = "ruamel-yaml", specifier = ">=0.18.10" },
+maintenance = [{ name = "tomlkit", specifier = ">=0.13.2" }]
+release = [{ name = "twine", specifier = ">=6.0.0,<7.0.0" }]
+sdk-test = [
+    { name = "cibuildwheel" },
+    { name = "markdown-code-runner", specifier = ">=2.1.0" },
+    { name = "matplotlib", specifier = ">=3.10.7" },
+    { name = "maturin", specifier = ">=1.14.1,<2.0.0" },
+    { name = "myst-nb", specifier = ">=1.0.0" },
+    { name = "ommx", editable = "python/ommx" },
+    { name = "ommx-highs-adapter", editable = "python/ommx-highs-adapter" },
+    { name = "ommx-pyscipopt-adapter", editable = "python/ommx-pyscipopt-adapter" },
+    { name = "pyright", specifier = ">=1.1.394" },
+    { name = "pytest", specifier = ">=8.3.4" },
+    { name = "pytest-codspeed", specifier = ">=4.5.0" },
+    { name = "pytest-github-actions-annotate-failures" },
+    { name = "sphinx", specifier = ">=7.4.7" },
+    { name = "sphinx-autoapi", specifier = ">=3.5.0" },
+    { name = "sphinx-book-theme", specifier = ">=1.1.4" },
+    { name = "sphinxcontrib-katex", specifier = ">=0.9.11" },
+    { name = "syrupy", specifier = ">=4.7.2" },
     { name = "tomlkit", specifier = ">=0.13.2" },
 ]
-release = [{ name = "twine", specifier = ">=6.0.0,<7.0.0" }]
 test = [
     { name = "markdown-code-runner", specifier = ">=2.1.0" },
     { name = "pytest", specifier = ">=8.3.4" },
@@ -2178,23 +2194,6 @@ requires-dist = [
 ]
 
 [[package]]
-name = "ommx-tests"
-version = "3.0.0b10"
-source = { editable = "python/ommx-tests" }
-dependencies = [
-    { name = "ommx" },
-    { name = "ommx-highs-adapter" },
-    { name = "ommx-pyscipopt-adapter" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "ommx", editable = "python/ommx" },
-    { name = "ommx-highs-adapter", editable = "python/ommx-highs-adapter" },
-    { name = "ommx-pyscipopt-adapter", editable = "python/ommx-pyscipopt-adapter" },
-]
-
-[[package]]
 name = "openjij"
 version = "0.12.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3226,15 +3225,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ba/a5/9672e532fe02cd3b92c78cfd8743abca939d96853006c63835009a1ecb6f/rpds_py-2026.9.1-pp312-pypy312_pp73-musllinux_1_2_x86_64.whl", hash = "sha256:6b9bf3135b4ad5981df9a73d71a35272d650a2985ae9c2746357b24d59de2448", size = 591126, upload-time = "2026-10-04T16:32:29.274Z" },
     { url = "https://files.pythonhosted.org/packages/80/ef/3a9f8e4279c7920af561deed4cb7ebebed2794a8f608cf404d5eef14a105/rpds_py-2026.9.1-pp312-pypy312_pp80-macosx_10_12_x86_64.whl", hash = "sha256:56c6952a9b15047466d0c2347c446a761d4527f89976156341e68f0ce5cc08b0", size = 357108, upload-time = "2026-10-04T16:32:31.641Z" },
     { url = "https://files.pythonhosted.org/packages/b7/55/4b2fa381a583760aea5c92841e4e928a358e1c6511b129219e9c2826a226/rpds_py-2026.9.1-pp312-pypy312_pp80-macosx_11_0_arm64.whl", hash = "sha256:b242c27c8f836305a4a72df9cdd564386ac57b807bd252a063223331c9316b37", size = 346877, upload-time = "2026-10-04T16:32:34.061Z" },
-]
-
-[[package]]
-name = "ruamel-yaml"
-version = "0.19.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/c7/3b/ebda527b56beb90cb7652cb1c7e4f91f48649fbcd8d2eb2fb6e77cd3329b/ruamel_yaml-0.19.1.tar.gz", hash = "sha256:53eb66cd27849eff968ebf8f0bf61f46cdac2da1d1f3576dd4ccee9b25c31993", size = 142709, upload-time = "2026-01-02T16:50:31.84Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b8/0c/51f6841f1d84f404f92463fc2b1ba0da357ca1e3db6b7fbda26956c3b82a/ruamel_yaml-0.19.1-py3-none-any.whl", hash = "sha256:27592957fedf6e0b62f281e96effd28043345e0e66001f97683aa9a40c667c93", size = 118102, upload-time = "2026-01-02T16:50:29.201Z" },
 ]
 
 [[package]]

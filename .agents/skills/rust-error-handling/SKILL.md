@@ -160,7 +160,7 @@ rg -n "OmmxPyResult|define_ommx_error_mappings|map_err|new_err|downcast_ref" \
   rust/ommx/src python/ommx/src
 cargo test -p ommx affected_module --lib
 env PYO3_PYTHON="$PWD/.venv/bin/python3" cargo test -p _ommx_rust error::tests --lib
-uv run --no-sync pytest -q python/ommx-tests/tests/test_affected_behavior.py
+uv run --no-sync pytest -q python/ommx/tests/test_affected_behavior.py
 cargo tree -p _ommx_rust -e features -i pyo3
 ```
 

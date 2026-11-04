@@ -24,7 +24,7 @@ requires-dist = [
 ]
 
 [tool.uv.workspace]
-members = ["python/ommx*"]
+members = ["python/ommx", "python/ommx-*-adapter"]
 
 # Keep development-only dependencies at the workspace root. Workspace members
 # declare only their runtime and build dependencies.
@@ -49,9 +49,17 @@ build = [
   "cibuildwheel",
   "maturin>=1.14.1,<2.0.0",
 ]
+# Runtime, doctest adapters, and tools required by the complete SDK test suite.
+sdk-test = [
+  "ommx",
+  "ommx-highs-adapter",
+  "ommx-pyscipopt-adapter",
+  { include-group = "benchmark" },
+  { include-group = "docs" },
+  { include-group = "build" },
+  { include-group = "typecheck" },
+]
 maintenance = [
-  "packaging",
-  "ruamel-yaml>=0.18.10",
   "tomlkit>=0.13.2",
 ]
 docs = [
@@ -71,12 +79,9 @@ release = [
   "twine>=6.0.0,<7.0.0",
 ]
 dev = [
+  { include-group = "sdk-test" },
   { include-group = "lint" },
-  { include-group = "typecheck" },
-  { include-group = "benchmark" },
-  { include-group = "build" },
   { include-group = "maintenance" },
-  { include-group = "docs" },
   { include-group = "tutorials" },
   { include-group = "release" },
 ]

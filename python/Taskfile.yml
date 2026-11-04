@@ -56,15 +56,6 @@ tasks:
       - task: ommx-pyscipopt-adapter:test
       - task: ommx-highs-adapter:test
 
-  test-ci:
-    desc: Run tests for all Python projects (CI mode; without pyright for ommx)
-    cmds:
-      - task: ommx:pytest
-      - task: ommx-openjij-adapter:test
-      - task: ommx-python-mip-adapter:test
-      - task: ommx-pyscipopt-adapter:test
-      - task: ommx-highs-adapter:test
-
   bench:
     desc: Run benchmarks for OMMX Python SDK
     cmds:

@@ -90,7 +90,6 @@ def main():
     adapters = [
         here / name / "pyproject.toml"
         for name in [
-            "ommx-tests",
             "ommx-pyscipopt-adapter",
             "ommx-python-mip-adapter",
             "ommx-openjij-adapter",

@@ -1,4 +1,4 @@
-"""Pytest configuration for the ommx-tests package.
+"""Pytest configuration for the OMMX Python SDK.
 
 Sets up an OpenTelemetry ``TracerProvider`` with an in-memory
 ``SpanExporter`` at the start of the test session so that tests can

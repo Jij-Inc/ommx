@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.14t", "3.15"]
+        python-version: ["3.11", "3.15"]
     steps:
       - uses: actions/checkout@v7
 
@@ -76,6 +76,11 @@ jobs:
 
   # Test each wheel across its supported Python versions and GIL modes.
   test:
+    name: test (${{ matrix.python-version }})
+    env:
+      UV_NO_SYNC: '1' # uv run must keep using the installed wheel.
+      PYTEST_ADDOPTS: ${{ endsWith(matrix.python-version, 't') && '--require-gil-disabled' || '' }}
+      ADAPTER_COMPARISON_DOCTEST: python/ommx/tests/test_doctests.py::test_doctest[ommx.adapter]
     runs-on: ubuntu-latest
     needs: build-wheel
     strategy:
@@ -83,13 +88,10 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
         include:
-          # OpenJij and its dependencies do not support Python 3.15 yet.
           - python-version: "3.15"
-            test-scope: --sdk-only
-          - python-version: "3.14t"
-            test-scope: --sdk-only
+            wheel: wheels-3.15
           - python-version: "3.15t"
-            test-scope: --sdk-only
+            wheel: wheels-3.15
     steps:
       - uses: actions/checkout@v7
 
@@ -100,19 +102,44 @@ jobs:
       - name: Download wheel
         uses: actions/download-artifact@v8
         with:
-          pattern: wheels-*
-          merge-multiple: true
+          name: ${{ matrix.wheel || 'wheels-3.11' }}
           path: wheels
-      - name: Transform Python Project to run tests
+      - name: Select adapters for this interpreter
         run: |
-          # Keep the project-rewrite tooling independent of the target Python.
-          uv sync --python 3.11 --locked --only-group maintenance --no-install-workspace
-          uv run --python 3.11 --no-sync ci-scripts/setup-python-test-project.py ${{ matrix.python-version }} ${{ matrix.test-scope }}
-          cat pyproject.toml
-      - name: Install deps
-        run: task python:sync
-      - name: Test
-        run: task python:test-ci
+          adapters=$(uv run --no-project ci-scripts/select-python-adapters.py "${{ matrix.python-version }}")
+          echo "ADAPTERS=$adapters" >> "$GITHUB_ENV"
+      - name: Install locked test dependencies
+        shell: bash
+        run: |
+          packages=(--package ommx)
+          for adapter in $ADAPTERS; do
+            packages+=(--package "${adapter}")
+          done
+          uv sync --locked --no-install-package ommx --no-default-groups \
+            --group sdk-test --group lint "${packages[@]}"
+      - name: Install SDK wheel
+        run: uv pip install --python .venv --no-deps wheels/ommx-*.whl
+      - name: Check installed dependencies
+        run: uv pip check --python .venv
+      - name: Test SDK
+        run: |
+          if [[ -n "$PYTEST_ADDOPTS" ]]; then
+            # This example imports PySCIPOpt, which currently enables the GIL.
+            export PYTEST_ADDOPTS="$PYTEST_ADDOPTS --deselect=$ADAPTER_COMPARISON_DOCTEST"
+          fi
+          task python:ommx:pytest
+      - name: Test SDK comparison of solver adapters in a separate process
+        if: endsWith(matrix.python-version, 't')
+        env:
+          # Enforce the same contract once both participants declare support.
+          PYTEST_ADDOPTS: ${{ contains(env.ADAPTERS, 'ommx-highs-adapter') && contains(env.ADAPTERS, 'ommx-pyscipopt-adapter') && '--require-gil-disabled' || '' }}
+        run: uv run --no-sync pytest -v "$ADAPTER_COMPARISON_DOCTEST"
+      - name: Test selected adapters
+        if: env.ADAPTERS != ''
+        run: |
+          for adapter in $ADAPTERS; do
+            task "python:${adapter}:test"
+          done
 
       - name: Check PyO3 bridge generated stub and typing
         if: matrix.python-version == '3.11'
@@ -120,6 +147,18 @@ jobs:
 
       - name: Test PyO3 bridge across extension boundary
         run: task pyo3-bridge:runtime-test
+
+      - name: Verify the downloaded SDK wheel is still installed
+        run: |
+          uv run --no-sync python - <<'PY'
+          from importlib.metadata import distribution
+          import json
+          from pathlib import Path
+
+          wheel, = Path("wheels").glob("ommx-*.whl")
+          source = json.loads(distribution("ommx").read_text("direct_url.json"))
+          assert source["url"] == wheel.resolve().as_uri(), source
+          PY
 
   # Test Sphinx documentation with code execution
   test-book:
@@ -131,6 +170,7 @@ jobs:
         lang: [ja, en]
     env:
       python-version: "3.12"
+      UV_NO_SYNC: '1'
     steps:
       - uses: actions/checkout@v7
 
@@ -141,17 +181,14 @@ jobs:
       - name: Download wheel
         uses: actions/download-artifact@v8
         with:
-          pattern: wheels-*
-          merge-multiple: true
+          name: wheels-3.11
           path: wheels
-      - name: Transform Python Project to run tests
-        run: |
-          # Keep the project-rewrite tooling independent of the target Python.
-          uv sync --python 3.11 --locked --only-group maintenance --no-install-workspace
-          uv run --python 3.11 --no-sync ci-scripts/setup-python-test-project.py ${{ env.python-version }}
-          cat pyproject.toml
-      - name: Install deps
-        run: task python:sync
+      - name: Install locked Book dependencies
+        run: >-
+          uv sync --locked --all-packages --no-default-groups
+          --group docs --group tutorials --no-install-package ommx
+      - name: Install SDK wheel
+        run: uv pip install --python .venv --no-deps wheels/ommx-*.whl
       - name: Test Book (${{ matrix.lang }})
         run: task python:book:test:${{ matrix.lang }}
       - name: Check published entry links (${{ matrix.lang }})
@@ -169,12 +206,7 @@ jobs:
         run: uv sync --locked --only-group lint --no-install-workspace
 
       - name: Format
-        run: uv run --no-sync ruff format --check python
+        run: uv run --no-sync ruff format --check python ci-scripts conftest.py
 
       - name: Lint
-        run: uv run --no-sync ruff check python
-
-      - name: Test CI project setup
-        run: |
-          uv sync --locked --only-group maintenance --no-install-workspace --inexact
-          uv run --no-sync python -m unittest discover -s ci-scripts/tests
+        run: uv run --no-sync ruff check python ci-scripts conftest.py
