@@ -76,6 +76,19 @@ uv = tool["uv"]
 if not isinstance(uv, dict):
     raise KeyError("Expected tool.uv table in pyproject.toml")
 
+# This is a disposable CI workspace for one interpreter. In particular, a
+# version-specific free-threaded wheel cannot resolve on other Python minors.
+uv["environments"] = [f"python_version == '{version}'"]
+
+if sdk_only:
+    # Keep Sphinx for SDK rendering tests, but do not install dependencies used
+    # only by executable Book tutorials (which are tested in separate jobs).
+    groups = pyproject["dependency-groups"]
+    del groups["tutorials"]
+    groups["dev"] = [
+        group for group in groups["dev"] if group != {"include-group": "tutorials"}
+    ]
+
 sources = uv["sources"]
 if not isinstance(sources, dict):
     raise KeyError("Expected tool.uv.sources table in pyproject.toml")

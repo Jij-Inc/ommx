@@ -171,3 +171,8 @@ jobs:
 
       - name: Lint
         run: uv run --no-sync ruff check python
+
+      - name: Test CI project setup
+        run: |
+          uv sync --locked --only-group maintenance --no-install-workspace --inexact
+          uv run --no-sync python -m unittest discover -s ci-scripts/tests
