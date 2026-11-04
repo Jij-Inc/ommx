@@ -1546,7 +1546,7 @@ Alongside this storage model and the new `Experiment` API, the old `ArtifactBuil
 - New CLI `ommx prune-anonymous [--delete]` reports accumulated anonymous-commit entries by default and removes them only when `--delete` is passed.
 - `ommx.get_image_dir(...)` and the CLI `ommx image-dir <name>` subcommand are removed. The return value was a v2 disk-cache path (`<root>/<image_name>/<tag>/`) that no longer corresponds to any v3 storage location — the SQLite Local Registry stores blobs content-addressed and refs in SQLite — so pointing users at it was actively misleading. Existing v2 caches still migrate via `ommx import-legacy`.
 
-See the {ref}`Python SDK v2 to v3 Migration Guide §13 <13-artifact-api-archive-becomes-an-exchange-format>` for the full before/after code and migration checklist.
+See {ref}`Open or create an archive <13-artifact-api-archive-becomes-an-exchange-format>` for the replacements for the v2 archive APIs.
 
 ### 🆕 Artifact-backed experiment management API: `ommx.experiment` ([#882](https://github.com/Jij-Inc/ommx/pull/882), [#885](https://github.com/Jij-Inc/ommx/pull/885), [#886](https://github.com/Jij-Inc/ommx/pull/886), [#903](https://github.com/Jij-Inc/ommx/pull/903))
 
