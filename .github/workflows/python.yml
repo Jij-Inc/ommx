@@ -76,6 +76,8 @@ jobs:
 
   # Test each wheel across its supported Python versions and GIL modes.
   test:
+    env:
+      UV_NO_SYNC: '1' # uv run must keep using the installed wheel.
     runs-on: ubuntu-latest
     needs: build-wheel
     strategy:
@@ -86,13 +88,13 @@ jobs:
           # OpenJij and its dependencies do not support Python 3.15 yet.
           - python-version: "3.15"
             wheel: wheels-3.15
-            test-scope: --sdk-only
+            sdk-only: true
           - python-version: "3.14t"
             wheel: wheels-3.14t
-            test-scope: --sdk-only
+            sdk-only: true
           - python-version: "3.15t"
             wheel: wheels-3.15
-            test-scope: --sdk-only
+            sdk-only: true
     steps:
       - uses: actions/checkout@v7
 
@@ -105,14 +107,16 @@ jobs:
         with:
           name: ${{ matrix.wheel || 'wheels-3.11' }}
           path: wheels
-      - name: Transform Python Project to run tests
+      - name: Install locked test dependencies
         run: >-
-          uv run --isolated --locked --python 3.11 --only-group maintenance
-          ci-scripts/setup-python-test-project.py ${{ matrix.python-version }} wheels/ommx-*.whl ${{ matrix.test-scope }}
-      - name: Install deps
-        run: task python:sync
+          uv sync --locked --no-install-package ommx
+          ${{ matrix.sdk-only && '--only-group sdk-test' || '--all-packages --no-default-groups --group sdk-test --group lint' }}
+      - name: Install SDK wheel
+        run: uv pip install --python .venv --no-deps wheels/ommx-*.whl
+      - name: Check installed dependencies
+        run: uv pip check --python .venv
       - name: Test
-        run: task ${{ matrix.test-scope && 'python:ommx:pytest' || 'python:test-ci' }}
+        run: task ${{ matrix.sdk-only && 'python:ommx:pytest' || 'python:test-ci' }}
 
       - name: Check PyO3 bridge generated stub and typing
         if: matrix.python-version == '3.11'
@@ -120,6 +124,18 @@ jobs:
 
       - name: Test PyO3 bridge across extension boundary
         run: task pyo3-bridge:runtime-test
+
+      - name: Verify the downloaded SDK wheel is still installed
+        run: |
+          uv run --no-sync python - <<'PY'
+          from importlib.metadata import distribution
+          import json
+          from pathlib import Path
+
+          wheel, = Path("wheels").glob("ommx-*.whl")
+          source = json.loads(distribution("ommx").read_text("direct_url.json"))
+          assert source["url"] == wheel.resolve().as_uri(), source
+          PY
 
   # Test Sphinx documentation with code execution
   test-book:
@@ -131,6 +147,7 @@ jobs:
         lang: [ja, en]
     env:
       python-version: "3.12"
+      UV_NO_SYNC: '1'
     steps:
       - uses: actions/checkout@v7
 
@@ -143,12 +160,12 @@ jobs:
         with:
           name: wheels-3.11
           path: wheels
-      - name: Transform Python Project to run tests
+      - name: Install locked Book dependencies
         run: >-
-          uv run --isolated --locked --python 3.11 --only-group maintenance
-          ci-scripts/setup-python-test-project.py ${{ env.python-version }} wheels/ommx-*.whl
-      - name: Install deps
-        run: task python:sync
+          uv sync --locked --all-packages --no-default-groups
+          --group docs --group tutorials --no-install-package ommx
+      - name: Install SDK wheel
+        run: uv pip install --python .venv --no-deps wheels/ommx-*.whl
       - name: Test Book (${{ matrix.lang }})
         run: task python:book:test:${{ matrix.lang }}
       - name: Check published entry links (${{ matrix.lang }})
@@ -170,8 +187,3 @@ jobs:
 
       - name: Lint
         run: uv run --no-sync ruff check python ci-scripts
-
-      - name: Test CI project setup
-        run: |
-          uv sync --locked --only-group maintenance --no-install-workspace --inexact
-          uv run --no-sync python -m unittest discover -s ci-scripts/tests

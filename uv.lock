@@ -26,7 +26,6 @@ members = [
     "ommx-openjij-adapter",
     "ommx-pyscipopt-adapter",
     "ommx-python-mip-adapter",
-    "ommx-tests",
 ]
 constraints = [{ name = "openjij", specifier = "==0.12.0" }]
 
@@ -49,7 +48,9 @@ dev = [
     { name = "matplotlib", specifier = ">=3.10.7" },
     { name = "maturin", specifier = ">=1.14.1,<2.0.0" },
     { name = "myst-nb", specifier = ">=1.0.0" },
-    { name = "packaging" },
+    { name = "ommx", editable = "python/ommx" },
+    { name = "ommx-highs-adapter", editable = "python/ommx-highs-adapter" },
+    { name = "ommx-pyscipopt-adapter", editable = "python/ommx-pyscipopt-adapter" },
     { name = "pyright", specifier = ">=1.1.394" },
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pytest-codspeed", specifier = ">=4.5.0" },
@@ -73,11 +74,28 @@ docs = [
     { name = "tomlkit", specifier = ">=0.13.2" },
 ]
 lint = [{ name = "ruff", specifier = ">=0.16.0" }]
-maintenance = [
-    { name = "packaging" },
+maintenance = [{ name = "tomlkit", specifier = ">=0.13.2" }]
+release = [{ name = "twine", specifier = ">=6.0.0,<7.0.0" }]
+sdk-test = [
+    { name = "cibuildwheel" },
+    { name = "markdown-code-runner", specifier = ">=2.1.0" },
+    { name = "matplotlib", specifier = ">=3.10.7" },
+    { name = "maturin", specifier = ">=1.14.1,<2.0.0" },
+    { name = "myst-nb", specifier = ">=1.0.0" },
+    { name = "ommx", editable = "python/ommx" },
+    { name = "ommx-highs-adapter", editable = "python/ommx-highs-adapter" },
+    { name = "ommx-pyscipopt-adapter", editable = "python/ommx-pyscipopt-adapter" },
+    { name = "pyright", specifier = ">=1.1.394" },
+    { name = "pytest", specifier = ">=8.3.4" },
+    { name = "pytest-codspeed", specifier = ">=4.5.0" },
+    { name = "pytest-github-actions-annotate-failures" },
+    { name = "sphinx", specifier = ">=7.4.7" },
+    { name = "sphinx-autoapi", specifier = ">=3.5.0" },
+    { name = "sphinx-book-theme", specifier = ">=1.1.4" },
+    { name = "sphinxcontrib-katex", specifier = ">=0.9.11" },
+    { name = "syrupy", specifier = ">=4.7.2" },
     { name = "tomlkit", specifier = ">=0.13.2" },
 ]
-release = [{ name = "twine", specifier = ">=6.0.0,<7.0.0" }]
 test = [
     { name = "markdown-code-runner", specifier = ">=2.1.0" },
     { name = "pytest", specifier = ">=8.3.4" },
@@ -2173,23 +2191,6 @@ requires-dist = [
     { name = "cffi", specifier = ">=1.15.0,<2.0.0" },
     { name = "mip", specifier = ">=1.17.0,<2.0.0" },
     { name = "ommx", editable = "python/ommx" },
-]
-
-[[package]]
-name = "ommx-tests"
-version = "3.0.0b10"
-source = { editable = "python/ommx-tests" }
-dependencies = [
-    { name = "ommx" },
-    { name = "ommx-highs-adapter" },
-    { name = "ommx-pyscipopt-adapter" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "ommx", editable = "python/ommx" },
-    { name = "ommx-highs-adapter", editable = "python/ommx-highs-adapter" },
-    { name = "ommx-pyscipopt-adapter", editable = "python/ommx-pyscipopt-adapter" },
 ]
 
 [[package]]
