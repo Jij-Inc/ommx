@@ -79,7 +79,6 @@ jobs:
     name: test (${{ matrix.python-version }})
     env:
       UV_NO_SYNC: '1' # uv run must keep using the installed wheel.
-      ADAPTERS: ${{ join(matrix.adapters, ' ') }}
     runs-on: ubuntu-latest
     needs: build-wheel
     strategy:
@@ -87,14 +86,10 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
         include:
-          # Adapter suites to run alongside the SDK on the four versions above.
-          - adapters: [openjij, python-mip, pyscipopt, highs]
           - python-version: "3.15"
             wheel: wheels-3.15
-            adapters: []
           - python-version: "3.15t"
             wheel: wheels-3.15
-            adapters: []
     steps:
       - uses: actions/checkout@v7
 
@@ -107,12 +102,16 @@ jobs:
         with:
           name: ${{ matrix.wheel || 'wheels-3.11' }}
           path: wheels
+      - name: Select adapters for this interpreter
+        run: |
+          adapters=$(uv run --no-project ci-scripts/select-python-adapters.py "${{ matrix.python-version }}")
+          echo "ADAPTERS=$adapters" >> "$GITHUB_ENV"
       - name: Install locked test dependencies
         shell: bash
         run: |
           packages=(--package ommx)
           for adapter in $ADAPTERS; do
-            packages+=(--package "ommx-${adapter}-adapter")
+            packages+=(--package "${adapter}")
           done
           uv sync --locked --no-install-package ommx --no-default-groups \
             --group sdk-test --group lint "${packages[@]}"
@@ -126,7 +125,7 @@ jobs:
         if: env.ADAPTERS != ''
         run: |
           for adapter in $ADAPTERS; do
-            task "python:ommx-${adapter}-adapter:test"
+            task "python:${adapter}:test"
           done
 
       - name: Check PyO3 bridge generated stub and typing

@@ -150,7 +150,7 @@ When developing solver adapters:
 - Declare only runtime dependencies required by the adapter's own implementation in its package metadata.
 - Base `requires-python` on the syntax and standard-library APIs it uses. An explicitly adopted project-wide support policy, such as dropping an end-of-life Python release, may set a higher minimum across the SDK and adapters. Add a Python upper bound only for a demonstrated incompatibility in the adapter itself.
 - Do not copy a solver's or transitive dependency's Python bounds or wheel availability into the adapter's `requires-python`. Let dependency metadata and the package resolver enforce those constraints.
-- Keep development and CI environment restrictions in workspace configuration. Record tested Python versions in classifiers and the CI matrix separately from package requirements.
+- Each adapter declares its tested GIL-enabled Python minors in its own `project.classifiers` (e.g. `Programming Language :: Python :: 3.15`). For free-threaded interpreters, list tested minors separately in that same pyproject, e.g. `[tool.ommx.ci]` with `free-threaded = ["3.15"]`. CI reads these declarations for each SDK interpreter; omitting the free-threaded list means no free-threaded adapter tests.
 
 ```python
 from ommx import Instance, DecisionVariable, Function, Solution  # Good
