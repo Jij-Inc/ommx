@@ -30,7 +30,7 @@ from ommx import (
     PreparationPolicy,
     Sense,
     Solution,
-    SpecialConstraintKind,
+    ConstraintKind,
     SpecialConstraintPreparation,
     State,
     ToState,
@@ -370,37 +370,27 @@ class SCIPDiagnosticsAnalyzer:
 
     .. rubric:: Plot a recorded bound and gap history
 
-    The following figure uses one actual run on MIPLIB ``air05``. It is an
-    illustration of diagnostic output, not a performance comparison. The
-    :download:`saved diagnostics </api/examples/scip_air05.json>` include the
-    source model location, SDK/repository revision, platform, solver versions,
-    and settings. No network access or new solve is needed to redraw it.
+    Use the elapsed-time index to plot the bounds and gap from your own
+    run. SCIP can return its infinity sentinel before a finite bound is
+    available. Mask these entries so an unknown bound does not look like
+    a large observed value.
 
-    Download the :download:`drawing and recording script
-    </api/examples/adapter_diagnostics.py>` and JSON into the same directory.
-    With matplotlib installed, run ``python adapter_diagnostics.py --data
-    scip_air05.json --output diagnostics.png`` in your SDK environment. In this
-    repository, use ``uv run --no-sync python
-    docs/api/examples/adapter_diagnostics.py``. From the repository root, add
-    ``--record`` only to acquire a new run: it downloads/caches MIPLIB data in the Local Registry and solves
-    the problem again. Timings and intermediate observations can change.
+    >>> from matplotlib import pyplot as plt
+    >>> from pyscipopt import Model
+    >>> values = history[["primal_bound", "dual_bound", "gap"]]
+    >>> visible = values.where(values.abs() < Model().infinity())
+    >>> fig, (bounds_ax, gap_ax) = plt.subplots(2, sharex=True)
+    >>> _ = visible[["primal_bound", "dual_bound"]].plot(ax=bounds_ax)
+    >>> _ = visible["gap"].plot(ax=gap_ax, ylabel="Relative gap")
+    >>> plt.close(fig)
 
-    The plotting function passes the saved reports to this Analyzer and uses
-    its time-indexed DataFrame. It masks NaN/Inf and SCIP's infinity sentinel;
-    absent bounds do not become artificial points on the chart. Lines connect
-    recorded observations, not every change made by the solver. The final SCIP
-    report supplies the terminal row.
+    .. figure:: /../assets/scip_air05/bounds.png
+       :alt: SCIP upper and lower bounds converge at 26374 and the relative gap reaches zero.
 
-    .. literalinclude:: /api/examples/adapter_diagnostics.py
-       :language: python
-       :pyobject: plot
-
-    .. figure:: /api/assets/adapter_diagnostics_bounds.png
-       :alt: Recorded SCIP primal and dual bounds and relative gap over elapsed time
-
-       One recorded SCIP run on air05. The upper panel shows solver objective
-       bounds; the lower panel shows SCIP's relative gap. Acquisition conditions
-       and unfiltered reports are included in the downloadable JSON.
+       SCIP 10.0.2 minimizing MIPLIB air05 with the adapter defaults.
+       The incumbent gives an upper bound and the dual bound gives a lower
+       bound. Lines connect recorded observations. At termination the bounds
+       meet at 26,374 and SCIP reports a relative gap of zero.
 
     .. rubric:: Inspect a report when no Solution is returned
 
@@ -714,7 +704,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     ...     lambda value: "Include" if value > 0.5 else "Exclude"
     ... )
     >>> assert selection["choice"].value_counts().to_dict() == {"Exclude": 4, "Include": 2}
-    >>> constraints = solution.constraints_df(kind="regular")
+    >>> constraints = solution.constraints_df(kind=ConstraintKind.Regular)
     >>> residual = constraints.loc[weight_limit.constraint_id, "value"]
     >>> assert abs(residual - (sum(weights[i] for i in selected) - capacity)) < 1e-6
     >>> assert abs(residual - (-1.0)) < 1e-6
@@ -732,7 +722,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     it does not require either one to be selected. SCIP receives both
     structures directly:
 
-    >>> from ommx import Instance, Sos1Constraint, SpecialConstraintKind
+    >>> from ommx import Instance, Sos1Constraint, ConstraintKind
     >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
     >>> source = Instance.maximize()
     >>> enabled = source.new_binary("enabled")
@@ -749,7 +739,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     >>> assert solution.feasible
     >>> assert abs(solution.objective - 20.0) < 1e-6
     >>> assert source.active_special_constraint_kinds == {
-    ...     SpecialConstraintKind.Indicator, SpecialConstraintKind.Sos1,
+    ...     ConstraintKind.Indicator, ConstraintKind.Sos1,
     ... }
     >>> assert not source.removed_constraints
 
@@ -763,7 +753,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     Exactly one of the three binary variables must be one. The easy solve path
     lowers the OneHot constraint on its copy before encoding SCIP input:
 
-    >>> from ommx import Instance, OneHotConstraint, SpecialConstraintKind
+    >>> from ommx import Instance, OneHotConstraint, ConstraintKind
     >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
     >>> choice_model = Instance.maximize()
     >>> choices = [choice_model.new_binary("choice", subscripts=[i]) for i in range(3)]
@@ -773,7 +763,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     >>> solution = OMMXPySCIPOptAdapter.solve(choice_model)
     >>> assert solution.feasible
     >>> assert abs(solution.objective - 10.0) < 1e-6
-    >>> assert choice_model.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
+    >>> assert choice_model.active_special_constraint_kinds == {ConstraintKind.OneHot}
     >>> assert not choice_model.removed_constraints
 
     **SOS1 with continuous variables**
@@ -800,7 +790,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
     >>> from ommx import (
     ...     Instance, OneHotConstraint, PreparationPolicy, Sos1Constraint,
-    ...     SpecialConstraintKind, SpecialConstraintPreparation,
+    ...     ConstraintKind, SpecialConstraintPreparation,
     ... )
     >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
     >>> model = Instance.maximize()
@@ -811,12 +801,12 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     >>> _ = model.add_sos1_constraint(Sos1Constraint(variables=optional))
     >>> policy = PreparationPolicy(
     ...     special_constraints=SpecialConstraintPreparation.lower_special_constraints(
-    ...         kinds={SpecialConstraintKind.OneHot}
+    ...         kinds={ConstraintKind.OneHot}
     ...     )
     ... )
     >>> model.prepare(OMMXPySCIPOptAdapter.INPUT_CLASS, policy)
     >>> assert OMMXPySCIPOptAdapter.check_applicability(model).is_member
-    >>> assert model.active_special_constraint_kinds == {SpecialConstraintKind.Sos1}
+    >>> assert model.active_special_constraint_kinds == {ConstraintKind.Sos1}
     >>> solution = OMMXPySCIPOptAdapter.solve_without_preparation(model)
     >>> assert solution.feasible
     >>> assert abs(solution.objective - 14.0) < 1e-6
@@ -858,7 +848,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         """
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(
-                kinds={SpecialConstraintKind.OneHot}
+                kinds={ConstraintKind.OneHot}
             )
         )
 
@@ -912,6 +902,44 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         The :class:`OMMXPySCIPOptAdapter` class documentation contains a complete
         knapsack example from model construction through named-variable
         extraction, tabular analysis, objective value, and constraint slack.
+
+        **Start from a candidate**
+
+        Evaluate the proposed assignment against the same instance you intend
+        to solve. SCIP uses it as a starting point and can return a better
+        solution. In this example the starting objective is 1 and the optimum
+        is 5.
+
+        >>> from ommx import Instance
+        >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+        >>> problem = Instance.maximize()
+        >>> x = problem.new_integer("x", lower=0, upper=5)
+        >>> y = problem.new_integer("y", lower=0, upper=5)
+        >>> problem.objective = x - y
+        >>> _ = problem.add_constraint(x + y <= 5)
+        >>> proposed = {x.id: 3, y.id: 2}
+        >>> initial = problem.evaluate(proposed)
+        >>> assert initial.feasible and initial.objective == 1
+        >>> result = OMMXPySCIPOptAdapter.solve(problem, initial_state=proposed)
+        >>> assert result.feasible and result.objective == 5
+
+        To reuse a plan across models whose IDs differ, supply names and
+        tuple subscripts. Use an empty tuple for a scalar and ``(i,)`` for
+        a single index. SCIP accepts the named mapping directly. To check
+        it first, resolve the names against the target instance:
+
+        >>> named = {"x": {(): 3.0}, "y": {(): 2.0}}
+        >>> state = problem.state_from_named_values(named)
+        >>> assert problem.evaluate(state).feasible
+        >>> assert OMMXPySCIPOptAdapter.solve(problem, initial_state=named).objective == 5
+
+        You can also pass the resolved State or a previous solution's
+        :attr:`~ommx.Solution.state` when the IDs match.
+        :meth:`ommx.Instance.state_from_named_values` describes unknown or
+        ambiguous names. SCIP initializes omitted solver variables to zero
+        when building the proposed solution. Evaluating a partial assignment
+        with OMMX may require additional values. A starting point neither fixes
+        the final assignment nor guarantees a shorter solve.
 
         Infeasible Problem
 

@@ -2,7 +2,10 @@ use super::DecisionVariableRole;
 use serde::{Deserialize, Serialize};
 
 /// Statistics about decision variables categorized by kind.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Additional kind counts may be added. Use `Default` when constructing counts.
+#[non_exhaustive]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct VariableStatsByKind {
     /// Number of binary variables
     pub binary: usize,
@@ -180,6 +183,20 @@ impl super::Instance {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn kind_statistics_read_missing_counts_as_zero() {
+        let counts: super::VariableStatsByKind =
+            serde_json::from_str(r#"{"binary": 2, "integer": 3}"#).unwrap();
+        assert_eq!(counts.binary, 2);
+        assert_eq!(counts.integer, 3);
+        assert_eq!(counts.finite_domain, 0);
+        let expected = super::VariableStatsByKind {
+            binary: 2,
+            integer: 3,
+            ..Default::default()
+        };
+        assert_eq!(counts, expected);
+    }
     use super::*;
     use crate::{
         coeff, linear, Constraint, ConstraintID, DecisionVariable, Instance, Sense, VariableID,

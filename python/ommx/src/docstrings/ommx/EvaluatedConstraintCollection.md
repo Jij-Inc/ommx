@@ -33,10 +33,10 @@ unsupported families when interpreting their mathematical meaning.
 
 | ``kind`` | Typed ID | Solution row | SampleSet row |
 | --- | --- | --- | --- |
-| ``"regular"`` | {class}`~ommx.ConstraintID` | {class}`~ommx.EvaluatedConstraint` | {class}`~ommx.SampledConstraint` |
-| ``"indicator"`` | {class}`~ommx.IndicatorConstraintID` | {class}`~ommx.EvaluatedIndicatorConstraint` | {class}`~ommx.SampledIndicatorConstraint` |
-| ``"one_hot"`` | {class}`~ommx.OneHotConstraintID` | {class}`~ommx.EvaluatedOneHotConstraint` | {class}`~ommx.SampledOneHotConstraint` |
-| ``"sos1"`` | {class}`~ommx.Sos1ConstraintID` | {class}`~ommx.EvaluatedSos1Constraint` | {class}`~ommx.SampledSos1Constraint` |
+| ``ConstraintKind.Regular`` | {class}`~ommx.ConstraintID` | {class}`~ommx.EvaluatedConstraint` | {class}`~ommx.SampledConstraint` |
+| ``ConstraintKind.Indicator`` | {class}`~ommx.IndicatorConstraintID` | {class}`~ommx.EvaluatedIndicatorConstraint` | {class}`~ommx.SampledIndicatorConstraint` |
+| ``ConstraintKind.OneHot`` | {class}`~ommx.OneHotConstraintID` | {class}`~ommx.EvaluatedOneHotConstraint` | {class}`~ommx.SampledOneHotConstraint` |
+| ``ConstraintKind.Sos1`` | {class}`~ommx.Sos1ConstraintID` | {class}`~ommx.EvaluatedSos1Constraint` | {class}`~ommx.SampledSos1Constraint` |
 
 For the mixed-family typed-key contract, ``get``, live views, iteration timing,
 and snapshot equality, see {class}`~ommx.ConstraintCollection`. Filter without

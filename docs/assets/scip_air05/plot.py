@@ -1,7 +1,7 @@
 """Render saved SCIP diagnostics; optionally collect a new air05 run.
 
 From the repository root:
-    uv run --no-sync python docs/api/examples/adapter_diagnostics.py
+    uv run --no-sync python docs/assets/scip_air05/plot.py
 
 Pass --record to download/cache MIPLIB air05 and solve it again. Recording uses
 the installed SDK and solver defaults and is never part of the rendering test.
@@ -88,11 +88,11 @@ def plot(payload: dict):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data", type=Path, default=HERE / "scip_air05.json")
+    parser.add_argument("--data", type=Path, default=HERE / "diagnostics.json")
     parser.add_argument(
         "--output",
         type=Path,
-        default=HERE.parent / "assets" / "adapter_diagnostics_bounds.png",
+        default=HERE / "bounds.png",
     )
     parser.add_argument("--record", action="store_true")
     args = parser.parse_args()

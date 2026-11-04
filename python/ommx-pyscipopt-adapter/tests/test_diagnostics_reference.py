@@ -14,10 +14,10 @@ from PIL import Image
 from ommx_pyscipopt_adapter import SCIPDiagnosticsAnalyzer
 
 
-API = Path(__file__).resolve().parents[3] / "docs" / "api"
-SCRIPT = API / "examples" / "adapter_diagnostics.py"
-DATA = API / "examples" / "scip_air05.json"
-IMAGE = API / "assets" / "adapter_diagnostics_bounds.png"
+FIGURE = Path(__file__).resolve().parents[3] / "docs/assets/scip_air05"
+SCRIPT = FIGURE / "plot.py"
+DATA = FIGURE / "diagnostics.json"
+IMAGE = FIGURE / "bounds.png"
 
 
 def test_recorded_diagnostics_plot(tmp_path):

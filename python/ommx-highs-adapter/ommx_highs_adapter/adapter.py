@@ -22,7 +22,7 @@ from ommx import (
     PreparationPolicy,
     Sense,
     Solution,
-    SpecialConstraintKind,
+    ConstraintKind,
     SpecialConstraintPreparation,
     State,
 )
@@ -293,8 +293,7 @@ class HighsDiagnosticsAnalyzer:
 
     Display ``fig`` or call ``plt.show()`` before closing it when working
     interactively. The :class:`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer`
-    Reference includes a downloadable recorded history, plotting script, and
-    a bound/gap figure. Use the appropriate Analyzer and backend definitions
+    Reference illustrates how the bounds and gap change during a recorded solve. Use the appropriate Analyzer and backend definitions
     when drawing your own reports; the curves are observations, not a complete
     trace of every internal update.
 
@@ -568,7 +567,7 @@ class OMMXHighsAdapter(SolverAdapter):
     This example is self-contained; it uses the same model that
     :class:`ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter` can encode natively.
 
-    >>> from ommx import Instance, Sos1Constraint, SpecialConstraintKind
+    >>> from ommx import Instance, Sos1Constraint, ConstraintKind
     >>> from ommx_highs_adapter import OMMXHighsAdapter
     >>> source = Instance.maximize()
     >>> enabled = source.new_binary("enabled")
@@ -585,7 +584,7 @@ class OMMXHighsAdapter(SolverAdapter):
     >>> assert solution.feasible
     >>> assert abs(solution.objective - 20.0) < 1e-6
     >>> assert source.active_special_constraint_kinds == {
-    ...     SpecialConstraintKind.Indicator, SpecialConstraintKind.Sos1,
+    ...     ConstraintKind.Indicator, ConstraintKind.Sos1,
     ... }
     >>> assert not source.removed_constraints
 
@@ -597,6 +596,21 @@ class OMMXHighsAdapter(SolverAdapter):
     :meth:`ommx.Instance.prepare` explicitly and then
     :meth:`solve_without_preparation`; the PySCIPOpt Adapter Reference provides
     a complete example of that sequence.
+
+    **Inspect conversion, search and decoding times**
+
+    >>> from ommx import Instance
+    >>> from ommx.tracing import capture_trace
+    >>> problem = Instance.minimize()
+    >>> x = problem.new_binary("x")
+    >>> problem.objective = -x
+    >>> with capture_trace("highs_solve") as trace:
+    ...     solution = OMMXHighsAdapter.solve(problem, verbose=False)
+    >>> assert solution.feasible and solution.objective == -1
+    >>> assert {"convert", "call", "decode"} <= {span.name for span in trace.spans}
+
+    Display the trace to read the stages within the solve. The parent
+    span includes the children's time. Each duration describes this run.
 
     Translation Specifications
     ==========================
@@ -767,9 +781,9 @@ class OMMXHighsAdapter(SolverAdapter):
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(
                 kinds={
-                    SpecialConstraintKind.Indicator,
-                    SpecialConstraintKind.OneHot,
-                    SpecialConstraintKind.Sos1,
+                    ConstraintKind.Indicator,
+                    ConstraintKind.OneHot,
+                    ConstraintKind.Sos1,
                 }
             )
         )

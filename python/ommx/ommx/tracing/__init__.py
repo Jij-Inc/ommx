@@ -1,58 +1,63 @@
-"""Per-cell / per-block tracing for OMMX.
+"""Inspect the time spent inside an OMMX operation.
 
-Two user-facing APIs, sharing the same OTel collector + renderers:
+A span records the start and end of an instrumented operation. Nested spans
+show where time went within a parent operation. The parent includes its
+children's time. A single root span tells you only the total duration.
 
-**Jupyter cell magic** (best for notebooks)::
+**Capture one evaluation**
+
+>>> from ommx import Instance
+>>> from ommx.tracing import capture_trace, render_text_tree, save_chrome_trace
+>>> problem = Instance.minimize()
+>>> x = problem.new_binary("x")
+>>> problem.objective = x
+>>> with capture_trace("evaluate candidate") as trace:
+...     solution = problem.evaluate({x.id: 1})
+>>> assert solution.objective == 1
+>>> assert "evaluate candidate" in render_text_tree(trace)
+
+Inspect the tree in a terminal or display the result in Jupyter. To view a
+timeline in Perfetto or another Chrome trace viewer, save the trace as JSON:
+
+>>> from pathlib import Path
+>>> from tempfile import TemporaryDirectory
+>>> with TemporaryDirectory() as directory:
+...     path = Path(directory) / "trace.json"
+...     save_chrome_trace(trace, path)
+...     assert path.stat().st_size > 0
+
+To trace each call to a function, use :func:`traced`. The function still
+returns its normal result. On failure, the decorator attempts to save the
+trace and propagates the original exception.
+
+>>> from ommx.tracing import traced
+>>> with TemporaryDirectory() as directory:
+...     path = Path(directory) / "evaluate.json"
+...     @traced(output=path)
+...     def evaluate(value):
+...         return problem.evaluate({x.id: value})
+...     assert evaluate(0).objective == 0 and path.is_file()
+
+**Trace one notebook cell**
+
+In a Jupyter kernel with the SDK installed, run this line in its own cell::
 
     %load_ext ommx.tracing
 
+Then start the cell you want to measure with the magic::
+
     %%ommx_trace
-    instance = Instance.from_v2_bytes(blob)
-    solution = instance.evaluate(state)
+    from ommx import Instance
+    solution = Instance.minimize().evaluate({})
 
-Cell output shows a nested text tree of every span produced during the
-cell (Rust and Python alike), annotated with durations and attributes,
-plus a download link for the full trace in Chrome Trace Event Format.
+The output displays the span tree and a Chrome trace JSON link. Only
+instrumented operations produce child spans. If the cell raises an exception,
+the trace is displayed and the exception propagates.
 
-**Context manager / decorator** (best for scripts, tests, CI)::
-
-    from ommx.tracing import capture_trace, render_text_tree, save_chrome_trace, traced
-
-    with capture_trace() as trace:
-        solution = instance.evaluate(state)
-    print(render_text_tree(trace))
-    save_chrome_trace(trace, "trace.json")
-
-    @traced(output="process.json")
-    def process():
-        ...
-
-The public surface is intentionally small:
-
-* :class:`capture_trace` — context manager; ``__enter__`` returns a
-  :class:`TraceResult` placeholder that ``__exit__`` fills in (for
-  success *and* for exceptions — information is never dropped).
-* :class:`TraceResult` — completed trace data: ``request``, ``spans``,
-  ``otlp_protobuf()``.
-* :func:`render_text_tree`, :func:`chrome_trace_json`,
-  :func:`save_chrome_trace` — render or save a :class:`TraceResult`.
-* :func:`traced` — decorator sugar on top of :class:`capture_trace`,
-  optionally writing the Chrome Trace JSON to disk.
-* :func:`load_ipython_extension` — wired by ``%load_ext ommx.tracing``;
-  registers the ``%%ommx_trace`` cell magic. The collector itself is
-  attached to the active OpenTelemetry ``TracerProvider`` lazily, on
-  the first traced cell, so ``%load_ext`` stays cheap and cannot fail
-  due to provider state that is still being configured further up the
-  notebook.
-* :func:`unload_ipython_extension` — pair for ``%unload_ext``. Kept as
-  a no-op because IPython magics cannot be cleanly unregistered
-  without disturbing user state; leaving the collector installed costs
-  nothing.
-
-Everything else (``_collector``, ``_render``, ``_setup``, ``_magic``,
-``_capture``, ``_decorator``, ``_result``) is internal and may change
-without notice. Reach for them only if you are building on top of this
-module and can tolerate breakage.
+For a solver breakdown, see :class:`ommx_highs_adapter.OMMXHighsAdapter`.
+To keep a trace with an Experiment, see :attr:`ommx.experiment.SealedRun.trace`.
+Local capture works without an external exporter. To send the same spans
+to a service, see :doc:`OTLP export settings </how_to/export_traces>`.
 """
 
 from __future__ import annotations

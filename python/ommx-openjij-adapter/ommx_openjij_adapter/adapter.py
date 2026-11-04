@@ -21,7 +21,7 @@ from ommx import (
     Samples,
     SampleSet,
     Solution,
-    SpecialConstraintKind,
+    ConstraintKind,
     SpecialConstraintPreparation,
 )
 from ommx.adapter import DiagnosticsSink, SamplerAdapter
@@ -67,9 +67,9 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(
                 kinds={
-                    SpecialConstraintKind.Indicator,
-                    SpecialConstraintKind.OneHot,
-                    SpecialConstraintKind.Sos1,
+                    ConstraintKind.Indicator,
+                    ConstraintKind.OneHot,
+                    ConstraintKind.Sos1,
                 }
             ),
             objective=ObjectivePreparation(target=Sense.Minimize),

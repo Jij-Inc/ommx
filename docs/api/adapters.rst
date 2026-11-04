@@ -66,7 +66,7 @@ The :class:`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` and
 :class:`~ommx_highs_adapter.HighsDiagnosticsAnalyzer` references each start with
 a complete small-model example and cover progress, terminal values, and reports
 retained when decoding fails. The SCIP Reference also provides a recorded
-bound/gap plot with downloadable source data and a drawing script.
+bound/gap plot and shows how to plot the history of your own run.
 
 .. py:class:: ommx.adapter.DiagnosticCollector()
 

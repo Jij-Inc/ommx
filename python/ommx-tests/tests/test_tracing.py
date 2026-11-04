@@ -23,7 +23,7 @@ from ommx import (
     Equality,
     IndicatorConstraint,
     Instance,
-    SpecialConstraintKind,
+    ConstraintKind,
 )
 
 from conftest import get_test_exporter, get_test_provider
@@ -76,7 +76,7 @@ def test_rust_spans_are_forwarded() -> None:
     exporter.clear()
 
     instance = _instance_with_indicator()
-    instance.lower_special_constraints({SpecialConstraintKind.Indicator})
+    instance.lower_special_constraints({ConstraintKind.Indicator})
 
     provider.force_flush()
     rust_spans = [s for s in exporter.spans if s.name == "lower_special_constraints"]
@@ -98,7 +98,7 @@ def test_trace_context_propagation() -> None:
     with tracer.start_as_current_span("python_parent") as parent_span:
         parent_trace_id = parent_span.get_span_context().trace_id
         parent_span_id = parent_span.get_span_context().span_id
-        instance.lower_special_constraints({SpecialConstraintKind.Indicator})
+        instance.lower_special_constraints({ConstraintKind.Indicator})
 
     provider.force_flush()
 
@@ -192,7 +192,7 @@ def test_tracing_info_event_captured_on_rust_span() -> None:
     exporter.clear()
 
     instance = _instance_with_indicator()
-    instance.lower_special_constraints({SpecialConstraintKind.Indicator})
+    instance.lower_special_constraints({ConstraintKind.Indicator})
 
     provider.force_flush()
     rust_spans = [s for s in exporter.spans if s.name == "lower_special_constraints"]

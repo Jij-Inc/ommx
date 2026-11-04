@@ -6,6 +6,38 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+## 3.0.0 Beta 9
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b9-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b9)
+
+### ⚠ Use `ConstraintKind` for constraint families ([#1329](https://github.com/Jij-Inc/ommx/pull/1329))
+
+When migrating from Beta 8, replace `SpecialConstraintKind` and string
+selectors such as `"sos1"` with `ConstraintKind` constants. For example,
+`constraints.of_kind(ConstraintKind.Sos1)` returns a view with SOS1 ID and
+row types, and `constraints_df(kind=ConstraintKind.Sos1)` selects the same
+family for a DataFrame.
+
+`Kind`, `ConstraintKind`, and `ProvenanceKind` expose known constants and allow
+new kinds in future SDKs. Code that interprets a domain or constraint family
+must handle unrecognized values explicitly. Comparison, hashing, integer
+conversion, and `Kind.from_pb()` / `Kind.to_pb()` remain available. See
+[the migration guide](../migration/python_sdk_v2_to_v3.md) for the numeric scalar extension contract.
+
+`instance.active_constraint_kinds` reports every family with active rows.
+`instance.active_special_constraint_kinds` reports only the special families.
+Passing `ConstraintKind.Regular` to `lower_special_constraints` raises an error
+before any selected family is converted.
+
+For a solution containing OneHot constraint 30, look up its violation by typed ID and select its table by family.
+
+```python
+from ommx import ConstraintKind, OneHotConstraintID
+
+solution.constraint_violation(OneHotConstraintID(30))
+solution.constraints_df(kind=ConstraintKind.OneHot)
+```
+
 ### 🆕 Finite-domain decision variables ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
 
 {class}`~ommx.DecisionVariable` can now represent an exact, explicitly
@@ -21,12 +53,16 @@ x = instance.new_finite_domain([0.1, 0.3, 0.5, 1.0], name="x")
 
 assert x.kind == DecisionVariable.FINITE_DOMAIN
 assert x.values == [0.1, 0.3, 0.5, 1.0]
+instance.objective = x
+assert instance.evaluate({x.id: 0.3}).feasible
+assert not instance.evaluate({x.id: 0.4}).feasible
 ```
 
 The value set must be non-empty and contain unique, finite numbers. OMMX
-preserves the exact set through evaluation, sampling, and v1/v2 serialization;
-it is not a discretization of a continuous interval. See {meth}`~ommx.DecisionVariable.finite_domain` for the domain and
-DataFrame representation.
+preserves the exact set through evaluation, sampling, and v1/v2 serialization.
+The bounds give its minimum and maximum. MPS export rejects a solver-used
+finite-domain variable because bounds cannot represent an arbitrary set of allowed values.
+See {meth}`~ommx.DecisionVariable.finite_domain` for the domain and DataFrame representation.
 
 ## 3.0.0 Beta 8
 
@@ -151,7 +187,7 @@ state = instance.state_from_named_values({"x": {(0,): 1.0, (1,): 4.0}})
 Unknown keys raise `KeyError`; ambiguous name/subscript pairs raise `ValueError`.
 Keys that collide after string or integer normalization also raise `ValueError`.
 The SCIP adapter also accepts `NamedState` directly through `initial_state`.
-See {ref}`Providing Values by Name and Subscripts <named-initial-state>`
+See {meth}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter.solve`
 for a SCIP example.
 
 ### 🆕 Discover the bundled coding-agent plugin and skill ([#1264](https://github.com/Jij-Inc/ommx/pull/1264))
@@ -225,7 +261,7 @@ published feasible solution to be reported as infeasible.
 If you used {meth}`~ommx.Instance.load_qplib` to create a saved model, reimport
 it from the original `.qplib` file. `ommx.dataset.qplib` now loads the corrected
 distribution published with OMMX 2.8.0, even if the older distribution is cached.
-See the [QPLIB tutorial](../tutorial/download_qplib_instance.md).
+See the {func}`~ommx.dataset.qplib`.
 
 ### 🛠 Preserve binary variables when importing MPS and MIPLIB ([#1202](https://github.com/Jij-Inc/ommx/pull/1202), [#1205](https://github.com/Jij-Inc/ommx/pull/1205))
 
@@ -239,7 +275,7 @@ precedence.
 Reimport affected saved models from the original MPS file.
 `ommx.dataset.miplib2017` now loads the corrected MIPLIB distribution published
 with OMMX 2.7.0, even if the older distribution is cached. See the
-[MIPLIB tutorial](../tutorial/download_miplib_instance.md).
+{func}`~ommx.dataset.miplib2017`.
 
 ### 🛠 Consistent tolerance for variable bounds and constraints ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
 
@@ -278,6 +314,7 @@ To migrate your code, use {meth}`~ommx.Solution.total_violation` in place of
 violations of regular, Indicator, OneHot, SOS1, and removed constraints.
 
 ```python
+# Beta 6 syntax. See the migration guide for the current typed-ID API.
 solution.total_violation()
 solution.constraint_violation(30, kind="one_hot")  # existing OneHot constraint ID
 solution.constraints_df(kind="sos1")[["feasible", "violation"]]
@@ -388,7 +425,7 @@ solution = instance.evaluate(state, atol=1e-8)
 Variables omitted from the solution file receive zero. The reported `objvar`
 is not treated as a variable; evaluation computes the objective from the model.
 `ommx.qplib.load_solution` is also available. See the
-[QPLIB tutorial](../tutorial/download_qplib_instance.md) for supported files.
+{func}`~ommx.qplib.load_solution` for supported files.
 
 ### 🆕 A shared exception for Rust extension transfers ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
 
@@ -692,7 +729,7 @@ in the solver-input construction path; their failures are conversion or backend
 errors rather than `AdapterNotApplicableError`. In particular, OpenJij signed-ID
 and finite-coefficient validation now occurs when sampler input is built. See
 {class}`~ommx.InstanceClass` and the
-[Adapter implementation tutorial](../tutorial/implement_adapter.md) for the
+{mod}`Adapter Reference <ommx.adapter>` for the
 responsibility boundary.
 
 ### Adapter input classes are required ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
@@ -702,7 +739,7 @@ Concrete `SolverAdapter` and `SamplerAdapter` implementations must declare
 declaration. In-repository adapters now expose `InstanceClass` directly, so
 callers can pass `Adapter.INPUT_CLASS` to {meth}`~ommx.Instance.prepare` without
 an `is not None` guard. A missing declaration still produces a clear `TypeError`
-when applicability is checked. See the [Adapter implementation tutorial](../tutorial/implement_adapter.md)
+when applicability is checked. See the {mod}`Adapter Reference <ommx.adapter>`
 for the complete contract.
 
 ## 3.0.0 Beta 3
@@ -1344,7 +1381,7 @@ See the GitHub Release above for full details. The following summarizes the main
 
 {class}`~ommx.experiment.Experiment`, {meth}`~ommx.experiment.Experiment.with_temp_local_registry`, and {meth}`~ommx.experiment.Experiment.fork` now accept `store_trace=True`. When enabled, each `with experiment.run()` context captures the OpenTelemetry spans emitted inside that Run and stores one trace on the closed {class}`~ommx.experiment.SealedRun`. The stored trace is returned as {class}`~ommx.tracing.TraceResult` from {attr}`~ommx.experiment.SealedRun.trace`, and is carried through commit, load, and fork.
 
-See [Tracing and Profiling](../user_guide/tracing.ipynb) for the full tracing workflow, renderers, and OpenTelemetry setup notes.
+See {mod}`ommx.tracing` and the [OTLP export guide](../how_to/export_traces.md) for the full tracing workflow, renderers, and OpenTelemetry setup notes.
 
 ```python
 from ommx.experiment import Experiment
@@ -1595,13 +1632,13 @@ solution.decision_variables_df(include=["label"])      # core + label
 solution.decision_variables_df(include=["parameters"]) # core + parameters
 ```
 
-Six new long-format / id-indexed sidecar accessors read directly from the SoA label/context stores. Required keyword-only `kind=` selects the constraint family (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`):
+Six new long-format / id-indexed sidecar accessors read directly from the SoA label/context stores. In Alpha 3, `kind` accepts `"regular"` (the default), `"indicator"`, `"one_hot"`, or `"sos1"`.
 
-- `constraint_context_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
+- `constraint_metadata_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
 - `constraint_parameters_df(kind=...)` — long format (`{kind}_constraint_id` / `key` / `value`)
 - `constraint_provenance_df(kind=...)` — long format (`{kind}_constraint_id` / `step` / `source_kind` / `source_id`)
 - `constraint_removed_reasons_df(kind=...)` — long format (`{kind}_constraint_id` / `reason` / `key` / `value`)
-- `variable_labels_df()` — id-indexed
+- `variable_metadata_df()` — id-indexed
 - `variable_parameters_df()` — long format
 
 Sidecar index names are kind-qualified (`regular_constraint_id` / `indicator_constraint_id` / `one_hot_constraint_id` / `sos1_constraint_id` / `variable_id`) so accidental cross-id-space `df.join()` mistakes surface in `df.head()` and friends. Long-format `*_parameters_df` / `*_removed_reasons_df` rows are sorted by `(id, key)`, and empty long-format DataFrames keep their column schema instead of returning a column-less frame.
@@ -1656,7 +1693,7 @@ Two entry points ship under `ommx.tracing`:
 - **`%%ommx_trace`** — a Jupyter cell magic that renders a per-cell span tree and a Chrome Trace JSON download link
 - **`capture_trace` / `@traced`** — a context manager and decorator for the same workflow from regular Python scripts, tests, and CI
 
-See [Tracing and Profiling](../user_guide/tracing.ipynb) for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
+See {mod}`ommx.tracing` and the [OTLP export guide](../how_to/export_traces.md) for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
 
 ### 🆕 Tracing spans in solver/sampler adapters ([#833](https://github.com/Jij-Inc/ommx/pull/833))
 

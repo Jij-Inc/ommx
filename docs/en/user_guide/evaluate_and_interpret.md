@@ -7,7 +7,9 @@ You may already have a candidate from a solver, a sampler, or a manually prepare
 
 ## Separate the problem being solved from the conditions being checked
 
-Consider maximizing a binary variable $x$ subject to $x \leq 0$. If you remove that constraint, $x=1$ is allowed in the new problem, but violates the original condition.
+A production line can make up to 100 units per hour, but only 60 in reduced mode. Suppose a planner proposes producing 65 units per hour. In normal mode the proposal satisfies this production limit. In reduced mode it exceeds the limit by 5, even if a solver was allowed to ignore the reduced-mode limit while searching. The mode and output together determine the verdict.
+
+You can apply the same check to a candidate from a solver or one supplied by hand. Passing this one check still leaves the other constraints and variable domains to check. Even a plan that satisfies them all might have a worse objective value than another feasible plan.
 
 OMMX can retain a constraint after removing it from the conditions imposed on the solver. The imposed constraints are called **active**; the retained ones are called **removed**. Evaluation can therefore distinguish satisfying the active conditions from satisfying all retained conditions. Variable domains, such as integrality and bounds, matter in both cases.
 
@@ -39,7 +41,7 @@ Backend diagnostics answer another question: why did the solver stop, and what p
 
 For example, in minimization, a best feasible objective of 120 and a proven lower bound of 100 place the optimum between 100 and 120. These are the primal and dual bounds respectively; for maximization, their upper/lower roles reverse. A progress graph shows how the search narrows this interval. A solver can stop before the bounds meet, and finite bounds may be unavailable before it finds a candidate. The reported relative gap follows the backend's definition, so it is not simply the interval width.
 
-For collection, field meanings, and executable examples, see the {class}`SCIP <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>` and {class}`HiGHS <ommx_highs_adapter.HighsDiagnosticsAnalyzer>` diagnostic references. The SCIP Reference includes a bound/gap graph with its recorded data and drawing code. Intermediate records are observations; use the termination report to read the final outcome.
+For collection, field meanings, and executable examples, see the {class}`SCIP <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>` and {class}`HiGHS <ommx_highs_adapter.HighsDiagnosticsAnalyzer>` diagnostic references. The SCIP Reference illustrates how the bounds converge in a recorded solve. Intermediate records are observations; use the termination report to read the final outcome.
 
 ## Compare candidates using the same criteria
 

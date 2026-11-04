@@ -14,8 +14,8 @@ v3 completes the PyO3 migration that started in v2: SDK domain classes are now i
 Themes you will encounter:
 
 1. Every trace of the protobuf Python layer is gone — imports from `ommx.v1.*_pb2` or `ommx.v1` must switch to top-level `ommx` for SDK domain classes, and bridge methods like `.raw`/`from_protobuf`/`to_protobuf` are removed.
-2. `Constraint` no longer has an `id` — constraint IDs live only as the keys of the `dict[int, Constraint]` you pass to `Instance.from_components`. All `.id` getters, `set_id()` / `id=` kwargs, and global ID-counter helpers are gone.
-3. Container types flipped: every constraint-valued argument and getter on `Instance` / `ParametricInstance` / `Solution` is now `dict[int, T]`, not `list[T]`. `decision_variables` stays a `list`.
+2. A detached `Constraint` has no ID. With `Instance.from_components`, supply the ID as the key in the mapping for that family, for example `constraints={5: constraint}`.
+3. On models and results, `.constraints` is a read-only collection keyed by typed IDs. Look up that regular constraint with `instance.constraints[ConstraintID(5)]`. The `decision_variables` property still returns a list.
 4. A handful of renames and small signature changes (`write_mps` → `save_mps`, `Parameters(entries=...)` → plain `dict`, …).
 5. Every `*_df` accessor is a method now, with `kind=` / `include=` / `removed=` parameters consolidating the per-kind / active-vs-removed family. Long-format sidecar DataFrames (`constraint_context_df`, `constraint_provenance_df`, `variable_parameters_df`, …) are new.
 6. `instance.constraints[id]` and `instance.decision_variables` return write-through `AttachedX` handles instead of snapshot wrappers; label/context updates through them propagate back to the host.
@@ -93,7 +93,7 @@ The dataclass-style constructors (`Instance(raw=..., annotations=...)`) are also
 
 ### 3.1 No more `id` / `set_id()` / `id=` kwarg (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
 
-`Constraint` (and `IndicatorConstraint`, `OneHotConstraint`, `Sos1Constraint`, `RemovedConstraint`, `EvaluatedConstraint`, `SampledConstraint`) no longer carry an ID. The constraint object is **detached** — it gets an ID only when it is placed in the `dict[int, Constraint]` you pass to `Instance.from_components` (see §4).
+A newly constructed constraint is **detached** and has no ID. To choose its ID during construction, supply the key in the corresponding family mapping passed to `Instance.from_components` (see §4). When adding a constraint to an existing model, let the model assign the ID (§3.3).
 
 **Before (v2.5.1)**:
 ```python
@@ -156,9 +156,9 @@ These module-level names are gone from `ommx._ommx_rust`:
 - `update_constraint_id_counter(...)`
 - `get_constraint_id_counter()`
 
-Constraint IDs no longer exist outside the `BTreeMap` keys inside an `Instance`. If you need a fresh ID for a new constraint, call `instance.next_constraint_id()`.
+For a new regular constraint `c`, `instance.add_constraint(c).constraint_id` adds the constraint and returns its assigned `ConstraintID`.
 
-## 4. Container-type changes (`list` → `dict[int, T]`)
+## 4. Constructing and looking up constraints by ID
 
 ### 4.1 `Instance.from_components(constraints=...)` expects a `dict[int, Constraint]` (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
 
@@ -373,10 +373,10 @@ per constraint, including removed constraints and all special constraint kinds.
 Regular equality and inequality violations retain their existing definitions.
 
 ```python
-from ommx import OneHotConstraintID
+from ommx import ConstraintKind, OneHotConstraintID
 solution.total_violation()
 solution.constraint_violation(OneHotConstraintID(30))
-solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+solution.constraints_df(kind=ConstraintKind.Sos1)[["feasible", "violation"]]
 ```
 
 Indicator constraints contribute the inner violation when active and zero otherwise.
@@ -475,11 +475,11 @@ polynomial.terms()
 
 `Linear.linear_terms`, `Quadratic.linear_terms` / `quadratic_terms`, and `Polynomial.constant_term` stay properties.
 
-### 6.3 `DecisionVariable.kind` is a typed `Kind` enum
+### 6.3 Working with `DecisionVariable.kind`
 
-The initial v3 alpha migration in `3.0.0a1` ([#770](https://github.com/Jij-Inc/ommx/pull/770)) accidentally exposed the protobuf integer representation through the `DecisionVariable` constructor and `kind` properties. The v3 API now consistently accepts and returns the top-level `Kind` enum for detached, attached, evaluated, and sampled decision variables.
+The initial v3 alpha migration in `3.0.0a1` ([#770](https://github.com/Jij-Inc/ommx/pull/770)) exposed protobuf integer codes through the `DecisionVariable` constructor and `kind` properties. The current constructor accepts a `Kind` value, and detached, attached, evaluated, and sampled variables return that type from `.kind`.
 
-Use `Kind.Binary`, `Kind.Integer`, and the other `Kind` members in new code. The old `DecisionVariable.BINARY`/`INTEGER`/… names remain as typed compatibility aliases with the same enum values.
+Compare against known constants such as `Kind.Binary` and `Kind.Integer`. New SDKs can add kinds, so handle any remaining value explicitly. `Kind` does not support iteration or `Enum.__members__`. Existing aliases such as `DecisionVariable.BINARY` still refer to the corresponding kind.
 
 The same compatibility policy applies to `Constraint.EQUAL_TO_ZERO` / `LESS_THAN_OR_EQUAL_TO_ZERO` and `Instance.MINIMIZE` / `MAXIMIZE`: they remain typed aliases, while new code should use `Equality.*` and `Sense.*`.
 
@@ -493,7 +493,7 @@ assert var.kind == Kind.Binary
 assert DecisionVariable.BINARY == Kind.Binary
 ```
 
-The enums retain comparison and hash compatibility with their protobuf integer values, so explicit boundary checks continue to work. The regular SDK constructor and properties nevertheless use the enum type.
+Each known kind compares equal to its protobuf integer code and has the same hash.
 
 ```python
 assert Kind.Binary == 1
@@ -531,7 +531,7 @@ except ValueError as e:
 
 ### 6.6 `ParametricInstance.parameters` returns `list[Parameter]`, use `parameters_df()` for the DataFrame (`3.0.0a1`, [#774](https://github.com/Jij-Inc/ommx/pull/774); `3.0.0a3`, [#846](https://github.com/Jij-Inc/ommx/pull/846))
 
-The DataFrame view moved to a separate `_df` accessor, mirroring `decision_variables` / `decision_variables_df()` and `constraints` / `constraints_df(kind="regular")`. The bare `parameters` attribute is now an ordered `list[Parameter]`. The split itself landed in 3.0.0a1 (#774) when `ParametricInstance` became a Rust re-export; the `_df` accessor flipped from a `#[getter]` property to a method call in 3.0.0a3 (#846), at which point every `*_df` on `Instance` / `ParametricInstance` / `Solution` / `SampleSet` requires parentheses (see §9 below).
+The DataFrame view moved to a separate `_df` accessor, mirroring `decision_variables` / `decision_variables_df()` and `constraints` / `constraints_df(kind=ConstraintKind.Regular)`. The bare `parameters` attribute is now an ordered `list[Parameter]`. The split itself landed in 3.0.0a1 (#774) when `ParametricInstance` became a Rust re-export; the `_df` accessor flipped from a `#[getter]` property to a method call in 3.0.0a3 (#846), at which point every `*_df` on `Instance` / `ParametricInstance` / `Solution` / `SampleSet` requires parentheses (see §9 below).
 
 ```python
 # v2.5.1 (DataFrame view)
@@ -671,27 +671,35 @@ df = instance.removed_constraints_df     # separate active vs. removed
 df = solution.constraints_df
 
 # v3
-df = instance.constraints_df(kind="regular")           # method; kind is required
-df = instance.constraints_df(kind="indicator")
-df = instance.constraints_df(kind="regular", removed=True)
+from ommx import ConstraintKind
+
+df = instance.constraints_df(kind=ConstraintKind.Regular)           # method; kind is required
+df = instance.constraints_df(kind=ConstraintKind.Indicator)
+df = instance.constraints_df(kind=ConstraintKind.Regular, removed=True)
                                          # active + removed merged in id order
-df = solution.constraints_df(kind="regular")           # no removed= (no active/removed
+df = solution.constraints_df(kind=ConstraintKind.Regular)           # no removed= (no active/removed
                                          # distinction at the evaluated stage)
 ```
 
-`kind` is a required keyword argument accepting `Literal["regular", "indicator", "one_hot", "sos1"]`; unknown values raise `ValueError`. Solution / SampleSet have no `removed=` parameter — at the evaluated / sampled stage every row is materialized regardless of how it was lifecycled, and reason data is gated by `"removed_reason"` in `include=` instead.
+`kind` is a required keyword argument accepting `ConstraintKind.Regular`,
+`ConstraintKind.Indicator`, `ConstraintKind.OneHot`, or `ConstraintKind.Sos1`.
+String selectors raise `TypeError`. Solution / SampleSet have no `removed=`
+parameter — at the evaluated / sampled stage every row is materialized regardless
+of how it was lifecycled, and reason data is gated by `"removed_reason"` in `include=` instead.
 
 `include` accepts a `Sequence[str]` of `"label"` / `"parameters"` / `"removed_reason"` (singular). The default (`None`) preserves the v2 wide shape (`("label", "parameters")`); `include=[]` drops every optional column family.
 
 ```python
+from ommx import ConstraintKind
+
 # Default — v2-equivalent shape (label + parameters columns)
-df = instance.constraints_df(kind="regular")
+df = instance.constraints_df(kind=ConstraintKind.Regular)
 
 # Core only — drop label and parameters
-df = instance.constraints_df(kind="regular", include=[])
+df = instance.constraints_df(kind=ConstraintKind.Regular, include=[])
 
 # Active + removed in one DataFrame; reason columns auto-added
-df = instance.constraints_df(kind="regular", removed=True)
+df = instance.constraints_df(kind=ConstraintKind.Regular, removed=True)
 # columns include: equality, function_type, used_ids,
 #                  name, subscripts, description, parameters.{key},
 #                  removed_reason, removed_reason.{key}
@@ -703,23 +711,25 @@ df = instance.decision_variables_df(include=[])
 
 `"removed_reason"` is a unit flag — it gates both the `removed_reason` column and the `removed_reason.{key}` parameter columns together. The `removed_reason` column is **schema-stable**: when the flag is on it always appears in the resulting DataFrame, NA-filled if no row carries a reason, so downstream code that branches on schema doesn't need to special-case empty data.
 
-The wide `constraints_df(kind="regular")` index column was renamed from unqualified `id` to `{kind}_constraint_id` (`regular_constraint_id`, `indicator_constraint_id`, `one_hot_constraint_id`, `sos1_constraint_id`). `decision_variables_df()` keeps `id` as its index name (only one variable ID space, so disambiguation isn't load-bearing); the long-format variable sidecars in §10 do use `variable_id`. Constraint indexes now contain family-specific ID objects. Constraint numbers must be unique across all families, including removed constraints, within each instance. The ID type still identifies the constraint family.
+The wide `constraints_df(kind=ConstraintKind.Regular)` index column was renamed from unqualified `id` to `{kind}_constraint_id` (`regular_constraint_id`, `indicator_constraint_id`, `one_hot_constraint_id`, `sos1_constraint_id`). `decision_variables_df()` keeps `id` as its index name (only one variable ID space, so disambiguation isn't load-bearing); the long-format variable sidecars in §10 do use `variable_id`. Constraint indexes now contain family-specific ID objects. Constraint numbers must be unique across all families, including removed constraints, within each instance. The ID type still identifies the constraint family.
 
 ## 10. Long-format sidecar DataFrames (`3.0.0a3`, [#846](https://github.com/Jij-Inc/ommx/pull/846))
 
 `Instance` / `ParametricInstance` / `Solution` / `SampleSet` gained six long-format / id-indexed sidecar DataFrame methods that read directly from the SoA label/context stores:
 
 ```python
+from ommx import ConstraintKind
+
 # Constraint-side — kind= dispatches across the four constraint families
-instance.constraint_context_df(kind="regular")
+instance.constraint_context_df(kind=ConstraintKind.Regular)
                                           # name, subscripts, description
                                           # index: regular_constraint_id
-instance.constraint_parameters_df(kind="regular")
+instance.constraint_parameters_df(kind=ConstraintKind.Regular)
                                           # columns: regular_constraint_id, key, value
-instance.constraint_provenance_df(kind="regular")
+instance.constraint_provenance_df(kind=ConstraintKind.Regular)
                                           # columns: regular_constraint_id, step,
                                           #          source_kind, source_id
-instance.constraint_removed_reasons_df(kind="regular")
+instance.constraint_removed_reasons_df(kind=ConstraintKind.Regular)
                                           # columns: regular_constraint_id, reason,
                                           #          key, value
 
@@ -728,9 +738,9 @@ instance.variable_labels_df()
 instance.variable_parameters_df()
 ```
 
-Use these for tidy-data joins / aggregation; reach for the wide `constraints_df(kind="regular")` (with `include=`) when you want one row per id with columns alongside.
+Use these for tidy-data joins / aggregation; reach for the wide `constraints_df(kind=ConstraintKind.Regular)` (with `include=`) when you want one row per id with columns alongside.
 
-`provenance` is intentionally not folded into `constraints_df(kind="regular")` via `include=`: chains have variable length, and a wide pivot would either explode the column space or produce an object-dtype list column. Pivot the long-format `constraint_provenance_df(kind="regular")` yourself if you need a wide view.
+`provenance` is intentionally not folded into `constraints_df(kind=ConstraintKind.Regular)` via `include=`: chains have variable length, and a wide pivot would either explode the column space or produce an object-dtype list column. Pivot the long-format `constraint_provenance_df(kind=ConstraintKind.Regular)` yourself if you need a wide view.
 
 ## 11. Constraint and variable accessors return `AttachedX` write-through handles (`3.0.0a3`, [#849](https://github.com/Jij-Inc/ommx/pull/849), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#852](https://github.com/Jij-Inc/ommx/pull/852))
 
@@ -744,6 +754,8 @@ c.add_name("balance")                              # mutated the local snapshot
 print(instance.get_constraint_by_id(5).name)       # still None — fresh snapshot
 
 # v3 — collection lookup returns a write-through handle
+from ommx import ConstraintID
+
 c = instance.constraints[ConstraintID(5)]                        # AttachedConstraint (live)
 c.set_name("balance")                              # writes through to the SoA store
 print(instance.constraints[ConstraintID(5)].name)                # "balance"
@@ -1033,10 +1045,10 @@ expr = 2 * p + 3  # Linear
 
 ## Migration checklist
 
-- [ ] Replace every `from ommx.v1.*_pb2 import ...` and `from ommx.v1 import ...` SDK-domain import with `from ommx import ...`.
+- [ ] Import SDK domain classes from top-level `ommx`, for example `from ommx import DecisionVariable, Instance`.
 - [ ] Remove all `.raw`, `from_raw(...)`, `from_protobuf(...)`, `to_protobuf(...)` usage; use `from_v2_bytes` / `to_v2_bytes` for newly serialized top-level payloads, `from_v1_bytes` / `to_v1_bytes` for legacy v1 interop, or direct properties.
 - [ ] Replace `Constraint(id=N, ...)` / `.set_id(N)` / `(expr <= 0).set_id(N)` with `{N: (expr <= 0)}` in the `constraints=` dict.
-- [ ] Remove reads of `constraint.id`; iterate with `.items()` on constraint dicts instead.
+- [ ] To read constraint IDs alongside their rows, iterate over `instance.constraints.items()`.
 - [ ] Remove any use of `next_constraint_id()` / `set_constraint_id_counter(...)` / related counter helpers.
 - [ ] Update `Instance.from_components(constraints=[...])` to pass a `dict[int, Constraint]`. Same for `indicator_constraints`, `one_hot_constraints`, `sos1_constraints`.
 - [ ] Replace `constraint_hints` reads with `instance.constraints`, using typed IDs to distinguish constraint families.
@@ -1054,7 +1066,7 @@ expr = 2 * p + 3  # Linear
 - [ ] Audit chained `Constraint.add_name(...).add_subscripts(...)` calls — the chain operates on a clone after the first method, so only the first mutation lands in the original wrapper. Assign the chain to a fresh binding (`c = (...).add_name(...).add_subscripts(...)`), or use the live `AttachedConstraint` from `instance.constraints[id]` for write-through mutation.
 - [ ] Replace `ArtifactArchive` / `ArtifactDir` usage with `Artifact.import_archive(...)` for code that needs archive contents, `Artifact.inspect_archive(...)` for read-only archive inspection, or `Artifact.load(...)` for remote / registry refs.
 - [ ] Remove any `Linear.from_object(...)` / `Linear.equals_to(...)` calls.
-- [ ] Add parentheses to every `*_df` access — `instance.constraints_df` → `instance.constraints_df(kind="regular")` etc. (every `*_df` accessor is a method now).
+- [ ] Add parentheses to every `*_df` access — `instance.constraints_df` → `instance.constraints_df(kind=ConstraintKind.Regular)` etc. (every `*_df` accessor is a method now).
 - [ ] Replace per-kind `instance.indicator_constraints_df` / `one_hot_constraints_df` / `sos1_constraints_df` and `removed_*_constraints_df` / `*_removed_reasons_df` calls with `constraints_df(kind=..., removed=...)` on the same host.
 - [ ] If you depended on the unqualified `id` index column on a wide constraint `*_df`, switch to the kind-qualified `{kind}_constraint_id` name. `decision_variables_df()` keeps `id` (only one variable ID space); long-format variable sidecars use `variable_id`.
 - [ ] Drop the in-place `c.add_name(...)` mutation pattern on snapshot wrappers retrieved from an instance — those calls return a new object and don't write through to the host. Use the live handle returned by `instance.constraints[id]` (an `AttachedConstraint`) and call its `set_*` / `add_*` methods, or re-add via `from_components`.
@@ -1081,9 +1093,11 @@ and result `constraint_ids` are replaced by indexing and key iteration.
 There is no `get_constraints` method.
 
 ```python
-row = instance.constraints.of_kind("regular")[5]  # AttachedConstraint
+from ommx import ConstraintKind
+
+row = instance.constraints.of_kind(ConstraintKind.Regular)[5]  # AttachedConstraint
 snapshot = row.detach()  # Explicit independent Constraint copy
-removed = instance.removed_constraints.of_kind("regular")[7]  # RemovedConstraint snapshot
+removed = instance.removed_constraints.of_kind(ConstraintKind.Regular)[7]  # RemovedConstraint snapshot
 ```
 
 The metadata methods `constraint_context_df`, `constraint_parameters_df`,
@@ -1098,7 +1112,7 @@ objectives and overall feasibility, and `samples.constraints` or
 The collection property does not materialize rows. Model accesses return
 `Attached*` handles; result accesses return individual snapshots. Retained
 collection views observe owner mutations. Use `dict(owner.constraints)` when
-an independent mapping is needed. Use `constraints.of_kind("sos1")` when
+an independent mapping is needed. Use `constraints.of_kind(ConstraintKind.Sos1)` when
 inspecting one family. `constraints_df(*, kind=...)` requires `kind` on every root.
 Models select active rows by default and support `removed=True`; results include
 retained removed rows. See {class}`collection semantics <ommx.ConstraintCollection>`.
@@ -1124,3 +1138,27 @@ now return violations instead of signed function values.** Parameters are ignore
 as in variable extraction; duplicate subscripts across families raise `ValueError`.
 
 For signed regular values, use `solution.get_constraint_value(id)` or `row.evaluated_value`. See {meth}`name-based extraction <ommx.Solution.extract_constraints>`.
+
+## Extensible variable and constraint kinds
+
+`Kind`, `ConstraintKind`, and `ProvenanceKind` are immutable value classes
+with known constants. Their type hints no longer describe exhaustive Enums.
+Keep an explicit rejecting fallback when dispatching on these values, even
+when all currently known constants have been handled; `assert_never` cannot
+establish complete support. Comparisons, hashing, integer conversion and
+`Kind.from_pb()` / `to_pb()` remain available. Unknown protobuf kinds are rejected.
+
+Common constraint collections continue to expose `ConstraintIDBase` and
+`ConstraintView`, with precise return types for concrete family IDs. New kinds
+and families do not imply support by an existing adapter or transformation.
+The V3 extension contract covers numeric scalar domains. Non-scalar values
+require a separate design for value storage and evaluation.
+
+Use `ConstraintKind` for all constraint families, including `ConstraintKind.Regular`.
+It replaces the former `SpecialConstraintKind` selector and string selectors:
+`collection.of_kind(ConstraintKind.Sos1)` and
+`model.constraints_df(kind=ConstraintKind.Sos1)`. The ID type carried by a known
+constant preserves precise family-view return types; callers normally do not
+need to write the type parameter. `active_constraint_kinds` includes Regular,
+while `active_special_constraint_kinds` excludes it. Requesting Regular in
+`lower_special_constraints` is rejected before any conversion is applied.
