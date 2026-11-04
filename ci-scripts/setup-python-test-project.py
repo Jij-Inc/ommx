@@ -16,6 +16,7 @@
 import tomlkit
 import sys
 import glob
+import platform
 from pathlib import Path
 from argparse import ArgumentParser
 from packaging.specifiers import SpecifierSet
@@ -78,16 +79,17 @@ if not isinstance(uv, dict):
 
 # This is a disposable CI workspace for one interpreter. In particular, a
 # version-specific free-threaded wheel cannot resolve on other Python minors.
-uv["environments"] = [f"python_version == '{version}'"]
+uv["environments"] = [
+    f"python_version == '{version}' and sys_platform == '{sys.platform}' "
+    f"and platform_machine == '{platform.machine()}'"
+]
 
 if sdk_only:
     # Keep Sphinx for SDK rendering tests, but do not install dependencies used
     # only by executable Book tutorials (which are tested in separate jobs).
-    groups = pyproject["dependency-groups"]
-    del groups["tutorials"]
-    groups["dev"] = [
-        group for group in groups["dev"] if group != {"include-group": "tutorials"}
-    ]
+    # benchmark includes test; build supplies maturin for the bridge fixture.
+    # Publishing tools (twine/keyring) are only needed in release jobs.
+    uv["default-groups"] = ["benchmark", "docs", "build"]
 
 sources = uv["sources"]
 if not isinstance(sources, dict):

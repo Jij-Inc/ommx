@@ -6,10 +6,6 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-## 3.0.0 Beta 9
-
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b9-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b9)
-
 ### Python 3.11 以降を必須とし、SDK が Python 3.15 に対応 ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
 
 Python 3.10 のサポート終了に伴う共通の方針として、SDK と Adapter パッケージの
@@ -22,6 +18,10 @@ Adapter の利用可否は接続するソルバーの Python 対応状況にも�
 
 pandas 3 を利用できるようになりました。PyArrow は引き続き、
 Artifact の DataFrame を Parquet 形式で保存・復元するための必須依存です。
+
+## 3.0.0 Beta 9
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b9-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b9)
 
 ### ⚠ 制約の種類を `ConstraintKind` で指定する ([#1329](https://github.com/Jij-Inc/ommx/pull/1329))
 
@@ -700,7 +700,7 @@ Converter 固有の表現検査や backend の上限検査は solver input の�
 特に OpenJij の signed ID と finite coefficient の検査は sampler input の構築時に
 行われるようになりました。責務境界の詳細は
 {class}`~ommx.InstanceClass`と
-[Developer Guide: OMMX Adapterを実装する](../developer_guide/adapter.md)を参照してください。
+{mod}`Adapter Reference <ommx.adapter>`を参照してください。
 
 ### Adapter の input class 宣言を必須化 ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
 
@@ -710,7 +710,7 @@ Converter 固有の表現検査や backend の上限検査は solver input の�
 呼び出し側は `is not None` の確認なしで `Adapter.INPUT_CLASS` を
 {meth}`~ommx.Instance.prepare` に渡せます。宣言がない場合は、applicability の確認時に
 引き続き明確な `TypeError` を送出します。契約の全体像は
-[Developer Guide: OMMX Adapterを実装する](../developer_guide/adapter.md)を参照してください。
+{mod}`Adapter Reference <ommx.adapter>`を参照してください。
 
 ## 3.0.0 Beta 3
 
@@ -1280,7 +1280,7 @@ HiGHS Adapter は HiGHS の logging callback から MIP progress snapshot を記
 
 PySCIPOpt の progress history は、diagnostics に termination report が含まれる場合に synthetic な `TERMINATION` 行を含むようになりました。これにより、別の termination report を重複させずに、`progress_history_records` と `progress_history_df` から最終 solver state も確認できます。
 
-direct solve と Experiment 経由の workflow については [Adapter 固有 diagnostics](../how_to/inspect_adapter_diagnostics.md) を参照してください。
+direct solve と Experiment 経由の workflow は{class}`SCIPの診断Reference <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>`、HiGHS固有の報告は{class}`HiGHSの診断Reference <ommx_highs_adapter.HighsDiagnosticsAnalyzer>`を参照してください。
 
 ### 🆕 top-level root 向け versioned protobuf bytes API ([#989](https://github.com/Jij-Inc/ommx/pull/989))
 
@@ -1312,7 +1312,7 @@ Solver Adapter に、共通の {class}`~ommx.Solution` 結果には入らない 
 
 PySCIPOpt Adapter は、SCIP の `BESTSOLFOUND` と `DUALBOUNDIMPROVED` callback から {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` diagnostics を出力し、`model.optimize()` の後に {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` を出力するようになりました。termination report には SCIP の status、primal / dual bound、gap、incumbent objective value、node 数、LP / cut / solution counter、primal-dual integral、求解時間、SCIP / PySCIPOpt version metadata が含まれます。typed collector の中身や Experiment から読み出した dictionary は {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` で records または pandas DataFrame に後処理できます。direct collection では OMMX Solution へ decode する前に termination report が記録されるため、infeasible や unbounded の検出などで decode が adapter exception を投げる場合でも呼び出し側で確認できます。
 
-収集・調査の手順は[Adapterのdiagnostics](../how_to/inspect_adapter_diagnostics.md)、reportの各fieldは{class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`のAPI Referenceを参照してください。
+収集・調査の手順は{class}`SCIPの診断Reference <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>`、reportの各fieldは{class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`のAPI Referenceを参照してください。
 
 ## 3.0.0 Alpha 5
 
@@ -1324,7 +1324,7 @@ PySCIPOpt Adapter は、SCIP の `BESTSOLFOUND` と `DUALBOUNDIMPROVED` callback
 
 {class}`~ommx.experiment.Experiment`、{meth}`~ommx.experiment.Experiment.with_temp_local_registry`、{meth}`~ommx.experiment.Experiment.fork` が `store_trace=True` を受け取れるようになりました。有効化すると、各 `with experiment.run()` context 内で発生した OpenTelemetry span を capture し、close 済みの {class}`~ommx.experiment.SealedRun` に trace を 1 つ保存します。保存された trace は {attr}`~ommx.experiment.SealedRun.trace` から {class}`~ommx.tracing.TraceResult` として取得でき、commit、load、fork をまたいで保持されます。
 
-詳しい trace workflow、renderer、OpenTelemetry の設定については [トレースとプロファイリング](../how_to/trace_execution) を参照してください。
+詳しい trace workflow、renderer、OpenTelemetry の設定については {mod}`ommx.tracing`と[外部送信の設定](../how_to/export_traces.md) を参照してください。
 
 ```python
 from ommx.experiment import Experiment
@@ -1636,7 +1636,7 @@ assert instance.constraints[c.constraint_id].name == "budget"
 - **`%%ommx_trace`** — Jupyterセル単位でスパンツリーとChrome Trace JSONダウンロードリンクを表示するセルマジック
 - **`capture_trace` / `@traced`** — 通常のPythonスクリプト／テスト／CIから同じ機能を使うためのコンテキストマネージャとデコレータ
 
-詳しい使い方、独自 `TracerProvider` の設定方法、トラブルシューティングは [トレースとプロファイリング](../how_to/trace_execution) を参照してください。
+詳しい使い方、独自 `TracerProvider` の設定方法、トラブルシューティングは {mod}`ommx.tracing`と[外部送信の設定](../how_to/export_traces.md) を参照してください。
 
 ### 🆕 Solver / Sampler Adapter のトレーシング対応 ([#833](https://github.com/Jij-Inc/ommx/pull/833))
 

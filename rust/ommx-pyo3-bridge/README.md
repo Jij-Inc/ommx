@@ -92,7 +92,7 @@ bridge crate version numbers:
 The two extensions may use different bridge crate versions while honoring the
 same runtime contract. Within each extension, the SDK, bridge, and PyO3 Rust
 dependencies must resolve compatible types.
-This release accepts PyO3 0.27.2 through the 0.29 release line. The `sender`
+This release accepts PyO3 0.27.2 through the 0.30 release line. The `sender`
 feature uses `pyo3-stub-gen` 0.23; a receiving SDK can use its own stub generator
 version without taking a dependency on the bridge's generator.
 

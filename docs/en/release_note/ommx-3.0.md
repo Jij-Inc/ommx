@@ -6,10 +6,6 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-## 3.0.0 Beta 9
-
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b9-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b9)
-
 ### Require Python 3.11 and add Python 3.15 SDK support ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
 
 The SDK and adapter packages now require Python 3.11 or newer under a shared
@@ -22,6 +18,10 @@ also depends on the underlying solver's Python support.
 
 The SDK now allows pandas 3. PyArrow remains a required runtime
 dependency for storing and loading Artifact DataFrames in Parquet format.
+
+## 3.0.0 Beta 9
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b9-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b9)
 
 ### ⚠ Use `ConstraintKind` for constraint families ([#1329](https://github.com/Jij-Inc/ommx/pull/1329))
 
@@ -742,7 +742,7 @@ in the solver-input construction path; their failures are conversion or backend
 errors rather than `AdapterNotApplicableError`. In particular, OpenJij signed-ID
 and finite-coefficient validation now occurs when sampler input is built. See
 {class}`~ommx.InstanceClass` and the
-[Adapter implementation tutorial](../tutorial/implement_adapter.md) for the
+{mod}`Adapter Reference <ommx.adapter>` for the
 responsibility boundary.
 
 ### Adapter input classes are required ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
@@ -752,7 +752,7 @@ Concrete `SolverAdapter` and `SamplerAdapter` implementations must declare
 declaration. In-repository adapters now expose `InstanceClass` directly, so
 callers can pass `Adapter.INPUT_CLASS` to {meth}`~ommx.Instance.prepare` without
 an `is not None` guard. A missing declaration still produces a clear `TypeError`
-when applicability is checked. See the [Adapter implementation tutorial](../tutorial/implement_adapter.md)
+when applicability is checked. See the {mod}`Adapter Reference <ommx.adapter>`
 for the complete contract.
 
 ## 3.0.0 Beta 3
@@ -1350,7 +1350,7 @@ The HiGHS Adapter now records MIP progress snapshots from the HiGHS logging call
 
 PySCIPOpt progress histories now include a synthetic `TERMINATION` row when diagnostics include a termination report, so `progress_history_records` and `progress_history_df` include the final solver state without duplicating the separate termination report.
 
-See [Adapter-specific Diagnostics](../user_guide/adapter_diagnostics.md) for the direct and Experiment-based workflows.
+See the {class}`SCIP diagnostics Reference <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>` for the direct and Experiment-based workflows, and the {class}`HiGHS diagnostics Reference <ommx_highs_adapter.HighsDiagnosticsAnalyzer>` for HiGHS-specific reports.
 
 ### 🆕 Versioned protobuf bytes APIs for top-level roots ([#989](https://github.com/Jij-Inc/ommx/pull/989))
 
@@ -1382,7 +1382,7 @@ Solver adapters now have an adapter-specific diagnostics channel for preserving 
 
 The PySCIPOpt Adapter now emits {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` diagnostics from SCIP `BESTSOLFOUND` and `DUALBOUNDIMPROVED` callbacks, plus {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` after `model.optimize()`. The termination report includes SCIP status, primal/dual bounds, gap, incumbent objective value, node counts, LP/cut/solution counters, primal-dual integral, timing, and SCIP/PySCIPOpt version metadata. {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` can post-process the typed collector contents or dictionaries loaded from an Experiment into records or pandas DataFrames. With direct collection, the termination report is recorded before decoding back to an OMMX Solution, so it remains available to the caller even when decoding raises an adapter exception such as infeasible or unbounded detection.
 
-See [Adapter-specific Diagnostics](../user_guide/adapter_diagnostics.md) for the full API workflow and the PySCIPOpt report field references.
+See the {class}`SCIP diagnostics Reference <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>` for the full API workflow and the PySCIPOpt report field references.
 
 ## 3.0.0 Alpha 5
 
@@ -1394,7 +1394,7 @@ See the GitHub Release above for full details. The following summarizes the main
 
 {class}`~ommx.experiment.Experiment`, {meth}`~ommx.experiment.Experiment.with_temp_local_registry`, and {meth}`~ommx.experiment.Experiment.fork` now accept `store_trace=True`. When enabled, each `with experiment.run()` context captures the OpenTelemetry spans emitted inside that Run and stores one trace on the closed {class}`~ommx.experiment.SealedRun`. The stored trace is returned as {class}`~ommx.tracing.TraceResult` from {attr}`~ommx.experiment.SealedRun.trace`, and is carried through commit, load, and fork.
 
-See [Tracing and Profiling](../user_guide/tracing.ipynb) for the full tracing workflow, renderers, and OpenTelemetry setup notes.
+See {mod}`ommx.tracing` and the [OTLP export guide](../how_to/export_traces.md) for the full tracing workflow, renderers, and OpenTelemetry setup notes.
 
 ```python
 from ommx.experiment import Experiment
@@ -1706,7 +1706,7 @@ Two entry points ship under `ommx.tracing`:
 - **`%%ommx_trace`** — a Jupyter cell magic that renders a per-cell span tree and a Chrome Trace JSON download link
 - **`capture_trace` / `@traced`** — a context manager and decorator for the same workflow from regular Python scripts, tests, and CI
 
-See [Tracing and Profiling](../user_guide/tracing.ipynb) for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
+See {mod}`ommx.tracing` and the [OTLP export guide](../how_to/export_traces.md) for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
 
 ### 🆕 Tracing spans in solver/sampler adapters ([#833](https://github.com/Jij-Inc/ommx/pull/833))
 

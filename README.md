@@ -31,6 +31,7 @@ The **Book** explains when to use each capability and how to interpret the resul
 | Understand OMMX and explore its capabilities | [English Book](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/) · [日本語Book](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/) |
 | Choose how to represent a problem for a solver | [Transform a problem](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/transform_and_solve.html) · [日本語](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/user_guide/transform_and_solve.html) |
 | Check a candidate against your requirements | [Evaluate candidates](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/evaluate_and_interpret.html) · [日本語](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/user_guide/evaluate_and_interpret.html) |
+| Compare a result with a published benchmark | [Worked example](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/examples/published_benchmarks.html) · [日本語](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/examples/published_benchmarks.html) |
 | Choose a solver or sampler integration | [Adapter packages and input contracts](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/api/adapters.html) |
 | Install the Python SDK and an optional adapter | [Installation guide](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/getting_started/install.html) · [日本語](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/getting_started/install.html) |
 | Inspect and exchange saved data from the command line | [OMMX CLI](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/cli.html) |
@@ -44,7 +45,7 @@ Until the 3.0.0 stable release, both the Book and API Reference describe `main`.
 
 ## Development
 
-See [DEVELOPMENT.md](./DEVELOPMENT.md) to work on OMMX, or the [adapter implementation guide](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html) to connect your own solving tool. The [Rust-to-Python PyO3 bridge](https://crates.io/crates/ommx-pyo3-bridge) has its own [API Reference](https://docs.rs/ommx-pyo3-bridge).
+See [DEVELOPMENT.md](./DEVELOPMENT.md) to work on OMMX, or the [Adapter API Reference](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/autoapi/ommx/adapter/index.html#ommx.adapter.SolverAdapter) to connect your own solving tool. The [Rust-to-Python PyO3 bridge](https://crates.io/crates/ommx-pyo3-bridge) has its own [API Reference](https://docs.rs/ommx-pyo3-bridge).
 
 [![CodSpeed Badge](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://codspeed.io/Jij-Inc/ommx?utm_source=badge)
 

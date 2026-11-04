@@ -1,4 +1,5 @@
 import shutil
+import platform
 import subprocess
 import sys
 import tempfile
@@ -52,16 +53,21 @@ class SetupPythonTestProjectTests(unittest.TestCase):
                 uv = config["tool"]["uv"]
                 groups = config["dependency-groups"]
                 self.assertEqual(
-                    uv["environments"], [f"python_version == '{version.rstrip('t')}'"]
+                    uv["environments"],
+                    [
+                        f"python_version == '{version.rstrip('t')}' and sys_platform == '{sys.platform}' and platform_machine == '{platform.machine()}'"
+                    ],
                 )
                 self.assertEqual(uv["sources"]["ommx"]["path"], f"wheels/{WHEELS[abi]}")
                 self.assertTrue(
                     any(dep.startswith("sphinx>=") for dep in groups["docs"])
                 )
-                self.assertEqual("tutorials" in groups, not sdk_only)
-                self.assertEqual(
-                    {"include-group": "tutorials"} in groups["dev"], not sdk_only
-                )
+                selected = uv.get("default-groups", ["dev"])
+                if sdk_only:
+                    self.assertCountEqual(selected, ["benchmark", "docs", "build"])
+                else:
+                    self.assertIn("dev", selected)
+                    self.assertIn({"include-group": "tutorials"}, groups["dev"])
                 self.assertIn("python/ommx-tests", uv["workspace"]["members"])
                 for adapter in ["highs", "pyscipopt"]:
                     self.assertIn(

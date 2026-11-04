@@ -4104,6 +4104,24 @@ impl PySealedRun {
         imports = ("typing", "ommx.tracing")
     ))]
     /// Stored trace for this run, or `None` when this run was recorded without trace storage.
+    ///
+    /// With `store_trace=True`, the `Run` span covers the body of the Run
+    /// context manager. On exit the trace is stored in the Experiment Artifact.
+    /// Read it after reopening the record without rerunning the computation:
+    ///
+    /// >>> from ommx import Instance
+    /// >>> from ommx.experiment import Experiment
+    /// >>> instance = Instance.minimize()
+    /// >>> with Experiment.with_temp_local_registry(store_trace=True) as experiment:
+    /// ...     with experiment.run() as run:
+    /// ...         run.log_solution("candidate", instance.evaluate({}))
+    /// >>> reopened = Experiment.from_artifact(experiment.artifact)
+    /// >>> trace = reopened.runs[0].trace
+    /// >>> assert trace is not None and any(span.name == "Run" for span in trace.spans)
+    ///
+    /// Run trace storage requires using the context manager and is independent
+    /// of exporting spans to an external backend. Forking carries the recorded
+    /// traces; select `store_trace=True` on the fork to trace new Runs there.
     pub fn trace<'py>(&self, py: Python<'py>) -> OmmxPyResult<Option<Bound<'py, PyAny>>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let Some(trace) = self.run.trace()? else {
