@@ -11,8 +11,9 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 The SDK and adapter packages now require Python 3.11 or newer under a shared
 support policy that drops end-of-life Python 3.10. The core SDK adds Python 3.15
 support with PyO3 0.30.1, and ABI3 wheels now use Python 3.11 as their baseline.
-ABI3t wheels support both GIL-enabled and free-threaded Python 3.15 and newer;
-free-threaded Python 3.14 continues to use a version-specific wheel.
+Free-threaded support starts with Python 3.15, the baseline for ABI3t.
+On Linux and macOS, the same ABI3t wheel works with both GIL modes
+([#1351](https://github.com/Jij-Inc/ommx/pull/1351)).
 Python 3.15 support is introduced for the core SDK first; adapter availability
 also depends on the underlying solver's Python support.
 
