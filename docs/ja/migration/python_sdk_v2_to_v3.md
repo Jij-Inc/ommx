@@ -26,7 +26,7 @@ PyrightはOMMXに同梱された型情報を使い、スクリプトを実行せ
 
 | Pyrightが指摘する箇所 | 書き換え方 |
 |---|---|
-| `Instance.from_components` の `constraints` にリストを渡している | 外部IDを引き継ぐなら `constraints={7: x <= 1}` のような辞書を渡す。自動採番なら {meth}`~ommx.Instance.add_constraint` を使う。 |
+| `Instance.from_components` の `constraints` にリストを渡している | 各制約の追加には {meth}`~ommx.Instance.add_constraint` を使う。 |
 | `instance.write_mps` が見つからない | {meth}`~ommx.Instance.save_mps` を使う。 |
 | `solution.constraints_df()` の引数が足りない | 通常制約なら `kind=ConstraintKind.Regular` のように種類を指定する。 |
 
@@ -36,7 +36,7 @@ PyrightはOMMXに同梱された型情報を使い、スクリプトを実行せ
 
 `Function`、`Constraint`、`DecisionVariable`、`Instance`、`ParametricInstance`、`Solution`、`SampleSet` は、2.9.4でも `ommx` から直接importできます。この7クラスはv2環境のうちにimport先を変更できます。v3では `Linear`、`Parameter`、`Equality`、`Sense` などのモデリング用の型も `ommx` からimportします。
 
-`ommx.v1.*_pb2` や `.raw` を使っていた箇所は、何を取り出していたかで置き換え先が決まります。たとえば目的関数の向きは `instance.sense` で読めます。モデルを組み立てる場合は {meth}`~ommx.Instance.from_components` または次節の追加APIを使います。バイト列を受け渡す場合は{ref}`形式に応じた読込み方法 <migration-storage>`を選んでください。protobufスキーマ名のv1は引き続きデータ形式を表します。v3のPython SDKでは生成済みprotobufモジュールと `from_raw`、`from_protobuf`、`to_protobuf` は廃止されました。
+`ommx.v1.*_pb2` や `.raw` を使っていた箇所は、何を取り出していたかで置き換え先が決まります。たとえば目的関数の向きは `instance.sense` で読めます。モデルは {meth}`~ommx.Instance.minimize` または {meth}`~ommx.Instance.maximize` で作り、変数と制約を順に追加します。バイト列を受け渡す場合は{ref}`形式に応じた読込み方法 <migration-storage>`を選んでください。protobufスキーマ名のv1は引き続きデータ形式を表します。v3のPython SDKでは生成済みprotobufモジュールと `from_raw`、`from_protobuf`、`to_protobuf` は廃止されました。
 
 (migration-build)=
 ## 2. モデルを組み立て、編集する
@@ -59,7 +59,7 @@ assert model.constraints[limit.constraint_id].name == "limit"
 
 整数・連続・半整数・半連続・有限集合を値域とする変数にも、それぞれ `new_integer`、`new_continuous`、`new_semi_integer`、`new_semi_continuous`、`new_finite_domain` があります。`Instance` と `ParametricInstance` では、`add_constraint`、`add_indicator_constraint`、`add_one_hot_constraint`、`add_sos1_constraint` が各制約の番号を割り当てます。
 
-別のファイルやアプリケーションが変数0や制約7を参照している場合は、**その番号を維持します**。変数は作成時にIDを指定します。制約はv2の `constraints=[(x <= 1).set_id(7)]` を、`from_components` に渡す `constraints={7: x <= 1}` に置き換えます。モデルに属していない制約はIDを持ちません。一つのモデルでは削除済みを含めて全種類の制約が番号を共有し、構築時や読込み時に重複を拒否します。{ref}`第4節の比較例 <migration-compare-model>`では両方の版で同じ番号を使います。
+外部のアプリケーションがモデル内の変数0や制約7をその番号で参照する必要がある場合は、**その番号を維持します**。変数は作成時にIDを指定します。制約はv2の `constraints=[(x <= 1).set_id(7)]` を、{meth}`~ommx.Instance.from_components` に渡す `constraints={7: x <= 1}` に置き換えます。モデルに属していない制約はIDを持ちません。一つのモデルでは削除済みを含めて全種類の制約が番号を共有し、構築時や読込み時に重複を拒否します。
 
 (42-constraint-accessors-on-instance--parametricinstance--solution-return-dicts)=
 (typed-constraint-ids-and-live-collections)=
@@ -177,16 +177,15 @@ assert result.extract_constraints("limit")[()] == -1.0
 **v3（`main`）**
 
 ```python
-from ommx import ConstraintID, DecisionVariable, Instance, Sense
+from ommx import Instance
 
-x = DecisionVariable.binary(0)
-model = Instance.from_components(
-    decision_variables=[x], objective=x, constraints={7: x <= 1}, sense=Sense.Maximize,
-)
-model.constraints[ConstraintID(7)].set_name("limit")
-result = model.evaluate({0: 0})
+model = Instance.maximize()
+x = model.new_binary("x")
+model.objective = x
+limit = model.add_constraint(x <= 1, "limit")
+result = model.evaluate({x.id: 0})
 assert result.extract_constraints("limit")[()] == 0.0
-assert result.get_constraint_value(ConstraintID(7)) == -1.0
+assert result.get_constraint_value(limit.constraint_id) == -1.0
 ```
 
 {meth}`~ommx.Solution.extract_constraints` は全種類の制約を検索し、添字タプルをキーとして非負の違反量を返します。同じ名前に対して添字が重複すると、種類が違っていても曖昧になります。通常制約の符号や余裕を使っていた集計では、上の例のように `get_constraint_value` で式の値を読んでください。型付きIDで違反量を調べる場合は `constraint_violation` を使います。評価済みの行で `row.is_feasible(atol=result.feasibility_atol)` を呼ぶと、結果と同じ許容誤差で判定できます。候補全体の実行可能性には変数の値域も影響するため、制約違反量の合計がゼロでも実行不可能な場合があります。
@@ -205,20 +204,22 @@ assert result.get_constraint_value(ConstraintID(7)) == -1.0
 ```{index} Instance.constraints_df (v2), Instance.removed_constraints_df (v2), SampleSet.summary_with_constraints (v2)
 ```
 
-v2では `instance.constraints_df` のインデックス `id` を、整数をキーとする業務側の表に結合できました。v3で通常制約のインデックス名は `regular_constraint_id`、値は `ConstraintID` です。結合前に、業務側の表の番号を対応する型付きIDに変換します。
+v2では `instance.constraints_df` のインデックス `id` を、整数をキーとする業務側の表に結合できました。v3で通常制約のインデックス名は `regular_constraint_id`、値は `ConstraintID` です。モデルを組み立てるときに、業務側の制約番号（例では7）と追加時に返ったIDの対応を記録し、それを使って結合します。
 
 ```python
 import pandas as pd
-from ommx import ConstraintID, ConstraintKind, DecisionVariable, Instance, Sense
+from ommx import ConstraintKind, Instance
 
-x = DecisionVariable.binary(0)
-model = Instance.from_components(
-    decision_variables=[x], objective=x, constraints={7: x <= 1}, sense=Sense.Maximize,
-)
+model = Instance.maximize()
+x = model.new_binary("x")
+model.objective = x
+limit = model.add_constraint(x <= 1, "limit")
+id_map = {7: limit.constraint_id}
+
+owners = pd.Series({7: "planning"}, name="owner")
 rows = model.constraints_df(kind=ConstraintKind.Regular, include=[])
-owners = pd.Series({ConstraintID(7): "planning"}, name="owner")
-report = rows.join(owners)
-assert report.loc[ConstraintID(7), "owner"] == "planning"
+report = rows.join(owners.rename(index=id_map))
+assert report.loc[limit.constraint_id, "owner"] == "planning"
 ```
 
 ラベルとパラメータを列に含めるなら `include=["label", "parameters"]`、キーと値の組を1行ずつ結合するなら `constraint_parameters_df(kind=...)` を使います。変換履歴は `constraint_provenance_df(kind=...)` に由来のステップごとに記録されます。モデル側の `removed=True` は有効な行も含むので、削除済み制約だけの旧帳票を再現するには `removed_reason` が欠損していない行を選んでください。
@@ -301,11 +302,11 @@ Local Registryに書き込まずにアーカイブの内容を調べるには {m
 
 | 旧API・使用箇所 | v3の書き方 | 節 |
 |---|---|---|
-| `.raw` / `from_raw` / `from_protobuf` / `to_protobuf` | 例：{attr}`instance.sense <ommx.Instance.sense>` / {meth}`Instance.from_components <ommx.Instance.from_components>` | {ref}`1 <migration-imports>` |
+| `.raw` / `from_raw` / `from_protobuf` / `to_protobuf` | 例：{attr}`instance.sense <ommx.Instance.sense>` / {meth}`Instance.minimize <ommx.Instance.minimize>` | {ref}`1 <migration-imports>` |
 | `add_name` / `add_description` | {meth}`set_name <ommx.Constraint.set_name>` / {meth}`set_description <ommx.Constraint.set_description>` | {ref}`migration-constraint-metadata` |
 | `ArtifactArchive` / `ArtifactDir` / `ArtifactBuilder` | {class}`Artifact <ommx.artifact.Artifact>` / {class}`ArtifactDraft <ommx.artifact.ArtifactDraft>` | {ref}`migration-artifact-archives` |
 | `Artifact.load_archive` | {meth}`Artifact.import_archive <ommx.artifact.Artifact.import_archive>` / {meth}`Artifact.inspect_archive <ommx.artifact.Artifact.inspect_archive>` | {ref}`migration-artifact-archives` |
-| `Constraint.id` / `set_id` / `next_constraint_id` | {meth}`add_constraint <ommx.Instance.add_constraint>` / {meth}`from_components <ommx.Instance.from_components>` | {ref}`2 <migration-build>` |
+| `Constraint.id` / `set_id` / `next_constraint_id` | {meth}`add_constraint <ommx.Instance.add_constraint>`。外部の制約番号を維持するときは {meth}`from_components <ommx.Instance.from_components>` | {ref}`2 <migration-build>` |
 | `constraint_hints` / `OneHot` / `Sos1` | {class}`OneHotConstraint <ommx.OneHotConstraint>` / {class}`Sos1Constraint <ommx.Sos1Constraint>` | {ref}`2 <migration-build>` |
 | `constraints_df` / `removed_constraints_df` | {meth}`constraints_df(kind=...) <ommx.Instance.constraints_df>` / {meth}`constraints_df(kind=..., removed=True) <ommx.Instance.constraints_df>` | {ref}`migration-constraint-tables` |
 | `decision_variable_analysis()` | {meth}`decision_variable_roles() <ommx.Instance.decision_variable_roles>` / {meth}`fixed_decision_variables() <ommx.Instance.fixed_decision_variables>` | {ref}`migration-constraint-metadata` |

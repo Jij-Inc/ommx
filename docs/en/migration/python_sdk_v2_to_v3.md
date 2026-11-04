@@ -26,7 +26,7 @@ Pyright reads the type information shipped with OMMX and reports incompatible ca
 
 | What Pyright flags | How to update the call |
 |---|---|
-| A list passed as `constraints` to `Instance.from_components` | Pass a mapping such as `constraints={7: x <= 1}` to preserve an external ID, or use {meth}`~ommx.Instance.add_constraint` for automatic numbering. |
+| A list passed as `constraints` to `Instance.from_components` | Add each constraint to the model with {meth}`~ommx.Instance.add_constraint`. |
 | Unknown method `instance.write_mps` | Use {meth}`~ommx.Instance.save_mps`. |
 | Missing argument in `solution.constraints_df()` | Select the constraint family, for example `kind=ConstraintKind.Regular`. |
 
@@ -36,7 +36,7 @@ Some changes keep the same type. For example, a value returned by {meth}`~ommx.S
 
 In v2.9.4, `Function`, `Constraint`, `DecisionVariable`, `Instance`, `ParametricInstance`, `Solution`, and `SampleSet` are already available from `ommx`. You can switch these imports while still running v2. In v3, import the other modeling types from the same public namespace, including `Linear`, `Parameter`, `Equality`, and `Sense`.
 
-If your v2 code imports `ommx.v1.*_pb2` or accesses `.raw`, identify what it needs from the object. For example, read `instance.sense` directly. To build a model, use {meth}`~ommx.Instance.from_components` or the incremental API below. For serialized data, {ref}`select a reader by format <migration-storage>`. The v1 protobuf schema name still identifies a wire format. The Python SDK no longer provides those generated protobuf modules or the `from_raw`, `from_protobuf`, and `to_protobuf` wrappers.
+If your v2 code imports `ommx.v1.*_pb2` or accesses `.raw`, identify what it needs from the object. For example, read `instance.sense` directly. Start a model with {meth}`~ommx.Instance.minimize` or {meth}`~ommx.Instance.maximize`, then add variables and constraints. For serialized data, {ref}`select a reader by format <migration-storage>`. The v1 protobuf schema name still identifies a wire format. The Python SDK no longer provides those generated protobuf modules or the `from_raw`, `from_protobuf`, and `to_protobuf` wrappers.
 
 (migration-build)=
 ## 2. Build and edit a model
@@ -59,7 +59,7 @@ assert model.constraints[limit.constraint_id].name == "limit"
 
 `new_integer`, `new_continuous`, `new_semi_integer`, `new_semi_continuous`, and `new_finite_domain` also allocate variable IDs. On both `Instance` and `ParametricInstance`, `add_constraint`, `add_indicator_constraint`, `add_one_hot_constraint`, and `add_sos1_constraint` allocate constraint numbers.
 
-If another file or application already refers to variable 0 or constraint 7, **preserve those numbers**. Keep the ID when constructing the variable. Replace v2's `constraints=[(x <= 1).set_id(7)]` with `constraints={7: x <= 1}` in `from_components`. A detached constraint has no ID. All constraint families share one number space per model, including removed constraints. Construction and loading reject collisions. {ref}`Section 4 <migration-compare-model>` uses an explicit ID in both versions.
+If an external consumer requires the model itself to keep variable 0 or constraint 7, **preserve those numbers**. Keep the ID when constructing the variable. Replace v2's `constraints=[(x <= 1).set_id(7)]` with `constraints={7: x <= 1}` in {meth}`~ommx.Instance.from_components`. A detached constraint has no ID. All constraint families share one number space per model, including removed constraints. Construction and loading reject collisions.
 
 (42-constraint-accessors-on-instance--parametricinstance--solution-return-dicts)=
 (typed-constraint-ids-and-live-collections)=
@@ -177,16 +177,15 @@ assert result.extract_constraints("limit")[()] == -1.0
 **v3 on `main`**
 
 ```python
-from ommx import ConstraintID, DecisionVariable, Instance, Sense
+from ommx import Instance
 
-x = DecisionVariable.binary(0)
-model = Instance.from_components(
-    decision_variables=[x], objective=x, constraints={7: x <= 1}, sense=Sense.Maximize,
-)
-model.constraints[ConstraintID(7)].set_name("limit")
-result = model.evaluate({0: 0})
+model = Instance.maximize()
+x = model.new_binary("x")
+model.objective = x
+limit = model.add_constraint(x <= 1, "limit")
+result = model.evaluate({x.id: 0})
 assert result.extract_constraints("limit")[()] == 0.0
-assert result.get_constraint_value(ConstraintID(7)) == -1.0
+assert result.get_constraint_value(limit.constraint_id) == -1.0
 ```
 
 {meth}`~ommx.Solution.extract_constraints` now searches all families and returns nonnegative violations keyed by subscript tuple. Duplicate subscripts for a name are ambiguous, even across families. If you relied on the sign or slack of a regular row, use `get_constraint_value` as above. For a violation by typed ID use `constraint_violation`. When reading a single evaluated row, use `row.is_feasible(atol=result.feasibility_atol)` to apply the result's tolerance. Overall feasibility also checks variable domains. A zero total constraint violation alone is insufficient.
@@ -205,20 +204,22 @@ For multiple samples, use `samples.summary` for objectives and overall feasibili
 ```{index} Instance.constraints_df (v2), Instance.removed_constraints_df (v2), SampleSet.summary_with_constraints (v2)
 ```
 
-In v2 a report might join the `id` index of `instance.constraints_df` to a table keyed by integers. In v3 the regular-constraint index is named `regular_constraint_id` and contains `ConstraintID` objects. Convert the keys in the application's lookup table to the appropriate ID type before joining.
+In v2 a report might join the `id` index of `instance.constraints_df` to a table keyed by integers. In v3 the regular-constraint index is named `regular_constraint_id` and contains `ConstraintID` objects. When building the model, record which assigned ID corresponds to each source constraint number (here, 7). Use that mapping to join the application's table.
 
 ```python
 import pandas as pd
-from ommx import ConstraintID, ConstraintKind, DecisionVariable, Instance, Sense
+from ommx import ConstraintKind, Instance
 
-x = DecisionVariable.binary(0)
-model = Instance.from_components(
-    decision_variables=[x], objective=x, constraints={7: x <= 1}, sense=Sense.Maximize,
-)
+model = Instance.maximize()
+x = model.new_binary("x")
+model.objective = x
+limit = model.add_constraint(x <= 1, "limit")
+id_map = {7: limit.constraint_id}
+
+owners = pd.Series({7: "planning"}, name="owner")
 rows = model.constraints_df(kind=ConstraintKind.Regular, include=[])
-owners = pd.Series({ConstraintID(7): "planning"}, name="owner")
-report = rows.join(owners)
-assert report.loc[ConstraintID(7), "owner"] == "planning"
+report = rows.join(owners.rename(index=id_map))
+assert report.loc[limit.constraint_id, "owner"] == "planning"
 ```
 
 Use `include=["label", "parameters"]` for a wide table with metadata. For a join with one row per key/value, use `constraint_parameters_df(kind=...)`. Transformation history is in `constraint_provenance_df(kind=...)`, with one row per provenance step. For a model, `removed=True` includes active rows as well: filter the non-null `removed_reason` values if your old report contained only removed rows.
@@ -301,11 +302,11 @@ The site-wide {ref}`general index <genindex>` also lists the detailed examples u
 
 | Old API or use | v3 replacement | Section |
 |---|---|---|
-| `.raw` / `from_raw` / `from_protobuf` / `to_protobuf` | For example, {attr}`instance.sense <ommx.Instance.sense>` / {meth}`Instance.from_components <ommx.Instance.from_components>` | {ref}`1 <migration-imports>` |
+| `.raw` / `from_raw` / `from_protobuf` / `to_protobuf` | For example, {attr}`instance.sense <ommx.Instance.sense>` / {meth}`Instance.minimize <ommx.Instance.minimize>` | {ref}`1 <migration-imports>` |
 | `add_name` / `add_description` | {meth}`set_name <ommx.Constraint.set_name>` / {meth}`set_description <ommx.Constraint.set_description>` | {ref}`migration-constraint-metadata` |
 | `ArtifactArchive` / `ArtifactDir` / `ArtifactBuilder` | {class}`Artifact <ommx.artifact.Artifact>` / {class}`ArtifactDraft <ommx.artifact.ArtifactDraft>` | {ref}`migration-artifact-archives` |
 | `Artifact.load_archive` | {meth}`Artifact.import_archive <ommx.artifact.Artifact.import_archive>` / {meth}`Artifact.inspect_archive <ommx.artifact.Artifact.inspect_archive>` | {ref}`migration-artifact-archives` |
-| `Constraint.id` / `set_id` / `next_constraint_id` | {meth}`add_constraint <ommx.Instance.add_constraint>` / {meth}`from_components <ommx.Instance.from_components>` | {ref}`2 <migration-build>` |
+| `Constraint.id` / `set_id` / `next_constraint_id` | {meth}`add_constraint <ommx.Instance.add_constraint>` or, to preserve external constraint numbers, {meth}`from_components <ommx.Instance.from_components>` | {ref}`2 <migration-build>` |
 | `constraint_hints` / `OneHot` / `Sos1` | {class}`OneHotConstraint <ommx.OneHotConstraint>` / {class}`Sos1Constraint <ommx.Sos1Constraint>` | {ref}`2 <migration-build>` |
 | `constraints_df` / `removed_constraints_df` | {meth}`constraints_df(kind=...) <ommx.Instance.constraints_df>` / {meth}`constraints_df(kind=..., removed=True) <ommx.Instance.constraints_df>` | {ref}`migration-constraint-tables` |
 | `decision_variable_analysis()` | {meth}`decision_variable_roles() <ommx.Instance.decision_variable_roles>` / {meth}`fixed_decision_variables() <ommx.Instance.fixed_decision_variables>` | {ref}`migration-constraint-metadata` |
