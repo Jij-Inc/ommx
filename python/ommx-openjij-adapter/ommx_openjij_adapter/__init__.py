@@ -125,6 +125,27 @@ class OMMXOpenJijSAAdapter(_OMMXOpenJijSAAdapter):
     The :class:`ommx.SampleSet` Reference explains result inspection and
     selection in full. For an independent application, see the
     :doc:`TSP sampling example </tutorial/tsp_sampling_with_openjij_adapter>`.
+
+    **Follow the sampler interface across the backend call**
+
+    For a small quadratic binary minimization, the exact-input constructor
+    exposes the QUBO coefficients for OpenJij. Decode its response with the
+    same adapter to evaluate each read against the encoded Instance:
+
+    >>> import openjij as oj
+    >>> from ommx import Instance
+    >>> from ommx_openjij_adapter import OMMXOpenJijSAAdapter
+    >>> problem = Instance.minimize()
+    >>> x, y = problem.new_binary("x"), problem.new_binary("y")
+    >>> problem.objective = -x - y + 2*x*y
+    >>> adapter = OMMXOpenJijSAAdapter(problem)
+    >>> response = oj.SASampler().sample_qubo(adapter.sampler_input, num_reads=3, seed=42)
+    >>> decoded = adapter.decode_to_sampleset(response)
+    >>> assert decoded.num_samples() == 3
+    >>> for sample_id in decoded.sample_ids():
+    ...     candidate = decoded.get(sample_id)
+    ...     assert candidate.feasible
+    ...     assert candidate.objective == problem.objective.evaluate(candidate.state)
     """
 
 

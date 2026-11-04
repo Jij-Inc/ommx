@@ -484,6 +484,21 @@ class OMMXHighsAdapter(SolverAdapter):
     :meth:`solve_without_preparation`; the PySCIPOpt Adapter Reference provides
     a complete example of that sequence.
 
+    **Inspect conversion, search and decoding times**
+
+    >>> from ommx import Instance
+    >>> from ommx.tracing import capture_trace
+    >>> problem = Instance.minimize()
+    >>> x = problem.new_binary("x")
+    >>> problem.objective = -x
+    >>> with capture_trace("highs_solve") as trace:
+    ...     solution = OMMXHighsAdapter.solve(problem, verbose=False)
+    >>> assert solution.feasible and solution.objective == -1
+    >>> assert {"convert", "call", "decode"} <= {span.name for span in trace.spans}
+
+    Display the trace to read the stages within the solve. The parent
+    span includes the children's time. Each duration describes this run.
+
     Translation Specifications
     ==========================
 

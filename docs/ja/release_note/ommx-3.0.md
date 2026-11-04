@@ -687,7 +687,7 @@ Converter 固有の表現検査や backend の上限検査は solver input の�
 特に OpenJij の signed ID と finite coefficient の検査は sampler input の構築時に
 行われるようになりました。責務境界の詳細は
 {class}`~ommx.InstanceClass`と
-[Developer Guide: OMMX Adapterを実装する](../developer_guide/adapter.md)を参照してください。
+{mod}`Adapter Reference <ommx.adapter>`を参照してください。
 
 ### Adapter の input class 宣言を必須化 ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
 
@@ -697,7 +697,7 @@ Converter 固有の表現検査や backend の上限検査は solver input の�
 呼び出し側は `is not None` の確認なしで `Adapter.INPUT_CLASS` を
 {meth}`~ommx.Instance.prepare` に渡せます。宣言がない場合は、applicability の確認時に
 引き続き明確な `TypeError` を送出します。契約の全体像は
-[Developer Guide: OMMX Adapterを実装する](../developer_guide/adapter.md)を参照してください。
+{mod}`Adapter Reference <ommx.adapter>`を参照してください。
 
 ## 3.0.0 Beta 3
 
@@ -1311,7 +1311,7 @@ PySCIPOpt Adapter は、SCIP の `BESTSOLFOUND` と `DUALBOUNDIMPROVED` callback
 
 {class}`~ommx.experiment.Experiment`、{meth}`~ommx.experiment.Experiment.with_temp_local_registry`、{meth}`~ommx.experiment.Experiment.fork` が `store_trace=True` を受け取れるようになりました。有効化すると、各 `with experiment.run()` context 内で発生した OpenTelemetry span を capture し、close 済みの {class}`~ommx.experiment.SealedRun` に trace を 1 つ保存します。保存された trace は {attr}`~ommx.experiment.SealedRun.trace` から {class}`~ommx.tracing.TraceResult` として取得でき、commit、load、fork をまたいで保持されます。
 
-詳しい trace workflow、renderer、OpenTelemetry の設定については [トレースとプロファイリング](../how_to/trace_execution) を参照してください。
+詳しい trace workflow、renderer、OpenTelemetry の設定については {mod}`ommx.tracing`と[外部送信の設定](../how_to/export_traces.md) を参照してください。
 
 ```python
 from ommx.experiment import Experiment
@@ -1623,7 +1623,7 @@ assert instance.constraints[c.constraint_id].name == "budget"
 - **`%%ommx_trace`** — Jupyterセル単位でスパンツリーとChrome Trace JSONダウンロードリンクを表示するセルマジック
 - **`capture_trace` / `@traced`** — 通常のPythonスクリプト／テスト／CIから同じ機能を使うためのコンテキストマネージャとデコレータ
 
-詳しい使い方、独自 `TracerProvider` の設定方法、トラブルシューティングは [トレースとプロファイリング](../how_to/trace_execution) を参照してください。
+詳しい使い方、独自 `TracerProvider` の設定方法、トラブルシューティングは {mod}`ommx.tracing`と[外部送信の設定](../how_to/export_traces.md) を参照してください。
 
 ### 🆕 Solver / Sampler Adapter のトレーシング対応 ([#833](https://github.com/Jij-Inc/ommx/pull/833))
 

@@ -290,6 +290,35 @@
         "R_API.adapter.initial.named"
       ],
       "note": "日英6原稿を既存問題の入手、公開候補の評価、SCIPへの初期候補の提示というまとまりで共有API Referenceへ移す。ホーム・セットアップ・リリースノートの入口を更新する。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "130a1fccb389bc96d0c25fb38f47070959463c08",
+      "target_revision": "codex/adapter-tracing-bounds-reference",
+      "affected_pages": [
+        "README",
+        "HOME",
+        "HOME_EN",
+        "R_API.tracing",
+        "R_API.adapter.trace",
+        "R_API.experiment.run_trace",
+        "R_API.adapter.implement",
+        "R_API.instance.bounds",
+        "R_INTEGRATION.trace_export"
+      ],
+      "note": "旧5原稿を移管。上下限の更新・Adapter実装・トレース・Run保存は所有APIの実行例へ、外部OTLP設定は日英how_to/export_tracesへ集約する。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "fa1846671af281991eb13d2c9ce700004125e197",
+      "target_revision": "codex/adapter-tracing-bounds-reference",
+      "affected_pages": [
+        "README",
+        "HOME",
+        "HOME_EN",
+        "R_INTEGRATION.trace_export"
+      ],
+      "note": "日英のホームと目次を読者の目的で揃える。第1章から残り3章へ直接入り、応用例・API・形式仕様・外部接続などを必要に応じて選ぶ。公開済みの既存ページはURLを維持し、未公開のOTLP送信設定はhow_toへ移す。診断の移管は#1331で追跡する。"
     }
   ],
   "interpretation": {
@@ -1183,10 +1212,8 @@
     {
       "id": "trace.events",
       "label": "実行区間のトレースを読む",
-      "owner": "P6",
-      "requires": [
-        "evaluation.basic"
-      ],
+      "owner": "R_API.tracing",
+      "requires": [],
       "external": false,
       "aliases": [
         "tracing",
@@ -1194,7 +1221,7 @@
         "Trace",
         "ChromeTrace"
       ],
-      "scope": ""
+      "scope": "計測された処理区間の親子と所要時間を読む。個々のPython文の時間は保証しない。"
     },
     {
       "id": "model.import",
@@ -1473,7 +1500,7 @@
     {
       "id": "adapter.contract",
       "label": "Adapterのexact inputと評価snapshotを守る",
-      "owner": "DEV_A",
+      "owner": "R_API.adapter.implement",
       "requires": [
         "adapter.basic",
         "class.membership",
@@ -1492,7 +1519,7 @@
     {
       "id": "adapter.encode_decode",
       "label": "使用変数とbackend表現の対応を実装する",
-      "owner": "DEV_A",
+      "owner": "R_API.adapter.implement",
       "requires": [
         "adapter.contract",
         "variables.recovery"
@@ -1691,7 +1718,7 @@
     {
       "id": "bounds.inspect_once",
       "label": "一回のbound更新と変更された変数を確認する",
-      "owner": "P15",
+      "owner": "R_API.instance.bounds",
       "requires": [
         "bounds.tighten"
       ],
@@ -1813,6 +1840,19 @@
       "owner": "B_RECORD_SHARE",
       "external": false,
       "aliases": []
+    },
+    {
+      "id": "trace.export",
+      "label": "外部コレクターへスパンを送る",
+      "owner": "R_INTEGRATION.trace_export",
+      "requires": [
+        "sdk.environment"
+      ],
+      "external": false,
+      "aliases": [
+        "OTLP"
+      ],
+      "scope": "アプリケーション所有のSDK providerにexporterを設定する。外部送信とRunの保存を区別する。"
     }
   ],
   "pages": [
@@ -1907,7 +1947,8 @@
           "mentions": [
             "adapter.basic",
             "artifact.roundtrip",
-            "experiment.record"
+            "experiment.record",
+            "parametric.materialize"
           ]
         },
         {
@@ -1949,32 +1990,24 @@
             "ommx.adoption"
           ],
           "mentions": [
-            "adapter.basic",
-            "class.membership",
-            "preparation.target",
-            "artifact.roundtrip",
-            "experiment.record",
-            "class.qubo",
-            "bigm.contract",
-            "parametric.materialize",
-            "expression.basics",
-            "named.outputs",
-            "solution.extract",
-            "expression.labels",
-            "results.evaluation_scope",
             "transform.structure",
-            "transform.preparation_choice",
-            "transform.backend_choice",
+            "results.evaluation_scope",
             "records.choice",
-            "records.scope",
-            "records.identity",
-            "records.reexecution"
+            "sdk.environment",
+            "model.import",
+            "adapter.basic",
+            "adapter.contract",
+            "artifact.registry",
+            "trace.export",
+            "aux.agent_skills",
+            "artifact.format",
+            "wire.serialization"
           ]
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、生産ラインの上限を使って候補評価とIndicatorの表現選択を具体化する。実行例はSolutionのReferenceが所有する。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。 基本求解・native特殊制約・HiGHSのcopy上の準備・OpenJijの重み付きsamplingは、共有Adapter Referenceの完結した例へ案内する。ナビゲーションからAPI操作の習得を付与しない。",
+      "notes": "数理最適化の基礎から入れるBook第1章。冒頭で目的と現在の採用理由を示し、生産ラインの例で候補評価と定式化の選択を説明する。目的別の案内の最初にBookの残り3章を置き、実行環境、題材を追うExamples、Artifactの扱い、外部ツール接続、API・形式仕様、移行・変更履歴へ分岐する。項目名やリンクから操作能力を推定しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2013,7 +2046,8 @@
           "mentions": [
             "adapter.basic",
             "artifact.roundtrip",
-            "experiment.record"
+            "experiment.record",
+            "parametric.materialize"
           ]
         },
         {
@@ -2055,32 +2089,24 @@
             "ommx.adoption"
           ],
           "mentions": [
-            "adapter.basic",
-            "class.membership",
-            "preparation.target",
-            "artifact.roundtrip",
-            "experiment.record",
-            "class.qubo",
-            "bigm.contract",
-            "parametric.materialize",
-            "expression.basics",
-            "named.outputs",
-            "solution.extract",
-            "expression.labels",
-            "results.evaluation_scope",
             "transform.structure",
-            "transform.preparation_choice",
-            "transform.backend_choice",
+            "results.evaluation_scope",
             "records.choice",
-            "records.scope",
-            "records.identity",
-            "records.reexecution"
+            "sdk.environment",
+            "model.import",
+            "adapter.basic",
+            "adapter.contract",
+            "artifact.registry",
+            "trace.export",
+            "aux.agent_skills",
+            "artifact.format",
+            "wire.serialization"
           ]
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、生産ラインの上限による候補評価とIndicatorの表現選択、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。 保存方法と記録範囲の判断は日英B_RECORD_SHARE、具体的な保存・復帰・添付操作は共有API、CLI/認証は日英の運用Referenceへ接続する。 基本求解・native特殊制約・HiGHSのcopy上の準備・OpenJijの重み付きsamplingは、共有Adapter Referenceの完結した例へ案内する。ナビゲーションからAPI操作の習得を付与しない。",
+      "notes": "数理最適化の基礎から入れるBook第1章。冒頭で目的と現在の採用理由を示し、生産ラインの例で候補評価と定式化の選択を説明する。目的別の案内の最初にBookの残り3章を置き、実行環境、題材を追うExamples、Artifactの扱い、外部ツール接続、API・形式仕様、移行・変更履歴へ分岐する。項目名やリンクから操作能力を推定しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -4544,21 +4570,18 @@
       ]
     },
     {
-      "id": "P6",
-      "title": "変換と実行の時間を調べる",
-      "slice": "J",
-      "role": "how-to",
+      "id": "R_API.tracing",
+      "title": "実行区間のスパンを記録・表示する",
+      "slice": "Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/trace_execution.ipynb"
+        "python/ommx/ommx/tracing/__init__.py"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/tracing.ipynb"
-      ],
+      "source_urls": [],
       "requires": [
         "ext.python",
-        "sdk.environment",
-        "evaluation.basic"
+        "sdk.environment"
       ],
       "sections": [
         {
@@ -4577,21 +4600,21 @@
         "class.qubo"
       ],
       "parent_page": null,
-      "notes": "SDKだけの最初の出力は囲んだ区間の時間を読む例。内部の処理がすべて自動でスパンになるとは約束しない。Adapterのconvert/call/decode内訳は独立した任意節P6.adapter、Experiment保存はP6.experimentへ分ける。実測出力をipynbに保持し、性能比較の根拠としない。",
+      "notes": "メソッド実行中のspan、親子の時間、セル・ブロック・関数単位の収集と保存を共有Referenceで扱う。外部exporter設定は日英の運用ページへ進む。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/trace_execution.ipynb"
+        "python/ommx/ommx/tracing/__init__.py"
       ]
     },
     {
-      "id": "P6.adapter",
-      "title": "Adapter実行の内訳をトレースする",
-      "slice": "J",
-      "role": "how-to-section",
+      "id": "R_API.adapter.trace",
+      "title": "HiGHSで求解の内訳を読む",
+      "slice": "Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/trace_execution.ipynb"
+        "python/ommx-highs-adapter/ommx_highs_adapter/adapter.py"
       ],
       "source_urls": [],
       "requires": [
@@ -4614,26 +4637,24 @@
       "deferred": [
         "experiment.record"
       ],
-      "parent_page": "P6",
-      "notes": "HiGHSを直接capture_traceで実行する。Experimentを前提にせず、記録されたconvert/call/decodeの親子区間を解釈する。",
+      "parent_page": null,
+      "notes": "独立したHiGHSの例でconvert・call・decodeを確認する。Experimentを前提にしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/trace_execution.ipynb"
+        "python/ommx-highs-adapter/ommx_highs_adapter/adapter.py"
       ]
     },
     {
-      "id": "P6.experiment",
-      "title": "トレースを実験に記録する",
-      "slice": "J/F",
-      "role": "how-to-section",
+      "id": "R_API.experiment.run_trace",
+      "title": "保存されたRun traceを読み直す",
+      "slice": "Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/trace_execution.ipynb"
+        "python/ommx/src/experiment.rs"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/tracing.ipynb"
-      ],
+      "source_urls": [],
       "requires": [
         "trace.events",
         "evaluation.basic",
@@ -4652,12 +4673,12 @@
         }
       ],
       "deferred": [],
-      "parent_page": "P6",
-      "notes": "候補評価をlog_solutionで記録するRunのトレースを保存・読出しする。P6.adapterを飛ばしてもよく、Adapterの知識や導入は要求しない。",
+      "parent_page": null,
+      "notes": "SealedRun.traceでRunの範囲、実験の確定、再読込を扱う。外部exporterやAdapterは不要。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/trace_execution.ipynb"
+        "python/ommx/src/experiment.rs"
       ]
     },
     {
@@ -5253,17 +5274,16 @@
       ]
     },
     {
-      "id": "DEV_A",
-      "title": "Adapterを実装する",
-      "slice": "C",
-      "role": "developer",
+      "id": "R_API.adapter.implement",
+      "title": "Solver/Sampler Adapterを実装する",
+      "slice": "Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/developer_guide/adapter.md"
+        "python/ommx/ommx/adapter.py",
+        "python/ommx-openjij-adapter/ommx_openjij_adapter/__init__.py"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/developer_guide/adapter.md"
-      ],
+      "source_urls": [],
       "requires": [
         "ext.python",
         "instance.model",
@@ -5271,22 +5291,11 @@
         "state.values",
         "evaluation.basic",
         "adapter.basic",
-        "class.membership"
+        "class.membership",
+        "variables.roles",
+        "variables.recovery"
       ],
       "sections": [
-        {
-          "id": "variables",
-          "introduces": [
-            "variables.roles",
-            "variables.recovery",
-            "variables.defaults"
-          ],
-          "uses": [
-            "variables.roles",
-            "variables.recovery"
-          ],
-          "mentions": []
-        },
         {
           "id": "contract",
           "introduces": [
@@ -5302,11 +5311,12 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "PR #1159のレビュー修正で、encodeからdecode完了まで入力を不変に保つ契約、最適性情報のmapping、revisionを固定した参照実装を明記する。PySCIPOptの入力参照保持をisolated snapshotの保証と混同しない。変数の詳細の概念所有はInstance/G6側に残す。 同じ入力をencodeからdecodeまで変更せず保持する契約を先に示し、private copyを既定の実装手順として勧めない。",
+      "notes": "契約を所有するSolverAdapter・SamplerAdapterの本文から、疎なIDの符号化・復号、入力の照合、同一Instanceでの評価、実装例へ進む。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/developer_guide/adapter.md"
+        "python/ommx/ommx/adapter.py",
+        "python/ommx-openjij-adapter/ommx_openjij_adapter/__init__.py"
       ]
     },
     {
@@ -5925,24 +5935,48 @@
       ],
       "source_urls": [],
       "requires": [
-        "variable.basics",
-        "constraint.basics"
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
       ],
       "sections": [
         {
-          "id": "meaning",
+          "id": "model",
           "introduces": [
-            "bounds.tighten"
+            "variable.basics",
+            "constraint.basics"
           ],
           "uses": [
-            "bounds.tighten"
+            "variable.basics",
+            "constraint.basics"
           ],
           "mentions": []
+        },
+        {
+          "id": "once",
+          "introduces": [
+            "bounds.tighten",
+            "bounds.inspect_once"
+          ],
+          "uses": [
+            "bounds.inspect_once"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "limits",
+          "introduces": [],
+          "uses": [
+            "bounds.inspect_once"
+          ],
+          "mentions": [
+            "numeric.tolerance"
+          ]
         }
       ],
       "deferred": [],
       "parent_page": "R_API.instance",
-      "notes": "旧G7.boundsの意味と限界をtighten_bounds_simultaneously_onceの二回の伝播例、およびtighten_bounds_simultaneously_once_using_constraintsの選択範囲・数式・数値・失敗時契約へ割り当てる。Bookは任意固定との違いと自動収束を約束しない点だけを扱い、P15は独立した手順入口として残る。",
+      "notes": "上限更新の意味・二回の伝播・対象外と数値条件を共有APIに集約。空の変更集合は実行可能性を保証しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -6183,65 +6217,6 @@
       ]
     },
     {
-      "id": "P15",
-      "title": "制約から変数の上下限を絞る",
-      "slice": "L",
-      "role": "how-to",
-      "status": "existing",
-      "source_paths": [
-        "docs/ja/how_to/tighten_bounds.md"
-      ],
-      "source_urls": [],
-      "requires": [
-        "ext.math",
-        "ext.python",
-        "sdk.environment"
-      ],
-      "sections": [
-        {
-          "id": "model",
-          "introduces": [
-            "variable.basics",
-            "constraint.basics"
-          ],
-          "uses": [
-            "variable.basics",
-            "constraint.basics"
-          ],
-          "mentions": []
-        },
-        {
-          "id": "once",
-          "introduces": [
-            "bounds.tighten",
-            "bounds.inspect_once"
-          ],
-          "uses": [
-            "bounds.inspect_once"
-          ],
-          "mentions": []
-        },
-        {
-          "id": "limits",
-          "introduces": [],
-          "uses": [
-            "bounds.inspect_once"
-          ],
-          "mentions": [
-            "numeric.tolerance"
-          ]
-        }
-      ],
-      "deferred": [],
-      "parent_page": null,
-      "notes": "上下限と通常制約を知る読者へ、自己完結した二変数例で開始時bound→一回の更新→変更結果を先に示す。二回目で更新伝播を説明するが、自動反復/収束APIを追加しない。空辞書と対象外・数値条件の読み方を後段へ置く。同じatolでも丸め・計算順序で境界付近の判定が変わる場合を局所説明する。",
-      "contract_status": "proposed",
-      "implementation_verified": false,
-      "source_paths_existing": [
-        "docs/ja/how_to/tighten_bounds.md"
-      ]
-    },
-    {
       "id": "B_EVALUATE",
       "title": "候補を評価して結果を判断する / Evaluate candidates and interpret results",
       "slice": "Result interpretation migration",
@@ -6456,6 +6431,45 @@
         "docs/ja/user_guide/record_and_share.md",
         "docs/en/user_guide/record_and_share.md"
       ]
+    },
+    {
+      "id": "R_INTEGRATION.trace_export",
+      "title": "スパンの外部送信を設定する",
+      "role": "integration-reference",
+      "status": "existing",
+      "source_paths": [
+        "docs/en/how_to/export_traces.md",
+        "docs/ja/how_to/export_traces.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "configure-exporter",
+          "introduces": [
+            "trace.export"
+          ],
+          "uses": [
+            "trace.export"
+          ],
+          "mentions": [
+            "trace.events",
+            "experiment.record"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "日英ページで追加依存・接続先・providerの設定順を示す。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/en/how_to/export_traces.md",
+        "docs/ja/how_to/export_traces.md"
+      ]
     }
   ],
   "routes": [
@@ -6636,7 +6650,7 @@
     },
     {
       "id": "tracing",
-      "title": "評価処理のトレース",
+      "title": "スクリプト・Notebookから直接トレースする",
       "initial": [
         "ext.math",
         "ext.python",
@@ -6645,8 +6659,7 @@
       ],
       "steps": [
         "SETUP",
-        "R_API.qplib.candidate",
-        "P6"
+        "R_API.tracing"
       ]
     },
     {
@@ -6661,9 +6674,9 @@
       "steps": [
         "SETUP",
         "R_API.qplib.candidate",
-        "P6",
+        "R_API.tracing",
         "R_API.experiment.example",
-        "P6.experiment"
+        "R_API.experiment.run_trace"
       ]
     },
     {
@@ -6678,8 +6691,8 @@
       "steps": [
         "SETUP",
         "R_API.qplib.candidate",
-        "P6",
-        "P6.adapter"
+        "R_API.tracing",
+        "R_API.adapter.trace"
       ]
     },
     {
@@ -6861,7 +6874,8 @@
         "R_API.instance_class",
         "R_API.preparation",
         "R_API.adapter",
-        "DEV_A"
+        "R_API.instance.population",
+        "R_API.adapter.implement"
       ]
     },
     {
@@ -7103,7 +7117,7 @@
       ],
       "steps": [
         "SETUP",
-        "P15"
+        "R_API.instance.bounds"
       ]
     },
     {
@@ -7118,8 +7132,7 @@
         "R_API.instance",
         "R_API.solution",
         "B_TRANSFORM",
-        "R_API.instance.bounds",
-        "P15"
+        "R_API.instance.bounds"
       ]
     },
     {
@@ -7393,6 +7406,58 @@
           ]
         }
       ]
+    },
+    {
+      "id": "trace_export_direct",
+      "title": "外部のOTLP送信先を設定する",
+      "initial": [
+        "ext.python",
+        "ext.math"
+      ],
+      "steps": [
+        "SETUP",
+        "R_INTEGRATION.trace_export"
+      ]
+    },
+    {
+      "id": "transform_from_home",
+      "title": "問題を変換して解法へ渡す：ホームからの入口",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        {
+          "alternatives": [
+            [
+              "HOME"
+            ],
+            [
+              "HOME_EN"
+            ]
+          ]
+        },
+        "B_TRANSFORM"
+      ]
+    },
+    {
+      "id": "evaluate_from_home",
+      "title": "候補を評価して結果を判断する：ホームからの入口",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        {
+          "alternatives": [
+            [
+              "HOME"
+            ],
+            [
+              "HOME_EN"
+            ]
+          ]
+        },
+        "B_EVALUATE"
+      ]
     }
   ],
   "environment_requirements": [
@@ -7409,7 +7474,7 @@
       "observed": "ID指定の例と同じSDK・PySCIPOpt Adapter環境で名前照合を使う。別の開発環境への切替は前提にしない。"
     },
     {
-      "page": "P6.adapter",
+      "page": "R_API.adapter.trace",
       "observed": "HiGHS Adapterを任意追加する。Experimentと外部OTel exporterは不要。"
     },
     {
@@ -7433,7 +7498,7 @@
       "observed": "結果抽出と別Instanceへの名前照合はSETUPで選んだSDK環境で実行する。照合と値・実行可能性の検査という意味上の違いは各APIの本文で説明する。"
     },
     {
-      "page": "P15",
+      "page": "R_API.instance.bounds",
       "observed": "SETUPで選んだSDK環境だけで自己完結する。一回分の更新を明示的に呼び、一般presolve統合を前提にしない。"
     },
     {
