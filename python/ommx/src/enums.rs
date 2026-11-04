@@ -4,7 +4,7 @@ macro_rules! open_kind {
     ($(#[$doc:meta])* $name:ident, $core:ty, $code:expr; $( $variant:ident => $core_variant:ident ),+ $(,)?) => {
         $(#[$doc])*
         #[pyo3_stub_gen::derive::gen_stub_pyclass]
-        #[pyclass(frozen)]
+        #[pyclass(from_py_object, frozen)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $name($core);
 
@@ -119,7 +119,7 @@ class Kind:
 /// {meth}`~ommx.Instance.populate_state` explains reconstruction, defaults,
 /// canonicalization, and consistency assertions with executable examples.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, frozen)]
+#[pyclass(from_py_object, eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DecisionVariableRole {
     /// Used by the objective or active constraints passed to solvers
@@ -182,7 +182,7 @@ impl From<DecisionVariableRole> for ommx::DecisionVariableRole {
 
 /// Sense of optimization (minimize or maximize)
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, frozen)]
+#[pyclass(from_py_object, eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Sense {
     /// Minimize the objective function
@@ -247,7 +247,7 @@ impl From<Sense> for ommx::Sense {
 
 /// Equality type for constraints
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, frozen)]
+#[pyclass(from_py_object, eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Equality {
     /// Equal to zero constraint (=)
@@ -348,7 +348,7 @@ impl Kind {
 
 /// Optimality status of a solution
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int)]
+#[pyclass(from_py_object, eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Optimality {
     /// The solver cannot determine whether the solution is optimal
@@ -416,7 +416,7 @@ impl From<Optimality> for ommx::v1::Optimality {
 
 /// Relaxation status of a solution
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int)]
+#[pyclass(from_py_object, eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Relaxation {
     /// No relaxation is used

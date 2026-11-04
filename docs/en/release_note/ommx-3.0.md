@@ -6,6 +6,19 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### Require Python 3.11 and add Python 3.15 SDK support ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
+
+The SDK and adapter packages now require Python 3.11 or newer under a shared
+support policy that drops end-of-life Python 3.10. The core SDK adds Python 3.15
+support with PyO3 0.30.1, and ABI3 wheels now use Python 3.11 as their baseline.
+ABI3t wheels support both GIL-enabled and free-threaded Python 3.15 and newer;
+free-threaded Python 3.14 continues to use a version-specific wheel.
+Python 3.15 support is introduced for the core SDK first; adapter availability
+also depends on the underlying solver's Python support.
+
+The SDK now allows pandas 3. PyArrow remains a required runtime
+dependency for storing and loading Artifact DataFrames in Parquet format.
+
 ## 3.0.0 Beta 9
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b9-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b9)

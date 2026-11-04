@@ -125,7 +125,7 @@ use std::collections::BTreeSet;
 /// optimality. Solution annotations can also be persisted in protobuf payloads
 /// and mirrored to OMMX Artifact descriptors.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct Solution {
     pub(crate) inner: ommx::Solution,

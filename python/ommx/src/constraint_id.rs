@@ -237,7 +237,7 @@ macro_rules! constraint_id {
         // definitions and are re-exported from ommx as before.
         #[doc = $doc]
         #[pyo3_stub_gen::derive::gen_stub_pyclass(module = "ommx._ommx_rust")]
-        #[pyclass(module = "ommx", frozen, eq, ord, hash, extends = ConstraintIDBase)]
+        #[pyclass(from_py_object, module = "ommx", frozen, eq, ord, hash, extends = ConstraintIDBase)]
         #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $name(ommx::$name);
         crate::constraint_base::constraint_subclass!(

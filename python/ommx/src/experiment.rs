@@ -262,7 +262,7 @@ impl PyExperimentCheckpointRef {
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(frozen)]
+#[pyclass(from_py_object, frozen)]
 #[pyo3(module = "ommx._ommx_rust", name = "AutosavePolicy")]
 /// Policy controlling rolling draft checkpoints after a `Run` closes.
 ///
@@ -4164,7 +4164,7 @@ impl PySealedRun {
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(module = "ommx._ommx_rust", name = "Solve")]
 #[derive(Clone)]
 /// Immutable record of one solver call.
@@ -4255,7 +4255,7 @@ impl PySolve {
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(module = "ommx._ommx_rust", name = "Sampling")]
 #[derive(Clone)]
 /// Immutable record of one sampler call.

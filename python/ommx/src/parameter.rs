@@ -35,7 +35,7 @@ use std::collections::HashMap;
 /// using parameterized profits, weights, and capacity, then
 /// {meth}`~ommx.ParametricInstance.with_parameters` to create an Instance.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct Parameter(pub ommx::v1::Parameter);
 

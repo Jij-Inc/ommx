@@ -34,7 +34,7 @@ use std::collections::HashMap;
 /// >>> x.id == y.id
 /// False
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct DecisionVariable(
     pub VariableID,

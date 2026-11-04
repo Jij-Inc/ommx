@@ -147,7 +147,8 @@ Run `task -l` to see all available commands.
 When developing solver adapters:
 - Import from top-level `ommx` — the public API surface
 - `ommx._ommx_rust` is an internal module and may change without notice
-- Declare only requirements of the adapter's own implementation in its package metadata. Base `requires-python` on the syntax and standard-library APIs it uses; add a Python upper bound only for a demonstrated incompatibility in the adapter itself.
+- Declare only runtime dependencies required by the adapter's own implementation in its package metadata.
+- Base `requires-python` on the syntax and standard-library APIs it uses. An explicitly adopted project-wide support policy, such as dropping an end-of-life Python release, may set a higher minimum across the SDK and adapters. Add a Python upper bound only for a demonstrated incompatibility in the adapter itself.
 - Do not copy a solver's or transitive dependency's Python bounds or wheel availability into the adapter's `requires-python`. Let dependency metadata and the package resolver enforce those constraints.
 - Keep development and CI environment restrictions in workspace configuration. Record tested Python versions in classifiers and the CI matrix separately from package requirements.
 

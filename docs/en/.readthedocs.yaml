@@ -18,7 +18,7 @@ build:
       - asdf install uv latest
       - asdf global uv latest
     create_environment:
-      # Override the repository's Python 3.10 pin for SDK development.
+      # Override the repository's Python 3.11 pin for SDK development.
       - uv venv --python 3.12 "${READTHEDOCS_VIRTUALENV_PATH}"
     install:
       # API rendering reads sources and generated metadata without the compiled SDK.

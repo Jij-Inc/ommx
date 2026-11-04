@@ -7,7 +7,7 @@ use pyo3_stub_gen::{PyStubType, TypeInfo};
 /// Known constants select precise family views. The ID type parameter records
 /// that selection; generic consumers can use ConstraintIDBase. Future SDKs may
 /// add families. This selector does not declare adapter or wire support.
-#[pyclass(frozen)]
+#[pyclass(from_py_object, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ConstraintKind(ommx::ConstraintKind);
 
