@@ -1,16 +1,21 @@
 (python-sdk-v2-to-v3-migration-guide)=
 # Migrate from Python SDK v2 to v3
 
-This guide takes code written for [OMMX 2.9.4](https://pypi.org/project/ommx/2.9.4/) to the v3 API on `main`. Keep the v2 environment and set up a separate v3 environment using the [installation guide](../getting_started/install.md). Before changing the code, save one model, a candidate, and the results your application actually uses. You will compare them in [section 6](#migration-verify).
+This guide takes code written for [OMMX 2.9.4](https://pypi.org/project/ommx/2.9.4/) to the v3 API on `main`. Keep the v2 environment and set up a separate v3 environment using the [installation guide](../getting_started/install.md). Before changing the code, save one model, a candidate, and the results your application actually uses. You will compare them in {ref}`section 6 <migration-verify>`.
 
-Start where your code uses OMMX. If you [construct models](#migration-build), first decide who assigns IDs. If you [call a backend](#migration-solve), check who prepares its inputs. If you only consume data, go straight to [interpreting results](#migration-results) or [loading saved data](#migration-storage). To look up an error by its old method name, use the [API index](#migration-index).
+Start where your code uses OMMX. If you {ref}`construct models <migration-build>`, first decide who assigns IDs. If you {ref}`call a backend <migration-solve>`, check who prepares its inputs. If you only consume data, go straight to {ref}`interpreting results <migration-results>` or {ref}`loading saved data <migration-storage>`. To look up an error by its old method name, use the {ref}`API index <migration-index>`.
+
+```{contents} Migration guide contents
+:local:
+:depth: 1
+```
 
 (migration-imports)=
 ## 1. Update imports and object access
 
 In v2.9.4, `Function`, `Constraint`, `DecisionVariable`, `Instance`, `ParametricInstance`, `Solution`, and `SampleSet` are already available from `ommx`. You can switch these imports while still running v2. In v3, import the other modeling types from the same public namespace, including `Linear`, `Parameter`, `Equality`, and `Sense`.
 
-If your v2 code imports `ommx.v1.*_pb2` or accesses `.raw`, identify what it needs from the object. For example, read `instance.sense` directly. To build a model, use {meth}`~ommx.Instance.from_components` or the incremental API below. For serialized data, [select a reader by format](#migration-storage). The v1 protobuf schema name still identifies a wire format. The Python SDK no longer provides those generated protobuf modules or the `from_raw`, `from_protobuf`, and `to_protobuf` wrappers.
+If your v2 code imports `ommx.v1.*_pb2` or accesses `.raw`, identify what it needs from the object. For example, read `instance.sense` directly. To build a model, use {meth}`~ommx.Instance.from_components` or the incremental API below. For serialized data, {ref}`select a reader by format <migration-storage>`. The v1 protobuf schema name still identifies a wire format. The Python SDK no longer provides those generated protobuf modules or the `from_raw`, `from_protobuf`, and `to_protobuf` wrappers.
 
 (migration-build)=
 ## 2. Build and edit a model
@@ -33,7 +38,7 @@ assert model.constraints[limit.constraint_id].name == "limit"
 
 `new_integer`, `new_continuous`, `new_semi_integer`, `new_semi_continuous`, and `new_finite_domain` also allocate variable IDs. On both `Instance` and `ParametricInstance`, `add_constraint`, `add_indicator_constraint`, `add_one_hot_constraint`, and `add_sos1_constraint` allocate constraint numbers.
 
-If another file or application already refers to variable 0 or constraint 7, **preserve those numbers**. Keep the ID when constructing the variable. Replace v2's `constraints=[(x <= 1).set_id(7)]` with `constraints={7: x <= 1}` in `from_components`. A detached constraint has no ID. All constraint families share one number space per model, including removed constraints. Construction and loading reject collisions. [Section 4](#migration-compare-model) uses an explicit ID in both versions.
+If another file or application already refers to variable 0 or constraint 7, **preserve those numbers**. Keep the ID when constructing the variable. Replace v2's `constraints=[(x <= 1).set_id(7)]` with `constraints={7: x <= 1}` in `from_components`. A detached constraint has no ID. All constraint families share one number space per model, including removed constraints. Construction and loading reject collisions. {ref}`Section 4 <migration-compare-model>` uses an explicit ID in both versions.
 
 (42-constraint-accessors-on-instance--parametricinstance--solution-return-dicts)=
 (typed-constraint-ids-and-live-collections)=
@@ -42,6 +47,12 @@ If another file or application already refers to variable 0 or constraint 7, **p
 Look up a regular constraint as `model.constraints[ConstraintID(7)]`. The collection contains all families, so a bare integer cannot identify the family for lookup. In a family-specific view, `model.constraints.of_kind(ConstraintKind.Regular)[7]` also works. Iteration yields typed IDs. Use `.items()` for ID/row pairs.
 
 On a model, an active row is an attached handle. Calling `row.set_name("limit")` updates the model. Call `row.detach()` to keep an independent copy. Replace v2's `add_name` and `add_description` with `set_name` and `set_description`. Use `set_parameters` to replace the whole mapping and `add_parameters` to merge entries. Read fixed variable values from `model.fixed_decision_variables()`. The model owns that state even when a variable definition has been detached. See {class}`~ommx.ConstraintCollection` and {class}`~ommx.DecisionVariable`.
+
+```{toctree}
+:maxdepth: 1
+
+v2_to_v3/constraint_metadata
+```
 
 ### Carry over the mathematical structure
 
@@ -59,6 +70,12 @@ For the adapter's recommended preparation, pass your model to `solve()` or `samp
 **Initial candidates and penalties.** SCIP still accepts initial values by variable name and subscripts, as in 2.9.4. OpenJij initial states use the solver variable IDs of the exact prepared input. Supply them to its preparation-free API. When constraints require fixed penalties, choose the weights explicitly. Move the v2 penalty arguments to `policy.fixed_penalty` and integer slack settings to `policy.integer_slack`. The {class}`OpenJij adapter reference <ommx_openjij_adapter.OMMXOpenJijSAAdapter>` shows the full sequence.
 
 **Exporting coefficients yourself.** {meth}`~ommx.Instance.to_qubo` and {meth}`~ommx.Instance.to_hubo` mutate the instance and expose the energy sent to the backend. In v3, evaluating a candidate with this instance returns the objective it exposed before preparation. Keep the backend energy separately if your application compares penalties or solver scores.
+
+```{toctree}
+:maxdepth: 1
+
+v2_to_v3/openjij_penalties
+```
 
 ### If you implement an adapter
 
@@ -112,6 +129,12 @@ Call the `*_df` methods. In particular, replace `solution.constraints_df` with `
 
 For multiple samples, use `samples.summary` for objectives and overall feasibility, and `samples.constraints_df(kind=...)` for per-constraint results. `samples.sample_ids()` returns a set. Use `samples.sample_ids_list` when the consumer needs a list. See {class}`~ommx.Solution` and {class}`~ommx.SampleSet` for complete examples.
 
+```{toctree}
+:maxdepth: 1
+
+v2_to_v3/constraint_tables
+```
+
 (migration-storage)=
 ## 5. Bring saved models and Artifacts forward
 
@@ -137,6 +160,12 @@ If you export MPS to another tool, replace `write_mps` with {meth}`~ommx.Instanc
 
 See {class}`~ommx.artifact.Artifact` for the archive API. For cleanup, `ommx prune-anonymous` previews refs and `ommx gc` previews unreachable blobs. Each requires `--delete` to perform deletion. See [Manage the Local Registry](../how_to/manage_local_registry.md).
 
+```{toctree}
+:maxdepth: 1
+
+v2_to_v3/artifact_archives
+```
+
 (migration-verify)=
 ## 6. Verify your application's results
 
@@ -147,31 +176,33 @@ See {class}`~ommx.artifact.Artifact` for the archive API. For cleanup, `ommx pru
 (migration-index)=
 ## Appendix. Find a replacement by its v2 name
 
+The site-wide {ref}`general index <genindex>` also lists the detailed examples under their v2 API names.
+
 | Old API or use | v3 replacement | Section |
 |---|---|---|
-| `.raw` / `from_raw` / `from_protobuf` / `to_protobuf` | Public properties and constructors | [1](#migration-imports) |
-| `add_name` / `add_description` | `set_name` / `set_description` | [2](#migration-build) |
-| `ArtifactArchive` / `ArtifactDir` / `ArtifactBuilder` | `Artifact` / `ArtifactDraft` | [5](#migration-storage) |
-| `Artifact.load_archive` | `Artifact.import_archive` / `Artifact.inspect_archive` | [5](#migration-storage) |
-| `Constraint.id` / `set_id` / `next_constraint_id` | `add_constraint` / `from_components` | [2](#migration-build) |
-| `constraint_hints` / `OneHot` / `Sos1` | `OneHotConstraint` / `Sos1Constraint` | [2](#migration-build) |
-| `constraints_df` / `removed_constraints_df` | `constraints_df(kind=...)` / `constraints_df(kind=..., removed=True)` | [4](#migration-results) |
-| `decision_variable_analysis()` | `decision_variable_roles()` / `fixed_decision_variables()` | [2](#migration-build) |
-| `DecisionVariable.substituted_value` | `model.fixed_decision_variables()` | [2](#migration-build) |
-| `evaluated.feasible` / `sampled.feasible` | `evaluated.is_feasible(atol=...)` / `sampled.feasible(atol=...)` | [4](#migration-results) |
-| `extract_constraints(name)` | extract_constraints for violations, get_constraint_value for signed regular values | [4](#migration-results) |
-| `get_constraint_by_id` / `get_removed_constraint_by_id` | `constraints[ConstraintID(n)]` / `removed_constraints[ConstraintID(n)]` | [2](#migration-build) |
-| `Linear.from_object` / `Linear.equals_to` | arithmetic or Linear.single_term / almost_equal | [2](#migration-build) |
-| `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` | `terms()` | [2](#migration-build) |
-| `ommx.v1` / `ommx.v1.*_pb2` | `ommx` | [1](#migration-imports) |
-| `Parameter.new` / `Parameters(entries=...)` | `Parameter(id, ...)` / `with_parameters({id: value})` | [2](#migration-build) |
-| `ParametricInstance.parameters (DataFrame)` | `parameters_df()` | [2](#migration-build) |
-| `response_to_samples` / `sample_qubo_sa` | `decode_to_samples` / `OMMXOpenJijSAAdapter.sample` | [3](#migration-solve) |
-| `SampleSet.sample_ids` / `summary_with_constraints` | `sample_ids()` / `summary + constraints_df(kind=...)` | [4](#migration-results) |
-| `Solution.total_violation_l1` / `total_violation_l2` | total_violation (sum of per-constraint violations); no L2 aggregate | [4](#migration-results) |
-| `to_bytes` / `from_bytes` | `to_v2_bytes` / `from_v2_bytes` / `from_v1_bytes` | [5](#migration-storage) |
-| `uniform_penalty_weight` / `penalty_weights` / `inequality_integer_slack_max_range` | `policy.fixed_penalty` / `policy.integer_slack` | [3](#migration-solve) |
-| `used_decision_variable_ids() (Instance, Function)` | `required_ids()` | [2](#migration-build) |
-| `write_mps(path)` | `save_mps(path)` | [5](#migration-storage) |
+| `.raw` / `from_raw` / `from_protobuf` / `to_protobuf` | Public properties and constructors | {ref}`1 <migration-imports>` |
+| `add_name` / `add_description` | `set_name` / `set_description` | {doc}`v2_to_v3/constraint_metadata` |
+| `ArtifactArchive` / `ArtifactDir` / `ArtifactBuilder` | `Artifact` / `ArtifactDraft` | {doc}`v2_to_v3/artifact_archives` |
+| `Artifact.load_archive` | `Artifact.import_archive` / `Artifact.inspect_archive` | {doc}`v2_to_v3/artifact_archives` |
+| `Constraint.id` / `set_id` / `next_constraint_id` | `add_constraint` / `from_components` | {ref}`2 <migration-build>` |
+| `constraint_hints` / `OneHot` / `Sos1` | `OneHotConstraint` / `Sos1Constraint` | {ref}`2 <migration-build>` |
+| `constraints_df` / `removed_constraints_df` | `constraints_df(kind=...)` / `constraints_df(kind=..., removed=True)` | {doc}`v2_to_v3/constraint_tables` |
+| `decision_variable_analysis()` | `decision_variable_roles()` / `fixed_decision_variables()` | {doc}`v2_to_v3/constraint_metadata` |
+| `DecisionVariable.substituted_value` | `model.fixed_decision_variables()` | {ref}`2 <migration-build>` |
+| `evaluated.feasible` / `sampled.feasible` | `evaluated.is_feasible(atol=...)` / `sampled.feasible(atol=...)` | {ref}`4 <migration-results>` |
+| `extract_constraints(name)` | extract_constraints for violations, get_constraint_value for signed regular values | {ref}`4 <migration-results>` |
+| `get_constraint_by_id` / `get_removed_constraint_by_id` | `constraints[ConstraintID(n)]` / `removed_constraints[ConstraintID(n)]` | {ref}`2 <migration-build>` |
+| `Linear.from_object` / `Linear.equals_to` | arithmetic or Linear.single_term / almost_equal | {ref}`2 <migration-build>` |
+| `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` | `terms()` | {ref}`2 <migration-build>` |
+| `ommx.v1` / `ommx.v1.*_pb2` | `ommx` | {ref}`1 <migration-imports>` |
+| `Parameter.new` / `Parameters(entries=...)` | `Parameter(id, ...)` / `with_parameters({id: value})` | {ref}`2 <migration-build>` |
+| `ParametricInstance.parameters (DataFrame)` | `parameters_df()` | {ref}`2 <migration-build>` |
+| `response_to_samples` / `sample_qubo_sa` | `decode_to_samples` / `OMMXOpenJijSAAdapter.sample` | {doc}`v2_to_v3/openjij_penalties` |
+| `SampleSet.sample_ids` / `summary_with_constraints` | `sample_ids()` / `summary + constraints_df(kind=...)` | {ref}`4 <migration-results>` |
+| `Solution.total_violation_l1` / `total_violation_l2` | total_violation (sum of per-constraint violations); no L2 aggregate | {ref}`4 <migration-results>` |
+| `to_bytes` / `from_bytes` | `to_v2_bytes` / `from_v2_bytes` / `from_v1_bytes` | {ref}`5 <migration-storage>` |
+| `uniform_penalty_weight` / `penalty_weights` / `inequality_integer_slack_max_range` | `policy.fixed_penalty` / `policy.integer_slack` | {doc}`v2_to_v3/openjij_penalties` |
+| `used_decision_variable_ids() (Instance, Function)` | `required_ids()` | {ref}`2 <migration-build>` |
+| `write_mps(path)` | `save_mps(path)` | {ref}`5 <migration-storage>` |
 
 For changes between individual v3 prereleases, see the [Python SDK 3.0 release notes](../release_note/ommx-3.0.md).

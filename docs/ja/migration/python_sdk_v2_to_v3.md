@@ -1,16 +1,21 @@
 (python-sdk-v2-to-v3-migration-guide)=
 # Python SDK v2からv3への移行ガイド
 
-このガイドでは [OMMX 2.9.4](https://pypi.org/project/ommx/2.9.4/) のコードを `main` のv3 APIに移行します。v2環境を残し、[導入手順](../getting_started/install.md)に従って別の環境にv3を用意してください。コードを変更する前に、代表的なモデルと候補を一つ選び、アプリケーションで使っている結果を保存します。[第6節](#migration-verify)で移行後の結果と比較します。
+このガイドでは [OMMX 2.9.4](https://pypi.org/project/ommx/2.9.4/) のコードを `main` のv3 APIに移行します。v2環境を残し、[導入手順](../getting_started/install.md)に従って別の環境にv3を用意してください。コードを変更する前に、代表的なモデルと候補を一つ選び、アプリケーションで使っている結果を保存します。{ref}`第6節 <migration-verify>`で移行後の結果と比較します。
 
-[モデルを作るコード](#migration-build)なら、まず誰がIDを割り当てるかを決めます。[ソルバーを呼ぶコード](#migration-solve)なら、入力の準備をどこで行うかを確認します。データを受け取る側は、[結果の読み方](#migration-results)または[保存済みデータの読込み](#migration-storage)から始められます。エラーに出た旧メソッド名から探すには[巻末の索引](#migration-index)を使ってください。
+{ref}`モデルを作るコード <migration-build>`なら、まず誰がIDを割り当てるかを決めます。{ref}`ソルバーを呼ぶコード <migration-solve>`なら、入力の準備をどこで行うかを確認します。データを受け取る側は、{ref}`結果の読み方 <migration-results>`または{ref}`保存済みデータの読込み <migration-storage>`から始められます。エラーに出た旧メソッド名から探すには{ref}`巻末の索引 <migration-index>`を使ってください。
+
+```{contents} 移行ガイドの目次
+:local:
+:depth: 1
+```
 
 (migration-imports)=
 ## 1. SDKの読み込みとオブジェクトの扱いを変える
 
 `Function`、`Constraint`、`DecisionVariable`、`Instance`、`ParametricInstance`、`Solution`、`SampleSet` は、2.9.4でも `ommx` から直接importできます。この7クラスはv2環境のうちにimport先を変更できます。v3では `Linear`、`Parameter`、`Equality`、`Sense` などのモデリング用の型も `ommx` からimportします。
 
-`ommx.v1.*_pb2` や `.raw` を使っていた箇所は、何を取り出していたかで置き換え先が決まります。たとえば目的関数の向きは `instance.sense` で読めます。モデルを組み立てる場合は {meth}`~ommx.Instance.from_components` または次節の追加APIを使います。バイト列を受け渡す場合は[形式に応じた読込み方法](#migration-storage)を選んでください。protobufスキーマ名のv1は引き続きデータ形式を表します。v3のPython SDKでは生成済みprotobufモジュールと `from_raw`、`from_protobuf`、`to_protobuf` は廃止されました。
+`ommx.v1.*_pb2` や `.raw` を使っていた箇所は、何を取り出していたかで置き換え先が決まります。たとえば目的関数の向きは `instance.sense` で読めます。モデルを組み立てる場合は {meth}`~ommx.Instance.from_components` または次節の追加APIを使います。バイト列を受け渡す場合は{ref}`形式に応じた読込み方法 <migration-storage>`を選んでください。protobufスキーマ名のv1は引き続きデータ形式を表します。v3のPython SDKでは生成済みprotobufモジュールと `from_raw`、`from_protobuf`、`to_protobuf` は廃止されました。
 
 (migration-build)=
 ## 2. モデルを組み立て、編集する
@@ -33,7 +38,7 @@ assert model.constraints[limit.constraint_id].name == "limit"
 
 整数・連続・半整数・半連続・有限集合を値域とする変数にも、それぞれ `new_integer`、`new_continuous`、`new_semi_integer`、`new_semi_continuous`、`new_finite_domain` があります。`Instance` と `ParametricInstance` では、`add_constraint`、`add_indicator_constraint`、`add_one_hot_constraint`、`add_sos1_constraint` が各制約の番号を割り当てます。
 
-別のファイルやアプリケーションが変数0や制約7を参照している場合は、**その番号を維持します**。変数は作成時にIDを指定します。制約はv2の `constraints=[(x <= 1).set_id(7)]` を、`from_components` に渡す `constraints={7: x <= 1}` に置き換えます。モデルに属していない制約はIDを持ちません。一つのモデルでは削除済みを含めて全種類の制約が番号を共有し、構築時や読込み時に重複を拒否します。[第4節の比較例](#migration-compare-model)では両方の版で同じ番号を使います。
+別のファイルやアプリケーションが変数0や制約7を参照している場合は、**その番号を維持します**。変数は作成時にIDを指定します。制約はv2の `constraints=[(x <= 1).set_id(7)]` を、`from_components` に渡す `constraints={7: x <= 1}` に置き換えます。モデルに属していない制約はIDを持ちません。一つのモデルでは削除済みを含めて全種類の制約が番号を共有し、構築時や読込み時に重複を拒否します。{ref}`第4節の比較例 <migration-compare-model>`では両方の版で同じ番号を使います。
 
 (42-constraint-accessors-on-instance--parametricinstance--solution-return-dicts)=
 (typed-constraint-ids-and-live-collections)=
@@ -42,6 +47,12 @@ assert model.constraints[limit.constraint_id].name == "limit"
 通常制約7は `model.constraints[ConstraintID(7)]` で参照します。全種類を含むコレクションでは、検索キーに制約の種類を示す型付きIDが必要です。通常制約だけに絞った `model.constraints.of_kind(ConstraintKind.Regular)[7]` なら整数も使えます。反復すると型付きIDが得られます。IDと行の両方を使う場合は `.items()` を呼びます。
 
 モデルから取得した有効な行は、モデルに接続されたハンドルです。`row.set_name("limit")` はモデル上の名前を更新します。独立したコピーが必要なら `row.detach()` を呼びます。v2の `add_name` と `add_description` は `set_name` と `set_description` に置き換えます。パラメータ全体の置換には `set_parameters`、指定したキーだけの更新には `add_parameters` を使います。変数の固定値は変数定義をコピーしてもモデル側に残るため、`model.fixed_decision_variables()` から取得します。詳しくは {class}`~ommx.ConstraintCollection` と {class}`~ommx.DecisionVariable` を参照してください。
+
+```{toctree}
+:maxdepth: 1
+
+v2_to_v3/constraint_metadata
+```
 
 ### 数式と制約の意味を引き継ぐ
 
@@ -59,6 +70,12 @@ Adapterの推奨設定で準備する場合は、元のモデルを `solve()` �
 **初期候補とペナルティ**。SCIPには2.9.4と同じく、変数名と添字で初期候補を渡せます。OpenJijの初期状態は、準備後にソルバーに渡す変数のIDで指定します。そのため、準備済みの入力を受け取るAPIに渡します。制約の変換に固定ペナルティが必要なら重みを明示してください。v2で直接渡していた重みは `policy.fixed_penalty`、整数のスラック変数の設定は `policy.integer_slack` に移します。一連の実行例は {class}`OpenJij AdapterのReference <ommx_openjij_adapter.OMMXOpenJijSAAdapter>` にあります。
 
 **係数を取り出して解く場合**。{meth}`~ommx.Instance.to_qubo` と {meth}`~ommx.Instance.to_hubo` はモデルを変更し、ソルバーに渡すエネルギーを取り出せるようにします。v3では、このモデルで候補を評価すると準備前の目的関数の値を取得できます。ペナルティやソルバーのスコアを比較するアプリケーションでは、ソルバー側のエネルギーも別に保持してください。
+
+```{toctree}
+:maxdepth: 1
+
+v2_to_v3/openjij_penalties
+```
 
 ### 独自Adapterを実装している場合
 
@@ -112,6 +129,12 @@ assert result.get_constraint_value(ConstraintID(7)) == -1.0
 
 複数サンプルでは `samples.summary` で目的値と全体の実行可能性を、`samples.constraints_df(kind=...)` で制約別の結果を取得します。`samples.sample_ids()` は集合を返します。リストを受け取るコードには `samples.sample_ids_list` を使ってください。使用例は {class}`~ommx.Solution` と {class}`~ommx.SampleSet` にあります。
 
+```{toctree}
+:maxdepth: 1
+
+v2_to_v3/constraint_tables
+```
+
 (migration-storage)=
 ## 5. 保存済みモデルとArtifactを引き継ぐ
 
@@ -137,6 +160,12 @@ MPSを他のツールに渡す場合は `write_mps` を {meth}`~ommx.Instance.sa
 
 アーカイブのAPIは {class}`~ommx.artifact.Artifact` にあります。整理するときは `ommx prune-anonymous` で参照の削除候補を、`ommx gc` で到達できないblobを確認できます。どちらも削除を実行するには `--delete` が必要です。詳しくは[Local Registryの管理手順](../how_to/manage_local_registry.md)を参照してください。
 
+```{toctree}
+:maxdepth: 1
+
+v2_to_v3/artifact_archives
+```
+
 (migration-verify)=
 ## 6. 移行結果を確かめる
 
@@ -147,31 +176,33 @@ MPSを他のツールに渡す場合は `write_mps` を {meth}`~ommx.Instance.sa
 (migration-index)=
 ## 付録　旧API名から置き換え先を探す
 
+個別の詳しい移行例は、サイトの {ref}`総索引 <genindex>` から旧API名でも引けます。
+
 | 旧API・使用箇所 | v3の書き方 | 節 |
 |---|---|---|
-| `.raw` / `from_raw` / `from_protobuf` / `to_protobuf` | 公開プロパティ・コンストラクタ | [1](#migration-imports) |
-| `add_name` / `add_description` | `set_name` / `set_description` | [2](#migration-build) |
-| `ArtifactArchive` / `ArtifactDir` / `ArtifactBuilder` | `Artifact` / `ArtifactDraft` | [5](#migration-storage) |
-| `Artifact.load_archive` | `Artifact.import_archive` / `Artifact.inspect_archive` | [5](#migration-storage) |
-| `Constraint.id` / `set_id` / `next_constraint_id` | `add_constraint` / `from_components` | [2](#migration-build) |
-| `constraint_hints` / `OneHot` / `Sos1` | `OneHotConstraint` / `Sos1Constraint` | [2](#migration-build) |
-| `constraints_df` / `removed_constraints_df` | `constraints_df(kind=...)` / `constraints_df(kind=..., removed=True)` | [4](#migration-results) |
-| `decision_variable_analysis()` | `decision_variable_roles()` / `fixed_decision_variables()` | [2](#migration-build) |
-| `DecisionVariable.substituted_value` | `model.fixed_decision_variables()` | [2](#migration-build) |
-| `evaluated.feasible` / `sampled.feasible` | `evaluated.is_feasible(atol=...)` / `sampled.feasible(atol=...)` | [4](#migration-results) |
-| `extract_constraints(name)` | 違反量は `extract_constraints`、通常制約の式の値は `get_constraint_value` | [4](#migration-results) |
-| `get_constraint_by_id` / `get_removed_constraint_by_id` | `constraints[ConstraintID(n)]` / `removed_constraints[ConstraintID(n)]` | [2](#migration-build) |
-| `Linear.from_object` / `Linear.equals_to` | 式または `Linear.single_term` / `almost_equal` | [2](#migration-build) |
-| `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` | `terms()` | [2](#migration-build) |
-| `ommx.v1` / `ommx.v1.*_pb2` | `ommx` | [1](#migration-imports) |
-| `Parameter.new` / `Parameters(entries=...)` | `Parameter(id, ...)` / `with_parameters({id: value})` | [2](#migration-build) |
-| `ParametricInstance.parameters (DataFrame)` | `parameters_df()` | [2](#migration-build) |
-| `response_to_samples` / `sample_qubo_sa` | `decode_to_samples` / `OMMXOpenJijSAAdapter.sample` | [3](#migration-solve) |
-| `SampleSet.sample_ids` / `summary_with_constraints` | `sample_ids()` / `summary + constraints_df(kind=...)` | [4](#migration-results) |
-| `Solution.total_violation_l1` / `total_violation_l2` | `total_violation`（各制約の違反量の和）。L2集計は廃止 | [4](#migration-results) |
-| `to_bytes` / `from_bytes` | `to_v2_bytes` / `from_v2_bytes` / `from_v1_bytes` | [5](#migration-storage) |
-| `uniform_penalty_weight` / `penalty_weights` / `inequality_integer_slack_max_range` | `policy.fixed_penalty` / `policy.integer_slack` | [3](#migration-solve) |
-| `used_decision_variable_ids() (Instance, Function)` | `required_ids()` | [2](#migration-build) |
-| `write_mps(path)` | `save_mps(path)` | [5](#migration-storage) |
+| `.raw` / `from_raw` / `from_protobuf` / `to_protobuf` | 公開プロパティ・コンストラクタ | {ref}`1 <migration-imports>` |
+| `add_name` / `add_description` | `set_name` / `set_description` | {doc}`v2_to_v3/constraint_metadata` |
+| `ArtifactArchive` / `ArtifactDir` / `ArtifactBuilder` | `Artifact` / `ArtifactDraft` | {doc}`v2_to_v3/artifact_archives` |
+| `Artifact.load_archive` | `Artifact.import_archive` / `Artifact.inspect_archive` | {doc}`v2_to_v3/artifact_archives` |
+| `Constraint.id` / `set_id` / `next_constraint_id` | `add_constraint` / `from_components` | {ref}`2 <migration-build>` |
+| `constraint_hints` / `OneHot` / `Sos1` | `OneHotConstraint` / `Sos1Constraint` | {ref}`2 <migration-build>` |
+| `constraints_df` / `removed_constraints_df` | `constraints_df(kind=...)` / `constraints_df(kind=..., removed=True)` | {doc}`v2_to_v3/constraint_tables` |
+| `decision_variable_analysis()` | `decision_variable_roles()` / `fixed_decision_variables()` | {doc}`v2_to_v3/constraint_metadata` |
+| `DecisionVariable.substituted_value` | `model.fixed_decision_variables()` | {ref}`2 <migration-build>` |
+| `evaluated.feasible` / `sampled.feasible` | `evaluated.is_feasible(atol=...)` / `sampled.feasible(atol=...)` | {ref}`4 <migration-results>` |
+| `extract_constraints(name)` | 違反量は `extract_constraints`、通常制約の式の値は `get_constraint_value` | {ref}`4 <migration-results>` |
+| `get_constraint_by_id` / `get_removed_constraint_by_id` | `constraints[ConstraintID(n)]` / `removed_constraints[ConstraintID(n)]` | {ref}`2 <migration-build>` |
+| `Linear.from_object` / `Linear.equals_to` | 式または `Linear.single_term` / `almost_equal` | {ref}`2 <migration-build>` |
+| `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` | `terms()` | {ref}`2 <migration-build>` |
+| `ommx.v1` / `ommx.v1.*_pb2` | `ommx` | {ref}`1 <migration-imports>` |
+| `Parameter.new` / `Parameters(entries=...)` | `Parameter(id, ...)` / `with_parameters({id: value})` | {ref}`2 <migration-build>` |
+| `ParametricInstance.parameters (DataFrame)` | `parameters_df()` | {ref}`2 <migration-build>` |
+| `response_to_samples` / `sample_qubo_sa` | `decode_to_samples` / `OMMXOpenJijSAAdapter.sample` | {doc}`v2_to_v3/openjij_penalties` |
+| `SampleSet.sample_ids` / `summary_with_constraints` | `sample_ids()` / `summary + constraints_df(kind=...)` | {ref}`4 <migration-results>` |
+| `Solution.total_violation_l1` / `total_violation_l2` | `total_violation`（各制約の違反量の和）。L2集計は廃止 | {ref}`4 <migration-results>` |
+| `to_bytes` / `from_bytes` | `to_v2_bytes` / `from_v2_bytes` / `from_v1_bytes` | {ref}`5 <migration-storage>` |
+| `uniform_penalty_weight` / `penalty_weights` / `inequality_integer_slack_max_range` | `policy.fixed_penalty` / `policy.integer_slack` | {doc}`v2_to_v3/openjij_penalties` |
+| `used_decision_variable_ids() (Instance, Function)` | `required_ids()` | {ref}`2 <migration-build>` |
+| `write_mps(path)` | `save_mps(path)` | {ref}`5 <migration-storage>` |
 
 v3の各プレリリースでの変更経緯は[Python SDK 3.0のリリースノート](../release_note/ommx-3.0.md)を参照してください。

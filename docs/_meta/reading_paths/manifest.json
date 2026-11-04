@@ -5654,7 +5654,15 @@
       "status": "existing",
       "source_paths": [
         "docs/ja/migration/python_sdk_v2_to_v3.md",
-        "docs/en/migration/python_sdk_v2_to_v3.md"
+        "docs/en/migration/python_sdk_v2_to_v3.md",
+        "docs/ja/migration/v2_to_v3/constraint_metadata.md",
+        "docs/ja/migration/v2_to_v3/openjij_penalties.md",
+        "docs/ja/migration/v2_to_v3/constraint_tables.md",
+        "docs/ja/migration/v2_to_v3/artifact_archives.md",
+        "docs/en/migration/v2_to_v3/constraint_metadata.md",
+        "docs/en/migration/v2_to_v3/openjij_penalties.md",
+        "docs/en/migration/v2_to_v3/constraint_tables.md",
+        "docs/en/migration/v2_to_v3/artifact_archives.md"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/migration/python_sdk_v2_to_v3.md"
@@ -5687,7 +5695,15 @@
       "implementation_verified": false,
       "source_paths_existing": [
         "docs/ja/migration/python_sdk_v2_to_v3.md",
-        "docs/en/migration/python_sdk_v2_to_v3.md"
+        "docs/en/migration/python_sdk_v2_to_v3.md",
+        "docs/ja/migration/v2_to_v3/constraint_metadata.md",
+        "docs/ja/migration/v2_to_v3/openjij_penalties.md",
+        "docs/ja/migration/v2_to_v3/constraint_tables.md",
+        "docs/ja/migration/v2_to_v3/artifact_archives.md",
+        "docs/en/migration/v2_to_v3/constraint_metadata.md",
+        "docs/en/migration/v2_to_v3/openjij_penalties.md",
+        "docs/en/migration/v2_to_v3/constraint_tables.md",
+        "docs/en/migration/v2_to_v3/artifact_archives.md"
       ]
     },
     {
