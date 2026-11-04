@@ -301,29 +301,29 @@ The site-wide {ref}`general index <genindex>` also lists the detailed examples u
 
 | Old API or use | v3 replacement | Section |
 |---|---|---|
-| `.raw` / `from_raw` / `from_protobuf` / `to_protobuf` | Public properties and constructors | {ref}`1 <migration-imports>` |
-| `add_name` / `add_description` | `set_name` / `set_description` | {ref}`migration-constraint-metadata` |
-| `ArtifactArchive` / `ArtifactDir` / `ArtifactBuilder` | `Artifact` / `ArtifactDraft` | {ref}`migration-artifact-archives` |
-| `Artifact.load_archive` | `Artifact.import_archive` / `Artifact.inspect_archive` | {ref}`migration-artifact-archives` |
-| `Constraint.id` / `set_id` / `next_constraint_id` | `add_constraint` / `from_components` | {ref}`2 <migration-build>` |
-| `constraint_hints` / `OneHot` / `Sos1` | `OneHotConstraint` / `Sos1Constraint` | {ref}`2 <migration-build>` |
-| `constraints_df` / `removed_constraints_df` | `constraints_df(kind=...)` / `constraints_df(kind=..., removed=True)` | {ref}`migration-constraint-tables` |
-| `decision_variable_analysis()` | `decision_variable_roles()` / `fixed_decision_variables()` | {ref}`migration-constraint-metadata` |
-| `DecisionVariable.substituted_value` | `model.fixed_decision_variables()` | {ref}`2 <migration-build>` |
-| `evaluated.feasible` / `sampled.feasible` | `evaluated.is_feasible(atol=...)` / `sampled.feasible(atol=...)` | {ref}`4 <migration-results>` |
-| `extract_constraints(name)` | extract_constraints for violations, get_constraint_value for signed regular values | {ref}`4 <migration-results>` |
-| `get_constraint_by_id` / `get_removed_constraint_by_id` | `constraints[ConstraintID(n)]` / `removed_constraints[ConstraintID(n)]` | {ref}`2 <migration-build>` |
-| `Linear.from_object` / `Linear.equals_to` | arithmetic or Linear.single_term / almost_equal | {ref}`2 <migration-build>` |
-| `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` | `terms()` | {ref}`2 <migration-build>` |
-| `ommx.v1` / `ommx.v1.*_pb2` | `ommx` | {ref}`1 <migration-imports>` |
-| `Parameter.new` / `Parameters(entries=...)` | `Parameter(id, ...)` / `with_parameters({id: value})` | {ref}`2 <migration-build>` |
-| `ParametricInstance.parameters (DataFrame)` | `parameters_df()` | {ref}`2 <migration-build>` |
-| `response_to_samples` / `sample_qubo_sa` | `decode_to_samples` / `OMMXOpenJijSAAdapter.sample` | {ref}`migration-openjij-penalties` |
-| `SampleSet.sample_ids` / `summary_with_constraints` | `sample_ids()` / `summary + constraints_df(kind=...)` | {ref}`4 <migration-results>` |
-| `Solution.total_violation_l1` / `total_violation_l2` | total_violation (sum of per-constraint violations); no L2 aggregate | {ref}`4 <migration-results>` |
-| `to_bytes` / `from_bytes` | `to_v2_bytes` / `from_v2_bytes` / `from_v1_bytes` | {ref}`5 <migration-storage>` |
-| `uniform_penalty_weight` / `penalty_weights` / `inequality_integer_slack_max_range` | `policy.fixed_penalty` / `policy.integer_slack` | {ref}`migration-openjij-penalties` |
-| `used_decision_variable_ids() (Instance, Function)` | `required_ids()` | {ref}`2 <migration-build>` |
-| `write_mps(path)` | `save_mps(path)` | {ref}`5 <migration-storage>` |
+| `.raw` / `from_raw` / `from_protobuf` / `to_protobuf` | For example, {attr}`instance.sense <ommx.Instance.sense>` / {meth}`Instance.from_components <ommx.Instance.from_components>` | {ref}`1 <migration-imports>` |
+| `add_name` / `add_description` | {meth}`set_name <ommx.Constraint.set_name>` / {meth}`set_description <ommx.Constraint.set_description>` | {ref}`migration-constraint-metadata` |
+| `ArtifactArchive` / `ArtifactDir` / `ArtifactBuilder` | {class}`Artifact <ommx.artifact.Artifact>` / {class}`ArtifactDraft <ommx.artifact.ArtifactDraft>` | {ref}`migration-artifact-archives` |
+| `Artifact.load_archive` | {meth}`Artifact.import_archive <ommx.artifact.Artifact.import_archive>` / {meth}`Artifact.inspect_archive <ommx.artifact.Artifact.inspect_archive>` | {ref}`migration-artifact-archives` |
+| `Constraint.id` / `set_id` / `next_constraint_id` | {meth}`add_constraint <ommx.Instance.add_constraint>` / {meth}`from_components <ommx.Instance.from_components>` | {ref}`2 <migration-build>` |
+| `constraint_hints` / `OneHot` / `Sos1` | {class}`OneHotConstraint <ommx.OneHotConstraint>` / {class}`Sos1Constraint <ommx.Sos1Constraint>` | {ref}`2 <migration-build>` |
+| `constraints_df` / `removed_constraints_df` | {meth}`constraints_df(kind=...) <ommx.Instance.constraints_df>` / {meth}`constraints_df(kind=..., removed=True) <ommx.Instance.constraints_df>` | {ref}`migration-constraint-tables` |
+| `decision_variable_analysis()` | {meth}`decision_variable_roles() <ommx.Instance.decision_variable_roles>` / {meth}`fixed_decision_variables() <ommx.Instance.fixed_decision_variables>` | {ref}`migration-constraint-metadata` |
+| `DecisionVariable.substituted_value` | {meth}`model.fixed_decision_variables() <ommx.Instance.fixed_decision_variables>` | {ref}`2 <migration-build>` |
+| `evaluated.feasible` / `sampled.feasible` | {meth}`evaluated.is_feasible(atol=...) <ommx.EvaluatedConstraint.is_feasible>` / {meth}`sampled.feasible(atol=...) <ommx.SampledConstraint.feasible>` | {ref}`4 <migration-results>` |
+| `extract_constraints(name)` | {meth}`extract_constraints <ommx.Solution.extract_constraints>` for violations, {meth}`get_constraint_value <ommx.Solution.get_constraint_value>` for signed regular values | {ref}`4 <migration-results>` |
+| `get_constraint_by_id` / `get_removed_constraint_by_id` | {attr}`constraints[ConstraintID(n)] <ommx.Instance.constraints>` / {attr}`removed_constraints[ConstraintID(n)] <ommx.Instance.removed_constraints>` | {ref}`2 <migration-build>` |
+| `Linear.from_object` / `Linear.equals_to` | Arithmetic or {meth}`Linear.single_term <ommx.Linear.single_term>` / {meth}`almost_equal <ommx.Linear.almost_equal>` | {ref}`2 <migration-build>` |
+| `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` | {meth}`Linear.terms() <ommx.Linear.terms>` / {meth}`Quadratic.terms() <ommx.Quadratic.terms>` / {meth}`Polynomial.terms() <ommx.Polynomial.terms>` | {ref}`2 <migration-build>` |
+| `ommx.v1` / `ommx.v1.*_pb2` | {doc}`ommx </api/index>` | {ref}`1 <migration-imports>` |
+| `Parameter.new` / `Parameters(entries=...)` | {class}`Parameter(id, ...) <ommx.Parameter>` / {meth}`with_parameters({id: value}) <ommx.ParametricInstance.with_parameters>` | {ref}`2 <migration-build>` |
+| `ParametricInstance.parameters (DataFrame)` | {meth}`parameters_df() <ommx.ParametricInstance.parameters_df>` | {ref}`2 <migration-build>` |
+| `response_to_samples` / `sample_qubo_sa` | {func}`decode_to_samples <ommx_openjij_adapter.decode_to_samples>` / {meth}`OMMXOpenJijSAAdapter.sample <ommx_openjij_adapter.OMMXOpenJijSAAdapter.sample>` | {ref}`migration-openjij-penalties` |
+| `SampleSet.sample_ids` / `summary_with_constraints` | {meth}`sample_ids() <ommx.SampleSet.sample_ids>` / {attr}`summary <ommx.SampleSet.summary>` + {meth}`constraints_df(kind=...) <ommx.SampleSet.constraints_df>` | {ref}`4 <migration-results>` |
+| `Solution.total_violation_l1` / `total_violation_l2` | {meth}`total_violation <ommx.Solution.total_violation>` (sum of per-constraint violations). The L2 aggregate was removed. | {ref}`4 <migration-results>` |
+| `to_bytes` / `from_bytes` | {meth}`to_v2_bytes <ommx.Instance.to_v2_bytes>` / {meth}`from_v2_bytes <ommx.Instance.from_v2_bytes>` / {meth}`from_v1_bytes <ommx.Instance.from_v1_bytes>` | {ref}`5 <migration-storage>` |
+| `uniform_penalty_weight` / `penalty_weights` / `inequality_integer_slack_max_range` | {attr}`policy.fixed_penalty <ommx.PreparationPolicy.fixed_penalty>` / {attr}`policy.integer_slack <ommx.PreparationPolicy.integer_slack>` | {ref}`migration-openjij-penalties` |
+| `used_decision_variable_ids() (Instance, Function)` | {meth}`Instance.required_ids() <ommx.Instance.required_ids>` / {meth}`Function.required_ids() <ommx.Function.required_ids>` | {ref}`2 <migration-build>` |
+| `write_mps(path)` | {meth}`save_mps(path) <ommx.Instance.save_mps>` | {ref}`5 <migration-storage>` |
 
 For changes between individual v3 prereleases, see the [Python SDK 3.0 release notes](../release_note/ommx-3.0.md).
