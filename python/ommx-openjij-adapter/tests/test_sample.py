@@ -295,20 +295,11 @@ def test_sample_twice(instance, ans):
         _assert_sample_set_uses_instance_model(sample_set, adapter_input)
 
 
-@pytest.mark.parametrize(
-    "objective_factory",
-    [
-        pytest.param(lambda x: x - x * x, id="binary-power-cancellation"),
-        pytest.param(lambda x: 1e-20 * x, id="sub-epsilon-coefficient"),
-    ],
-)
-def test_sample_fills_evaluation_variables_omitted_from_sampler_input(
-    objective_factory,
-):
+def test_sample_restores_variable_and_offset_for_constant_objective():
     x = DecisionVariable.binary(0, name="x", subscripts=[0])
     instance = Instance.from_components(
         decision_variables=[x],
-        objective=objective_factory(x),
+        objective=7,
         constraints={},
         sense=Sense.Minimize,
     )
@@ -317,7 +308,7 @@ def test_sample_fills_evaluation_variables_omitted_from_sampler_input(
 
     sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=1, seed=999)
     assert sample_set.extract_decision_variables("x", 0) == {(0,): 0.0}
-    assert sample_set.objectives[0] == pytest.approx(0.0)
+    assert sample_set.objectives[0] == 7.0
 
 
 def test_decode_to_sampleset_uses_instance_variables():

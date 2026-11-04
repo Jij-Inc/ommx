@@ -6,6 +6,14 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 🛠 QUBO/HUBO変換で微小な係数を保持 ([#1320](https://github.com/Jij-Inc/ommx/pull/1320))
+
+`Instance.as_qubo_format()` と `as_hubo_format()` は、大きさによらず非ゼロの
+係数と定数オフセットを保持します。同じ二値キーにまとめた係数も、厳密にゼロに
+なった場合だけ除去し、機械イプシロンより小さな残差を保持します。
+`to_qubo()` と `to_hubo()` のPreparation後の変換にも適用されます。
+浮動小数点演算の扱いは {meth}`~ommx.Instance.as_qubo_format` を参照してください。
+
 ### Python 3.11 以降を必須とし、SDK が Python 3.15 に対応 ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
 
 Python 3.10 のサポート終了に伴う共通の方針として、SDK と Adapter パッケージの

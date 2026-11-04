@@ -14,6 +14,15 @@ impl Instance {
     ///   - TODO: Binary encoding will be added.
     /// - The objective is a polynomial of degree at most 2.
     ///
+    /// # Numerical behavior
+    ///
+    /// Finite nonzero coefficients and constant offsets are retained regardless
+    /// of magnitude, including values at or below [`f64::EPSILON`]. Terms with
+    /// the same binary key are summed using `f64` arithmetic; only exact zero
+    /// entries are omitted. Aggregation can round or overflow, and resulting
+    /// sums are not checked for finiteness. Evaluation tolerances do not affect
+    /// formatting, and the instance is not mutated.
+    ///
     /// # Postconditions
     ///
     /// The returned QUBO encodes the active objective, while evaluation uses the output objective.
@@ -75,15 +84,12 @@ impl Instance {
         let mut quad: BTreeMap<BinaryIdPair, f64> = BTreeMap::new();
         for (ids, coefficient) in terms {
             let c = coefficient.into_inner();
-            if c.abs() <= f64::EPSILON {
-                continue;
-            }
             if ids.is_empty() {
                 constant += c;
             } else {
                 let key = BinaryIdPair::try_from(ids)?;
                 let value = quad.entry(key).and_modify(|v| *v += c).or_insert(c);
-                if value.abs() < f64::EPSILON {
+                if *value == 0.0 {
                     quad.remove(&key);
                 }
             }
@@ -100,6 +106,15 @@ impl Instance {
     /// - The objective function uses only binary decision variables.
     ///   - TODO: Binary encoding will be added.
     /// - The objective is polynomial.
+    ///
+    /// # Numerical behavior
+    ///
+    /// Finite nonzero coefficients and constant offsets are retained regardless
+    /// of magnitude, including values at or below [`f64::EPSILON`]. Terms with
+    /// the same binary key are summed using `f64` arithmetic; only exact zero
+    /// entries are omitted. Aggregation can round or overflow, and resulting
+    /// sums are not checked for finiteness. Evaluation tolerances do not affect
+    /// formatting, and the instance is not mutated.
     ///
     /// # Postconditions
     ///
@@ -163,15 +178,12 @@ impl Instance {
         let mut hubo: BTreeMap<BinaryIds, f64> = BTreeMap::new();
         for (ids, coefficient) in terms {
             let c = coefficient.into_inner();
-            if c.abs() <= f64::EPSILON {
-                continue;
-            }
             if ids.is_empty() {
                 constant += c;
             } else {
                 let key = BinaryIds::from(ids);
                 let value = hubo.entry(key.clone()).and_modify(|v| *v += c).or_insert(c);
-                if value.abs() < f64::EPSILON {
+                if *value == 0.0 {
                     hubo.remove(&key);
                 }
             }
@@ -183,7 +195,10 @@ impl Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{coeff, linear, quadratic, DecisionVariable, Function, VariableID};
+    use crate::{
+        coeff, linear, quadratic, v1::State, ATol, DecisionVariable, Function, MonomialDyn,
+        Polynomial, VariableID,
+    };
     use maplit::btreemap;
     use std::collections::BTreeMap;
 
@@ -194,6 +209,140 @@ mod tests {
                 (id, DecisionVariable::binary())
             })
             .collect()
+    }
+
+    #[test]
+    fn qubo_and_hubo_preserve_small_coefficients_and_offsets() {
+        for magnitude in [
+            f64::from_bits(1),
+            f64::MIN_POSITIVE,
+            1e-20,
+            f64::EPSILON / 2.0,
+            f64::EPSILON,
+            f64::from_bits(f64::EPSILON.to_bits() + 1),
+        ] {
+            for c in [magnitude, -magnitude] {
+                let objective = ((coeff!(c) * linear!(1)).unwrap() + coeff!(c)).unwrap();
+                let instance = Instance::new(
+                    Sense::Minimize,
+                    objective.into(),
+                    binary_vars([1]),
+                    BTreeMap::new(),
+                )
+                .unwrap();
+                let (qubo, qubo_offset) = instance.as_qubo_format().unwrap();
+                let (hubo, hubo_offset) = instance.as_hubo_format().unwrap();
+                let key = BinaryIds::from(MonomialDyn::new(vec![VariableID::from(1)]));
+                assert_eq!(qubo, BTreeMap::from([(BinaryIdPair(1, 1), c)]));
+                assert_eq!(hubo, BTreeMap::from([(key.clone(), c)]));
+                assert_eq!(qubo_offset, c);
+                assert_eq!(hubo_offset, c);
+
+                for x in [0.0, 1.0] {
+                    let state = State::from_iter([(1, x)]);
+                    let expected = instance
+                        .objective()
+                        .evaluate(&state, ATol::default())
+                        .unwrap();
+                    assert_eq!(qubo_offset + qubo[&BinaryIdPair(1, 1)] * x, expected);
+                    assert_eq!(hubo_offset + hubo[&key] * x, expected);
+                }
+                // The formatter must preserve which of x=0 and x=1 is better.
+                assert_eq!(
+                    qubo_offset < qubo_offset + qubo[&BinaryIdPair(1, 1)],
+                    c > 0.0
+                );
+                assert_eq!(hubo_offset < hubo_offset + hubo[&key], c > 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn qubo_and_hubo_preserve_small_interaction_terms() {
+        for degree in [2, 3] {
+            for c in [1e-20, -1e-20] {
+                let monomial = MonomialDyn::new((1..=degree).map(VariableID::from).collect());
+                let objective = Polynomial::single_term(monomial.clone(), coeff!(c));
+                let instance = Instance::new(
+                    Sense::Minimize,
+                    objective.into(),
+                    binary_vars(1..=degree),
+                    BTreeMap::new(),
+                )
+                .unwrap();
+                let (hubo, offset) = instance.as_hubo_format().unwrap();
+                assert_eq!(hubo, BTreeMap::from([(BinaryIds::from(monomial), c)]));
+                assert_eq!(offset, 0.0);
+                for mask in 0..(1 << degree) {
+                    let state = State::from_iter(
+                        (1..=degree).map(|id| (id, f64::from((mask >> (id - 1)) & 1))),
+                    );
+                    let expected = instance
+                        .objective()
+                        .evaluate(&state, ATol::default())
+                        .unwrap();
+                    let actual = offset
+                        + hubo
+                            .iter()
+                            .map(|(ids, c)| {
+                                c * ids.iter().map(|id| state.entries[id]).product::<f64>()
+                            })
+                            .sum::<f64>();
+                    assert_eq!(actual, expected);
+                    if degree == 2 {
+                        let (qubo, offset) = instance.as_qubo_format().unwrap();
+                        assert_eq!(qubo, BTreeMap::from([(BinaryIdPair(1, 2), c)]));
+                        assert_eq!(offset, 0.0);
+                        assert_eq!(
+                            offset
+                                + qubo[&BinaryIdPair(1, 2)] * state.entries[&1] * state.entries[&2],
+                            expected
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn qubo_and_hubo_remove_only_exact_zero_after_binary_aggregation() {
+        for residual in [0.0, f64::EPSILON / 2.0, -f64::EPSILON / 2.0] {
+            let sign = if residual < 0.0 { -1.0 } else { 1.0 };
+            let objective = (Function::from(coeff!(sign) * linear!(1))
+                + Function::from(coeff!(-sign * (1.0 - residual.abs())) * quadratic!(1, 1)))
+            .unwrap();
+            let instance = Instance::new(
+                Sense::Minimize,
+                objective,
+                binary_vars([1]),
+                BTreeMap::new(),
+            )
+            .unwrap();
+            let (qubo, qubo_offset) = instance.as_qubo_format().unwrap();
+            let (hubo, hubo_offset) = instance.as_hubo_format().unwrap();
+            let key = BinaryIds::from(MonomialDyn::new(vec![VariableID::from(1)]));
+            if residual == 0.0 {
+                assert!(qubo.is_empty());
+                assert!(hubo.is_empty());
+            } else {
+                assert_eq!(qubo, BTreeMap::from([(BinaryIdPair(1, 1), residual)]));
+                assert_eq!(hubo, BTreeMap::from([(key.clone(), residual)]));
+            }
+            assert_eq!(qubo_offset, 0.0);
+            assert_eq!(hubo_offset, 0.0);
+            for x in [0.0, 1.0] {
+                let state = State::from_iter([(1, x)]);
+                let expected = instance
+                    .objective()
+                    .evaluate(&state, ATol::default())
+                    .unwrap();
+                assert_eq!(
+                    qubo.get(&BinaryIdPair(1, 1)).copied().unwrap_or(0.0) * x,
+                    expected
+                );
+                assert_eq!(hubo.get(&key).copied().unwrap_or(0.0) * x, expected);
+            }
+        }
     }
 
     #[test]

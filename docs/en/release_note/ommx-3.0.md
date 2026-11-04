@@ -6,6 +6,15 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### 🛠 Preserve small QUBO/HUBO coefficients ([#1320](https://github.com/Jij-Inc/ommx/pull/1320))
+
+`Instance.as_qubo_format()` and `as_hubo_format()` now retain nonzero
+coefficients and constant offsets regardless of magnitude. Binary-key
+aggregation removes only exact zeros, preserving nonzero residuals below
+machine epsilon. This also applies to `to_qubo()` and `to_hubo()` after
+Preparation. See {meth}`~ommx.Instance.as_qubo_format` for the floating-point
+contract.
+
 ### Require Python 3.11 and add Python 3.15 SDK support ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
 
 The SDK and adapter packages now require Python 3.11 or newer under a shared
