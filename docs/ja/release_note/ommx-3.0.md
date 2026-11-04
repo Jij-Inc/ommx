@@ -1462,7 +1462,7 @@ v3 では Artifact のローカル保存実体を SQLite-based Local Registry �
 - 新 CLI `ommx prune-anonymous [--delete]` はデフォルトで蓄積した匿名 commit エントリを report し、`--delete` 指定時だけ削除します。
 - `ommx.get_image_dir(...)` と CLI `ommx image-dir <name>` を廃止しました。戻り値は v2 disk-cache の `<root>/<image_name>/<tag>/` パスで、v3 SQLite Local Registry の実際の保存先 (blob は content-addressed、ref は SQLite) とは無関係になっており、ユーザーをミスリードしていたため。既存の v2 cache は引き続き `ommx import-legacy` で移行できます。
 
-before / after コード例と移行チェックリストは {ref}`Python SDK v2 to v3 Migration Guide §13 <13-artifact-api-archive-becomes-an-exchange-format>` を参照してください。
+v2のアーカイブAPIの置き換え先は、移行ガイドの {ref}`アーカイブを開く・作る <13-artifact-api-archive-becomes-an-exchange-format>` を参照してください。
 
 ### 🆕 Artifact ベースの実験管理 API: `ommx.experiment` ([#882](https://github.com/Jij-Inc/ommx/pull/882), [#885](https://github.com/Jij-Inc/ommx/pull/885), [#886](https://github.com/Jij-Inc/ommx/pull/886), [#903](https://github.com/Jij-Inc/ommx/pull/903))
 

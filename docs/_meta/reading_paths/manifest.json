@@ -5682,7 +5682,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "Python SDK 2.9.4からmainへ移行する読者向け。同じモデルと候補で符号付きの値と違反量を比較する。旧namespaceの出現を現在APIの導入とみなさない。",
+      "notes": "Python SDK 2.9.4の利用者が、モデル構築・求解・結果集計・保存データのうち自分のコードに関わる節から移行できる。構築時の自動採番と外部IDの維持を選び、結果の節では同じ候補の符号付きの値と違反量を比較する。旧API名は巻末の索引から引ける。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
