@@ -282,16 +282,28 @@ class HighsDiagnosticsAnalyzer:
 
     >>> import numpy as np
     >>> from matplotlib import pyplot as plt
-    >>> bounds = analysis.progress_history_df[["primal_bound", "dual_bound"]]
+    >>> def plot_bounds(history, ax):
+    ...     bounds = history[["primal_bound", "dual_bound"]].astype(float)
+    ...     for column in bounds:
+    ...         series = bounds[column]
+    ...         ax.plot(series.index, series.where(np.isfinite(series)), label=column)
+    ...     ax.set(xlabel="Solver elapsed time (s)", ylabel="Solver objective bound")
+    ...     ax.legend()
     >>> fig, ax = plt.subplots()
-    >>> for column in bounds:
-    ...     series = bounds[column]
-    ...     _ = ax.plot(series.index, series.where(np.isfinite(series)), label=column)
-    >>> _ = ax.set(xlabel="Solver elapsed time (s)", ylabel="Solver objective bound")
-    >>> _ = ax.legend()
+    >>> plot_bounds(analysis.progress_history_df, ax)
     >>> plt.close(fig)
 
-    Display ``fig`` or call ``plt.show()`` before closing it when working
+    With no callbacks there are no observations to plot. Converting the
+    columns to floats also works in this case, when pandas cannot infer
+    a numeric type from any rows:
+
+    >>> fig, ax = plt.subplots()
+    >>> plot_bounds(HighsDiagnosticsAnalyzer([]).progress_history_df, ax)
+    >>> [len(line.get_ydata()) for line in ax.lines]
+    [0, 0]
+    >>> plt.close(fig)
+
+    Call ``plt.show()`` before closing a figure when working
     interactively. The :class:`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer`
     Reference illustrates how the bounds and gap change during a recorded solve. Use the appropriate Analyzer and backend definitions
     when drawing your own reports; the curves are observations, not a complete

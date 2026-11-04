@@ -377,7 +377,7 @@ class SCIPDiagnosticsAnalyzer:
 
     >>> from matplotlib import pyplot as plt
     >>> from pyscipopt import Model
-    >>> values = history[["primal_bound", "dual_bound", "gap"]]
+    >>> values = history[["primal_bound", "dual_bound", "gap"]].astype(float)
     >>> visible = values.where(values.abs() < Model().infinity())
     >>> fig, (bounds_ax, gap_ax) = plt.subplots(2, sharex=True)
     >>> _ = visible[["primal_bound", "dual_bound"]].plot(ax=bounds_ax)
