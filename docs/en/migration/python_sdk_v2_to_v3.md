@@ -13,6 +13,20 @@ Start where your code uses OMMX. If you {ref}`construct models <migration-build>
 (migration-imports)=
 ## 1. Update imports and object access
 
+### Use the v3 type stubs to find incompatible calls
+
+Point your project's type checker at the environment containing OMMX v3 and run it on your application code. For a uv project with Pyright installed as a development dependency, run `uv run --no-sync pyright` from the project root. The SDK ships type stubs, so the checker can flag many changes before you run a solver.
+
+| What Pyright flags | How to update the call |
+|---|---|
+| A list passed as `constraints` to `Instance.from_components` | Pass a mapping such as `constraints={7: x <= 1}` to preserve an external ID, or use {meth}`~ommx.Instance.add_constraint` for automatic numbering. |
+| Unknown method `instance.write_mps` | Use {meth}`~ommx.Instance.save_mps`. |
+| Missing argument in `solution.constraints_df()` | Select the constraint family, for example `kind=ConstraintKind.Regular`. |
+
+Some changes keep the same type. For example, a value returned by {meth}`~ommx.Solution.extract_constraints` is still a float, but for a regular constraint it now measures violation. Use the {ref}`same-candidate comparison <migration-compare-model>` to check reports that depend on its meaning.
+
+### Switch to the public imports
+
 In v2.9.4, `Function`, `Constraint`, `DecisionVariable`, `Instance`, `ParametricInstance`, `Solution`, and `SampleSet` are already available from `ommx`. You can switch these imports while still running v2. In v3, import the other modeling types from the same public namespace, including `Linear`, `Parameter`, `Equality`, and `Sense`.
 
 If your v2 code imports `ommx.v1.*_pb2` or accesses `.raw`, identify what it needs from the object. For example, read `instance.sense` directly. To build a model, use {meth}`~ommx.Instance.from_components` or the incremental API below. For serialized data, {ref}`select a reader by format <migration-storage>`. The v1 protobuf schema name still identifies a wire format. The Python SDK no longer provides those generated protobuf modules or the `from_raw`, `from_protobuf`, and `to_protobuf` wrappers.

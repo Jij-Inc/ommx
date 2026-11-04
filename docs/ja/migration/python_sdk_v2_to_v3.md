@@ -13,6 +13,20 @@
 (migration-imports)=
 ## 1. SDKの読み込みとオブジェクトの扱いを変える
 
+### v3の型スタブを使って書き換え箇所を見つける
+
+プロジェクトで使っている型チェッカーの参照先をOMMX v3の環境に切り替え、アプリケーションのコードを検査します。uvプロジェクトでPyrightを開発用依存関係に入れている場合は、プロジェクトのルートで `uv run --no-sync pyright` を実行してください。SDKには型スタブが同梱されているので、ソルバーを動かす前に多くの変更箇所を特定できます。
+
+| Pyrightが指摘する箇所 | 書き換え方 |
+|---|---|
+| `Instance.from_components` の `constraints` にリストを渡している | 外部IDを引き継ぐなら `constraints={7: x <= 1}` のような辞書を渡す。自動採番なら {meth}`~ommx.Instance.add_constraint` を使う。 |
+| `instance.write_mps` が見つからない | {meth}`~ommx.Instance.save_mps` を使う。 |
+| `solution.constraints_df()` の引数が足りない | 通常制約なら `kind=ConstraintKind.Regular` のように種類を指定する。 |
+
+型が同じでも意味が変わる場合があります。たとえば {meth}`~ommx.Solution.extract_constraints` で取得する値は引き続き浮動小数ですが、通常制約では違反量を表すようになりました。この値を使う帳票は、{ref}`同じ候補を両方のSDKで評価する例 <migration-compare-model>` に沿って照合してください。
+
+### 公開APIのimportに切り替える
+
 `Function`、`Constraint`、`DecisionVariable`、`Instance`、`ParametricInstance`、`Solution`、`SampleSet` は、2.9.4でも `ommx` から直接importできます。この7クラスはv2環境のうちにimport先を変更できます。v3では `Linear`、`Parameter`、`Equality`、`Sense` などのモデリング用の型も `ommx` からimportします。
 
 `ommx.v1.*_pb2` や `.raw` を使っていた箇所は、何を取り出していたかで置き換え先が決まります。たとえば目的関数の向きは `instance.sense` で読めます。モデルを組み立てる場合は {meth}`~ommx.Instance.from_components` または次節の追加APIを使います。バイト列を受け渡す場合は{ref}`形式に応じた読込み方法 <migration-storage>`を選んでください。protobufスキーマ名のv1は引き続きデータ形式を表します。v3のPython SDKでは生成済みprotobufモジュールと `from_raw`、`from_protobuf`、`to_protobuf` は廃止されました。
