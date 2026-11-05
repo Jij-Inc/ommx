@@ -1,0 +1,11 @@
+[
+  {
+    "name": "delete-ci-artifacts-after-seven-days",
+    "action": {"type": "Delete"},
+    "condition": {
+      "tagState": "any",
+      "packageNamePrefixes": ["ci-issue-606-"],
+      "olderThan": "7d"
+    }
+  }
+]

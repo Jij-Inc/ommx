@@ -1,0 +1,48 @@
+name: Google Cloud Artifact Registry
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  round-trip:
+    # The WIF provider also enforces this repository, branch, and workflow.
+    if: github.repository == 'Jij-Inc/ommx' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-test-environment
+      - name: Build the current Python SDK
+        run: uv sync --locked --package ommx --no-default-groups
+
+      # Authenticate after the build so compilation does not consume the
+      # short-lived GitHub OIDC credential's lifetime.
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ommx-testing
+          workload_identity_provider: projects/166263083727/locations/global/workloadIdentityPools/ommx-github/providers/artifact-ci
+          service_account: ommx-artifact-ci@ommx-testing.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Push and pull with both authentication methods
+        env:
+          TEST_TAG: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          uv run --no-sync python ci-scripts/gcloud-artifact-roundtrip.py \
+            --repository asia-northeast1-docker.pkg.dev/ommx-testing/ommx-artifacts \
+            --tag "$TEST_TAG" --output-dir "$RUNNER_TEMP/gcloud-artifact-results"
+      - name: Upload round-trip evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gcloud-artifact-results
+          path: ${{ runner.temp }}/gcloud-artifact-results
+          if-no-files-found: ignore
+          retention-days: 14
