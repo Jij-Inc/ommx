@@ -693,8 +693,9 @@ class OMMXHighsAdapter(SolverAdapter):
     Constant equalities and inequalities are passed to HiGHS as rows with no
     variable coefficients. HiGHS determines feasibility using its configured
     tolerances; infeasible models raise ``InfeasibleDetected`` during decoding.
-    The adapter sets ``infinite_bound`` to infinity to preserve finite bounds
-    above HiGHS's default infinity threshold, including constant-row bounds.
+    When a constant-row bound reaches HiGHS's infinity threshold, the adapter
+    temporarily raises ``infinite_bound`` while adding that row and restores
+    it immediately afterward. Other rows and solver settings are unchanged.
 
     **Constraint ID Management**:
 
@@ -822,9 +823,6 @@ class OMMXHighsAdapter(SolverAdapter):
             self.require_applicable(ommx_instance)
             self.instance = ommx_instance
             self.model = highspy.Highs()
-            # Preserve finite bounds, including constant-row bounds beyond
-            # HiGHS's default 1e20 infinity threshold.
-            self.model.setOptionValue("infinite_bound", highspy.kHighsInf)
 
             # the default is for `log_to_console` to be True, so we
             # turn it off unless user requests it
@@ -1256,14 +1254,36 @@ class OMMXHighsAdapter(SolverAdapter):
                     f"Unsupported constraint family: {type(cid).__name__} (id: {cid})"
                 )
             constr = self.instance.constraints[cid]
-            const_expr = self._linear_expr_conversion(constr.function)
+            function = constr.function
+            const_expr = self._linear_expr_conversion(function)
             row_index = self.model.getNumRow()
             if constr.equality == Equality.EqualToZero:
-                self.model.addConstr(const_expr == 0, str(cid))
+                row = const_expr == 0
             elif constr.equality == Equality.LessThanOrEqualToZero:
-                self.model.addConstr(const_expr <= 0, str(cid))
+                row = const_expr <= 0
             else:
                 raise OMMXHighsAdapterError(
                     f"Unsupported constraint equality kind: {constr.equality}"
                 )
+            if function.degree() == 0:
+                self._add_constant_row(row, str(cid), function.constant_term)
+            else:
+                self.model.addConstr(row, str(cid))
             self._constraint_rows[cid] = row_index
+
+    def _add_constant_row(
+        self, row: highs_linear_expression, name: str, constant: float
+    ):
+        _, infinite_bound = self.model.getOptionValue("infinite_bound")
+        infinite_bound = cast(float, infinite_bound)
+        if abs(constant) < infinite_bound:
+            self.model.addConstr(row, name)
+            return
+
+        # Restore the original threshold before adding any other row or
+        # running HiGHS, even if registering this constant row fails.
+        self.model.setOptionValue("infinite_bound", highspy.kHighsInf)
+        try:
+            self.model.addConstr(row, name)
+        finally:
+            self.model.setOptionValue("infinite_bound", infinite_bound)

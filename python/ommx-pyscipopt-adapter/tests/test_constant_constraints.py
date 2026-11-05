@@ -1,10 +1,12 @@
 import sys
+from unittest.mock import Mock
 
 import pytest
+import pyscipopt
 
 from ommx import Constraint, DecisionVariable, Equality, Instance, Sense
 from ommx.adapter import InfeasibleDetected, UnboundedDetected
-from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter, OMMXPySCIPOptAdapterError
 
 
 @pytest.mark.parametrize("variable_mode", ["none", "unused", "active"])
@@ -35,6 +37,10 @@ def test_constant_constraint_solver_lifecycle(
     assert OMMXPySCIPOptAdapter.check_applicability(instance).is_member
     adapter = OMMXPySCIPOptAdapter(instance)
     model = adapter.solver_input
+    default_model = pyscipopt.Model()
+    assert model.getParam("misc/allowstrongdualreds") == default_model.getParam(
+        "misc/allowstrongdualreds"
+    )
     assert model.getStatus() == "unknown"
     assert model.getNConss() == 1
 
@@ -78,15 +84,30 @@ def test_constant_constraint_with_unbounded_objective(equality, constant):
         sense=Sense.Minimize,
     )
     feasible = constant == 0 if equality == Equality.EqualToZero else constant <= 0
-    expected_exception = UnboundedDetected if feasible else InfeasibleDetected
+    expected_exception = UnboundedDetected if feasible else OMMXPySCIPOptAdapterError
     adapter = OMMXPySCIPOptAdapter(instance)
     model = adapter.solver_input
     model.optimize()
-    assert model.getStatus() == ("unbounded" if feasible else "infeasible")
+    # With SCIP's default reductions this fixture is unresolved when the
+    # constant row is false. Decoding must preserve that distinction.
+    assert model.getStatus() == ("unbounded" if feasible else "inforunbd")
     with pytest.raises(expected_exception):
         adapter.decode(model)
     with pytest.raises(expected_exception):
         OMMXPySCIPOptAdapter.solve(instance)
+
+
+def test_decode_unresolved_status_does_not_solve_or_claim_infeasibility():
+    instance = Instance.from_components(
+        decision_variables=[], objective=0, constraints={}, sense=Sense.Minimize
+    )
+    adapter = OMMXPySCIPOptAdapter(instance)
+    model = Mock(spec=pyscipopt.Model)
+    model.getStatus.return_value = "inforunbd"
+    with pytest.raises(OMMXPySCIPOptAdapterError, match="status: inforunbd"):
+        adapter.decode(model)
+    model.optimize.assert_not_called()
+    model.getBestSol.assert_not_called()
 
 
 @pytest.mark.parametrize(

@@ -11,8 +11,8 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 HiGHS and PySCIPOpt now accept constant regular equalities and inequalities
 during adapter construction, including infeasible ones such as `1 <= 0`.
 The constraints remain structurally applicable and are passed to the solver,
-which determines feasibility using its configured tolerances. Infeasible
-models raise `ommx.InfeasibleDetected` through the normal solve/decode path.
+which determines feasibility using its configured tolerances. When the solver
+reports infeasibility, the normal solve/decode path raises `ommx.InfeasibleDetected`.
 
 This changes the Python SDK 2.6.x exception and lifecycle contract. Replace
 handlers for `OMMXHighsAdapterError` or `OMMXPySCIPOptAdapterError` around
@@ -24,11 +24,14 @@ fixed variable, which does not appear in the decoded OMMX state. Feasible
 constant rows are retained and their HiGHS dual values are mapped back to the
 corresponding OMMX constraint IDs.
 
-The HiGHS adapter sets `infinite_bound` to infinity so finite bounds, including
-large constant-row bounds, remain finite. For models containing constant
-regular constraints, the PySCIPOpt adapter disables `misc/allowstrongdualreds`
-so SCIP can distinguish infeasibility from unboundedness instead of returning
-`inforunbd`. This changes SCIP's presolve behavior for those models.
+For a constant row at or above HiGHS's infinity threshold, the adapter raises
+`infinite_bound` only while registering that row and immediately restores it,
+including on failure. Other rows and solver settings retain their usual behavior.
+
+SCIP retains its default reductions. If it reports `inforunbd`, decoding raises
+`OMMXPySCIPOptAdapterError` with that unresolved status, without claiming definite
+infeasibility or unboundedness and without re-solving. SDK-owned constant-row
+simplification and early detection are tracked in [#1188](https://github.com/Jij-Inc/ommx/issues/1188).
 
 ### 🛠 Preserve small QUBO/HUBO coefficients ([#1320](https://github.com/Jij-Inc/ommx/pull/1320))
 

@@ -1125,6 +1125,12 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         if data.getStatus() == "unbounded":
             raise UnboundedDetected("Model was unbounded")
 
+        if data.getStatus() == "inforunbd":
+            raise OMMXPySCIPOptAdapterError(
+                "SCIP could not distinguish infeasibility from unboundedness "
+                "[status: inforunbd]"
+            )
+
         if data.getStatus() == "timelimit":
             # The following condition checks if there is no feasible primal solution.
             # In other words, it is checking for the absence of any feasible solution.
@@ -1255,11 +1261,6 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         # Handle constraint function based on its type
         f = constraint.function
         degree = f.degree()
-        if degree == 0:
-            # Strong dual reductions can report "inforunbd" before SCIP checks
-            # a false constant row. Preserve the distinction between infeasible
-            # and unbounded models, including the manual optimize/decode path.
-            self.model.setBoolParam("misc/allowstrongdualreds", False)
         if degree in (0, 1):
             expr = self._make_linear_expr(f)
         elif degree == 2:

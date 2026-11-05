@@ -11,7 +11,8 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 HiGHSとPySCIPOptのAdapterは、`1 <= 0` のように実行不能なものも含め、
 定数の通常等式・不等式制約を構築時に受け付けます。構造上は適用可能な制約として
 ソルバーに渡し、ソルバーに設定された許容誤差で実行可能性を判定します。
-実行不能なモデルは通常のsolve/decode経路で `ommx.InfeasibleDetected` を送出します。
+ソルバーが実行不能と判定すると、通常のsolve/decode経路で
+`ommx.InfeasibleDetected` を送出します。
 
 Python SDK 2.6.xから、例外の種類と発生するタイミングが変わります。このケースで
 構築時の `OMMXHighsAdapterError` や `OMMXPySCIPOptAdapterError` を捕捉していたコードは、
@@ -22,11 +23,14 @@ HiGHSでは、使用される決定変数がないモデルも内部の固定変
 この補助変数はデコード後のOMMX状態には含まれません。実行可能な定数制約も
 ソルバーの行として保持され、そのHiGHS双対値は対応するOMMX制約IDに紐付けられます。
 
-HiGHS Adapterは `infinite_bound` を無限大に設定し、巨大な定数制約の境界を含む
-有限の境界値を有限のまま扱います。PySCIPOpt Adapterは定数の通常制約を含むモデルで
-`misc/allowstrongdualreds` を無効にし、SCIPが `inforunbd` を返す代わりに
-実行不能と非有界を区別できるようにします。この設定により、該当モデルの
-SCIPの前処理の挙動が変わります。
+HiGHSの無限大判定の閾値以上の定数行は、登録する間だけ `infinite_bound` を
+引き上げ、失敗した場合も含めて直後に復元します。他の行やソルバーの設定は
+従来の挙動を保ちます。
+
+SCIPの縮約設定は既定値を保ちます。`inforunbd` が返された場合は、その未確定な
+状態を示す `OMMXPySCIPOptAdapterError` を送出し、実行不能・非有界のどちらかに
+断定したり、再求解したりしません。SDK側での定数制約の簡約と早期検出は
+[#1188](https://github.com/Jij-Inc/ommx/issues/1188) で追跡します。
 
 ### 🛠 QUBO/HUBO変換で微小な係数を保持 ([#1320](https://github.com/Jij-Inc/ommx/pull/1320))
 
