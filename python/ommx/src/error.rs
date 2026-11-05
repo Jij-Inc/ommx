@@ -827,16 +827,16 @@ mod tests {
 
     #[test]
     fn infeasible_detected_maps_to_a_specific_runtime_error() {
-        let signal = ommx::InfeasibleDetected::InequalityConstraintBound {
-            id: ommx::ConstraintID::from(3),
-            bound: ommx::Bound::new(1.0, 2.0).unwrap(),
-        };
+        let signal = ommx::InfeasibleDetected::inequality_constraint_bound(
+            ommx::ConstraintID::from(3),
+            ommx::Bound::new(1.0, 2.0).unwrap(),
+        );
         assert_exception::<InfeasibleDetected>(signal.into());
 
-        let erased = ommx::Error::from(ommx::InfeasibleDetected::InequalityConstraintBound {
-            id: ommx::ConstraintID::from(3),
-            bound: ommx::Bound::new(1.0, 2.0).unwrap(),
-        });
+        let erased = ommx::Error::from(ommx::InfeasibleDetected::inequality_constraint_bound(
+            ommx::ConstraintID::from(3),
+            ommx::Bound::new(1.0, 2.0).unwrap(),
+        ));
         assert_exception::<InfeasibleDetected>(erased.into());
     }
 
