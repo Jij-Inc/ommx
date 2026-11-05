@@ -6,6 +6,24 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### 🛠 ⚠ Report infeasible constant constraints through the solver ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))
+
+HiGHS and PySCIPOpt now accept constant regular equalities and inequalities
+during adapter construction, including infeasible ones such as `1 <= 0`.
+The constraints remain structurally applicable and are passed to the solver,
+which determines feasibility using its configured tolerances. Infeasible
+models raise `ommx.InfeasibleDetected` through the normal solve/decode path.
+
+This changes the Python SDK 2.6.x exception and lifecycle contract. Replace
+handlers for `OMMXHighsAdapterError` or `OMMXPySCIPOptAdapterError` around
+construction for this case with an `InfeasibleDetected` handler around
+`solve()`, `solve_without_preparation()`, or `decode()`.
+
+HiGHS also solves models with no used decision variables using an internal
+fixed variable, which does not appear in the decoded OMMX state. Feasible
+constant rows are retained and their HiGHS dual values are mapped back to the
+corresponding OMMX constraint IDs.
+
 ### 🛠 Preserve small QUBO/HUBO coefficients ([#1320](https://github.com/Jij-Inc/ommx/pull/1320))
 
 `Instance.as_qubo_format()` and `as_hubo_format()` now retain nonzero

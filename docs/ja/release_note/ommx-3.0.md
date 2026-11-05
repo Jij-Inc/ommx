@@ -6,6 +6,22 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 🛠 ⚠ 実行不能な定数制約をソルバーの判定結果として扱う ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))
+
+HiGHSとPySCIPOptのAdapterは、`1 <= 0` のように実行不能なものも含め、
+定数の通常等式・不等式制約を構築時に受け付けます。構造上は適用可能な制約として
+ソルバーに渡し、ソルバーに設定された許容誤差で実行可能性を判定します。
+実行不能なモデルは通常のsolve/decode経路で `ommx.InfeasibleDetected` を送出します。
+
+Python SDK 2.6.xから、例外の種類と発生するタイミングが変わります。このケースで
+構築時の `OMMXHighsAdapterError` や `OMMXPySCIPOptAdapterError` を捕捉していたコードは、
+`solve()`、`solve_without_preparation()`、または `decode()` の呼び出しで
+`InfeasibleDetected` を捕捉するように変更してください。
+
+HiGHSでは、使用される決定変数がないモデルも内部の固定変数を使って求解します。
+この補助変数はデコード後のOMMX状態には含まれません。実行可能な定数制約も
+ソルバーの行として保持され、そのHiGHS双対値は対応するOMMX制約IDに紐付けられます。
+
 ### 🛠 QUBO/HUBO変換で微小な係数を保持 ([#1320](https://github.com/Jij-Inc/ommx/pull/1320))
 
 `Instance.as_qubo_format()` と `as_hubo_format()` は、大きさによらず非ゼロの
