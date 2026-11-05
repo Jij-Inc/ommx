@@ -1,9 +1,17 @@
 import sys
+from unittest.mock import Mock
 
 import highspy
 import pytest
 
-from ommx import Constraint, DecisionVariable, Equality, Instance, Sense
+from ommx import (
+    Constraint,
+    DecisionVariable,
+    Equality,
+    InfeasibleOrUnboundedDetected,
+    Instance,
+    Sense,
+)
 from ommx.adapter import InfeasibleDetected, UnboundedDetected
 from ommx_highs_adapter import OMMXHighsAdapter
 
@@ -119,6 +127,20 @@ def test_constant_constraint_uses_solver_tolerance(equality, tolerance, feasible
         if feasible
         else highspy.HighsModelStatus.kInfeasible
     )
+
+
+def test_decode_unresolved_status_does_not_read_a_solution_or_solve():
+    instance = Instance.from_components(
+        decision_variables=[], objective=0, constraints={}, sense=Sense.Minimize
+    )
+    adapter = OMMXHighsAdapter(instance)
+    model = Mock(spec=highspy.Highs)
+    model.getModelStatus.return_value = highspy.HighsModelStatus.kUnboundedOrInfeasible
+    with pytest.raises(InfeasibleOrUnboundedDetected, match="UnboundedOrInfeasible"):
+        adapter.decode(model)
+    model.getSolution.assert_not_called()
+    model.run.assert_not_called()
+    model.solve.assert_not_called()
 
 
 def test_large_constant_override_does_not_affect_other_rows():

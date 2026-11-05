@@ -331,6 +331,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     // Domain operation signals
     "ExactIntegerSlackError",
     "InfeasibleDetected",
+    "InfeasibleOrUnboundedDetected",
     "LogEncodingError",
     "PreparationTargetNotReachedError",
     "Sos1BigMPromotionBatchRejectedError",

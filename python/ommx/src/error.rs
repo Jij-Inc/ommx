@@ -178,6 +178,11 @@ create_core_exception!(
     PyRuntimeError,
     "The mathematical model was proven infeasible."
 );
+create_core_exception!(
+    InfeasibleOrUnboundedDetected,
+    PyRuntimeError,
+    "A solver or presolve/analysis operation reported that the model is infeasible or unbounded, without distinguishing which. Catch this separately from definite infeasibility or unboundedness and explicitly choose further analysis if needed. It does not mean merely that no solution was found, and it is not an independently validated certificate."
+);
 pyo3::create_exception!(
     ommx,
     Sos1BigMPromotionBatchRejectedError,
@@ -493,6 +498,13 @@ fn infeasible_detected_to_pyerr(_: &ommx::InfeasibleDetected, message: String) -
     InfeasibleDetected::new_err(message)
 }
 
+fn infeasible_or_unbounded_detected_to_pyerr(
+    _: &ommx::InfeasibleOrUnboundedDetected,
+    message: String,
+) -> PyErr {
+    InfeasibleOrUnboundedDetected::new_err(message)
+}
+
 fn sos1_big_m_promotion_batch_rejected_to_pyerr(
     error: &ommx::Sos1BigMPromotionBatchRejected,
     message: String,
@@ -534,6 +546,7 @@ define_ommx_error_mappings!(
     ommx::LogEncodingUnavailable => log_encoding_unavailable_to_pyerr,
     ommx::ExactIntegerSlackUnavailable => exact_integer_slack_unavailable_to_pyerr,
     ommx::InfeasibleDetected => infeasible_detected_to_pyerr,
+    ommx::InfeasibleOrUnboundedDetected => infeasible_or_unbounded_detected_to_pyerr,
     ommx::PreparationTargetNotReached => preparation_target_not_reached_to_pyerr,
     #[cfg(feature = "remote-artifact")]
     ommx::artifact::RemoteArtifactError => remote_artifact_error_to_pyerr,
@@ -610,6 +623,10 @@ pub fn register_exceptions(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyRe
         py.get_type::<ExactIntegerSlackError>(),
     )?;
     module.add("InfeasibleDetected", py.get_type::<InfeasibleDetected>())?;
+    module.add(
+        "InfeasibleOrUnboundedDetected",
+        py.get_type::<InfeasibleOrUnboundedDetected>(),
+    )?;
     module.add(
         "Sos1BigMPromotionBatchRejectedError",
         py.get_type::<Sos1BigMPromotionBatchRejectedError>(),
@@ -821,6 +838,24 @@ mod tests {
             bound: ommx::Bound::new(1.0, 2.0).unwrap(),
         });
         assert_exception::<InfeasibleDetected>(erased.into());
+    }
+
+    #[test]
+    fn unresolved_detection_preserves_its_classification_and_context() {
+        assert_exception::<InfeasibleOrUnboundedDetected>(
+            ommx::InfeasibleOrUnboundedDetected.into(),
+        );
+        let erased = ommx::Error::from(ommx::InfeasibleOrUnboundedDetected)
+            .context("presolve analysis returned an unresolved result");
+        assert!(erased.is::<ommx::InfeasibleOrUnboundedDetected>());
+        assert!(!erased.is::<ommx::InfeasibleDetected>());
+        Python::initialize();
+        Python::attach(|py| {
+            let error: PyErr = OmmxPyError::from(erased).into();
+            assert!(error.is_instance_of::<InfeasibleOrUnboundedDetected>(py));
+            assert!(!error.is_instance_of::<InfeasibleDetected>(py));
+            assert!(error.to_string().contains("presolve analysis"));
+        });
     }
 
     fn rejected_sos1_big_m_batch() -> ommx::Sos1BigMPromotionBatchRejected {

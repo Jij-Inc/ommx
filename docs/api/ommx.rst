@@ -18,6 +18,7 @@ ommx
    _items/ommx.BridgeError
    _items/ommx.ExactIntegerSlackError
    _items/ommx.InfeasibleDetected
+   _items/ommx.InfeasibleOrUnboundedDetected
    _items/ommx.LogEncodingError
    _items/ommx.PreparationTargetNotReachedError
    _items/ommx.Sos1BigMPromotionBatchRejectedError

@@ -149,6 +149,7 @@ from typing import Any, ClassVar, Protocol, runtime_checkable
 from ommx._ommx_rust import DiagnosticCollector as DiagnosticCollector
 from ommx import (
     InfeasibleDetected as InfeasibleDetected,
+    InfeasibleOrUnboundedDetected as InfeasibleOrUnboundedDetected,
     Instance,
     InstanceClass,
     InstanceClassMembershipReport,
@@ -506,8 +507,8 @@ class UnboundedDetected(Exception):
     """
     Raised when the problem is proven to be unbounded.
 
-    This corresponds to ``Optimality.OPTIMALITY_UNBOUNDED`` and indicates that
-    the mathematical model itself is unbounded.
+    This indicates that the mathematical model has feasible solutions with
+    arbitrarily improving objective values.
     Should not be used when unboundedness cannot be proven (e.g., heuristic solvers).
     """
 

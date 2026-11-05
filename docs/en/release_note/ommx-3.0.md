@@ -28,10 +28,18 @@ For a constant row at or above HiGHS's infinity threshold, the adapter raises
 `infinite_bound` only while registering that row and immediately restores it,
 including on failure. Other rows and solver settings retain their usual behavior.
 
-SCIP retains its default reductions. If it reports `inforunbd`, decoding raises
-`OMMXPySCIPOptAdapterError` with that unresolved status, without claiming definite
-infeasibility or unboundedness and without re-solving. SDK-owned constant-row
-simplification and early detection are tracked in [#1188](https://github.com/Jij-Inc/ommx/issues/1188).
+SCIP retains its default reductions. Its `inforunbd` status and HiGHS's
+`UnboundedOrInfeasible` status now raise the shared
+`ommx.InfeasibleOrUnboundedDetected`, also re-exported from `ommx.adapter`.
+Catch this separately from definite infeasibility or unboundedness and choose
+whether further analysis is needed. Decoding does not re-solve the problem.
+
+This signal is shared with future Presolve/analysis operations. It preserves
+the reported disjunction without treating it as an independently validated
+certificate or merely a failure to find a solution. The common detection
+semantics are tracked in [#1003](https://github.com/Jij-Inc/ommx/issues/1003);
+SDK-owned constant-row simplification and early detection are tracked in
+[#1188](https://github.com/Jij-Inc/ommx/issues/1188).
 
 ### 🛠 Preserve small QUBO/HUBO coefficients ([#1320](https://github.com/Jij-Inc/ommx/pull/1320))
 

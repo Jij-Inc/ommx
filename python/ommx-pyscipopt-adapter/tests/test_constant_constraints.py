@@ -4,9 +4,16 @@ from unittest.mock import Mock
 import pytest
 import pyscipopt
 
-from ommx import Constraint, DecisionVariable, Equality, Instance, Sense
+from ommx import (
+    Constraint,
+    DecisionVariable,
+    Equality,
+    InfeasibleOrUnboundedDetected,
+    Instance,
+    Sense,
+)
 from ommx.adapter import InfeasibleDetected, UnboundedDetected
-from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter, OMMXPySCIPOptAdapterError
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 
 @pytest.mark.parametrize("variable_mode", ["none", "unused", "active"])
@@ -84,7 +91,9 @@ def test_constant_constraint_with_unbounded_objective(equality, constant):
         sense=Sense.Minimize,
     )
     feasible = constant == 0 if equality == Equality.EqualToZero else constant <= 0
-    expected_exception = UnboundedDetected if feasible else OMMXPySCIPOptAdapterError
+    expected_exception = (
+        UnboundedDetected if feasible else InfeasibleOrUnboundedDetected
+    )
     adapter = OMMXPySCIPOptAdapter(instance)
     model = adapter.solver_input
     model.optimize()
@@ -104,7 +113,7 @@ def test_decode_unresolved_status_does_not_solve_or_claim_infeasibility():
     adapter = OMMXPySCIPOptAdapter(instance)
     model = Mock(spec=pyscipopt.Model)
     model.getStatus.return_value = "inforunbd"
-    with pytest.raises(OMMXPySCIPOptAdapterError, match="status: inforunbd"):
+    with pytest.raises(InfeasibleOrUnboundedDetected, match="status: inforunbd"):
         adapter.decode(model)
     model.optimize.assert_not_called()
     model.getBestSol.assert_not_called()

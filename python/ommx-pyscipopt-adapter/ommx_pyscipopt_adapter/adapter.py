@@ -20,6 +20,7 @@ from ommx.adapter import (
 )
 from ommx import (
     Equality,
+    InfeasibleOrUnboundedDetected,
     Function,
     Instance,
     InstanceClass,
@@ -1088,6 +1089,11 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         """
         Create an ommx.State from an optimized PySCIPOpt Model.
 
+        SCIP's ``inforunbd`` status raises
+        :class:`ommx.InfeasibleOrUnboundedDetected`. The caller can retain this
+        unresolved result or explicitly request further analysis. Decoding
+        does not re-solve the model or change SCIP's reduction settings.
+
         Examples
         =========
 
@@ -1126,7 +1132,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             raise UnboundedDetected("Model was unbounded")
 
         if data.getStatus() == "inforunbd":
-            raise OMMXPySCIPOptAdapterError(
+            raise InfeasibleOrUnboundedDetected(
                 "SCIP could not distinguish infeasibility from unboundedness "
                 "[status: inforunbd]"
             )

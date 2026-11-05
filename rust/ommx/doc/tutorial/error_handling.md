@@ -26,6 +26,11 @@ returns the typed error directly):
 
 - [`InfeasibleDetected`](crate::InfeasibleDetected) — produced by [`Propagate`](crate::Propagate) when a constraint
   becomes infeasible after substitution.
+- [`InfeasibleOrUnboundedDetected`](crate::InfeasibleOrUnboundedDetected) — a
+  shared analysis/presolve/solver signal for the unresolved conclusion that a
+  model is infeasible or unbounded. Callers can retain that conclusion or
+  explicitly select further analysis. It is distinct from definite
+  infeasibility, a mere failure to find a solution, and a validated certificate.
 - [`CoefficientError`](crate::CoefficientError), [`BoundError`](crate::BoundError), [`AtolError`](crate::AtolError),
   [`InvalidPenaltyWeight`](crate::InvalidPenaltyWeight) — numeric-domain validation failures.
 - [`FunctionEvaluationError`](crate::FunctionEvaluationError) — identifies

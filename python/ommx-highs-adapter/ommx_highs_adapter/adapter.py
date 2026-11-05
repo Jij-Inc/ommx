@@ -13,6 +13,7 @@ from opentelemetry import trace
 from ommx import (
     ConstraintID,
     Equality,
+    InfeasibleOrUnboundedDetected,
     Function,
     Instance,
     InstanceClass,
@@ -692,7 +693,9 @@ class OMMXHighsAdapter(SolverAdapter):
 
     Constant equalities and inequalities are passed to HiGHS as rows with no
     variable coefficients. HiGHS determines feasibility using its configured
-    tolerances; infeasible models raise ``InfeasibleDetected`` during decoding.
+    tolerances. A definite infeasible status raises ``InfeasibleDetected``;
+    an unresolved infeasible-or-unbounded status raises
+    ``InfeasibleOrUnboundedDetected`` during decoding.
     When a constant-row bound reaches HiGHS's infinity threshold, the adapter
     temporarily raises ``infinite_bound`` while adding that row and restores
     it immediately afterward. Other rows and solver settings are unchanged.
@@ -755,6 +758,8 @@ class OMMXHighsAdapter(SolverAdapter):
          - ``InfeasibleDetected``
        * - ``kUnbounded``
          - ``UnboundedDetected``
+       * - ``kUnboundedOrInfeasible``
+         - ``InfeasibleOrUnboundedDetected``
        * - ``kNotset``
          - ``OMMXHighsAdapterError``
 
@@ -876,6 +881,8 @@ class OMMXHighsAdapter(SolverAdapter):
             When the optimization problem has no feasible solution
         UnboundedDetected
             When the optimization problem is unbounded
+        InfeasibleOrUnboundedDetected
+            When HiGHS reports infeasibility or unboundedness without distinguishing which
         PreparationTargetNotReachedError
             When the recommended preparation cannot reach the Adapter input class
         OMMXHighsAdapterError
@@ -1031,6 +1038,8 @@ class OMMXHighsAdapter(SolverAdapter):
             If HiGHS determined the problem is infeasible
         UnboundedDetected
             If HiGHS determined the problem is unbounded
+        InfeasibleOrUnboundedDetected
+            If HiGHS reports infeasibility or unboundedness without distinguishing which
 
         Notes
         -----
@@ -1108,6 +1117,8 @@ class OMMXHighsAdapter(SolverAdapter):
             If the model is infeasible
         UnboundedDetected
             If the model is unbounded
+        InfeasibleOrUnboundedDetected
+            If HiGHS reports infeasibility or unboundedness without distinguishing which
 
         Examples
         --------
@@ -1136,6 +1147,11 @@ class OMMXHighsAdapter(SolverAdapter):
             raise InfeasibleDetected("Model was infeasible")
         elif status == highspy.HighsModelStatus.kUnbounded:
             raise UnboundedDetected("Model was unbounded")
+        elif status == highspy.HighsModelStatus.kUnboundedOrInfeasible:
+            raise InfeasibleOrUnboundedDetected(
+                "HiGHS could not distinguish infeasibility from unboundedness "
+                "[status: UnboundedOrInfeasible]"
+            )
 
         solution = data.getSolution()
         return State(

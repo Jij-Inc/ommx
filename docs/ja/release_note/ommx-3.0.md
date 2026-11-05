@@ -27,10 +27,16 @@ HiGHSの無限大判定の閾値以上の定数行は、登録する間だけ `i
 引き上げ、失敗した場合も含めて直後に復元します。他の行やソルバーの設定は
 従来の挙動を保ちます。
 
-SCIPの縮約設定は既定値を保ちます。`inforunbd` が返された場合は、その未確定な
-状態を示す `OMMXPySCIPOptAdapterError` を送出し、実行不能・非有界のどちらかに
-断定したり、再求解したりしません。SDK側での定数制約の簡約と早期検出は
-[#1188](https://github.com/Jij-Inc/ommx/issues/1188) で追跡します。
+SCIPの縮約設定は既定値を保ちます。SCIPの `inforunbd` とHiGHSの
+`UnboundedOrInfeasible` は、共通の `ommx.InfeasibleOrUnboundedDetected` を送出します。
+同じ例外型を `ommx.adapter` からもimportできます。実行不能・非有界の確定結果とは
+分けて捕捉し、追加解析が必要かを呼び出し側で判断してください。decodeは再求解しません。
+
+このsignalは今後のPresolve・解析処理でも共有します。「実行不能または非有界」という
+報告を保持し、独立に検証済みの証明書や、単に解が見つからなかった状態とは区別します。
+共通の検出結果の意味は [#1003](https://github.com/Jij-Inc/ommx/issues/1003)、
+SDK側での定数制約の簡約と早期検出は [#1188](https://github.com/Jij-Inc/ommx/issues/1188)
+で追跡します。
 
 ### 🛠 QUBO/HUBO変換で微小な係数を保持 ([#1320](https://github.com/Jij-Inc/ommx/pull/1320))
 
