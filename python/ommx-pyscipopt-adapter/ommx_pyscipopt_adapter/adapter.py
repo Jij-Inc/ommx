@@ -1255,23 +1255,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         # Handle constraint function based on its type
         f = constraint.function
         degree = f.degree()
-        if degree == 0:
-            # Constant constraint is not passed to SCIP, but checked for feasibility
-            constant_value = f.constant_term
-            if constraint.equality == Equality.EqualToZero and math.isclose(
-                constant_value, 0, abs_tol=1e-6
-            ):
-                return  # Skip feasible constant constraint
-            elif (
-                constraint.equality == Equality.LessThanOrEqualToZero
-                and constant_value <= 1e-6
-            ):
-                return  # Skip feasible constant constraint
-            else:
-                raise OMMXPySCIPOptAdapterError(
-                    f"Infeasible constant constraint was found: id {cid}"
-                )
-        elif degree == 1:
+        if degree in (0, 1):
             expr = self._make_linear_expr(f)
         elif degree == 2:
             expr = self._make_quadratic_expr(f)

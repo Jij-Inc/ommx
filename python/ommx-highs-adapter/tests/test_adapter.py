@@ -57,10 +57,20 @@ def test_constructor_without_active_variables(has_unused_variable):
     )
     adapter = OMMXHighsAdapter(instance)
     model = adapter.solver_input
-    assert model.getNumCol() == 0
+    assert model.getNumCol() == 1  # Fixed auxiliary column for a constant model.
+    assert adapter.highs_vars == {}
+    assert list(model.getLp().col_lower_) == [0]
+    assert list(model.getLp().col_upper_) == [0]
     assert model.getNumRow() == 0
     assert model.getObjectiveOffset() == (highspy.HighsStatus.kOk, 7)
     assert model.getModelStatus() == highspy.HighsModelStatus.kNotset
+
+    assert model.run() == highspy.HighsStatus.kOk
+    assert model.getModelStatus() == highspy.HighsModelStatus.kOptimal
+    assert adapter.decode_to_state(model).entries == {}
+    solution = adapter.decode(model)
+    assert solution.feasible
+    assert solution.objective == 7
 
 
 @pytest.mark.parametrize(
@@ -115,7 +125,7 @@ def test_constructor_preserves_model_without_solving(
     assert model.getModelStatus() == highspy.HighsModelStatus.kNotset
     assert model.getRunTime() == 0
     assert model.getNumCol() == 2
-    assert model.getNumRow() == 2  # Satisfied constant constraints are omitted.
+    assert model.getNumRow() == 4
     expected_sense = (
         highspy.ObjSense.kMinimize
         if sense == Sense.Minimize

@@ -690,8 +690,9 @@ class OMMXHighsAdapter(SolverAdapter):
 
     **Constant Constraint Handling**:
 
-    - Equality: Skip if \\|constant\\| ≤ 1e-10, error if \\|constant\\| > 1e-10
-    - Inequality: Skip if constant ≤ 1e-10, error if constant > 1e-10
+    Constant equalities and inequalities are passed to HiGHS as rows with no
+    variable coefficients. HiGHS determines feasibility using its configured
+    tolerances; infeasible models raise ``InfeasibleDetected`` during decoding.
 
     **Constraint ID Management**:
 
@@ -1145,6 +1146,14 @@ class OMMXHighsAdapter(SolverAdapter):
         variables = self.instance.used_decision_variables
         num_cols = len(variables)
         if num_cols == 0:
+            # HiGHS reports ModelEmpty without checking rows when there are no
+            # columns. A fixed auxiliary column lets it solve constant models.
+            # It has no OMMX ID and is excluded from decoded states.
+            status = self.model.addVar(0.0, 0.0)
+            if status != highspy.HighsStatus.kOk:
+                raise OMMXHighsAdapterError(
+                    f"Failed to add auxiliary variable for constant model: {status}"
+                )
             return
 
         lower = np.empty(num_cols, dtype=np.float64)
@@ -1206,8 +1215,7 @@ class OMMXHighsAdapter(SolverAdapter):
                 "HiGHS Adapter currently only supports linear problems"
             )
         if degree == 0:
-            # Keep constants as floats for the feasibility checks in _set_constraints.
-            return ommx_func.constant_term
+            return highs_linear_expression(ommx_func.constant_term)
 
         # Python's sum copies the growing HiGHS expression on every addition.
         # qsum appends terms in place, keeping construction linear in term count.
@@ -1244,30 +1252,13 @@ class OMMXHighsAdapter(SolverAdapter):
                 )
             constr = self.instance.constraints[cid]
             const_expr = self._linear_expr_conversion(constr.function)
-            if isinstance(const_expr, float):
-                val = const_expr
-                if constr.equality == Equality.EqualToZero:
-                    if abs(val) > 1e-10:
-                        raise OMMXHighsAdapterError(
-                            "Infeasible constant equality constraint"
-                        )
-                    continue
-                elif constr.equality == Equality.LessThanOrEqualToZero:
-                    if val > 1e-10:
-                        raise OMMXHighsAdapterError(
-                            "Infeasible constant inequality constraint"
-                        )
-                    continue
+            row_index = self.model.getNumRow()
+            if constr.equality == Equality.EqualToZero:
+                self.model.addConstr(const_expr == 0, str(cid))
+            elif constr.equality == Equality.LessThanOrEqualToZero:
+                self.model.addConstr(const_expr <= 0, str(cid))
             else:
-                row_index = self.model.getNumRow()
-                const_expr = highs_linear_expression(const_expr)
-                if constr.equality == Equality.EqualToZero:
-                    self.model.addConstr(const_expr == 0, str(cid))
-                    self._constraint_rows[cid] = row_index
-                elif constr.equality == Equality.LessThanOrEqualToZero:
-                    self.model.addConstr(const_expr <= 0, str(cid))
-                    self._constraint_rows[cid] = row_index
-                else:
-                    raise OMMXHighsAdapterError(
-                        f"Unsupported constraint equality kind: {constr.equality}"
-                    )
+                raise OMMXHighsAdapterError(
+                    f"Unsupported constraint equality kind: {constr.equality}"
+                )
+            self._constraint_rows[cid] = row_index

@@ -20,7 +20,7 @@ def test_dual_mapping_uses_solver_rows(constant_id, bound_id):
     model = adapter.solver_input
     model.run()
     solution = adapter.decode(model)
-    assert model.getNumRow() == 1
+    assert model.getNumRow() == (1 if constant_id is None else 2)
     assert solution.get_dual_variable(bound_id) == pytest.approx(1)
     if constant_id is not None:
-        assert solution.get_dual_variable(constant_id) is None
+        assert solution.get_dual_variable(constant_id) == pytest.approx(0)

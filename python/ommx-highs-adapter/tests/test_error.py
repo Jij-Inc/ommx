@@ -16,7 +16,7 @@ from ommx import (
 )
 from ommx.adapter import AdapterNotApplicableError, InfeasibleDetected
 
-from ommx_highs_adapter import OMMXHighsAdapter, OMMXHighsAdapterError
+from ommx_highs_adapter import OMMXHighsAdapter
 
 
 def test_declares_linear_mip_input_class():
@@ -231,40 +231,6 @@ def test_recommended_preparation_reaches_the_highs_input_class():
     assert instance.prepare(input_class, policy) is None
     assert input_class.contains(instance)
     assert OMMXHighsAdapter.check_applicability(instance).is_member
-
-
-def test_error_infeasible_constant_equality_constraint():
-    ommx_instance = Instance.from_components(
-        decision_variables=[],
-        objective=0,
-        constraints={
-            0: Constraint(
-                function=-1,
-                equality=Equality.EqualToZero,
-            )
-        },
-        sense=Sense.Minimize,
-    )
-    with pytest.raises(OMMXHighsAdapterError) as e:
-        OMMXHighsAdapter(ommx_instance)
-    assert "Infeasible constant equality constraint" in str(e.value)
-
-
-def test_error_infeasible_constant_inequality_constraint():
-    ommx_instance = Instance.from_components(
-        decision_variables=[],
-        objective=0,
-        constraints={
-            0: Constraint(
-                function=1,
-                equality=Equality.LessThanOrEqualToZero,
-            )
-        },
-        sense=Sense.Minimize,
-    )
-    with pytest.raises(OMMXHighsAdapterError) as e:
-        OMMXHighsAdapter(ommx_instance)
-    assert "Infeasible constant inequality constraint" in str(e.value)
 
 
 def test_error_infeasible_model():
