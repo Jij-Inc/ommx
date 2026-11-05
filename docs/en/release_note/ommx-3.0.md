@@ -1439,7 +1439,7 @@ See the GitHub Release above for full details. The following summarizes the main
 
 {class}`~ommx.experiment.Experiment`, {meth}`~ommx.experiment.Experiment.with_temp_local_registry`, and {meth}`~ommx.experiment.Experiment.fork` now accept `store_trace=True`. When enabled, each `with experiment.run()` context captures the OpenTelemetry spans emitted inside that Run and stores one trace on the closed {class}`~ommx.experiment.SealedRun`. The stored trace is returned as {class}`~ommx.tracing.TraceResult` from {attr}`~ommx.experiment.SealedRun.trace`, and is carried through commit, load, and fork.
 
-See {mod}`ommx.tracing` and the [OTLP export guide](../how_to/export_traces.md) for the full tracing workflow, renderers, and OpenTelemetry setup notes.
+See {mod}`ommx.tracing` for the full tracing workflow, renderers, and OpenTelemetry setup notes.
 
 ```python
 from ommx.experiment import Experiment
@@ -1751,7 +1751,7 @@ Two entry points ship under `ommx.tracing`:
 - **`%%ommx_trace`** — a Jupyter cell magic that renders a per-cell span tree and a Chrome Trace JSON download link
 - **`capture_trace` / `@traced`** — a context manager and decorator for the same workflow from regular Python scripts, tests, and CI
 
-See {mod}`ommx.tracing` and the [OTLP export guide](../how_to/export_traces.md) for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
+See {mod}`ommx.tracing` for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
 
 ### 🆕 Tracing spans in solver/sampler adapters ([#833](https://github.com/Jij-Inc/ommx/pull/833))
 

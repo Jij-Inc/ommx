@@ -44,13 +44,13 @@ OMMX（Open Mathematical prograMming eXchange、オミキス）を使うと、**
 | 得られた候補は元の条件を満たすか。ソルバーが報告する目的値やboundから何が言えるか | [候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md) |
 | 別の人が結果を調べたり、試行を再実行したりするには、何を残す必要があるか | [問題・結果・試行を保存して共有する](./user_guide/record_and_share.md) |
 
-実行環境を用意するには、[SDKと必要なAdapterのインストール](./getting_started/install.md)から始めます。題材を通して試したい場合は、[公開ベンチマークを解いて結果を照合する例](./examples/published_benchmarks.md)や[巡回セールスマン問題の経路をサンプリングして描画する例](./tutorial/tsp_sampling_with_openjij_adapter)があります。
+実行環境を用意するには、[SDKと必要なAdapterのインストール](./getting_started/install.md)から始めます。題材を通して試したい場合は、[巡回セールスマン問題の経路をサンプリングして描画する例](./tutorial/tsp_sampling_with_openjij_adapter)があります。
 
 個々の操作は{doc}`Python API Reference <api/index>`から調べられます。例えば、候補の値と制約の違反を調べる例は{class}`~ommx.Solution`、ファイルから候補を読む例は{func}`~ommx.qplib.load_solution`にあります。{doc}`Adapterの一覧 <api/adapters>`から、各ソルバーの入力条件と求解例に進めます。自分の解法を接続する場合は{class}`~ommx.adapter.SolverAdapter`または{class}`~ommx.adapter.SamplerAdapter`を参照してください。
 
 探索の進捗や終了理由を調べる手順は、{class}`SCIP <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>`と{class}`HiGHS <ommx_highs_adapter.HighsDiagnosticsAnalyzer>`の診断情報のReferenceにあります。
 
-保存したデータを扱うには、[手元のArtifactを調べる手順](./how_to/manage_local_registry.md)や[レジストリで共有する手順](./how_to/share_artifact_registry.md)に進みます。外部ツールを接続するには、[エージェントプラグインの導入](./user_guide/agent_skills.md)や[OpenTelemetryコレクターへの送信設定](./how_to/export_traces.md)を参照してください。
+保存したデータを扱うには、[手元のArtifactを調べる手順](./how_to/manage_local_registry.md)や[レジストリで共有する手順](./how_to/share_artifact_registry.md)に進みます。外部ツールを接続するには、[エージェントプラグインの導入](./user_guide/agent_skills.md)や{mod}`OpenTelemetryコレクターへの送信設定 <ommx.tracing>`を参照してください。
 
 ## データの交換と共有を支える仕組み
 
@@ -97,7 +97,6 @@ getting_started/install
 :maxdepth: 1
 :hidden:
 
-examples/published_benchmarks
 tutorial/tsp_sampling_with_openjij_adapter
 ```
 
@@ -116,7 +115,6 @@ how_to/share_artifact_registry
 :hidden:
 
 user_guide/agent_skills
-how_to/export_traces
 ```
 
 ```{toctree}

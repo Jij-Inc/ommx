@@ -56,8 +56,42 @@ the trace is displayed and the exception propagates.
 
 For a solver breakdown, see :class:`ommx_highs_adapter.OMMXHighsAdapter`.
 To keep a trace with an Experiment, see :attr:`ommx.experiment.SealedRun.trace`.
-Local capture works without an external exporter. To send the same spans
-to a service, see :doc:`OTLP export settings </how_to/export_traces>`.
+
+**Export spans to an OpenTelemetry backend**
+
+Local capture works without an external exporter. To send the same spans to
+an OpenTelemetry collector, install ``opentelemetry-exporter-otlp-proto-grpc``
+in the SDK environment. Set ``OTEL_EXPORTER_OTLP_ENDPOINT`` to the collector's
+gRPC endpoint and supply credentials if it requires them.
+
+Configure the SDK provider once at the start of the process or notebook
+kernel, before importing OMMX. If the application already owns a provider,
+add the span processor to that provider instead. The following standalone
+script requires a running collector:
+
+.. code-block:: python
+
+    from opentelemetry import trace
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+    provider = TracerProvider()
+    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    trace.set_tracer_provider(provider)
+
+    from ommx import Instance
+    from ommx.tracing import capture_trace
+
+    with capture_trace("evaluate candidate") as captured:
+        Instance.minimize().evaluate({})
+    print(captured)
+    provider.shutdown()
+
+The local span collector attaches to the active provider, so the block
+appears in both the local tree and the external backend. In this standalone
+script, shutdown flushes the provider at process exit. In a service, leave
+shutdown to the owner of the provider.
 """
 
 from __future__ import annotations

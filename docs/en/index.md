@@ -44,13 +44,13 @@ This introduction explains why you might adopt OMMX. The other three Book chapte
 | Does this candidate meet the original requirements? What does the solver's reported objective or bound tell me? | [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md) |
 | What should I keep so someone else can inspect a result or repeat a trial? | [Save and share problems, results, and trials](./user_guide/record_and_share.md) |
 
-To run something yourself, [install the SDK and any adapter you need](./getting_started/install.md). Choose an example when you want to follow a whole task, such as [comparing a solver result with a published benchmark](./examples/published_benchmarks.md) or [sampling and plotting routes for a traveling salesperson](./tutorial/tsp_sampling_with_openjij_adapter).
+To run something yourself, [install the SDK and any adapter you need](./getting_started/install.md). Choose an example when you want to follow a whole task, such as [sampling and plotting routes for a traveling salesperson](./tutorial/tsp_sampling_with_openjij_adapter).
 
 For an individual operation, start in the {doc}`Python API Reference <api/index>`. For example, {class}`~ommx.Solution` shows how to inspect a candidate and {func}`~ommx.qplib.load_solution` reads one from a file. The {doc}`adapter catalogue <api/adapters>` lists solver inputs and links to complete solve examples. To connect your own backend, see {class}`~ommx.adapter.SolverAdapter` or {class}`~ommx.adapter.SamplerAdapter`.
 
 To inspect a solver's search progress and termination report, see the {class}`SCIP <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>` or {class}`HiGHS <ommx_highs_adapter.HighsDiagnosticsAnalyzer>` diagnostic reference.
 
-To work with saved data, [inspect a local Artifact](./how_to/manage_local_registry.md) or [share it through a registry](./how_to/share_artifact_registry.md). To connect an external tool, [install an agent plugin](./user_guide/agent_skills.md) or [send spans to an OpenTelemetry collector](./how_to/export_traces.md).
+To work with saved data, [inspect a local Artifact](./how_to/manage_local_registry.md) or [share it through a registry](./how_to/share_artifact_registry.md). To connect an external tool, [install an agent plugin](./user_guide/agent_skills.md) or see {mod}`ommx.tracing` to send spans to an OpenTelemetry collector.
 
 ## Support data exchange and sharing
 
@@ -98,7 +98,6 @@ user_guide/cli
 :maxdepth: 1
 :hidden:
 
-examples/published_benchmarks
 tutorial/tsp_sampling_with_openjij_adapter
 ```
 
@@ -117,7 +116,6 @@ how_to/share_artifact_registry
 :hidden:
 
 user_guide/agent_skills
-how_to/export_traces
 ```
 
 ```{toctree}

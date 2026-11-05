@@ -1365,7 +1365,7 @@ PySCIPOpt Adapter は、SCIP の `BESTSOLFOUND` と `DUALBOUNDIMPROVED` callback
 
 {class}`~ommx.experiment.Experiment`、{meth}`~ommx.experiment.Experiment.with_temp_local_registry`、{meth}`~ommx.experiment.Experiment.fork` が `store_trace=True` を受け取れるようになりました。有効化すると、各 `with experiment.run()` context 内で発生した OpenTelemetry span を capture し、close 済みの {class}`~ommx.experiment.SealedRun` に trace を 1 つ保存します。保存された trace は {attr}`~ommx.experiment.SealedRun.trace` から {class}`~ommx.tracing.TraceResult` として取得でき、commit、load、fork をまたいで保持されます。
 
-詳しい trace workflow、renderer、OpenTelemetry の設定については {mod}`ommx.tracing`と[外部送信の設定](../how_to/export_traces.md) を参照してください。
+詳しい trace workflow、renderer、OpenTelemetry の設定については {mod}`ommx.tracing` を参照してください。
 
 ```python
 from ommx.experiment import Experiment
@@ -1677,7 +1677,7 @@ assert instance.constraints[c.constraint_id].name == "budget"
 - **`%%ommx_trace`** — Jupyterセル単位でスパンツリーとChrome Trace JSONダウンロードリンクを表示するセルマジック
 - **`capture_trace` / `@traced`** — 通常のPythonスクリプト／テスト／CIから同じ機能を使うためのコンテキストマネージャとデコレータ
 
-詳しい使い方、独自 `TracerProvider` の設定方法、トラブルシューティングは {mod}`ommx.tracing`と[外部送信の設定](../how_to/export_traces.md) を参照してください。
+詳しい使い方、独自 `TracerProvider` の設定方法、トラブルシューティングは {mod}`ommx.tracing` を参照してください。
 
 ### 🆕 Solver / Sampler Adapter のトレーシング対応 ([#833](https://github.com/Jij-Inc/ommx/pull/833))
 

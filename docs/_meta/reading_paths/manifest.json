@@ -15,6 +15,30 @@
   },
   "editorial_updates": [
     {
+      "design_source": "User request in the current chat (2026-11-05): consolidate external trace export instructions into API Reference.",
+      "base_revision": "81ebb51f675bb0362b9d135070f60edd2750e821",
+      "target_revision": "working tree based on 81ebb51f",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "R_API.tracing",
+        "R_API.tracing.export"
+      ],
+      "note": "日英の外部送信設定ページをommx.tracingの共有Referenceへ統合する。追加依存・接続先・providerの設定順・既存providerへの接続・shutdownの責任とコード例を移す。旧R_INTEGRATION.trace_exportの所有先と直接入口の経路を更新する。"
+    },
+    {
+      "design_source": "User request in the current chat (2026-11-05): remove the published benchmark example page.",
+      "base_revision": "81ebb51f675bb0362b9d135070f60edd2750e821",
+      "target_revision": "working tree based on 81ebb51f",
+      "affected_pages": [
+        "README",
+        "HOME",
+        "HOME_EN",
+        "R_API.dataset"
+      ],
+      "note": "日英の公開ベンチマークExampleと入口からの案内を削除する。datasetの読込み・注釈の説明は共有Referenceが引き続き所有する。"
+    },
+    {
       "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
       "base_revision": "521aea0ad30d936598e2ff2b423a714ff5cb960b",
       "target_revision": "codex/readme-book-purpose",
@@ -1871,7 +1895,7 @@
     {
       "id": "trace.export",
       "label": "外部コレクターへスパンを送る",
-      "owner": "R_INTEGRATION.trace_export",
+      "owner": "R_API.tracing.export",
       "requires": [
         "sdk.environment"
       ],
@@ -4339,9 +4363,7 @@
       "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "python/ommx/ommx/dataset.py",
-        "docs/en/examples/published_benchmarks.md",
-        "docs/ja/examples/published_benchmarks.md"
+        "python/ommx/ommx/dataset.py"
       ],
       "source_urls": [],
       "requires": [
@@ -4376,13 +4398,11 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "MIPLIBとQPLIBの引数、配布元、キャッシュ、注釈を説明する。ローカルファイルとArtifactからの読込みは対応APIへ案内する。 公開Artifactの取得からSCIPでの求解・注釈との照合までは日英の独立Examplesにまとめる。",
+      "notes": "MIPLIBとQPLIBの引数、配布元、キャッシュ、注釈を説明する。ローカルファイルとArtifactからの読込みは対応APIへ案内する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "python/ommx/ommx/dataset.py",
-        "docs/en/examples/published_benchmarks.md",
-        "docs/ja/examples/published_benchmarks.md"
+        "python/ommx/ommx/dataset.py"
       ]
     },
     {
@@ -4552,7 +4572,7 @@
         "class.qubo"
       ],
       "parent_page": null,
-      "notes": "メソッド実行中のspan、親子の時間、セル・ブロック・関数単位の収集と保存を共有Referenceで扱う。外部exporter設定は日英の運用ページへ進む。",
+      "notes": "メソッド実行中のspan、親子の時間、セル・ブロック・関数単位の収集と保存を共有Referenceで扱う。外部exporter設定も同じモジュールのReferenceで扱う。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -6387,13 +6407,12 @@
       ]
     },
     {
-      "id": "R_INTEGRATION.trace_export",
+      "id": "R_API.tracing.export",
       "title": "スパンの外部送信を設定する",
-      "role": "integration-reference",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/en/how_to/export_traces.md",
-        "docs/ja/how_to/export_traces.md"
+        "python/ommx/ommx/tracing/__init__.py"
       ],
       "source_urls": [],
       "requires": [
@@ -6416,13 +6435,12 @@
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "日英ページで追加依存・接続先・providerの設定順を示す。",
+      "parent_page": "R_API.tracing",
+      "notes": "ommx.tracingのExport spans to an OpenTelemetry backend節へ直接入れる。追加依存・接続先・providerの設定順と既存providerへの接続を説明し、自己完結したコード例で外部送信とローカル収集を示す。shutdownはproviderの所有者が担当する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/en/how_to/export_traces.md",
-        "docs/ja/how_to/export_traces.md"
+        "python/ommx/ommx/tracing/__init__.py"
       ]
     },
     {
@@ -7584,7 +7602,7 @@
       ],
       "steps": [
         "SETUP",
-        "R_INTEGRATION.trace_export"
+        "R_API.tracing.export"
       ]
     },
     {
