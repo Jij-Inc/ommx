@@ -24,6 +24,7 @@ Untitled*.ipynb
 
 # Python
 .venv*/
+gha-creds-*.json
 __pycache__/
 python/**/build/
 python/**/dist/
