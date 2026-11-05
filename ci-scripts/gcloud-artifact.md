@@ -2,7 +2,7 @@
 
 `.github/workflows/gcloud-artifact.yml` runs after pushes to `main` and on manual
 dispatch from `main` in `Jij-Inc/ommx`. It builds the current Python SDK, then runs
-`gcloud-artifact-roundtrip.py` against the real registry from issue #606.
+`gcloud-artifact-roundtrip.py` to continuously check real-registry compatibility.
 The local Docker registry tests in `rust/ommx/tests/auth_e2e.rs` still run on PRs.
 
 Each authentication method is checked independently:
@@ -69,11 +69,13 @@ provider's condition. Manual dispatch from other branches is intentionally skipp
 
 ## Retention
 
-Images use `ci-issue-606-env` and `ci-issue-606-helper`, tagged with the GitHub run
+Images use `ci-gar-roundtrip-env` and `ci-gar-roundtrip-helper`, tagged with the GitHub run
 ID, attempt, and commit SHA. `gcloud-artifact-cleanup.json` deletes only packages
-with the `ci-issue-606-` prefix once they are older than seven days, including
-tagged versions. The original manually verified `issue-606-*` images are outside
-this policy. Cleanup is asynchronous; it does not happen at an exact deadline.
+with the `ci-gar-roundtrip-` prefix once they are older than seven days, including
+tagged versions. The legacy `ci-issue-606-` prefix remains in the policy so that
+artifacts created before the rename are also cleaned up. The original manually
+verified `issue-606-*` images are outside this policy. Cleanup is asynchronous;
+it does not happen at an exact deadline.
 
 Apply the policy from the repository root with an administrator account:
 

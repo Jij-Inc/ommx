@@ -36,7 +36,7 @@ def snapshot(artifact: Artifact) -> dict:
             }
         )
     instance = artifact.instance
-    assert instance.title == "Issue 606 GAR round trip"
+    assert instance.title == "Google Artifact Registry round trip"
     # Exercise the reconstructed model with both feasible and infeasible states.
     for state, feasible, objective in [
         ({0: 1, 1: 0}, True, 3),
@@ -60,7 +60,7 @@ def worker(action: str, reference: str, evidence_path: str) -> None:
     assert not Path(os.environ["OMMX_LOCAL_REGISTRY_ROOT"]).exists()
     if action == "push":
         instance = Instance.maximize()
-        instance.title = "Issue 606 GAR round trip"
+        instance.title = "Google Artifact Registry round trip"
         x = instance.new_binary("x")
         y = instance.new_binary("y")
         instance.objective = 3 * x + 2 * y
@@ -69,7 +69,9 @@ def worker(action: str, reference: str, evidence_path: str) -> None:
         draft.add_annotation("org.opencontainers.image.description", "GAR CI test")
         draft.add_instance(instance)
         draft.add_solution(instance.evaluate({x.id: 1, y.id: 0}))
-        draft.add_json({"issue": 606, "reference": reference}, title="verification")
+        draft.add_json(
+            {"test": "gar-roundtrip", "reference": reference}, title="verification"
+        )
         artifact = draft.commit()
         evidence.write_text(json.dumps(snapshot(artifact), indent=2) + "\n")
         artifact.push()
@@ -86,7 +88,7 @@ def worker(action: str, reference: str, evidence_path: str) -> None:
 
 
 def round_trip(repository: str, tag: str, auth: str, output: Path) -> None:
-    reference = f"{repository}/ci-issue-606-{auth}:{tag}"
+    reference = f"{repository}/ci-gar-roundtrip-{auth}:{tag}"
     host = repository.split("/", 1)[0]
     env = os.environ.copy()
     for name in (
