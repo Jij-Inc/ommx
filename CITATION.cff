@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+title: "OMMX: Open Mathematical prograMming eXchange"
+abstract: "OMMX is an open, language- and solver-agnostic standard for exchanging mathematical programming problems, solutions, and related data, along with reference implementations for producing and consuming OMMX artifacts."
+authors:
+  - name: "Jij Inc."
+repository-code: "https://github.com/Jij-Inc/ommx"
+url: "https://jij-inc-ommx.readthedocs-hosted.com/en/latest/"
+license: Apache-2.0
+keywords:
+  - mathematical-programming
+  - optimization
+  - ommx
