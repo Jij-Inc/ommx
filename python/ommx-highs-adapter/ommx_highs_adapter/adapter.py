@@ -248,7 +248,7 @@ class HighsDiagnosticsAnalyzer:
 
     Bounds and gaps describe the solver-facing objective. Sign, scale, and
     penalty transformations can separate it from OMMX's reported objective;
-    see :doc:`result interpretation </user_guide/evaluate_and_interpret>` before
+    see :doc:`result interpretation </book/evaluate_and_interpret>` before
     interpreting them as guarantees about the original problem.
 
     .. rubric:: Read progress and terminal values

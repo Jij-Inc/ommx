@@ -37,4 +37,4 @@ print(sample_set.summary)
 
 [OpenJij adapter API](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/autoapi/ommx_openjij_adapter/index.html#ommx_openjij_adapter.OMMXOpenJijSAAdapter) · [日本語サイトのAPI Reference](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/autoapi/ommx_openjij_adapter/index.html#ommx_openjij_adapter.OMMXOpenJijSAAdapter)
 
-The adapter reference above describes supported inputs and explicit preparation, including which variable IDs to supply when passing an initial state. The [Book chapter on choosing a formulation](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/transform_and_solve.html) explains when to keep or convert a constraint.
+The adapter reference above describes supported inputs and explicit preparation, including which variable IDs to supply when passing an initial state. The [Book chapter on choosing a formulation](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/book/transform_and_solve.html) explains when to keep or convert a constraint.

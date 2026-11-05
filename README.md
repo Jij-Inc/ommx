@@ -29,11 +29,11 @@ The **Book** explains when to use each capability and how to interpret the resul
 | Purpose | Start here |
 |:--------|:-----------|
 | Understand OMMX and explore its capabilities | [English Book](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/) · [日本語Book](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/) |
-| Choose how to represent a problem for a solver | [Transform a problem](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/transform_and_solve.html) · [日本語](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/user_guide/transform_and_solve.html) |
-| Check a candidate against your requirements | [Evaluate candidates](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/evaluate_and_interpret.html) · [日本語](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/user_guide/evaluate_and_interpret.html) |
+| Choose how to represent a problem for a solver | [Transform a problem](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/book/transform_and_solve.html) · [日本語](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/book/transform_and_solve.html) |
+| Check a candidate against your requirements | [Evaluate candidates](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/book/evaluate_and_interpret.html) · [日本語](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/book/evaluate_and_interpret.html) |
 | Choose a solver or sampler integration | [Adapter packages and input contracts](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/api/adapters.html) |
 | Install the Python SDK and an optional adapter | [Installation guide](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/getting_started/install.html) · [日本語](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/getting_started/install.html) |
-| Inspect and exchange saved data from the command line | [OMMX CLI](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/cli.html) |
+| Inspect and exchange saved data from the command line | [OMMX CLI](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/how_to/cli.html) |
 
 Until the 3.0.0 stable release, both the Book and API Reference describe `main`. The installation guide covers the latest published prerelease and installation from `main`; use `main` for features that have not been released yet. Rust and Python SDK versions are managed independently.
 

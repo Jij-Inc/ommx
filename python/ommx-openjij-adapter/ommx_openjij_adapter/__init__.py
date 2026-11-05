@@ -127,7 +127,7 @@ class OMMXOpenJijSAAdapter(_OMMXOpenJijSAAdapter):
     by a preparation-free method keeps the application's penalty choice.
     The :class:`ommx.SampleSet` Reference explains result inspection and
     selection in full. For an independent application, see the
-    :doc:`TSP sampling example </tutorial/tsp_sampling_with_openjij_adapter>`.
+    :doc:`TSP sampling example </examples/tsp_sampling_with_openjij_adapter>`.
 
     **Follow the sampler interface across the backend call**
 

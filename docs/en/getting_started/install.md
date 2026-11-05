@@ -119,7 +119,7 @@ main:
 uv sync --locked --package ommx-openjij-adapter --no-default-groups --inexact
 ```
 
-This also installs OpenJij itself. Other adapters and solver license setup are unnecessary. The {class}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter` Reference contains a small example from choosing penalty weights to selecting a returned candidate. The optional [TSP Notebook](../tutorial/tsp_sampling_with_openjij_adapter) uses matplotlib to draw routes.
+This also installs OpenJij itself. Other adapters and solver license setup are unnecessary. The {class}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter` Reference contains a small example from choosing penalty weights to selecting a returned candidate. The optional [TSP Notebook](../examples/tsp_sampling_with_openjij_adapter) uses matplotlib to draw routes.
 
 ## 3. Add Notebook and plotting tools when needed
 
@@ -163,7 +163,7 @@ Repeat the `main` installation commands for the adapters you use so that they ma
 (install-cli)=
 ## Optional: manage Artifacts with the CLI
 
-The SDK includes the [OMMX CLI](../user_guide/cli.md). From either environment, run:
+The SDK includes the [OMMX CLI](../how_to/cli.md). From either environment, run:
 
 ```sh
 uv run --no-sync ommx --version

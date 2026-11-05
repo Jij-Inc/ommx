@@ -336,7 +336,7 @@ class SCIPDiagnosticsAnalyzer:
     These values concern the solver-facing objective. After sign, scale, or
     penalty changes, do not treat them as bounds on the reported OMMX objective
     without the corresponding transformation guarantee. See
-    :doc:`result interpretation </user_guide/evaluate_and_interpret>`.
+    :doc:`result interpretation </book/evaluate_and_interpret>`.
 
     .. rubric:: Read progress observations
 

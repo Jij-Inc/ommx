@@ -119,7 +119,7 @@ main：
 uv sync --locked --package ommx-openjij-adapter --no-default-groups --inexact
 ```
 
-OpenJij本体も依存関係として導入されます。ほかのAdapterやソルバーのライセンス設定は不要です。{class}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter`のReferenceに、重みを選び、得られた候補を選択するまでの小さな使用例があります。任意の応用例である[TSPのNotebook](../tutorial/tsp_sampling_with_openjij_adapter)では、経路の描画にmatplotlibを使います。
+OpenJij本体も依存関係として導入されます。ほかのAdapterやソルバーのライセンス設定は不要です。{class}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter`のReferenceに、重みを選び、得られた候補を選択するまでの小さな使用例があります。任意の応用例である[TSPのNotebook](../examples/tsp_sampling_with_openjij_adapter)では、経路の描画にmatplotlibを使います。
 
 ## 3. 必要に応じてNotebook・描画用ツールを追加する
 

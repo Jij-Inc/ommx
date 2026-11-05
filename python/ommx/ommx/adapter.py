@@ -87,8 +87,8 @@ If you explicitly solve a transformed Instance, evaluate the candidate against
 the original Instance as needed. Reconstructed values and membership in an
 adapter's input class alone do not establish original feasibility or global
 optimality. See :doc:`Transform problems and choose a solving method
-</user_guide/transform_and_solve>` and :doc:`Evaluate candidates and interpret
-results </user_guide/evaluate_and_interpret>` for choosing the evaluation target.
+</book/transform_and_solve>` and :doc:`Evaluate candidates and interpret
+results </book/evaluate_and_interpret>` for choosing the evaluation target.
 
 The :class:`~ommx_highs_adapter.HighsDiagnosticsAnalyzer` and
 :class:`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` references explain backend
