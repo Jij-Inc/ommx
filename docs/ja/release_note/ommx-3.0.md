@@ -22,6 +22,12 @@ HiGHSでは、使用される決定変数がないモデルも内部の固定変
 この補助変数はデコード後のOMMX状態には含まれません。実行可能な定数制約も
 ソルバーの行として保持され、そのHiGHS双対値は対応するOMMX制約IDに紐付けられます。
 
+HiGHS Adapterは `infinite_bound` を無限大に設定し、巨大な定数制約の境界を含む
+有限の境界値を有限のまま扱います。PySCIPOpt Adapterは定数の通常制約を含むモデルで
+`misc/allowstrongdualreds` を無効にし、SCIPが `inforunbd` を返す代わりに
+実行不能と非有界を区別できるようにします。この設定により、該当モデルの
+SCIPの前処理の挙動が変わります。
+
 ### 🛠 QUBO/HUBO変換で微小な係数を保持 ([#1320](https://github.com/Jij-Inc/ommx/pull/1320))
 
 `Instance.as_qubo_format()` と `as_hubo_format()` は、大きさによらず非ゼロの

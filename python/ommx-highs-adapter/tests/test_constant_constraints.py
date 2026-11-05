@@ -1,12 +1,15 @@
+import sys
+
 import highspy
 import pytest
 
 from ommx import Constraint, DecisionVariable, Equality, Instance, Sense
-from ommx.adapter import InfeasibleDetected
+from ommx.adapter import InfeasibleDetected, UnboundedDetected
 from ommx_highs_adapter import OMMXHighsAdapter
 
 
 @pytest.mark.parametrize("variable_mode", ["none", "unused", "active"])
+@pytest.mark.parametrize("magnitude", [1, 1e20, sys.float_info.max])
 @pytest.mark.parametrize(
     "equality,constant,feasible",
     [
@@ -19,8 +22,9 @@ from ommx_highs_adapter import OMMXHighsAdapter
     ],
 )
 def test_constant_constraint_solver_lifecycle(
-    variable_mode, equality, constant, feasible
+    variable_mode, magnitude, equality, constant, feasible
 ):
+    constant *= magnitude
     x = DecisionVariable.continuous(11, lower=0, upper=1)
     instance = Instance.from_components(
         decision_variables=[] if variable_mode == "none" else [x],
@@ -62,3 +66,53 @@ def test_constant_constraint_solver_lifecycle(
             with pytest.raises(InfeasibleDetected):
                 solve(instance)
     assert instance.to_v2_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "equality", [Equality.EqualToZero, Equality.LessThanOrEqualToZero]
+)
+@pytest.mark.parametrize("constant", [-1, 0, 1])
+def test_constant_constraint_with_unbounded_objective(equality, constant):
+    x = DecisionVariable.continuous(11)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=-x,
+        constraints={42: Constraint(function=constant, equality=equality)},
+        sense=Sense.Minimize,
+    )
+    feasible = constant == 0 if equality == Equality.EqualToZero else constant <= 0
+    expected_exception = UnboundedDetected if feasible else InfeasibleDetected
+    adapter = OMMXHighsAdapter(instance)
+    model = adapter.solver_input
+    model.run()
+    assert model.getModelStatus() == (
+        highspy.HighsModelStatus.kUnbounded
+        if feasible
+        else highspy.HighsModelStatus.kInfeasible
+    )
+    with pytest.raises(expected_exception):
+        adapter.decode(model)
+    with pytest.raises(expected_exception):
+        OMMXHighsAdapter.solve(instance)
+
+
+@pytest.mark.parametrize(
+    "equality", [Equality.EqualToZero, Equality.LessThanOrEqualToZero]
+)
+@pytest.mark.parametrize("tolerance,feasible", [(1e-7, False), (1e-4, True)])
+def test_constant_constraint_uses_solver_tolerance(equality, tolerance, feasible):
+    instance = Instance.from_components(
+        decision_variables=[],
+        objective=7,
+        constraints={42: Constraint(function=1e-5, equality=equality)},
+        sense=Sense.Minimize,
+    )
+    assert OMMXHighsAdapter.check_applicability(instance).is_member
+    model = OMMXHighsAdapter(instance).solver_input
+    model.setOptionValue("primal_feasibility_tolerance", tolerance)
+    model.run()
+    assert model.getModelStatus() == (
+        highspy.HighsModelStatus.kOptimal
+        if feasible
+        else highspy.HighsModelStatus.kInfeasible
+    )

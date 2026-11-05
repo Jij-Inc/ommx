@@ -24,6 +24,12 @@ fixed variable, which does not appear in the decoded OMMX state. Feasible
 constant rows are retained and their HiGHS dual values are mapped back to the
 corresponding OMMX constraint IDs.
 
+The HiGHS adapter sets `infinite_bound` to infinity so finite bounds, including
+large constant-row bounds, remain finite. For models containing constant
+regular constraints, the PySCIPOpt adapter disables `misc/allowstrongdualreds`
+so SCIP can distinguish infeasibility from unboundedness instead of returning
+`inforunbd`. This changes SCIP's presolve behavior for those models.
+
 ### 🛠 Preserve small QUBO/HUBO coefficients ([#1320](https://github.com/Jij-Inc/ommx/pull/1320))
 
 `Instance.as_qubo_format()` and `as_hubo_format()` now retain nonzero

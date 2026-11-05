@@ -1255,6 +1255,11 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         # Handle constraint function based on its type
         f = constraint.function
         degree = f.degree()
+        if degree == 0:
+            # Strong dual reductions can report "inforunbd" before SCIP checks
+            # a false constant row. Preserve the distinction between infeasible
+            # and unbounded models, including the manual optimize/decode path.
+            self.model.setBoolParam("misc/allowstrongdualreds", False)
         if degree in (0, 1):
             expr = self._make_linear_expr(f)
         elif degree == 2:

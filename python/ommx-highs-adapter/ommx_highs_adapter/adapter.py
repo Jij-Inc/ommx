@@ -693,6 +693,8 @@ class OMMXHighsAdapter(SolverAdapter):
     Constant equalities and inequalities are passed to HiGHS as rows with no
     variable coefficients. HiGHS determines feasibility using its configured
     tolerances; infeasible models raise ``InfeasibleDetected`` during decoding.
+    The adapter sets ``infinite_bound`` to infinity to preserve finite bounds
+    above HiGHS's default infinity threshold, including constant-row bounds.
 
     **Constraint ID Management**:
 
@@ -820,6 +822,9 @@ class OMMXHighsAdapter(SolverAdapter):
             self.require_applicable(ommx_instance)
             self.instance = ommx_instance
             self.model = highspy.Highs()
+            # Preserve finite bounds, including constant-row bounds beyond
+            # HiGHS's default 1e20 infinity threshold.
+            self.model.setOptionValue("infinite_bound", highspy.kHighsInf)
 
             # the default is for `log_to_console` to be True, so we
             # turn it off unless user requests it
