@@ -301,37 +301,3 @@ def test_error_infeasible_model():
     )
     with pytest.raises(InfeasibleDetected):
         OMMXPySCIPOptAdapter.solve(ommx_instance)
-
-
-def test_error_infeasible_constant_equality_constraint():
-    ommx_instance = Instance.from_components(
-        decision_variables=[],
-        objective=0,
-        constraints={
-            0: Constraint(
-                function=-1,
-                equality=Equality.EqualToZero,
-            )
-        },
-        sense=Sense.Minimize,
-    )
-    with pytest.raises(OMMXPySCIPOptAdapterError) as e:
-        OMMXPySCIPOptAdapter(ommx_instance)
-    assert "Infeasible constant constraint was found" in str(e.value)
-
-
-def test_error_infeasible_constant_inequality_constraint():
-    ommx_instance = Instance.from_components(
-        decision_variables=[],
-        objective=0,
-        constraints={
-            0: Constraint(
-                function=1,
-                equality=Equality.LessThanOrEqualToZero,
-            )
-        },
-        sense=Sense.Minimize,
-    )
-    with pytest.raises(OMMXPySCIPOptAdapterError) as e:
-        OMMXPySCIPOptAdapter(ommx_instance)
-    assert "Infeasible constant constraint was found" in str(e.value)

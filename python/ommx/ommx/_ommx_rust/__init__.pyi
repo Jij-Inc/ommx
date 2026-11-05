@@ -68,6 +68,7 @@ __all__ = [
     "IndicatorConstraint",
     "IndicatorConstraintID",
     "InfeasibleDetected",
+    "InfeasibleOrUnboundedDetected",
     "Instance",
     "InstanceClass",
     "InstanceClassClause",
@@ -4880,6 +4881,13 @@ class IndicatorConstraintID(ConstraintIDBase):
 class InfeasibleDetected(builtins.RuntimeError):
     r"""
     The mathematical model was proven infeasible.
+    """
+
+    ...
+
+class InfeasibleOrUnboundedDetected(builtins.RuntimeError):
+    r"""
+    A solver or presolve/analysis operation reported that the model is infeasible or unbounded, without distinguishing which. Catch this separately from definite infeasibility or unboundedness and explicitly choose further analysis if needed. It does not mean merely that no solution was found, and it is not an independently validated certificate.
     """
 
     ...

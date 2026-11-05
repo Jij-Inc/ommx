@@ -43,7 +43,7 @@ mod evaluate;
 mod format;
 mod function;
 mod indicator_constraint;
-mod infeasible_detected;
+mod infeasibility;
 mod instance;
 mod instance_class;
 mod macros;
@@ -76,7 +76,7 @@ pub use function::{
     Expression, Function, FunctionEvaluationError, FunctionParameters, IntoFunctionForMacro,
 };
 pub use indicator_constraint::*;
-pub use infeasible_detected::*;
+pub use infeasibility::{InfeasibleDetected, InfeasibleOrUnboundedDetected};
 pub use instance::*;
 pub use instance_class::*;
 pub use modeling_label::*;

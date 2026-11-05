@@ -6,6 +6,41 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### 🛠 ⚠ Report infeasible constant constraints through the solver ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))
+
+HiGHS and PySCIPOpt now accept constant regular equalities and inequalities
+during adapter construction, including infeasible ones such as `1 <= 0`.
+The constraints remain structurally applicable and are passed to the solver,
+which determines feasibility using its configured tolerances. When the solver
+reports infeasibility, the normal solve/decode path raises `ommx.InfeasibleDetected`.
+
+This changes the Python SDK 2.6.x exception and lifecycle contract. Replace
+handlers for `OMMXHighsAdapterError` or `OMMXPySCIPOptAdapterError` around
+construction for this case with an `InfeasibleDetected` handler around
+`solve()`, `solve_without_preparation()`, or `decode()`.
+
+HiGHS also solves models with no used decision variables using an internal
+fixed variable, which does not appear in the decoded OMMX state. Feasible
+constant rows are retained and their HiGHS dual values are mapped back to the
+corresponding OMMX constraint IDs.
+
+For a constant row at or above HiGHS's infinity threshold, the adapter raises
+`infinite_bound` only while registering that row and immediately restores it,
+including on failure. Other rows and solver settings retain their usual behavior.
+
+SCIP retains its default reductions. Its `inforunbd` status and HiGHS's
+`UnboundedOrInfeasible` status now raise the shared
+`ommx.InfeasibleOrUnboundedDetected`, also re-exported from `ommx.adapter`.
+Catch this separately from definite infeasibility or unboundedness and choose
+whether further analysis is needed. Decoding does not re-solve the problem.
+
+This signal is shared with future Presolve/analysis operations. It preserves
+the reported disjunction without treating it as an independently validated
+certificate or merely a failure to find a solution. The common detection
+semantics are tracked in [#1003](https://github.com/Jij-Inc/ommx/issues/1003);
+SDK-owned constant-row simplification and early detection are tracked in
+[#1188](https://github.com/Jij-Inc/ommx/issues/1188).
+
 ### 🛠 Preserve small QUBO/HUBO coefficients ([#1320](https://github.com/Jij-Inc/ommx/pull/1320))
 
 `Instance.as_qubo_format()` and `as_hubo_format()` now retain nonzero

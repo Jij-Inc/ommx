@@ -14,6 +14,7 @@ from ommx import (
     ExactIntegerSlackError,
     Function,
     InfeasibleDetected,
+    InfeasibleOrUnboundedDetected,
     Instance,
     InstanceClass,
     Linear,
@@ -27,24 +28,35 @@ from ommx import (
 
 def test_operation_error_types_are_public_runtime_errors():
     from ommx.adapter import InfeasibleDetected as AdapterInfeasibleDetected
+    from ommx.adapter import (
+        InfeasibleOrUnboundedDetected as AdapterInfeasibleOrUnboundedDetected,
+        NoSolutionReturned,
+        UnboundedDetected,
+    )
 
     operation_error_types = (
         LogEncodingError,
         ExactIntegerSlackError,
         InfeasibleDetected,
+        InfeasibleOrUnboundedDetected,
     )
     for error_type in operation_error_types:
         assert issubclass(error_type, RuntimeError)
         assert error_type.__module__ == "ommx"
     assert AdapterInfeasibleDetected is InfeasibleDetected
+    assert AdapterInfeasibleOrUnboundedDetected is InfeasibleOrUnboundedDetected
+    for other in (InfeasibleDetected, UnboundedDetected, NoSolutionReturned):
+        assert not issubclass(InfeasibleOrUnboundedDetected, other)
     assert {
         "LogEncodingError",
         "ExactIntegerSlackError",
         "InfeasibleDetected",
+        "InfeasibleOrUnboundedDetected",
     } <= set(ommx.__all__)
     assert ommx.LogEncodingError is LogEncodingError
     assert ommx.ExactIntegerSlackError is ExactIntegerSlackError
     assert ommx.InfeasibleDetected is InfeasibleDetected
+    assert ommx.InfeasibleOrUnboundedDetected is InfeasibleOrUnboundedDetected
 
 
 def test_incremental_modeling_workflow():

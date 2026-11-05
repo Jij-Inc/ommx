@@ -6,6 +6,38 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 🛠 ⚠ 実行不能な定数制約をソルバーの判定結果として扱う ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))
+
+HiGHSとPySCIPOptのAdapterは、`1 <= 0` のように実行不能なものも含め、
+定数の通常等式・不等式制約を構築時に受け付けます。構造上は適用可能な制約として
+ソルバーに渡し、ソルバーに設定された許容誤差で実行可能性を判定します。
+ソルバーが実行不能と判定すると、通常のsolve/decode経路で
+`ommx.InfeasibleDetected` を送出します。
+
+Python SDK 2.6.xから、例外の種類と発生するタイミングが変わります。このケースで
+構築時の `OMMXHighsAdapterError` や `OMMXPySCIPOptAdapterError` を捕捉していたコードは、
+`solve()`、`solve_without_preparation()`、または `decode()` の呼び出しで
+`InfeasibleDetected` を捕捉するように変更してください。
+
+HiGHSでは、使用される決定変数がないモデルも内部の固定変数を使って求解します。
+この補助変数はデコード後のOMMX状態には含まれません。実行可能な定数制約も
+ソルバーの行として保持され、そのHiGHS双対値は対応するOMMX制約IDに紐付けられます。
+
+HiGHSの無限大判定の閾値以上の定数行は、登録する間だけ `infinite_bound` を
+引き上げ、失敗した場合も含めて直後に復元します。他の行やソルバーの設定は
+従来の挙動を保ちます。
+
+SCIPの縮約設定は既定値を保ちます。SCIPの `inforunbd` とHiGHSの
+`UnboundedOrInfeasible` は、共通の `ommx.InfeasibleOrUnboundedDetected` を送出します。
+同じ例外型を `ommx.adapter` からもimportできます。実行不能・非有界の確定結果とは
+分けて捕捉し、追加解析が必要かを呼び出し側で判断してください。decodeは再求解しません。
+
+このsignalは今後のPresolve・解析処理でも共有します。「実行不能または非有界」という
+報告を保持し、独立に検証済みの証明書や、単に解が見つからなかった状態とは区別します。
+共通の検出結果の意味は [#1003](https://github.com/Jij-Inc/ommx/issues/1003)、
+SDK側での定数制約の簡約と早期検出は [#1188](https://github.com/Jij-Inc/ommx/issues/1188)
+で追跡します。
+
 ### 🛠 QUBO/HUBO変換で微小な係数を保持 ([#1320](https://github.com/Jij-Inc/ommx/pull/1320))
 
 `Instance.as_qubo_format()` と `as_hubo_format()` は、大きさによらず非ゼロの

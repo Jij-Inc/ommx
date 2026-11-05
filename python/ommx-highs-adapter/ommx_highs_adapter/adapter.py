@@ -13,6 +13,7 @@ from opentelemetry import trace
 from ommx import (
     ConstraintID,
     Equality,
+    InfeasibleOrUnboundedDetected,
     Function,
     Instance,
     InstanceClass,
@@ -690,8 +691,14 @@ class OMMXHighsAdapter(SolverAdapter):
 
     **Constant Constraint Handling**:
 
-    - Equality: Skip if \\|constant\\| ≤ 1e-10, error if \\|constant\\| > 1e-10
-    - Inequality: Skip if constant ≤ 1e-10, error if constant > 1e-10
+    Constant equalities and inequalities are passed to HiGHS as rows with no
+    variable coefficients. HiGHS determines feasibility using its configured
+    tolerances. A definite infeasible status raises ``InfeasibleDetected``;
+    an unresolved infeasible-or-unbounded status raises
+    ``InfeasibleOrUnboundedDetected`` during decoding.
+    When a constant-row bound reaches HiGHS's infinity threshold, the adapter
+    temporarily raises ``infinite_bound`` while adding that row and restores
+    it immediately afterward. Other rows and solver settings are unchanged.
 
     **Constraint ID Management**:
 
@@ -751,6 +758,8 @@ class OMMXHighsAdapter(SolverAdapter):
          - ``InfeasibleDetected``
        * - ``kUnbounded``
          - ``UnboundedDetected``
+       * - ``kUnboundedOrInfeasible``
+         - ``InfeasibleOrUnboundedDetected``
        * - ``kNotset``
          - ``OMMXHighsAdapterError``
 
@@ -872,6 +881,8 @@ class OMMXHighsAdapter(SolverAdapter):
             When the optimization problem has no feasible solution
         UnboundedDetected
             When the optimization problem is unbounded
+        InfeasibleOrUnboundedDetected
+            When HiGHS reports infeasibility or unboundedness without distinguishing which
         PreparationTargetNotReachedError
             When the recommended preparation cannot reach the Adapter input class
         OMMXHighsAdapterError
@@ -1027,6 +1038,8 @@ class OMMXHighsAdapter(SolverAdapter):
             If HiGHS determined the problem is infeasible
         UnboundedDetected
             If HiGHS determined the problem is unbounded
+        InfeasibleOrUnboundedDetected
+            If HiGHS reports infeasibility or unboundedness without distinguishing which
 
         Notes
         -----
@@ -1104,6 +1117,8 @@ class OMMXHighsAdapter(SolverAdapter):
             If the model is infeasible
         UnboundedDetected
             If the model is unbounded
+        InfeasibleOrUnboundedDetected
+            If HiGHS reports infeasibility or unboundedness without distinguishing which
 
         Examples
         --------
@@ -1132,6 +1147,11 @@ class OMMXHighsAdapter(SolverAdapter):
             raise InfeasibleDetected("Model was infeasible")
         elif status == highspy.HighsModelStatus.kUnbounded:
             raise UnboundedDetected("Model was unbounded")
+        elif status == highspy.HighsModelStatus.kUnboundedOrInfeasible:
+            raise InfeasibleOrUnboundedDetected(
+                "HiGHS could not distinguish infeasibility from unboundedness "
+                "[status: UnboundedOrInfeasible]"
+            )
 
         solution = data.getSolution()
         return State(
@@ -1145,6 +1165,14 @@ class OMMXHighsAdapter(SolverAdapter):
         variables = self.instance.used_decision_variables
         num_cols = len(variables)
         if num_cols == 0:
+            # HiGHS reports ModelEmpty without checking rows when there are no
+            # columns. A fixed auxiliary column lets it solve constant models.
+            # It has no OMMX ID and is excluded from decoded states.
+            status = self.model.addVar(0.0, 0.0)
+            if status != highspy.HighsStatus.kOk:
+                raise OMMXHighsAdapterError(
+                    f"Failed to add auxiliary variable for constant model: {status}"
+                )
             return
 
         lower = np.empty(num_cols, dtype=np.float64)
@@ -1206,8 +1234,7 @@ class OMMXHighsAdapter(SolverAdapter):
                 "HiGHS Adapter currently only supports linear problems"
             )
         if degree == 0:
-            # Keep constants as floats for the feasibility checks in _set_constraints.
-            return ommx_func.constant_term
+            return highs_linear_expression(ommx_func.constant_term)
 
         # Python's sum copies the growing HiGHS expression on every addition.
         # qsum appends terms in place, keeping construction linear in term count.
@@ -1243,31 +1270,36 @@ class OMMXHighsAdapter(SolverAdapter):
                     f"Unsupported constraint family: {type(cid).__name__} (id: {cid})"
                 )
             constr = self.instance.constraints[cid]
-            const_expr = self._linear_expr_conversion(constr.function)
-            if isinstance(const_expr, float):
-                val = const_expr
-                if constr.equality == Equality.EqualToZero:
-                    if abs(val) > 1e-10:
-                        raise OMMXHighsAdapterError(
-                            "Infeasible constant equality constraint"
-                        )
-                    continue
-                elif constr.equality == Equality.LessThanOrEqualToZero:
-                    if val > 1e-10:
-                        raise OMMXHighsAdapterError(
-                            "Infeasible constant inequality constraint"
-                        )
-                    continue
+            function = constr.function
+            const_expr = self._linear_expr_conversion(function)
+            row_index = self.model.getNumRow()
+            if constr.equality == Equality.EqualToZero:
+                row = const_expr == 0
+            elif constr.equality == Equality.LessThanOrEqualToZero:
+                row = const_expr <= 0
             else:
-                row_index = self.model.getNumRow()
-                const_expr = highs_linear_expression(const_expr)
-                if constr.equality == Equality.EqualToZero:
-                    self.model.addConstr(const_expr == 0, str(cid))
-                    self._constraint_rows[cid] = row_index
-                elif constr.equality == Equality.LessThanOrEqualToZero:
-                    self.model.addConstr(const_expr <= 0, str(cid))
-                    self._constraint_rows[cid] = row_index
-                else:
-                    raise OMMXHighsAdapterError(
-                        f"Unsupported constraint equality kind: {constr.equality}"
-                    )
+                raise OMMXHighsAdapterError(
+                    f"Unsupported constraint equality kind: {constr.equality}"
+                )
+            if function.degree() == 0:
+                self._add_constant_row(row, str(cid), function.constant_term)
+            else:
+                self.model.addConstr(row, str(cid))
+            self._constraint_rows[cid] = row_index
+
+    def _add_constant_row(
+        self, row: highs_linear_expression, name: str, constant: float
+    ):
+        _, infinite_bound = self.model.getOptionValue("infinite_bound")
+        infinite_bound = cast(float, infinite_bound)
+        if abs(constant) < infinite_bound:
+            self.model.addConstr(row, name)
+            return
+
+        # Restore the original threshold before adding any other row or
+        # running HiGHS, even if registering this constant row fails.
+        self.model.setOptionValue("infinite_bound", highspy.kHighsInf)
+        try:
+            self.model.addConstr(row, name)
+        finally:
+            self.model.setOptionValue("infinite_bound", infinite_bound)
