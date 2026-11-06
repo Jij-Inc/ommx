@@ -5,6 +5,8 @@ You may already have a candidate from a solver, a sampler, or a manually prepare
 
 **Choose what problem you are evaluating against before comparing results.** A candidate can satisfy the formulation given to a solver while violating a condition that was removed during preparation. Reconstructing its variable values, checking feasibility, and establishing optimality answer different questions.
 
+When a solve returns no candidate, read its termination report to determine what was established. Connecting the conditions identified by candidates or diagnostics back to requirements and input data helps you decide where to revise a plan, requirement, or data value.
+
 ## Separate the problem being solved from the conditions being checked
 
 A production line can make up to 100 units per hour, but only 60 in reduced mode. Suppose a planner proposes producing 65 units per hour. In normal mode the proposal satisfies this production limit. In reduced mode it exceeds the limit by 5, even if a solver was allowed to ignore the reduced-mode limit while searching. The mode and output together determine the verdict.
@@ -43,6 +45,23 @@ For example, in minimization, a best feasible objective of 120 and a proven lowe
 
 For collection, field meanings, and executable examples, see the {class}`SCIP <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>` and {class}`HiGHS <ommx_highs_adapter.HighsDiagnosticsAnalyzer>` diagnostic references. The SCIP Reference illustrates how the bounds converge in a recorded solve. Intermediate records are observations; use the termination report to read the final outcome.
 
+## Read what was established when no candidate is returned
+
+Finding no candidate before a time limit calls for a different decision from concluding that no candidate satisfies the conditions. First identify the problem the solver actually solved and read its termination report.
+
+| Report | What it says about that problem |
+|---|---|
+| No candidate returned | No candidate was obtained; this does not prove infeasibility |
+| Infeasible | It was concluded that no feasible solution exists |
+| Unbounded | It was concluded that feasible objective values can improve without limit |
+| Infeasible or unbounded | One of these was reported, without distinguishing which |
+
+An unknown status or a time limit alone does not establish infeasibility or unboundedness. A time limit can also leave a candidate available. Input conversion failures and solver execution failures are separate from mathematical infeasibility. See the Reference for {class}`~ommx.adapter.NoSolutionReturned`, {class}`~ommx.InfeasibleDetected`, {class}`~ommx.adapter.UnboundedDetected`, and {class}`~ommx.InfeasibleOrUnboundedDetected` for the exception meanings.
+
+OMMX requires adapters to interpret backend reports against the input actually solved. Candidate values must be mapped and evaluated against the same problem, and evaluation alone must not become an optimality claim. These are part of the {ref}`adapter contract <adapter-responsibilities>`. Mapping a report to an OMMX result does not itself independently validate a certificate. Supported termination reports and diagnostics vary by adapter; consult the {doc}`individual adapter API references </api/adapters>` for details.
+
+Whether a conclusion carries back to the original problem depends on what each transformation preserves. For example, a subproblem that fixes output to 65 units and selects reduced mode contradicts the limit of 60. This does not establish infeasibility of the original problem, where output and mode remain choices. Similarly, infeasibility after adding a cost threshold does not imply infeasibility without that extra condition.
+
 ## Compare candidates using the same criteria
 
 Common evaluation makes results from different methods easier to compare, provided you align the criteria:
@@ -54,3 +73,15 @@ Common evaluation makes results from different methods easier to compare, provid
 {class}`SampleSet <ommx.SampleSet>` supports evaluating and selecting among supplied candidates; its best candidate is best within that set under the chosen criteria. Comparing solving methods additionally requires their execution conditions, such as time limits, to be considered separately. The {mod}`Adapter comparison Reference <ommx.adapter>` provides a complete example of solving one model with HiGHS and SCIP, comparing the results, and plotting the selected values.
 
 For business decisions, you may also need costs, distances, or other metrics beyond the objective. {class}`Named functions <ommx.NamedFunction>` evaluate those metrics without changing what is optimized. {meth}`Named result extraction <ommx.Solution.extract_decision_variables>` returns values using business-facing labels. These capabilities help bring a result back to its application; they do not add a feasibility or optimality guarantee.
+
+## Connect results back to requirements and input data
+
+Suppose you convert the reduced-mode limit into an ordinary inequality. With output $q$ and a variable $r$ equal to 1 in reduced mode, the normal-mode upper bound of 100 gives $q\leq100-40r$. The candidate $q=65, r=1$ violates this inequality. Tracing the generated constraint's provenance connects it to the original indicator constraint: at most 60 units in reduced mode.
+
+In OMMX, labels identify mathematical objects, and {class}`provenance <ommx.Provenance>` connects a generated ordinary constraint to its source special constraint. {attr}`Solution constraint rows <ommx.Solution.constraints>` retain labels, provenance, removal reasons, and evaluation information. The {meth}`special-constraint lowering example <ommx.Instance.lower_special_constraints>` shows how to inspect source and generated constraints.
+
+To identify the corresponding business declaration or input data, combine this information with the mapping maintained by a modeler such as JijModeling or by your application. For example, a constraint label can identify the production line and time period whose planned output, operating mode, capacity data, or requested deadline needs inspection. The user then decides whether to revise the plan, correct an input error, or reconsider a requirement.
+
+Tracing an origin, checking a candidate's violation, and establishing that the requirements cannot all hold are separate tasks. This candidate's limit violation and provenance alone do not establish infeasibility or identify conflicting requirements. Consult each operation's API Reference for the available provenance information and what it retains through a transformation.
+
+The responsibility to connect results back to requirements remains the same when new declarations or transformations are added. Their design must connect OMMX's correspondence between mathematical objects and transformations with the modeler's or application's mapping to business declarations and data. Carrying this correspondence through combinations of transformations is part of the contract for extending the system while preserving the meaning of results.

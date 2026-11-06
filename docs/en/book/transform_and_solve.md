@@ -16,9 +16,23 @@ The indicator states explicitly which operating mode activates the limit. The in
 
 When the solver supports special constraints directly, you may also want to make structure explicit. For example, OMMX can {meth}`express a group of linear constraints as an SOS1 constraint <ommx.Instance.promote_sos1_big_m>` when they match a supported pattern. The solver can then use the explicit condition that at most one member may be nonzero.
 
+(adapter-responsibilities)=
+## Responsibilities an adapter must uphold
+
+An adapter is responsible for the mathematical correspondence between an OMMX problem and a backend's inputs and outputs. OMMX requires the following contract:
+
+- State which problems it accepts, and preserve the meaning of their conditions and objective when passing them to the backend. It must not silently omit unsupported constraints.
+- Map candidate values to OMMX variables and evaluate them against the same mathematical problem that was passed to the backend.
+- Interpret candidate availability, termination reasons, and claims such as optimality or infeasibility against the problem actually solved. Failure to find a candidate must not become an infeasibility claim, and candidate evaluation alone must not become an optimality claim.
+- Base conclusions about the original problem on the correspondences and preservation guarantees of the transformations used. It must not carry back a conclusion whose required guarantee has not been established.
+
+The backend owns search and its reports; common OMMX processing owns problem transformations, candidate evaluation, and transformation guarantees. The adapter connects them so that the subject and meaning of a report agree. Independent certificate validation is a separate operation from interpreting a report.
+
+Coverage of this contract varies by feature and adapter. Consult the {doc}`individual adapter API references </api/adapters>` for input requirements, supported results and diagnostics, and usage. The {class}`~ommx.adapter.SolverAdapter` and {class}`~ommx.adapter.SamplerAdapter` references define the APIs for implementing adapters.
+
 ## Separate input requirements from permitted transformations
 
-An **Adapter** connects an Instance to a backend's input and output. Its input requirements describe the representation it can accept directly: variable kinds, expression forms, constraint families, and optimization direction. A familiar problem name alone is not enough to decide whether an input matches. Even mathematically equal expressions can have different stored forms.
+An **Adapter** connects an Instance to a backend's input and output and interprets backend reports against the problem actually solved. Its input requirements describe the representation it can accept directly: variable kinds, expression forms, constraint families, and optimization direction. A familiar problem name alone is not enough to decide whether an input matches. Even mathematically equal expressions can have different stored forms.
 
 OMMX calls the process of applying selected transformations toward a target representation **Preparation**. The target says what the result must satisfy; the policy says which transformations may be used. For example, you can choose to express linear indicator constraints as ordinary inequalities and pass SOS1 constraints directly to the solver. Creating a policy does not transform a problem, and reaching the target does not mean every allowed transformation was needed.
 
@@ -65,10 +79,21 @@ If preparation cannot reach the target, inspect the unmet input conditions and t
 
 The {mod}`Adapter Reference <ommx.adapter>` explains the execution paths for recommended or explicitly chosen preparation. The {doc}`adapter catalogue </api/adapters>` leads to each backend's contracts. Solver names are not interchangeable with problem classes: for example, OpenJij SA can accept Binary polynomials beyond quadratic degree, so its actual input requirements are the useful starting point.
 
-After execution, interpret the candidate against the corresponding problem and its retained evaluation information. A successful solve call or a favorable backend objective does not replace that check. [Evaluate candidates and interpret results](./evaluate_and_interpret.md) explains how to separate reconstructed values, reported objectives, feasibility, and optimality when comparing results.
+After execution, interpret the candidate against the corresponding problem and its retained evaluation information. A successful solve call or a favorable backend objective does not replace that check. Even when no candidate is returned, read termination reports against the problem actually solved; carrying conclusions back to the original problem requires the transformations' correspondences and preservation guarantees. [Evaluate candidates and interpret results](./evaluate_and_interpret.md) separates reconstructed values, reported objectives, feasibility, and optimality, and explains conclusions without candidates and how results connect back to requirements.
 
-## Build on common processing
+(shared-analysis-and-transformations)=
+## Combine analyses, transformations, and guarantees
 
-OMMX already provides individual transformations, policies that select supported operations, and candidate evaluation. It also provides {meth}`bound tightening <ommx.Instance.tighten_bounds_simultaneously_once>`: for example, a constraint $x\leq3$ can refine a declared upper bound of $10$. This operation applies one simultaneous update; it is not a complete presolver that repeats until convergence or detects every infeasible problem.
+A problem that a solver already accepts may still be reduced through preprocessing, or **Presolve**. Selecting and repeating such operations serves a different purpose from Preparation, which establishes input requirements.
 
-The development direction is to accumulate both transformation techniques and the knowledge of when to select and repeat them. Keeping these operations on the common representation lets new modelers and solving methods reuse that work. Today, choose the supported operations and read their guarantees; general automatic orchestration remains a development direction.
+OMMX is a system for adding and combining analyses and transformations on a common problem representation. Its operations have the following responsibilities:
+
+- An analysis inspects properties and structure without rewriting the problem and states the conditions on which its results depend.
+- A transformation rewrites the problem using analysis results and applicability conditions, and states its correspondence with the original problem and the guarantees it preserves.
+- Processing that combines analyses and transformations decides whether analysis results remain reusable after a change and connects transformations according to the required guarantees.
+
+For example, a transformation may use a bound inferred from a constraint. After that constraint is removed, the same bound may no longer be justified. The processing that combines these operations is responsible for checking the analysis dependencies and deciding whether to retain, update, or recompute the result.
+
+New analyses and transformations must define their applicability conditions and guarantees within this division of responsibilities. Users choose the guarantees their task requires; the design makes combinations that satisfy them reusable as common processing. As declaration types and solving methods grow, the contract connecting each transformation to reconstruction and result interpretation remains shared.
+
+Available operations, combinations, and guarantees vary by feature. Consult each operation's API Reference, such as {meth}`Preparation <ommx.Instance.prepare>` or {meth}`bound tightening <ommx.Instance.tighten_bounds_simultaneously_once>`, for its specific applicability conditions and guarantees.

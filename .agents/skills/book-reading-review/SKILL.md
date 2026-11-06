@@ -1,16 +1,15 @@
 ---
 name: book-reading-review
-description: Plan, write, or review OMMX README and Book explanations of purpose, adoption value, capabilities, reader choices, and independent reading paths. Check prerequisites, introduction order, cognitive load, and explanation ownership across the Book and Reference; audit major SDK feature coverage when requested. Generated API wiring or Sphinx build failures alone belong to sphinx-docs-review.
+description: Plan, write, or review OMMX README and Book explanations of purpose, responsibility contracts, extensible design, adoption value, reader choices, and independent reading paths. Check prerequisites, introduction order, cognitive load, and explanation ownership across the Book and Reference; audit major SDK feature coverage when requested. Generated API wiring or Sphinx build failures alone belong to sphinx-docs-review.
 ---
 
 # Book Reading Review
 
-Review what a reader can understand, decide, or do at each point. OMMX aims to
-let transformation and preprocessing techniques accumulate and be reused across
-modelers and solving methods through a common problem representation. Keep that
-purpose connected to concrete capabilities, with current availability distinct
-from future development. Explain it in optimization terms without requiring
-compiler knowledge.
+Review what a reader can understand, decide, or do at each point. OMMX is designed
+as an extensible system: declarations, analyses, and transformations are added
+on a common problem representation while preserving shared meanings and
+responsibilities. Connect that design to adoption value and reader choices.
+Explain it in optimization terms without requiring compiler knowledge.
 
 OMMX defines problem and candidate semantics independently of a solver. Keep
 that common model separate from an Adapter's execution contract and the
@@ -52,17 +51,46 @@ and prerequisites accurate without treating a Book build as execution evidence.
 
 ## Check purpose and capability explanations
 
-For README and overview work, check whether readers can explain what OMMX aims
-to provide, why it matters to them, what work they can currently delegate, and
-where to go next. A list of APIs or an aspiration alone does not answer those
-questions. Keep the modeler, common OMMX processing, and execution backend's
-responsibilities understandable without a catalogue of implementation details.
+For README and overview work, check whether readers can explain what OMMX
+provides, why it matters to them, which responsibilities belong to common
+processing, which choices remain theirs, and where to go next. A list of APIs
+or an aspiration alone does not answer those questions. Keep the modeler,
+common OMMX processing, Adapter, and execution backend's responsibilities
+understandable without a catalogue of implementation details.
 
 For a capability explanation, identify its use, its place in the overall flow,
 and the choices left to the reader. A small example, diagram, or counterexample
 should teach the meaning or decision at hand. Retain the conditions needed to
 interpret that example correctly; do not require a full implementation recipe
 for every feature in the Book.
+
+## Explain responsibility contracts and extensible design
+
+The Book defines OMMX's accepted domain responsibilities independently of how
+completely individual implementations realize them. State these contracts
+explicitly; do not weaken them to match implementation gaps or relocate them
+entirely to API Reference. For example, an Adapter must preserve the meaning of
+accepted input, interpret backend reports against the problem actually solved,
+and carry conclusions back only with the required transformation guarantees.
+A stated contract is not evidence that every implementation already meets it.
+API Reference owns the concrete API contracts and supported scope.
+
+Explain how new declarations, analyses, transformations, and solving methods
+join the same system while retaining its semantic and responsibility boundaries.
+Integrate this explanation into the passages that own those relationships. Do
+not turn extensibility into a separate development-direction section or a list
+of planned features. Explain what must stay true as components are added, such
+as retaining structure before choosing a formulation, stating applicability and
+preservation guarantees, and maintaining the correspondence needed to interpret
+results. Use examples to teach those principles without implying that every
+example has a complete implementation.
+
+Treat implementation coverage as supporting information. A brief note that
+support varies by feature or Adapter, with a usable API Reference destination,
+is normally sufficient. Do not make an ordinary Book edit depend on a detailed
+implementation census or maintain a second availability matrix in the Book.
+Verify concrete API calls and executable claims when the text relies on them;
+perform broader implementation or feature-coverage audits when requested.
 
 ## Audit feature coverage when requested
 
@@ -119,13 +147,15 @@ understand or do. Inspect retained passages as well as newly added lines.
 Assign ownership by the reader's question, not by a Tutorial/How-to/Guide label:
 
 - README explains the project's purpose, present adoption value, and entry points.
-- Book explains the overall model, available capabilities, why and when to use
-  them, choices across capabilities, and result interpretation through prose,
-  mathematics, diagrams, and explanatory pseudocode.
-- API Reference owns class meanings, components, basic usage, and executable
-  examples as well as exact argument/default rules, exhaustive cases, execution
-  order, formulas, preconditions, errors, mutation guarantees, and numerical
-  contracts. Its executable API examples belong in the doctest workflow.
+- Book defines the overall model and responsibility contracts, explains how the
+  system accommodates new components, and teaches adoption, choices across
+  capabilities, and result interpretation through prose, mathematics, diagrams,
+  and explanatory pseudocode.
+- API Reference owns concrete API contracts and supported scope: class meanings,
+  components, basic usage, executable examples, exact argument/default rules,
+  exhaustive cases, execution order, formulas, preconditions, errors, mutation
+  guarantees, and numerical contracts. Its executable API examples belong in
+  the doctest workflow.
 - Independent Examples own complete runnable workflows whose value comes from
   following an application end to end; their tests maintain executability.
 - Setup, CLI/operational reference, and format/integration specifications own
