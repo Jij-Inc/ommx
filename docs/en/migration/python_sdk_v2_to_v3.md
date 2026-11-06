@@ -69,6 +69,35 @@ Look up a regular constraint as `model.constraints[ConstraintID(7)]`. The collec
 
 On a model, an active row is an attached handle. Calling `row.set_name("limit")` updates the model. Call `row.detach()` to keep an independent copy. Replace v2's `add_name` and `add_description` with `set_name` and `set_description`. Use `set_parameters` to replace the whole mapping and `add_parameters` to merge entries. Read fixed variable values from `model.fixed_decision_variables()`. The model owns that state even when a variable definition has been detached. See {class}`~ommx.ConstraintCollection` and {class}`~ommx.DecisionVariable`.
 
+(migration-slack-source)=
+### Follow generated IDs after Integer-slack conversion
+
+`convert_inequality_to_equality_with_integer_slack` and
+`add_integer_slack_to_inequality` retain the original inequality under its
+original ID in `removed_constraints`. The generated active row has a fresh ID:
+
+```python
+from ommx import ConstraintID
+
+model.convert_inequality_to_equality_with_integer_slack(source_id, 31)
+source = model.removed_constraints[ConstraintID(source_id)]
+generated_id = source.removed_reason_parameters.get("constraint_id")
+if generated_id is not None:
+    generated = model.constraints[ConstraintID(int(generated_id))]
+```
+
+A trivially satisfied source is removed without generating a row. Otherwise,
+the removal parameters also contain `slack_variable_id`, and the generated
+row appends `ProvenanceKind.Constraint` naming its source. Evaluation reports
+the original condition and the auxiliary condition separately.
+
+Preparation carries source-keyed penalty weights through this lineage: an
+active row's own ID takes priority, followed by the nearest retained regular
+source. Every supplied key must be used; remove shadowed ancestor keys rather
+than passing both source and generated weights for the same row. Use v2 bytes
+to preserve typed provenance. v1 retains source rows and removal parameters
+but omits provenance.
+
 (migration-constraint-metadata)=
 ### Check where a metadata edit lands
 

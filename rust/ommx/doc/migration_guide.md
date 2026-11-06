@@ -20,6 +20,24 @@ type includes `Regular`; selecting it for special-constraint lowering is an erro
 This section covers the migration to stage-parameterized constraints
 landed in `3.0.0-alpha.1`.
 
+## Integer-slack source IDs
+
+[`Instance::convert_inequality_to_equality_with_integer_slack`](crate::Instance::convert_inequality_to_equality_with_integer_slack)
+and [`Instance::add_integer_slack_to_inequality`](crate::Instance::add_integer_slack_to_inequality)
+now retain the original inequality, ID, and context in `removed_constraints`.
+Select the generated active row using the source removal parameter
+`constraint_id`; `slack_variable_id` identifies its auxiliary variable.
+Trivially satisfied sources are removed without either parameter or a generated row.
+Generated rows append [`Provenance::Constraint`](crate::Provenance::Constraint).
+
+Keyed [`FixedPenaltyPreparation`](crate::FixedPenaltyPreparation) weights can
+name a retained regular source: the active row's own ID wins, otherwise the
+nearest retained regular source in its provenance is used. All supplied keys
+must be used, so shadowed ancestor keys are errors. Direct
+[`Instance::penalty_method_with_fixed_weights`](crate::Instance::penalty_method_with_fixed_weights)
+continues to require exactly the active IDs. v1 serialization preserves source
+rows and removal parameters but omits typed provenance; use v2 for full lineage.
+
 ## Overview
 
 `Constraint` is now generic over a lifecycle stage, its `ConstraintID`

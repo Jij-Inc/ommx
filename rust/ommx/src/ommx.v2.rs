@@ -84,13 +84,12 @@ impl Feature {
 }
 /// One transformation step in a constraint's lineage.
 ///
-/// Provenance records special-constraint origins when a special constraint is
-/// converted or propagated into another constraint family.
+/// Provenance records the source constraint when a constraint is transformed.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Provenance {
-    #[prost(oneof = "provenance::Source", tags = "1, 2, 3")]
+    #[prost(oneof = "provenance::Source", tags = "1, 2, 3, 4")]
     pub source: ::core::option::Option<provenance::Source>,
 }
 /// Nested message and enum types in `Provenance`.
@@ -105,6 +104,8 @@ pub mod provenance {
         OneHotConstraintId(u64),
         #[prost(uint64, tag = "3")]
         Sos1ConstraintId(u64),
+        #[prost(uint64, tag = "4")]
+        ConstraintId(u64),
     }
 }
 /// Constraint sidecar owned by one constraint collection.

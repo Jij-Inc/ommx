@@ -320,8 +320,12 @@ pub struct FixedPenaltyPreparation {
 impl FixedPenaltyPreparation {
     /// Select the keyed fixed-weight penalty owner operation.
     ///
-    /// The keys of ``weights`` must be exactly the active regular constraint
-    /// IDs. Each value is the corresponding $w_i$ in the class formula.
+    /// Each active regular constraint uses its own ID's weight if supplied,
+    /// otherwise the nearest retained regular source in its provenance.
+    /// This carries source-keyed weights through Integer-slack introduction.
+    /// Every active row needs a weight and every supplied key must be used;
+    /// unknown keys and ancestor keys shadowed by nearer keys raise ``ValueError``.
+    /// Each value is the corresponding $w_i$ in the class formula.
     /// ``atol`` is used by the owner operation to accept a penalty magnitude
     /// down to ``-atol`` and normalize a tolerated negative value to zero. Every
     /// weight must be finite.

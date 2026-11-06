@@ -9,13 +9,13 @@ import "ommx/v2/common.proto";
 
 // One transformation step in a constraint's lineage.
 //
-// Provenance records special-constraint origins when a special constraint is
-// converted or propagated into another constraint family.
+// Provenance records the source constraint when a constraint is transformed.
 message Provenance {
   oneof source {
     uint64 indicator_constraint_id = 1;
     uint64 one_hot_constraint_id = 2;
     uint64 sos1_constraint_id = 3;
+    uint64 constraint_id = 4;
   }
 }
 
