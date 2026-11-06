@@ -16,7 +16,10 @@ fn convert_objective_pair(sense: &mut Sense, objective: &mut Function, target: S
 }
 
 impl Instance {
-    /// Convert only the active, solver-facing objective to `target`.
+    /// Convert the Active Formulation objective and sense to `target`.
+    ///
+    /// Retains the output semantics as Interpretation Context on this instance;
+    /// see [`Instance`] for these roles of the intermediate representation.
     ///
     /// # Postconditions
     ///
@@ -228,6 +231,11 @@ fn materialize_constraint_collection_parameters<T: ConstraintType>(
 
 impl ParametricInstance {
     /// Materialize every parameter into an [`Instance`].
+    ///
+    /// Specializes parameter-bearing expressions in both the Active Formulation
+    /// and Interpretation Context defined on [`Instance`], including removed
+    /// constraints, output objectives, named functions, and dependency
+    /// expressions. The returned instance retains this specialized context.
     ///
     /// # Postconditions
     ///

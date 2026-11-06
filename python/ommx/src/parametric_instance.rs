@@ -394,6 +394,11 @@ impl ParametricInstance {
 
     /// Substitute parameters to yield an instance.
     ///
+    /// Specializes parameter-bearing expressions in both the **Active Formulation**
+    /// and **Interpretation Context** defined on {class}`~ommx.Instance`, including
+    /// removed constraints, output objectives, named functions, and dependency
+    /// expressions. The returned Instance retains this specialized context.
+    ///
     /// Provide a dict mapping every declared parameter ID to its numerical value,
     /// including parameters not referenced by an expression. The original
     /// {class}`~ommx.ParametricInstance` is unchanged and can be materialized again.

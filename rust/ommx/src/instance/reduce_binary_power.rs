@@ -8,9 +8,10 @@ impl Instance {
     /// derived from this instance's decision-variable table.
     ///
     /// Rewrites the active objective, active regular and indicator constraint
-    /// bodies. Named functions,
+    /// bodies: these belong to the Active Formulation defined on [`Instance`].
+    /// Interpretation Context expressions are left unchanged: named functions,
     /// decision-variable dependency right-hand sides, removed constraints, and
-    /// an existing output objective are left unchanged.
+    /// an existing output objective.
     /// One-hot and SOS1 constraints contain variable sets rather than expression
     /// bodies and do not require this rewrite.
     ///
