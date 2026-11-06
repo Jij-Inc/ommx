@@ -186,6 +186,10 @@ impl Instance {
 /// Evaluation reconstructs the substituted variables before evaluating these
 /// expressions. This does not establish equivalence of optimization problems;
 /// see [`Substitute`] for the caller's control over domain preservation.
+/// Every nonempty generic substitution invalidates the optimality-transport
+/// guarantee of a retained output objective, including one captured by this
+/// operation. Algebraic substitution alone does not prove ordering after
+/// discrete reconstruction. Exact integer encodings use their own contract.
 /// Fixed and dependent variables cannot be substitution targets. To extend
 /// a representation, substitute its remaining independent variables.
 ///
@@ -212,7 +216,8 @@ impl Instance {
 /// let output = instance.output_objective().cloned();
 ///
 /// substitute(&mut instance, [(original, Function::from(linear!(1)))]).unwrap();
-/// assert_eq!(instance.output_objective(), output.as_ref());
+/// assert_eq!(instance.output_objective().unwrap().function(), output.unwrap().function());
+/// assert!(!instance.output_objective().unwrap().preserves_optimality());
 /// let state = State::from(HashMap::from([(1, 1.0)]));
 /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), -1.0);
 /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
@@ -233,6 +238,10 @@ impl Substitute for Instance {
         self.decision_variable_dependency =
             std::mem::take(&mut self.decision_variable_dependency).substitute_acyclic(acyclic)?;
         self.commit_substitution(plan);
+        // Generic assignments do not establish that actual reconstruction,
+        // including discrete canonicalization, preserves objective ordering.
+        // Exact encodings deliberately use apply_encoding_substitution instead.
+        self.invalidate_output_objective_optimality();
         Ok(self)
     }
 
@@ -359,6 +368,10 @@ impl Substitute for ParametricInstance {
         // Compose reconstruction rules; named functions use the reconstructed state.
         substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
 
+        if let Some(output) = self.output_objective.as_mut() {
+            output.preserves_optimality = false;
+        }
+
         Ok(self)
     }
 
@@ -376,6 +389,62 @@ mod tests {
     use super::*;
     use crate::{coeff, constraint::Equality, linear, DecisionVariable, Evaluate, Sense};
     use std::collections::BTreeMap;
+
+    #[test]
+    fn generic_substitution_invalidates_ordering_through_discrete_reconstruction() {
+        let source = Instance::new(
+            Sense::Minimize,
+            Function::from(((coeff!(4194304.0) * linear!(0)).unwrap() - linear!(1)).unwrap()),
+            BTreeMap::from([
+                (VariableID::from(0), DecisionVariable::binary()),
+                (VariableID::from(1), DecisionVariable::binary()),
+            ]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let replacement = Function::from((coeff!(0.000000476837158203125) * linear!(1)).unwrap());
+        for existing_output in [false, true] {
+            let mut source = source.clone();
+            if existing_output {
+                source.capture_output_objective();
+            }
+            let instance = source
+                .clone()
+                .substitute_one(VariableID::from(0), &replacement)
+                .unwrap();
+            let materialized = ParametricInstance::from(source)
+                .substitute_one(VariableID::from(0), &replacement)
+                .unwrap()
+                .with_parameters(crate::v1::Parameters::default())
+                .unwrap();
+            for transformed in [instance, materialized] {
+                assert!(!transformed
+                    .output_objective()
+                    .unwrap()
+                    .preserves_optimality());
+                for optimality in [
+                    crate::v1::Optimality::Optimal,
+                    crate::v1::Optimality::NotOptimal,
+                ] {
+                    assert_eq!(
+                        transformed.map_active_optimality(optimality),
+                        crate::v1::Optimality::Unspecified
+                    );
+                }
+                let atol = ATol::new(1e-6).unwrap();
+                for value in [0.0, 1.0] {
+                    let state = crate::v1::State::from_iter([(1, value)]);
+                    assert_eq!(
+                        transformed.objective().evaluate(&state, atol).unwrap(),
+                        value
+                    );
+                    let solution = transformed.evaluate(&state, atol).unwrap();
+                    assert_eq!(*solution.objective(), -value);
+                    assert!(solution.feasible());
+                }
+            }
+        }
+    }
 
     #[test]
     fn repeated_substitution_reports_the_assigned_variable() {

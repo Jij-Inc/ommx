@@ -7518,6 +7518,12 @@ class Instance:
         linking and bound constraints explicitly. Deliberately non-equivalent
         substitutions are also supported; OMMX does not require or establish
         preservation of the feasible region or optimal solutions.
+        Every nonempty substitution sets a retained output objective's
+        ``preserves_optimality`` to ``False``, including an objective captured
+        by this call. Reconstruction may round discrete values and change
+        objective ordering. {meth}`~ommx.Instance.map_active_optimality` then
+        returns ``Optimality.Unspecified``. This conservative rule also applies
+        to simple renaming; built-in integer encodings have a separate contract.
 
         The substituted variable's definition is retained and its value becomes
         dependent on the replacement expression. {meth}`~ommx.Instance.evaluate`
@@ -10615,6 +10621,11 @@ class ParametricInstance:
         Deliberately non-equivalent substitutions are also supported; OMMX
         does not require or establish preservation of the feasible region or
         optimal solutions.
+        Every nonempty substitution invalidates the optimality guarantee of a
+        retained output objective, including one captured by this call. Its
+        ``preserves_optimality`` is ``False`` after parameter materialization
+        because algebraic substitution does not prove ordering through discrete
+        reconstruction. This conservative rule also applies to simple renaming.
 
         Raises ``ValueError`` on cyclic or recursive assignments, undefined
         IDs, when a parameter ID is used as an assignment target, or when

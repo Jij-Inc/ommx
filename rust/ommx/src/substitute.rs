@@ -43,6 +43,10 @@ pub use error::SubstitutionError;
 /// linking and bound constraints.
 /// Deliberately non-equivalent substitutions are also supported; this operation
 /// does not establish preservation of the feasible region or optimal solutions.
+/// Nonempty generic substitution also invalidates any retained output-objective
+/// optimality guarantee: reconstruction can canonicalize discrete values and
+/// change ordering even when the algebraic rewrite is exact. Instance-owned
+/// integer encodings establish their guarantees separately.
 ///
 /// # Example
 ///

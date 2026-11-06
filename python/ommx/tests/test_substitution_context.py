@@ -19,6 +19,116 @@ from ommx import (
 
 
 @pytest.mark.parametrize("parametric", [False, True])
+@pytest.mark.parametrize("existing_output", [False, True])
+def test_substitution_rounding_cannot_transport_optimality(parametric, existing_output):
+    x, b = [DecisionVariable.binary(i) for i in range(2)]
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=2**22 * x - b,
+        decision_variables=[x, b],
+        constraints={},
+    )
+    if existing_output:
+        instance.convert_active_objective(Sense.Maximize)
+    target = instance.as_parametric_instance() if parametric else instance
+    target.substitute({0: 2**-21 * b})
+    if isinstance(target, ParametricInstance):
+        target = ParametricInstance.from_v2_bytes(target.to_v2_bytes()).with_parameters(
+            {}
+        )
+    for concrete in (target, Instance.from_v2_bytes(target.to_v2_bytes())):
+        output = concrete.output_objective
+        assert output is not None and not output.preserves_optimality
+        for status in (Optimality.Optimal, Optimality.NotOptimal):
+            assert concrete.map_active_optimality(status) == Optimality.Unspecified
+        samples = concrete.evaluate_samples({0: {1: 0}, 1: {1: 1}}, atol=1e-6)
+        for value in (0, 1):
+            assert concrete.objective.evaluate({1: value}) == (
+                -value if existing_output else value
+            )
+            solution = concrete.evaluate({1: value}, atol=1e-6)
+            assert solution.feasible
+            assert solution.state.entries[0] == 0
+            assert solution.objective == -value
+            assert samples.get(value).objective == -value
+
+
+@pytest.mark.parametrize("parametric", [False, True])
+def test_substitution_invalidates_existing_guarantee_without_active_objective_change(
+    parametric,
+):
+    x, y, z = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x,
+        decision_variables=[x, y, z],
+        constraints={},
+    )
+    instance.convert_active_objective(Sense.Maximize)
+    target = instance.as_parametric_instance() if parametric else instance
+    target.substitute({})
+    active, output = target.objective, target.output_objective
+    assert output is not None and output.preserves_optimality
+    target.substitute({1: z})
+    replaced_output = target.output_objective
+    assert replaced_output is not None
+    assert target.objective == active
+    assert replaced_output.function == output.function
+    assert replaced_output.sense == output.sense
+    assert not replaced_output.preserves_optimality
+
+
+@pytest.mark.parametrize("method", ["log_encode", "unary_encode"])
+@pytest.mark.parametrize("invalidate_first", [False, True])
+def test_exact_encoding_does_not_restore_lost_substitution_guarantee(
+    method, invalidate_first
+):
+    x = DecisionVariable.integer(0, lower=0, upper=3)
+    y, z = DecisionVariable.binary(1), DecisionVariable.binary(2)
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x + y,
+        decision_variables=[x, y, z],
+        constraints={},
+    )
+    instance.convert_active_objective(Sense.Maximize)
+    if invalidate_first:
+        instance.substitute({1: z})
+    getattr(instance, method)({0})
+    output = instance.output_objective
+    assert output is not None
+    assert output.preserves_optimality == (not invalidate_first)
+    expected = Optimality.Unspecified if invalidate_first else Optimality.Optimal
+    assert instance.map_active_optimality(Optimality.Optimal) == expected
+
+
+@pytest.mark.parametrize("parametric", [False, True])
+def test_substitution_without_distinct_output_keeps_identical_objective_ordering(
+    parametric,
+):
+    x, y, b = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=b,
+        decision_variables=[x, y, b],
+        constraints={},
+    )
+    target = instance.as_parametric_instance() if parametric else instance
+    target.substitute({0: y})
+    target.substitute({1: 2**-21 * b})
+    concrete = (
+        target.with_parameters({}) if isinstance(target, ParametricInstance) else target
+    )
+    assert concrete.output_objective is None
+    # No output pair means the active objective itself is evaluated for output.
+    assert concrete.map_active_optimality(Optimality.Optimal) == Optimality.Optimal
+    for value in (0, 1):
+        solution = concrete.evaluate({2: value}, atol=1e-6)
+        assert solution.objective == concrete.objective.evaluate({2: value})
+        assert solution.state.entries[0] == solution.state.entries[1] == 0
+
+
+@pytest.mark.parametrize("parametric", [False, True])
 def test_reassigning_dependency_is_rejected_without_changing_output(parametric):
     x, y, z = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
@@ -31,11 +141,11 @@ def test_reassigning_dependency_is_rejected_without_changing_output(parametric):
     target = instance.as_parametric_instance() if parametric else instance
     target.substitute({0: y})
     output = target.output_objective
-    assert output is not None and output.preserves_optimality
-    # Extending a substitution chain preserves the objective ordering.
+    assert output is not None and not output.preserves_optimality
+    # Extending a chain remains supported without claiming proven ordering.
     target.substitute({1: z})
     output = target.output_objective
-    assert output is not None and output.preserves_optimality
+    assert output is not None and not output.preserves_optimality
     # Overwriting its source interpretation would reverse that ordering.
     before = target.to_v2_bytes()
     with pytest.raises(ValueError, match="already fixed or dependent"):
@@ -46,15 +156,17 @@ def test_reassigning_dependency_is_rejected_without_changing_output(parametric):
     )
     for concrete in (result, Instance.from_v2_bytes(result.to_v2_bytes())):
         output = concrete.output_objective
-        assert output is not None and output.preserves_optimality
+        assert output is not None and not output.preserves_optimality
         assert concrete.objective.evaluate({2: 0}) == 0
         solution = concrete.evaluate({2: 0})
         assert solution.objective == 0
         assert solution.get_named_function_by_id(9).evaluated_value == 0
-        assert concrete.map_active_optimality(Optimality.Optimal) == Optimality.Optimal
+        assert (
+            concrete.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified
+        )
         assert (
             concrete.map_active_optimality(Optimality.NotOptimal)
-            == Optimality.NotOptimal
+            == Optimality.Unspecified
         )
 
 
