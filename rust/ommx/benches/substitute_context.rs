@@ -1,28 +1,30 @@
-//! Diagnostic for the clone-backed generic in-place substitution helpers (#1046).
+//! PR regression guardrails for the generic in-place substitution helpers (#1046).
 //! Origin: https://github.com/Jij-Inc/ommx/issues/1046.
 //!
-//! Purpose/regression: isolate whole-owner atomic staging from semantic rewriting.
+//! Purpose/regression: detect additional retained-table scans, clones, or rebuilds
+//! in each public helper by comparing the same fixed input across commits.
 //! Boundary: Rust free helpers on Instance and ParametricInstance, not their
 //! consuming trait methods and not the owner-specific integer-encoding path.
-//! Independent variable: N unrelated NamedFunctions OR removed constraints.
+//! Input: 4,096 unrelated NamedFunctions OR removed constraints, measured separately.
 //! Two variables, one active objective, one assignment, and expression sizes stay
-//! fixed. No active rows or dependency chains grow with N.
-//! Cost model: fixed rewrite plus cloning and disposing the retained table;
-//! expect p ~= 1 today. This is a diagnostic hypothesis, not an accepted no-scan
-//! contract for generic helpers. Use same-run ratios/exponents; profile if needed
-//! to distinguish cloning from necessary work before proposing an optimization.
+//! fixed. Both roots and all three helpers have distinct entry paths, so retain
+//! one input per root/helper/table combination rather than three sizes of each.
+//! Cost model: fixed rewrite plus the helper's existing owner clone and disposal.
+//! This baseline includes retained-context copying; it is not the no-traversal
+//! contract of integer encoding. A PR regression matters even if its exponent
+//! stays linear. Cross-size analysis and profiles are manual follow-up as needed.
 //! Expected profile: the free helper enters owner Clone, including retained-table
 //! allocation/copy, then fixed active rewriting and old-owner/table drop on commit.
-//! Input rationale: 256/1024/4096 rows expose scaling without a large full-suite
-//! workload. Setup/reset and final fixture disposal are outside measurement;
+//! Input rationale: 4,096 rows expose redundant table work with bounded case cost.
+//! Setup/reset and final fixture disposal are outside measurement;
 //! cloning and replacing the old owner INSIDE the free helper remain timed.
-//! Lifecycle/run policy: manual diagnostic, included only in the existing full
-//! suite (OMMX_BENCHMARK_SUITE=full). Do not add 36 cases to automatic guardrails.
+//! Lifecycle/run policy: 12 persistent guardrails in the existing Rust suite,
+//! compared on ready PRs, main, and releases without an opt-in environment flag.
 //! Runtime budget: keep each optimized native case below a few milliseconds;
-//! account for build-included job cost before promoting a persistent subset.
+//! account for build-included job cost before adding more cases.
 //!
 //! Local run:
-//! OMMX_BENCHMARK_SUITE=full cargo bench -p ommx --no-default-features --bench substitute_context
+//! cargo bench -p ommx --no-default-features --bench substitute_context
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use ommx::{
@@ -75,13 +77,16 @@ fn benchmark_owner<T: Substitute<Output = T> + Clone>(
     family: &str,
     make: impl Fn(usize) -> T,
 ) {
+    const NUM_CONTEXT_ROWS: usize = 4096;
+    let source = make(NUM_CONTEXT_ROWS);
     let rhs = Function::from(linear!(1));
     let assignments = AcyclicAssignments::new([(VariableID::from(0), rhs.clone())]).unwrap();
     for helper in ["substitute", "substitute_one", "substitute_acyclic"] {
         let mut group = c.benchmark_group(format!("{family}/{helper}"));
-        for count in [256, 1024, 4096] {
-            let source = make(count);
-            group.bench_with_input(BenchmarkId::from_parameter(count), &source, |b, source| {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(NUM_CONTEXT_ROWS),
+            &source,
+            |b, source| {
                 b.iter_batched_ref(
                     || source.clone(),
                     |target| match helper {
@@ -98,16 +103,13 @@ fn benchmark_owner<T: Substitute<Output = T> + Clone>(
                     },
                     BatchSize::LargeInput,
                 );
-            });
-        }
+            },
+        );
         group.finish();
     }
 }
 
 fn substitute_context(c: &mut Criterion) {
-    if std::env::var("OMMX_BENCHMARK_SUITE").as_deref() != Ok("full") {
-        return;
-    }
     for (context, named) in [("named-functions", true), ("removed-constraints", false)] {
         benchmark_owner(c, &format!("substitute-context/instance/{context}"), |n| {
             instance(n, named)

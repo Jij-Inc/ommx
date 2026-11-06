@@ -26,20 +26,19 @@
 //
 // Named-function families
 // - Purpose: persistent fixed-input regression guardrail.
-//   The mixed-reference family additionally guards scaling with context size.
 // - Regression: encoding scans, clones, or rewrites retained NamedFunctions.
 // - Origin: https://github.com/Jij-Inc/ommx/pull/1047 and
 //   https://github.com/Jij-Inc/ommx/issues/1365, following PR #1363.
 // - Measured boundary/input: Rust SDK Instance::log_encode with 32,000 fixed,
-//   unrelated NamedFunctions in the historical input; the separate scaling
-//   family varies N with half referencing each of the two declared variables.
+//   unrelated NamedFunctions in the historical input; the separate mixed input
+//   has the same count with half referencing each of the two declared variables.
 // - Cost model/evidence: fixed encoding work, with no NamedFunction traversal.
 //   Even references to the encoded variable belong to Interpretation Context.
-//   Keep variable count, expression size, Active Formulation, and ten-bit work
-//   fixed; expect same-run simulation cross-size p ~= 0. Native timings can
-//   still reflect cache/allocator state left by untimed fixture cloning.
-//   Preserve the historical URI/input for comparisons and use a profile only
-//   to diagnose a detected regression.
+//   Compare the same URI/input between PR head and baseline. 32,000 rows amplify
+//   unwanted work; the mixed input additionally catches work conditional on a
+//   reference to the encoded variable. Variable count, expression size, Active
+//   Formulation, and ten-bit work remain fixed. Setup cloning is untimed.
+//   Cross-size analysis and profiles are optional manual follow-up.
 //
 // Unrelated-dependency family
 // - Purpose: persistent fixed-input regression guardrail.
@@ -308,25 +307,24 @@ fn log_encode_unrelated_dependencies(c: &mut Criterion) {
 }
 
 fn log_encode_mixed_named_functions(c: &mut Criterion) {
+    const NUM_NAMED_FUNCTIONS: usize = 32_000;
     let mut group = c.benchmark_group("log-encode-mixed-named-functions");
-    for count in [1_000, 8_000, 32_000] {
-        let instance = instance_with_named_functions(count, true);
-        group.bench_with_input(
-            BenchmarkId::from_parameter(count),
-            &instance,
-            |b, instance| {
-                b.iter_batched_ref(
-                    || instance.clone(),
-                    |instance| {
-                        instance
-                            .log_encode([VariableID::from(0)], ATol::default())
-                            .unwrap()
-                    },
-                    criterion::BatchSize::LargeInput,
-                );
-            },
-        );
-    }
+    let instance = instance_with_named_functions(NUM_NAMED_FUNCTIONS, true);
+    group.bench_with_input(
+        BenchmarkId::from_parameter(NUM_NAMED_FUNCTIONS),
+        &instance,
+        |b, instance| {
+            b.iter_batched_ref(
+                || instance.clone(),
+                |instance| {
+                    instance
+                        .log_encode([VariableID::from(0)], ATol::default())
+                        .unwrap()
+                },
+                criterion::BatchSize::LargeInput,
+            );
+        },
+    );
     group.finish();
 }
 

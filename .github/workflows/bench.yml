@@ -39,10 +39,6 @@ jobs:
     name: Benchmarks for Rust SDK
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    env:
-      # Generic substitution context diagnostics are opt-in; the encoding
-      # no-traversal guardrail remains part of every automatic run.
-      OMMX_BENCHMARK_SUITE: ${{ github.event_name == 'workflow_dispatch' && inputs.suite == 'full' && 'full' || 'guardrail' }}
     steps:
       - uses: actions/checkout@v7
       - name: Setup Environment
