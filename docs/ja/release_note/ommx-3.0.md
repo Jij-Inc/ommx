@@ -46,6 +46,20 @@ SDK側での定数制約の簡約と早期検出は [#1188](https://github.com/J
 `to_qubo()` と `to_hubo()` のPreparation後の変換にも適用されます。
 浮動小数点演算の扱いは {meth}`~ommx.Instance.as_qubo_format` を参照してください。
 
+### 置換後の最適性の引き継ぎを保守的に判定 ([#1368](https://github.com/Jij-Inc/ommx/pull/1368))
+
+{meth}`~ommx.Instance.substitute` と {meth}`~ommx.ParametricInstance.substitute`
+で空でない置換が成功すると、その呼び出しで新たに保持したものも含め、出力用目的関数の
+`preserves_optimality` を `False` に設定します。離散変数の復元時に値が丸められ、
+目的値の順位が逆転する場合があるため、この出力用目的関数に対する
+{meth}`~ommx.Instance.map_active_optimality` は `Optimality.Unspecified` を返します。
+目的関数の式と最小化・最大化の向きは保持します。この保守的な規則は単純な変数の
+置き換えにも適用されます。
+
+空の置換は何も変更しません。組み込みの `log_encode` と `unary_encode` は
+それぞれの保証を維持しますが、すでに `False` になったフラグを戻すことはありません。
+汎用の置換は引き続き代数的な操作であり、同値性が必要な場合の保証は呼び出し側の責任です。
+
 ### Python 3.11 以降を必須とし、SDK が Python 3.15 に対応 ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
 
 Python 3.10 のサポート終了に伴う共通の方針として、SDK と Adapter パッケージの

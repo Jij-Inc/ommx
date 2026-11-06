@@ -50,6 +50,21 @@ machine epsilon. This also applies to `to_qubo()` and `to_hubo()` after
 Preparation. See {meth}`~ommx.Instance.as_qubo_format` for the floating-point
 contract.
 
+### Conservative optimality transport after substitution ([#1368](https://github.com/Jij-Inc/ommx/pull/1368))
+
+Every successful nonempty {meth}`~ommx.Instance.substitute` or
+{meth}`~ommx.ParametricInstance.substitute` call now sets a retained output
+objective's `preserves_optimality` to `False`, including one captured by that
+call. Reconstructing discrete variables can round their values and reverse
+objective ordering, so {meth}`~ommx.Instance.map_active_optimality` returns
+`Optimality.Unspecified` for that output objective. Its function and sense are
+retained; this conservative rule also applies to simple variable renaming.
+
+Empty substitutions remain no-ops. Built-in `log_encode` and `unary_encode`
+retain their own guarantees but do not restore a flag already set to `False`.
+Generic substitution remains an algebraic operation whose equivalence is the
+caller's responsibility.
+
 ### Require Python 3.11 and add Python 3.15 SDK support ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
 
 The SDK and adapter packages now require Python 3.11 or newer under a shared
