@@ -204,6 +204,17 @@ impl OutputObjective {
 /// variable definition may serve both roles. Interpretation Context need not
 /// contain an independent, complete copy of the original problem.
 ///
+/// **Implementation contract:** [`Self::used_decision_variable_ids`] must be
+/// exactly the union of decision-variable IDs referenced by the active
+/// objective and every active constraint family, including structural uses
+/// such as an Indicator's controlling variable. [`Self::used_decision_variables`]
+/// must return the corresponding variable definitions. References occurring
+/// only in Interpretation Context must not contribute to this set.
+/// Maintaining this correspondence is the responsibility of the `Instance`
+/// implementation: construction, successful mutations and transformations,
+/// and extensions with new constraint families must preserve it. Solver
+/// adapters may rely on this contract when creating backend variables.
+///
 /// Transformations used to prepare a problem for solving normally rewrite the
 /// Active Formulation and retain or update the necessary Interpretation
 /// Context on the same instance (or on the returned transformed instance).

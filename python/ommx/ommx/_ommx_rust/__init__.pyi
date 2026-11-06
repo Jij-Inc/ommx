@@ -4930,6 +4930,17 @@ class Instance:
     definition can serve both roles. Interpretation Context need not contain an
     independent, complete copy of the original problem.
 
+    **Implementation contract:** {attr}`~ommx.Instance.used_decision_variables`
+    must contain exactly the variables referenced by the active objective and
+    every active constraint family, including structural uses such as an
+    Indicator's controlling variable. {meth}`~ommx.Instance.required_ids` returns
+    the same set of IDs. References occurring only in Interpretation Context must
+    not contribute to this set. Maintaining this correspondence is the
+    responsibility of the Instance implementation: construction, successful
+    mutations and transformations, and extensions with new constraint families
+    must preserve it. Solver adapters may rely on this contract when creating
+    backend variables.
+
     **Transformation principle**
 
     Transformations used to prepare a problem for solving normally rewrite the
@@ -5452,6 +5463,10 @@ class Instance:
     def used_decision_variables(self) -> builtins.list[DecisionVariable]:
         r"""
         Decision variables used by the mathematical solver input.
+
+        This property implements the Active Formulation contract of
+        {class}`~ommx.Instance`: it contains exactly the variables referenced by
+        that formulation, with IDs matching {meth}`~ommx.Instance.required_ids`.
 
         This list contains the variables referenced by the objective or by an
         active regular, Indicator, OneHot, or SOS1 constraint. Variables

@@ -1310,6 +1310,10 @@ impl Instance {
 
     /// Decision variables used by the mathematical solver input.
     ///
+    /// This property implements the Active Formulation contract of
+    /// {class}`~ommx.Instance`: it contains exactly the variables referenced by
+    /// that formulation, with IDs matching {meth}`~ommx.Instance.required_ids`.
+    ///
     /// This list contains the variables referenced by the objective or by an
     /// active regular, Indicator, OneHot, or SOS1 constraint. Variables
     /// referenced only by the output objective, named functions, removed
