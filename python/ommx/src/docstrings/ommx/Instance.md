@@ -76,13 +76,14 @@ a different contract. {meth}`~ommx.Instance.as_minimization_problem` and
 objectives; assigning a new {attr}`~ommx.Instance.objective` also rebases output
 evaluation.
 
+{meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` and
+{meth}`~ommx.Instance.add_integer_slack_to_inequality` retain the original row
+as a removed constraint and link it to a generated active row with a fresh ID.
+
 Consult each operation's rewrite scope and preservation guarantees. The
 principle above does not imply that all current operations leave context
 expressions unchanged or retain every source detail:
 
-- {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` and
-  {meth}`~ommx.Instance.add_integer_slack_to_inequality` replace a rewritten
-  source row in place; they do not retain that original row separately.
 - {meth}`~ommx.Instance.tighten_bounds_simultaneously_once` updates the retained
   variable bounds without retaining their previous values as original-domain
   information.

@@ -69,6 +69,34 @@ assert model.constraints[limit.constraint_id].name == "limit"
 
 モデルから取得した有効な行は、モデルに接続されたハンドルです。`row.set_name("limit")` はモデル上の名前を更新します。独立したコピーが必要なら `row.detach()` を呼びます。v2の `add_name` と `add_description` は `set_name` と `set_description` に置き換えます。パラメータ全体の置換には `set_parameters`、指定したキーだけの更新には `add_parameters` を使います。変数の固定値は変数定義をコピーしてもモデル側に残るため、`model.fixed_decision_variables()` から取得します。詳しくは {class}`~ommx.ConstraintCollection` と {class}`~ommx.DecisionVariable` を参照してください。
 
+(migration-slack-source)=
+### 整数スラック変換後は生成されたIDを参照する
+
+`convert_inequality_to_equality_with_integer_slack` と
+`add_integer_slack_to_inequality` は、元の不等式を元のIDのまま
+`removed_constraints` に保持します。生成された有効な行には新しいIDが付きます。
+
+```python
+from ommx import ConstraintID
+
+model.convert_inequality_to_equality_with_integer_slack(source_id, 31)
+source = model.removed_constraints[ConstraintID(source_id)]
+generated_id = source.removed_reason_parameters.get("constraint_id")
+if generated_id is not None:
+    generated = model.constraints[ConstraintID(int(generated_id))]
+```
+
+自明に満たされる制約は除去され、新しい行は生成されません。それ以外では、
+除去理由のパラメータに `slack_variable_id` も記録され、生成行の履歴には
+元の制約を指す `ProvenanceKind.Constraint` が追加されます。評価結果では、
+元の条件と補助変数を含む条件の充足を別々に確認できます。
+
+Preparation はこの履歴を使って元の制約IDに指定したペナルティ重みを引き継ぎます。
+有効な行自身のIDを優先し、指定がなければ最も近い保持済みの通常制約を参照します。
+指定したキーはすべて使われる必要があります。同じ行に元の重みと生成後の重みを
+両方指定せず、採用されない祖先のキーを除いてください。型付きの履歴を保存するには
+v2 bytes を使います。v1 でも元の行と除去理由のパラメータは残りますが、履歴は保存されません。
+
 (migration-constraint-metadata)=
 ### メタデータの編集先を確認する
 

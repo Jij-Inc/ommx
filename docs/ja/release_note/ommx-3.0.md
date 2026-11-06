@@ -6,6 +6,17 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 🛠 ⚠ 整数スラック導入後も元の制約を保持 ([#1369](https://github.com/Jij-Inc/ommx/pull/1369))
+
+2つの整数スラック導入操作は、元の不等式を `removed_constraints` に保持し、
+新しいIDで有効な行を生成するようになりました。評価時には、元の条件と補助変数の
+整合性を区別できます。後続の操作では、元の制約の除去理由パラメータ
+`constraint_id` が指すIDを使ってください。生成行には
+`ProvenanceKind.Constraint` の履歴も付きます。Preparation は元の制約IDに指定した
+ペナルティ重みを生成行へ引き継ぎ、未使用のキーはエラーにします。
+{ref}`IDの移行例 <migration-slack-source>` を参照してください。
+型付きの履歴には v2 bytes が必要です。v1 でも元の行と除去理由のパラメータは残ります。
+
 ### 🛠 ⚠ 実行不能な定数制約をソルバーの判定結果として扱う ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))
 
 HiGHSとPySCIPOptのAdapterは、`1 <= 0` のように実行不能なものも含め、
