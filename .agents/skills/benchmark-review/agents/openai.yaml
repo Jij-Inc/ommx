@@ -1,4 +1,4 @@
 interface:
   display_name: "Benchmark Review"
-  short_description: "Review benchmark intent, evidence, and lifecycle"
-  default_prompt: "Use $benchmark-review to classify this benchmark's purpose, define its cost model and required evidence, and recommend its lifecycle and CI run policy."
+  short_description: "Review PR regression coverage and benchmark cost"
+  default_prompt: "Use $benchmark-review to assess this benchmark's PR regression signal, cost model, and run policy, reserving scaling and profile analysis for manual follow-up."
