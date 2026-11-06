@@ -1,7 +1,8 @@
 Live mapping of retained constraints that are no longer active.
 
-Active constraints in {attr}`~ommx.Instance.constraints` define the current
-solver-facing formulation. Removed constraints remain available for evaluation
+Active constraints in {attr}`~ommx.Instance.constraints` belong to the
+**Active Formulation**. Removed constraints are retained as **Interpretation
+Context**, as defined on {class}`~ommx.Instance`, and remain available for evaluation
 and inspection, but are not imposed as active conditions. Both collections
 include regular constraints and supported special-constraint families, currently
 Indicator, OneHot, and SOS1, keyed by their typed IDs.

@@ -4895,15 +4895,20 @@ class InfeasibleOrUnboundedDetected(builtins.RuntimeError):
 @typing.final
 class Instance:
     r"""
-    An optimization problem with variable domains, an objective, and constraints.
+    A unit of OMMX's intermediate representation for optimization problems.
 
-    An Instance defines which assignments are feasible and how their objective
-    values are computed independently of a solver. Its main components are:
+    An Instance holds both the current problem to solve and the information needed
+    to reconstruct and interpret its results against the user's input. These two
+    roles are called **Active Formulation** and **Interpretation Context**.
 
-    - {attr}`~ommx.Instance.decision_variables`: variables and their domains.
-    - {attr}`~ommx.Instance.objective`: the objective {class}`~ommx.Function`.
-    - {attr}`~ommx.Instance.constraints`: all active regular and special constraints.
-    - {attr}`~ommx.Instance.sense`: whether the objective is minimized or maximized.
+    **Active Formulation** is the currently effective optimization problem:
+
+    - {attr}`~ommx.Instance.objective` and {attr}`~ommx.Instance.sense` define
+      what is minimized or maximized.
+    - {attr}`~ommx.Instance.used_decision_variables` supplies the variables and
+      their domains.
+    - {attr}`~ommx.Instance.constraints` supplies all active regular and special
+      constraints.
 
     Regular constraints have the form ``f(x) == 0`` or ``f(x) <= 0``;
     ``f(x) >= 0`` is represented as ``-f(x) <= 0``. Special constraints express
@@ -4914,12 +4919,52 @@ class Instance:
     instructions to a particular solver. See {class}`~ommx.InstanceClass` for
     the separate question of which representations a solver adapter accepts.
 
+    **Interpretation Context** is the information retained to recover variable
+    values and evaluate or explain results in terms of the user's input. It includes
+    fixed values, decision-variable dependencies, {attr}`~ommx.Instance.removed_constraints`,
+    an {attr}`~ommx.Instance.output_objective`, {class}`~ommx.NamedFunction` expressions,
+    and relevant modeling labels and transformation provenance.
+
+    These names describe conceptual roles within the intermediate representation,
+    not separate SDK types or disjoint copies of the model. A retained variable
+    definition can serve both roles. Interpretation Context need not contain an
+    independent, complete copy of the original problem.
+
+    **Transformation principle**
+
+    Transformations used to prepare a problem for solving normally rewrite the
+    Active Formulation and retain or update the necessary Interpretation Context
+    on the same Instance, or on the returned transformed Instance. For example:
+
+    - {meth}`~ommx.Instance.log_encode` changes the solver's variables and retains
+      the expressions needed to reconstruct the encoded values.
+    - {meth}`~ommx.Instance.lower_special_constraints` retains source constraints
+      and records the provenance of generated constraints.
+    - {meth}`~ommx.Instance.convert_active_objective` preserves the objective and
+      sense used for output evaluation.
+    - {meth}`~ommx.Instance.reduce_binary_power` reduces Active Formulation
+      expressions and captures the original objective when needed for output
+      evaluation. It leaves existing Interpretation Context expressions unchanged.
+
+    An expression being evaluable by OMMX does not by itself make it a target of an
+    Active Formulation rewrite. Each operation documents its exact rewrite boundary,
+    context updates, and guarantees. Operations that explicitly change the user's
+    problem or output semantics have a different contract; for example, assigning
+    a new {attr}`~ommx.Instance.objective` also rebases output evaluation.
+
+    Use the transformed Instance to interpret a candidate: {meth}`~ommx.Instance.populate_state`
+    reconstructs values, and {meth}`~ommx.Instance.evaluate` evaluates the populated
+    state. Reconstruction, feasibility, and optimality preservation are distinct.
+    Retaining Interpretation Context does not establish equivalence between the
+    original and active problems.
+
     **Build and evaluate a problem**
 
     This problem maximizes ``x + y`` subject to ``x * y == 0``, with binary
     variables. {meth}`~ommx.Instance.maximize` starts an empty maximization
     problem; use {meth}`~ommx.Instance.minimize` for minimization.
 
+    ```pycon
     >>> from ommx import ConstraintKind, Instance
     >>> instance = Instance.maximize()
     >>> x = instance.new_binary("x")
@@ -4929,6 +4974,8 @@ class Instance:
     >>> solution = instance.evaluate({x.id: 1, y.id: 0})
     >>> assert solution.feasible
     >>> assert solution.objective == 1.0
+
+    ```
 
     The ``new_*`` methods and {meth}`~ommx.Instance.add_constraint` assign IDs
     automatically and return attached handles. IDs remain accessible through
@@ -4941,6 +4988,7 @@ class Instance:
     explicit IDs. The Instance validates that expressions and special
     constraints refer to variables defined in that Instance.
 
+    ```pycon
     >>> from ommx import ConstraintKind, ConstraintID, DecisionVariable, Instance, Sense
     >>> a = DecisionVariable.binary(10, name="a")
     >>> assembled = Instance.from_components(
@@ -4950,6 +4998,8 @@ class Instance:
     >>> assert ConstraintID(7) in assembled.constraints
     >>> assert assembled.evaluate({a.id: 1}).feasible
 
+    ```
+
     **Variable domains and modeling labels**
 
     A variable's ``kind``, ``lower``, and ``upper`` define its domain. Binary
@@ -4958,6 +5008,7 @@ class Instance:
     SemiInteger and SemiContinuous additionally allow zero even when zero is
     outside the specified interval.
 
+    ```pycon
     >>> from ommx import ConstraintKind, Instance
     >>> typed = Instance.minimize()
     >>> flag = typed.new_binary("flag")
@@ -4965,6 +5016,8 @@ class Instance:
     >>> amount = typed.new_continuous("amount", lower=0)
     >>> batch = typed.new_semi_integer("batch", lower=2, upper=10)
     >>> rate = typed.new_semi_continuous("rate", lower=0.5, upper=4)
+
+    ```
 
     Here ``batch`` permits 0 and the integers from 2 through 10; ``rate``
     permits 0 and real values from 0.5 through 4. Each ``new_*`` method
@@ -5011,6 +5064,7 @@ class Instance:
     {attr}`~ommx.Instance.removed_constraints` exposes retained constraints
     that are no longer active.
 
+    ```pycon
     >>> from ommx import ConstraintKind, ConstraintID, Instance
     >>> model = Instance.minimize()
     >>> selected = model.new_binary("selected")
@@ -5018,6 +5072,8 @@ class Instance:
     >>> assert added.constraint_id == ConstraintID(0)
     >>> assert model.constraints[added.constraint_id].name == "required"
     >>> assert list(model.constraints) == [added.constraint_id]
+
+    ```
 
     Use {meth}`~ommx.Instance.constraints_df` with an explicit ``kind``, such
     as ``kind=ConstraintKind.Regular``, to collect one family into a DataFrame. Collection
@@ -5034,6 +5090,7 @@ class Instance:
     replace their fields; ``add_subscripts`` appends indices and
     ``add_parameter`` / ``add_parameters`` merge parameter entries.
 
+    ```pycon
     >>> from ommx import ConstraintKind, Instance
     >>> labeled = Instance.maximize()
     >>> choice = labeled.new_binary("choice")
@@ -5048,6 +5105,8 @@ class Instance:
     >>> assert labeled.attached_decision_variable(choice.id).name == "selected"
     >>> assert labeled.constraints[rule.constraint_id].name == "selection_limit"
 
+    ```
+
     Changing labels preserves IDs and mathematical conditions. Set labels
     before evaluation when the resulting Solution should carry them. By
     contrast, ``detach()`` and
@@ -5055,12 +5114,15 @@ class Instance:
     snapshots. Editing a snapshot or a DataFrame does not write back to the
     Instance.
 
+    ```pycon
     >>> snapshot = constraint.detach()
     >>> _ = snapshot.set_name("snapshot_only")
     >>> table = labeled.decision_variables_df()
     >>> table.loc[choice.id, "name"] = "table_only"
     >>> assert labeled.constraints[rule.constraint_id].name == "selection_limit"
     >>> assert labeled.attached_decision_variable(choice.id).name == "selected"
+
+    ```
 
     **Retained variables and output evaluation**
 
@@ -5070,6 +5132,7 @@ class Instance:
     remain defined so that evaluation can reconstruct their values, although
     the solver no longer chooses those values directly.
 
+    ```pycon
     >>> from ommx import ConstraintKind, Instance
     >>> original = Instance.maximize()
     >>> x = original.new_binary("x")
@@ -5080,7 +5143,9 @@ class Instance:
     >>> assert {v.id for v in fixed.used_decision_variables} == {y.id}
     >>> assert fixed.evaluate({y.id: 0}).state.entries == {x.id: 1.0, y.id: 0.0}
 
-    Instances can retain information used only to interpret results:
+    ```
+
+    Interpretation Context also includes information used only to interpret results:
     {class}`~ommx.NamedFunction` expressions for reporting metrics, removed
     constraints for checking original conditions, and an
     {class}`~ommx.OutputObjective` separate from the current solver-facing
@@ -5099,6 +5164,7 @@ class Instance:
     reported after evaluation, including when all solver-input variables have
     been fixed:
 
+    ```pycon
     >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     >>> x = DecisionVariable.binary(0)
     >>> instance = Instance.from_components(
@@ -5114,6 +5180,8 @@ class Instance:
     >>> assert fixed.populate_state({}).entries == {0: 1.0}
     >>> solution = fixed.evaluate({})
     >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)
+
+    ```
     """
 
     MAXIMIZE: Sense
@@ -5171,7 +5239,7 @@ class Instance:
     @property
     def sense(self) -> Sense:
         r"""
-        Active optimization sense used by the solver-facing formulation.
+        Optimization sense of the Active Formulation; see {class}`~ommx.Instance`.
 
         # Postconditions
 
@@ -5189,7 +5257,7 @@ class Instance:
     @property
     def objective(self) -> Function:
         r"""
-        Active objective used by the solver-facing formulation.
+        Objective of the Active Formulation; see {class}`~ommx.Instance`.
 
         # Postconditions
 
@@ -5296,8 +5364,9 @@ class Instance:
         r"""
         Live mapping of retained constraints that are no longer active.
 
-        Active constraints in {attr}`~ommx.Instance.constraints` define the current
-        solver-facing formulation. Removed constraints remain available for evaluation
+        Active constraints in {attr}`~ommx.Instance.constraints` belong to the
+        **Active Formulation**. Removed constraints are retained as **Interpretation
+        Context**, as defined on {class}`~ommx.Instance`, and remain available for evaluation
         and inspection, but are not imposed as active conditions. Both collections
         include regular constraints and supported special-constraint families, currently
         Indicator, OneHot, and SOS1, keyed by their typed IDs.
@@ -6524,6 +6593,10 @@ class Instance:
     ) -> State:
         r"""
         Restore fixed and dependent values and fill omitted irrelevant values in a candidate.
+
+        Uses the Instance's **Interpretation Context** to reconstruct values from a
+        candidate for its **Active Formulation**. See {class}`~ommx.Instance` for these
+        two roles of the intermediate representation.
 
         Accepts a {class}`~ommx.State`, an ID-to-value mapping, or an iterable of ID/value
         pairs. The returned State contains exactly the decision-variable IDs retained by
@@ -7808,7 +7881,9 @@ class Instance:
         """
     def convert_active_objective(self, target: Sense) -> builtins.bool:
         r"""
-        Convert only the active, solver-facing objective to `target`.
+        Convert the **Active Formulation** objective and sense to `target`, retaining
+        the output semantics as **Interpretation Context** on this Instance. See
+        {class}`~ommx.Instance` for these two roles of the intermediate representation.
 
         For example, a solver may accept only minimization while the problem maximizes
         a reward. This method negates the active objective and changes
@@ -7917,17 +7992,26 @@ class Instance:
         """
     def reduce_binary_power(self) -> builtins.bool:
         r"""
-        Reduce binary powers in the instance.
+        Reduce binary powers in the Instance's Active Formulation.
 
-        This method replaces binary powers in the instance with their equivalent linear expressions.
         For binary variables, $x^n = x$ for any $n \geq 1$, so we can reduce higher powers to linear terms.
 
+        Rewrites the active objective and active regular and Indicator constraint
+        bodies, using the Instance's variable kinds. OneHot and SOS1 constraints
+        contain variable sets rather than expression bodies and are unchanged.
+        Interpretation Context is not reduced: named functions, dependency
+        right-hand sides, removed constraints, and an existing output objective
+        are left unchanged. See {class}`~ommx.Instance` for this boundary.
+
         **Returns:**
-        ``True`` if any reduction was performed, ``False`` otherwise.
+        ``True`` if an Active Formulation expression changed, ``False`` otherwise.
+        A coefficient error in any target expression leaves the entire Instance unchanged.
 
         # Postconditions
 
-        Reduction preserves existing output semantics, or captures the pre-reduction active objective when no output objective exists, while rewriting active expressions.
+        Reduction preserves labels, constraint contexts, and lifecycle state.
+        If the active objective changes and no output objective exists, its
+        original function and sense are retained as Interpretation Context.
 
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)

@@ -2,14 +2,16 @@ use super::*;
 use std::collections::BTreeMap;
 
 impl Instance {
-    /// Reduce binary powers in the instance.
+    /// Reduce binary powers in the instance's Active Formulation.
     ///
     /// For binary variables, x^n = x for any n >= 1. Binary variable IDs are
     /// derived from this instance's decision-variable table.
     ///
     /// Rewrites the active objective, active regular and indicator constraint
-    /// bodies, named functions, and decision-variable dependency right-hand
-    /// sides. Removed constraints and the output objective are left unchanged.
+    /// bodies. Interpretation Context is not reduced: named functions,
+    /// decision-variable dependency right-hand sides, removed constraints, and
+    /// an existing output objective are left unchanged. See [`Instance`] for
+    /// the Active Formulation / Interpretation Context boundary.
     /// One-hot and SOS1 constraints contain variable sets rather than expression
     /// bodies and do not require this rewrite.
     ///
@@ -57,7 +59,7 @@ impl Instance {
             return Ok(false);
         }
 
-        // Plan all expression-owner rewrites before mutating `self`. Row
+        // Plan all Active Formulation expression rewrites before mutating `self`. Row
         // replacements leave collection-owned labels and contexts in place.
         let objective_replacement = self.objective.plan_binary_power_reduction(&binary_ids)?;
         let mut replacements = BTreeMap::new();
@@ -83,46 +85,9 @@ impl Instance {
                 );
             }
         }
-        let mut named_function_replacements = BTreeMap::new();
-        for (&id, named_function) in self.named_functions.iter() {
-            if let Some(function) = named_function
-                .function
-                .plan_binary_power_reduction(&binary_ids)?
-            {
-                named_function_replacements.insert(id, NamedFunction { function });
-            }
-        }
-        let mut dependency_replacements = BTreeMap::new();
-        for (&id, function) in self.decision_variable_dependency.iter() {
-            if let Some(function) = function.plan_binary_power_reduction(&binary_ids)? {
-                dependency_replacements.insert(id, function);
-            }
-        }
-        let dependency_replacement = if dependency_replacements.is_empty() {
-            None
-        } else {
-            // Cancellation can remove references, so rebuild the cached graph
-            // and order through the assignment owner. Reduction never adds a
-            // variable reference and therefore cannot introduce a cycle.
-            Some(
-                AcyclicAssignments::new(self.decision_variable_dependency.iter().map(
-                    |(&id, function)| {
-                        (
-                            id,
-                            dependency_replacements
-                                .remove(&id)
-                                .unwrap_or_else(|| function.clone()),
-                        )
-                    },
-                ))
-                .expect("binary-power reduction cannot introduce assignment cycles"),
-            )
-        };
         let changed = objective_replacement.is_some()
             || !replacements.is_empty()
-            || !indicator_replacements.is_empty()
-            || !named_function_replacements.is_empty()
-            || dependency_replacement.is_some();
+            || !indicator_replacements.is_empty();
 
         // Commit only after every fallible rewrite has succeeded.
         if let Some(replacement) = objective_replacement {
@@ -136,12 +101,6 @@ impl Instance {
         self.indicator_constraint_collection
             .replace_active_rows(indicator_replacements)
             .expect("replacement IDs were read from active indicator constraints");
-        self.named_functions
-            .replace_rows(named_function_replacements)
-            .expect("replacement IDs were read from named functions");
-        if let Some(dependency) = dependency_replacement {
-            self.decision_variable_dependency = dependency;
-        }
         Ok(changed)
     }
 }
@@ -337,7 +296,8 @@ mod tests {
         assert!(instance.output_objective().is_none());
     }
 
-    // Each slot is a distinct expression owner, in planning order.
+    // The first three slots belong to the Active Formulation; the last two
+    // are expressions retained in Interpretation Context.
     fn instance_with_expression_owners(functions: [Function; 5]) -> Instance {
         let [objective, regular, indicator, named, dependency] = functions;
         let reason = crate::constraint::RemovedReason {
@@ -430,13 +390,15 @@ mod tests {
     }
 
     #[test]
-    fn reduce_binary_power_covers_each_expression_owner() {
+    fn reduce_binary_power_covers_each_active_expression_owner() {
         // A continuous square must survive beside the reducible binary square.
         let reducible = Function::from((quadratic!(1, 1) + quadratic!(2, 2)).unwrap());
         let reduced = Function::from((quadratic!(1) + quadratic!(2, 2)).unwrap());
-        for owner in 0..5 {
+        for owner in 0..3 {
             let mut functions = std::array::from_fn(|_| Function::from(linear!(1)));
             functions[owner] = reducible.clone();
+            functions[3] = reducible.clone();
+            functions[4] = reducible.clone();
             let mut instance = instance_with_expression_owners(functions);
             let before = instance.clone();
 
@@ -474,8 +436,8 @@ mod tests {
             instance_with_expression_owners(std::array::from_fn(|_| original.clone()));
 
         assert!(instance.reduce_binary_power().unwrap());
-        for function in owned_functions(&instance) {
-            assert_eq!(function, &Function::from(linear!(1)));
+        for function in &owned_functions(&instance)[..3] {
+            assert_eq!(*function, &Function::from(linear!(1)));
             for value in [0.0, 1.0] {
                 let state = crate::v1::State::from(std::collections::HashMap::from([(1, value)]));
                 assert_eq!(
@@ -484,25 +446,24 @@ mod tests {
                 );
             }
         }
+        for function in &owned_functions(&instance)[3..] {
+            assert_eq!(*function, &original);
+        }
         assert_eq!(instance.output_objective().unwrap().function(), &original);
         assert!(!instance.reduce_binary_power().unwrap());
     }
 
     #[test]
-    fn reduce_binary_power_rebuilds_dependency_graph_after_cancellation() {
+    fn reduce_binary_power_preserves_reducible_dependency_and_its_graph() {
         let mut functions = std::array::from_fn(|_| Function::from(linear!(1)));
         functions[4] =
             Function::from(((quadratic!(1, 1) - quadratic!(1)).unwrap() + quadratic!(2)).unwrap());
         let mut instance = instance_with_expression_owners(functions);
+        let before = instance.clone();
 
-        assert!(instance.reduce_binary_power().unwrap());
-        // Equality checks both assignments and cached graph nodes/edges.
-        assert_eq!(
-            instance.decision_variable_dependency(),
-            &AcyclicAssignments::new([(VariableID::from(3), Function::from(quadratic!(2)),)])
-                .unwrap(),
-        );
         assert!(!instance.reduce_binary_power().unwrap());
+        // Instance equality includes the assignments and their cached graph.
+        assert_eq!(instance, before);
     }
 
     #[test]
@@ -511,7 +472,7 @@ mod tests {
         let overflowing = Function::from(
             ((huge * quadratic!(1, 1)).unwrap() + (huge * quadratic!(1)).unwrap()).unwrap(),
         );
-        for owner in 1..5 {
+        for owner in 1..3 {
             let mut functions = std::array::from_fn(|_| Function::from(quadratic!(1, 1)));
             functions[owner] = overflowing.clone();
             let mut instance = instance_with_expression_owners(functions);
@@ -526,12 +487,63 @@ mod tests {
         }
     }
 
+    #[test]
+    fn reduce_binary_power_does_not_reduce_overflowing_interpretation_context() {
+        let huge = Coefficient::try_from(f64::MAX).unwrap();
+        let overflowing = Function::from(
+            ((huge * quadratic!(1, 1)).unwrap() + (huge * quadratic!(1)).unwrap()).unwrap(),
+        );
+        for active_changes in [false, true] {
+            let active = if active_changes {
+                Function::from(quadratic!(1, 1))
+            } else {
+                Function::from(linear!(1))
+            };
+            let mut instance = instance_with_expression_owners([
+                active.clone(),
+                active.clone(),
+                active,
+                overflowing.clone(),
+                overflowing.clone(),
+            ]);
+            let before = instance.clone();
+
+            assert_eq!(instance.reduce_binary_power().unwrap(), active_changes);
+            assert_eq!(
+                instance.named_function_table(),
+                before.named_function_table()
+            );
+            assert_eq!(
+                instance.decision_variable_dependency(),
+                before.decision_variable_dependency()
+            );
+            assert_eq!(instance.removed_constraints(), before.removed_constraints());
+            assert_eq!(
+                instance.removed_indicator_constraints(),
+                before.removed_indicator_constraints()
+            );
+            if !active_changes {
+                assert_eq!(instance, before);
+            }
+        }
+    }
+
     proptest! {
         #[test]
         fn test_instance_reduce_binary_power_idempotent(
             mut instance in Instance::arbitrary()
         ) {
+            let before = instance.clone();
             let _first = instance.reduce_binary_power().unwrap();
+            prop_assert_eq!(instance.named_function_table(), before.named_function_table());
+            prop_assert_eq!(instance.decision_variable_dependency(), before.decision_variable_dependency());
+            prop_assert_eq!(instance.removed_constraints(), before.removed_constraints());
+            prop_assert_eq!(instance.removed_indicator_constraints(), before.removed_indicator_constraints());
+            prop_assert_eq!(instance.one_hot_constraint_collection(), before.one_hot_constraint_collection());
+            prop_assert_eq!(instance.sos1_constraint_collection(), before.sos1_constraint_collection());
+            if before.output_objective().is_some() {
+                prop_assert_eq!(instance.output_objective(), before.output_objective());
+            }
             let second = instance.reduce_binary_power().unwrap();
             prop_assert!(!second, "reduce_binary_power should be idempotent");
         }
