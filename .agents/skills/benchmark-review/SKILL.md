@@ -1,25 +1,34 @@
 ---
 name: benchmark-review
-description: Use when reviewing, designing, triaging, or managing OMMX benchmarks, CodSpeed runs or flamegraphs, performance PRs or issues, benchmark workload changes, or benchmark CI policy. Classify the measurement purpose, define the benchmark contract and cost model, validate the required scaling or profile evidence, assign a lifecycle and run policy, and keep CI cost proportional to the regression signal.
+description: Use when reviewing, designing, triaging, or managing OMMX benchmarks, CodSpeed runs or flamegraphs, performance PRs or issues, benchmark workload changes, or benchmark CI policy. Prioritize PR-level regression detection on fixed inputs, define the benchmark contract and cost model, reserve scaling and profile analysis for manual follow-up, and keep CI cost proportional to the regression signal.
 ---
 
 # Benchmark Review
 
-Treat each benchmark family as a hypothesis-driven measurement instrument.
-Connect a concrete regression risk to a cost model, the evidence needed to
-confirm or falsify it, and an explicit lifecycle. Do not retain a workload only
-because it is slow or because a profiler can produce a flame graph for it.
+The primary purpose of persistent benchmarks is PR-level regression detection
+through CodSpeed comparisons of the same deterministic input. Choose workloads
+where an unwanted scan, clone, allocation, or rebuild produces a detectable
+cost increase. Such work can regress performance without changing the scaling
+exponent.
+
+Connect each family to a concrete regression risk, cost model, and lifecycle.
+Cross-size exponents and flame graphs are manual follow-up tools for inspecting
+the workload or diagnosing a regression. They are not required for every PR,
+and automatic exponent checks are not the default goal of this workflow.
 
 ## Review Flow
 
 ### 1. Classify the primary question
 
-Choose one primary purpose before judging the implementation or numbers:
+Default persistent benchmarks to PR-level regression detection. Distinguish
+that purpose from a task specifically requesting further analysis:
 
-- **Scaling guardrail**: determine how cost changes as an independent variable
-  grows and detect a complexity regression such as `O(N)` to `O(N^2)`.
-- **Fixed-input regression**: compare the same deterministic workload across
-  commits to detect a constant-factor regression.
+- **PR regression guardrail**: compare the same deterministic workload between
+  the PR head and a comparable baseline. Detect added unnecessary work, whether
+  it changes a constant factor or introduces worse complexity. Each size in an
+  existing scaling family also serves this purpose as a fixed input.
+- **Manual scaling analysis**: examine how cost changes as an independent
+  variable grows when investigating the workload or a detected regression.
 - **Profiling diagnostic**: attribute a fixed input's cost to functions or
   subsystems while investigating an optimization.
 - **Workflow cost**: determine whether setup, build, instrumentation, and
@@ -54,10 +63,28 @@ generic goal such as "measure addition performance."
 
 ### 3. Match the evidence to the purpose
 
-#### Scaling guardrail
+#### PR regression guardrail
 
-- Use at least three geometrically spaced input sizes, such as `N`, `2N`,
-  `4N` or `N`, `10N`, `100N`.
+- Keep the input deterministic and representative of the regression risk.
+- Compare the same benchmark URI, input shape, runner mode, and environment
+  between the PR head and baseline. Keep historical inputs stable; give a
+  materially different workload a distinct URI.
+- Make unwanted work visible: for example, keep active work fixed while using
+  enough unrelated retained rows to expose an accidental full-table clone.
+- Use the CodSpeed PR comparison as the primary signal. An unchanged exponent
+  does not dismiss a regression, and exponent analysis is not a prerequisite
+  for reporting one.
+- A representative fixed size can be sufficient. Retain multiple sizes when
+  they add detection coverage worth their CI cost; do not multiply automatic
+  cases solely to make an exponent calculable.
+
+#### Manual scaling analysis
+
+- Perform this later when needed to inspect a workload or explain a regression,
+  or when the user explicitly requests scaling evidence. It is not a routine
+  PR acceptance requirement.
+- For that analysis, use at least three geometrically spaced input sizes,
+  such as `N`, `2N`, `4N` or `N`, `10N`, `100N`.
 - Keep other shape dimensions fixed unless they are independent variables in
   the stated cost model.
 - Estimate the observed exponent between adjacent points:
@@ -66,21 +93,15 @@ generic goal such as "measure addition performance."
   p = log(T2 / T1) / log(N2 / N1)
   ```
 
-  Expect `p ~= 1` for linear scaling and `p ~= 2` for quadratic scaling.
+  Expect `p ~= 0` for independence from the varied data, `p ~= 1` for linear
+  scaling, and `p ~= 2` for quadratic scaling.
 - Prefer the larger points when fixed overhead distorts small inputs. Use
   same-run ratios where possible so hardware differences cancel.
-- Inspect or generate a cross-size table or graph. CodSpeed tracks each
-  parameter as a separate result and does not replace explicit cross-size
-  scaling analysis.
+- Inspect or generate a cross-size table or graph when making a scaling claim.
+  CodSpeed compares each parameter separately; manual cross-size inspection is
+  sufficient. Do not introduce an automatic exponent gate by default.
 - Do not require a flame graph unless the task is also diagnosing why the
   observed scaling is wrong.
-
-#### Fixed-input regression
-
-- Keep the input deterministic and representative of the regression risk.
-- Compare the same benchmark URI, input shape, runner mode, and environment.
-- Use commit-to-commit timing as the primary evidence. Use a profile only when
-  explaining a detected change.
 
 #### Profiling diagnostic
 
@@ -120,8 +141,8 @@ generic goal such as "measure addition performance."
 
 ### 5. Assign lifecycle and run policy
 
-- **Persistent guardrail**: retain on `main` when it detects a concrete
-  complexity or fixed-input regression.
+- **Persistent guardrail**: retain when its fixed inputs provide an actionable
+  PR regression signal, with `main` runs supplying comparison baselines.
 - **Diagnostic benchmark**: run manually during performance work; remove it or
   convert it to a persistent guardrail once the hypothesis is resolved.
 - Allow CodSpeed to produce profiles on `main` without treating every profile
@@ -132,13 +153,18 @@ generic goal such as "measure addition performance."
   automatically on PRs. Until then, keep full PR runs manual and use automatic
   `main` runs as catch-all coverage.
 - State both the regression signal and CI cost before retaining a large input.
+- Inspect which PR events trigger comparison and which head commit was
+  measured. If later pushes are not remeasured automatically, state that
+  coverage gap; a result for an older head does not cover the latest changes.
+  Do not change workflow triggers or dispatch runs unless the task authorizes it.
 
 ### 6. Validate claims with CodSpeed evidence
 
 - Use CodSpeed run results to discover benchmark URIs and values.
-- Use run comparisons for fixed-input regressions and verify environment
+- Prioritize the PR head-to-baseline comparison and verify environment
   differences before attributing a change to code.
-- Compute cross-size ratios or exponents explicitly for scaling guardrails.
+- Compute cross-size ratios or exponents in manual follow-up when a scaling
+  claim or diagnosis needs them, not as a requirement for every guardrail PR.
 - Query flame graphs for profiling diagnostics or to explain a scaling failure;
   do not query every flame graph merely because it is available.
 - Never claim a performance improvement or regression without comparable
@@ -151,8 +177,10 @@ Review benchmark families rather than listing every parameter separately. For
 each family, state the purpose, boundary, cost model, evidence, lifecycle, and
 recommended action: retain on `main`, move to manual diagnostics, narrow or
 relocate the benchmark, or remove it. Lead findings with missing hypotheses,
-mixed cost models, wrong layers, insufficient scaling points, profile-only
-workloads in CI, or cost disproportionate to the signal.
+mixed cost models, wrong layers, missing PR comparison coverage, profile-only
+workloads in CI, or cost disproportionate to the signal. Insufficient scaling
+points matter when a scaling claim is being made, not for a fixed-input
+regression guardrail by itself.
 
 Do not require every benchmark to prove an optimization. A benchmark can be a
 valuable canary when its expected failure mode and response are explicit.
@@ -161,16 +189,17 @@ valuable canary when its expected failure mode and response are explicit.
 
 ### Python `small_many` accumulation
 
-Treat the Python `small_many` addition benchmarks as persistent scaling
+Treat the Python `small_many` addition benchmarks as persistent PR regression
 guardrails originating from PR #498:
 
 ```text
-Purpose: Scaling guardrail
+Purpose: PR-level regression detection at fixed operand counts
 Regression: Repeated += clones the growing accumulator and changes O(N) to O(N^2)
 Origin: PR #498
 Measured boundary: Python += -> PyO3 __iadd__ -> Rust in-place merge
 Independent variable: Number N of fixed-size operands
-Expected evidence: Geometric input sizes and an observed exponent near 1
+Expected evidence: CodSpeed PR comparison for each retained fixed input
+Manual follow-up: Cross-size exponent near 1 when inspecting scaling
 Lifecycle: Persistent on main
 ```
 
@@ -221,13 +250,16 @@ test, not as an algorithmic scaling benchmark.
 
 ## Review Checklist
 
-- What is the primary purpose: scaling, fixed-input regression, profiling, or
-  workflow cost?
+- Does the persistent benchmark provide a useful PR-level regression signal?
+- Is any additional task manual scaling analysis, profiling, or workflow cost?
 - What concrete regression and origin does the contract record?
 - What operation and language or system boundary does it measure?
 - What is the cost model, and which dimensions are independent variables?
 - Does the evidence match the purpose?
-- For scaling, are there enough geometric points and was the exponent examined?
+- Are PR head and baseline measurements comparable, and is the measured head
+  the one under review?
+- If making a scaling claim, are there enough points and was the exponent
+  examined manually? Do not require this for routine PR regression detection.
 - For profiling, are percentages used diagnostically rather than as thresholds?
 - Is the benchmark in the narrowest valid layer?
 - Is it a persistent guardrail or a temporary/manual diagnostic?
