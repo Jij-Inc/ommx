@@ -6,6 +6,17 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### 🛠 ⚠ Retain source constraints after Integer-slack introduction ([#1369](https://github.com/Jij-Inc/ommx/pull/1369))
+
+Both Integer-slack operations now retain the original inequality in
+`removed_constraints` and create an active row with a fresh ID. This lets
+evaluation distinguish the source condition from auxiliary-variable consistency.
+Follow the source's `constraint_id` removal parameter for subsequent operations;
+generated rows also expose `ProvenanceKind.Constraint` lineage. Preparation
+carries source-keyed penalty weights to generated rows while rejecting unused
+keys. See the {ref}`ID migration example <migration-slack-source>`.
+Use v2 bytes for typed lineage; v1 retains source rows and removal parameters.
+
 ### 🛠 ⚠ Report infeasible constant constraints through the solver ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))
 
 HiGHS and PySCIPOpt now accept constant regular equalities and inequalities
