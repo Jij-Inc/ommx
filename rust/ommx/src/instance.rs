@@ -227,9 +227,9 @@ impl OutputObjective {
 /// principle above does not imply that all current operations leave context
 /// expressions unchanged or retain every source detail:
 ///
-/// - Substitution and partial evaluation also rewrite named functions, as do
-///   integer encodings ([`Self::log_encode`] and [`Self::unary_encode`]) that
-///   use substitution.
+/// - Partial evaluation also rewrites named functions. Substitution and integer
+///   encodings ([`Self::log_encode`] and [`Self::unary_encode`]) preserve their
+///   expressions and record dependencies for evaluation after reconstruction.
 /// - [`Self::convert_inequality_to_equality_with_integer_slack`] and
 ///   [`Self::add_integer_slack_to_inequality`] replace a rewritten source row
 ///   in place without separately retaining that original row.
