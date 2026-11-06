@@ -19,6 +19,52 @@ from ommx import (
 
 
 @pytest.mark.parametrize("parametric", [False, True])
+@pytest.mark.parametrize("assumption", [None, False, True])
+@pytest.mark.parametrize("previous", [None, False, True])
+@pytest.mark.parametrize("invalid", ["target", "rhs", "intermediate", "irrelevant"])
+def test_substitution_rejects_undefined_ids_atomically(
+    parametric, assumption, previous, invalid
+):
+    x, y, z = [DecisionVariable.binary(i) for i in range(3)]
+    unknown = DecisionVariable.binary(99)
+    source = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x,
+        decision_variables=[x, y, z],
+        constraints={7: x <= 1},
+        named_functions=[NamedFunction(id=9, function=x + y)],
+    )
+    if previous is not None:
+        source.convert_active_objective(Sense.Maximize)
+    if previous is False:
+        source.substitute({2: y})
+    target = source.as_parametric_instance() if parametric else source
+    assignments = {
+        "target": {99: y},
+        "rhs": {0: unknown},
+        "intermediate": {0: unknown, 99: y},
+        "irrelevant": {1: unknown},
+    }[invalid]
+    before = target.to_v2_bytes()
+    with pytest.raises(ValueError, match="Undefined variable ID.*99"):
+        if assumption is None:
+            target.substitute(assignments)
+        else:
+            target.substitute(assignments, assume_preserves_optimality=assumption)
+    assert target.to_v2_bytes() == before
+    if isinstance(target, ParametricInstance):
+        concrete = ParametricInstance.from_v2_bytes(before).with_parameters({})
+    else:
+        concrete = Instance.from_v2_bytes(before)
+    output = concrete.output_objective
+    if previous is None:
+        assert output is None
+    else:
+        assert output is not None and output.preserves_optimality == previous
+    assert concrete.evaluate({0: 1, 1: 0}).objective == 1
+
+
+@pytest.mark.parametrize("parametric", [False, True])
 @pytest.mark.parametrize("existing_output", [False, True])
 def test_substitution_rounding_cannot_transport_optimality(parametric, existing_output):
     x, b = [DecisionVariable.binary(i) for i in range(2)]

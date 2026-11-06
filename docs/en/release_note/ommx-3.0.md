@@ -74,6 +74,12 @@ retain their own guarantees but do not restore a flag already set to `False`.
 Generic substitution remains an algebraic operation whose equivalence is the
 caller's responsibility.
 
+`Instance.substitute` also rejects unregistered assignment targets and
+right-hand-side variable IDs, including intermediate IDs in chains and
+assignments outside the active formulation. Declare variables before using
+them in substitutions. A rejected call leaves the instance and its guarantee
+unchanged, matching `ParametricInstance`'s reference validation.
+
 ### Require Python 3.11 and add Python 3.15 SDK support ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
 
 The SDK and adapter packages now require Python 3.11 or newer under a shared

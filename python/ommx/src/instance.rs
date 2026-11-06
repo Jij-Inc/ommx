@@ -2668,7 +2668,13 @@ impl Instance {
     /// constraints to the solver input. Being able to reconstruct a value is
     /// therefore not a guarantee of an equivalent optimization problem.
     ///
-    /// Raises ``ValueError`` on cyclic or recursive assignments, or when
+    /// All assignment targets and right-hand-side variable IDs must already be
+    /// registered in this instance, including intermediate IDs in assignment
+    /// chains and assignments unused by the active formulation. Substitution
+    /// does not declare new variables. Invalid assignments leave the instance
+    /// unchanged, including its output objective and optimality guarantee.
+    ///
+    /// Raises ``ValueError`` on undefined IDs, cyclic or recursive assignments, or when
     /// substituting the controlling variable of an active Indicator constraint
     /// or a member of an active OneHot or SOS1 constraint. Variables appearing
     /// only in an Indicator's function body can be substituted.

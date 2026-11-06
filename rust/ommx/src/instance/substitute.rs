@@ -39,6 +39,10 @@ impl Instance {
     ///
     /// Returns the same [`SubstitutionError`] as [`Substitute::substitute`] for
     /// invalid assignments or expression arithmetic failures.
+    /// Every assignment target and right-hand-side variable must already belong
+    /// to this instance, including intermediate IDs in assignment chains and
+    /// assignments unused by the active formulation. Undefined IDs produce
+    /// [`SubstitutionError::UndefinedSubstitutionVariable`].
     ///
     /// # Example
     ///
@@ -75,7 +79,7 @@ impl Instance {
         if acyclic.is_empty() {
             return Ok(self);
         }
-        let plan = self.plan_substitution(acyclic)?;
+        let plan = self.plan_substitution(acyclic, &BTreeSet::new())?;
         self.decision_variable_dependency =
             std::mem::take(&mut self.decision_variable_dependency).substitute_acyclic(acyclic)?;
         self.commit_substitution(plan);
@@ -85,20 +89,35 @@ impl Instance {
         Ok(self)
     }
 
-    /// Plan the Active Formulation rewrite; reporting expressions use reconstructed values.
+    /// Validate owner references and plan the Active Formulation rewrite.
+    /// Fresh IDs are reserved by integer encoding before planning, but are not
+    /// inserted until all fallible work succeeds. They may only occur on the RHS.
     fn plan_substitution(
         &self,
         acyclic: &crate::AcyclicAssignments,
+        fresh_ids: &BTreeSet<VariableID>,
     ) -> Result<InstanceSubstitutionPlan, crate::SubstitutionError> {
         debug_assert!(!acyclic.is_empty());
         let substituted_variables: BTreeSet<VariableID> =
             acyclic.iter().map(|(var_id, _)| *var_id).collect();
 
-        for &variable in &substituted_variables {
+        for (&variable, function) in acyclic.iter() {
+            if !self.decision_variables.contains_key(&variable) {
+                return Err(SubstitutionError::UndefinedSubstitutionVariable { variable });
+            }
             if self.fixed_decision_variable_value(variable).is_some()
                 || self.decision_variable_dependency.get(&variable).is_some()
             {
                 return Err(SubstitutionError::AssignedVariableSubstitution { variable });
+            }
+            for required_id in function.required_ids() {
+                if !self.decision_variables.contains_key(&required_id)
+                    && !fresh_ids.contains(&required_id)
+                {
+                    return Err(SubstitutionError::UndefinedSubstitutionVariable {
+                        variable: required_id,
+                    });
+                }
             }
         }
 
@@ -213,21 +232,7 @@ impl Instance {
                 crate::bail!({ ?id }, "Fresh decision variable ID is already owned: {id:?}");
             }
         }
-        for id in acyclic.keys() {
-            if !self.decision_variables.contains_key(&id) {
-                crate::bail!({ ?id }, "Substitution target is not owned by this instance: {id:?}");
-            }
-        }
-        for id in acyclic.required_ids() {
-            if !self.decision_variables.contains_key(&id) && !fresh_ids.contains(&id) {
-                crate::bail!(
-                    { ?id },
-                    "Substitution references an unowned decision variable: {id:?}",
-                );
-            }
-        }
-
-        let plan = self.plan_substitution(acyclic)?;
+        let plan = self.plan_substitution(acyclic, &fresh_ids)?;
 
         // This is the last fallible operation. It plans and validates the
         // dependency update before mutating the table, and clones only the
@@ -262,6 +267,8 @@ impl Instance {
 /// a caller-owned guarantee for this transformation.
 /// Fixed and dependent variables cannot be substitution targets. To extend
 /// a representation, substitute its remaining independent variables.
+/// All assignment targets and right-hand-side variable IDs must already belong
+/// to the instance; substitution does not declare new variables.
 ///
 /// ```
 /// use ommx::{
@@ -485,6 +492,70 @@ mod tests {
     use super::*;
     use crate::{coeff, constraint::Equality, linear, DecisionVariable, Evaluate, Sense};
     use std::collections::BTreeMap;
+
+    #[test]
+    fn substitution_rejects_undefined_ids_before_mutation() {
+        let mut source = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(0)),
+            (0..3)
+                .map(|id| (VariableID::from(id), DecisionVariable::binary()))
+                .collect(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        source.convert_active_objective(Sense::Maximize);
+        let unknown = VariableID::from(99);
+        let cases = [
+            vec![(unknown, Function::from(linear!(1)))],
+            vec![(VariableID::from(0), Function::from(linear!(99)))],
+            // The unknown intermediate must not disappear through flattening.
+            vec![
+                (VariableID::from(0), Function::from(linear!(99))),
+                (unknown, Function::from(linear!(1))),
+            ],
+            // Even assignments outside the active formulation enter reconstruction.
+            vec![(VariableID::from(2), Function::from(linear!(99)))],
+        ];
+        let expected = SubstitutionError::UndefinedSubstitutionVariable { variable: unknown };
+        for assignments in cases {
+            let acyclic = crate::AcyclicAssignments::new(assignments.clone()).unwrap();
+            let mut instance = source.clone();
+            assert_eq!(
+                crate::substitute(&mut instance, assignments.clone()).unwrap_err(),
+                expected
+            );
+            assert_eq!(instance, source);
+            assert_eq!(
+                crate::substitute_acyclic(&mut instance, &acyclic).unwrap_err(),
+                expected
+            );
+            assert_eq!(instance, source);
+            if assignments.len() == 1 {
+                let (id, function) = &assignments[0];
+                assert_eq!(
+                    crate::substitute_one(&mut instance, *id, function).unwrap_err(),
+                    expected
+                );
+                assert_eq!(instance, source);
+            }
+            for assumption in [false, true] {
+                assert_eq!(
+                    source
+                        .clone()
+                        .substitute_with_optimality_assumption(assignments.clone(), assumption)
+                        .unwrap_err(),
+                    expected
+                );
+                assert_eq!(
+                    ParametricInstance::from(source.clone())
+                        .substitute_with_optimality_assumption(assignments.clone(), assumption)
+                        .unwrap_err(),
+                    expected
+                );
+            }
+        }
+    }
 
     #[test]
     fn caller_optimality_assumption_composes_with_existing_guarantee() {
@@ -893,7 +964,12 @@ mod tests {
             .apply_encoding_substitution(&acyclic, Vec::new(), ATol::default())
             .unwrap_err();
 
-        assert!(err.to_string().contains("unowned decision variable"));
+        assert_eq!(
+            err.downcast_ref::<SubstitutionError>(),
+            Some(&SubstitutionError::UndefinedSubstitutionVariable {
+                variable: VariableID::from(999),
+            }),
+        );
         assert_eq!(instance, before);
     }
 
