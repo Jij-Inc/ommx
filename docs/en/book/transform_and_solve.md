@@ -18,7 +18,7 @@ When the solver supports special constraints directly, you may also want to make
 
 ## Separate input requirements from permitted transformations
 
-An **Adapter** connects an Instance to a backend's input and output. Its input requirements describe the representation it can accept directly: variable kinds, expression forms, constraint families, and optimization direction. A familiar problem name alone is not enough to decide whether an input matches. Even mathematically equal expressions can have different stored forms.
+An **Adapter** connects an Instance to a backend's input and output and interprets backend reports against the problem actually solved. Its input requirements describe the representation it can accept directly: variable kinds, expression forms, constraint families, and optimization direction. A familiar problem name alone is not enough to decide whether an input matches. Even mathematically equal expressions can have different stored forms.
 
 OMMX calls the process of applying selected transformations toward a target representation **Preparation**. The target says what the result must satisfy; the policy says which transformations may be used. For example, you can choose to express linear indicator constraints as ordinary inequalities and pass SOS1 constraints directly to the solver. Creating a policy does not transform a problem, and reaching the target does not mean every allowed transformation was needed.
 
@@ -65,10 +65,22 @@ If preparation cannot reach the target, inspect the unmet input conditions and t
 
 The {mod}`Adapter Reference <ommx.adapter>` explains the execution paths for recommended or explicitly chosen preparation. The {doc}`adapter catalogue </api/adapters>` leads to each backend's contracts. Solver names are not interchangeable with problem classes: for example, OpenJij SA can accept Binary polynomials beyond quadratic degree, so its actual input requirements are the useful starting point.
 
-After execution, interpret the candidate against the corresponding problem and its retained evaluation information. A successful solve call or a favorable backend objective does not replace that check. [Evaluate candidates and interpret results](./evaluate_and_interpret.md) explains how to separate reconstructed values, reported objectives, feasibility, and optimality when comparing results.
+After execution, interpret the candidate against the corresponding problem and its retained evaluation information. A successful solve call or a favorable backend objective does not replace that check. Even when no candidate is returned, read termination reports against the problem actually solved; carrying conclusions back to the original problem requires the transformations' correspondences and preservation guarantees. [Evaluate candidates and interpret results](./evaluate_and_interpret.md) separates reconstructed values, reported objectives, feasibility, and optimality, and explains conclusions without candidates and how results connect back to requirements.
 
-## Build on common processing
+(shared-analysis-and-transformations)=
+## Share analyses, transformations, and guarantees
 
 OMMX already provides individual transformations, policies that select supported operations, and candidate evaluation. It also provides {meth}`bound tightening <ommx.Instance.tighten_bounds_simultaneously_once>`: for example, a constraint $x\leq3$ can refine a declared upper bound of $10$. This operation applies one simultaneous update; it is not a complete presolver that repeats until convergence or detects every infeasible problem.
 
-The development direction is to accumulate both transformation techniques and the knowledge of when to select and repeat them. Keeping these operations on the common representation lets new modelers and solving methods reuse that work. Today, choose the supported operations and read their guarantees; general automatic orchestration remains a development direction.
+A problem that a solver already accepts may still be reduced through preprocessing, or **Presolve**. Selecting and repeating such operations serves a different purpose from Preparation, which establishes input requirements.
+
+The development direction is to share the following mechanisms alongside individual techniques:
+
+- Analyses that inspect properties and structure without rewriting the problem.
+- Transformations that rewrite the problem using analysis results and applicability conditions.
+- Decisions about whether analysis results remain reusable after constraints or objectives change, or need to be recomputed.
+- Composition of transformations according to the required guarantees, supporting reconstruction of original values and interpretation of results.
+
+For example, a transformation may use a bound inferred from a constraint. After that constraint is removed, the same bound may no longer be justified. Tracking the conditions on which an analysis result depends should let the processing system decide which information it can reuse.
+
+Users choose the guarantees their task requires, such as feasibility or optimality preservation. The aim is for the processing system to handle whether a chosen transformation path establishes them, reducing the need to check each combination manually. Today, input checks and individual operation guarantees guide transformation choices. Management of analysis reuse, general automatic selection and repetition, and composition of guarantees remain development directions. Accumulating them on the common representation would make them reusable by new modelers and solving methods.

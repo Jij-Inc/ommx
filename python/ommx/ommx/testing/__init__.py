@@ -15,6 +15,8 @@ from ommx import (
 
 
 class DataType(enum.Enum):
+    """Numeric type used to generate the matrix and solution of a test LP."""
+
     INT = enum.auto()
     FLOAT = enum.auto()
 
