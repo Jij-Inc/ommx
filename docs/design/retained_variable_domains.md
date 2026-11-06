@@ -54,8 +54,9 @@ its active rows. The variable table can enforce local ID/domain consistency;
 only `Instance` can associate an inference with constraints and transformations.
 
 Store a sparse declared-domain record keyed by `VariableID`. Capture the domain
-before the first solver-oriented change; subsequent passes must not overwrite
-it. Absence means that no distinct declared domain has been recorded, and the
+before the first solver-oriented change, including an explicit effective-domain
+edit made before any inference; subsequent passes must not overwrite it. Absence
+means that no distinct declared domain has been recorded, and the
 current domain serves both roles. An explicitly retained record remains present
 even if later operations make the two domains equal.
 
@@ -88,7 +89,8 @@ domain retention is not an opportunity to change them implicitly.
 
 | Operation | Declared-domain and provenance behavior |
 | --- | --- |
-| Construction or explicit domain edit before inference | Establish the declared domain using the existing normalized domain rules. |
+| Construction or explicit source-domain edit before domain separation | Establish the declared and effective domains together using the existing normalized domain rules. |
+| Explicit effective-domain edit | Capture the declared domain before the first change, even without inference; change only the effective domain without creating an inference guarantee. |
 | Solver-oriented tightening | Capture once, narrow only the effective domain, and append an inference batch. |
 | Repeated tightening | Preserve the first declared domain; record the new entry/result and dependency on earlier inferences. |
 | Fixing or substitution | Preserve the source variable's declared domain and inference records while storing the existing fixed/dependent reconstruction rule. |
@@ -103,15 +105,22 @@ migration of existing clipping calls, coordinated with #1229. Tightening must
 use an owner-private commit path rather than invoking an API documented as an
 explicit source edit.
 
-For the first slice, source-domain edits after retained inference are rejected
-atomically with guidance to edit the pre-tightening instance and run inference
-again. This avoids silently keeping downstream bounds derived from a domain the
-user has changed. It also avoids pretending that the recorded domain is still
-the declaration after a user edit. Supporting in-place source edits and
-recomputation later requires its own dependency invalidation contract.
+For the first slice, source-domain edits are rejected atomically once the
+instance has a retained declared-domain record or inference batch, including
+a record created by an explicit effective-domain edit before inference. Guide
+users to edit the instance from before domain separation and rerun the selected
+operations. This instance-wide restriction avoids silently keeping downstream
+bounds derived from a domain the user has changed, or treating an old snapshot
+as the new declaration. It applies even if the two domains later become equal.
+Supporting in-place source edits and recomputation later requires its own
+dependency invalidation contract.
 
 An explicit effective-domain edit can keep historical provenance, but must not
-acquire an inference guarantee simply because an earlier batch was valid.
+acquire an inference guarantee simply because an earlier batch was valid. For
+example, explicitly changing the effective domain from `[0, 10]` to `[0, 8]`
+before any inference retains `[0, 10]`; a later inference to `[0, 5]` must not
+replace that declaration with `[0, 8]`. If the edit changes an input domain used
+by an earlier batch, apply the premise-invalidation rules below.
 Fixed-value consistency and the substituted variable's original kind remain
 the responsibility of their existing domain owners. Source-domain retention
 does not turn generic substitution into an equivalence-preserving operation.
@@ -175,10 +184,19 @@ diagnostics are interpretable without access to a mutable source instance.
 
 Parsing must validate existing variable IDs, domain normalization, record
 presence, batch ordering, premise references/snapshots, and fixed/dependent
-value consistency under the stated policy. An invalidated historical inference
-is valid data, not permission to use a stale guarantee. Older payloads without
-retention remain valid and mean that no distinct declaration was retained;
-they must not invent a historical source domain.
+value consistency under the stated policy. Here consistency means internal
+agreement with stored fixed values and reconstruction rules represented by the
+payload, not satisfaction of declared or effective domains by every evaluated
+value. A serialized infeasible candidate that passes the existing state-shape
+and numeric validation must remain readable, including a reconstructed
+dependent value outside either domain. Domain violations remain diagnostics;
+contradictory fixed/dependent assertions remain validation errors. This does not
+weaken the existing domain checks for fixed values in a model definition.
+
+An invalidated historical inference is valid data, not permission to use a stale
+guarantee. Older payloads without retention remain valid and mean that no
+distinct declaration was retained; they must not invent a historical source
+domain.
 
 v1 export must reject nonrepresentable retained semantics explicitly. It must
 not silently flatten them into the effective domain. A future explicit lossy
@@ -197,14 +215,20 @@ after all applicable boundaries below are covered.
    as well as fixtures to protect cross-table invariants.
 2. **Atomic capture and mutation contracts.** Integrate tightening, explicit
    source/effective edits, fixing, substitution and encoding. Include the
-   no-change path, repeated passes, late arithmetic failure, and premise edits
-   that invalidate provenance. Solver-used variables must continue to derive
+   no-change path, effective edits before the first inference, repeated passes,
+   late arithmetic failure, and premise edits that invalidate provenance. Check
+   that source edits after either form of domain separation fail atomically,
+   including when declared and effective domains have become equal again.
+   Solver-used variables must continue to derive
    only from Active Formulation; domain/provenance-only references do not make
    a variable solver-used.
 3. **Evaluation and persistence.** Add separate domain diagnostics for state
    and sample results, including serialization and sample extraction. Exercise
    the example above, discrete tolerance boundaries, semi and finite domains,
-   fixed/dependent values, and generated variables. Preserve current aggregate
+   fixed/dependent values, and generated variables. Round-trip infeasible
+   candidates (including reconstructed dependent values outside their domains)
+   through Solution, SampleSet, and per-sample extraction; separately reject
+   contradictory fixed/dependent assertions. Preserve current aggregate
    feasibility behavior until its separate redesign is accepted.
 4. **Public surfaces.** Expose coherent Rust/Python queries and explicit edit
    intentions, regenerate stubs, and document the supported workflow and
