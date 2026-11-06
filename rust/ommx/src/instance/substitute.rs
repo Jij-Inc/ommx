@@ -17,20 +17,107 @@ struct InstanceSubstitutionPlan {
 }
 
 impl Instance {
-    /// Plan the Active Formulation rewrite; reporting expressions use reconstructed values.
+    /// Substitute variables with an explicit caller assumption about optimality.
+    ///
+    /// Like [`Substitute::substitute`], this consumes the instance and rewrites
+    /// the Active Formulation while retaining source reporting expressions.
+    /// For a successful nonempty substitution, a retained output objective's
+    /// guarantee becomes `previous_guarantee && assume_preserves_optimality`.
+    /// A newly captured output objective starts with `previous_guarantee = true`.
+    /// Empty assignments are a no-op. If no output objective exists and the
+    /// active objective is unaffected, no output objective is created.
+    ///
+    /// Passing `true` is the caller's assertion that this transformation
+    /// preserves objective ordering through state reconstruction, including
+    /// discrete canonicalization at the tolerances used for evaluation. OMMX
+    /// does not verify the assertion. It cannot restore a guarantee lost by an
+    /// earlier transformation and does not assert feasibility with respect to
+    /// removed constraints. Pass `false` for the ordinary conservative behavior.
+    /// Built-in integer encodings establish their own guarantees separately.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same [`SubstitutionError`] as [`Substitute::substitute`] for
+    /// invalid assignments or expression arithmetic failures.
+    /// Every assignment target and right-hand-side variable must already belong
+    /// to this instance, including intermediate IDs in assignment chains and
+    /// assignments unused by the active formulation. Undefined IDs produce
+    /// [`SubstitutionError::UndefinedSubstitutionVariable`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use ommx::{linear, DecisionVariable, Function, Instance, Sense, VariableID};
+    /// use std::collections::BTreeMap;
+    /// let instance = Instance::new(
+    ///     Sense::Minimize, Function::from(linear!(0)),
+    ///     BTreeMap::from([
+    ///         (VariableID::from(0), DecisionVariable::binary()),
+    ///         (VariableID::from(1), DecisionVariable::binary()),
+    ///     ]), BTreeMap::new(),
+    /// ).unwrap();
+    /// // Exact binary-variable renaming: the caller asserts ordering preservation.
+    /// let instance = instance.substitute_with_optimality_assumption(
+    ///     [(VariableID::from(0), Function::from(linear!(1)))], true,
+    /// ).unwrap();
+    /// assert!(instance.output_objective().unwrap().preserves_optimality());
+    /// ```
+    pub fn substitute_with_optimality_assumption(
+        self,
+        assignments: impl IntoIterator<Item = (VariableID, Function)>,
+        assume_preserves_optimality: bool,
+    ) -> Result<Self, SubstitutionError> {
+        let acyclic = crate::AcyclicAssignments::new(assignments)?;
+        self.substitute_acyclic_with_optimality_assumption(&acyclic, assume_preserves_optimality)
+    }
+
+    fn substitute_acyclic_with_optimality_assumption(
+        mut self,
+        acyclic: &crate::AcyclicAssignments,
+        assume_preserves_optimality: bool,
+    ) -> Result<Self, SubstitutionError> {
+        if acyclic.is_empty() {
+            return Ok(self);
+        }
+        let plan = self.plan_substitution(acyclic, &BTreeSet::new())?;
+        self.decision_variable_dependency =
+            std::mem::take(&mut self.decision_variable_dependency).substitute_acyclic(acyclic)?;
+        self.commit_substitution(plan);
+        if let Some(output) = self.output_objective.as_mut() {
+            output.preserves_optimality &= assume_preserves_optimality;
+        }
+        Ok(self)
+    }
+
+    /// Validate owner references and plan the Active Formulation rewrite.
+    /// Fresh IDs are reserved by integer encoding before planning, but are not
+    /// inserted until all fallible work succeeds. They may only occur on the RHS.
     fn plan_substitution(
         &self,
         acyclic: &crate::AcyclicAssignments,
+        fresh_ids: &BTreeSet<VariableID>,
     ) -> Result<InstanceSubstitutionPlan, crate::SubstitutionError> {
         debug_assert!(!acyclic.is_empty());
         let substituted_variables: BTreeSet<VariableID> =
             acyclic.iter().map(|(var_id, _)| *var_id).collect();
 
-        for &variable in &substituted_variables {
+        for (&variable, function) in acyclic.iter() {
+            if !self.decision_variables.contains_key(&variable) {
+                return Err(SubstitutionError::UndefinedSubstitutionVariable { variable });
+            }
             if self.fixed_decision_variable_value(variable).is_some()
                 || self.decision_variable_dependency.get(&variable).is_some()
             {
                 return Err(SubstitutionError::AssignedVariableSubstitution { variable });
+            }
+            for required_id in function.required_ids() {
+                if !self.decision_variables.contains_key(&required_id)
+                    && !fresh_ids.contains(&required_id)
+                {
+                    return Err(SubstitutionError::UndefinedSubstitutionVariable {
+                        variable: required_id,
+                    });
+                }
             }
         }
 
@@ -145,21 +232,7 @@ impl Instance {
                 crate::bail!({ ?id }, "Fresh decision variable ID is already owned: {id:?}");
             }
         }
-        for id in acyclic.keys() {
-            if !self.decision_variables.contains_key(&id) {
-                crate::bail!({ ?id }, "Substitution target is not owned by this instance: {id:?}");
-            }
-        }
-        for id in acyclic.required_ids() {
-            if !self.decision_variables.contains_key(&id) && !fresh_ids.contains(&id) {
-                crate::bail!(
-                    { ?id },
-                    "Substitution references an unowned decision variable: {id:?}",
-                );
-            }
-        }
-
-        let plan = self.plan_substitution(acyclic)?;
+        let plan = self.plan_substitution(acyclic, &fresh_ids)?;
 
         // This is the last fallible operation. It plans and validates the
         // dependency update before mutating the table, and clones only the
@@ -186,8 +259,16 @@ impl Instance {
 /// Evaluation reconstructs the substituted variables before evaluating these
 /// expressions. This does not establish equivalence of optimization problems;
 /// see [`Substitute`] for the caller's control over domain preservation.
+/// Every nonempty generic substitution invalidates the optimality-transport
+/// guarantee of a retained output objective, including one captured by this
+/// operation. Algebraic substitution alone does not prove ordering after
+/// discrete reconstruction. Exact integer encodings use their own contract.
+/// Use [`Instance::substitute_with_optimality_assumption`] to explicitly supply
+/// a caller-owned guarantee for this transformation.
 /// Fixed and dependent variables cannot be substitution targets. To extend
 /// a representation, substitute its remaining independent variables.
+/// All assignment targets and right-hand-side variable IDs must already belong
+/// to the instance; substitution does not declare new variables.
 ///
 /// ```
 /// use ommx::{
@@ -212,7 +293,8 @@ impl Instance {
 /// let output = instance.output_objective().cloned();
 ///
 /// substitute(&mut instance, [(original, Function::from(linear!(1)))]).unwrap();
-/// assert_eq!(instance.output_objective(), output.as_ref());
+/// assert_eq!(instance.output_objective().unwrap().function(), output.unwrap().function());
+/// assert!(!instance.output_objective().unwrap().preserves_optimality());
 /// let state = State::from(HashMap::from([(1, 1.0)]));
 /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), -1.0);
 /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
@@ -223,17 +305,10 @@ impl Substitute for Instance {
     type Output = Self;
 
     fn substitute_acyclic(
-        mut self,
+        self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
-        if acyclic.is_empty() {
-            return Ok(self);
-        }
-        let plan = self.plan_substitution(acyclic)?;
-        self.decision_variable_dependency =
-            std::mem::take(&mut self.decision_variable_dependency).substitute_acyclic(acyclic)?;
-        self.commit_substitution(plan);
-        Ok(self)
+        self.substitute_acyclic_with_optimality_assumption(acyclic, false)
     }
 
     fn substitute_one(
@@ -245,13 +320,39 @@ impl Substitute for Instance {
     }
 }
 
-impl Substitute for ParametricInstance {
-    type Output = Self;
+impl ParametricInstance {
+    /// Substitute variables with a caller-owned optimality assumption.
+    ///
+    /// This has the same contract as
+    /// [`Instance::substitute_with_optimality_assumption`]: for nonempty
+    /// assignments, a retained output objective's guarantee becomes
+    /// `previous_guarantee && assume_preserves_optimality`. Its function and
+    /// sense are retained. Empty assignments are a no-op, and the guarantee
+    /// survives parameter materialization.
+    ///
+    /// Passing `true` asserts ordering preservation through reconstruction for
+    /// every parameter value and evaluation tolerance for which the resulting
+    /// instance will be used. OMMX does not verify this assertion. A previously
+    /// lost guarantee cannot be restored. Ordinary [`Substitute`] uses `false`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same [`SubstitutionError`] as [`Substitute::substitute`] for
+    /// invalid assignments or expression arithmetic failures.
+    pub fn substitute_with_optimality_assumption(
+        self,
+        assignments: impl IntoIterator<Item = (VariableID, Function)>,
+        assume_preserves_optimality: bool,
+    ) -> Result<Self, SubstitutionError> {
+        let acyclic = crate::AcyclicAssignments::new(assignments)?;
+        self.substitute_acyclic_with_optimality_assumption(&acyclic, assume_preserves_optimality)
+    }
 
-    fn substitute_acyclic(
+    fn substitute_acyclic_with_optimality_assumption(
         mut self,
         acyclic: &crate::AcyclicAssignments,
-    ) -> Result<Self::Output, crate::SubstitutionError> {
+        assume_preserves_optimality: bool,
+    ) -> Result<Self, SubstitutionError> {
         if acyclic.is_empty() {
             return Ok(self);
         }
@@ -359,7 +460,22 @@ impl Substitute for ParametricInstance {
         // Compose reconstruction rules; named functions use the reconstructed state.
         substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
 
+        if let Some(output) = self.output_objective.as_mut() {
+            output.preserves_optimality &= assume_preserves_optimality;
+        }
+
         Ok(self)
+    }
+}
+
+impl Substitute for ParametricInstance {
+    type Output = Self;
+
+    fn substitute_acyclic(
+        self,
+        acyclic: &crate::AcyclicAssignments,
+    ) -> Result<Self::Output, SubstitutionError> {
+        self.substitute_acyclic_with_optimality_assumption(acyclic, false)
     }
 
     fn substitute_one(
@@ -376,6 +492,227 @@ mod tests {
     use super::*;
     use crate::{coeff, constraint::Equality, linear, DecisionVariable, Evaluate, Sense};
     use std::collections::BTreeMap;
+
+    #[test]
+    fn substitution_rejects_undefined_ids_before_mutation() {
+        let mut source = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(0)),
+            (0..3)
+                .map(|id| (VariableID::from(id), DecisionVariable::binary()))
+                .collect(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        source.convert_active_objective(Sense::Maximize);
+        let unknown = VariableID::from(99);
+        let cases = [
+            vec![(unknown, Function::from(linear!(1)))],
+            vec![(VariableID::from(0), Function::from(linear!(99)))],
+            // The unknown intermediate must not disappear through flattening.
+            vec![
+                (VariableID::from(0), Function::from(linear!(99))),
+                (unknown, Function::from(linear!(1))),
+            ],
+            // Even assignments outside the active formulation enter reconstruction.
+            vec![(VariableID::from(2), Function::from(linear!(99)))],
+        ];
+        let expected = SubstitutionError::UndefinedSubstitutionVariable { variable: unknown };
+        for assignments in cases {
+            let acyclic = crate::AcyclicAssignments::new(assignments.clone()).unwrap();
+            let mut instance = source.clone();
+            assert_eq!(
+                crate::substitute(&mut instance, assignments.clone()).unwrap_err(),
+                expected
+            );
+            assert_eq!(instance, source);
+            assert_eq!(
+                crate::substitute_acyclic(&mut instance, &acyclic).unwrap_err(),
+                expected
+            );
+            assert_eq!(instance, source);
+            if assignments.len() == 1 {
+                let (id, function) = &assignments[0];
+                assert_eq!(
+                    crate::substitute_one(&mut instance, *id, function).unwrap_err(),
+                    expected
+                );
+                assert_eq!(instance, source);
+            }
+            for assumption in [false, true] {
+                assert_eq!(
+                    source
+                        .clone()
+                        .substitute_with_optimality_assumption(assignments.clone(), assumption)
+                        .unwrap_err(),
+                    expected
+                );
+                assert_eq!(
+                    ParametricInstance::from(source.clone())
+                        .substitute_with_optimality_assumption(assignments.clone(), assumption)
+                        .unwrap_err(),
+                    expected
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn caller_optimality_assumption_composes_with_existing_guarantee() {
+        for previous in [None, Some(false), Some(true)] {
+            for assume_preserves_optimality in [false, true] {
+                let mut source = Instance::new(
+                    Sense::Minimize,
+                    Function::from(linear!(0)),
+                    (0..3)
+                        .map(|id| (VariableID::from(id), DecisionVariable::binary()))
+                        .collect(),
+                    BTreeMap::new(),
+                )
+                .unwrap();
+                if previous.is_some() {
+                    source.convert_active_objective(Sense::Maximize);
+                }
+                let assigned = if previous == Some(false) {
+                    source = source
+                        .substitute_one(VariableID::from(0), &Function::from(linear!(1)))
+                        .unwrap();
+                    VariableID::from(1)
+                } else {
+                    VariableID::from(0)
+                };
+                let assignments = [(assigned, Function::from(linear!(2)))];
+                let instance = source
+                    .clone()
+                    .substitute_with_optimality_assumption(
+                        assignments.clone(),
+                        assume_preserves_optimality,
+                    )
+                    .unwrap();
+                let parametric = ParametricInstance::from(source)
+                    .substitute_with_optimality_assumption(assignments, assume_preserves_optimality)
+                    .unwrap();
+
+                for assumption in [false, true] {
+                    assert_eq!(
+                        instance
+                            .clone()
+                            .substitute_with_optimality_assumption([], assumption)
+                            .unwrap(),
+                        instance,
+                    );
+                    assert_eq!(
+                        parametric
+                            .clone()
+                            .substitute_with_optimality_assumption([], assumption)
+                            .unwrap(),
+                        parametric,
+                    );
+                    let invalid = [(assigned, Function::Zero)];
+                    assert_eq!(
+                        instance
+                            .clone()
+                            .substitute_with_optimality_assumption(invalid.clone(), assumption)
+                            .unwrap_err(),
+                        SubstitutionError::AssignedVariableSubstitution { variable: assigned },
+                    );
+                    assert_eq!(
+                        parametric
+                            .clone()
+                            .substitute_with_optimality_assumption(invalid, assumption)
+                            .unwrap_err(),
+                        SubstitutionError::AssignedVariableSubstitution { variable: assigned },
+                    );
+                }
+
+                let materialized = parametric
+                    .with_parameters(crate::v1::Parameters::default())
+                    .unwrap();
+                let expected = previous.unwrap_or(true) && assume_preserves_optimality;
+                for transformed in [instance, materialized] {
+                    let output = transformed.output_objective().unwrap();
+                    assert_eq!(output.preserves_optimality(), expected);
+                    assert_eq!(output.function(), &Function::from(linear!(0)));
+                    assert_eq!(output.sense(), Sense::Minimize);
+                    for status in [
+                        crate::v1::Optimality::Optimal,
+                        crate::v1::Optimality::NotOptimal,
+                    ] {
+                        assert_eq!(
+                            transformed.map_active_optimality(status),
+                            if expected {
+                                status
+                            } else {
+                                crate::v1::Optimality::Unspecified
+                            },
+                        );
+                    }
+                    for value in [0.0, 1.0] {
+                        let state = crate::v1::State::from_iter([(2, value)]);
+                        let solution = transformed.evaluate(&state, ATol::default()).unwrap();
+                        assert_eq!(*solution.objective(), value);
+                        assert!(solution.feasible());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn generic_substitution_invalidates_ordering_through_discrete_reconstruction() {
+        let source = Instance::new(
+            Sense::Minimize,
+            Function::from(((coeff!(4194304.0) * linear!(0)).unwrap() - linear!(1)).unwrap()),
+            BTreeMap::from([
+                (VariableID::from(0), DecisionVariable::binary()),
+                (VariableID::from(1), DecisionVariable::binary()),
+            ]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let replacement = Function::from((coeff!(0.000000476837158203125) * linear!(1)).unwrap());
+        for existing_output in [false, true] {
+            let mut source = source.clone();
+            if existing_output {
+                source.capture_output_objective();
+            }
+            let instance = source
+                .clone()
+                .substitute_one(VariableID::from(0), &replacement)
+                .unwrap();
+            let materialized = ParametricInstance::from(source)
+                .substitute_one(VariableID::from(0), &replacement)
+                .unwrap()
+                .with_parameters(crate::v1::Parameters::default())
+                .unwrap();
+            for transformed in [instance, materialized] {
+                assert!(!transformed
+                    .output_objective()
+                    .unwrap()
+                    .preserves_optimality());
+                for optimality in [
+                    crate::v1::Optimality::Optimal,
+                    crate::v1::Optimality::NotOptimal,
+                ] {
+                    assert_eq!(
+                        transformed.map_active_optimality(optimality),
+                        crate::v1::Optimality::Unspecified
+                    );
+                }
+                let atol = ATol::new(1e-6).unwrap();
+                for value in [0.0, 1.0] {
+                    let state = crate::v1::State::from_iter([(1, value)]);
+                    assert_eq!(
+                        transformed.objective().evaluate(&state, atol).unwrap(),
+                        value
+                    );
+                    let solution = transformed.evaluate(&state, atol).unwrap();
+                    assert_eq!(*solution.objective(), -value);
+                    assert!(solution.feasible());
+                }
+            }
+        }
+    }
 
     #[test]
     fn repeated_substitution_reports_the_assigned_variable() {
@@ -627,7 +964,12 @@ mod tests {
             .apply_encoding_substitution(&acyclic, Vec::new(), ATol::default())
             .unwrap_err();
 
-        assert!(err.to_string().contains("unowned decision variable"));
+        assert_eq!(
+            err.downcast_ref::<SubstitutionError>(),
+            Some(&SubstitutionError::UndefinedSubstitutionVariable {
+                variable: VariableID::from(999),
+            }),
+        );
         assert_eq!(instance, before);
     }
 

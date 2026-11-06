@@ -172,6 +172,11 @@ impl OutputObjective {
     /// not assert feasibility or optimality with respect to removed
     /// constraints.
     ///
+    /// A guarantee may come from an operation's contract or an explicit caller
+    /// assumption passed to [`Instance::substitute_with_optimality_assumption`]
+    /// or [`ParametricInstance::substitute_with_optimality_assumption`]. OMMX
+    /// does not independently verify caller assumptions.
+    ///
     /// `false` means that no such proof is available. It does not assert that
     /// a reconstructed state is suboptimal. Use
     /// [`Instance::map_active_optimality`] when attaching a solver status to
