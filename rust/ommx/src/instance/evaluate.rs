@@ -203,7 +203,6 @@ enum PartialEvaluatePlan {
         fixed_values: BTreeMap<VariableID, f64>,
         objective: Option<Function>,
         active_constraint_replacements: BTreeMap<ConstraintID, Constraint>,
-        named_function_replacements: BTreeMap<NamedFunctionID, NamedFunction>,
     },
 }
 
@@ -236,21 +235,10 @@ impl PartialEvaluatePlan {
             active_constraint_replacements.insert(id, replacement);
         }
 
-        let mut named_function_replacements = BTreeMap::new();
-        for (&id, named_function) in instance.named_functions.entries() {
-            let Some(replacement) =
-                named_function.partial_evaluate_replacement(&evaluation_state, atol)?
-            else {
-                continue;
-            };
-            named_function_replacements.insert(id, replacement);
-        }
-
         Ok(Some(Self::RegularReplacement {
             fixed_values,
             objective,
             active_constraint_replacements,
-            named_function_replacements,
         }))
     }
 
@@ -279,7 +267,6 @@ impl PartialEvaluatePlan {
             && instance.constraint_collection.active().is_empty()
             && Self::has_no_active_special_constraints(instance)
             && instance.decision_variable_dependency.is_empty()
-            && instance.named_functions.required_ids().is_empty()
     }
 
     fn supports_regular_replacement_shape(instance: &Instance) -> bool {
@@ -571,7 +558,6 @@ impl Instance {
                 fixed_values,
                 objective,
                 active_constraint_replacements,
-                named_function_replacements,
             } => {
                 self.decision_variables
                     .merge_validated_fixed_values(fixed_values, atol);
@@ -583,9 +569,6 @@ impl Instance {
                     .expect(
                         "partial-evaluate plan prepared replacements from active constraint IDs",
                     );
-                self.named_functions
-                    .replace_rows(named_function_replacements)
-                    .expect("partial-evaluate plan prepared replacements from named-function IDs");
             }
         }
     }
@@ -640,8 +623,8 @@ impl Instance {
         self.objective.partial_evaluate(&normalized_state, atol)?;
         self.constraint_collection
             .partial_evaluate(&normalized_state, atol)?;
-        self.named_functions
-            .partial_evaluate(&normalized_state, atol)?;
+        // Reporting expressions retain their source variables. Evaluation
+        // populates fixed and dependent values before interpreting them.
 
         // Structural propagation can retain an approximately zero member to
         // preserve feasibility under the sum of member errors. An active row cannot
@@ -886,7 +869,9 @@ impl Evaluate for Instance {
     ///
     /// Partial evaluation canonicalizes validated supplied coordinates before
     /// propagation and substitution, rewrites active data, and preserves the
-    /// output objective. Existing fixed values remain authoritative, while
+    /// output objective. Named functions and existing removed constraints retain
+    /// their expressions; evaluation populates fixed and dependent values first.
+    /// Existing fixed values remain authoritative, while
     /// dependent assertions are checked before their derived targets are
     /// canonicalized. Values outside partial evaluation's existing kind/bound
     /// acceptance contract remain rejected.
@@ -2034,6 +2019,125 @@ mod tests {
     }
 
     #[test]
+    fn partial_evaluate_preserves_reporting_context_in_every_path() {
+        use crate::{OneHotConstraint, OneHotConstraintID};
+        for path in ["fixed_only", "regular", "dependent", "one_hot"] {
+            let mut instance = Instance::builder()
+                .sense(Sense::Minimize)
+                .objective(if path == "fixed_only" {
+                    Function::Zero
+                } else {
+                    Function::from((linear!(1) + linear!(2)).unwrap())
+                })
+                .decision_variables(BTreeMap::from([
+                    (VariableID::from(1), DecisionVariable::binary()),
+                    (VariableID::from(2), DecisionVariable::binary()),
+                    (VariableID::from(3), DecisionVariable::continuous()),
+                ]))
+                .constraints(BTreeMap::new())
+                .removed_constraints(BTreeMap::from([(
+                    ConstraintID::from(7),
+                    (
+                        Constraint::equal_to_zero(Function::from(
+                            ((linear!(1) + linear!(2)).unwrap() + coeff!(-1.0)).unwrap(),
+                        )),
+                        RemovedReason {
+                            reason: "source".into(),
+                            ..Default::default()
+                        },
+                    ),
+                )]))
+                .named_functions(BTreeMap::from([(
+                    NamedFunctionID::from(9),
+                    NamedFunction {
+                        function: Function::from(
+                            ((linear!(1) + linear!(2)).unwrap() + linear!(3)).unwrap(),
+                        ),
+                    },
+                )]))
+                .build()
+                .unwrap();
+            instance
+                .set_named_function_label(
+                    NamedFunctionID::from(9),
+                    crate::ModelingLabel {
+                        name: Some("source_metric".into()),
+                        subscripts: vec![4],
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+            if path == "dependent" {
+                instance.decision_variable_dependency =
+                    crate::assign! { 3 <- coeff!(2.0) * linear!(1) };
+            } else if path == "one_hot" {
+                instance
+                    .one_hot_constraint_collection
+                    .insert_active_with_context(
+                        OneHotConstraintID::from(8),
+                        OneHotConstraint::new([1, 2].into_iter().map(VariableID::from).collect())
+                            .unwrap(),
+                        crate::ConstraintContext::default(),
+                    )
+                    .unwrap();
+            }
+            let state = v1::State::from_iter([(1, 1.0)]);
+            let atol = ATol::default();
+            let plan = PartialEvaluatePlan::prepare(&instance, &state, atol).unwrap();
+            match path {
+                "fixed_only" => assert!(matches!(
+                    plan,
+                    Some(PartialEvaluatePlan::FixedValuesOnly { .. })
+                )),
+                "regular" => assert!(matches!(
+                    plan,
+                    Some(PartialEvaluatePlan::RegularReplacement { .. })
+                )),
+                _ => assert!(plan.is_none()),
+            }
+            let mut borrowed = instance.clone();
+            borrowed.partial_evaluate(&state, atol).unwrap();
+            let consumed = instance
+                .clone()
+                .into_partial_evaluated(&state, atol)
+                .unwrap();
+            assert_eq!(borrowed, consumed);
+            assert_eq!(
+                borrowed.named_function_table(),
+                instance.named_function_table()
+            );
+            assert_eq!(
+                borrowed.removed_constraints(),
+                instance.removed_constraints()
+            );
+            assert_eq!(borrowed.constraint_context(), instance.constraint_context());
+            if path == "one_hot" {
+                assert_eq!(
+                    borrowed.fixed_decision_variable_value(VariableID::from(2)),
+                    Some(0.0)
+                );
+            }
+            if path == "dependent" {
+                assert_eq!(
+                    borrowed.fixed_decision_variable_value(VariableID::from(3)),
+                    Some(2.0)
+                );
+            }
+            let expected = instance
+                .evaluate(&v1::State::from_iter([(1, 1.0), (2, 0.0), (3, 2.0)]), atol)
+                .unwrap();
+            let actual = borrowed
+                .evaluate(&v1::State::from_iter([(2, 0.0), (3, 2.0)]), atol)
+                .unwrap();
+            assert_eq!(
+                actual.evaluated_named_function_table(),
+                expected.evaluated_named_function_table()
+            );
+            assert_eq!(actual.objective(), expected.objective());
+        }
+    }
+
+    #[test]
     fn test_partial_evaluate_active_regular_shape_uses_replacement_plan() {
         let instance = Instance::builder()
             .sense(Sense::Minimize)
@@ -2130,7 +2234,7 @@ mod tests {
     fn test_partial_evaluate_regular_plan_replaces_only_overlapping_functions() {
         let changed_constraint_id = ConstraintID::from(1);
         let unchanged_constraint_id = ConstraintID::from(2);
-        let changed_named_function_id = NamedFunctionID::from(1);
+        let overlapping_named_function_id = NamedFunctionID::from(1);
         let unchanged_named_function_id = NamedFunctionID::from(2);
         let removed_reason = RemovedReason {
             reason: "test".to_string(),
@@ -2165,7 +2269,7 @@ mod tests {
             )]))
             .named_functions(BTreeMap::from([
                 (
-                    changed_named_function_id,
+                    overlapping_named_function_id,
                     NamedFunction {
                         function: Function::from((linear!(1) + linear!(3)).unwrap()),
                     },
@@ -2184,7 +2288,6 @@ mod tests {
         let Some(PartialEvaluatePlan::RegularReplacement {
             objective,
             active_constraint_replacements,
-            named_function_replacements,
             ..
         }) = PartialEvaluatePlan::prepare(&instance, &state, ATol::default()).unwrap()
         else {
@@ -2199,13 +2302,6 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![changed_constraint_id]
         );
-        assert_eq!(
-            named_function_replacements
-                .keys()
-                .copied()
-                .collect::<Vec<_>>(),
-            vec![changed_named_function_id]
-        );
 
         let original_objective = instance.objective().clone();
         let original_unchanged_constraint = instance
@@ -2213,11 +2309,7 @@ mod tests {
             .get(&unchanged_constraint_id)
             .unwrap()
             .clone();
-        let original_unchanged_named_function = instance
-            .named_functions()
-            .get(&unchanged_named_function_id)
-            .unwrap()
-            .clone();
+        let original_named_functions = instance.named_function_table().clone();
         let mut rewritten = instance;
         rewritten.partial_evaluate(&state, ATol::default()).unwrap();
 
@@ -2226,12 +2318,7 @@ mod tests {
             rewritten.constraints().get(&unchanged_constraint_id),
             Some(&original_unchanged_constraint)
         );
-        assert_eq!(
-            rewritten
-                .named_functions()
-                .get(&unchanged_named_function_id),
-            Some(&original_unchanged_named_function)
-        );
+        assert_eq!(rewritten.named_function_table(), &original_named_functions);
         assert_eq!(
             rewritten
                 .constraints()

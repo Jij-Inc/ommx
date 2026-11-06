@@ -5,6 +5,13 @@ canonicalizes supplied values, fixes the specified variables, and substitutes
 them into active expressions. Use this to study a configuration or optimize
 the remaining variables under chosen conditions.
 
+Named functions and existing removed constraints retain their original
+expressions as Interpretation Context. The new Instance stores fixed values
+and normalizes dependencies; {meth}`~ommx.Instance.evaluate` and
+{meth}`~ommx.Instance.evaluate_samples` populate those values before evaluating
+the retained expressions. Calling {meth}`~ommx.NamedFunction.partial_evaluate`
+on an individual named function still rewrites that function's expression.
+
 `state` accepts a {class}`~ommx.State`, an ID-to-value mapping, or an iterable of
 `(variable_id, value)` pairs. `atol` is the absolute tolerance; `None` uses
 the default from {func}`~ommx.get_default_atol`.

@@ -42,6 +42,9 @@ on the same Instance, or on the returned transformed Instance. For example:
 - {meth}`~ommx.Instance.log_encode` changes the solver's variables and retains
   the expressions needed to reconstruct the encoded values. Named functions
   keep their original expressions and use those reconstructed values.
+- {meth}`~ommx.Instance.partial_evaluate` fixes variables and simplifies active
+  expressions. Named functions and existing removed constraints retain their
+  expressions and use the saved fixed values during evaluation.
 - {meth}`~ommx.Instance.lower_special_constraints` retains source constraints
   and records the provenance of generated constraints.
 - {meth}`~ommx.Instance.convert_active_objective` preserves the objective and
@@ -66,10 +69,6 @@ Consult each operation's rewrite scope and preservation guarantees. The
 principle above does not imply that all current operations leave context
 expressions unchanged or retain every source detail:
 
-- {meth}`~ommx.Instance.partial_evaluate` currently also rewrites named functions.
-  In contrast, {meth}`~ommx.Instance.substitute`, {meth}`~ommx.Instance.log_encode`,
-  and {meth}`~ommx.Instance.unary_encode` preserve named-function expressions
-  and record the dependencies needed to evaluate them after reconstruction.
 - {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` and
   {meth}`~ommx.Instance.add_integer_slack_to_inequality` replace a rewritten
   source row in place; they do not retain that original row separately.

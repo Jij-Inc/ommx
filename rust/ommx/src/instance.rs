@@ -214,6 +214,8 @@ impl OutputObjective {
 /// rewrite.
 /// [`Self::reduce_binary_power`] reduces only Active Formulation expressions
 /// and captures the original objective when needed for output evaluation.
+/// Partial evaluation preserves named-function and existing removed-constraint
+/// expressions, storing fixed values for evaluation after state population.
 ///
 /// Interpretation Context can require updates. For example,
 /// [`ParametricInstance::with_parameters`] specializes parameter-bearing
@@ -227,9 +229,6 @@ impl OutputObjective {
 /// principle above does not imply that all current operations leave context
 /// expressions unchanged or retain every source detail:
 ///
-/// - Partial evaluation also rewrites named functions. Substitution and integer
-///   encodings ([`Self::log_encode`] and [`Self::unary_encode`]) preserve their
-///   expressions and record dependencies for evaluation after reconstruction.
 /// - [`Self::convert_inequality_to_equality_with_integer_slack`] and
 ///   [`Self::add_integer_slack_to_inequality`] replace a rewritten source row
 ///   in place without separately retaining that original row.
