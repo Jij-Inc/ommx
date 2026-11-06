@@ -9,9 +9,8 @@ See the publication records for
 `MIPLIB v2.7 <https://github.com/Jij-Inc/ommx/blob/1ec99bbe3c36696e5fce3cac2cd87616e457af49/rust/dataset/distributions/v2.7/README.md>`_
 and `QPLIB v2.8 <https://github.com/Jij-Inc/ommx/blob/b4cffe9f1ce5323c15de67eca55b05d9f87285a0/rust/dataset/distributions/v2.8/README.md>`_
 for coverage, corrections and model digests. Dataset annotations describe the
-published instance. The :doc:`benchmark solving example </examples/published_benchmarks>`
-compares a solver result with the published objective. A known objective value
-alone does not establish the feasibility or optimality of a candidate.
+published instance. A known objective value alone does not establish the
+feasibility or optimality of a candidate.
 
 For local files, use :meth:`ommx.Instance.load_mps` or :meth:`ommx.Instance.load_qplib`.
 :func:`ommx.qplib.load_solution` shows how to read a problem and a matching

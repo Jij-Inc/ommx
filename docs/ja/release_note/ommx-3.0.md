@@ -241,7 +241,7 @@ SCIP での利用例は {meth}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter.solv
 埋め込まれ、内容と CLI バージョンに対応するキャッシュに展開されます。
 現在の `SKILL.md` は配布確認用の
 プレースホルダーで、OMMX の利用方法を説明する本文は別途追加します。
-導入・更新手順は [OMMX のエージェントプラグインとスキルを取得・導入する](../user_guide/agent_skills.md)
+導入・更新手順は [OMMX のエージェントプラグインとスキルを取得・導入する](../how_to/agent_skills.md)
 を参照してください。
 
 ### 🆕 Python SDK から OMMX CLI を実行 ([#1263](https://github.com/Jij-Inc/ommx/pull/1263))
@@ -812,7 +812,7 @@ Beta 2から移行する場合は、OpenJijのモデル変換optionとpre-releas
 `OpenJijPreparation*` APIを、この共通フローに置き換えてください。exact inputの意味は
 {class}`~ommx.InstanceClass`、Policyと実行の責任境界は
 {meth}`~ommx.Instance.prepare`、完全な利用例は
-[OpenJijによるサンプリング](../tutorial/tsp_sampling_with_openjij_adapter)、対応するAPIの
+[OpenJijによるサンプリング](../examples/tsp_sampling_with_openjij_adapter)、対応するAPIの
 置き換えは[Python SDK v2からv3へのマイグレーションガイド](../migration/python_sdk_v2_to_v3.md)
 を参照してください。
 
@@ -871,7 +871,7 @@ source_samples = preparation.evaluate_source(prepared_samples)
 applicabilityを確認してください。受け入れるmodel classとpreparationの詳細は
 {class}`~ommx.InstanceClass` と
 {meth}`~ommx.Instance.prepare` および
-[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) を参照してください。
+[OpenJij tutorial](../examples/tsp_sampling_with_openjij_adapter) を参照してください。
 
 2.6.1から移行する場合、非対応入力にはAdapter固有exceptionではなく
 `AdapterNotApplicableError`をcatchしてください。infeasibilityのcanonicalな型は
@@ -1365,7 +1365,7 @@ PySCIPOpt Adapter は、SCIP の `BESTSOLFOUND` と `DUALBOUNDIMPROVED` callback
 
 {class}`~ommx.experiment.Experiment`、{meth}`~ommx.experiment.Experiment.with_temp_local_registry`、{meth}`~ommx.experiment.Experiment.fork` が `store_trace=True` を受け取れるようになりました。有効化すると、各 `with experiment.run()` context 内で発生した OpenTelemetry span を capture し、close 済みの {class}`~ommx.experiment.SealedRun` に trace を 1 つ保存します。保存された trace は {attr}`~ommx.experiment.SealedRun.trace` から {class}`~ommx.tracing.TraceResult` として取得でき、commit、load、fork をまたいで保持されます。
 
-詳しい trace workflow、renderer、OpenTelemetry の設定については {mod}`ommx.tracing`と[外部送信の設定](../how_to/export_traces.md) を参照してください。
+詳しい trace workflow、renderer、OpenTelemetry の設定については {mod}`ommx.tracing` を参照してください。
 
 ```python
 from ommx.experiment import Experiment
@@ -1677,7 +1677,7 @@ assert instance.constraints[c.constraint_id].name == "budget"
 - **`%%ommx_trace`** — Jupyterセル単位でスパンツリーとChrome Trace JSONダウンロードリンクを表示するセルマジック
 - **`capture_trace` / `@traced`** — 通常のPythonスクリプト／テスト／CIから同じ機能を使うためのコンテキストマネージャとデコレータ
 
-詳しい使い方、独自 `TracerProvider` の設定方法、トラブルシューティングは {mod}`ommx.tracing`と[外部送信の設定](../how_to/export_traces.md) を参照してください。
+詳しい使い方、独自 `TracerProvider` の設定方法、トラブルシューティングは {mod}`ommx.tracing` を参照してください。
 
 ### 🆕 Solver / Sampler Adapter のトレーシング対応 ([#833](https://github.com/Jij-Inc/ommx/pull/833))
 
@@ -1752,7 +1752,7 @@ Instance.from_components(..., constraints={5: c}, ...)
 - {class}`~ommx.OneHotConstraint` — 従来 `ConstraintHints.OneHot` として扱われていた one-hot 制約
 - {class}`~ommx.Sos1Constraint` — 従来 `ConstraintHints.Sos1` として扱われていた SOS1 制約
 
-具体的な使い方と評価結果の参照については {class}`~ommx.IndicatorConstraint`・{class}`~ommx.OneHotConstraint`・{class}`~ommx.Sos1Constraint`、Indicator 制約を含む active / removed の扱いについては [候補を評価して結果を判断する](../user_guide/evaluate_and_interpret.md) を参照してください。
+具体的な使い方と評価結果の参照については {class}`~ommx.IndicatorConstraint`・{class}`~ommx.OneHotConstraint`・{class}`~ommx.Sos1Constraint`、Indicator 制約を含む active / removed の扱いについては [候補を評価して結果を判断する](../book/evaluate_and_interpret.md) を参照してください。
 
 これに伴い旧 API である `ConstraintHints` / `OneHot` / `Sos1` クラス、`Instance.constraint_hints` プロパティ、PySCIPOpt Adapter の `use_sos1` フラグは削除されています。
 

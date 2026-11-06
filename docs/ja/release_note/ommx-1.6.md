@@ -17,6 +17,6 @@ kernelspec:
 
 - 限定的なQUBOサポートが追加されました。
   - [OpenJij](https://github.com/OpenJij/OpenJij) を使った新しいアダプターパッケージ [ommx-openjij-adapter](https://pypi.org/project/ommx-openjij-adapter/) が追加されました。
-  - 使い方は新しい [チュートリアルページ](https://jij-inc.github.io/ommx/ja/tutorial/tsp_sampling_with_openjij_adapter.html) をご覧ください。
+  - 使い方は新しい [チュートリアルページ](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/examples/tsp_sampling_with_openjij_adapter.html) をご覧ください。
   - `ommx.v1.Instance` をQUBO形式に変換するためのいくつかのAPIが追加されました。上記のチュートリアルをご覧ください。
 - Python 3.8のサポートはEOLのため終了しました。

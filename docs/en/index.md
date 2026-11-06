@@ -20,11 +20,11 @@ You choose the requirements the model must satisfy, including when an AI tool he
 
 ## Evaluate a candidate you already have
 
-A production line can make up to 100 units per hour, but only 60 in reduced mode. A plan that calls for 65 units in an hour of reduced operation violates that limit, whether the plan came from a solver or from a colleague. OMMX can evaluate either plan against the same problem. [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md) explains how to distinguish checking this rule, checking the whole model, and establishing optimality. The {class}`Solution Reference <ommx.Solution>` shows how to evaluate a candidate and inspect the result.
+A production line can make up to 100 units per hour, but only 60 in reduced mode. A plan that calls for 65 units in an hour of reduced operation violates that limit, whether the plan came from a solver or from a colleague. OMMX can evaluate either plan against the same problem. [Evaluate candidates and interpret results](./book/evaluate_and_interpret.md) explains how to distinguish checking this rule, checking the whole model, and establishing optimality. The {class}`Solution Reference <ommx.Solution>` shows how to evaluate a candidate and inspect the result.
 
 ## Separate a problem's meaning from its representation for solving
 
-You can express the reduced-mode limit as an **indicator constraint**, which applies a condition when a binary variable takes a specified value. The {class}`PySCIPOpt Adapter <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` can pass this linear indicator directly to SCIP. You can also use the known upper bound on output to express the same rule as an ordinary inequality and try that formulation with SCIP. In either case, the planner specifies the production rule once. [Transform a problem and connect it to a solving method](./user_guide/transform_and_solve.md) derives the inequality and explains which guarantees to check for other transformations.
+You can express the reduced-mode limit as an **indicator constraint**, which applies a condition when a binary variable takes a specified value. The {class}`PySCIPOpt Adapter <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` can pass this linear indicator directly to SCIP. You can also use the known upper bound on output to express the same rule as an ordinary inequality and try that formulation with SCIP. In either case, the planner specifies the production rule once. [Transform a problem and connect it to a solving method](./book/transform_and_solve.md) derives the inequality and explains which guarantees to check for other transformations.
 
 ## Accumulate transformation techniques on a common representation
 
@@ -40,17 +40,17 @@ This introduction explains why you might adopt OMMX. The other three Book chapte
 
 | What do you need to decide? | Book chapter |
 |---|---|
-| Can the solver use my model directly? If I change its formulation, which properties must I preserve? | [Transform a problem and connect it to a solving method](./user_guide/transform_and_solve.md) |
-| Does this candidate meet the original requirements? What does the solver's reported objective or bound tell me? | [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md) |
-| What should I keep so someone else can inspect a result or repeat a trial? | [Save and share problems, results, and trials](./user_guide/record_and_share.md) |
+| Can the solver use my model directly? If I change its formulation, which properties must I preserve? | [Transform a problem and connect it to a solving method](./book/transform_and_solve.md) |
+| Does this candidate meet the original requirements? What does the solver's reported objective or bound tell me? | [Evaluate candidates and interpret results](./book/evaluate_and_interpret.md) |
+| What should I keep so someone else can inspect a result or repeat a trial? | [Save and share problems, results, and trials](./book/record_and_share.md) |
 
-To run something yourself, [install the SDK and any adapter you need](./getting_started/install.md). Choose an example when you want to follow a whole task, such as [comparing a solver result with a published benchmark](./examples/published_benchmarks.md) or [sampling and plotting routes for a traveling salesperson](./tutorial/tsp_sampling_with_openjij_adapter).
+To run something yourself, [install the SDK and any adapter you need](./getting_started/install.md). Choose an example when you want to follow a whole task, such as [sampling and plotting routes for a traveling salesperson](./examples/tsp_sampling_with_openjij_adapter).
 
 For an individual operation, start in the {doc}`Python API Reference <api/index>`. For example, {class}`~ommx.Solution` shows how to inspect a candidate and {func}`~ommx.qplib.load_solution` reads one from a file. The {doc}`adapter catalogue <api/adapters>` lists solver inputs and links to complete solve examples. To connect your own backend, see {class}`~ommx.adapter.SolverAdapter` or {class}`~ommx.adapter.SamplerAdapter`.
 
 To inspect a solver's search progress and termination report, see the {class}`SCIP <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>` or {class}`HiGHS <ommx_highs_adapter.HighsDiagnosticsAnalyzer>` diagnostic reference.
 
-To work with saved data, [inspect a local Artifact](./how_to/manage_local_registry.md) or [share it through a registry](./how_to/share_artifact_registry.md). To connect an external tool, [install an agent plugin](./user_guide/agent_skills.md) or [send spans to an OpenTelemetry collector](./how_to/export_traces.md).
+To work with saved data, [inspect a local Artifact](./how_to/manage_local_registry.md) or [share it through a registry](./how_to/share_artifact_registry.md). To connect an external tool, [install an agent plugin](./how_to/agent_skills.md) or see {mod}`ommx.tracing` to send spans to an OpenTelemetry collector.
 
 ## Support data exchange and sharing
 
@@ -79,9 +79,9 @@ Alongside problems and results, Artifacts can record what was solved and with wh
 :maxdepth: 1
 :hidden:
 
-user_guide/transform_and_solve
-user_guide/evaluate_and_interpret
-user_guide/record_and_share
+book/transform_and_solve
+book/evaluate_and_interpret
+book/record_and_share
 ```
 
 ```{toctree}
@@ -90,7 +90,7 @@ user_guide/record_and_share
 :hidden:
 
 getting_started/install
-user_guide/cli
+how_to/cli
 ```
 
 ```{toctree}
@@ -98,8 +98,7 @@ user_guide/cli
 :maxdepth: 1
 :hidden:
 
-examples/published_benchmarks
-tutorial/tsp_sampling_with_openjij_adapter
+examples/tsp_sampling_with_openjij_adapter
 ```
 
 ```{toctree}
@@ -116,8 +115,7 @@ how_to/share_artifact_registry
 :maxdepth: 1
 :hidden:
 
-user_guide/agent_skills
-how_to/export_traces
+how_to/agent_skills
 ```
 
 ```{toctree}

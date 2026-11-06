@@ -257,7 +257,7 @@ skill directory. The CLI embeds the bundle with Agent Plugins and Claude Code
 manifests, and materializes it in a cache keyed by its contents and CLI version.
 The current `SKILL.md` is a
 distribution placeholder; OMMX usage guidance will be provided separately.
-See [Install OMMX Agent Plugins and Skills](../user_guide/agent_skills.md)
+See [Install OMMX Agent Plugins and Skills](../how_to/agent_skills.md)
 for installation and updates.
 
 ### 🆕 Run the OMMX CLI from the Python SDK ([#1263](https://github.com/Jij-Inc/ommx/pull/1263))
@@ -273,7 +273,7 @@ uv run ommx list
 The console script shares argument parsing, command execution, and terminal
 output with the Rust executable, including `OMMX_LOCAL_REGISTRY_ROOT` support.
 `inspect` now prints JSON object keys in a stable order. See
-[Install and Run the OMMX CLI](../user_guide/cli.md) for installation options and
+[Install and Run the OMMX CLI](../how_to/cli.md) for installation options and
 {ref}`Local Registry cleanup workflow <experiment-cleanup-workflow>` for registry
 management.
 
@@ -862,7 +862,7 @@ were removed during preparation. If a later preparation step fails, changes
 from earlier completed steps remain. If you are migrating from v2 or Beta 2,
 replace OpenJij's model-conversion options and the prerelease
 `OpenJijPreparation*` APIs with this common workflow. See
-[Sampling with OpenJij](../tutorial/tsp_sampling_with_openjij_adapter) for a
+[Sampling with OpenJij](../examples/tsp_sampling_with_openjij_adapter) for a
 complete example and the
 [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for
 the corresponding API replacements.
@@ -924,7 +924,7 @@ Finite penalties and approximate integer slack now require explicit opt-in.
 Every prepared value is a new {class}`~ommx.Instance`, so applicability must be
 checked on `preparation.input`, not inferred from the source. See
 {class}`~ommx.InstanceClass` and the
-[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) for the
+[OpenJij tutorial](../examples/tsp_sampling_with_openjij_adapter) for the
 accepted model classes and preparation details.
 
 When migrating from 2.6.1, catch `AdapterNotApplicableError` instead of an
@@ -1439,7 +1439,7 @@ See the GitHub Release above for full details. The following summarizes the main
 
 {class}`~ommx.experiment.Experiment`, {meth}`~ommx.experiment.Experiment.with_temp_local_registry`, and {meth}`~ommx.experiment.Experiment.fork` now accept `store_trace=True`. When enabled, each `with experiment.run()` context captures the OpenTelemetry spans emitted inside that Run and stores one trace on the closed {class}`~ommx.experiment.SealedRun`. The stored trace is returned as {class}`~ommx.tracing.TraceResult` from {attr}`~ommx.experiment.SealedRun.trace`, and is carried through commit, load, and fork.
 
-See {mod}`ommx.tracing` and the [OTLP export guide](../how_to/export_traces.md) for the full tracing workflow, renderers, and OpenTelemetry setup notes.
+See {mod}`ommx.tracing` for the full tracing workflow, renderers, and OpenTelemetry setup notes.
 
 ```python
 from ommx.experiment import Experiment
@@ -1751,7 +1751,7 @@ Two entry points ship under `ommx.tracing`:
 - **`%%ommx_trace`** — a Jupyter cell magic that renders a per-cell span tree and a Chrome Trace JSON download link
 - **`capture_trace` / `@traced`** — a context manager and decorator for the same workflow from regular Python scripts, tests, and CI
 
-See {mod}`ommx.tracing` and the [OTLP export guide](../how_to/export_traces.md) for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
+See {mod}`ommx.tracing` for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
 
 ### 🆕 Tracing spans in solver/sampler adapters ([#833](https://github.com/Jij-Inc/ommx/pull/833))
 
