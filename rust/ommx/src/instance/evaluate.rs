@@ -507,6 +507,10 @@ impl Instance {
     /// consistent with discrete decision-variable kinds, and populate fixed,
     /// irrelevant, and dependent decision variables.
     ///
+    /// Uses Interpretation Context to reconstruct values from a candidate for
+    /// the Active Formulation; see [`Instance`] for these roles. Filling an
+    /// omitted irrelevant value supplies a default, not a reconstructed value.
+    ///
     /// Post-condition: the returned state contains exactly this instance's
     /// decision-variable IDs. For supplied coordinates that are neither fixed
     /// nor dependent, Binary values at most `atol` away from zero or one and

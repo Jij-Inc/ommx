@@ -181,7 +181,67 @@ impl OutputObjective {
     }
 }
 
-/// Instance, represents a mathematical optimization problem.
+/// A unit of OMMX's intermediate representation for optimization problems.
+///
+/// # Active Formulation and Interpretation Context
+///
+/// An instance holds both the current problem to solve and the information
+/// needed to reconstruct and interpret its results against the user's input:
+///
+/// - **Active Formulation** is the currently effective optimization problem:
+///   the objective and sense, used decision variables and their domains, and
+///   all active constraints, including special-constraint families. This is
+///   the solver-facing part of the intermediate representation. Acceptance by
+///   a particular adapter is a separate question; see [`crate::InstanceClass`].
+/// - **Interpretation Context** is the retained information needed to recover
+///   variable values and evaluate or explain results in terms of the user's
+///   input. It includes fixed values, decision-variable dependencies, removed
+///   constraints, an output objective, named functions, and relevant modeling
+///   labels and transformation provenance.
+///
+/// These are conceptual roles within the intermediate representation, not
+/// separate SDK types or disjoint copies of the model. For example, a retained
+/// variable definition may serve both roles. Interpretation Context need not
+/// contain an independent, complete copy of the original problem.
+///
+/// Transformations used to prepare a problem for solving normally rewrite the
+/// Active Formulation and retain or update the necessary Interpretation
+/// Context on the same instance (or on the returned transformed instance).
+/// For example, encoding a variable retains its reconstruction rule, lowering
+/// a special constraint retains its source row and provenance, and rewriting
+/// the active objective can retain an output objective. An expression being
+/// evaluable by OMMX does not by itself make it a target of an Active Formulation
+/// rewrite.
+/// [`Self::reduce_binary_power`] reduces only Active Formulation expressions
+/// and captures the original objective when needed for output evaluation.
+///
+/// Interpretation Context can require updates. For example,
+/// [`ParametricInstance::with_parameters`] specializes parameter-bearing
+/// expressions in both roles, including removed constraints, output objectives,
+/// named functions, and dependency expressions. Operations that explicitly
+/// change output semantics have a different contract:
+/// [`Self::as_minimization_problem`] and [`Self::as_maximization_problem`]
+/// convert both the active and output objectives.
+///
+/// Consult each operation's rewrite scope and preservation guarantees. The
+/// principle above does not imply that all current operations leave context
+/// expressions unchanged or retain every source detail:
+///
+/// - Substitution and partial evaluation also rewrite named functions, as do
+///   integer encodings ([`Self::log_encode`] and [`Self::unary_encode`]) that
+///   use substitution.
+/// - [`Self::convert_inequality_to_equality_with_integer_slack`] and
+///   [`Self::add_integer_slack_to_inequality`] replace a rewritten source row
+///   in place without separately retaining that original row.
+/// - [`Self::tighten_bounds_simultaneously_once`] updates retained variable
+///   bounds without preserving their previous values as original-domain
+///   information.
+///
+/// Reconstruction, feasibility, and optimality preservation are distinct:
+/// retaining Interpretation Context does not establish equivalence between
+/// the original and active problems. Use [`Self::populate_state`] to reconstruct
+/// values and [`Evaluate::evaluate`] to evaluate the candidate with the
+/// transformed instance.
 ///
 /// # Declared and solver-used variables
 ///
@@ -657,7 +717,11 @@ impl Instance {
         self.constraint_collection.active()
     }
 
-    /// Removed constraints.
+    /// Removed regular constraints retained as Interpretation Context.
+    ///
+    /// These are evaluated for result interpretation but are not conditions of
+    /// the Active Formulation. See [`Self`] for these roles and the owning
+    /// transformation for its preservation guarantees.
     pub fn removed_constraints(&self) -> &BTreeMap<ConstraintID, (Constraint, RemovedReason)> {
         self.constraint_collection.removed()
     }
