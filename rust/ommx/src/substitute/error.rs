@@ -30,6 +30,12 @@ pub enum SubstitutionError {
     #[error("Undefined variable ID is used in substitution: {variable:?}")]
     UndefinedSubstitutionVariable { variable: VariableID },
 
+    /// An Instance-owned variable already has a fixed value or reconstruction rule.
+    /// Substitute remaining independent variables, or start from the original
+    /// instance to choose a different representation.
+    #[error("Cannot substitute variable {variable:?}: it is already fixed or dependent; substitute remaining independent variables or start from the original instance")]
+    AssignedVariableSubstitution { variable: VariableID },
+
     /// Substituting a one-hot variable would change the constraint type.
     #[error("Cannot substitute variable {variable:?} of one-hot constraint {constraint_id:?}")]
     OneHotVariableSubstitution {

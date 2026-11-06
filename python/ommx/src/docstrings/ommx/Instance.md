@@ -33,6 +33,17 @@ not separate SDK types or disjoint copies of the model. A retained variable
 definition can serve both roles. Interpretation Context need not contain an
 independent, complete copy of the original problem.
 
+**Implementation contract:** {attr}`~ommx.Instance.used_decision_variables`
+must contain exactly the variables referenced by the active objective and
+every active constraint family, including structural uses such as an
+Indicator's controlling variable. {meth}`~ommx.Instance.required_ids` returns
+the same set of IDs. References occurring only in Interpretation Context must
+not contribute to this set. Maintaining this correspondence is the
+responsibility of the Instance implementation: construction, successful
+mutations and transformations, and extensions with new constraint families
+must preserve it. Solver adapters may rely on this contract when creating
+backend variables.
+
 **Transformation principle**
 
 Transformations used to prepare a problem for solving normally rewrite the
@@ -40,7 +51,11 @@ Active Formulation and retain or update the necessary Interpretation Context
 on the same Instance, or on the returned transformed Instance. For example:
 
 - {meth}`~ommx.Instance.log_encode` changes the solver's variables and retains
-  the expressions needed to reconstruct the encoded values.
+  the expressions needed to reconstruct the encoded values. Named functions
+  keep their original expressions and use those reconstructed values.
+- {meth}`~ommx.Instance.partial_evaluate` fixes variables and simplifies active
+  expressions. Named functions and existing removed constraints retain their
+  expressions and use the saved fixed values during evaluation.
 - {meth}`~ommx.Instance.lower_special_constraints` retains source constraints
   and records the provenance of generated constraints.
 - {meth}`~ommx.Instance.convert_active_objective` preserves the objective and
@@ -65,10 +80,6 @@ Consult each operation's rewrite scope and preservation guarantees. The
 principle above does not imply that all current operations leave context
 expressions unchanged or retain every source detail:
 
-- {meth}`~ommx.Instance.substitute` and {meth}`~ommx.Instance.partial_evaluate`
-  currently also rewrite named functions. Integer encodings
-  ({meth}`~ommx.Instance.log_encode` and {meth}`~ommx.Instance.unary_encode`)
-  use substitution and also rewrite named functions.
 - {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` and
   {meth}`~ommx.Instance.add_integer_slack_to_inequality` replace a rewritten
   source row in place; they do not retain that original row separately.

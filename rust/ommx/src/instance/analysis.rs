@@ -527,6 +527,8 @@ impl Instance {
 
     /// Return the decision-variable IDs needed by the active solver formulation.
     ///
+    /// This query implements the Active Formulation contract of [`Instance`]:
+    /// its result is exactly the set of IDs referenced by that formulation.
     /// When writing a solver integration, use this set rather than all declared
     /// variables to decide which backend variables to create. It contains IDs
     /// referenced by the active objective or active regular, Indicator, OneHot,

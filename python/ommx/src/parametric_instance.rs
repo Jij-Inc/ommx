@@ -545,6 +545,15 @@ impl ParametricInstance {
     /// expressions may only reference existing decision variable or parameter
     /// IDs; parameter IDs cannot be assignment targets.
     ///
+    /// Named functions, removed constraints, and existing output objectives
+    /// retain their expressions as Interpretation Context. The recorded
+    /// dependencies reconstruct substituted variables during evaluation after
+    /// {meth}`with_parameters` specializes parameters throughout both the
+    /// Active Formulation and Interpretation Context.
+    /// Fixed and dependent variables cannot be substitution targets. To extend
+    /// a representation, substitute its remaining independent variables;
+    /// start from the original instance to replace the representation itself.
+    ///
     /// **Args:**
     /// - `assignments`: A dict mapping decision variable IDs to the function
     ///   expressions that should replace them.
@@ -555,6 +564,9 @@ impl ParametricInstance {
     /// the replacement expression. If the substitution must preserve the
     /// optimization problem, the caller must provide a domain-preserving
     /// encoding or add the required linking and bound constraints explicitly.
+    /// Deliberately non-equivalent substitutions are also supported; OMMX
+    /// does not require or establish preservation of the feasible region or
+    /// optimal solutions.
     ///
     /// Raises ``ValueError`` on cyclic or recursive assignments, undefined
     /// IDs, when a parameter ID is used as an assignment target, or when
@@ -563,7 +575,10 @@ impl ParametricInstance {
     ///
     /// # Postconditions
     ///
-    /// Substitution rewrites active expressions while materialized output evaluation restores the substituted variable.
+    /// Substitution rewrites active expressions while materialized output evaluation
+    /// restores the substituted variable. An existing output objective is preserved;
+    /// if the active objective is affected and no output objective exists, its previous
+    /// function and sense are retained.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)

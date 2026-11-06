@@ -1310,6 +1310,10 @@ impl Instance {
 
     /// Decision variables used by the mathematical solver input.
     ///
+    /// This property implements the Active Formulation contract of
+    /// {class}`~ommx.Instance`: it contains exactly the variables referenced by
+    /// that formulation, with IDs matching {meth}`~ommx.Instance.required_ids`.
+    ///
     /// This list contains the variables referenced by the objective or by an
     /// active regular, Indicator, OneHot, or SOS1 constraint. Variables
     /// referenced only by the output objective, named functions, removed
@@ -2485,7 +2489,12 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Encoding preserves existing output semantics, or captures the pre-encoding active objective when no output objective exists, while rewriting the active objective.
+    /// Encoding rewrites the Active Formulation and records variable reconstruction
+    /// rules. Named functions and removed constraints keep their original expressions.
+    /// Fixed and dependent variables cannot be encoded again.
+    /// An existing output objective is preserved; if the active objective is affected
+    /// and no output objective exists, its previous function and sense are retained.
+    /// Evaluation restores the original variables before evaluating these expressions.
     ///
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.integer(0, lower=0, upper=3)
@@ -2554,7 +2563,12 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Encoding preserves existing output semantics, or captures the pre-encoding active objective when no output objective exists, while rewriting the active objective.
+    /// Encoding rewrites the Active Formulation and records variable reconstruction
+    /// rules. Named functions and removed constraints keep their original expressions.
+    /// Fixed and dependent variables cannot be encoded again.
+    /// An existing output objective is preserved; if the active objective is affected
+    /// and no output objective exists, its previous function and sense are retained.
+    /// Evaluation restores the original variables before evaluating these expressions.
     ///
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.integer(0, lower=2, upper=5, name="x")
@@ -2605,7 +2619,17 @@ impl Instance {
     /// Replaces each given decision variable with the provided function in the
     /// objective and all active constraints. This is the general substitution
     /// mechanism behind {meth}`~ommx.Instance.log_encode`, exposed so that
-    /// users can implement their own integer encodings (e.g. unary, one-hot).
+    /// users can implement their own variable representations. Named functions,
+    /// removed constraints, and an existing output objective retain their expressions
+    /// as Interpretation Context. The Instance records the assignments and composes
+    /// existing dependencies; {meth}`~ommx.Instance.evaluate` and
+    /// {meth}`~ommx.Instance.evaluate_samples` reconstruct values before evaluating
+    /// these expressions. Standalone Function or NamedFunction evaluation does not
+    /// have access to these Instance-owned reconstruction rules.
+    /// Fixed and dependent variables cannot be substitution targets: after
+    /// substituting ``x`` with ``y``, substituting ``y`` with ``z`` is allowed,
+    /// but substituting ``x`` again raises ``ValueError``. Start from the original
+    /// Instance to choose a different representation for ``x``.
     ///
     /// **Args:**
     /// - `assignments`: A dict mapping decision variable IDs to the function
@@ -2619,7 +2643,9 @@ impl Instance {
     /// an integer variable does not ensure that the replacement expression is
     /// integral. If the substitution must preserve the optimization problem,
     /// the caller must provide a domain-preserving encoding or add the required
-    /// linking and bound constraints explicitly.
+    /// linking and bound constraints explicitly. Deliberately non-equivalent
+    /// substitutions are also supported; OMMX does not require or establish
+    /// preservation of the feasible region or optimal solutions.
     ///
     /// The substituted variable's definition is retained and its value becomes
     /// dependent on the replacement expression. {meth}`~ommx.Instance.evaluate`
@@ -2672,7 +2698,9 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Substitution rewrites the active objective while output evaluation restores the substituted variable value.
+    /// Substitution rewrites active expressions and preserves existing output
+    /// semantics. If the active objective is affected and no output objective
+    /// exists, its previous function and sense are retained for output evaluation.
     ///
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)

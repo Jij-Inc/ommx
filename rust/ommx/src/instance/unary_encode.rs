@@ -60,6 +60,7 @@ impl Instance {
     /// this encoding does not require an additional encoding-validity
     /// constraint. The number of auxiliary variables grows linearly with the
     /// range width, so this is intended for narrow integer ranges.
+    /// Fixed and dependent variables cannot be encoded again.
     ///
     /// `max_range` is an upper bound on `upper - lower`, which is also the
     /// number of auxiliary binary variables introduced for this decision
@@ -73,8 +74,10 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Encoding rewrites only the active formulation and preserves evaluation
-    /// in the pre-encoding output semantics.
+    /// Encoding rewrites the Active Formulation and records reconstruction
+    /// rules. Named functions, removed constraints, and existing output
+    /// objectives keep their expressions in Interpretation Context. Evaluation
+    /// restores the original variables before evaluating those expressions.
     ///
     /// ```
     /// use ommx::{

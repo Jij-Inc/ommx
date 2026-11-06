@@ -23,6 +23,17 @@ pub use error::SubstitutionError;
 /// not, by itself, convert the substituted variable's kind or bound into
 /// additional constraints on the right-hand side.
 ///
+/// The target owns the rewrite boundary. Functions, polynomials, and individual
+/// named functions rewrite their expressions. [`crate::Instance`] and
+/// [`crate::ParametricInstance`] rewrite the Active Formulation and update
+/// reconstruction rules, preserving named-function expressions, removed
+/// constraints, and existing output objectives as Interpretation Context.
+/// Named functions are evaluated after restoring substituted variables.
+/// An affected active objective is retained for output evaluation when no
+/// output objective already exists.
+/// Instance-owned fixed and dependent variables cannot be substitution targets;
+/// extend a representation by substituting its remaining independent variables.
+///
 /// For example, substituting a binary variable `x1` with `x2 + x3` does not
 /// automatically add `0 <= x2 + x3 <= 1`. Likewise, substituting an integer
 /// variable does not automatically enforce that the right-hand side is integral.
@@ -30,6 +41,8 @@ pub use error::SubstitutionError;
 /// those domain requirements themselves, either by constructing a
 /// domain-preserving encoding (as in binary encodings) or by adding suitable
 /// linking and bound constraints.
+/// Deliberately non-equivalent substitutions are also supported; this operation
+/// does not establish preservation of the feasible region or optimal solutions.
 ///
 /// # Example
 ///

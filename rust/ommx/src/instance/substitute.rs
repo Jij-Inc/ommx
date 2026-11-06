@@ -1,12 +1,11 @@
 use super::*;
 use crate::{
     substitute_acyclic, substitute_one_via_acyclic, ATol, DecisionVariable, Function,
-    IndicatorConstraintID, ModelingLabel, NamedFunctionID, Substitute, SubstitutionError,
-    VariableID,
+    IndicatorConstraintID, ModelingLabel, Substitute, SubstitutionError, VariableID,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-/// All fallible results of substituting an [`Instance`].
+/// Planned expression replacements in an [`Instance`] Active Formulation.
 ///
 /// The root object prepares this plan without mutation, then commits only
 /// table-local replacements. This keeps substitution atomic without granting
@@ -15,11 +14,10 @@ struct InstanceSubstitutionPlan {
     objective: Option<Function>,
     constraint_replacements: BTreeMap<ConstraintID, Constraint>,
     indicator_replacements: BTreeMap<IndicatorConstraintID, IndicatorConstraint>,
-    named_function_replacements: BTreeMap<NamedFunctionID, NamedFunction>,
 }
 
 impl Instance {
-    /// Prepare every fallible rewrite required by an acyclic substitution.
+    /// Plan the Active Formulation rewrite; reporting expressions use reconstructed values.
     fn plan_substitution(
         &self,
         acyclic: &crate::AcyclicAssignments,
@@ -27,6 +25,14 @@ impl Instance {
         debug_assert!(!acyclic.is_empty());
         let substituted_variables: BTreeSet<VariableID> =
             acyclic.iter().map(|(var_id, _)| *var_id).collect();
+
+        for &variable in &substituted_variables {
+            if self.fixed_decision_variable_value(variable).is_some()
+                || self.decision_variable_dependency.get(&variable).is_some()
+            {
+                return Err(SubstitutionError::AssignedVariableSubstitution { variable });
+            }
+        }
 
         // Structural special-constraint variables cannot be substituted. Check
         // every family while the operation is still read-only.
@@ -99,30 +105,17 @@ impl Instance {
             }
         }
 
-        let mut named_function_replacements = BTreeMap::new();
-        for (&id, named_function) in self.named_functions.iter() {
-            if !named_function
-                .function
-                .required_ids()
-                .is_disjoint(&substituted_variables)
-            {
-                named_function_replacements
-                    .insert(id, named_function.clone().substitute_acyclic(acyclic)?);
-            }
-        }
-
         Ok(InstanceSubstitutionPlan {
             objective,
             constraint_replacements,
             indicator_replacements,
-            named_function_replacements,
         })
     }
 
     /// Commit a fully validated substitution plan using table-local effects.
     fn commit_substitution(&mut self, plan: InstanceSubstitutionPlan) {
         if let Some(objective) = plan.objective {
-            self.objective = objective;
+            self.replace_active_objective_preserving_output(objective);
         }
         self.constraint_collection
             .replace_active_rows(plan.constraint_replacements)
@@ -130,9 +123,6 @@ impl Instance {
         self.indicator_constraint_collection
             .replace_active_rows(plan.indicator_replacements)
             .expect("replacement IDs were read from active indicator constraints");
-        self.named_functions
-            .replace_rows(plan.named_function_replacements)
-            .expect("replacement IDs were read from named functions");
     }
 
     /// Apply an exact encoding's active-formulation substitution together with
@@ -143,8 +133,6 @@ impl Instance {
     /// fallible operation, immediately before the planned rewrite is committed.
     /// Whether the rewritten function happens to equal the original function is
     /// irrelevant: ownership of the rewrite determines the capture boundary.
-    /// Generic [`Substitute`] operations do not use this path and retain their
-    /// existing output-objective semantics.
     pub(super) fn apply_encoding_substitution(
         &mut self,
         acyclic: &crate::AcyclicAssignments,
@@ -171,8 +159,7 @@ impl Instance {
             }
         }
 
-        let mut plan = self.plan_substitution(acyclic)?;
-        let objective_is_affected = plan.objective.is_some();
+        let plan = self.plan_substitution(acyclic)?;
 
         // This is the last fallible operation. It plans and validates the
         // dependency update before mutating the table, and clones only the
@@ -185,13 +172,6 @@ impl Instance {
                 .insert(id, variable, label, None, atol)
                 .expect("fresh decision variable IDs were reserved from this instance");
         }
-        if objective_is_affected {
-            let replacement = plan
-                .objective
-                .take()
-                .expect("affected objective has a planned replacement");
-            self.replace_active_objective_preserving_output(replacement);
-        }
         self.commit_substitution(plan);
         Ok(())
     }
@@ -199,7 +179,15 @@ impl Instance {
 
 /// # Postconditions
 ///
-/// Substitution rewrites active functions while preserving the output objective.
+/// Substitution rewrites the Active Formulation and composes reconstruction
+/// rules. Named functions, removed constraints, and an existing output objective
+/// retain their source expressions. If the active objective is affected and no
+/// output objective exists, its previous function and sense are retained.
+/// Evaluation reconstructs the substituted variables before evaluating these
+/// expressions. This does not establish equivalence of optimization problems;
+/// see [`Substitute`] for the caller's control over domain preservation.
+/// Fixed and dependent variables cannot be substitution targets. To extend
+/// a representation, substitute its remaining independent variables.
 ///
 /// ```
 /// use ommx::{
@@ -278,6 +266,11 @@ impl Substitute for ParametricInstance {
             if !self.decision_variables.contains_key(var_id) {
                 return Err(SubstitutionError::UndefinedSubstitutionVariable { variable: *var_id });
             }
+            if self.decision_variables.fixed_value(*var_id).is_some()
+                || self.decision_variable_dependency.get(var_id).is_some()
+            {
+                return Err(SubstitutionError::AssignedVariableSubstitution { variable: *var_id });
+            }
             for required_id in function.required_ids() {
                 if !self.decision_variables.contains_key(&required_id)
                     && !self.parameters.contains_key(&required_id)
@@ -297,7 +290,17 @@ impl Substitute for ParametricInstance {
             }
         }
 
-        substitute_acyclic(&mut self.objective, acyclic)?;
+        if !self
+            .objective
+            .required_ids()
+            .is_disjoint(&substituted_variables)
+        {
+            let replacement = self.objective.clone().substitute_acyclic(acyclic)?;
+            let original = std::mem::replace(&mut self.objective, replacement);
+            if self.output_objective.is_none() {
+                self.output_objective = Some(OutputObjective::new(self.sense, original, true));
+            }
+        }
 
         let mut constraint_replacements = BTreeMap::new();
         for (&constraint_id, constraint) in self.constraint_collection.active() {
@@ -353,8 +356,7 @@ impl Substitute for ParametricInstance {
             }
         }
 
-        // Apply substitution to named functions and existing dependencies.
-        substitute_acyclic(&mut self.named_functions, acyclic)?;
+        // Compose reconstruction rules; named functions use the reconstructed state.
         substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
 
         Ok(self)
@@ -376,11 +378,179 @@ mod tests {
     use std::collections::BTreeMap;
 
     #[test]
+    fn repeated_substitution_reports_the_assigned_variable() {
+        let id = VariableID::from(0);
+        let source = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(0)),
+            BTreeMap::from([
+                (id, DecisionVariable::binary()),
+                (VariableID::from(1), DecisionVariable::binary()),
+            ]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let mut instance = source
+            .clone()
+            .substitute_one(id, &Function::from(linear!(1)))
+            .unwrap();
+        let before = instance.clone();
+        assert_eq!(
+            crate::substitute_one(&mut instance, id, &Function::Zero).unwrap_err(),
+            SubstitutionError::AssignedVariableSubstitution { variable: id },
+        );
+        assert_eq!(instance, before);
+
+        let mut parametric = ParametricInstance::from(source)
+            .substitute_one(id, &Function::from(linear!(1)))
+            .unwrap();
+        let before = parametric.clone();
+        assert_eq!(
+            crate::substitute_one(&mut parametric, id, &Function::Zero).unwrap_err(),
+            SubstitutionError::AssignedVariableSubstitution { variable: id },
+        );
+        assert_eq!(parametric, before);
+    }
+
+    #[test]
+    fn substitution_preserves_reporting_expressions_and_composes_reconstruction() {
+        use crate::{quadratic, Bound, Coefficient, Kind, NamedFunctionID};
+        let atol = ATol::default();
+        let x = VariableID::from(0);
+        let dependent = VariableID::from(1);
+        let huge = Coefficient::try_from(f64::MAX).unwrap();
+        // Finite at every original integer value, but expansion under
+        // x = b0 + b1 - 1 would introduce coefficients of magnitude 2 * MAX.
+        let metric = Function::from(((-huge * quadratic!(0, 0)).unwrap() + huge).unwrap());
+        let original = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(0)))
+            .decision_variables(BTreeMap::from([
+                (
+                    x,
+                    DecisionVariable::new(Kind::Integer, Bound::new(-1.0, 1.0).unwrap(), atol)
+                        .unwrap(),
+                ),
+                (dependent, DecisionVariable::continuous()),
+                (VariableID::from(2), DecisionVariable::binary()),
+                (VariableID::from(3), DecisionVariable::binary()),
+            ]))
+            .decision_variable_dependency(crate::assign! { 1 <- linear!(0) + coeff!(1.0) })
+            .constraints(BTreeMap::from([(
+                ConstraintID::from(4),
+                Constraint::less_than_or_equal_to_zero(Function::from(linear!(0) + coeff!(-1.0))),
+            )]))
+            .removed_constraints(BTreeMap::from([(
+                ConstraintID::from(5),
+                (
+                    Constraint::less_than_or_equal_to_zero(Function::from(
+                        linear!(0) + coeff!(-1.0),
+                    )),
+                    crate::constraint::RemovedReason {
+                        reason: "retained source".into(),
+                        ..Default::default()
+                    },
+                ),
+            )]))
+            .named_functions(BTreeMap::from([
+                (NamedFunctionID::from(0), NamedFunction { function: metric }),
+                (
+                    NamedFunctionID::from(1),
+                    NamedFunction {
+                        function: Function::from(quadratic!(1, 1)).abs(),
+                    },
+                ),
+            ]))
+            .build()
+            .unwrap();
+        let mut original = original;
+        original
+            .set_named_function_label(
+                NamedFunctionID::from(0),
+                ModelingLabel {
+                    name: Some("source_metric".into()),
+                    subscripts: vec![3],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+        for operation in 0..4 {
+            let mut encoded = original.clone();
+            let assignments = crate::assign! { 0 <- ((linear!(2) + linear!(3)).unwrap() + coeff!(-1.0)).unwrap() };
+            match operation {
+                0 => {
+                    encoded.log_encode([x], atol).unwrap();
+                }
+                1 => {
+                    encoded.unary_encode([x], 2, atol).unwrap();
+                }
+                2 => {
+                    encoded = encoded.substitute_acyclic(&assignments).unwrap();
+                }
+                _ => {
+                    let parametric = ParametricInstance::from(encoded)
+                        .substitute_acyclic(&assignments)
+                        .unwrap();
+                    assert_eq!(
+                        parametric.named_function_table(),
+                        original.named_function_table()
+                    );
+                    encoded = parametric
+                        .with_parameters(crate::v1::Parameters::default())
+                        .unwrap();
+                }
+            }
+            assert_eq!(
+                encoded.named_function_table(),
+                original.named_function_table()
+            );
+            assert_eq!(encoded.constraint_context(), original.constraint_context());
+            assert_eq!(
+                encoded.removed_constraints(),
+                original.removed_constraints()
+            );
+            assert_eq!(
+                encoded.output_objective().unwrap().function(),
+                original.objective()
+            );
+            assert!(encoded
+                .decision_variable_dependency()
+                .get(&dependent)
+                .is_some());
+            let ids: Vec<_> = encoded.used_decision_variable_ids().into_iter().collect();
+            assert_eq!(ids.len(), 2);
+            for mask in 0..4 {
+                let state = crate::v1::State::from_iter(
+                    ids.iter()
+                        .enumerate()
+                        .map(|(i, id)| (id.into_inner(), ((mask >> i) & 1) as f64)),
+                );
+                let actual = encoded.evaluate(&state, atol).unwrap();
+                let restored = actual.state();
+                let expected = original
+                    .evaluate(
+                        &crate::v1::State::from_iter([(0, restored.entries[&0])]),
+                        atol,
+                    )
+                    .unwrap();
+                assert_eq!(restored.entries[&1], restored.entries[&0] + 1.0);
+                assert_eq!(
+                    actual.evaluated_named_function_table(),
+                    expected.evaluated_named_function_table()
+                );
+                assert_eq!(actual.objective(), expected.objective());
+            }
+        }
+    }
+
+    #[test]
     fn test_instance_substitute() {
         // Create decision variables
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(VariableID::from(1), DecisionVariable::continuous());
         decision_variables.insert(VariableID::from(2), DecisionVariable::continuous());
+        decision_variables.insert(VariableID::from(3), DecisionVariable::continuous());
 
         // Create a simple instance: minimize x1 + 2*x2, subject to x1 + x2 <= 10
         let objective = Function::from((linear!(1) + coeff!(2.0) * linear!(2)).unwrap());
@@ -423,10 +593,21 @@ mod tests {
 
         let named_function = result.named_functions().get(&named_function_id).unwrap();
         let expected_ids: std::collections::BTreeSet<_> =
-            [VariableID::from(2), VariableID::from(3)]
+            [VariableID::from(1), VariableID::from(2)]
                 .into_iter()
                 .collect();
         assert_eq!(named_function.required_ids(), expected_ids);
+        let solution = result
+            .evaluate(
+                &crate::v1::State::from_iter([(2, 2.0), (3, 3.0)]),
+                ATol::default(),
+            )
+            .unwrap();
+        assert_eq!(solution.state().entries[&1], 4.0);
+        assert_eq!(
+            solution.evaluated_named_functions()[&named_function_id].evaluated_value(),
+            6.0
+        );
     }
 
     #[test]
