@@ -1,6 +1,6 @@
 # What is OMMX?
 
-OMMX (Open Mathematical prograMming eXchange) lets you describe **what you want to solve** separately from **how you solve it**. You can revise the formulation you send to a solver and still judge its candidates by the constraints and objective of the original problem. Connecting results back to those conditions helps you understand what to revisit in your requirements or input data.
+OMMX (Open Mathematical prograMming eXchange) lets you describe **what you want to solve** separately from **how you solve it**. You can revise the formulation you send to a solver and still judge its candidates by the constraints and objective of the original problem. Connecting results back to those conditions helps you understand what to revisit in your requirements or input data. It is a system that grows through new declarations, analyses, and transformations while retaining shared meanings and responsibilities.
 
 ## Responsibilities of modelers, OMMX, and adapters
 
@@ -31,17 +31,17 @@ A production line can make up to 100 units per hour, but only 60 in reduced mode
 
 You can express the reduced-mode limit as an **indicator constraint**, which applies a condition when a binary variable takes a specified value. The {class}`PySCIPOpt Adapter <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` can pass this linear indicator directly to SCIP. You can also use the known upper bound on output to express the same rule as an ordinary inequality and try that formulation with SCIP. In either case, the planner specifies the production rule once. [Transform a problem and connect it to a solving method](./book/transform_and_solve.md) derives the inequality and explains which guarantees to check for other transformations.
 
+OMMX is designed as an extensible system: new declarations and operations are added on top of shared meanings and responsibilities. The same principle of retaining structure before choosing a solver formulation applies to special constraints, evaluations such as assignment costs or route lengths, and objectives composed of several evaluation axes. For example, when treating cost, delay, and shortage counts as objectives, keep the individual axes separate from the choice of a weighted sum or lexicographic ordering. A customer's stated priorities remain requirements that this choice must satisfy.
+
+In this division of work, users, AI tools, and modelers clarify natural-language intent; common OMMX processing expands the agreed declarations into mathematical formulations. Adding declarations available to modelers such as JijModeling together with transformations that realize them reduces the need to construct that expansion separately for each application.
+
 ## Accumulate analysis and transformation techniques on a common representation
 
 Implementing preprocessing and transformations against a common representation lets modeling tools and solving methods reuse them. A new method can connect its inputs and outputs to that representation and benefit from the techniques already available. This is why OMMX develops both data exchange and shared processing of that data.
 
-## Development direction: extend declarations and shared processing
+Separating analyses that inspect properties from transformations that rewrite a problem, and making their applicability conditions, information dependencies, and preservation guarantees explicit, provides the foundation for extending this system. New operations follow the same contracts so they can be combined with existing ones. Users choose the guarantees they need; delegating combinations that respect those guarantees to shared processing is the design for reducing manual work in checking each combination. See {ref}`the relationship between analyses, transformations, and guarantees <shared-analysis-and-transformations>` for details.
 
-The development direction is to extend the structures you can declare beyond today's special constraints to evaluations such as assignment costs or route lengths, and to objectives composed of several evaluation axes. For example, the aim is to retain cost, delay, and shortage counts as individual objectives, choose a weighted sum or lexicographic ordering to suit the requirements, and evaluate results on each original objective. A customer's stated priorities remain requirements that this choice must satisfy. This planned support for objective structure and its realization is distinct from today's evaluation of additional metrics with {class}`~ommx.NamedFunction`.
-
-In this direction, users, AI tools, and modelers clarify natural-language intent, while shared transformations expand the agreed declarations into mathematical formulations. Connecting modelers such as JijModeling to OMMX should reduce the work of having people or AI tools construct and check that expansion separately for each application.
-
-The development direction separates analyses that inspect a problem's properties from transformations that rewrite it, and shares the reuse of analysis results and the selection and repetition of transformations. Users would choose the guarantees they need; the processing system would compose the guarantees of individual transformations to interpret results in the original problem. This should also reduce the work of checking each combination manually. The {ref}`end of the transformation chapter <shared-analysis-and-transformations>` explains the shared approach to analyses, transformations, and guarantees.
+Support for specific declarations and operations grows continuously within this system. Consult API Reference for the features available and their conditions.
 
 ## Start with your purpose
 

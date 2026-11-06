@@ -82,19 +82,18 @@ The {mod}`Adapter Reference <ommx.adapter>` explains the execution paths for rec
 After execution, interpret the candidate against the corresponding problem and its retained evaluation information. A successful solve call or a favorable backend objective does not replace that check. Even when no candidate is returned, read termination reports against the problem actually solved; carrying conclusions back to the original problem requires the transformations' correspondences and preservation guarantees. [Evaluate candidates and interpret results](./evaluate_and_interpret.md) separates reconstructed values, reported objectives, feasibility, and optimality, and explains conclusions without candidates and how results connect back to requirements.
 
 (shared-analysis-and-transformations)=
-## Development direction: share analyses, transformations, and guarantees
+## Combine analyses, transformations, and guarantees
 
 A problem that a solver already accepts may still be reduced through preprocessing, or **Presolve**. Selecting and repeating such operations serves a different purpose from Preparation, which establishes input requirements.
 
-The development direction is to share the following mechanisms alongside individual techniques:
+OMMX is a system for adding and combining analyses and transformations on a common problem representation. Its operations have the following responsibilities:
 
-- Analyses that inspect properties and structure without rewriting the problem.
-- Transformations that rewrite the problem using analysis results and applicability conditions.
-- Decisions about whether analysis results remain reusable after constraints or objectives change, or need to be recomputed.
-- Composition of transformations according to the required guarantees, supporting reconstruction of original values and interpretation of results.
+- An analysis inspects properties and structure without rewriting the problem and states the conditions on which its results depend.
+- A transformation rewrites the problem using analysis results and applicability conditions, and states its correspondence with the original problem and the guarantees it preserves.
+- Processing that combines analyses and transformations decides whether analysis results remain reusable after a change and connects transformations according to the required guarantees.
 
-For example, a transformation may use a bound inferred from a constraint. After that constraint is removed, the same bound may no longer be justified. Tracking the conditions on which an analysis result depends should let the processing system decide which information it can reuse.
+For example, a transformation may use a bound inferred from a constraint. After that constraint is removed, the same bound may no longer be justified. The processing that combines these operations is responsible for checking the analysis dependencies and deciding whether to retain, update, or recompute the result.
 
-Users choose the guarantees their task requires, such as feasibility or optimality preservation. The aim is for the processing system to handle whether a chosen transformation path establishes them, reducing the need to check each combination manually. Accumulating them on the common representation would make them reusable by new modelers and solving methods.
+New analyses and transformations must define their applicability conditions and guarantees within this division of responsibilities. Users choose the guarantees their task requires; the design makes combinations that satisfy them reusable as common processing. As declaration types and solving methods grow, the contract connecting each transformation to reconstruction and result interpretation remains shared.
 
-Available operations and guarantees cover different parts of this development direction. Consult each operation's API Reference, such as {meth}`Preparation <ommx.Instance.prepare>` or {meth}`bound tightening <ommx.Instance.tighten_bounds_simultaneously_once>`, for its specific applicability conditions and guarantees.
+Available operations, combinations, and guarantees vary by feature. Consult each operation's API Reference, such as {meth}`Preparation <ommx.Instance.prepare>` or {meth}`bound tightening <ommx.Instance.tighten_bounds_simultaneously_once>`, for its specific applicability conditions and guarantees.

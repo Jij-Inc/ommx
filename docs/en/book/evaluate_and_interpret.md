@@ -84,6 +84,4 @@ To identify the corresponding business declaration or input data, combine this i
 
 Tracing an origin, checking a candidate's violation, and establishing that the requirements cannot all hold are separate tasks. This candidate's limit violation and provenance alone do not establish infeasibility or identify conflicting requirements. Consult each operation's API Reference for the available provenance information and what it retains through a transformation.
 
-### Development direction: trace back to declarations through multiple transformations
-
-The direction is to build on the correspondence between special constraints and their generated constraints, extending it through multiple transformations from results and diagnostics to high-level declarations and their data. OMMX owns the correspondence between mathematical objects and transformations; modelers and applications own the mapping to business declarations and data. The aim is to connect these parts of the path.
+The responsibility to connect results back to requirements remains the same when new declarations or transformations are added. Their design must connect OMMX's correspondence between mathematical objects and transformations with the modeler's or application's mapping to business declarations and data. Carrying this correspondence through combinations of transformations is part of the contract for extending the system while preserving the meaning of results.
