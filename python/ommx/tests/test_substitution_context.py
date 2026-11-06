@@ -10,11 +10,96 @@ from ommx import (
     Instance,
     NamedFunction,
     OneHotConstraint,
+    Optimality,
     Parameter,
     ParametricInstance,
     Polynomial,
     Sense,
 )
+
+
+@pytest.mark.parametrize("parametric", [False, True])
+def test_reassigning_dependency_is_rejected_without_changing_output(parametric):
+    x, y, z = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x,
+        decision_variables=[x, y, z],
+        constraints={},
+        named_functions=[NamedFunction(id=9, function=x)],
+    )
+    target = instance.as_parametric_instance() if parametric else instance
+    target.substitute({0: y})
+    output = target.output_objective
+    assert output is not None and output.preserves_optimality
+    # Extending a substitution chain preserves the objective ordering.
+    target.substitute({1: z})
+    output = target.output_objective
+    assert output is not None and output.preserves_optimality
+    # Overwriting its source interpretation would reverse that ordering.
+    before = target.to_v2_bytes()
+    with pytest.raises(ValueError, match="already fixed or dependent"):
+        target.substitute({0: 1 - z})
+    assert target.to_v2_bytes() == before
+    result = (
+        target.with_parameters({}) if isinstance(target, ParametricInstance) else target
+    )
+    for concrete in (result, Instance.from_v2_bytes(result.to_v2_bytes())):
+        output = concrete.output_objective
+        assert output is not None and output.preserves_optimality
+        assert concrete.objective.evaluate({2: 0}) == 0
+        solution = concrete.evaluate({2: 0})
+        assert solution.objective == 0
+        assert solution.get_named_function_by_id(9).evaluated_value == 0
+        assert concrete.map_active_optimality(Optimality.Optimal) == Optimality.Optimal
+        assert (
+            concrete.map_active_optimality(Optimality.NotOptimal)
+            == Optimality.NotOptimal
+        )
+
+
+@pytest.mark.parametrize("parametric", [False, True])
+@pytest.mark.parametrize("normalize_dependency", [False, True])
+def test_substitution_rejects_fixed_targets_atomically(
+    parametric, normalize_dependency
+):
+    x, y, z = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x + z,
+        decision_variables=[x, y, z],
+        constraints={},
+    )
+    if normalize_dependency:
+        instance.substitute({0: y})
+        instance = instance.partial_evaluate({1: 1})
+    else:
+        instance = instance.partial_evaluate({0: 1})
+    target = instance.as_parametric_instance() if parametric else instance
+    before = target.to_v2_bytes()
+    with pytest.raises(ValueError, match="already fixed or dependent"):
+        target.substitute({2: 0, 0: y})
+    assert target.to_v2_bytes() == before
+
+
+@pytest.mark.parametrize("first", ["log_encode", "unary_encode"])
+@pytest.mark.parametrize("second", ["log_encode", "unary_encode", "substitute"])
+def test_integer_encoding_cannot_replace_existing_representation(first, second):
+    x = DecisionVariable.integer(0, lower=0, upper=3)
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x,
+        decision_variables=[x],
+        constraints={},
+    )
+    getattr(instance, first)({0})
+    before = instance.to_v2_bytes()
+    with pytest.raises(ValueError, match="already fixed or dependent"):
+        if second == "substitute":
+            instance.substitute({0: 0})
+        else:
+            getattr(instance, second)({0})
+    assert instance.to_v2_bytes() == before
 
 
 @pytest.mark.parametrize("path", ["fixed_only", "regular", "dependent", "one_hot"])
@@ -115,8 +200,9 @@ def test_substitution_preserves_named_function_for_reconstructed_values(
     assert instance.named_functions[0].function == metric
     assert instance.named_functions[0].name == "source_metric"
     assert instance.output_objective is not None
+    source_output = source.output_objective
     expected_output = (
-        source.output_objective.function if existing_output else source.objective
+        source_output.function if source_output is not None else source.objective
     )
     assert instance.output_objective.function == expected_output
     decoded = Instance.from_v2_bytes(instance.to_v2_bytes())
@@ -192,13 +278,13 @@ def test_substitution_only_in_context_does_not_capture_objective(operation):
         named_functions=[NamedFunction(id=9, function=source)],
     )
     if operation == "parametric":
-        instance = instance.as_parametric_instance()
-    if operation in ("substitute", "parametric"):
+        parametric = instance.as_parametric_instance()
+        parametric.substitute({0: bits[0] + bits[1] - 1})
+        instance = parametric.with_parameters({})
+    elif operation == "substitute":
         instance.substitute({0: bits[0] + bits[1] - 1})
     else:
         getattr(instance, operation)({0})
-    if operation == "parametric":
-        instance = instance.with_parameters({})
     assert instance.output_objective is None
     assert instance.required_ids() == set()
     assert instance.named_functions[0].function == source
@@ -248,10 +334,11 @@ def test_substitution_allows_intentionally_restricted_domain(parametric):
         named_functions=[NamedFunction(id=9, function=x * x)],
     )
     if parametric:
-        instance = instance.as_parametric_instance()
-    instance.substitute({0: 2 * b})  # Intentionally excludes original x = 1.
-    if parametric:
-        instance = instance.with_parameters({})
+        parameterized = instance.as_parametric_instance()
+        parameterized.substitute({0: 2 * b})
+        instance = parameterized.with_parameters({})
+    else:
+        instance.substitute({0: 2 * b})  # Intentionally excludes original x = 1.
     assert instance.named_functions[0].function.required_ids() == {0}
     for value in (0, 1):
         result = instance.evaluate({1: value})

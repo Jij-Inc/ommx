@@ -26,6 +26,14 @@ impl Instance {
         let substituted_variables: BTreeSet<VariableID> =
             acyclic.iter().map(|(var_id, _)| *var_id).collect();
 
+        for &variable in &substituted_variables {
+            if self.fixed_decision_variable_value(variable).is_some()
+                || self.decision_variable_dependency.get(&variable).is_some()
+            {
+                return Err(SubstitutionError::AssignedVariableSubstitution { variable });
+            }
+        }
+
         // Structural special-constraint variables cannot be substituted. Check
         // every family while the operation is still read-only.
         for (&constraint_id, constraint) in self.indicator_constraint_collection.active() {
@@ -178,6 +186,8 @@ impl Instance {
 /// Evaluation reconstructs the substituted variables before evaluating these
 /// expressions. This does not establish equivalence of optimization problems;
 /// see [`Substitute`] for the caller's control over domain preservation.
+/// Fixed and dependent variables cannot be substitution targets. To extend
+/// a representation, substitute its remaining independent variables.
 ///
 /// ```
 /// use ommx::{
@@ -255,6 +265,11 @@ impl Substitute for ParametricInstance {
             }
             if !self.decision_variables.contains_key(var_id) {
                 return Err(SubstitutionError::UndefinedSubstitutionVariable { variable: *var_id });
+            }
+            if self.decision_variables.fixed_value(*var_id).is_some()
+                || self.decision_variable_dependency.get(var_id).is_some()
+            {
+                return Err(SubstitutionError::AssignedVariableSubstitution { variable: *var_id });
             }
             for required_id in function.required_ids() {
                 if !self.decision_variables.contains_key(&required_id)
@@ -361,6 +376,41 @@ mod tests {
     use super::*;
     use crate::{coeff, constraint::Equality, linear, DecisionVariable, Evaluate, Sense};
     use std::collections::BTreeMap;
+
+    #[test]
+    fn repeated_substitution_reports_the_assigned_variable() {
+        let id = VariableID::from(0);
+        let source = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(0)),
+            BTreeMap::from([
+                (id, DecisionVariable::binary()),
+                (VariableID::from(1), DecisionVariable::binary()),
+            ]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let mut instance = source
+            .clone()
+            .substitute_one(id, &Function::from(linear!(1)))
+            .unwrap();
+        let before = instance.clone();
+        assert_eq!(
+            crate::substitute_one(&mut instance, id, &Function::Zero).unwrap_err(),
+            SubstitutionError::AssignedVariableSubstitution { variable: id },
+        );
+        assert_eq!(instance, before);
+
+        let mut parametric = ParametricInstance::from(source)
+            .substitute_one(id, &Function::from(linear!(1)))
+            .unwrap();
+        let before = parametric.clone();
+        assert_eq!(
+            crate::substitute_one(&mut parametric, id, &Function::Zero).unwrap_err(),
+            SubstitutionError::AssignedVariableSubstitution { variable: id },
+        );
+        assert_eq!(parametric, before);
+    }
 
     #[test]
     fn substitution_preserves_reporting_expressions_and_composes_reconstruction() {

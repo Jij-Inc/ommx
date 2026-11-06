@@ -31,6 +31,8 @@ pub use error::SubstitutionError;
 /// Named functions are evaluated after restoring substituted variables.
 /// An affected active objective is retained for output evaluation when no
 /// output objective already exists.
+/// Instance-owned fixed and dependent variables cannot be substitution targets;
+/// extend a representation by substituting its remaining independent variables.
 ///
 /// For example, substituting a binary variable `x1` with `x2 + x3` does not
 /// automatically add `0 <= x2 + x3 <= 1`. Likewise, substituting an integer

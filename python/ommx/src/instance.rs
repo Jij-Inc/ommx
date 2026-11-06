@@ -2487,6 +2487,7 @@ impl Instance {
     ///
     /// Encoding rewrites the Active Formulation and records variable reconstruction
     /// rules. Named functions and removed constraints keep their original expressions.
+    /// Fixed and dependent variables cannot be encoded again.
     /// An existing output objective is preserved; if the active objective is affected
     /// and no output objective exists, its previous function and sense are retained.
     /// Evaluation restores the original variables before evaluating these expressions.
@@ -2560,6 +2561,7 @@ impl Instance {
     ///
     /// Encoding rewrites the Active Formulation and records variable reconstruction
     /// rules. Named functions and removed constraints keep their original expressions.
+    /// Fixed and dependent variables cannot be encoded again.
     /// An existing output objective is preserved; if the active objective is affected
     /// and no output objective exists, its previous function and sense are retained.
     /// Evaluation restores the original variables before evaluating these expressions.
@@ -2620,6 +2622,10 @@ impl Instance {
     /// {meth}`~ommx.Instance.evaluate_samples` reconstruct values before evaluating
     /// these expressions. Standalone Function or NamedFunction evaluation does not
     /// have access to these Instance-owned reconstruction rules.
+    /// Fixed and dependent variables cannot be substitution targets: after
+    /// substituting ``x`` with ``y``, substituting ``y`` with ``z`` is allowed,
+    /// but substituting ``x`` again raises ``ValueError``. Start from the original
+    /// Instance to choose a different representation for ``x``.
     ///
     /// **Args:**
     /// - `assignments`: A dict mapping decision variable IDs to the function

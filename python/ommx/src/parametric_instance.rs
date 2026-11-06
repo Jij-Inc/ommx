@@ -550,6 +550,9 @@ impl ParametricInstance {
     /// dependencies reconstruct substituted variables during evaluation after
     /// {meth}`with_parameters` specializes parameters throughout both the
     /// Active Formulation and Interpretation Context.
+    /// Fixed and dependent variables cannot be substitution targets. To extend
+    /// a representation, substitute its remaining independent variables;
+    /// start from the original instance to replace the representation itself.
     ///
     /// **Args:**
     /// - `assignments`: A dict mapping decision variable IDs to the function

@@ -60,6 +60,7 @@ impl Instance {
     /// this encoding does not require an additional encoding-validity
     /// constraint. The number of auxiliary variables grows linearly with the
     /// range width, so this is intended for narrow integer ranges.
+    /// Fixed and dependent variables cannot be encoded again.
     ///
     /// `max_range` is an upper bound on `upper - lower`, which is also the
     /// number of auxiliary binary variables introduced for this decision
