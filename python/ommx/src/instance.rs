@@ -3631,17 +3631,26 @@ impl Instance {
             })
     }
 
-    /// Reduce binary powers in the instance.
+    /// Reduce binary powers in the active objective and constraints.
     ///
-    /// This method replaces binary powers in the instance with their equivalent linear expressions.
     /// For binary variables, $x^n = x$ for any $n \geq 1$, so we can reduce higher powers to linear terms.
     ///
+    /// Rewrites the active objective and active regular and Indicator constraint
+    /// bodies, using the Instance's variable kinds. OneHot and SOS1 constraints
+    /// contain variable sets rather than expression bodies and are unchanged.
+    /// Named functions, dependency
+    /// right-hand sides, removed constraints, and an existing output objective
+    /// are left unchanged.
+    ///
     /// **Returns:**
-    /// ``True`` if any reduction was performed, ``False`` otherwise.
+    /// ``True`` if a target expression changed, ``False`` otherwise.
+    /// A coefficient error in any target expression leaves the entire Instance unchanged.
     ///
     /// # Postconditions
     ///
-    /// Reduction preserves existing output semantics, or captures the pre-reduction active objective when no output objective exists, while rewriting active expressions.
+    /// Reduction preserves labels, constraint contexts, and lifecycle state.
+    /// If the active objective changes and no output objective exists, its
+    /// original function and sense are retained as the output objective.
     ///
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
