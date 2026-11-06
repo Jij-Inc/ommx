@@ -24,16 +24,22 @@
 //   whole-owner cloning; use the removed family or same-input run comparisons
 //   for that regression.
 //
-// Unrelated-named-function family
+// Named-function families
 // - Purpose: persistent fixed-input regression guardrail.
-// - Regression: routing through a generic atomic helper clones and rebuilds
-//   every unrelated named-function row.
-// - Origin: https://github.com/Jij-Inc/ommx/pull/1047.
+//   The mixed-reference family additionally guards scaling with context size.
+// - Regression: encoding scans, clones, or rewrites retained NamedFunctions.
+// - Origin: https://github.com/Jij-Inc/ommx/pull/1047 and
+//   https://github.com/Jij-Inc/ommx/issues/1365, following PR #1363.
 // - Measured boundary/input: Rust SDK Instance::log_encode with 32,000 fixed,
-//   deterministic named functions that do not reference the encoded variable.
-// - Cost model/evidence: inspect N functions for affected IDs plus fixed
-//   encoding work, without cloning their rows; compare the same URI across
-//   commits and use a profile only to diagnose a detected regression.
+//   unrelated NamedFunctions in the historical input; the separate scaling
+//   family varies N with half referencing each of the two declared variables.
+// - Cost model/evidence: fixed encoding work, with no NamedFunction traversal.
+//   Even references to the encoded variable belong to Interpretation Context.
+//   Keep variable count, expression size, Active Formulation, and ten-bit work
+//   fixed; expect same-run simulation cross-size p ~= 0. Native timings can
+//   still reflect cache/allocator state left by untimed fixture cloning.
+//   Preserve the historical URI/input for comparisons and use a profile only
+//   to diagnose a detected regression.
 //
 // Unrelated-dependency family
 // - Purpose: persistent fixed-input regression guardrail.
@@ -145,6 +151,10 @@ fn instance_with_active_constraints(num_active: usize) -> Instance {
 }
 
 fn instance_with_unrelated_named_functions(num_named_functions: usize) -> Instance {
+    instance_with_named_functions(num_named_functions, false)
+}
+
+fn instance_with_named_functions(num_named_functions: usize, mixed: bool) -> Instance {
     let decision_variables = BTreeMap::from([
         (
             VariableID::from(0),
@@ -162,7 +172,7 @@ fn instance_with_unrelated_named_functions(num_named_functions: usize) -> Instan
             (
                 NamedFunctionID::from(id),
                 NamedFunction {
-                    function: Function::from(linear!(1)),
+                    function: Function::from(linear!(if mixed { id % 2 } else { 1 })),
                 },
             )
         })
@@ -297,11 +307,35 @@ fn log_encode_unrelated_dependencies(c: &mut Criterion) {
     });
 }
 
+fn log_encode_mixed_named_functions(c: &mut Criterion) {
+    let mut group = c.benchmark_group("log-encode-mixed-named-functions");
+    for count in [1_000, 8_000, 32_000] {
+        let instance = instance_with_named_functions(count, true);
+        group.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &instance,
+            |b, instance| {
+                b.iter_batched_ref(
+                    || instance.clone(),
+                    |instance| {
+                        instance
+                            .log_encode([VariableID::from(0)], ATol::default())
+                            .unwrap()
+                    },
+                    criterion::BatchSize::LargeInput,
+                );
+            },
+        );
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     log_encode_removed_constraints,
     log_encode_active_constraints,
     log_encode_unrelated_named_functions,
+    log_encode_mixed_named_functions,
     log_encode_unrelated_dependencies,
 );
 criterion_main!(benches);
