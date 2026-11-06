@@ -43,10 +43,15 @@ pub use error::SubstitutionError;
 /// linking and bound constraints.
 /// Deliberately non-equivalent substitutions are also supported; this operation
 /// does not establish preservation of the feasible region or optimal solutions.
-/// Nonempty generic substitution also invalidates any retained output-objective
+/// Nonempty substitution through this trait invalidates any retained output-objective
 /// optimality guarantee: reconstruction can canonicalize discrete values and
 /// change ordering even when the algebraic rewrite is exact. Instance-owned
 /// integer encodings establish their guarantees separately.
+/// Callers that can assert ordering preservation through reconstruction can use
+/// [`Instance::substitute_with_optimality_assumption`](crate::Instance::substitute_with_optimality_assumption)
+/// or [`ParametricInstance::substitute_with_optimality_assumption`](crate::ParametricInstance::substitute_with_optimality_assumption).
+/// Those owner operations combine the caller's assumption with the existing
+/// guarantee using logical AND; they cannot restore a previously lost guarantee.
 ///
 /// # Example
 ///

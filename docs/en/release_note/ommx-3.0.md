@@ -52,13 +52,22 @@ contract.
 
 ### Conservative optimality transport after substitution ([#1368](https://github.com/Jij-Inc/ommx/pull/1368))
 
-Every successful nonempty {meth}`~ommx.Instance.substitute` or
+By default, every successful nonempty {meth}`~ommx.Instance.substitute` or
 {meth}`~ommx.ParametricInstance.substitute` call now sets a retained output
 objective's `preserves_optimality` to `False`, including one captured by that
 call. Reconstructing discrete variables can round their values and reverse
 objective ordering, so {meth}`~ommx.Instance.map_active_optimality` returns
 `Optimality.Unspecified` for that output objective. Its function and sense are
 retained; this conservative rule also applies to simple variable renaming.
+
+If the caller can guarantee ordering preservation, pass
+`substitute(assignments, assume_preserves_optimality=True)`. This is a caller
+assertion, not a check performed by OMMX, and must cover reconstruction including
+discrete rounding at the evaluation tolerances in use. For `ParametricInstance`,
+it must hold for every parameter value for which the result will be used.
+The guarantee becomes `previous_guarantee and assume_preserves_optimality`;
+a newly captured output objective starts with `previous_guarantee=True`.
+An assertion for this substitution cannot restore a guarantee lost earlier.
 
 Empty substitutions remain no-ops. Built-in `log_encode` and `unary_encode`
 retain their own guarantees but do not restore a flag already set to `False`.

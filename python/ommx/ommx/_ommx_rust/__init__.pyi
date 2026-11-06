@@ -7484,7 +7484,12 @@ class Instance:
         >>> solution = instance.evaluate(state)
         >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 5.0)
         """
-    def substitute(self, assignments: typing.Mapping[builtins.int, ToFunction]) -> None:
+    def substitute(
+        self,
+        assignments: typing.Mapping[builtins.int, ToFunction],
+        *,
+        assume_preserves_optimality: builtins.bool = False,
+    ) -> None:
         r"""
         Substitute decision variables with function expressions (in-place).
 
@@ -7518,12 +7523,20 @@ class Instance:
         linking and bound constraints explicitly. Deliberately non-equivalent
         substitutions are also supported; OMMX does not require or establish
         preservation of the feasible region or optimal solutions.
-        Every nonempty substitution sets a retained output objective's
-        ``preserves_optimality`` to ``False``, including an objective captured
-        by this call. Reconstruction may round discrete values and change
-        objective ordering. {meth}`~ommx.Instance.map_active_optimality` then
-        returns ``Optimality.Unspecified``. This conservative rule also applies
-        to simple renaming; built-in integer encodings have a separate contract.
+        By default, every successful nonempty substitution sets a retained output
+        objective's ``preserves_optimality`` to ``False``, including an objective
+        captured by this call. Reconstruction may round discrete values and
+        change objective ordering. {meth}`~ommx.Instance.map_active_optimality`
+        then returns ``Optimality.Unspecified``.
+
+        Set ``assume_preserves_optimality=True`` to assert, as the caller, that
+        this transformation preserves objective ordering through reconstruction,
+        including discrete rounding at the tolerances used for evaluation.
+        OMMX does not verify this assertion. The resulting guarantee is
+        ``previous_guarantee and assume_preserves_optimality``, so ``True`` cannot
+        restore a guarantee lost by an earlier transformation. A newly captured
+        output objective starts with ``previous_guarantee=True``. Empty
+        assignments are a no-op. Built-in integer encodings have their own contract.
 
         The substituted variable's definition is retained and its value becomes
         dependent on the replacement expression. {meth}`~ommx.Instance.evaluate`
@@ -7592,6 +7605,16 @@ class Instance:
         >>> assert instance.objective.evaluate({1: 1}) == -1.0
         >>> solution = instance.evaluate({1: 1})
         >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)
+
+        For an exact binary-variable renaming, the caller can explicitly assert
+        ordering preservation:
+
+        >>> from ommx import Optimality
+        >>> model = Instance.minimize()
+        >>> x, y = model.new_binary("x"), model.new_binary("y")
+        >>> model.objective = x
+        >>> model.substitute({x.id: y}, assume_preserves_optimality=True)
+        >>> assert model.map_active_optimality(Optimality.Optimal) == Optimality.Optimal
         """
     def convert_inequality_to_equality_with_integer_slack(
         self,
@@ -10587,7 +10610,12 @@ class ParametricInstance:
         >>> assert preview.text == "x + p"
         >>> assert not preview.truncated
         """
-    def substitute(self, assignments: typing.Mapping[builtins.int, ToFunction]) -> None:
+    def substitute(
+        self,
+        assignments: typing.Mapping[builtins.int, ToFunction],
+        *,
+        assume_preserves_optimality: builtins.bool = False,
+    ) -> None:
         r"""
         Substitute decision variables with function expressions (in-place).
 
@@ -10621,11 +10649,20 @@ class ParametricInstance:
         Deliberately non-equivalent substitutions are also supported; OMMX
         does not require or establish preservation of the feasible region or
         optimal solutions.
-        Every nonempty substitution invalidates the optimality guarantee of a
-        retained output objective, including one captured by this call. Its
-        ``preserves_optimality`` is ``False`` after parameter materialization
-        because algebraic substitution does not prove ordering through discrete
-        reconstruction. This conservative rule also applies to simple renaming.
+        By default, every successful nonempty substitution sets a retained output
+        objective's ``preserves_optimality`` to ``False``, including one captured
+        by this call. Algebraic substitution does not prove ordering through
+        discrete reconstruction.
+
+        Set ``assume_preserves_optimality=True`` to assert, as the caller, that
+        this transformation preserves objective ordering through reconstruction
+        for every parameter value and evaluation tolerance for which the result
+        will be used. This includes discrete rounding. OMMX does not verify the
+        assertion. The guarantee becomes
+        ``previous_guarantee and assume_preserves_optimality`` and survives
+        parameter materialization; ``True`` cannot restore a previously lost
+        guarantee. A newly captured output objective starts with
+        ``previous_guarantee=True``. Empty assignments are a no-op.
 
         Raises ``ValueError`` on cyclic or recursive assignments, undefined
         IDs, when a parameter ID is used as an assignment target, or when
@@ -10653,6 +10690,14 @@ class ParametricInstance:
         >>> assert materialized.objective.evaluate({1: 1}) == -1.0
         >>> solution = materialized.evaluate({1: 1})
         >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)
+
+        Explicitly assert ordering preservation for exact variable renaming:
+
+        >>> from ommx import Optimality
+        >>> parametric = source.as_parametric_instance()
+        >>> parametric.substitute({0: b}, assume_preserves_optimality=True)
+        >>> materialized = parametric.with_parameters({})
+        >>> assert materialized.map_active_optimality(Optimality.Optimal) == Optimality.Optimal
         """
     def add_decision_variable(
         self, variable: DecisionVariable

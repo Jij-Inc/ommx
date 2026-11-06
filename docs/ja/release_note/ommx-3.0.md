@@ -49,12 +49,21 @@ SDK側での定数制約の簡約と早期検出は [#1188](https://github.com/J
 ### 置換後の最適性の引き継ぎを保守的に判定 ([#1368](https://github.com/Jij-Inc/ommx/pull/1368))
 
 {meth}`~ommx.Instance.substitute` と {meth}`~ommx.ParametricInstance.substitute`
-で空でない置換が成功すると、その呼び出しで新たに保持したものも含め、出力用目的関数の
+では、既定で空でない置換が成功すると、その呼び出しで新たに保持したものも含め、出力用目的関数の
 `preserves_optimality` を `False` に設定します。離散変数の復元時に値が丸められ、
 目的値の順位が逆転する場合があるため、この出力用目的関数に対する
 {meth}`~ommx.Instance.map_active_optimality` は `Optimality.Unspecified` を返します。
 目的関数の式と最小化・最大化の向きは保持します。この保守的な規則は単純な変数の
 置き換えにも適用されます。
+
+呼び出し側で順位の保存を保証できる場合は、
+`substitute(assignments, assume_preserves_optimality=True)` を指定できます。
+これは呼び出し側による表明であり、OMMXが検証するものではありません。
+使用する評価許容誤差での離散値の丸めを含む復元処理まで保証の対象です。
+`ParametricInstance` では、結果を使用するすべてのパラメータ値について成り立つ必要があります。
+保証は `previous_guarantee and assume_preserves_optimality` で合成し、新たに保持する
+出力用目的関数の `previous_guarantee` は `True` として扱います。
+今回の置換への表明で、以前に失われた保証を復活させることはできません。
 
 空の置換は何も変更しません。組み込みの `log_encode` と `unary_encode` は
 それぞれの保証を維持しますが、すでに `False` になったフラグを戻すことはありません。

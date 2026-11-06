@@ -2646,12 +2646,20 @@ impl Instance {
     /// linking and bound constraints explicitly. Deliberately non-equivalent
     /// substitutions are also supported; OMMX does not require or establish
     /// preservation of the feasible region or optimal solutions.
-    /// Every nonempty substitution sets a retained output objective's
-    /// ``preserves_optimality`` to ``False``, including an objective captured
-    /// by this call. Reconstruction may round discrete values and change
-    /// objective ordering. {meth}`~ommx.Instance.map_active_optimality` then
-    /// returns ``Optimality.Unspecified``. This conservative rule also applies
-    /// to simple renaming; built-in integer encodings have a separate contract.
+    /// By default, every successful nonempty substitution sets a retained output
+    /// objective's ``preserves_optimality`` to ``False``, including an objective
+    /// captured by this call. Reconstruction may round discrete values and
+    /// change objective ordering. {meth}`~ommx.Instance.map_active_optimality`
+    /// then returns ``Optimality.Unspecified``.
+    ///
+    /// Set ``assume_preserves_optimality=True`` to assert, as the caller, that
+    /// this transformation preserves objective ordering through reconstruction,
+    /// including discrete rounding at the tolerances used for evaluation.
+    /// OMMX does not verify this assertion. The resulting guarantee is
+    /// ``previous_guarantee and assume_preserves_optimality``, so ``True`` cannot
+    /// restore a guarantee lost by an earlier transformation. A newly captured
+    /// output objective starts with ``previous_guarantee=True``. Empty
+    /// assignments are a no-op. Built-in integer encodings have their own contract.
     ///
     /// The substituted variable's definition is retained and its value becomes
     /// dependent on the replacement expression. {meth}`~ommx.Instance.evaluate`
@@ -2720,17 +2728,31 @@ impl Instance {
     /// >>> assert instance.objective.evaluate({1: 1}) == -1.0
     /// >>> solution = instance.evaluate({1: 1})
     /// >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)
-    #[pyo3(signature = (assignments))]
+    ///
+    /// For an exact binary-variable renaming, the caller can explicitly assert
+    /// ordering preservation:
+    ///
+    /// >>> from ommx import Optimality
+    /// >>> model = Instance.minimize()
+    /// >>> x, y = model.new_binary("x"), model.new_binary("y")
+    /// >>> model.objective = x
+    /// >>> model.substitute({x.id: y}, assume_preserves_optimality=True)
+    /// >>> assert model.map_active_optimality(Optimality.Optimal) == Optimality.Optimal
+    #[pyo3(signature = (assignments, *, assume_preserves_optimality=false))]
     pub fn substitute(
         &mut self,
         py: Python<'_>,
         assignments: HashMap<u64, Function>,
+        assume_preserves_optimality: bool,
     ) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let iter = assignments
             .into_iter()
             .map(|(id, f)| (VariableID::from(id), f.0));
-        ommx::substitute(&mut self.inner, iter)?;
+        self.inner = self
+            .inner
+            .clone()
+            .substitute_with_optimality_assumption(iter, assume_preserves_optimality)?;
         Ok(())
     }
 

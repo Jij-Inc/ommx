@@ -567,11 +567,20 @@ impl ParametricInstance {
     /// Deliberately non-equivalent substitutions are also supported; OMMX
     /// does not require or establish preservation of the feasible region or
     /// optimal solutions.
-    /// Every nonempty substitution invalidates the optimality guarantee of a
-    /// retained output objective, including one captured by this call. Its
-    /// ``preserves_optimality`` is ``False`` after parameter materialization
-    /// because algebraic substitution does not prove ordering through discrete
-    /// reconstruction. This conservative rule also applies to simple renaming.
+    /// By default, every successful nonempty substitution sets a retained output
+    /// objective's ``preserves_optimality`` to ``False``, including one captured
+    /// by this call. Algebraic substitution does not prove ordering through
+    /// discrete reconstruction.
+    ///
+    /// Set ``assume_preserves_optimality=True`` to assert, as the caller, that
+    /// this transformation preserves objective ordering through reconstruction
+    /// for every parameter value and evaluation tolerance for which the result
+    /// will be used. This includes discrete rounding. OMMX does not verify the
+    /// assertion. The guarantee becomes
+    /// ``previous_guarantee and assume_preserves_optimality`` and survives
+    /// parameter materialization; ``True`` cannot restore a previously lost
+    /// guarantee. A newly captured output objective starts with
+    /// ``previous_guarantee=True``. Empty assignments are a no-op.
     ///
     /// Raises ``ValueError`` on cyclic or recursive assignments, undefined
     /// IDs, when a parameter ID is used as an assignment target, or when
@@ -599,17 +608,29 @@ impl ParametricInstance {
     /// >>> assert materialized.objective.evaluate({1: 1}) == -1.0
     /// >>> solution = materialized.evaluate({1: 1})
     /// >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)
-    #[pyo3(signature = (assignments))]
+    ///
+    /// Explicitly assert ordering preservation for exact variable renaming:
+    ///
+    /// >>> from ommx import Optimality
+    /// >>> parametric = source.as_parametric_instance()
+    /// >>> parametric.substitute({0: b}, assume_preserves_optimality=True)
+    /// >>> materialized = parametric.with_parameters({})
+    /// >>> assert materialized.map_active_optimality(Optimality.Optimal) == Optimality.Optimal
+    #[pyo3(signature = (assignments, *, assume_preserves_optimality=false))]
     pub fn substitute(
         &mut self,
         py: Python<'_>,
         assignments: HashMap<u64, Function>,
+        assume_preserves_optimality: bool,
     ) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let iter = assignments
             .into_iter()
             .map(|(id, f)| (VariableID::from(id), f.0));
-        ommx::substitute(&mut self.inner, iter)?;
+        self.inner = self
+            .inner
+            .clone()
+            .substitute_with_optimality_assumption(iter, assume_preserves_optimality)?;
         Ok(())
     }
 

@@ -54,8 +54,67 @@ def test_substitution_rounding_cannot_transport_optimality(parametric, existing_
 
 
 @pytest.mark.parametrize("parametric", [False, True])
-def test_substitution_invalidates_existing_guarantee_without_active_objective_change(
-    parametric,
+@pytest.mark.parametrize("existing_guarantee", [None, False, True])
+@pytest.mark.parametrize("assume_preserves_optimality", [False, True])
+def test_substitution_composes_caller_optimality_assumption(
+    parametric, existing_guarantee, assume_preserves_optimality
+):
+    x, y, z = [DecisionVariable.binary(i) for i in range(3)]
+    source = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x,
+        decision_variables=[x, y, z],
+        constraints={},
+    )
+    source_objective = source.objective
+    if existing_guarantee is not None:
+        source.convert_active_objective(Sense.Maximize)
+    assigned_id = 0
+    if existing_guarantee is False:
+        source.substitute({0: y})
+        assigned_id = 1
+    target = source.as_parametric_instance() if parametric else source
+    target.substitute(
+        {assigned_id: z}, assume_preserves_optimality=assume_preserves_optimality
+    )
+    expected = existing_guarantee is not False and assume_preserves_optimality
+    output = target.output_objective
+    assert output is not None
+    assert output.preserves_optimality == expected
+    assert output.function == source_objective
+    assert output.sense == Sense.Minimize
+
+    # Empty calls and rejected assignments cannot alter even a true guarantee.
+    before = target.to_v2_bytes()
+    for assumption in (False, True):
+        target.substitute({}, assume_preserves_optimality=assumption)
+        assert target.to_v2_bytes() == before
+        with pytest.raises(ValueError, match="already fixed or dependent"):
+            target.substitute({assigned_id: 0}, assume_preserves_optimality=assumption)
+        assert target.to_v2_bytes() == before
+
+    if isinstance(target, ParametricInstance):
+        target = ParametricInstance.from_v2_bytes(target.to_v2_bytes()).with_parameters(
+            {}
+        )
+    for concrete in (target, Instance.from_v2_bytes(target.to_v2_bytes())):
+        output = concrete.output_objective
+        assert output is not None and output.preserves_optimality == expected
+        for status in (Optimality.Optimal, Optimality.NotOptimal):
+            assert concrete.map_active_optimality(status) == (
+                status if expected else Optimality.Unspecified
+            )
+        for value in (0, 1):
+            solution = concrete.evaluate({2: value})
+            assert solution.objective == value
+            assert solution.sense == Sense.Minimize
+            assert solution.feasible
+
+
+@pytest.mark.parametrize("parametric", [False, True])
+@pytest.mark.parametrize("assume_preserves_optimality", [False, True])
+def test_substitution_composes_guarantee_without_active_objective_change(
+    parametric, assume_preserves_optimality
 ):
     x, y, z = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
@@ -69,13 +128,13 @@ def test_substitution_invalidates_existing_guarantee_without_active_objective_ch
     target.substitute({})
     active, output = target.objective, target.output_objective
     assert output is not None and output.preserves_optimality
-    target.substitute({1: z})
+    target.substitute({1: z}, assume_preserves_optimality=assume_preserves_optimality)
     replaced_output = target.output_objective
     assert replaced_output is not None
     assert target.objective == active
     assert replaced_output.function == output.function
     assert replaced_output.sense == output.sense
-    assert not replaced_output.preserves_optimality
+    assert replaced_output.preserves_optimality == assume_preserves_optimality
 
 
 @pytest.mark.parametrize("method", ["log_encode", "unary_encode"])
@@ -352,7 +411,8 @@ def test_substitution_preserves_named_function_for_reconstructed_values(
 @pytest.mark.parametrize(
     "operation", ["log_encode", "unary_encode", "substitute", "parametric"]
 )
-def test_substitution_active_overflow_is_atomic(operation):
+@pytest.mark.parametrize("assume_preserves_optimality", [False, True])
+def test_substitution_active_overflow_is_atomic(operation, assume_preserves_optimality):
     x = DecisionVariable.integer(0, lower=0, upper=3)
     bits = [DecisionVariable.binary(1), DecisionVariable.binary(2)]
     overflowing = Function(Polynomial({(0, 0): sys.float_info.max}))
@@ -363,13 +423,17 @@ def test_substitution_active_overflow_is_atomic(operation):
         constraints={7: overflowing <= 0},
         named_functions=[NamedFunction(id=9, function=x * x)],
     )
+    instance.convert_active_objective(Sense.Maximize)
     target = (
         instance.as_parametric_instance() if operation == "parametric" else instance
     )
     before = target.to_v2_bytes()
     with pytest.raises(ValueError, match="Coefficient must be finite"):
         if operation in ("substitute", "parametric"):
-            target.substitute({0: bits[0] + 2 * bits[1]})
+            target.substitute(
+                {0: bits[0] + 2 * bits[1]},
+                assume_preserves_optimality=assume_preserves_optimality,
+            )
         else:
             getattr(target, operation)({0})
     assert target.to_v2_bytes() == before
@@ -411,7 +475,10 @@ def test_substitution_only_in_context_does_not_capture_objective(operation):
         assert result.get_named_function_by_id(9).evaluated_value == 1
 
 
-def test_parametric_substitution_keeps_source_until_parameter_specialization():
+@pytest.mark.parametrize("assume_preserves_optimality", [False, True])
+def test_parametric_substitution_keeps_source_until_parameter_specialization(
+    assume_preserves_optimality,
+):
     x = DecisionVariable.continuous(0)
     b = DecisionVariable.binary(1)
     p = Parameter(2)
@@ -424,9 +491,15 @@ def test_parametric_substitution_keeps_source_until_parameter_specialization():
         named_functions=[NamedFunction(id=9, function=x * x + p)],
     )
     source = instance.named_functions[0].function
-    instance.substitute({0: b + p})
+    instance.substitute(
+        {0: b + p}, assume_preserves_optimality=assume_preserves_optimality
+    )
     assert instance.named_functions[0].function == source
+    instance = ParametricInstance.from_v2_bytes(instance.to_v2_bytes())
     concrete = instance.with_parameters({2: 3})
+    output = concrete.output_objective
+    assert output is not None
+    assert output.preserves_optimality == assume_preserves_optimality
     assert concrete.named_functions[0].function.required_ids() == {0}
     solution = concrete.evaluate({1: 1})
     assert solution.state.entries[0] == 4
