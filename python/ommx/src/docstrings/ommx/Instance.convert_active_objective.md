@@ -1,6 +1,4 @@
-Convert the **Active Formulation** objective and sense to `target`, retaining
-the output semantics as **Interpretation Context** on this Instance. See
-{class}`~ommx.Instance` for these two roles of the intermediate representation.
+Convert only the active, solver-facing objective to `target`.
 
 For example, a solver may accept only minimization while the problem maximizes
 a reward. This method negates the active objective and changes

@@ -181,44 +181,7 @@ impl OutputObjective {
     }
 }
 
-/// A unit of OMMX's intermediate representation for optimization problems.
-///
-/// # Active Formulation and Interpretation Context
-///
-/// An instance holds both the current problem to solve and the information
-/// needed to reconstruct and interpret its results against the user's input:
-///
-/// - **Active Formulation** is the currently effective optimization problem:
-///   the objective and sense, used decision variables and their domains, and
-///   all active constraints, including special-constraint families. This is
-///   the solver-facing part of the intermediate representation. Acceptance by
-///   a particular adapter is a separate question; see [`crate::InstanceClass`].
-/// - **Interpretation Context** is the retained information needed to recover
-///   variable values and evaluate or explain results in terms of the user's
-///   input. It includes fixed values, decision-variable dependencies, removed
-///   constraints, an output objective, named functions, and relevant modeling
-///   labels and transformation provenance.
-///
-/// These are conceptual roles within the intermediate representation, not
-/// separate SDK types or disjoint copies of the model. For example, a retained
-/// variable definition may serve both roles. Interpretation Context need not
-/// contain an independent, complete copy of the original problem.
-///
-/// Transformations used to prepare a problem for solving normally rewrite the
-/// Active Formulation and retain or update the necessary Interpretation
-/// Context on the same instance (or on the returned transformed instance).
-/// For example, encoding a variable retains its reconstruction rule, lowering
-/// a constraint retains its source row and provenance, and rewriting the active
-/// objective can retain an output objective. An expression being evaluable by
-/// OMMX does not by itself make it a target of an Active Formulation rewrite.
-/// [`Self::reduce_binary_power`] reduces only Active Formulation expressions
-/// and captures the original objective when needed for output evaluation.
-///
-/// Each operation documents its exact rewrite boundary, context updates, and
-/// guarantees. Operations that explicitly change the user's problem or its
-/// output semantics have a different contract. Reconstruction, feasibility,
-/// and optimality preservation are distinct: retaining Interpretation Context
-/// does not establish equivalence between the original and active problems.
+/// Instance, represents a mathematical optimization problem.
 ///
 /// # Declared and solver-used variables
 ///

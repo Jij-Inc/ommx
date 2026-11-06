@@ -1,9 +1,5 @@
 Restore fixed and dependent values and fill omitted irrelevant values in a candidate.
 
-Uses the Instance's **Interpretation Context** to reconstruct values from a
-candidate for its **Active Formulation**. See {class}`~ommx.Instance` for these
-two roles of the intermediate representation.
-
 Accepts a {class}`~ommx.State`, an ID-to-value mapping, or an iterable of ID/value
 pairs. The returned State contains exactly the decision-variable IDs retained by
 this Instance. Supply every variable used by its current objective and active

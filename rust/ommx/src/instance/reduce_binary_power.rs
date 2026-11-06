@@ -2,16 +2,15 @@ use super::*;
 use std::collections::BTreeMap;
 
 impl Instance {
-    /// Reduce binary powers in the instance's Active Formulation.
+    /// Reduce binary powers in the active objective and constraints.
     ///
     /// For binary variables, x^n = x for any n >= 1. Binary variable IDs are
     /// derived from this instance's decision-variable table.
     ///
     /// Rewrites the active objective, active regular and indicator constraint
-    /// bodies. Interpretation Context is not reduced: named functions,
+    /// bodies. Named functions,
     /// decision-variable dependency right-hand sides, removed constraints, and
-    /// an existing output objective are left unchanged. See [`Instance`] for
-    /// the Active Formulation / Interpretation Context boundary.
+    /// an existing output objective are left unchanged.
     /// One-hot and SOS1 constraints contain variable sets rather than expression
     /// bodies and do not require this rewrite.
     ///
@@ -296,8 +295,8 @@ mod tests {
         assert!(instance.output_objective().is_none());
     }
 
-    // The first three slots belong to the Active Formulation; the last two
-    // are expressions retained in Interpretation Context.
+    // The first three slots are active expressions; the last two
+    // are retained for output evaluation and variable reconstruction.
     fn instance_with_expression_owners(functions: [Function; 5]) -> Instance {
         let [objective, regular, indicator, named, dependency] = functions;
         let reason = crate::constraint::RemovedReason {
@@ -488,7 +487,7 @@ mod tests {
     }
 
     #[test]
-    fn reduce_binary_power_does_not_reduce_overflowing_interpretation_context() {
+    fn reduce_binary_power_preserves_overflowing_output_and_dependency_expressions() {
         let huge = Coefficient::try_from(f64::MAX).unwrap();
         let overflowing = Function::from(
             ((huge * quadratic!(1, 1)).unwrap() + (huge * quadratic!(1)).unwrap()).unwrap(),
