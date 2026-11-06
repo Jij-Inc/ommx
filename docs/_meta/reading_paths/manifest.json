@@ -404,6 +404,18 @@
         "B_EVALUATE"
       ],
       "note": "4章構成を維持し、日英の導入・変換・結果解釈を補強する。候補未取得時の結論と来歴による要求への帰還を追加し、高位の評価・目的構造、解析・変換・保証の共通化を将来方針として記載。既存の直接入口・Home経由・変換から結果への経路を再照合する。保存章とAPI契約は変更せず、過去のbaselineを維持。今回の本文照合記録はチャットに残す。"
+    },
+    {
+      "design_source": "User feedback in the current chat (2026-11-06): the Book defines responsibility contracts independently of implementation completeness; refer readers to API Reference for varying support instead of auditing implementation status.",
+      "base_revision": "e45f03e48b91d07e6a9d593ea2ce8ce9c1de1b25",
+      "target_revision": "working tree on codex/book-results-and-requirements",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "B_TRANSFORM",
+        "B_EVALUATE"
+      ],
+      "note": "Adapterの意味の対応・報告解釈・保証に基づく結論の契約をBookに独立節として定める。拡張方針は見出しで区別し、実装状況はAPI Referenceへ案内する補足とする。Bookの全体的責務とReferenceの実装API契約を別の概念にし、直接入口と日英の導線を再照合する。"
     }
   ],
   "interpretation": {
@@ -476,14 +488,14 @@
     },
     {
       "id": "ommx.adoption",
-      "label": "現在の用途と、共通処理に任せる仕事・利用者に残る判断を選ぶ",
+      "label": "利用目的と、共通処理に任せる仕事・利用者に残る判断を選ぶ",
       "owner": "HOME",
       "requires": [
         "ext.math"
       ],
       "external": false,
       "aliases": [],
-      "scope": "候補評価、構造を保持した問題変換、Adapter接続、任意の保存・記録を利用目的に結びつける。モデル化・解法・変換方針・結果の採否は利用者が選ぶ。APIの操作手順や一般の変換保証を習得したとはみなさない。 ラベル・来歴とアプリケーション側の対応を組み合わせ、結果を要求・入力データの見直しにつなぐ価値も含む。"
+      "scope": "候補評価、構造を保持した問題変換、Adapter接続、任意の保存・記録を利用目的に結びつける。モデル化・解法・変換方針・結果の採否は利用者が選ぶ。APIの操作手順や一般の変換保証を習得したとはみなさない。 ラベル・来歴とアプリケーション側の対応を組み合わせ、結果を要求・入力データの見直しにつなぐ価値も含む。 Bookの責務の分担として理解し、機能・Adapterごとの対応範囲はAPI Referenceで確認する。"
     },
     {
       "id": "instance.model",
@@ -1963,7 +1975,7 @@
     },
     {
       "id": "transform.shared_analysis",
-      "label": "解析・変換・保証を共通化する方向と現在の操作を区別する",
+      "label": "解析・変換・保証を共通化する拡張方針を理解する",
       "owner": "B_TRANSFORM",
       "requires": [
         "transform.preparation_choice",
@@ -1971,7 +1983,7 @@
       ],
       "external": false,
       "aliases": [],
-      "scope": "調べる解析と書き換える変換、変更後の情報の再利用条件、必要な保証の選択と処理系による合成を区別する。Preparationとは別のPresolveの目的を理解し、一般的な解析管理・自動選択・保証合成を現行機能と誤解しない。"
+      "scope": "調べる解析と書き換える変換、変更後の情報の再利用条件、必要な保証の選択と処理系による合成を区別する。Preparationとは別のPresolveの目的を理解する。拡張の方向と、各操作のAPI Referenceで確認する具体的な対応範囲を区別する。"
     },
     {
       "id": "ommx.structured_declarations",
@@ -1983,6 +1995,17 @@
       "external": false,
       "aliases": [],
       "scope": "特殊制約を起点に割当費用・巡回路長・複数の目的軸へ宣言を広げる方針を理解する。顧客の優先要求と重み付き和・辞書式等の具体化方針、現在のNamedFunctionによる追加指標を区別する。意図確認は利用者・AI・モデラー、確定した宣言の数学的な具体化は共通変換へ委ねる方向。"
+    },
+    {
+      "id": "adapter.responsibility",
+      "label": "OMMXとしてAdapterに求める意味の対応と報告解釈の責務を理解する",
+      "owner": "B_TRANSFORM",
+      "requires": [
+        "ext.math"
+      ],
+      "external": false,
+      "aliases": [],
+      "scope": "受理範囲の明示、条件や目的の意味の保存、未対応制約の拒否、候補の変数対応と同じ問題での評価、解いた問題への報告の対応、保証に基づく元問題への結論の引継ぎをBookの契約として理解する。実装の達成状況とは独立の契約であり、個別の対応範囲やAPI実装手順の習得は含めない。"
     }
   ],
   "pages": [
@@ -2064,10 +2087,12 @@
             "ommx.purpose"
           ],
           "uses": [],
-          "mentions": []
+          "mentions": [
+            "adapter.responsibility"
+          ]
         },
         {
-          "id": "current-adoption",
+          "id": "adoption-and-responsibilities",
           "introduces": [
             "ommx.adoption"
           ],
@@ -2094,9 +2119,7 @@
         },
         {
           "id": "structure-and-transformation",
-          "introduces": [
-            "ommx.structured_declarations"
-          ],
+          "introduces": [],
           "uses": [
             "ommx.adoption"
           ],
@@ -2107,12 +2130,14 @@
         },
         {
           "id": "development-direction",
-          "introduces": [],
+          "introduces": [
+            "ommx.structured_declarations"
+          ],
           "uses": [
-            "ommx.purpose"
+            "ommx.purpose",
+            "ommx.adoption"
           ],
           "mentions": [
-            "bounds.tighten",
             "transform.shared_analysis"
           ]
         },
@@ -2143,7 +2168,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "数理最適化の基礎から入れるBook第1章。冒頭で目的と現在の採用理由を示し、生産ラインの例で候補評価と定式化の選択を説明する。目的別の案内の最初にBookの残り3章を置き、実行環境、題材を追うExamples、Artifactの扱い、外部ツール接続、API・形式仕様、移行・変更履歴へ分岐する。項目名やリンクから操作能力を推定しない。 結果を要求へ戻す価値とAdapterの報告解釈を示し、高位の評価・目的構造および解析・保証の共通化は将来方針として現在の機能から区別する。",
+      "notes": "数理最適化の基礎から入れる日英のBook入口。責務の契約と採用理由を先に示し、生産ラインの例で評価と定式化の選択を説明する。高位の評価・目的構造と解析・保証の拡張方針は独立の見出しにまとめる。機能・Adapterごとの実装状況は棚卸しせずAPI Referenceへ案内する。目的別案内は残り3章の直接入口を提供し、API名やリンクから操作能力を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2169,10 +2194,12 @@
             "ommx.purpose"
           ],
           "uses": [],
-          "mentions": []
+          "mentions": [
+            "adapter.responsibility"
+          ]
         },
         {
-          "id": "current-adoption",
+          "id": "adoption-and-responsibilities",
           "introduces": [
             "ommx.adoption"
           ],
@@ -2199,9 +2226,7 @@
         },
         {
           "id": "structure-and-transformation",
-          "introduces": [
-            "ommx.structured_declarations"
-          ],
+          "introduces": [],
           "uses": [
             "ommx.adoption"
           ],
@@ -2212,12 +2237,14 @@
         },
         {
           "id": "development-direction",
-          "introduces": [],
+          "introduces": [
+            "ommx.structured_declarations"
+          ],
           "uses": [
-            "ommx.purpose"
+            "ommx.purpose",
+            "ommx.adoption"
           ],
           "mentions": [
-            "bounds.tighten",
             "transform.shared_analysis"
           ]
         },
@@ -2248,7 +2275,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "数理最適化の基礎から入れるBook第1章。冒頭で目的と現在の採用理由を示し、生産ラインの例で候補評価と定式化の選択を説明する。目的別の案内の最初にBookの残り3章を置き、実行環境、題材を追うExamples、Artifactの扱い、外部ツール接続、API・形式仕様、移行・変更履歴へ分岐する。項目名やリンクから操作能力を推定しない。 結果を要求へ戻す価値とAdapterの報告解釈を示し、高位の評価・目的構造および解析・保証の共通化は将来方針として現在の機能から区別する。",
+      "notes": "数理最適化の基礎から入れる日英のBook入口。責務の契約と採用理由を先に示し、生産ラインの例で評価と定式化の選択を説明する。高位の評価・目的構造と解析・保証の拡張方針は独立の見出しにまとめる。機能・Adapterごとの実装状況は棚卸しせずAPI Referenceへ案内する。目的別案内は残り3章の直接入口を提供し、API名やリンクから操作能力を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -3526,6 +3553,17 @@
           ]
         },
         {
+          "id": "adapter-responsibilities",
+          "introduces": [
+            "adapter.responsibility"
+          ],
+          "uses": [],
+          "mentions": [
+            "adapter.contract"
+          ],
+          "notes": "Bookの責務の契約を、実装の達成状況と独立に明記する。機能・Adapterごとの対応範囲はReferenceへの補足導線とする。"
+        },
+        {
           "id": "input-and-transformations",
           "introduces": [
             "transform.preparation_choice"
@@ -3577,7 +3615,7 @@
           ]
         },
         {
-          "id": "current-operations-and-direction",
+          "id": "development-direction",
           "introduces": [
             "transform.shared_analysis"
           ],
@@ -3589,7 +3627,7 @@
           "mentions": [
             "bounds.tighten"
           ],
-          "notes": "一回のbound更新と入力条件の検査を現在の操作として説明した後、Presolveの目的、解析と変換、解析結果の依存条件、保証を共通化する方向を導入する。"
+          "notes": "独立した拡張方針の節で、Presolveの目的、解析と変換、解析結果の依存条件、保証の共通化を説明する。詳細な実装状況の一覧は置かず、各操作の適用条件や保証はAPI Referenceへ案内する。"
         }
       ],
       "deferred": [
@@ -3597,7 +3635,7 @@
         "class.scope"
       ],
       "parent_page": null,
-      "notes": "数理最適化の基礎だけから直接入れる日英第2章。同じソルバーへIndicatorを直接渡す経路と、既知の上限を使って線形化する経路で共通表現の価値を導入し、入力条件・許す変換・数学的保証・設定・結果情報の選択へ進む。固定部分問題と不等式本体の二乗の反例は数式で読む。API操作や全特殊制約の詳細は紹介・リンクだけから付与しない。旧G7の保証判断とG11の選択軸を統合し、現在の明示的phase/一回bound更新と将来の自動選択・反復を区別する。第3章の既読を要求しない。",
+      "notes": "数理最適化の基礎から直接入れる日英第2章。生産ラインの定式化選択からAdapterの責務の契約へ進み、入力条件・許す変換・数学的保証・解法と設定を判断する。最後に解析・変換・保証の拡張方針を独立節で説明する。責務を実装状況に従属させず、具体的な対応範囲と操作はReferenceへ案内する。第3章を前提にしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -6345,7 +6383,7 @@
             "results.evaluation_scope"
           ],
           "mentions": [
-            "adapter.contract"
+            "adapter.responsibility"
           ]
         },
         {
@@ -6376,7 +6414,7 @@
         "variables.roles"
       ],
       "parent_page": null,
-      "notes": "日英で構造を揃え、数理最適化の基礎から直接入れる第3章。クラスやAPIの操作を順番に教えず、低速運転時の上限違反を例に、評価対象・値の出所・比較基準の判断へ進む。リンクだけからAPI操作能力を付与しない。 診断の用途とmin/maxでのprimal/dual boundの向き、gapと観測点の解釈を日英で説明し、操作と記録済み図はAnalyzerへ案内する。 候補がない場合の報告を比較節の前に説明し、末尾で生成不等式・来歴から要求と入力データの見直しへ進む。第2章を前提にせず、Indicatorの意味と変数を例の中で説明する。",
+      "notes": "日英で構造を揃え、数理最適化の基礎から直接入れる第3章。クラスやAPIの操作を順番に教えず、低速運転時の上限違反を例に、評価対象・値の出所・比較基準の判断へ進む。リンクだけからAPI操作能力を付与しない。 診断の用途とmin/maxでのprimal/dual boundの向き、gapと観測点の解釈を日英で説明し、操作と記録済み図はAnalyzerへ案内する。 候補がない場合の報告を比較節の前に説明し、末尾で生成不等式・来歴から要求と入力データの見直しへ進む。第2章を前提にせず、Indicatorの意味と変数を例の中で説明する。 Adapterの報告解釈はBookが定める責務として扱い、実装ごとの対応範囲はReferenceへ案内する。要求へ戻る節の末尾に拡張方針の小見出しを置き、複数変換を通じた対応の方向を説明する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [

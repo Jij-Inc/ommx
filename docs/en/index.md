@@ -2,13 +2,17 @@
 
 OMMX (Open Mathematical prograMming eXchange) lets you describe **what you want to solve** separately from **how you solve it**. You can revise the formulation you send to a solver and still judge its candidates by the constraints and objective of the original problem. Connecting results back to those conditions helps you understand what to revisit in your requirements or input data.
 
-A modeling tool expresses your requirements. OMMX provides a common data format and Python and Rust SDKs to transform the problem and evaluate candidates. An adapter connects that representation to the solver or sampler that searches for candidates and interprets its reports as OMMX results about the problem actually solved. Implementing transformations on this common representation makes them reusable across modeling tools and solving methods.
+## Responsibilities of modelers, OMMX, and adapters
 
-## Why use OMMX today?
+A modeling tool expresses your requirements. OMMX provides a common data format and Python and Rust SDKs to transform the problem and evaluate candidates. An adapter is responsible for connecting that representation to a solver or sampler while preserving its meaning, and for interpreting candidates and termination reports against the problem actually solved. Implementing transformations on this common representation makes them reusable across modeling tools and solving methods.
 
-Until the 3.0.0 stable release, both this Book and the API Reference describe `main`. The [installation guide](./getting_started/install.md) covers the latest published prerelease and installation from `main`; use `main` for features that have not been released yet. The current implementation supports the following tasks on a common problem representation.
+This division of responsibilities is an OMMX contract. Adapters must meet {ref}`this contract <adapter-responsibilities>` regardless of the coverage of individual implementations. Available features and support vary by operation and adapter; consult the {doc}`API Reference <api/index>` for details.
 
-| Your goal | What OMMX can handle | What you decide |
+## Why use OMMX?
+
+A common problem representation lets you divide the work as follows.
+
+| Your goal | Processing owned by OMMX | What you decide |
 |---|---|---|
 | Try a different formulation or solver | Supported special-constraint conversions and integer encodings; exchange with backends through adapters | The method, permitted transformations, and solver settings |
 | Check whether a candidate is usable | Evaluate variable domains, constraints, and the objective; reconstruct original variable values from information retained by supported transformations | How to model the requirements of your application and whether to accept the candidate |
@@ -27,17 +31,17 @@ A production line can make up to 100 units per hour, but only 60 in reduced mode
 
 You can express the reduced-mode limit as an **indicator constraint**, which applies a condition when a binary variable takes a specified value. The {class}`PySCIPOpt Adapter <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` can pass this linear indicator directly to SCIP. You can also use the known upper bound on output to express the same rule as an ordinary inequality and try that formulation with SCIP. In either case, the planner specifies the production rule once. [Transform a problem and connect it to a solving method](./book/transform_and_solve.md) derives the inequality and explains which guarantees to check for other transformations.
 
-The development direction is to extend the structures you can declare beyond today's special constraints to evaluations such as assignment costs or route lengths, and to objectives composed of several evaluation axes. For example, the aim is to retain cost, delay, and shortage counts as individual objectives, choose a weighted sum or lexicographic ordering to suit the requirements, and evaluate results on each original objective. A customer's stated priorities remain requirements that this choice must satisfy. This planned support for objective structure and its realization is distinct from today's evaluation of additional metrics with {class}`~ommx.NamedFunction`.
-
-In this direction, users, AI tools, and modelers clarify natural-language intent, while shared transformations expand the agreed declarations into mathematical formulations. Connecting modelers such as JijModeling to OMMX should reduce the work of having people or AI tools construct and check that expansion separately for each application.
-
 ## Accumulate analysis and transformation techniques on a common representation
 
 Implementing preprocessing and transformations against a common representation lets modeling tools and solving methods reuse them. A new method can connect its inputs and outputs to that representation and benefit from the techniques already available. This is why OMMX develops both data exchange and shared processing of that data.
 
-Today, OMMX supplies specific operations and policies for selecting supported transformations and evaluating candidates. For example, it can {meth}`tighten variable bounds using constraints <ommx.Instance.tighten_bounds_simultaneously_once>`, but this operation performs one update; it does not automatically optimize an entire preprocessing workflow.
+## Development direction: extend declarations and shared processing
 
-The development direction separates analyses that inspect a problem's properties from transformations that rewrite it, and shares the reuse of analysis results and the selection and repetition of transformations. Users would choose the guarantees they need; the processing system would compose the guarantees of individual transformations to interpret results in the original problem. This should also reduce the work of checking each combination manually. The {ref}`end of the transformation chapter <shared-analysis-and-transformations>` connects today's operations to this direction.
+The development direction is to extend the structures you can declare beyond today's special constraints to evaluations such as assignment costs or route lengths, and to objectives composed of several evaluation axes. For example, the aim is to retain cost, delay, and shortage counts as individual objectives, choose a weighted sum or lexicographic ordering to suit the requirements, and evaluate results on each original objective. A customer's stated priorities remain requirements that this choice must satisfy. This planned support for objective structure and its realization is distinct from today's evaluation of additional metrics with {class}`~ommx.NamedFunction`.
+
+In this direction, users, AI tools, and modelers clarify natural-language intent, while shared transformations expand the agreed declarations into mathematical formulations. Connecting modelers such as JijModeling to OMMX should reduce the work of having people or AI tools construct and check that expansion separately for each application.
+
+The development direction separates analyses that inspect a problem's properties from transformations that rewrite it, and shares the reuse of analysis results and the selection and repetition of transformations. Users would choose the guarantees they need; the processing system would compose the guarantees of individual transformations to interpret results in the original problem. This should also reduce the work of checking each combination manually. The {ref}`end of the transformation chapter <shared-analysis-and-transformations>` explains the shared approach to analyses, transformations, and guarantees.
 
 ## Start with your purpose
 
@@ -51,7 +55,7 @@ This introduction explains why you might adopt OMMX. The other three Book chapte
 
 To run something yourself, [install the SDK and any adapter you need](./getting_started/install.md). Choose an example when you want to follow a whole task, such as [sampling and plotting routes for a traveling salesperson](./examples/tsp_sampling_with_openjij_adapter).
 
-For an individual operation, start in the {doc}`Python API Reference <api/index>`. For example, {class}`~ommx.Solution` shows how to inspect a candidate and {func}`~ommx.qplib.load_solution` reads one from a file. The {doc}`adapter catalogue <api/adapters>` lists solver inputs and links to complete solve examples. To connect your own backend, see {class}`~ommx.adapter.SolverAdapter` or {class}`~ommx.adapter.SamplerAdapter`.
+For individual operations and their supported scope, start in the {doc}`Python API Reference <api/index>`. Until the 3.0.0 stable release, the API Reference describes `main`. The [installation guide](./getting_started/install.md) covers both the latest published prerelease and installation from `main`. For example, {class}`~ommx.Solution` shows how to inspect a candidate and {func}`~ommx.qplib.load_solution` reads one from a file. The {doc}`adapter catalogue <api/adapters>` lists solver inputs and links to complete solve examples. To connect your own backend, see {class}`~ommx.adapter.SolverAdapter` or {class}`~ommx.adapter.SamplerAdapter`.
 
 To inspect a solver's search progress and termination report, see the {class}`SCIP <ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer>` or {class}`HiGHS <ommx_highs_adapter.HighsDiagnosticsAnalyzer>` diagnostic reference.
 
