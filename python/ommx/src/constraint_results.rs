@@ -13,7 +13,10 @@ macro_rules! constraint_result_context {
     ($name:ident) => {
         impl $name {
             /// Copy the owning result's lifecycle metadata into this snapshot.
-            pub fn with_removed_reason(mut self, reason: Option<ommx::RemovedReason>) -> Self {
+            pub fn with_inactive_reason(
+                mut self,
+                reason: Option<ommx::InactiveConstraintMetadata>,
+            ) -> Self {
                 self.2 = reason;
                 self
             }
@@ -22,6 +25,16 @@ macro_rules! constraint_result_context {
         #[pyo3_stub_gen::derive::gen_stub_pymethods]
         #[pymethods]
         impl $name {
+            #[getter]
+            pub fn activeness(&self) -> crate::ConstraintActiveness {
+                self.2
+                    .as_ref()
+                    .map_or(ommx::ConstraintActiveness::Active, |metadata| {
+                        metadata.activeness()
+                    })
+                    .into()
+            }
+
             /// Modeling name, if supplied.
             #[getter]
             pub fn name(&self) -> Option<String> {
@@ -59,13 +72,13 @@ macro_rules! constraint_result_context {
 
             /// Reason this constraint was removed before evaluation, or None.
             #[getter]
-            pub fn removed_reason(&self) -> Option<String> {
+            pub fn inactive_reason(&self) -> Option<String> {
                 self.2.as_ref().map(|r| r.reason.clone())
             }
 
             /// Parameters of the removal reason; empty for an active constraint.
             #[getter]
-            pub fn removed_reason_parameters(&self) -> std::collections::HashMap<String, String> {
+            pub fn inactive_reason_parameters(&self) -> std::collections::HashMap<String, String> {
                 self.2
                     .as_ref()
                     .map(|r| {
@@ -86,7 +99,11 @@ macro_rules! result_class {
         #[pyo3_stub_gen::derive::gen_stub_pyclass]
         #[pyclass(eq, extends = ConstraintView)]
         #[derive(PartialEq)]
-        pub struct $name($inner, ommx::ConstraintContext, Option<ommx::RemovedReason>);
+        pub struct $name(
+            $inner,
+            ommx::ConstraintContext,
+            Option<ommx::InactiveConstraintMetadata>,
+        );
         crate::constraint_base::constraint_subclass!($name, crate::constraint_base::ConstraintView);
 
         impl $name {

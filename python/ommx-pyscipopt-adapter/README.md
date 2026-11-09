@@ -14,7 +14,7 @@ x1 = DecisionVariable.integer(1, lower=0, upper=5)
 ommx_instance = Instance.from_components(
     decision_variables=[x1],
     objective=x1,
-    constraints={},
+    active_constraints={},
     sense=Sense.Minimize,
 )
 

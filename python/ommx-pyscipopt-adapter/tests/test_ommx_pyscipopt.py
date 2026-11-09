@@ -25,7 +25,9 @@ def _knapsack_instance() -> Instance:
     return Instance.from_components(
         decision_variables=x,
         objective=sum(p[i] * x[i] for i in range(6)),
-        constraints={0: cast(Constraint, sum(w[i] * x[i] for i in range(6)) <= 47)},
+        active_constraints={
+            0: cast(Constraint, sum(w[i] * x[i] for i in range(6)) <= 47)
+        },
         sense=Sense.Maximize,
     )
 
@@ -155,7 +157,7 @@ def test_solution_optimality():
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
 
@@ -168,14 +170,14 @@ def test_solution_optimality_is_not_transported_through_fixed_penalty():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={7: x == 1},
+        active_constraints={7: x == 1},
         sense=Sense.Minimize,
     )
     instance.to_qubo(uniform_penalty_weight=0.0)
 
     solution = OMMXPySCIPOptAdapter.solve(instance)
 
-    assert not solution.feasible
+    assert not solution.feasible()
     assert solution.optimality == Optimality.Unspecified
 
 
@@ -184,7 +186,7 @@ def test_direct_solve_records_termination_report():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
     collector = DiagnosticCollector()
@@ -464,7 +466,7 @@ def test_direct_collector_keeps_termination_report_before_decode_error():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
     collector = DiagnosticCollector()

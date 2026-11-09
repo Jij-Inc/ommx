@@ -14,7 +14,7 @@ def test_decision_variable_roles_basic():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints={0: x[1] + x[2] == 1},
+        active_constraints={0: x[1] + x[2] == 1},
         sense=Sense.Maximize,
     )
 
@@ -34,7 +34,7 @@ def test_decision_variable_role_partitions():
     instance = Instance.from_components(
         decision_variables=list(x.values()),
         objective=x[0],
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     instance.substitute({2: x[0] + 1})
@@ -57,7 +57,7 @@ def _dependent_instance_y_eq_2x():
     instance = Instance.from_components(
         decision_variables=list(x.values()),
         objective=x[1],
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     instance.substitute({10: x[1] + x[1]})
@@ -114,7 +114,7 @@ def test_partial_evaluate_normalizes_dependency_chain():
     instance = Instance.from_components(
         decision_variables=list(x.values()),
         objective=x[1],
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     instance.substitute({10: x[1] + x[1], 11: x[10] + 1})
@@ -151,7 +151,7 @@ def test_instance_populate_state():
     instance = Instance.from_components(
         decision_variables=list(x.values()),
         objective=x[1] + x[2],
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     instance.substitute(
@@ -193,7 +193,7 @@ def test_instance_canonicalizes_discrete_solver_values():
     instance = Instance.from_components(
         decision_variables=list(x.values()),
         objective=x[0],
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     state = {

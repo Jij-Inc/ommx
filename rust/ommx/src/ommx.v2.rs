@@ -53,6 +53,8 @@ pub enum Feature {
     OutputObjective = 4,
     /// The payload contains a decision variable with an explicitly enumerated finite domain.
     DecisionVariableFiniteDomain = 5,
+    /// The payload contains an inactive constraint excluded from default feasibility.
+    ConstraintSkipFeasibilityCheck = 6,
 }
 impl Feature {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -67,6 +69,7 @@ impl Feature {
             Feature::ConstraintSos1 => "FEATURE_CONSTRAINT_SOS1",
             Feature::OutputObjective => "FEATURE_OUTPUT_OBJECTIVE",
             Feature::DecisionVariableFiniteDomain => "FEATURE_DECISION_VARIABLE_FINITE_DOMAIN",
+            Feature::ConstraintSkipFeasibilityCheck => "FEATURE_CONSTRAINT_SKIP_FEASIBILITY_CHECK",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -78,6 +81,9 @@ impl Feature {
             "FEATURE_CONSTRAINT_SOS1" => Some(Self::ConstraintSos1),
             "FEATURE_OUTPUT_OBJECTIVE" => Some(Self::OutputObjective),
             "FEATURE_DECISION_VARIABLE_FINITE_DOMAIN" => Some(Self::DecisionVariableFiniteDomain),
+            "FEATURE_CONSTRAINT_SKIP_FEASIBILITY_CHECK" => {
+                Some(Self::ConstraintSkipFeasibilityCheck)
+            }
             _ => None,
         }
     }
@@ -117,11 +123,11 @@ pub struct ConstraintContext {
     #[prost(message, repeated, tag = "2")]
     pub provenance: ::prost::alloc::vec::Vec<Provenance>,
 }
-/// Why a constraint row was removed or relaxed by preprocessing.
+/// Why a constraint row is inactive and whether it participates in default feasibility checks.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct RemovedReason {
+pub struct InactiveConstraintMetadata {
     #[prost(string, tag = "1")]
     pub reason: ::prost::alloc::string::String,
     #[prost(btree_map = "string, string", tag = "2")]
@@ -129,11 +135,15 @@ pub struct RemovedReason {
         ::prost::alloc::string::String,
         ::prost::alloc::string::String,
     >,
+    /// Exclude this inactive row from the default feasibility judgment.
+    /// The row remains evaluable and can be selected explicitly for diagnostics.
+    #[prost(bool, tag = "3")]
+    pub skip_feasibility_check: bool,
 }
 /// Regular scalar constraint row.
 ///
-/// The enclosing collection owns ConstraintID, modeling context, active/removed
-/// placement, and removed reasons.
+/// The enclosing collection owns ConstraintID, modeling context, active/inactive
+/// placement, and inactive metadata.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -179,9 +189,9 @@ pub struct RegularConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub active: ::prost::alloc::collections::BTreeMap<u64, RegularConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed: ::prost::alloc::collections::BTreeMap<u64, RegularConstraint>,
+    pub inactive: ::prost::alloc::collections::BTreeMap<u64, RegularConstraint>,
     #[prost(btree_map = "uint64, message", tag = "3")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "4")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -193,9 +203,9 @@ pub struct IndicatorConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub active: ::prost::alloc::collections::BTreeMap<u64, IndicatorConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed: ::prost::alloc::collections::BTreeMap<u64, IndicatorConstraint>,
+    pub inactive: ::prost::alloc::collections::BTreeMap<u64, IndicatorConstraint>,
     #[prost(btree_map = "uint64, message", tag = "3")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "4")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -207,9 +217,9 @@ pub struct OneHotConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub active: ::prost::alloc::collections::BTreeMap<u64, OneHotConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed: ::prost::alloc::collections::BTreeMap<u64, OneHotConstraint>,
+    pub inactive: ::prost::alloc::collections::BTreeMap<u64, OneHotConstraint>,
     #[prost(btree_map = "uint64, message", tag = "3")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "4")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -221,9 +231,9 @@ pub struct Sos1ConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub active: ::prost::alloc::collections::BTreeMap<u64, Sos1Constraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed: ::prost::alloc::collections::BTreeMap<u64, Sos1Constraint>,
+    pub inactive: ::prost::alloc::collections::BTreeMap<u64, Sos1Constraint>,
     #[prost(btree_map = "uint64, message", tag = "3")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "4")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -297,7 +307,7 @@ pub struct EvaluatedRegularConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub entries: ::prost::alloc::collections::BTreeMap<u64, EvaluatedRegularConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -309,7 +319,7 @@ pub struct EvaluatedIndicatorConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub entries: ::prost::alloc::collections::BTreeMap<u64, EvaluatedIndicatorConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -321,7 +331,7 @@ pub struct EvaluatedOneHotConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub entries: ::prost::alloc::collections::BTreeMap<u64, EvaluatedOneHotConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -333,7 +343,7 @@ pub struct EvaluatedSos1ConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub entries: ::prost::alloc::collections::BTreeMap<u64, EvaluatedSos1Constraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -415,7 +425,7 @@ pub struct SampledRegularConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub entries: ::prost::alloc::collections::BTreeMap<u64, SampledRegularConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -427,7 +437,7 @@ pub struct SampledIndicatorConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub entries: ::prost::alloc::collections::BTreeMap<u64, SampledIndicatorConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -439,7 +449,7 @@ pub struct SampledOneHotConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub entries: ::prost::alloc::collections::BTreeMap<u64, SampledOneHotConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -451,7 +461,7 @@ pub struct SampledSos1ConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub entries: ::prost::alloc::collections::BTreeMap<u64, SampledSos1Constraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }

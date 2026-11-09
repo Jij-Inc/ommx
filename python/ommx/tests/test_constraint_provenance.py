@@ -24,12 +24,12 @@ def test_user_authored_constraint_has_empty_provenance():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={
+        active_constraints={
             5: Constraint(function=x, equality=Equality.LessThanOrEqualToZero),
         },
         sense=Sense.Minimize,
     )
-    c = instance.constraints.of_kind(ConstraintKind.Regular)[5]
+    c = instance.active_constraints.of_kind(ConstraintKind.Regular)[5]
     assert c.provenance == []
 
 
@@ -38,13 +38,13 @@ def test_convert_one_hot_populates_provenance():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=x)},
+        active_constraints={},
+        active_one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Sense.Minimize,
     )
     new_id = instance.convert_one_hot_to_constraint(10)
 
-    c = instance.constraints[new_id]
+    c = instance.active_constraints[new_id]
     assert len(c.provenance) == 1
     assert c.provenance[0].kind == ProvenanceKind.OneHotConstraint
     assert c.provenance[0].original_id == OneHotConstraintID(10)
@@ -55,15 +55,15 @@ def test_convert_sos1_populates_provenance_on_every_generated_constraint():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
-        sos1_constraints={7: Sos1Constraint(variables=x)},
+        active_constraints={},
+        active_sos1_constraints={7: Sos1Constraint(variables=x)},
         sense=Sense.Minimize,
     )
     new_ids = instance.convert_sos1_to_constraints(7)
 
     assert new_ids, "convert_sos1_to_constraints should emit at least one constraint"
     for nid in new_ids:
-        c = instance.constraints[nid]
+        c = instance.active_constraints[nid]
         assert c.provenance, f"constraint {nid} has no provenance"
         last = c.provenance[-1]
         assert last.kind == ProvenanceKind.Sos1Constraint
@@ -84,15 +84,15 @@ def test_convert_indicator_populates_provenance():
     instance = Instance.from_components(
         decision_variables=[y, x1, x2],
         objective=x1 + x2,
-        constraints={},
-        indicator_constraints={42: indicator},
+        active_constraints={},
+        active_indicator_constraints={42: indicator},
         sense=Sense.Minimize,
     )
     new_ids = instance.convert_indicator_to_constraint(42)
 
     assert new_ids
     for nid in new_ids:
-        c = instance.constraints[nid]
+        c = instance.active_constraints[nid]
         assert c.provenance
         last = c.provenance[-1]
         assert last.kind == ProvenanceKind.IndicatorConstraint
@@ -104,8 +104,8 @@ def test_provenance_is_preserved_through_evaluate():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=x)},
+        active_constraints={},
+        active_one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Sense.Minimize,
     )
     new_id = instance.convert_one_hot_to_constraint(10)
@@ -123,8 +123,8 @@ def test_provenance_is_preserved_through_evaluate_samples():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=x)},
+        active_constraints={},
+        active_one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Sense.Minimize,
     )
     new_id = instance.convert_one_hot_to_constraint(10)
@@ -151,13 +151,13 @@ def test_provenance_equality_and_hash():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=x)},
+        active_constraints={},
+        active_one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Sense.Minimize,
     )
     new_id = instance.convert_one_hot_to_constraint(10)
-    p1 = instance.constraints[new_id].provenance[0]
-    p2 = instance.constraints[new_id].provenance[0]
+    p1 = instance.active_constraints[new_id].provenance[0]
+    p2 = instance.active_constraints[new_id].provenance[0]
 
     assert p1 == p2
     assert ProvenanceKind.OneHotConstraint == ProvenanceKind.OneHotConstraint

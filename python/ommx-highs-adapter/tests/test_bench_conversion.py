@@ -36,7 +36,7 @@ def conversion_instance(request, num_terms):
     return Instance.from_components(
         decision_variables=variables,
         objective=expression if request.param == "objective" else 0,
-        constraints={0: expression <= num_terms}
+        active_constraints={0: expression <= num_terms}
         if request.param == "constraint"
         else {},
         sense=Sense.Minimize,

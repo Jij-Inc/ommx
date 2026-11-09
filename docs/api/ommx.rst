@@ -31,6 +31,8 @@ ommx
    _items/ommx.AttachedDecisionVariable
    _items/ommx.Parameter
    _items/ommx.ConstraintKind
+   _items/ommx.ConstraintActiveness
+   _items/ommx.ConstraintCollection
    _items/ommx.PolynomialRequirement
    _items/ommx.InstanceClassClause
    _items/ommx.InstanceClass
@@ -44,9 +46,9 @@ ommx
    _items/ommx.BinaryPowerPreparation
    _items/ommx.FixedPenaltyPreparation
    _items/ommx.PreparationPolicy
-   _items/ommx.ConstraintCollection
+   _items/ommx.ActiveConstraintCollection
    _items/ommx.ConstraintFamilyView
-   _items/ommx.RemovedConstraintCollection
+   _items/ommx.InactiveConstraintCollection
    _items/ommx.EvaluatedConstraintCollection
    _items/ommx.SampledConstraintCollection
    _items/ommx.ConstraintIDBase
@@ -59,17 +61,17 @@ ommx
    _items/ommx.AttachedConstraint
    _items/ommx.IndicatorConstraint
    _items/ommx.AttachedIndicatorConstraint
-   _items/ommx.RemovedIndicatorConstraint
+   _items/ommx.InactiveIndicatorConstraint
    _items/ommx.OneHotConstraint
    _items/ommx.AttachedOneHotConstraint
-   _items/ommx.RemovedOneHotConstraint
+   _items/ommx.InactiveOneHotConstraint
    _items/ommx.Sos1Constraint
    _items/ommx.AttachedSos1Constraint
-   _items/ommx.RemovedSos1Constraint
+   _items/ommx.InactiveSos1Constraint
    _items/ommx.Sos1BigMSelectorClaim
    _items/ommx.Sos1BigMPromotionRequest
    _items/ommx.Sos1BigMPromotion
-   _items/ommx.RemovedConstraint
+   _items/ommx.InactiveConstraint
    _items/ommx.Provenance
    _items/ommx.ProvenanceKind
    _items/ommx.NamedFunction

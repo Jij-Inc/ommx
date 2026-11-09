@@ -25,7 +25,7 @@ def test_reassigning_dependency_is_rejected_without_changing_output(parametric):
         sense=Sense.Minimize,
         objective=x,
         decision_variables=[x, y, z],
-        constraints={},
+        active_constraints={},
         named_functions=[NamedFunction(id=9, function=x)],
     )
     target = instance.as_parametric_instance() if parametric else instance
@@ -68,7 +68,7 @@ def test_substitution_rejects_fixed_targets_atomically(
         sense=Sense.Minimize,
         objective=x + z,
         decision_variables=[x, y, z],
-        constraints={},
+        active_constraints={},
     )
     if normalize_dependency:
         instance.substitute({0: y})
@@ -90,7 +90,7 @@ def test_integer_encoding_cannot_replace_existing_representation(first, second):
         sense=Sense.Minimize,
         objective=x,
         decision_variables=[x],
-        constraints={},
+        active_constraints={},
     )
     getattr(instance, first)({0})
     before = instance.to_v2_bytes()
@@ -112,19 +112,19 @@ def test_partial_evaluate_preserves_reporting_context(path):
         sense=Sense.Minimize,
         objective=0 if path == "fixed_only" else x + y,
         decision_variables=[x, y, z],
-        constraints={7: x + y == 1},
+        active_constraints={7: x + y == 1},
         named_functions=[
             NamedFunction(id=9, function=metric, name="metric", subscripts=[4])
         ],
-        one_hot_constraints={8: OneHotConstraint(variables=[x, y])}
+        active_one_hot_constraints={8: OneHotConstraint(variables=[x, y])}
         if path == "one_hot"
         else {},
     )
-    instance.relax_constraint(7, "retained source")
+    instance.deactivate_constraint(7, "retained source")
     if path == "dependent":
         instance.substitute({2: 2 * x})
     before = instance.to_v2_bytes()
-    removed = instance.removed_constraints[ConstraintID(7)].function
+    removed = instance.inactive_constraints[ConstraintID(7)].function
     fixed = instance.partial_evaluate({0: 1.0000005}, atol=1e-6)
     assert instance.to_v2_bytes() == before
     for result in (fixed, Instance.from_v2_bytes(fixed.to_v2_bytes())):
@@ -132,7 +132,7 @@ def test_partial_evaluate_preserves_reporting_context(path):
         assert nf.function == metric
         assert nf.name == "metric"
         assert nf.subscripts == [4]
-        assert result.removed_constraints[ConstraintID(7)].function == removed
+        assert result.inactive_constraints[ConstraintID(7)].function == removed
         assert result.fixed_decision_variables()[0] == 1
         if path == "one_hot":
             assert result.fixed_decision_variables()[1] == 0
@@ -141,7 +141,7 @@ def test_partial_evaluate_preserves_reporting_context(path):
         solution = result.evaluate({1: 0, 2: 2})
         source = instance.evaluate({0: 1, 1: 0, 2: 2})
         assert solution.objective == source.objective
-        assert solution.feasible == source.feasible
+        assert solution.feasible() == source.feasible()
         evaluated = solution.get_named_function_by_id(9)
         assert evaluated.evaluated_value == 3
         assert evaluated.used_decision_variable_ids == {0, 1, 2}
@@ -158,7 +158,7 @@ def test_partial_evaluate_does_not_expand_reporting_coefficients(active):
         sense=Sense.Minimize,
         objective=x if active else 0,
         decision_variables=[x, y],
-        constraints={},
+        active_constraints={},
         named_functions=[NamedFunction(id=9, function=metric)],
     )
     fixed = instance.partial_evaluate({1: 2})
@@ -180,7 +180,7 @@ def test_substitution_preserves_named_function_for_reconstructed_values(
         sense=Sense.Minimize,
         objective=x,
         decision_variables=[x, *bits],
-        constraints={7: x <= 1},
+        active_constraints={7: x <= 1},
         named_functions=[NamedFunction(id=9, function=metric, name="source_metric")],
     )
     if existing_output:
@@ -218,7 +218,7 @@ def test_substitution_preserves_named_function_for_reconstructed_values(
             original_x = result.state.entries[0]
             seen.add(original_x)
             expected = source.evaluate({0: original_x})
-            assert result.feasible == expected.feasible
+            assert result.feasible() == expected.feasible()
             assert result.objective == expected.objective
             assert (
                 result.get_named_function_by_id(9).evaluated_value
@@ -248,7 +248,7 @@ def test_substitution_active_overflow_is_atomic(operation):
         sense=Sense.Minimize,
         objective=x,
         decision_variables=[x, *bits],
-        constraints={7: overflowing <= 0},
+        active_constraints={7: overflowing <= 0},
         named_functions=[NamedFunction(id=9, function=x * x)],
     )
     target = (
@@ -274,7 +274,7 @@ def test_substitution_only_in_context_does_not_capture_objective(operation):
         sense=Sense.Minimize,
         objective=0,
         decision_variables=[x, *bits],
-        constraints={},
+        active_constraints={},
         named_functions=[NamedFunction(id=9, function=source)],
     )
     if operation == "parametric":
@@ -308,7 +308,7 @@ def test_parametric_substitution_keeps_source_until_parameter_specialization():
         objective=x,
         decision_variables=[x, b],
         parameters=[p],
-        constraints={},
+        active_constraints={},
         named_functions=[NamedFunction(id=9, function=x * x + p)],
     )
     source = instance.named_functions[0].function
@@ -330,7 +330,7 @@ def test_substitution_allows_intentionally_restricted_domain(parametric):
         sense=Sense.Minimize,
         objective=x,
         decision_variables=[x, b],
-        constraints={},
+        active_constraints={},
         named_functions=[NamedFunction(id=9, function=x * x)],
     )
     if parametric:
@@ -342,6 +342,6 @@ def test_substitution_allows_intentionally_restricted_domain(parametric):
     assert instance.named_functions[0].function.required_ids() == {0}
     for value in (0, 1):
         result = instance.evaluate({1: value})
-        assert result.feasible
+        assert result.feasible()
         assert result.state.entries[0] == 2 * value
         assert result.get_named_function_by_id(9).evaluated_value == 4 * value

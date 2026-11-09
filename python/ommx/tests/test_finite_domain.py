@@ -41,12 +41,12 @@ def test_extreme_finite_domain_members_can_be_evaluated_and_fixed(value):
 
     solution = instance.evaluate({variable.id: value})
     assert solution.objective == 0.0
-    assert solution.feasible
-    assert not instance.evaluate({variable.id: 0.0}).feasible
+    assert solution.feasible()
+    assert not instance.evaluate({variable.id: 0.0}).feasible()
 
     fixed = instance.partial_evaluate({variable.id: value})
     assert fixed.attached_decision_variable(variable.id).substituted_value == value
-    assert fixed.evaluate({}).feasible
+    assert fixed.evaluate({}).feasible()
 
 
 @pytest.mark.parametrize(
@@ -73,12 +73,12 @@ def test_finite_domain_evaluation_and_wire_roundtrip():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=Instance.MINIMIZE,
     )
 
-    assert instance.evaluate({1: 0.3}).feasible
-    assert not instance.evaluate({1: 0.4}).feasible
+    assert instance.evaluate({1: 0.3}).feasible()
+    assert not instance.evaluate({1: 0.4}).feasible()
 
     restored_v1 = Instance.from_v1_bytes(instance.to_v1_bytes())
     restored_v2 = Instance.from_v2_bytes(instance.to_v2_bytes())
@@ -117,7 +117,7 @@ def test_finite_domain_is_visible_in_dataframes():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=Instance.MINIMIZE,
     )
 

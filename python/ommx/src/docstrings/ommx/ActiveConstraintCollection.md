@@ -1,7 +1,7 @@
 Live, read-only mapping of all active constraint families in a model.
 
-Obtained from {attr}`~ommx.Instance.constraints` or
-{attr}`~ommx.ParametricInstance.constraints`. The collection keeps its owner
+Obtained from {attr}`~ommx.Instance.active_constraints` or
+{attr}`~ommx.ParametricInstance.active_constraints`. The collection keeps its owner
 alive and observes subsequent owner mutations. Obtaining it does not collect
 constraint rows; indexing fetches the selected row from the owner's current
 state. Active model rows are attached handles whose label setters update that
@@ -11,10 +11,10 @@ owner.
 >>> model = Instance.minimize()
 >>> x = model.new_binary("x")
 >>> rule = model.add_constraint(x <= 1, "limit")
->>> rows = model.constraints
+>>> rows = model.active_constraints
 >>> cid = rule.constraint_id
 >>> rows[cid].set_name("capacity")
->>> assert model.constraints[cid].name == "capacity"
+>>> assert model.active_constraints[cid].name == "capacity"
 >>> assert rows.get(ConstraintID(99)) is None
 >>> assert rows.get(ConstraintID(99), "missing") == "missing"
 
@@ -34,15 +34,15 @@ iteration rules but have different row ownership:
 
 | Collection | Included constraints | Returned rows |
 | --- | --- | --- |
-| {class}`~ommx.ConstraintCollection` | Active model constraints | Attached handles |
-| {class}`~ommx.RemovedConstraintCollection` | Retained removed model constraints | Independent snapshots |
-| {class}`~ommx.EvaluatedConstraintCollection` | Active and retained removed constraints in a Solution | Independent evaluated snapshots |
-| {class}`~ommx.SampledConstraintCollection` | Active and retained removed constraints in a SampleSet | Independent sampled snapshots |
+| {class}`~ommx.ActiveConstraintCollection` | Active model constraints | Attached handles |
+| {class}`~ommx.InactiveConstraintCollection` | Retained removed model constraints | Independent snapshots |
+| {class}`~ommx.EvaluatedConstraintCollection` | Active and retained inactive constraints in a Solution | Independent evaluated snapshots |
+| {class}`~ommx.SampledConstraintCollection` | Active and retained inactive constraints in a SampleSet | Independent sampled snapshots |
 
 Attached handles compare equal when they refer to the same owner object and
 typed ID. Handles from different owners are unequal even if the models contain
 identical data. Removed and result snapshots compare their stored data, including
-metadata and removal reasons. Mapping equality and membership in ``values()`` or
+metadata and inactivity reasons. Mapping equality and membership in ``values()`` or
 ``items()`` use those row equality rules.
 
 **Live views and iteration**
@@ -65,4 +65,4 @@ that access raises ``KeyError``.
 still attached handles. To inspect just one family, use ``of_kind`` and
 {class}`~ommx.ConstraintFamilyView`. To collect a table, use the owner's
 ``constraints_df(kind=...)``. Its typed index matches the selected family's keys;
-on models, ``removed=True`` includes both active and retained removed rows.
+on models, ``min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK`` includes both active and inactive rows.

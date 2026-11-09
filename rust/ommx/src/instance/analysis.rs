@@ -290,19 +290,19 @@ trait SolverUseVisitor {
 fn traverse_active_solver_uses(instance: &Instance, visitor: &mut impl SolverUseVisitor) {
     visitor.visit_objective(instance.objective().required_ids());
 
-    for (constraint_id, constraint) in instance.constraints() {
+    for (constraint_id, constraint) in instance.active_constraints() {
         visitor.visit_regular_constraint(*constraint_id, constraint.function().required_ids());
     }
 
-    for (constraint_id, constraint) in instance.indicator_constraints() {
+    for (constraint_id, constraint) in instance.active_indicator_constraints() {
         visitor.visit_indicator_constraint(*constraint_id, constraint.required_ids());
     }
 
-    for (constraint_id, constraint) in instance.one_hot_constraints() {
+    for (constraint_id, constraint) in instance.active_one_hot_constraints() {
         visitor.visit_one_hot_constraint(*constraint_id, constraint.required_ids());
     }
 
-    for (constraint_id, constraint) in instance.sos1_constraints() {
+    for (constraint_id, constraint) in instance.active_sos1_constraints() {
         visitor.visit_sos1_constraint(*constraint_id, constraint.required_ids());
     }
 }
@@ -921,7 +921,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(crate::Function::from(linear!(1) + linear!(2))) // objective uses x_1 and x_2
             .decision_variables(decision_variables)
-            .constraints(btreemap! {})
+            .active_constraints(btreemap! {})
             .decision_variable_dependency(dependency)
             .build()
             .unwrap();
@@ -963,7 +963,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(linear!(1).into())
             .decision_variables(decision_variables)
-            .constraints(btreemap! {})
+            .active_constraints(btreemap! {})
             .named_functions(btreemap! {
                 NamedFunctionID::from(7) => named_function,
             })

@@ -17,7 +17,7 @@ def test_quadratic_initial_state_initializes_solver_objective(
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=sign * (x * x + 2 * x * y + 3 * y + 7),
-        constraints={},
+        active_constraints={},
         sense=sense,
     )
     named: NamedState = {"x": {(0,): 2.0}} if partial else {"x": {(0,): 2.0, (1,): 3.0}}
@@ -54,7 +54,7 @@ def test_named_initial_state_is_stored_before_optimization(
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=2 * x + y,
-        constraints={0: x + y <= 5},
+        active_constraints={0: x + y <= 5},
         sense=Sense.Maximize,
     )
     # The same user input works even when IDs and their ordering change.
@@ -77,7 +77,7 @@ def test_named_initial_state_is_stored_before_optimization(
     model.optimize()
     solution = adapter.decode(model)
 
-    assert solution.feasible
+    assert solution.feasible()
     assert solution.state.entries == {x.id: 5.0, y.id: 0.0}
     assert solution.objective == 10.0
 
@@ -116,7 +116,7 @@ def test_adapter_class_with_initial_state():
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x - y,
-        constraints={0: x + y <= 5},
+        active_constraints={0: x + y <= 5},
         sense=Sense.Maximize,
     )
     initial_state = State(
@@ -148,7 +148,7 @@ def test_solve_with_initial_state():
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x - y,
-        constraints={0: x + y <= 5},
+        active_constraints={0: x + y <= 5},
         sense=Sense.Maximize,
     )
     initial_state = State(
@@ -176,7 +176,7 @@ def test_adapter_class_with_initial_state_from_mapping():
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x - y,
-        constraints={0: x + y <= 5},
+        active_constraints={0: x + y <= 5},
         sense=Sense.Maximize,
     )
     initial_mapping = {
@@ -205,7 +205,7 @@ def test_solve_with_initial_state_from_mapping():
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x - y,
-        constraints={0: x + y <= 5},
+        active_constraints={0: x + y <= 5},
         sense=Sense.Maximize,
     )
     initial_mapping = {

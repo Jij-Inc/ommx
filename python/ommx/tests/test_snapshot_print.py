@@ -116,7 +116,7 @@ def test_instance_stats_print(snapshot):
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints={0: x[0] + x[1] <= 1, 1: x[1] + x[2] >= 1},
+        active_constraints={0: x[0] + x[1] <= 1, 1: x[1] + x[2] >= 1},
         sense=Sense.Minimize,
     )
     stats = instance.stats()
@@ -147,9 +147,9 @@ def test_instance_print_uses_modeling_labels(snapshot):
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints={10: capacity},
-        indicator_constraints={20: indicator},
-        one_hot_constraints={30: one_hot},
+        active_constraints={10: capacity},
+        active_indicator_constraints={20: indicator},
+        active_one_hot_constraints={30: one_hot},
         named_functions=[score],
         sense=Sense.Maximize,
     )
@@ -165,7 +165,7 @@ def test_parametric_instance_print_uses_parameter_labels(snapshot):
     instance = ParametricInstance.from_components(
         decision_variables=[x],
         objective=x + p,
-        constraints={},
+        active_constraints={},
         parameters=[p],
         sense=Sense.Minimize,
     )
@@ -186,7 +186,7 @@ def test_instance_print_disambiguates_duplicate_labels_across_sections(snapshot)
     instance = Instance.from_components(
         decision_variables=[x0, x1],
         objective=x0,
-        constraints={1: constraint},
+        active_constraints={1: constraint},
         sense=Sense.Minimize,
     )
 
@@ -204,9 +204,9 @@ def test_parametric_instance_print_disambiguates_parameter_and_structural_variab
     instance = ParametricInstance.from_components(
         decision_variables=[x],
         objective=p,
-        constraints={},
+        active_constraints={},
         parameters=[p],
-        one_hot_constraints={7: one_hot},
+        active_one_hot_constraints={7: one_hot},
         sense=Sense.Minimize,
     )
 
@@ -231,7 +231,7 @@ def test_instance_print_limits_section_rows(snapshot):
     instance = Instance.from_components(
         decision_variables=variables,
         objective=variables[0],
-        constraints=constraints,
+        active_constraints=constraints,
         sense=Sense.Minimize,
     )
 
@@ -248,8 +248,8 @@ def test_instance_print_limits_structural_variable_sets(snapshot):
     instance = Instance.from_components(
         decision_variables=variables,
         objective=variables[0],
-        constraints={},
-        one_hot_constraints={3: one_hot},
+        active_constraints={},
+        active_one_hot_constraints={3: one_hot},
         sense=Sense.Minimize,
     )
 

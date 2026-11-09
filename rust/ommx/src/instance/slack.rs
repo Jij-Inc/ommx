@@ -116,10 +116,11 @@ impl Instance {
             });
         }
         if Equality::LessThanOrEqualToZero.is_satisfied(f_bound.upper(), atol) {
-            self.relax_constraint(
+            self.deactivate_constraint(
                 constraint_id,
                 "ommx.Instance.convert_inequality_to_equality_with_integer_slack".to_string(),
                 [],
+                false,
             )?;
             return Ok(());
         }
@@ -190,7 +191,7 @@ impl Instance {
     ///
     /// Returns the coefficient $b = -\mathrm{lower}(f(x)) / \text{slack\_upper\_bound}$.
     /// Returns `None` if the constraint was trivially satisfied and was moved to
-    /// removed_constraints.
+    /// inactive_constraints.
     /// `atol` controls both zero-sensitive operations while computing the
     /// function bound and the inequality feasibility threshold used to classify
     /// infeasible or trivial bounds. It must be less than `0.5` so its use while
@@ -236,10 +237,11 @@ impl Instance {
             });
         }
         if Equality::LessThanOrEqualToZero.is_satisfied(f_bound.upper(), atol) {
-            self.relax_constraint(
+            self.deactivate_constraint(
                 constraint_id,
                 "add_integer_slack_to_inequality".to_string(),
                 [],
+                false,
             )?;
             return Ok(None);
         }
@@ -367,7 +369,7 @@ mod tests {
             .unwrap();
 
         let constraint = instance
-            .constraints()
+            .active_constraints()
             .get(&ConstraintID::from(0))
             .expect("constraint should still be present");
         assert_eq!(constraint.equality, Equality::EqualToZero);
@@ -398,7 +400,7 @@ mod tests {
             .copied()
             .find(|id| instance.variable_labels().name(*id) == Some("ommx.slack"))
             .unwrap();
-        let constraint = &instance.constraints()[&ConstraintID::from(0)];
+        let constraint = &instance.active_constraints()[&ConstraintID::from(0)];
         let feasible = constraint
             .evaluate(
                 &crate::v1::State::from_iter([(1, 0.0), (slack_id.into_inner(), 0.0)]),
@@ -425,7 +427,7 @@ mod tests {
             .unwrap();
         assert_eq!(coefficient, Some(0.0));
 
-        let constraint = &instance.constraints()[&ConstraintID::from(0)];
+        let constraint = &instance.active_constraints()[&ConstraintID::from(0)];
         let feasible = constraint
             .evaluate(&crate::v1::State::from_iter([(1, 0.0)]), atol)
             .unwrap();
@@ -464,9 +466,9 @@ mod tests {
                     None
                 );
             }
-            assert!(instance.constraints().is_empty());
+            assert!(instance.active_constraints().is_empty());
             assert!(instance
-                .removed_constraints()
+                .inactive_constraints()
                 .contains_key(&ConstraintID::from(0)));
         }
     }
@@ -591,7 +593,9 @@ mod tests {
             Some(crate::ContentFactorError::CannotApproximateCoefficient)
         ));
         assert_eq!(instance.decision_variables().len(), 1);
-        assert!(instance.constraints().contains_key(&ConstraintID::from(0)));
+        assert!(instance
+            .active_constraints()
+            .contains_key(&ConstraintID::from(0)));
     }
 
     #[test]
@@ -619,7 +623,7 @@ mod tests {
         assert!(b > 0.0);
 
         let constraint = instance
-            .constraints()
+            .active_constraints()
             .get(&ConstraintID::from(0))
             .expect("constraint should still be present");
         assert_eq!(constraint.equality, Equality::LessThanOrEqualToZero);
@@ -652,8 +656,8 @@ mod tests {
             .add_integer_slack_to_inequality(0, 2, ATol::default())
             .unwrap();
         assert!(result.is_none());
-        assert!(instance.constraints().is_empty());
-        assert_eq!(instance.removed_constraints().len(), 1);
+        assert!(instance.active_constraints().is_empty());
+        assert_eq!(instance.inactive_constraints().len(), 1);
     }
 
     #[test]
@@ -684,7 +688,10 @@ mod tests {
         // No slack variable should have been added on the failure path.
         assert_eq!(instance.decision_variables.len(), before);
         // The original constraint is still the untouched inequality.
-        let constraint = instance.constraints().get(&ConstraintID::from(0)).unwrap();
+        let constraint = instance
+            .active_constraints()
+            .get(&ConstraintID::from(0))
+            .unwrap();
         assert_eq!(constraint.equality, Equality::LessThanOrEqualToZero);
     }
 

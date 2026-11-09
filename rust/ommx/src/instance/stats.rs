@@ -64,12 +64,12 @@ pub struct DecisionVariableStats {
 /// Statistics about constraints in an instance.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConstraintStats {
-    /// Total number of constraints (active + removed)
+    /// Total number of constraints (active + inactive)
     pub total: usize,
     /// Number of active constraints
     pub active: usize,
-    /// Number of removed constraints
-    pub removed: usize,
+    /// Number of inactive constraints
+    pub inactive: usize,
 }
 
 /// Statistics about an optimization problem instance.
@@ -169,9 +169,9 @@ impl super::Instance {
         };
 
         let constraints = ConstraintStats {
-            total: self.constraints().len() + self.removed_constraints().len(),
-            active: self.constraints().len(),
-            removed: self.removed_constraints().len(),
+            total: self.active_constraints().len() + self.inactive_constraints().len(),
+            active: self.active_constraints().len(),
+            inactive: self.inactive_constraints().len(),
         };
 
         InstanceStats {
@@ -220,7 +220,7 @@ mod tests {
 
         assert_eq!(stats.constraints.total, 0);
         assert_eq!(stats.constraints.active, 0);
-        assert_eq!(stats.constraints.removed, 0);
+        assert_eq!(stats.constraints.inactive, 0);
     }
 
     #[test]
@@ -276,14 +276,14 @@ mod tests {
 
         // Remove one constraint
         instance
-            .relax_constraint(ConstraintID::from(2), "Test removal".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(2), "Test removal".to_string(), [], false)
             .unwrap();
 
         let stats = instance.stats();
 
         assert_eq!(stats.constraints.total, 2);
         assert_eq!(stats.constraints.active, 1);
-        assert_eq!(stats.constraints.removed, 1);
+        assert_eq!(stats.constraints.inactive, 1);
         // Variables 1 and 2 are used in constraint 1 (active)
         // Note: Removed constraints are NOT counted in used_in_constraints
         assert_eq!(stats.decision_variables.by_usage.used_in_constraints, 2);
@@ -374,7 +374,7 @@ mod tests {
 
         // Remove one constraint
         instance
-            .relax_constraint(ConstraintID::from(3), "Not needed".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(3), "Not needed".to_string(), [], false)
             .unwrap();
 
         let stats = instance.stats();

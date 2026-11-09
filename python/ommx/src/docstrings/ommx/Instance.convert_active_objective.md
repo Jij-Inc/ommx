@@ -55,7 +55,7 @@ also rebases output evaluation onto that objective.
 The reported objective is separate from feasibility and optimality. In
 particular, after penalty conversion a small {attr}`~ommx.Solution.objective`
 does not measure the penalty or establish that retained constraints are
-satisfied. Check {attr}`~ommx.Solution.feasible` independently. Equivalent
+satisfied. Check {meth}`~ommx.Solution.feasible` independently. Equivalent
 objective sign conversion preserves optimality, but other transformations can
 invalidate its transport; use {meth}`~ommx.Instance.map_active_optimality` for
 the recorded mapping of a backend's optimality status.

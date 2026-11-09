@@ -14,7 +14,7 @@ def test_encoding_precedes_penalty_and_preserves_output_semantics(format_name, k
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
-        constraints={7: x + y == 2},
+        active_constraints={7: x + y == 2},
         sense=Sense.Minimize,
     )
     parametric = (
@@ -29,7 +29,7 @@ def test_encoding_precedes_penalty_and_preserves_output_semantics(format_name, k
     assert getattr(instance, f"to_{format_name}")(**options) == expected
     policy = getattr(PreparationPolicy, f"for_{format_name}")(**options)
     instance.prepare(getattr(InstanceClass, format_name)(), policy)
-    removed = instance.removed_constraints[ConstraintID(7)]
+    removed = instance.inactive_constraints[ConstraintID(7)]
     assert removed.function.required_ids() == {2, 3, 4}
     for bits in product([0, 1], repeat=3):
         state = dict(zip([2, 3, 4], bits))
@@ -37,5 +37,5 @@ def test_encoding_precedes_penalty_and_preserves_output_semantics(format_name, k
         solution = instance.evaluate(state)
         assert instance.objective.evaluate(state) == decoded + 3 * (decoded - 2) ** 2
         assert solution.objective == decoded
-        assert solution.feasible == (decoded == 2)
+        assert solution.feasible() == (decoded == 2)
         assert removed.function.evaluate(state) == decoded - 2

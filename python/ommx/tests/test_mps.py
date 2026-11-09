@@ -16,7 +16,7 @@ def test_neos_2626858_aoos_variable_domains(loader):
     instance = loader(str(path))
     variables = instance.decision_variables
     assert len(variables) == 524
-    assert len(instance.constraints) == 342
+    assert len(instance.active_constraints) == 342
     assert sum(v.kind == Kind.Binary for v in variables) == 209
     assert sum(v.kind == Kind.Integer for v in variables) == 315
 
@@ -37,8 +37,8 @@ def test_example_mps():
     dvars.sort(key=lambda x: x.name)
     constraints = sorted(
         (
-            instance.constraints[cid]
-            for cid in instance.constraints
+            instance.active_constraints[cid]
+            for cid in instance.active_constraints
             if isinstance(cid, ConstraintID)
         ),
         key=lambda c: c.name or "",
@@ -103,7 +103,7 @@ def test_output():
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints=constraints,
+        active_constraints=constraints,
         sense=Sense.Maximize,
     )
 
@@ -123,8 +123,8 @@ def test_output():
         assert b.bound.upper == a.bound.upper
         assert b.subscripts == a.subscripts
 
-    constr_before = instance.constraints
-    constr_after = loaded.constraints
+    constr_before = instance.active_constraints
+    constr_after = loaded.active_constraints
     assert len(constr_before) == len(constr_after)
     assert set(constr_before.keys()) == set(constr_after.keys())
     for cid in constr_before:

@@ -17,8 +17,8 @@
 
 use super::Instance;
 use crate::{
-    Coefficient, ConstraintContext, ConstraintID, Equality, Kind, LinearMonomial, OneHotConstraint,
-    OneHotConstraintID, RemovedReason, VariableID, VariableIDSet,
+    Coefficient, ConstraintContext, ConstraintID, Equality, InactiveConstraintMetadata, Kind,
+    LinearMonomial, OneHotConstraint, OneHotConstraintID, VariableID, VariableIDSet,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -330,7 +330,8 @@ impl<'a> OneHotPromotionPlan<'a> {
                 let planned = result.as_ref().ok()?;
                 Some((
                     source_constraint_id,
-                    RemovedReason {
+                    InactiveConstraintMetadata {
+                        skip_feasibility_check: false,
                         reason: PROMOTION_REASON.to_string(),
                         parameters: [(
                             TARGET_ID_PARAMETER.to_string(),
@@ -408,7 +409,7 @@ impl Instance {
     /// reason. An invalid source does not prevent independent valid sources in
     /// the same request from being promoted.
     ///
-    /// On each successful entry the source moves to `removed_constraints`, its
+    /// On each successful entry the source moves to `inactive_constraints`, its
     /// context is copied to the new active one-hot constraint, and the removal
     /// reason records the allocated target ID. Planning is atomic: rejected
     /// requests leave their rows unchanged. The plan exclusively
@@ -544,7 +545,7 @@ mod tests {
                 (VariableID::from(3), DecisionVariable::binary()),
                 (VariableID::from(4), DecisionVariable::integer()),
             ]))
-            .constraints(BTreeMap::from([(ConstraintID::from(10), source)]))
+            .active_constraints(BTreeMap::from([(ConstraintID::from(10), source)]))
             .build()
             .unwrap()
     }
@@ -559,7 +560,7 @@ mod tests {
                 (VariableID::from(2), DecisionVariable::binary()),
                 (VariableID::from(3), DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::from([
+            .active_constraints(BTreeMap::from([
                 (
                     ConstraintID::from(10),
                     Constraint::equal_to_zero(exact_scaled_one_hot(&[1, 2], 1.0)),
@@ -636,13 +637,13 @@ mod tests {
                 &OneHotConstraintID::from(11)
             );
             assert_eq!(results.len(), 1);
-            assert!(instance.constraints().is_empty());
+            assert!(instance.active_constraints().is_empty());
             assert_eq!(
-                instance.one_hot_constraints()[&OneHotConstraintID::from(11)].variables,
+                instance.active_one_hot_constraints()[&OneHotConstraintID::from(11)].variables,
                 variables([1, 2, 3])
             );
 
-            let (_, reason) = &instance.removed_constraints()[&ConstraintID::from(10)];
+            let (_, reason) = &instance.inactive_constraints()[&ConstraintID::from(10)];
             assert_eq!(reason.reason, PROMOTION_REASON);
             assert_eq!(
                 reason
@@ -682,15 +683,15 @@ mod tests {
             &OneHotConstraintID::from(22)
         );
         assert_eq!(results.len(), 2);
-        assert!(instance.constraints().is_empty());
-        assert_eq!(instance.removed_constraints().len(), 2);
-        assert_eq!(instance.one_hot_constraints().len(), 2);
+        assert!(instance.active_constraints().is_empty());
+        assert_eq!(instance.inactive_constraints().len(), 2);
+        assert_eq!(instance.active_one_hot_constraints().len(), 2);
         assert_eq!(
-            instance.one_hot_constraints()[&OneHotConstraintID::from(21)].variables,
+            instance.active_one_hot_constraints()[&OneHotConstraintID::from(21)].variables,
             variables([1, 2])
         );
         assert_eq!(
-            instance.one_hot_constraints()[&OneHotConstraintID::from(22)].variables,
+            instance.active_one_hot_constraints()[&OneHotConstraintID::from(22)].variables,
             variables([2, 3])
         );
     }
@@ -742,12 +743,16 @@ mod tests {
             .to_string()
             .contains("was not found"));
         assert_eq!(results.len(), 2);
-        assert!(instance.constraints().contains_key(&ConstraintID::from(10)));
-        assert!(!instance.constraints().contains_key(&ConstraintID::from(20)));
         assert!(instance
-            .removed_constraints()
+            .active_constraints()
+            .contains_key(&ConstraintID::from(10)));
+        assert!(!instance
+            .active_constraints()
             .contains_key(&ConstraintID::from(20)));
-        assert_eq!(instance.one_hot_constraints().len(), 1);
+        assert!(instance
+            .inactive_constraints()
+            .contains_key(&ConstraintID::from(20)));
+        assert_eq!(instance.active_one_hot_constraints().len(), 1);
     }
 
     #[test]
@@ -769,12 +774,15 @@ mod tests {
             results[&ConstraintID::from(20)].as_ref().unwrap(),
             &OneHotConstraintID::from(21)
         );
-        assert_eq!(instance.constraints()[&ConstraintID::from(10)], rejected);
+        assert_eq!(
+            instance.active_constraints()[&ConstraintID::from(10)],
+            rejected
+        );
         assert!(!instance
-            .removed_constraints()
+            .inactive_constraints()
             .contains_key(&ConstraintID::from(10)));
         assert!(instance
-            .removed_constraints()
+            .inactive_constraints()
             .contains_key(&ConstraintID::from(20)));
     }
 

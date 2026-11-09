@@ -56,7 +56,7 @@ use criterion::{
 };
 use ommx::{
     linear, ATol, AcyclicAssignments, Bound, Constraint, ConstraintID, DecisionVariable, Function,
-    Instance, Kind, NamedFunction, NamedFunctionID, RemovedReason, Sense, VariableID,
+    InactiveConstraintMetadata, Instance, Kind, NamedFunction, NamedFunctionID, Sense, VariableID,
 };
 use std::collections::BTreeMap;
 
@@ -68,7 +68,7 @@ const INTEGER_BOUND_WIDTH: f64 = 1023.0; // 10 log-encoding bits
 /// An instance with a single integer decision variable (id 0) to log-encode,
 /// plus `num_removed` unrelated removed regular constraints that log_encode
 /// must neither inspect nor rewrite.
-fn instance_with_removed_constraints(num_removed: usize) -> Instance {
+fn instance_with_inactive_constraints(num_removed: usize) -> Instance {
     let decision_variables = BTreeMap::from([
         (
             VariableID::from(0),
@@ -82,11 +82,12 @@ fn instance_with_removed_constraints(num_removed: usize) -> Instance {
         (VariableID::from(1), DecisionVariable::continuous()),
     ]);
 
-    let removed_reason = RemovedReason {
+    let removed_reason = InactiveConstraintMetadata {
+        skip_feasibility_check: false,
         reason: "ommx.bench.log_encode.removed_regular_constraints".to_string(),
         parameters: Default::default(),
     };
-    let removed_constraints = (1..=num_removed as u64)
+    let inactive_constraints = (1..=num_removed as u64)
         .map(|id| {
             (
                 ConstraintID::from(id),
@@ -102,8 +103,8 @@ fn instance_with_removed_constraints(num_removed: usize) -> Instance {
         .sense(Sense::Minimize)
         .objective(Function::Zero)
         .decision_variables(decision_variables)
-        .constraints(BTreeMap::new())
-        .removed_constraints(removed_constraints)
+        .active_constraints(BTreeMap::new())
+        .inactive_constraints(inactive_constraints)
         .build()
         .unwrap()
 }
@@ -139,7 +140,7 @@ fn instance_with_active_constraints(num_active: usize) -> Instance {
         .sense(Sense::Minimize)
         .objective(Function::Zero)
         .decision_variables(decision_variables)
-        .constraints(constraints)
+        .active_constraints(constraints)
         .build()
         .unwrap()
 }
@@ -172,7 +173,7 @@ fn instance_with_unrelated_named_functions(num_named_functions: usize) -> Instan
         .sense(Sense::Minimize)
         .objective(Function::Zero)
         .decision_variables(decision_variables)
-        .constraints(BTreeMap::new())
+        .active_constraints(BTreeMap::new())
         .named_functions(named_functions)
         .build()
         .unwrap()
@@ -205,19 +206,19 @@ fn instance_with_unrelated_dependencies(num_dependencies: usize) -> Instance {
         .sense(Sense::Minimize)
         .objective(Function::Zero)
         .decision_variables(decision_variables)
-        .constraints(BTreeMap::new())
+        .active_constraints(BTreeMap::new())
         .decision_variable_dependency(dependencies)
         .build()
         .unwrap()
 }
 
-fn log_encode_removed_constraints(c: &mut Criterion) {
+fn log_encode_inactive_constraints(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("log-encode-removed-constraints");
     group.plot_config(plot_config);
 
     for num_removed in [1_000, 8_000, 32_000] {
-        let instance = instance_with_removed_constraints(num_removed);
+        let instance = instance_with_inactive_constraints(num_removed);
         group.bench_with_input(
             BenchmarkId::new("log-encode-removed-constraints", num_removed.to_string()),
             &instance,
@@ -299,7 +300,7 @@ fn log_encode_unrelated_dependencies(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    log_encode_removed_constraints,
+    log_encode_inactive_constraints,
     log_encode_active_constraints,
     log_encode_unrelated_named_functions,
     log_encode_unrelated_dependencies,

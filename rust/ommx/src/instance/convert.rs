@@ -41,7 +41,7 @@ impl Instance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// let state = State::from(HashMap::from([(1, 1.0)]));
@@ -96,7 +96,7 @@ impl Instance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// let state = State::from(HashMap::from([(1, 1.0)]));
@@ -139,7 +139,7 @@ impl Instance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// let state = State::from(HashMap::from([(1, 1.0)]));
@@ -218,7 +218,7 @@ fn materialize_constraint_collection_parameters<T: ConstraintType>(
     }
 
     let mut removed_replacements = BTreeMap::new();
-    for (&id, (constraint, _reason)) in collection.removed() {
+    for (&id, (constraint, _reason)) in collection.inactive() {
         let mut constraint = constraint.clone();
         constraint.partial_evaluate(state, atol).inspect_err(|e| {
             tracing::error!(?id, error = %e, "failed to partial_evaluate removed constraint");
@@ -255,7 +255,7 @@ impl ParametricInstance {
     ///     .sense(Sense::Minimize)
     ///     .objective(Function::from(linear!(1)))
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-    ///     .constraints(BTreeMap::from([(
+    ///     .active_constraints(BTreeMap::from([(
     ///         ConstraintID::from(1),
     ///         Constraint::equal_to_zero(Function::from(linear!(1))),
     ///     )]))
@@ -316,7 +316,7 @@ impl ParametricInstance {
 
         // Both active and removed regular constraint bodies need the parameter
         // substitution applied — otherwise the resulting `Instance` would
-        // carry dangling parameter IDs in `removed_constraints`, violating
+        // carry dangling parameter IDs in `inactive_constraints`, violating
         // its own invariants.
         let mut constraint_collection = self.constraint_collection;
         materialize_constraint_collection_parameters(&mut constraint_collection, &state, atol)?;
@@ -378,7 +378,7 @@ mod output_objective_tests {
                 VariableID::from(1),
                 DecisionVariable::binary(),
             )]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap()
     }
@@ -532,7 +532,7 @@ mod with_parameters_tests {
                 dep => DecisionVariable::binary(),
             })
             .parameters(parameters([p]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .decision_variable_dependency(assignments)
             .build()
             .unwrap();
@@ -576,13 +576,14 @@ mod with_parameters_tests {
                 x => DecisionVariable::binary(),
             })
             .parameters(parameters([p]))
-            .constraints(btreemap! {
+            .active_constraints(btreemap! {
                 ConstraintID::from(0) => c_active,
             })
-            .removed_constraints(btreemap! {
+            .inactive_constraints(btreemap! {
                 ConstraintID::from(1) => (
                     c_removed,
-                    crate::constraint::RemovedReason {
+                    crate::constraint::InactiveConstraintMetadata {
+                skip_feasibility_check: false,
                         reason: "test".to_string(),
                         parameters: Default::default(),
                     },
@@ -597,7 +598,7 @@ mod with_parameters_tests {
         let instance = parametric.with_parameters(params).unwrap();
 
         let (rc, _r) = instance
-            .removed_constraints()
+            .inactive_constraints()
             .get(&ConstraintID::from(1))
             .unwrap();
         let body_required: VariableIDSet = rc.stage.function.required_ids();
@@ -631,11 +632,12 @@ mod with_parameters_tests {
                 x => DecisionVariable::binary(),
             })
             .parameters(parameters([p]))
-            .constraints(BTreeMap::new())
-            .removed_indicator_constraints(btreemap! {
+            .active_constraints(BTreeMap::new())
+            .inactive_indicator_constraints(btreemap! {
                 crate::IndicatorConstraintID::from(0) => (
                     indicator,
-                    crate::constraint::RemovedReason {
+                    crate::constraint::InactiveConstraintMetadata {
+                skip_feasibility_check: false,
                         reason: "test".to_string(),
                         parameters: Default::default(),
                     },
@@ -650,7 +652,7 @@ mod with_parameters_tests {
         let instance = parametric.with_parameters(params).unwrap();
 
         let (ic, _r) = instance
-            .removed_indicator_constraints()
+            .inactive_indicator_constraints()
             .get(&crate::IndicatorConstraintID::from(0))
             .expect("removed indicator survives materialization");
         let body_required: VariableIDSet = ic.stage.function.required_ids();
@@ -686,8 +688,8 @@ mod with_parameters_tests {
                 x => DecisionVariable::binary(),
             })
             .parameters(parameters([p]))
-            .constraints(BTreeMap::new())
-            .indicator_constraints(btreemap! {
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(btreemap! {
                 crate::IndicatorConstraintID::from(0) => indicator,
             })
             .build()
@@ -701,7 +703,7 @@ mod with_parameters_tests {
         // After substitution, the indicator body must no longer reference
         // the parameter id 100.
         let materialized = instance
-            .indicator_constraints()
+            .active_indicator_constraints()
             .get(&crate::IndicatorConstraintID::from(0))
             .unwrap();
         let body_required: VariableIDSet = materialized.stage.function.required_ids();

@@ -17,7 +17,7 @@ def test_unknown_family_is_rejected_instead_of_omitted(key: ConstraintIDBase):
     # Exercise the consumer boundary independently of SDK applicability checks:
     # a newer SDK may recognize a family that this adapter cannot translate.
     adapter = object.__new__(OMMXPythonMIPAdapter)
-    adapter.instance = cast(Instance, SimpleNamespace(constraints=[key]))
+    adapter.instance = cast(Instance, SimpleNamespace(active_constraints=[key]))
     with pytest.raises(
         OMMXPythonMIPAdapterError, match="Unsupported constraint family"
     ):

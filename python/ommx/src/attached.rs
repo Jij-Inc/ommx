@@ -62,10 +62,20 @@ impl ConstraintHost {
 /// kind-specific accessors in their own `#[pymethods]` block.
 #[macro_export]
 macro_rules! attached_constraint_context_methods {
-    ($Self:ident, $ID:ty, $get:ident, $set:ident) => {
+    ($Self:ident, $ID:ty, $get:ident, $set:ident, $active:ident, $collection:ident) => {
         #[pyo3_stub_gen::derive::gen_stub_pymethods]
         #[pymethods]
         impl $Self {
+            /// Current activeness of this owner-backed row.
+            #[getter]
+            pub fn activeness(&self, py: pyo3::Python<'_>) -> pyo3::PyResult<$crate::ConstraintActiveness> {
+                let state = match &self.host {
+                    $crate::ConstraintHost::Instance(p) => p.borrow(py).inner.$collection().activeness(&self.id),
+                    $crate::ConstraintHost::Parametric(p) => p.borrow(py).inner.$collection().activeness(&self.id),
+                };
+                state.map(Into::into).ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Constraint no longer exists"))
+            }
+
             #[getter]
             pub fn name(&self, py: pyo3::Python<'_>) -> Option<String> {
                 match &self.host {
@@ -138,12 +148,18 @@ macro_rules! attached_constraint_context_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
+                        if !host.inner.$active().contains_key(&self.id) {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err("This constraint is no longer active; obtain its current row from constraints").into());
+                        }
                         let mut context = host.inner.$get().collect_for(self.id);
                         context.label.name = Some(name);
                         host.inner.$set(self.id, context)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
+                        if !host.inner.$active().contains_key(&self.id) {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err("This constraint is no longer active; obtain its current row from constraints").into());
+                        }
                         let mut context = host.inner.$get().collect_for(self.id);
                         context.label.name = Some(name);
                         host.inner.$set(self.id, context)?;
@@ -161,12 +177,18 @@ macro_rules! attached_constraint_context_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
+                        if !host.inner.$active().contains_key(&self.id) {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err("This constraint is no longer active; obtain its current row from constraints").into());
+                        }
                         let mut context = host.inner.$get().collect_for(self.id);
                         context.label.subscripts = subscripts;
                         host.inner.$set(self.id, context)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
+                        if !host.inner.$active().contains_key(&self.id) {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err("This constraint is no longer active; obtain its current row from constraints").into());
+                        }
                         let mut context = host.inner.$get().collect_for(self.id);
                         context.label.subscripts = subscripts;
                         host.inner.$set(self.id, context)?;
@@ -184,12 +206,18 @@ macro_rules! attached_constraint_context_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
+                        if !host.inner.$active().contains_key(&self.id) {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err("This constraint is no longer active; obtain its current row from constraints").into());
+                        }
                         let mut context = host.inner.$get().collect_for(self.id);
                         context.label.subscripts.extend(subscripts);
                         host.inner.$set(self.id, context)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
+                        if !host.inner.$active().contains_key(&self.id) {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err("This constraint is no longer active; obtain its current row from constraints").into());
+                        }
                         let mut context = host.inner.$get().collect_for(self.id);
                         context.label.subscripts.extend(subscripts);
                         host.inner.$set(self.id, context)?;
@@ -207,12 +235,18 @@ macro_rules! attached_constraint_context_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
+                        if !host.inner.$active().contains_key(&self.id) {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err("This constraint is no longer active; obtain its current row from constraints").into());
+                        }
                         let mut context = host.inner.$get().collect_for(self.id);
                         context.label.description = Some(description);
                         host.inner.$set(self.id, context)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
+                        if !host.inner.$active().contains_key(&self.id) {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err("This constraint is no longer active; obtain its current row from constraints").into());
+                        }
                         let mut context = host.inner.$get().collect_for(self.id);
                         context.label.description = Some(description);
                         host.inner.$set(self.id, context)?;
@@ -231,12 +265,18 @@ macro_rules! attached_constraint_context_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
+                        if !host.inner.$active().contains_key(&self.id) {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err("This constraint is no longer active; obtain its current row from constraints").into());
+                        }
                         let mut context = host.inner.$get().collect_for(self.id);
                         context.label.parameters = params;
                         host.inner.$set(self.id, context)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
+                        if !host.inner.$active().contains_key(&self.id) {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err("This constraint is no longer active; obtain its current row from constraints").into());
+                        }
                         let mut context = host.inner.$get().collect_for(self.id);
                         context.label.parameters = params;
                         host.inner.$set(self.id, context)?;
@@ -257,12 +297,18 @@ macro_rules! attached_constraint_context_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
+                        if !host.inner.$active().contains_key(&self.id) {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err("This constraint is no longer active; obtain its current row from constraints").into());
+                        }
                         let mut context = host.inner.$get().collect_for(self.id);
                         context.label.parameters.extend(parameters);
                         host.inner.$set(self.id, context)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
+                        if !host.inner.$active().contains_key(&self.id) {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err("This constraint is no longer active; obtain its current row from constraints").into());
+                        }
                         let mut context = host.inner.$get().collect_for(self.id);
                         context.label.parameters.extend(parameters);
                         host.inner.$set(self.id, context)?;
@@ -281,12 +327,18 @@ macro_rules! attached_constraint_context_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
+                        if !host.inner.$active().contains_key(&self.id) {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err("This constraint is no longer active; obtain its current row from constraints").into());
+                        }
                         let mut context = host.inner.$get().collect_for(self.id);
                         context.label.parameters.insert(key, value);
                         host.inner.$set(self.id, context)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
+                        if !host.inner.$active().contains_key(&self.id) {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err("This constraint is no longer active; obtain its current row from constraints").into());
+                        }
                         let mut context = host.inner.$get().collect_for(self.id);
                         context.label.parameters.insert(key, value);
                         host.inner.$set(self.id, context)?;

@@ -35,7 +35,7 @@ def _instance_with_variable(
     return Instance.from_components(
         decision_variables=[variable],
         objective=variable,
-        constraints={},
+        active_constraints={},
         sense=sense,
     )
 
@@ -77,7 +77,7 @@ def test_direct_accepts_arbitrary_degree_binary_minimization_without_mutation() 
     instance = Instance.from_components(
         decision_variables=variables,
         objective=variables[0] * variables[1] * variables[2] * variables[3],
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     before = instance.to_v2_bytes()
@@ -100,7 +100,7 @@ def test_sampler_input_rejects_nonfinite_aggregated_interactions() -> None:
     instance = Instance.from_components(
         decision_variables=[x],
         objective=maximum * x + maximum * x * x,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 
@@ -175,7 +175,7 @@ def test_direct_rejects_regular_constraints_without_mutation() -> None:
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={7: x <= 0},
+        active_constraints={7: x <= 0},
         sense=Sense.Minimize,
     )
 
@@ -196,16 +196,16 @@ def test_direct_rejects_all_special_constraint_families_without_mutation() -> No
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
-        constraints={},
-        indicator_constraints={
+        active_constraints={},
+        active_indicator_constraints={
             10: IndicatorConstraint(
                 indicator_variable=x,
                 function=y - 1,
                 equality=Equality.LessThanOrEqualToZero,
             )
         },
-        one_hot_constraints={20: OneHotConstraint(variables=[x, y])},
-        sos1_constraints={30: Sos1Constraint(variables=[x, y])},
+        active_one_hot_constraints={20: OneHotConstraint(variables=[x, y])},
+        active_sos1_constraints={30: Sos1Constraint(variables=[x, y])},
         sense=Sense.Minimize,
     )
 
@@ -228,7 +228,7 @@ def test_recommended_policy_keeps_fixed_penalty_caller_owned() -> None:
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={7: x == 0},
+        active_constraints={7: x == 0},
         sense=Sense.Minimize,
     )
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
@@ -254,16 +254,16 @@ def test_recommended_preparation_reaches_the_openjij_input_class() -> None:
     instance = Instance.from_components(
         decision_variables=[integer, indicator, x, y],
         objective=integer + indicator + x + y,
-        constraints={40: integer <= 50},
-        indicator_constraints={
+        active_constraints={40: integer <= 50},
+        active_indicator_constraints={
             10: IndicatorConstraint(
                 indicator_variable=indicator,
                 function=x - 1,
                 equality=Equality.LessThanOrEqualToZero,
             )
         },
-        one_hot_constraints={20: OneHotConstraint(variables=[indicator, x])},
-        sos1_constraints={30: Sos1Constraint(variables=[x, y])},
+        active_one_hot_constraints={20: OneHotConstraint(variables=[indicator, x])},
+        active_sos1_constraints={30: Sos1Constraint(variables=[x, y])},
         sense=Sense.Maximize,
     )
     alias = instance
@@ -286,7 +286,7 @@ def test_sampler_input_validation_still_follows_preparation() -> None:
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS

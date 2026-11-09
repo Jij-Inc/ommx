@@ -1,10 +1,10 @@
 // These selectors are nominal values, not a closed Python Enum. Keep the Rust
 // domain value inside the wrapper so future SDK kinds survive generic queries.
 macro_rules! open_kind {
-    ($(#[$doc:meta])* $name:ident, $core:ty, $code:expr; $( $variant:ident => $core_variant:ident ),+ $(,)?) => {
+    ($(#[$doc:meta])* $name:ident, $core:ty, $code:expr $(, module=$module:literal)?; $( $variant:ident => $core_variant:ident ),+ $(,)? $(; $($extra:item)*)?) => {
         $(#[$doc])*
-        #[pyo3_stub_gen::derive::gen_stub_pyclass]
-        #[pyclass(from_py_object, frozen)]
+        #[pyo3_stub_gen::derive::gen_stub_pyclass(module = "ommx._ommx_rust")]
+        #[pyclass(from_py_object, frozen $(, module=$module)?)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $name($core);
 
@@ -18,6 +18,7 @@ macro_rules! open_kind {
         #[pyo3_stub_gen::derive::gen_stub_pymethods]
         #[pymethods]
         impl $name {
+            $($($extra)*)?
             fn __hash__(&self) -> isize {
                 let code: fn($core) -> i32 = $code;
                 code(self.0) as isize
@@ -473,5 +474,43 @@ impl From<Relaxation> for ommx::v1::Relaxation {
             Relaxation::Unspecified => ommx::v1::Relaxation::Unspecified,
             Relaxation::LpRelaxed => ommx::v1::Relaxation::LpRelaxed,
         }
+    }
+}
+
+open_kind!(
+    /// Ordered participation in constraint queries.
+    ///
+    /// SKIP_FEASIBILITY_CHECK < INACTIVE < ACTIVE. A min_activeness query
+    /// includes rows whose activeness is at least the requested value.
+    ConstraintActiveness, ommx::ConstraintActiveness, |value| value as i32, module="ommx";
+    SKIP_FEASIBILITY_CHECK => SkipFeasibilityCheck,
+    INACTIVE => Inactive,
+    ACTIVE => Active,
+    ;
+    fn __lt__(&self, other: Self) -> bool { self.0 < other.0 }
+    fn __le__(&self, other: Self) -> bool { self.0 <= other.0 }
+    fn __gt__(&self, other: Self) -> bool { self.0 > other.0 }
+    fn __ge__(&self, other: Self) -> bool { self.0 >= other.0 }
+);
+
+/// Pickle reconstruction through a named constant on its public class.
+type NamedConstantPickle<'py> = (
+    Bound<'py, PyAny>,
+    (Bound<'py, pyo3::types::PyType>, &'static str),
+);
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl ConstraintActiveness {
+    fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<NamedConstantPickle<'py>> {
+        let name = match self.0 {
+            ommx::ConstraintActiveness::Active => "ACTIVE",
+            ommx::ConstraintActiveness::Inactive => "INACTIVE",
+            ommx::ConstraintActiveness::SkipFeasibilityCheck => "SKIP_FEASIBILITY_CHECK",
+        };
+        Ok((
+            py.import("builtins")?.getattr("getattr")?,
+            (py.get_type::<Self>(), name),
+        ))
     }
 }

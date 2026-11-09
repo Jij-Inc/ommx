@@ -59,7 +59,7 @@ def test_integration_milp():
     instance = Instance.from_components(
         decision_variables=[x1, x2],
         objective=-x1 - x2,
-        constraints={0: 3 * x1 - x2 <= 6, 1: -x1 + 3 * x2 <= 6},
+        active_constraints={0: 3 * x1 - x2 <= 6, 1: -x1 + 3 * x2 <= 6},
         sense=Sense.Minimize,
     )
 
@@ -82,7 +82,7 @@ def test_integration_binary():
     instance = Instance.from_components(
         decision_variables=[x1, x2],
         objective=-x1 + x2,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 
@@ -105,7 +105,7 @@ def test_integration_maximize():
     instance = Instance.from_components(
         decision_variables=[x1, x2],
         objective=-x1 + x2,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
 
@@ -133,7 +133,7 @@ def test_integration_constant_objective():
     instance = Instance.from_components(
         decision_variables=[x1, x2],
         objective=0,
-        constraints={0: x1 + x2 - 5 == 0},
+        active_constraints={0: x1 + x2 - 5 == 0},
         sense=Sense.Minimize,
     )
 
@@ -167,7 +167,7 @@ def test_integration_quadratic_objective():
             columns=[1, 2],
             values=[1, 1],
         ),
-        constraints={0: x1 + x2 == 4},
+        active_constraints={0: x1 + x2 == 4},
     )
 
     adapter = OMMXPySCIPOptAdapter(instance)
@@ -195,7 +195,7 @@ def test_integration_quadratic_constraint():
         sense=Sense.Minimize,
         decision_variables=[x1, x2],
         objective=-x1 - x2,
-        constraints={
+        active_constraints={
             0: Constraint(
                 function=Quadratic(
                     columns=[1, 2],
@@ -234,7 +234,7 @@ def test_integration_feasible_constant_constraint():
     instance = Instance.from_components(
         decision_variables=[x1, x2],
         objective=-x1 - x2,
-        constraints={
+        active_constraints={
             0: 3 * x1 - x2 <= 6,
             1: -x1 + 3 * x2 <= 6,
             2: Constraint(
@@ -282,7 +282,7 @@ def test_integration_timelimit():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(v[i] * x[i] for i in range(n)),
-        constraints={0: constraint},
+        active_constraints={0: constraint},
         sense=Sense.Maximize,
     )
     adapter = OMMXPySCIPOptAdapter(instance)
@@ -303,7 +303,7 @@ def test_partial_evaluate():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1] + x[2],
-        constraints={0: x[0] + x[1] + x[2] <= 1},  # one-hot constraint
+        active_constraints={0: x[0] + x[1] + x[2] <= 1},  # one-hot constraint
         sense=Sense.Minimize,
     )
     assert instance.used_decision_variables == x
@@ -328,12 +328,12 @@ def test_relax_constraint():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints={0: x[0] + 2 * x[1] <= 1, 1: x[1] + x[2] <= 1},
+        active_constraints={0: x[0] + 2 * x[1] <= 1, 1: x[1] + x[2] <= 1},
         sense=Sense.Minimize,
     )
 
     assert instance.used_decision_variables == x
-    instance.relax_constraint(1, "relax")
+    instance.deactivate_constraint(1, "relax")
     # id for x[2] is listed as irrelevant
     assert instance.irrelevant_decision_variable_ids() == {x[2].id}
 
@@ -348,7 +348,7 @@ def test_infeasible_problem():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={0: x >= 4},
+        active_constraints={0: x >= 4},
         sense=Sense.Maximize,
     )
     adapter = OMMXPySCIPOptAdapter(instance)
@@ -365,7 +365,7 @@ def test_unbounded_problem():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
     adapter = OMMXPySCIPOptAdapter(instance)
@@ -381,7 +381,7 @@ def test_decode_before_optimize():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     adapter = OMMXPySCIPOptAdapter(instance)
@@ -393,3 +393,26 @@ def test_decode_before_optimize():
         match=r"The model may not be optimized. \[status: unknown\]",
     ):
         adapter.decode_to_state(model)
+
+
+@pytest.mark.parametrize("skip_feasibility_check", [False, True])
+def test_inactive_constraints_are_evaluated_but_not_imposed(skip_feasibility_check):
+    from ommx import ConstraintActiveness
+
+    instance = Instance.minimize()
+    x = instance.new_continuous("x", lower=0, upper=2)
+    instance.objective = x
+    row = instance.add_constraint(x >= 1, "retained_requirement")
+    instance.deactivate_constraint(
+        row.constraint_id, "manual", skip_feasibility_check=skip_feasibility_check
+    )
+
+    solution = OMMXPySCIPOptAdapter.solve_without_preparation(instance)
+
+    assert solution.state.entries[x.id] == pytest.approx(0)
+    assert solution.constraint_violation(row.constraint_id) == pytest.approx(1)
+    assert solution.feasible_relaxed
+    assert solution.feasible() is skip_feasibility_check
+    assert not solution.feasible(
+        min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK
+    )

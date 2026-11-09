@@ -18,9 +18,30 @@ pub struct Created;
 
 // ===== Common types =====
 
-/// Reason why a constraint was removed/relaxed.
+/// Ordered participation of a constraint in the current formulation and queries.
+///
+/// Queries include a row when its activeness is at least the requested minimum.
+/// The default includes active and checked inactive rows; selecting
+/// [`Self::SkipFeasibilityCheck`] includes every retained row.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, LogicalMemoryProfile,
+)]
+pub enum ConstraintActiveness {
+    /// Retained and evaluated, but excluded from default feasibility judgments.
+    SkipFeasibilityCheck,
+    /// Not imposed on the solver, but included in default feasibility judgments.
+    #[default]
+    Inactive,
+    /// Imposed on the solver as part of the active formulation.
+    Active,
+}
+
+/// Inactive membership metadata owned by a constraint collection.
+///
+/// This record exists only for inactive rows. The collection owns membership;
+/// the skip flag distinguishes their default feasibility participation.
 #[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
-pub struct RemovedReason {
+pub struct InactiveConstraintMetadata {
     /// Fully qualified, dot-separated path identifying the method, function,
     /// or application that removed the constraint.
     ///
@@ -37,13 +58,27 @@ pub struct RemovedReason {
     pub reason: String,
     /// Arbitrary key-value parameters for debugging.
     pub parameters: FnvHashMap<String, String>,
+    /// Exclude this row from default feasibility queries, while still evaluating it.
+    pub skip_feasibility_check: bool,
 }
 
-impl From<RemovedReason> for crate::v2::RemovedReason {
-    fn from(reason: RemovedReason) -> Self {
+impl InactiveConstraintMetadata {
+    /// The activeness represented by this inactive membership record.
+    pub fn activeness(&self) -> ConstraintActiveness {
+        if self.skip_feasibility_check {
+            ConstraintActiveness::SkipFeasibilityCheck
+        } else {
+            ConstraintActiveness::Inactive
+        }
+    }
+}
+
+impl From<InactiveConstraintMetadata> for crate::v2::InactiveConstraintMetadata {
+    fn from(reason: InactiveConstraintMetadata) -> Self {
         Self {
             reason: reason.reason,
             parameters: reason.parameters.into_iter().collect(),
+            skip_feasibility_check: reason.skip_feasibility_check,
         }
     }
 }

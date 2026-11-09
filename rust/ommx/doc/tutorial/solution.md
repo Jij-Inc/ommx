@@ -54,7 +54,7 @@ let solution = instance.evaluate(&state, ATol::default())?;
 
 // Access solution properties
 assert_eq!(*solution.objective(), 11.0); // 3 + 2*4 = 11
-assert!(solution.feasible()); // All constraints satisfied
+assert!(solution.feasible(Default::default())); // All constraints satisfied
 
 // Check evaluated constraints
 let evaluated_constraints = solution.evaluated_constraints();
@@ -117,10 +117,10 @@ let samples: Sampled<State> = Sampled::new(
 let sample_set: ommx::SampleSet = instance.evaluate_samples(&samples, ATol::default())?;
 
 // Per-sample feasibility and the best feasible sample.
-assert_eq!(sample_set.is_sample_feasible(SampleID::from(0)), Some(true));
-assert_eq!(sample_set.is_sample_feasible(SampleID::from(2)), Some(false));
+assert_eq!(sample_set.is_sample_feasible(SampleID::from(0), Default::default()), Some(true));
+assert_eq!(sample_set.is_sample_feasible(SampleID::from(2), Default::default()), Some(false));
 
-let best = sample_set.best_feasible()?;   // Solution for the minimum-objective feasible sample
+let best = sample_set.best_feasible(Default::default())?;   // Solution for the minimum-objective feasible sample
 assert_eq!(*best.objective(), 5.0);
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```

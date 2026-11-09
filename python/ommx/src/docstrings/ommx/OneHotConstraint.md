@@ -25,9 +25,9 @@ referenced variable exists and is Binary when inserting the constraint.
 >>> cid = attached.constraint_id
 >>> assert isinstance(cid, OneHotConstraintID)
 >>> chosen = instance.evaluate({choices[0].id: 0, choices[1].id: 1, choices[2].id: 0})
->>> assert chosen.feasible and chosen.objective == 10
->>> assert not instance.evaluate({x.id: 0 for x in choices}).feasible
->>> assert not instance.evaluate({x.id: 1 for x in choices}).feasible
+>>> assert chosen.feasible() and chosen.objective == 10
+>>> assert not instance.evaluate({x.id: 0 for x in choices}).feasible()
+>>> assert not instance.evaluate({x.id: 1 for x in choices}).feasible()
 >>> rows = chosen.constraints_df(kind=ConstraintKind.OneHot)
 >>> assert list(rows.index) == [cid]
 >>> assert rows.loc[cid, "violation"] == 0.0

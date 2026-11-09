@@ -38,7 +38,7 @@ impl Instance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// let original = instance.objective().clone();
@@ -177,7 +177,7 @@ mod tests {
             Function::Quadratic(((quadratic!(1) + quadratic!(2)).unwrap() + coeff!(-5.0)).unwrap());
         assert_eq!(
             instance
-                .constraints()
+                .active_constraints()
                 .get(&ConstraintID::from(1))
                 .unwrap()
                 .function(),
@@ -286,13 +286,13 @@ mod tests {
         let mut instance =
             Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
         let before_objective = instance.objective().clone();
-        let before_constraints = instance.constraints().clone();
+        let before_constraints = instance.active_constraints().clone();
 
         let err = instance.reduce_binary_power().unwrap_err();
 
         assert_eq!(err, crate::CoefficientError::Infinite);
         assert_eq!(instance.objective(), &before_objective);
-        assert_eq!(instance.constraints(), &before_constraints);
+        assert_eq!(instance.active_constraints(), &before_constraints);
         assert!(instance.output_objective().is_none());
     }
 
@@ -300,7 +300,8 @@ mod tests {
     // are retained for output evaluation and variable reconstruction.
     fn instance_with_expression_owners(functions: [Function; 5]) -> Instance {
         let [objective, regular, indicator, named, dependency] = functions;
-        let reason = crate::constraint::RemovedReason {
+        let reason = crate::constraint::InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "retained for diagnostics".into(),
             ..Default::default()
         };
@@ -312,11 +313,11 @@ mod tests {
                 (VariableID::from(2), DecisionVariable::continuous()),
                 (VariableID::from(3), DecisionVariable::continuous()),
             ]))
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 ConstraintID::from(10),
                 Constraint::equal_to_zero(regular),
             )]))
-            .indicator_constraints(BTreeMap::from([(
+            .active_indicator_constraints(BTreeMap::from([(
                 crate::IndicatorConstraintID::from(11),
                 crate::IndicatorConstraint::new(
                     VariableID::from(1),
@@ -331,14 +332,14 @@ mod tests {
             .decision_variable_dependency(
                 AcyclicAssignments::new([(VariableID::from(3), dependency)]).unwrap(),
             )
-            .removed_constraints(BTreeMap::from([(
+            .inactive_constraints(BTreeMap::from([(
                 ConstraintID::from(13),
                 (
                     Constraint::equal_to_zero(Function::from(quadratic!(1, 1))),
                     reason.clone(),
                 ),
             )]))
-            .removed_indicator_constraints(BTreeMap::from([(
+            .inactive_indicator_constraints(BTreeMap::from([(
                 crate::IndicatorConstraintID::from(14),
                 (
                     crate::IndicatorConstraint::new(
@@ -377,8 +378,8 @@ mod tests {
     fn owned_functions(instance: &Instance) -> [&Function; 5] {
         [
             instance.objective(),
-            instance.constraints()[&ConstraintID::from(10)].function(),
-            &instance.indicator_constraints()[&crate::IndicatorConstraintID::from(11)]
+            instance.active_constraints()[&ConstraintID::from(10)].function(),
+            &instance.active_indicator_constraints()[&crate::IndicatorConstraintID::from(11)]
                 .stage
                 .function,
             &instance.named_functions()[&NamedFunctionID::from(12)].function,
@@ -419,10 +420,13 @@ mod tests {
                 instance.named_function_labels(),
                 before.named_function_labels()
             );
-            assert_eq!(instance.removed_constraints(), before.removed_constraints());
             assert_eq!(
-                instance.removed_indicator_constraints(),
-                before.removed_indicator_constraints()
+                instance.inactive_constraints(),
+                before.inactive_constraints()
+            );
+            assert_eq!(
+                instance.inactive_indicator_constraints(),
+                before.inactive_indicator_constraints()
             );
             assert_eq!(instance.output_objective().is_some(), owner == 0);
             assert!(!instance.reduce_binary_power().unwrap());
@@ -517,10 +521,13 @@ mod tests {
                 instance.decision_variable_dependency(),
                 before.decision_variable_dependency()
             );
-            assert_eq!(instance.removed_constraints(), before.removed_constraints());
             assert_eq!(
-                instance.removed_indicator_constraints(),
-                before.removed_indicator_constraints()
+                instance.inactive_constraints(),
+                before.inactive_constraints()
+            );
+            assert_eq!(
+                instance.inactive_indicator_constraints(),
+                before.inactive_indicator_constraints()
             );
             if !active_changes {
                 assert_eq!(instance, before);
@@ -537,8 +544,8 @@ mod tests {
             let _first = instance.reduce_binary_power().unwrap();
             prop_assert_eq!(instance.named_function_table(), before.named_function_table());
             prop_assert_eq!(instance.decision_variable_dependency(), before.decision_variable_dependency());
-            prop_assert_eq!(instance.removed_constraints(), before.removed_constraints());
-            prop_assert_eq!(instance.removed_indicator_constraints(), before.removed_indicator_constraints());
+            prop_assert_eq!(instance.inactive_constraints(), before.inactive_constraints());
+            prop_assert_eq!(instance.inactive_indicator_constraints(), before.inactive_indicator_constraints());
             prop_assert_eq!(instance.one_hot_constraint_collection(), before.one_hot_constraint_collection());
             prop_assert_eq!(instance.sos1_constraint_collection(), before.sos1_constraint_collection());
             if before.output_objective().is_some() {

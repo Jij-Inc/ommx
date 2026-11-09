@@ -87,7 +87,12 @@ fn test_removed_constraint_variable_filtering() {
 
     // Relax the constraint to create a removed constraint
     instance
-        .relax_constraint(ConstraintID::from(100), "test_removal".to_string(), [])
+        .deactivate_constraint(
+            ConstraintID::from(100),
+            "test_removal".to_string(),
+            [],
+            false,
+        )
         .unwrap();
 
     // Write to MPS and read back
@@ -107,13 +112,13 @@ fn test_removed_constraint_variable_filtering() {
     assert_eq!(var_ids, vec![0]); // Only variable from objective is preserved
 
     // Should have 0 constraints (removed constraint is not exported)
-    assert_eq!(loaded_instance.constraints().len(), 0);
+    assert_eq!(loaded_instance.active_constraints().len(), 0);
 
-    // Should have 0 removed_constraints (not supported in MPS format)
-    assert_eq!(loaded_instance.removed_constraints().len(), 0);
+    // Should have 0 inactive_constraints (not supported in MPS format)
+    assert_eq!(loaded_instance.inactive_constraints().len(), 0);
 
     // Original instance should have 1 removed constraint
-    assert_eq!(instance.removed_constraints().len(), 1);
+    assert_eq!(instance.inactive_constraints().len(), 1);
 }
 
 #[test]
@@ -143,7 +148,7 @@ fn test_removed_constraint_information_loss() {
 
     // Relax one constraint to create a removed constraint
     instance
-        .relax_constraint(ConstraintID::from(1), "redundant".to_string(), [])
+        .deactivate_constraint(ConstraintID::from(1), "redundant".to_string(), [], false)
         .unwrap();
 
     // Write to MPS and read back
@@ -152,10 +157,14 @@ fn test_removed_constraint_information_loss() {
     let loaded_instance = parse(&buffer[..]).unwrap();
 
     // Only active constraint should remain
-    assert_eq!(loaded_instance.constraints().len(), 1);
+    assert_eq!(loaded_instance.active_constraints().len(), 1);
 
     // Verify the active constraint exists and has correct structure
-    let first_constraint = loaded_instance.constraints().values().next().unwrap();
+    let first_constraint = loaded_instance
+        .active_constraints()
+        .values()
+        .next()
+        .unwrap();
     // Check that it's the correct constraint (should be x0 - 5 <= 0)
     assert_eq!(
         first_constraint.equality,
@@ -163,9 +172,9 @@ fn test_removed_constraint_information_loss() {
     );
 
     // No removed constraints in the result (MPS format doesn't support them)
-    assert_eq!(loaded_instance.removed_constraints().len(), 0);
+    assert_eq!(loaded_instance.inactive_constraints().len(), 0);
 
     // Original instance should have 1 active + 1 removed = 2 total constraint-like objects
-    assert_eq!(instance.constraints().len(), 1); // 1 active constraint
-    assert_eq!(instance.removed_constraints().len(), 1); // 1 removed constraint
+    assert_eq!(instance.active_constraints().len(), 1); // 1 active constraint
+    assert_eq!(instance.inactive_constraints().len(), 1); // 1 removed constraint
 }

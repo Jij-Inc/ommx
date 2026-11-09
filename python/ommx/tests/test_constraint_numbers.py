@@ -35,20 +35,20 @@ def test_model_constructor_rejects_cross_family_numbers(
                 objective=0,
                 decision_variables=[x],
                 parameters=[],
-                constraints=regular,
-                indicator_constraints=indicator,
-                one_hot_constraints=one_hot,
-                sos1_constraints=sos1,
+                active_constraints=regular,
+                active_indicator_constraints=indicator,
+                active_one_hot_constraints=one_hot,
+                active_sos1_constraints=sos1,
             )
         else:
             Instance.from_components(
                 sense=Sense.Minimize,
                 objective=0,
                 decision_variables=[x],
-                constraints=regular,
-                indicator_constraints=indicator,
-                one_hot_constraints=one_hot,
-                sos1_constraints=sos1,
+                active_constraints=regular,
+                active_indicator_constraints=indicator,
+                active_one_hot_constraints=one_hot,
+                active_sos1_constraints=sos1,
             )
 
 
@@ -56,14 +56,14 @@ def test_model_constructor_rejects_cross_family_numbers(
 def test_added_constraints_share_numbers_across_families(parametric):
     x = DecisionVariable.binary(0)
     instance: Instance | ParametricInstance = Instance.from_components(
-        sense=Sense.Minimize, objective=0, decision_variables=[x], constraints={}
+        sense=Sense.Minimize, objective=0, decision_variables=[x], active_constraints={}
     )
     if parametric:
         instance = ParametricInstance.from_components(
             sense=Sense.Minimize,
             objective=0,
             decision_variables=[x],
-            constraints={},
+            active_constraints={},
             parameters=[],
         )
     assert instance.add_constraint(x == 0).constraint_id == ConstraintID(0)
@@ -87,7 +87,7 @@ def test_promotion_rejects_exhausted_shared_number_space_atomically():
         sense=Sense.Minimize,
         objective=0,
         decision_variables=[x],
-        constraints={maximum: x <= 1},
+        active_constraints={maximum: x <= 1},
     )
     before = instance.to_v2_bytes()
     request = Sos1BigMPromotionRequest({maximum: {0: Sos1BigMSelectorClaim.reused()}})

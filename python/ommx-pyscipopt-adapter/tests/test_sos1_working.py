@@ -28,8 +28,8 @@ def test_sos1_constraint_functionality():
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints={1: dummy_constraint, 2: bigm1, 3: bigm2},  # type: ignore
-        sos1_constraints={0: sos1},
+        active_constraints={1: dummy_constraint, 2: bigm1, 3: bigm2},  # type: ignore
+        active_sos1_constraints={0: sos1},
         sense=Sense.Minimize,
     )
 
@@ -66,8 +66,8 @@ def test_sos1_constraint_naming():
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints={10: constraint1},  # type: ignore
-        sos1_constraints={42: sos1},
+        active_constraints={10: constraint1},  # type: ignore
+        active_sos1_constraints={42: sos1},
         sense=Sense.Minimize,
     )
 
@@ -102,8 +102,8 @@ def test_sos1_constraint_naming_no_bigm():
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints={5: constraint1},  # type: ignore
-        sos1_constraints={7: sos1},
+        active_constraints={5: constraint1},  # type: ignore
+        active_sos1_constraints={7: sos1},
         sense=Sense.Minimize,
     )
 

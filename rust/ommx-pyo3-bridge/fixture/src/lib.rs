@@ -66,7 +66,7 @@ fn component_instance() -> ommx::Instance {
         .objective(component_function())
         .decision_variables(BTreeMap::from([(id, component_decision_variable())]))
         .variable_labels(labels)
-        .constraints(BTreeMap::new())
+        .active_constraints(BTreeMap::new())
         .build()
         .expect("the fixture instance is valid")
 }

@@ -24,10 +24,10 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
     instance = Instance.from_components(
         decision_variables=[indicator, *x, value],
         objective=value,
-        constraints={},
-        indicator_constraints={30: (value <= 1).with_indicator(indicator)},
-        one_hot_constraints={10: OneHotConstraint(variables=x)},
-        sos1_constraints={20: Sos1Constraint(variables=x)},
+        active_constraints={},
+        active_indicator_constraints={30: (value <= 1).with_indicator(indicator)},
+        active_one_hot_constraints={10: OneHotConstraint(variables=x)},
+        active_sos1_constraints={20: Sos1Constraint(variables=x)},
         sense=Sense.Maximize,
     )
     before = instance.to_v2_bytes()
@@ -37,7 +37,7 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
     assert instance.to_v2_bytes() == before
 
     solution = OMMXPySCIPOptAdapter.solve(instance)
-    assert solution.feasible
+    assert solution.feasible()
     assert instance.to_v2_bytes() == before
 
     prepared = copy.copy(instance)
@@ -48,25 +48,39 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
     )
 
     assert set(
-        (cid for cid in instance.constraints if isinstance(cid, OneHotConstraintID))
+        (
+            cid
+            for cid in instance.active_constraints
+            if isinstance(cid, OneHotConstraintID)
+        )
     ) == {OneHotConstraintID(10)}
     assert prepared.active_special_constraint_kinds == {
         ConstraintKind.Indicator,
         ConstraintKind.Sos1,
     }
-    assert not any(isinstance(cid, OneHotConstraintID) for cid in prepared.constraints)
+    assert not any(
+        isinstance(cid, OneHotConstraintID) for cid in prepared.active_constraints
+    )
     assert set(
-        (cid for cid in prepared.constraints if isinstance(cid, IndicatorConstraintID))
+        (
+            cid
+            for cid in prepared.active_constraints
+            if isinstance(cid, IndicatorConstraintID)
+        )
     ) == {IndicatorConstraintID(30)}
     assert set(
-        (cid for cid in prepared.constraints if isinstance(cid, Sos1ConstraintID))
+        (
+            cid
+            for cid in prepared.active_constraints
+            if isinstance(cid, Sos1ConstraintID)
+        )
     ) == {Sos1ConstraintID(20)}
 
     lowered = [
         constraint
         for constraint in (
-            prepared.constraints[cid]
-            for cid in prepared.constraints
+            prepared.active_constraints[cid]
+            for cid in prepared.active_constraints
             if isinstance(cid, ConstraintID)
         )
         if constraint.provenance

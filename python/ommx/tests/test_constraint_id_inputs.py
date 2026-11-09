@@ -13,7 +13,7 @@ from ommx import (
     AttachedOneHotConstraint,
     AttachedSos1Constraint,
     Constraint,
-    ConstraintCollection,
+    ActiveConstraintCollection,
     ConstraintID,
     DecisionVariable,
     Equality,
@@ -32,10 +32,10 @@ from ommx import (
 )
 
 FAMILIES = [
-    ("constraints", ConstraintID),
-    ("indicator_constraints", IndicatorConstraintID),
-    ("one_hot_constraints", OneHotConstraintID),
-    ("sos1_constraints", Sos1ConstraintID),
+    ("active_constraints", ConstraintID),
+    ("active_indicator_constraints", IndicatorConstraintID),
+    ("active_one_hot_constraints", OneHotConstraintID),
+    ("active_sos1_constraints", Sos1ConstraintID),
 ]
 
 
@@ -48,10 +48,10 @@ def components() -> dict[str, Any]:
         sense=Sense.Minimize,
         objective=x + y,
         decision_variables=[x, y],
-        constraints={7: x + y == 1},
-        indicator_constraints={8: (y == 1).with_indicator(x)},
-        one_hot_constraints={9: OneHotConstraint(variables=[x, y])},
-        sos1_constraints={10: Sos1Constraint(variables=[x, y])},
+        active_constraints={7: x + y == 1},
+        active_indicator_constraints={8: (y == 1).with_indicator(x)},
+        active_one_hot_constraints={9: OneHotConstraint(variables=[x, y])},
+        active_sos1_constraints={10: Sos1Constraint(variables=[x, y])},
     )
 
 
@@ -65,8 +65,8 @@ def test_integer_and_typed_keys_promote_to_the_same_family(host):
     instance = host.from_components(**kwargs)
     for i, (name, id_type) in enumerate(FAMILIES):
         rows = {
-            key: instance.constraints[key]
-            for key in instance.constraints
+            key: instance.active_constraints[key]
+            for key in instance.active_constraints
             if isinstance(key, id_type)
         }
         assert set(rows) == {id_type(NUMBERS[id_type]), id_type(42 + i)}
@@ -85,8 +85,8 @@ def test_integer_and_typed_keys_promote_to_the_same_family(host):
         # Returned dictionaries retain normal Python equality with typed keys.
         assert NUMBERS[id_type] not in rows
     assert (
-        instance.constraints.of_kind(ConstraintKind.Regular)[7].equality
-        == instance.constraints[ConstraintID(7)].equality
+        instance.active_constraints.of_kind(ConstraintKind.Regular)[7].equality
+        == instance.active_constraints[ConstraintID(7)].equality
     )
 
 
@@ -120,16 +120,16 @@ def test_mapping_rejects_duplicate_ids_after_promotion(host, name, id_type):
 
 def test_regular_integer_lookup_mutation_and_solution_queries():
     instance = Instance.from_components(**components())
-    instance.relax_constraint(7, "manual")
-    assert set(instance.removed_constraints) == {ConstraintID(7)}
+    instance.deactivate_constraint(7, "manual")
+    assert set(instance.inactive_constraints) == {ConstraintID(7)}
     assert (
-        instance.removed_constraints.of_kind(ConstraintKind.Regular)[7].removed_reason
+        instance.inactive_constraints.of_kind(ConstraintKind.Regular)[7].inactive_reason
         == "manual"
     )
-    instance.restore_constraint(7)
-    assert {key for key in instance.constraints if isinstance(key, ConstraintID)} == {
-        ConstraintID(7)
-    }
+    instance.activate_constraint(7)
+    assert {
+        key for key in instance.active_constraints if isinstance(key, ConstraintID)
+    } == {ConstraintID(7)}
     instance.tighten_bounds_simultaneously_once_using_constraints({7, ConstraintID(7)})
     solution = instance.evaluate({0: 1, 1: 0})
     assert solution.get_constraint_value(7) == 0
@@ -144,9 +144,9 @@ def test_regular_integer_lookup_mutation_and_solution_queries():
 
 def test_special_integer_mutations_and_typed_transformation_results():
     instance = Instance.from_components(**components())
-    instance.relax_indicator_constraint(8, "manual")
-    assert set(instance.removed_constraints) == {IndicatorConstraintID(8)}
-    instance.restore_indicator_constraint(8)
+    instance.deactivate_indicator_constraint(8, "manual")
+    assert set(instance.inactive_constraints) == {IndicatorConstraintID(8)}
+    instance.activate_indicator_constraint(8)
     regular_id = instance.convert_one_hot_to_constraint(9)
     assert_type(regular_id, ConstraintID)
     assert type(regular_id) is ConstraintID
@@ -154,7 +154,7 @@ def test_special_integer_mutations_and_typed_transformation_results():
         assert type(id_) is ConstraintID
     for id_ in instance.convert_indicator_to_constraint(8):
         assert type(id_) is ConstraintID
-    assert instance.constraints[regular_id].provenance[
+    assert instance.active_constraints[regular_id].provenance[
         0
     ].original_id == OneHotConstraintID(9)
 
@@ -203,7 +203,7 @@ def test_input_promotion_requires_an_integer(value):
     instance = Instance.from_components(**components())
     before = instance.to_v2_bytes()
     with pytest.raises(TypeError, match="Expected int or ConstraintID"):
-        instance.relax_constraint(value, "manual")
+        instance.deactivate_constraint(value, "manual")
     assert instance.to_v2_bytes() == before
 
 
@@ -212,7 +212,7 @@ def test_input_promotion_checks_unsigned_64_bit_range(value):
     instance = Instance.from_components(**components())
     before = instance.to_v2_bytes()
     with pytest.raises(OverflowError):
-        instance.relax_constraint(value, "manual")
+        instance.deactivate_constraint(value, "manual")
     assert instance.to_v2_bytes() == before
 
 
@@ -222,18 +222,23 @@ def test_static_input_unions_do_not_widen_output_types():
         sense=Sense.Minimize,
         objective=x,
         decision_variables=[x],
-        constraints={7: x == 1, ConstraintID(42): x <= 1},
-        indicator_constraints={8: (x == 1).with_indicator(x)},
-        one_hot_constraints={9: OneHotConstraint(variables=[x])},
-        sos1_constraints={10: Sos1Constraint(variables=[x])},
+        active_constraints={7: x == 1, ConstraintID(42): x <= 1},
+        active_indicator_constraints={8: (x == 1).with_indicator(x)},
+        active_one_hot_constraints={9: OneHotConstraint(variables=[x])},
+        active_sos1_constraints={10: Sos1Constraint(variables=[x])},
     )
-    assert_type(instance.constraints, ConstraintCollection)
-    assert_type(instance.constraints[ConstraintID(7)], AttachedConstraint)
+    assert_type(instance.active_constraints, ActiveConstraintCollection)
+    assert_type(instance.active_constraints[ConstraintID(7)], AttachedConstraint)
     assert_type(
-        instance.constraints[IndicatorConstraintID(8)], AttachedIndicatorConstraint
+        instance.active_constraints[IndicatorConstraintID(8)],
+        AttachedIndicatorConstraint,
     )
-    assert_type(instance.constraints[OneHotConstraintID(9)], AttachedOneHotConstraint)
-    assert_type(instance.constraints[Sos1ConstraintID(10)], AttachedSos1Constraint)
+    assert_type(
+        instance.active_constraints[OneHotConstraintID(9)], AttachedOneHotConstraint
+    )
+    assert_type(
+        instance.active_constraints[Sos1ConstraintID(10)], AttachedSos1Constraint
+    )
 
 
 def test_homogeneous_mapping_variables_are_valid_inputs():
@@ -246,11 +251,11 @@ def test_homogeneous_mapping_variables_are_valid_inputs():
             sense=Sense.Minimize,
             objective=x,
             decision_variables=[x],
-            constraints=rows,
+            active_constraints=rows,
         )
-        assert_type(instance.constraints, ConstraintCollection)
+        assert_type(instance.active_constraints, ActiveConstraintCollection)
         assert (
-            instance.constraints.of_kind(ConstraintKind.Regular)[7].equality
+            instance.active_constraints.of_kind(ConstraintKind.Regular)[7].equality
             == (x == 1).equality
         )
 

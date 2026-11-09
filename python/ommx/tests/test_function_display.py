@@ -34,7 +34,7 @@ def test_format_function_accepts_to_function_and_returns_full_text(snapshot):
         sense=Sense.Minimize,
         objective=0,
         decision_variables=x,
-        constraints={},
+        active_constraints={},
     )
 
     assert instance.format_function(x[0] + 2 * x[1]) == snapshot
@@ -46,7 +46,7 @@ def test_display_function_returns_bounded_function_display_by_default(snapshot):
         sense=Sense.Minimize,
         objective=0,
         decision_variables=x,
-        constraints={},
+        active_constraints={},
     )
 
     display = instance.display_function(sum(x))
@@ -68,7 +68,7 @@ def test_function_display_html_escapes_labels_and_reports_truncation(snapshot):
         sense=Sense.Minimize,
         objective=0,
         decision_variables=x,
-        constraints={},
+        active_constraints={},
     )
 
     display = instance.display_function(x[0] + x[1], max_terms=1)
@@ -89,7 +89,7 @@ def test_display_function_boundary_budgets(snapshot):
         sense=Sense.Minimize,
         objective=0,
         decision_variables=x,
-        constraints={},
+        active_constraints={},
     )
 
     zero_terms = instance.display_function(x[0] + x[1], max_terms=0)
@@ -115,7 +115,7 @@ def test_parametric_instance_format_function_uses_parameter_labels(snapshot):
         sense=Sense.Minimize,
         objective=x + p,
         decision_variables=[x],
-        constraints={},
+        active_constraints={},
         parameters=[p],
     )
 
@@ -128,7 +128,7 @@ def test_unknown_ids_error_even_beyond_preview_budget():
         sense=Sense.Minimize,
         objective=0,
         decision_variables=[x],
-        constraints={},
+        active_constraints={},
     )
 
     with pytest.raises(

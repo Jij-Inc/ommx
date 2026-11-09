@@ -14,9 +14,9 @@ use criterion::{
 use ommx::{
     linear,
     random::{arbitrary_state, random_deterministic, sample_deterministic},
-    Constraint, ConstraintID, DecisionVariable, Evaluate, Function, Instance, Linear,
-    LinearParameters, NamedFunction, NamedFunctionID, Polynomial, PolynomialParameters, Quadratic,
-    QuadraticParameters, RemovedReason, Sense, VariableID, VariableIDSet,
+    Constraint, ConstraintID, DecisionVariable, Evaluate, Function, InactiveConstraintMetadata,
+    Instance, Linear, LinearParameters, NamedFunction, NamedFunctionID, Polynomial,
+    PolynomialParameters, Quadratic, QuadraticParameters, Sense, VariableID, VariableIDSet,
 };
 use proptest::prelude::Arbitrary;
 use std::collections::BTreeMap;
@@ -29,11 +29,12 @@ fn removed_constraint_instance(num_constraints: usize) -> (Instance, ommx::v1::S
     let decision_variables = (0..num_constraints as u64)
         .map(|id| (VariableID::from(id), DecisionVariable::continuous()))
         .collect();
-    let removed_reason = RemovedReason {
+    let removed_reason = InactiveConstraintMetadata {
+        skip_feasibility_check: false,
         reason: "ommx.bench.partial_evaluate.removed_regular_constraints".to_string(),
         parameters: Default::default(),
     };
-    let removed_constraints = (0..num_constraints as u64)
+    let inactive_constraints = (0..num_constraints as u64)
         .map(|id| {
             (
                 ConstraintID::from(id),
@@ -49,8 +50,8 @@ fn removed_constraint_instance(num_constraints: usize) -> (Instance, ommx::v1::S
         .sense(Sense::Minimize)
         .objective(Function::Zero)
         .decision_variables(decision_variables)
-        .constraints(BTreeMap::new())
-        .removed_constraints(removed_constraints)
+        .active_constraints(BTreeMap::new())
+        .inactive_constraints(inactive_constraints)
         .build()
         .unwrap();
 
@@ -74,30 +75,31 @@ fn active_constraint_instance(num_constraints: usize) -> (Instance, ommx::v1::St
         .sense(Sense::Minimize)
         .objective(Function::Zero)
         .decision_variables(decision_variables)
-        .constraints(constraints)
+        .active_constraints(constraints)
         .build()
         .unwrap();
 
     (instance, state)
 }
 
-fn mixed_regular_instance(num_removed_constraints: usize) -> (Instance, ommx::v1::State) {
-    let active_var = VariableID::from(num_removed_constraints as u64);
-    let objective_var = VariableID::from(num_removed_constraints as u64 + 1);
-    let named_var = VariableID::from(num_removed_constraints as u64 + 2);
+fn mixed_regular_instance(num_inactive_constraints: usize) -> (Instance, ommx::v1::State) {
+    let active_var = VariableID::from(num_inactive_constraints as u64);
+    let objective_var = VariableID::from(num_inactive_constraints as u64 + 1);
+    let named_var = VariableID::from(num_inactive_constraints as u64 + 2);
 
-    let mut decision_variables: BTreeMap<_, _> = (0..num_removed_constraints as u64)
+    let mut decision_variables: BTreeMap<_, _> = (0..num_inactive_constraints as u64)
         .map(|id| (VariableID::from(id), DecisionVariable::continuous()))
         .collect();
     decision_variables.insert(active_var, DecisionVariable::continuous());
     decision_variables.insert(objective_var, DecisionVariable::continuous());
     decision_variables.insert(named_var, DecisionVariable::continuous());
 
-    let removed_reason = RemovedReason {
-        reason: "ommx.bench.partial_evaluate.mixed_regular_removed_constraints".to_string(),
+    let removed_reason = InactiveConstraintMetadata {
+        skip_feasibility_check: false,
+        reason: "ommx.bench.partial_evaluate.mixed_regular_inactive_constraints".to_string(),
         parameters: Default::default(),
     };
-    let removed_constraints = (0..num_removed_constraints as u64)
+    let inactive_constraints = (0..num_inactive_constraints as u64)
         .map(|id| {
             (
                 ConstraintID::from(id),
@@ -108,7 +110,7 @@ fn mixed_regular_instance(num_removed_constraints: usize) -> (Instance, ommx::v1
             )
         })
         .collect();
-    let active_constraint_id = ConstraintID::from(num_removed_constraints as u64);
+    let active_constraint_id = ConstraintID::from(num_inactive_constraints as u64);
     let constraints = BTreeMap::from([(
         active_constraint_id,
         Constraint::equal_to_zero(Function::from(linear!(active_var.into_inner()))),
@@ -127,8 +129,8 @@ fn mixed_regular_instance(num_removed_constraints: usize) -> (Instance, ommx::v1
         .sense(Sense::Minimize)
         .objective(Function::from(linear!(objective_var.into_inner())))
         .decision_variables(decision_variables)
-        .constraints(constraints)
-        .removed_constraints(removed_constraints)
+        .active_constraints(constraints)
+        .inactive_constraints(inactive_constraints)
         .named_functions(named_functions)
         .build()
         .unwrap();
@@ -137,8 +139,8 @@ fn mixed_regular_instance(num_removed_constraints: usize) -> (Instance, ommx::v1
 }
 
 /// Substitute all decision variables in an Instance that has many regular
-/// constraints already moved into removed_constraints.
-fn partial_evaluate_instance_removed_constraints(c: &mut Criterion) {
+/// constraints already moved into inactive_constraints.
+fn partial_evaluate_instance_inactive_constraints(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("partial-evaluate-instance-removed-constraints");
     group.plot_config(plot_config);
@@ -232,12 +234,12 @@ fn partial_evaluate_instance_mixed_regular(c: &mut Criterion) {
     let mut group = c.benchmark_group("partial-evaluate-instance-mixed-regular");
     group.plot_config(plot_config);
 
-    for num_removed_constraints in [1_000, 8_000, 32_000] {
-        let (instance, state) = mixed_regular_instance(num_removed_constraints);
+    for num_inactive_constraints in [1_000, 8_000, 32_000] {
+        let (instance, state) = mixed_regular_instance(num_inactive_constraints);
         group.bench_with_input(
             BenchmarkId::new(
                 "partial-evaluate-instance-mixed-regular-atomic",
-                num_removed_constraints.to_string(),
+                num_inactive_constraints.to_string(),
             ),
             &(instance, state),
             |b, (instance, state)| {
@@ -409,7 +411,7 @@ criterion_group!(
     partial_evaluate_polynomial_all,
     partial_evaluate_polynomial_half,
     partial_evaluate_polynomial_one,
-    partial_evaluate_instance_removed_constraints,
+    partial_evaluate_instance_inactive_constraints,
     partial_evaluate_instance_active_constraints,
     partial_evaluate_instance_mixed_regular,
 );

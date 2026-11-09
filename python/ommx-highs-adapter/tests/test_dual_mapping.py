@@ -14,7 +14,7 @@ def test_dual_mapping_uses_solver_rows(constant_id, bound_id):
         decision_variables=[x],
         objective=x,
         sense=Sense.Maximize,
-        constraints=constraints,
+        active_constraints=constraints,
     )
     adapter = OMMXHighsAdapter(instance)
     model = adapter.solver_input

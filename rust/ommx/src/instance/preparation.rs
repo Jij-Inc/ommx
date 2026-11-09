@@ -305,7 +305,7 @@ impl PreparationStep for ObjectivePreparation {
 impl PreparationStep for IntegerSlackPreparation {
     fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
         let inequality_ids = instance
-            .constraints()
+            .active_constraints()
             .iter()
             .filter_map(|(&id, constraint)| {
                 (constraint.equality == Equality::LessThanOrEqualToZero).then_some(id)
@@ -466,7 +466,7 @@ impl Instance {
     ///     .sense(Sense::Maximize)
     ///     .objective(Function::from(linear!(1)))
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-    ///     .constraints(BTreeMap::from([(
+    ///     .active_constraints(BTreeMap::from([(
     ///         ConstraintID::from(1),
     ///         Constraint::equal_to_zero(constraint),
     ///     )]))
@@ -482,7 +482,7 @@ impl Instance {
     /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
     /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
     /// assert_eq!(*solution.objective(), 0.0);
-    /// assert!(!solution.feasible());
+    /// assert!(!solution.feasible(Default::default()));
     /// assert_eq!(
     ///     instance.map_active_optimality(Optimality::Optimal),
     ///     Optimality::Unspecified,
@@ -679,7 +679,7 @@ mod tests {
         assert!(!output.preserves_optimality());
         // Encoding now precedes penalty removal. The removed row contains the
         // encoded function, whose value must still be the original constraint.
-        let removed = instance.removed_constraints()[&constraint_id].0.function();
+        let removed = instance.inactive_constraints()[&constraint_id].0.function();
         for low in [0.0, 1.0] {
             for high in [0.0, 1.0] {
                 let state = crate::v1::State::from_iter([(2, low), (3, high)]);
@@ -927,7 +927,7 @@ mod tests {
             .sense(Sense::Maximize)
             .objective(Function::from(linear!(1)))
             .decision_variables(variables)
-            .constraints(BTreeMap::from([
+            .active_constraints(BTreeMap::from([
                 (
                     converted_id,
                     Constraint::less_than_or_equal_to_zero(converted_function),
@@ -937,7 +937,7 @@ mod tests {
                     Constraint::less_than_or_equal_to_zero(infeasible_function),
                 ),
             ]))
-            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(3), one_hot)]))
+            .active_one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(3), one_hot)]))
             .build()
             .unwrap();
         let target = unconstrained_class(
@@ -969,9 +969,9 @@ mod tests {
                 if *id == infeasible_id && *bound == Bound::new(1.0, 1.5).unwrap()
         ));
         assert_eq!(instance.sense(), Sense::Minimize);
-        assert_eq!(instance.removed_one_hot_constraints().len(), 1);
+        assert_eq!(instance.inactive_one_hot_constraints().len(), 1);
         assert_eq!(
-            instance.constraints()[&converted_id].equality,
+            instance.active_constraints()[&converted_id].equality,
             Equality::EqualToZero
         );
     }

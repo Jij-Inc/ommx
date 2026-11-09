@@ -344,10 +344,10 @@ impl FlatAnnotations for crate::Instance {
         );
         annotations.insert(
             annotation_keys::INSTANCE_CONSTRAINTS.to_string(),
-            (self.constraints().len()
-                + self.indicator_constraints().len()
-                + self.one_hot_constraints().len()
-                + self.sos1_constraints().len())
+            (self.active_constraints().len()
+                + self.active_indicator_constraints().len()
+                + self.active_one_hot_constraints().len()
+                + self.active_sos1_constraints().len())
             .to_string(),
         );
         annotations
@@ -388,10 +388,10 @@ impl FlatAnnotations for crate::ParametricInstance {
         );
         annotations.insert(
             annotation_keys::PARAMETRIC_INSTANCE_CONSTRAINTS.to_string(),
-            (self.constraints().len()
-                + self.indicator_constraints().len()
-                + self.one_hot_constraints().len()
-                + self.sos1_constraints().len())
+            (self.active_constraints().len()
+                + self.active_indicator_constraints().len()
+                + self.active_one_hot_constraints().len()
+                + self.active_sos1_constraints().len())
             .to_string(),
         );
         annotations
@@ -591,8 +591,8 @@ mod tests {
             .sense(crate::Sense::Minimize)
             .objective(crate::Function::Zero)
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
-            .one_hot_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_one_hot_constraints(BTreeMap::from([(
                 crate::OneHotConstraintID::from(10),
                 one_hot,
             )]))

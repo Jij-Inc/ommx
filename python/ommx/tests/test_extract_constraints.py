@@ -26,7 +26,7 @@ Model = TypeVar("Model", bound=Instance | ParametricInstance)
 
 def label_model(model: Model) -> Model:
     for index, (_, id_type, _) in enumerate(FAMILIES):
-        row = model.constraints[id_type(NUMBERS[id_type])]
+        row = model.active_constraints[id_type(NUMBERS[id_type])]
         row.set_name("c")
         row.set_subscripts([index, -1])
         row.set_parameters({"group": str(index)})
@@ -45,13 +45,13 @@ def test_model_extraction_returns_attached_rows_of_all_families(
     for index, (_, id_type, row_type) in enumerate(FAMILIES):
         row = extracted[index, -1]
         assert type(row) is row_type
-        assert row == model.constraints[id_type(NUMBERS[id_type])]
+        assert row == model.active_constraints[id_type(NUMBERS[id_type])]
 
     regular = extracted[0, -1]
     assert isinstance(regular, AttachedConstraint)
     regular.set_name("renamed")
     regular.set_subscripts([42])
-    assert model.constraints[ConstraintID(5)].name == "renamed"
+    assert model.active_constraints[ConstraintID(5)].name == "renamed"
     assert model.extract_constraints("renamed") == {(42,): regular}
     assert (0, -1) in extracted  # Dictionary keys snapshot the original labels.
     assert set(model.extract_constraints("c")) == {(i, -1) for i in range(1, 4)}
@@ -63,10 +63,10 @@ def test_model_extraction_returns_attached_rows_of_all_families(
 
 def test_model_extraction_excludes_removed_rows_on_both_roots():
     model = label_model(make_model(Instance))
-    model.relax_constraint(5, "manual")
+    model.deactivate_constraint(5, "manual")
     for root in [model, model.as_parametric_instance()]:
         assert set(root.extract_constraints("c")) == {(i, -1) for i in range(1, 4)}
-        assert ConstraintID(5) in root.removed_constraints
+        assert ConstraintID(5) in root.inactive_constraints
 
 
 @pytest.mark.parametrize("removed", [False, True])
@@ -80,7 +80,7 @@ def test_results_extract_violations_including_retained_removed_constraints(remov
             model.evaluate({0: 0, 1: 0}).extract_constraints("c")
         with pytest.raises(ValueError, match="Duplicate subscript"):
             model.evaluate_samples({7: {0: 0, 1: 0}}).extract_constraints("c", 7)
-        for row in model.constraints.values():
+        for row in model.active_constraints.values():
             assert isinstance(row, AttachedConstraint)
             row.set_name("lowered")
     samples = model.evaluate_samples({7: {0: 0, 1: 0}, 42: {0: 1, 1: 1}})
@@ -115,7 +115,7 @@ def test_results_extract_violations_including_retained_removed_constraints(remov
 @pytest.mark.parametrize("left,right", list(combinations(range(4), 2)))
 def test_duplicate_subscripts_across_every_family_pair_are_rejected(host, left, right):
     model = label_model(make_model(host))
-    model.constraints[FAMILIES[right][1](5 + right)].set_subscripts([left, -1])
+    model.active_constraints[FAMILIES[right][1](5 + right)].set_subscripts([left, -1])
     with pytest.raises(ValueError, match="Duplicate subscript"):
         model.extract_constraints("c")
     if isinstance(model, ParametricInstance):
@@ -129,7 +129,7 @@ def test_duplicate_subscripts_across_every_family_pair_are_rejected(host, left, 
 def test_scalar_labels_missing_names_and_invalid_sample_ids():
     model = make_model(Instance)
     for index, (kind, id_type, _) in enumerate(FAMILIES):
-        model.constraints[id_type(NUMBERS[id_type])].set_name(str(kind))
+        model.active_constraints[id_type(NUMBERS[id_type])].set_name(str(kind))
         assert set(model.extract_constraints(str(kind))) == {()}
     with pytest.raises(KeyError):
         model.extract_constraints("missing")
@@ -169,7 +169,7 @@ def test_constraint_names_match_extraction_on_every_root():
 
     names = ["regular", "", "one_hot", "sos1"]
     for name, (_, id_type, _) in zip(names, FAMILIES):
-        model.constraints[id_type(NUMBERS[id_type])].set_name(str(name))
+        model.active_constraints[id_type(NUMBERS[id_type])].set_name(str(name))
     solution = model.evaluate({0: 0, 1: 0})
     samples = model.evaluate_samples({7: {0: 0, 1: 0}})
     roots: tuple[Instance, ParametricInstance, Solution, SampleSet] = (
@@ -191,7 +191,7 @@ def test_constraint_names_match_extraction_on_every_root():
         assert samples.extract_constraints(name, 7)
 
     old_names = model.constraint_names
-    model.constraints[ConstraintID(5)].set_name("renamed")
+    model.active_constraints[ConstraintID(5)].set_name("renamed")
     assert model.constraint_names == {"renamed", "", "one_hot", "sos1"}
     assert (
         old_names == solution.constraint_names == samples.constraint_names == set(names)
@@ -201,7 +201,7 @@ def test_constraint_names_match_extraction_on_every_root():
 def test_constraint_names_deduplicate_without_validating_subscripts():
     model = label_model(make_model(Instance))
     for _, id_type, _ in FAMILIES:
-        model.constraints[id_type(NUMBERS[id_type])].set_subscripts([])
+        model.active_constraints[id_type(NUMBERS[id_type])].set_subscripts([])
     solution = model.evaluate({0: 0, 1: 0})
     samples = model.evaluate_samples({7: {0: 0, 1: 0}})
     for root in [model, model.as_parametric_instance(), solution, samples]:
@@ -216,9 +216,9 @@ def test_constraint_names_deduplicate_without_validating_subscripts():
 def test_constraint_name_scope_tracks_removal_and_retained_results():
     model = make_model(Instance)
     for name, id_type, _ in FAMILIES:
-        model.constraints[id_type(NUMBERS[id_type])].set_name(str(name))
+        model.active_constraints[id_type(NUMBERS[id_type])].set_name(str(name))
     remove_all(model)
-    for row in model.constraints.values():
+    for row in model.active_constraints.values():
         assert isinstance(row, AttachedConstraint)
         row.set_name("generated")
     assert model.constraint_names == {"generated"}
@@ -250,7 +250,7 @@ def test_parametric_variable_names_exclude_parameters_and_track_label_edits():
             DecisionVariable.binary(3),
         ],
         parameters=[Parameter(100, name="parameter_only")],
-        constraints={},
+        active_constraints={},
     )
     names = model.decision_variable_names
     assert_type(names, set[str])

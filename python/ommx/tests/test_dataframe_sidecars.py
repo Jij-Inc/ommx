@@ -53,7 +53,7 @@ def _instance_with_context() -> Instance:
     return Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={10: c},
+        active_constraints={10: c},
         sense=Sense.Maximize,
     )
 
@@ -118,7 +118,7 @@ def test_string_kind_is_rejected():
         "constraint_context_df",
         "constraint_parameters_df",
         "constraint_provenance_df",
-        "constraint_removed_reasons_df",
+        "constraint_inactive_reasons_df",
     ],
 )
 def test_constraint_sidecars_require_explicit_keyword_kind(owner, accessor):
@@ -173,16 +173,16 @@ def _special_instance() -> Instance:
     return Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
-        indicator_constraints={
+        active_constraints={},
+        active_indicator_constraints={
             5: IndicatorConstraint(
                 indicator_variable=x[0],
                 function=x[1] + x[2] - 1,
                 equality=Equality.EqualToZero,
             )
         },
-        one_hot_constraints={6: OneHotConstraint(variables=x[1:])},
-        sos1_constraints={7: Sos1Constraint(variables=x)},
+        active_one_hot_constraints={6: OneHotConstraint(variables=x[1:])},
+        active_sos1_constraints={7: Sos1Constraint(variables=x)},
         sense=Sense.Maximize,
     )
 
@@ -212,8 +212,8 @@ def test_provenance_after_one_hot_conversion(snapshot):
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
-        one_hot_constraints={7: OneHotConstraint(variables=x)},
+        active_constraints={},
+        active_one_hot_constraints={7: OneHotConstraint(variables=x)},
         sense=Sense.Minimize,
     )
     instance.convert_one_hot_to_constraint(7)
@@ -224,16 +224,16 @@ def test_provenance_after_one_hot_conversion(snapshot):
 
 
 # ---------------------------------------------------------------------------
-# constraint_removed_reasons_df
+# constraint_inactive_reasons_df
 # ---------------------------------------------------------------------------
 
 
 def test_removed_reasons_df_after_relax(snapshot):
-    """relax_constraint with no extra parameters → 1 row, key/value = NA."""
+    """deactivate_constraint with no extra parameters → 1 row, key/value = NA."""
     instance = _instance_with_context()
-    instance.relax_constraint(10, "test_reason")
+    instance.deactivate_constraint(10, "test_reason")
     assert (
-        _df_snap(instance.constraint_removed_reasons_df(kind=ConstraintKind.Regular))
+        _df_snap(instance.constraint_inactive_reasons_df(kind=ConstraintKind.Regular))
         == snapshot
     )
 
@@ -246,13 +246,13 @@ def test_removed_reasons_df_with_parameters_after_one_hot_conversion(snapshot):
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
-        one_hot_constraints={7: OneHotConstraint(variables=x)},
+        active_constraints={},
+        active_one_hot_constraints={7: OneHotConstraint(variables=x)},
         sense=Sense.Minimize,
     )
     instance.convert_one_hot_to_constraint(7)
     assert (
-        _df_snap(instance.constraint_removed_reasons_df(kind=ConstraintKind.OneHot))
+        _df_snap(instance.constraint_inactive_reasons_df(kind=ConstraintKind.OneHot))
         == snapshot
     )
 
@@ -295,13 +295,13 @@ def _instance_with_relaxed_constraint() -> Instance:
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={
+        active_constraints={
             10: (x[0] + x[1] == 1).set_name("balance").set_parameters({"k": "v"}),
             11: (x[1] + x[2] <= 1).set_name("cap"),
         },
         sense=Sense.Maximize,
     )
-    instance.relax_constraint(10, "test_reason")
+    instance.deactivate_constraint(10, "test_reason")
     return instance
 
 

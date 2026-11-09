@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod activeness_tests;
 mod analysis;
 mod approx;
 pub(crate) mod arbitrary;
@@ -64,7 +66,7 @@ pub use v1_hint_promotion::{
 };
 
 use crate::{
-    constraint::{ConstraintContextStore, RemovedReason},
+    constraint::{ConstraintContextStore, InactiveConstraintMetadata},
     constraint_type::ConstraintCollection,
     decision_variable::{DecisionVariableTable, VariableLabelStore},
     indicator_constraint::IndicatorConstraint,
@@ -129,7 +131,7 @@ pub enum Sense {
 ///         VariableID::from(1),
 ///         DecisionVariable::binary(),
 ///     )]))
-///     .constraints(BTreeMap::new())
+///     .active_constraints(BTreeMap::new())
 ///     .build()
 ///     .unwrap();
 ///
@@ -230,7 +232,7 @@ impl OutputObjective {
 ///
 /// Interpretation Context can require updates. For example,
 /// [`ParametricInstance::with_parameters`] specializes parameter-bearing
-/// expressions in both roles, including removed constraints, output objectives,
+/// expressions in both roles, including inactive constraints, output objectives,
 /// named functions, and dependency expressions. Operations that explicitly
 /// change output semantics have a different contract:
 /// [`Self::as_minimization_problem`] and [`Self::as_maximization_problem`]
@@ -267,7 +269,7 @@ impl OutputObjective {
 /// return only those referenced by the current active objective or active
 /// constraints, including every special-constraint family. This is a structural
 /// property of the current instance, not a solver's presolve result. References
-/// only in the output objective, named functions, or removed constraints do not
+/// only in the output objective, named functions, or inactive constraints do not
 /// make a variable solver-used; merely declaring a variable does not either.
 ///
 /// Solver integrations should build their backend variables from the used set,
@@ -291,9 +293,9 @@ impl OutputObjective {
 /// - [`Sos1Constraint`]: at most one member variable is nonzero
 ///
 /// Constraint ID types remain family-specific, but their numeric values are unique
-/// across all active and removed constraints in this instance. New constraints
+/// across all active and inactive constraints in this instance. New constraints
 /// receive numbers from the instance-wide space; transformations retain source
-/// IDs in removed constraints and assign fresh numbers to generated constraints.
+/// IDs in inactive constraints and assign fresh numbers to generated constraints.
 ///
 /// [`ConstraintKind`] identifies active special constraint families.
 /// [`Instance::active_special_constraint_kinds`] inspects them, and
@@ -324,7 +326,7 @@ impl OutputObjective {
 ///
 /// Lower-level tables and collections only apply the table-local row effects
 /// requested by these root operations: fresh insertion, lifecycle-preserving
-/// replacement, active-to-removed movement, restore through a host-supplied
+/// replacement, active-to-inactive movement, restore through a host-supplied
 /// normalizer, label/context updates for owned IDs, or by-value rewrites. They
 /// do not decide whether an expression rewrite, variable-space extension,
 /// family morphism, or restore is semantically valid.
@@ -337,7 +339,7 @@ impl OutputObjective {
 /// - The decision-variable table rejects labels or fixed values for unknown
 ///   variable IDs, and fixed values must satisfy the corresponding row's
 ///   kind/bound.
-/// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
+/// - The keys of [`Self::active_constraints`] and [`Self::inactive_constraints`] are disjoint sets.
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
 ///   but must NOT be used in the active objective or active constraints.
 ///   These are "dependent variables" whose values are computed from other variables.
@@ -350,16 +352,16 @@ impl OutputObjective {
 ///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
 ///   - **irrelevant**: All other declared variables; these do not affect the active formulation
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
-/// - [`Self::removed_constraints`] may contain fixed or dependent variable IDs.
-///   These are substituted when the constraint is restored via [`Self::restore_constraint`].
+/// - [`Self::inactive_constraints`] may contain fixed or dependent variable IDs.
+///   These are substituted when the constraint is restored via [`Self::activate_constraint`].
 /// - [`Self::named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; named-function rows do not carry IDs.
-/// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
+/// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `inactive_constraints`).
 ///   Variable IDs referenced by named functions must be registered in [`Self::decision_variables`],
 ///   but are NOT included in the "used" set calculation.
 /// - Modeling-label and constraint-context sidecars are owned by their
 ///   corresponding top-level table or collection; every label/context ID must
-///   refer to an existing decision variable, named function, or active/removed
+///   refer to an existing decision variable, named function, or active/inactive
 ///   constraint in that owner.
 /// - Fixed decision-variable values are owned by
 ///   [`DecisionVariableTable`], not by individual [`DecisionVariable`]
@@ -381,7 +383,7 @@ impl OutputObjective {
 ///     .sense(Sense::Maximize)
 ///     .objective(Function::from(linear!(1)))
 ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-///     .constraints(BTreeMap::new())
+///     .active_constraints(BTreeMap::new())
 ///     .build()
 ///     .unwrap();
 /// assert!(instance.convert_active_objective(Sense::Minimize));
@@ -404,33 +406,34 @@ impl OutputObjective {
 ///
 /// ## Special-constraint invariants
 ///
-/// Active and removed indicator / one-hot / SOS1 constraints are subject to the
+/// Active and inactive indicator / one-hot / SOS1 constraints are subject to the
 /// same id-resolution rules as regular constraints, and additionally:
 ///
-/// - [`Self::indicator_constraints`] and [`Self::removed_indicator_constraints`]
+/// - [`Self::active_indicator_constraints`] and [`Self::inactive_indicator_constraints`]
 ///   are disjoint sets; same for the one-hot and SOS1 collections (within each
 ///   kind and across all kinds).
-/// - For every active or removed [`crate::IndicatorConstraint`], the
+/// - For every active or inactive [`crate::IndicatorConstraint`], the
 ///   `indicator_variable` is registered in [`Self::decision_variables`] and
 ///   has [`Kind::Binary`](crate::decision_variable::Kind). The function body
 ///   may reference any defined variable.
-/// - For every active or removed [`crate::OneHotConstraint`], every member of
+/// - For every active or inactive [`crate::OneHotConstraint`], every member of
 ///   `variables` is registered in [`Self::decision_variables`] and has
 ///   [`Kind::Binary`](crate::decision_variable::Kind).
-/// - For every active or removed [`crate::Sos1Constraint`], `variables` is
+/// - For every active or inactive [`crate::Sos1Constraint`], `variables` is
 ///   non-empty and every member is registered in [`Self::decision_variables`].
 ///   SOS1 does not require [`Kind::Binary`](crate::decision_variable::Kind).
 ///
 /// These invariants are enforced at every construction or mutation entry
-/// point: [`Instance::builder`] (which accepts active maps for all three
-/// kinds, a removed map for regular and indicator constraints, and validates
+/// point: [`Instance::builder`] (which accepts active and inactive maps for all four
+/// families and validates
 /// each), the post-construction setters [`Self::insert_constraint`] /
 /// [`Self::add_constraint`] / [`Self::add_indicator_constraint`] /
 /// [`Self::add_one_hot_constraint`] / [`Self::add_sos1_constraint`], and the
-/// internal `relax_constraint` / `relax_indicator_constraint` /
+/// `deactivate_constraint` / `deactivate_indicator_constraint` /
+/// `deactivate_one_hot_constraint` / `deactivate_sos1_constraint` /
 /// `convert_all_one_hots_to_constraints` / `convert_all_sos1_to_constraints`
-/// paths that populate the removed maps. Constraint-family storage is mutated
-/// through operation-level collection primitives so active/removed
+/// paths that populate the inactive maps. Constraint-family storage is mutated
+/// through operation-level collection primitives so active/inactive
 /// disjointness, removed reasons, and context sidecars remain attached to
 /// owned row IDs.
 ///
@@ -489,7 +492,7 @@ pub struct Instance {
 impl Instance {
     /// Unique names of active constraints across every family.
     ///
-    /// Unnamed and removed constraints are excluded. An explicitly empty name
+    /// Unnamed and inactive constraints are excluded. An explicitly empty name
     /// is included. Names are deduplicated even when subscripts are ambiguous.
     pub fn constraint_names(&self) -> BTreeSet<String> {
         let mut names = BTreeSet::new();
@@ -540,7 +543,7 @@ impl Instance {
     ///     .sense(Sense::Minimize)
     ///     .objective(Function::from(linear!(1)))
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-    ///     .constraints(BTreeMap::from([(
+    ///     .active_constraints(BTreeMap::from([(
     ///         ConstraintID::from(1),
     ///         Constraint::equal_to_zero(Function::from(linear!(1))),
     ///     )]))
@@ -722,8 +725,13 @@ impl Instance {
         self.named_functions.set_label(id, label)
     }
 
+    /// All retained constraints, regardless of activeness.
+    pub fn constraints(&self) -> &ConstraintCollection<Constraint> {
+        &self.constraint_collection
+    }
+
     /// Active constraints.
-    pub fn constraints(&self) -> &BTreeMap<ConstraintID, Constraint> {
+    pub fn active_constraints(&self) -> &BTreeMap<ConstraintID, Constraint> {
         self.constraint_collection.active()
     }
 
@@ -732,8 +740,10 @@ impl Instance {
     /// These are evaluated for result interpretation but are not conditions of
     /// the Active Formulation. See [`Self`] for these roles and the owning
     /// transformation for its preservation guarantees.
-    pub fn removed_constraints(&self) -> &BTreeMap<ConstraintID, (Constraint, RemovedReason)> {
-        self.constraint_collection.removed()
+    pub fn inactive_constraints(
+        &self,
+    ) -> &BTreeMap<ConstraintID, (Constraint, InactiveConstraintMetadata)> {
+        self.constraint_collection.inactive()
     }
 
     /// The full constraint collection (active + removed).
@@ -756,18 +766,24 @@ impl Instance {
             .set_context_for_owner(id, context, "constraint")
     }
 
+    /// All retained indicator constraints, regardless of activeness.
+    pub fn indicator_constraints(&self) -> &ConstraintCollection<IndicatorConstraint> {
+        &self.indicator_constraint_collection
+    }
+
     /// Active indicator constraints.
-    pub fn indicator_constraints(
+    pub fn active_indicator_constraints(
         &self,
     ) -> &BTreeMap<crate::IndicatorConstraintID, IndicatorConstraint> {
         self.indicator_constraint_collection.active()
     }
 
     /// Removed indicator constraints.
-    pub fn removed_indicator_constraints(
+    pub fn inactive_indicator_constraints(
         &self,
-    ) -> &BTreeMap<crate::IndicatorConstraintID, (IndicatorConstraint, RemovedReason)> {
-        self.indicator_constraint_collection.removed()
+    ) -> &BTreeMap<crate::IndicatorConstraintID, (IndicatorConstraint, InactiveConstraintMetadata)>
+    {
+        self.indicator_constraint_collection.inactive()
     }
 
     /// The full indicator constraint collection (active + removed).
@@ -795,16 +811,23 @@ impl Instance {
         )
     }
 
+    /// All retained one hot constraints, regardless of activeness.
+    pub fn one_hot_constraints(&self) -> &ConstraintCollection<crate::OneHotConstraint> {
+        &self.one_hot_constraint_collection
+    }
+
     /// Active one-hot constraints.
-    pub fn one_hot_constraints(&self) -> &BTreeMap<crate::OneHotConstraintID, OneHotConstraint> {
+    pub fn active_one_hot_constraints(
+        &self,
+    ) -> &BTreeMap<crate::OneHotConstraintID, OneHotConstraint> {
         self.one_hot_constraint_collection.active()
     }
 
     /// Removed one-hot constraints.
-    pub fn removed_one_hot_constraints(
+    pub fn inactive_one_hot_constraints(
         &self,
-    ) -> &BTreeMap<crate::OneHotConstraintID, (OneHotConstraint, RemovedReason)> {
-        self.one_hot_constraint_collection.removed()
+    ) -> &BTreeMap<crate::OneHotConstraintID, (OneHotConstraint, InactiveConstraintMetadata)> {
+        self.one_hot_constraint_collection.inactive()
     }
 
     /// The full one-hot constraint collection (active + removed).
@@ -827,16 +850,21 @@ impl Instance {
             .set_context_for_owner(id, context, "one-hot constraint")
     }
 
+    /// All retained sos1 constraints, regardless of activeness.
+    pub fn sos1_constraints(&self) -> &ConstraintCollection<crate::Sos1Constraint> {
+        &self.sos1_constraint_collection
+    }
+
     /// Active SOS1 constraints.
-    pub fn sos1_constraints(&self) -> &BTreeMap<crate::Sos1ConstraintID, Sos1Constraint> {
+    pub fn active_sos1_constraints(&self) -> &BTreeMap<crate::Sos1ConstraintID, Sos1Constraint> {
         self.sos1_constraint_collection.active()
     }
 
     /// Removed SOS1 constraints.
-    pub fn removed_sos1_constraints(
+    pub fn inactive_sos1_constraints(
         &self,
-    ) -> &BTreeMap<crate::Sos1ConstraintID, (Sos1Constraint, RemovedReason)> {
-        self.sos1_constraint_collection.removed()
+    ) -> &BTreeMap<crate::Sos1ConstraintID, (Sos1Constraint, InactiveConstraintMetadata)> {
+        self.sos1_constraint_collection.inactive()
     }
 
     /// The full SOS1 constraint collection (active + removed).
@@ -871,7 +899,7 @@ impl Instance {
 
     /// Return the special constraint families active in this instance.
     ///
-    /// Only active constraints are considered; removed constraints are
+    /// Only active constraints are considered; inactive constraints are
     /// excluded. The result does not describe an [`crate::InstanceClass`] or
     /// establish adapter applicability.
     pub fn active_special_constraint_kinds(&self) -> ConstraintKinds {
@@ -1007,7 +1035,7 @@ impl Instance {
 ///
 /// # Invariants
 ///
-/// - Constraint numbers are unique across all active and removed families,
+/// - Constraint numbers are unique across all active and inactive families,
 ///   as on [`Instance`]. Constructors and protobuf parsing reject collisions.
 ///
 /// - [`Self::decision_variables`] owns the
@@ -1029,7 +1057,7 @@ impl Instance {
 ///   disjoint sets. This shared-namespace invariant is host-level state and
 ///   is validated by [`ParametricInstance::builder`] / protobuf parsing, not
 ///   by [`ParameterTable`] alone.
-/// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
+/// - The keys of [`Self::active_constraints`] and [`Self::inactive_constraints`] are disjoint sets.
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
 ///   but must NOT be used in the active objective or active constraints.
 ///   The RHS expressions of [`Self::decision_variable_dependency`] may
@@ -1051,7 +1079,7 @@ impl Instance {
 /// - [`Self::named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; named-function rows do not carry IDs.
 /// - [`Self::named_functions`] may contain fixed or dependent decision-variable
-///   IDs (like `removed_constraints`) and may also reference parameter IDs.
+///   IDs (like `inactive_constraints`) and may also reference parameter IDs.
 ///   Every referenced ID must be registered in either
 ///   [`Self::decision_variables`] or [`Self::parameters`], but decision-variable
 ///   IDs appearing only in named functions are NOT included in the "used" set
@@ -1059,7 +1087,7 @@ impl Instance {
 /// - Modeling-label and constraint-context sidecars are owned by their
 ///   corresponding top-level table or collection; every label/context ID must
 ///   refer to an existing decision variable, parameter, named function, or
-///   active/removed constraint in that owner. Parameter labels are owned by
+///   active/inactive constraint in that owner. Parameter labels are owned by
 ///   [`ParameterTable`]; parameter IDs are not valid variable-label IDs.
 /// - Fixed decision-variable values are owned by
 ///   [`DecisionVariableTable`]. The root [`ParametricInstance`] owns
@@ -1074,23 +1102,23 @@ impl Instance {
 /// [`Self::with_parameters`]), but **structural** variable positions cannot
 /// — they must be real decision variables. Specifically:
 ///
-/// - For every active or removed [`crate::IndicatorConstraint`], the
+/// - For every active or inactive [`crate::IndicatorConstraint`], the
 ///   `indicator_variable` is registered in [`Self::decision_variables`]
 ///   (not [`Self::parameters`]) and has
 ///   [`Kind::Binary`](crate::decision_variable::Kind). The function body
 ///   may reference any defined variable or parameter.
-/// - For every active or removed [`crate::OneHotConstraint`], every member of
+/// - For every active or inactive [`crate::OneHotConstraint`], every member of
 ///   `variables` is registered in [`Self::decision_variables`] and has
 ///   [`Kind::Binary`](crate::decision_variable::Kind).
-/// - For every active or removed [`crate::Sos1Constraint`], `variables` is
+/// - For every active or inactive [`crate::Sos1Constraint`], `variables` is
 ///   non-empty and every member is registered in [`Self::decision_variables`].
 /// - The constraint id-disjointness invariants (active vs. removed, per kind)
 ///   match [`Instance`].
 ///
 /// These invariants are enforced at every construction or mutation entry
 /// point: [`ParametricInstance::builder`] (which mirrors
-/// [`Instance::builder`] and accepts active maps for all three kinds, plus
-/// removed maps for regular and indicator constraints, validating each),
+/// [`Instance::builder`] and accepts active and inactive maps for all four families,
+/// validating each),
 /// and the post-construction setters [`Self::add_constraint`] /
 /// [`Self::add_indicator_constraint`] / [`Self::add_one_hot_constraint`] /
 /// [`Self::add_sos1_constraint`].
@@ -1098,10 +1126,10 @@ impl Instance {
 /// [`Self::with_parameters`] partially evaluates parameter IDs out of every
 /// expression that could contain one when materializing a parametric
 /// instance into an [`Instance`]: the active objective, output objective,
-/// active and removed regular constraint bodies, active and removed indicator
+/// active and inactive regular constraint bodies, active and inactive indicator
 /// constraint function bodies, named functions, and
 /// `decision_variable_dependency` RHS expressions. OneHot/SOS1 collections
-/// (active and removed) pass through unchanged because their variable sets are
+/// (active and inactive) pass through unchanged because their variable sets are
 /// required to be real decision variables at construction time. The resulting
 /// [`Instance`] satisfies its own (stricter) invariants — no parameter IDs
 /// survive anywhere.
@@ -1165,7 +1193,7 @@ impl ParametricInstance {
 
     /// Unique names of active constraints across every family.
     ///
-    /// Unnamed and removed constraints are excluded. An explicitly empty name
+    /// Unnamed and inactive constraints are excluded. An explicitly empty name
     /// is included. Names are deduplicated even when subscripts are ambiguous.
     pub fn constraint_names(&self) -> BTreeSet<String> {
         let mut names = BTreeSet::new();
@@ -1255,14 +1283,21 @@ impl ParametricInstance {
         self.named_functions.set_label(id, label)
     }
 
+    /// All retained constraints, regardless of activeness.
+    pub fn constraints(&self) -> &ConstraintCollection<Constraint> {
+        &self.constraint_collection
+    }
+
     /// Active constraints.
-    pub fn constraints(&self) -> &BTreeMap<ConstraintID, Constraint> {
+    pub fn active_constraints(&self) -> &BTreeMap<ConstraintID, Constraint> {
         self.constraint_collection.active()
     }
 
     /// Removed constraints.
-    pub fn removed_constraints(&self) -> &BTreeMap<ConstraintID, (Constraint, RemovedReason)> {
-        self.constraint_collection.removed()
+    pub fn inactive_constraints(
+        &self,
+    ) -> &BTreeMap<ConstraintID, (Constraint, InactiveConstraintMetadata)> {
+        self.constraint_collection.inactive()
     }
 
     /// The full constraint collection (active + removed).
@@ -1286,18 +1321,24 @@ impl ParametricInstance {
             .set_context_for_owner(id, context, "constraint")
     }
 
+    /// All retained indicator constraints, regardless of activeness.
+    pub fn indicator_constraints(&self) -> &ConstraintCollection<IndicatorConstraint> {
+        &self.indicator_constraint_collection
+    }
+
     /// Active indicator constraints.
-    pub fn indicator_constraints(
+    pub fn active_indicator_constraints(
         &self,
     ) -> &BTreeMap<crate::IndicatorConstraintID, IndicatorConstraint> {
         self.indicator_constraint_collection.active()
     }
 
     /// Removed indicator constraints.
-    pub fn removed_indicator_constraints(
+    pub fn inactive_indicator_constraints(
         &self,
-    ) -> &BTreeMap<crate::IndicatorConstraintID, (IndicatorConstraint, RemovedReason)> {
-        self.indicator_constraint_collection.removed()
+    ) -> &BTreeMap<crate::IndicatorConstraintID, (IndicatorConstraint, InactiveConstraintMetadata)>
+    {
+        self.indicator_constraint_collection.inactive()
     }
 
     /// The full indicator constraint collection.
@@ -1326,16 +1367,23 @@ impl ParametricInstance {
         )
     }
 
+    /// All retained one hot constraints, regardless of activeness.
+    pub fn one_hot_constraints(&self) -> &ConstraintCollection<crate::OneHotConstraint> {
+        &self.one_hot_constraint_collection
+    }
+
     /// Active one-hot constraints.
-    pub fn one_hot_constraints(&self) -> &BTreeMap<crate::OneHotConstraintID, OneHotConstraint> {
+    pub fn active_one_hot_constraints(
+        &self,
+    ) -> &BTreeMap<crate::OneHotConstraintID, OneHotConstraint> {
         self.one_hot_constraint_collection.active()
     }
 
     /// Removed one-hot constraints.
-    pub fn removed_one_hot_constraints(
+    pub fn inactive_one_hot_constraints(
         &self,
-    ) -> &BTreeMap<crate::OneHotConstraintID, (OneHotConstraint, RemovedReason)> {
-        self.one_hot_constraint_collection.removed()
+    ) -> &BTreeMap<crate::OneHotConstraintID, (OneHotConstraint, InactiveConstraintMetadata)> {
+        self.one_hot_constraint_collection.inactive()
     }
 
     /// The full one-hot constraint collection.
@@ -1359,16 +1407,21 @@ impl ParametricInstance {
             .set_context_for_owner(id, context, "one-hot constraint")
     }
 
+    /// All retained sos1 constraints, regardless of activeness.
+    pub fn sos1_constraints(&self) -> &ConstraintCollection<crate::Sos1Constraint> {
+        &self.sos1_constraint_collection
+    }
+
     /// Active SOS1 constraints.
-    pub fn sos1_constraints(&self) -> &BTreeMap<crate::Sos1ConstraintID, Sos1Constraint> {
+    pub fn active_sos1_constraints(&self) -> &BTreeMap<crate::Sos1ConstraintID, Sos1Constraint> {
         self.sos1_constraint_collection.active()
     }
 
     /// Removed SOS1 constraints.
-    pub fn removed_sos1_constraints(
+    pub fn inactive_sos1_constraints(
         &self,
-    ) -> &BTreeMap<crate::Sos1ConstraintID, (Sos1Constraint, RemovedReason)> {
-        self.sos1_constraint_collection.removed()
+    ) -> &BTreeMap<crate::Sos1ConstraintID, (Sos1Constraint, InactiveConstraintMetadata)> {
+        self.sos1_constraint_collection.inactive()
     }
 
     /// The full SOS1 constraint collection.
@@ -1402,7 +1455,7 @@ fn maximum_number<T: crate::ConstraintType>(collection: &ConstraintCollection<T>
         .map(Into::into)
         .max(
             collection
-                .removed()
+                .inactive()
                 .keys()
                 .next_back()
                 .copied()
@@ -1474,7 +1527,7 @@ impl Instance {
             let id = T::ID::from(number);
             let state = if collection.active().contains_key(&id) {
                 Some("active")
-            } else if collection.removed().contains_key(&id) {
+            } else if collection.inactive().contains_key(&id) {
                 Some("removed")
             } else {
                 None
@@ -1535,13 +1588,13 @@ mod lower_special_constraints_tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
-            .indicator_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(BTreeMap::from([(
                 IndicatorConstraintID::from(1),
                 indicator,
             )]))
-            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(2), one_hot)]))
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
+            .active_one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(2), one_hot)]))
+            .active_sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
             .build()
             .unwrap()
     }
@@ -1550,18 +1603,18 @@ mod lower_special_constraints_tests {
     fn noop_when_no_kinds_are_selected() {
         let mut instance = instance_with_all_special_constraint_kinds();
         let kinds_to_lower = ConstraintKinds::new();
-        let before_indicators = instance.indicator_constraints().clone();
-        let before_one_hots = instance.one_hot_constraints().clone();
-        let before_sos1 = instance.sos1_constraints().clone();
+        let before_indicators = instance.active_indicator_constraints().clone();
+        let before_one_hots = instance.active_one_hot_constraints().clone();
+        let before_sos1 = instance.active_sos1_constraints().clone();
 
         let lowered = instance
             .lower_special_constraints(&kinds_to_lower, ATol::default())
             .unwrap();
 
         assert!(lowered.is_empty());
-        assert_eq!(instance.indicator_constraints(), &before_indicators);
-        assert_eq!(instance.one_hot_constraints(), &before_one_hots);
-        assert_eq!(instance.sos1_constraints(), &before_sos1);
+        assert_eq!(instance.active_indicator_constraints(), &before_indicators);
+        assert_eq!(instance.active_one_hot_constraints(), &before_one_hots);
+        assert_eq!(instance.active_sos1_constraints(), &before_sos1);
     }
 
     #[test]
@@ -1576,9 +1629,9 @@ mod lower_special_constraints_tests {
             .unwrap();
 
         assert_eq!(lowered, kinds_to_lower);
-        assert!(instance.indicator_constraints().is_empty());
-        assert!(instance.one_hot_constraints().is_empty());
-        assert!(!instance.sos1_constraints().is_empty());
+        assert!(instance.active_indicator_constraints().is_empty());
+        assert!(instance.active_one_hot_constraints().is_empty());
+        assert!(!instance.active_sos1_constraints().is_empty());
         assert_eq!(
             instance.active_special_constraint_kinds(),
             [ConstraintKind::Sos1].into_iter().collect()
@@ -1620,8 +1673,8 @@ mod lower_special_constraints_tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
-            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(2), one_hot)]))
+            .active_constraints(BTreeMap::new())
+            .active_one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(2), one_hot)]))
             .build()
             .unwrap();
         let kinds_to_lower: ConstraintKinds = [
@@ -1638,7 +1691,7 @@ mod lower_special_constraints_tests {
 
         let expected: ConstraintKinds = [ConstraintKind::OneHot].into_iter().collect();
         assert_eq!(lowered, expected);
-        assert!(instance.one_hot_constraints().is_empty());
+        assert!(instance.active_one_hot_constraints().is_empty());
     }
 
     #[test]
@@ -1652,8 +1705,8 @@ mod lower_special_constraints_tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
             .decision_variables(btreemap! { VariableID::from(0) => dv })
-            .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
+            .active_constraints(BTreeMap::new())
+            .active_sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
             .build()
             .unwrap();
         let kinds_to_lower: ConstraintKinds = [ConstraintKind::Sos1].into_iter().collect();
@@ -1683,9 +1736,9 @@ mod lower_special_constraints_tests {
                 VariableID::from(1) => DecisionVariable::binary(),
                 VariableID::from(2) => DecisionVariable::continuous(),
             })
-            .constraints(BTreeMap::new())
-            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(2), one_hot)]))
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
+            .active_constraints(BTreeMap::new())
+            .active_one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(2), one_hot)]))
+            .active_sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
             .build()
             .unwrap();
         let kinds_to_lower: ConstraintKinds = [ConstraintKind::OneHot, ConstraintKind::Sos1]
@@ -1697,10 +1750,10 @@ mod lower_special_constraints_tests {
             .unwrap_err();
 
         assert!(err.to_string().contains("non-finite"));
-        assert!(instance.one_hot_constraints().is_empty());
-        assert_eq!(instance.removed_one_hot_constraints().len(), 1);
-        assert_eq!(instance.constraints().len(), 1);
-        assert_eq!(instance.sos1_constraints().len(), 1);
+        assert!(instance.active_one_hot_constraints().is_empty());
+        assert_eq!(instance.inactive_one_hot_constraints().len(), 1);
+        assert_eq!(instance.active_constraints().len(), 1);
+        assert_eq!(instance.active_sos1_constraints().len(), 1);
         assert_eq!(
             instance.active_special_constraint_kinds(),
             [ConstraintKind::Sos1].into_iter().collect()
@@ -1735,8 +1788,8 @@ mod lower_special_constraints_tests {
             .unwrap_err();
 
         assert_eq!(instance, after_indicator_conversion);
-        assert!(instance.indicator_constraints().is_empty());
-        assert_eq!(instance.one_hot_constraints().len(), 1);
+        assert!(instance.active_indicator_constraints().is_empty());
+        assert_eq!(instance.active_one_hot_constraints().len(), 1);
     }
 
     #[test]
@@ -1756,8 +1809,8 @@ mod lower_special_constraints_tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
             .decision_variables(btreemap! { VariableID::from(0) => dv })
-            .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
+            .active_constraints(BTreeMap::new())
+            .active_sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
             .build()
             .unwrap();
 
@@ -1769,7 +1822,7 @@ mod lower_special_constraints_tests {
         assert_eq!(lowered, kinds_to_lower);
         // Fresh binary indicator was allocated → decision variable count went up.
         assert_eq!(instance.decision_variables.len(), 2);
-        assert!(instance.sos1_constraints().is_empty());
-        assert!(!instance.constraints().is_empty());
+        assert!(instance.active_sos1_constraints().is_empty());
+        assert!(!instance.active_constraints().is_empty());
     }
 }

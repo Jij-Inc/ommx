@@ -28,7 +28,7 @@ For incremental construction with automatically assigned IDs, use
 >>> instance = Instance.minimize()
 >>> dose = instance.new_finite_domain([0.1, 0.3, 0.5, 1.0], "dose")
 >>> instance.objective = dose
->>> assert instance.evaluate({dose.id: 0.3}).feasible
->>> assert not instance.evaluate({dose.id: 0.4}).feasible
+>>> assert instance.evaluate({dose.id: 0.3}).feasible()
+>>> assert not instance.evaluate({dose.id: 0.4}).feasible()
 
 ```

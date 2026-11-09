@@ -17,7 +17,7 @@ def test_instance_from_components_rejects_duplicate_decision_variable_ids():
         Instance.from_components(
             decision_variables=variables,
             objective=0,
-            constraints={},
+            active_constraints={},
             sense=Sense.Minimize,
         )
 
@@ -30,7 +30,7 @@ def test_parametric_from_components_rejects_duplicate_decision_variable_ids():
             decision_variables=variables,
             parameters=[],
             objective=0,
-            constraints={},
+            active_constraints={},
             sense=Sense.Minimize,
         )
 
@@ -48,7 +48,7 @@ def test_parametric_from_components_rejects_duplicate_named_function_ids():
             decision_variables=[variable],
             parameters=[parameter],
             objective=variable + parameter,
-            constraints={},
+            active_constraints={},
             sense=Sense.Minimize,
             named_functions=named_functions,
         )
@@ -59,7 +59,7 @@ def test_to_qubo_rejects_missing_penalty_weight():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0],
-        constraints={123: x[0] == 0, 456: x[1] == 1},
+        active_constraints={123: x[0] == 0, 456: x[1] == 1},
         sense=Sense.Minimize,
     )
 

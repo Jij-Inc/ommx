@@ -9,7 +9,7 @@ fn test_neos_2626858_aoos_variable_domains() {
         parse(&include_bytes!("../../../tests/data/mps/neos-2626858-aoos.mps.gz")[..]).unwrap();
     let variables = instance.decision_variables();
     assert_eq!(variables.len(), 524);
-    assert_eq!(instance.constraints().len(), 342);
+    assert_eq!(instance.active_constraints().len(), 342);
     assert_eq!(
         variables
             .values()
@@ -168,8 +168,8 @@ ENDATA
     assert_abs_diff_eq!(instance.objective(), &Function::from(linear!(*var_id)));
 
     // Check constraint: x1 - 5 <= 0
-    assert_eq!(instance.constraints().len(), 1);
-    let (cid, constraint) = instance.constraints().iter().next().unwrap();
+    assert_eq!(instance.active_constraints().len(), 1);
+    let (cid, constraint) = instance.active_constraints().iter().next().unwrap();
     assert_abs_diff_eq!(
         constraint.function(),
         &Function::from(linear!(*var_id) + coeff!(-5.0))
@@ -229,9 +229,9 @@ ENDATA
     );
 
     // Check constraints
-    assert_eq!(instance.constraints().len(), 4);
+    assert_eq!(instance.active_constraints().len(), 4);
     let constraint_context = instance.constraint_collection().context();
-    let mut iter = instance.constraints().iter();
+    let mut iter = instance.active_constraints().iter();
     let (r1_id, r1) = iter.next().unwrap();
     let (r2_id, r2) = iter.next().unwrap();
     let (r1_range_id, r1_range) = iter.next().unwrap();
@@ -327,8 +327,8 @@ ENDATA
     );
 
     // Check constraint: x1 + x2 + x3 - 10 <= 0
-    assert_eq!(instance.constraints().len(), 1);
-    let (cid, constraint) = instance.constraints().iter().next().unwrap();
+    assert_eq!(instance.active_constraints().len(), 1);
+    let (cid, constraint) = instance.active_constraints().iter().next().unwrap();
     assert_abs_diff_eq!(
         constraint.function(),
         &Function::from(
@@ -391,8 +391,8 @@ ENDATA
     );
 
     // Check constraint: x1 + x2 - 1 <= 0
-    assert_eq!(instance.constraints().len(), 1);
-    let (cid, constraint) = instance.constraints().iter().next().unwrap();
+    assert_eq!(instance.active_constraints().len(), 1);
+    let (cid, constraint) = instance.active_constraints().iter().next().unwrap();
     assert_abs_diff_eq!(
         constraint.function(),
         &Function::from(((linear!(*x1_id) + linear!(*x2_id)).unwrap() + coeff!(-1.0)).unwrap())
@@ -457,8 +457,8 @@ ENDATA
     );
 
     // Check constraint: x1 - x2 = 0
-    assert_eq!(instance.constraints().len(), 1);
-    let (cid, constraint) = instance.constraints().iter().next().unwrap();
+    assert_eq!(instance.active_constraints().len(), 1);
+    let (cid, constraint) = instance.active_constraints().iter().next().unwrap();
     assert_abs_diff_eq!(
         constraint.function(),
         &Function::from(linear!(*x1_id) + coeff!(-1.0) * linear!(*x2_id))
@@ -514,8 +514,8 @@ ENDATA
     );
 
     // Check constraint: x1 + x2 - 10 <= 0
-    assert_eq!(instance.constraints().len(), 1);
-    let (cid, constraint) = instance.constraints().iter().next().unwrap();
+    assert_eq!(instance.active_constraints().len(), 1);
+    let (cid, constraint) = instance.active_constraints().iter().next().unwrap();
     assert_abs_diff_eq!(
         constraint.function(),
         &Function::from(((linear!(*x1_id) + linear!(*x2_id)).unwrap() + coeff!(-10.0)).unwrap())
@@ -593,7 +593,7 @@ ENDATA
     );
 
     // Check constraints
-    assert_eq!(instance.constraints().len(), 3);
+    assert_eq!(instance.active_constraints().len(), 3);
 
     // Check that all variables have valid bounds
     for var in instance.decision_variables().values() {
@@ -602,7 +602,7 @@ ENDATA
     }
 
     // Check that all constraints have valid equality types
-    for constraint in instance.constraints().values() {
+    for constraint in instance.active_constraints().values() {
         match constraint.equality {
             crate::Equality::EqualToZero | crate::Equality::LessThanOrEqualToZero => {
                 // These are expected
@@ -638,7 +638,7 @@ ENDATA
     assert_eq!(instance.decision_variables().len(), 2);
 
     // Check that we have 1 constraint
-    assert_eq!(instance.constraints().len(), 1);
+    assert_eq!(instance.active_constraints().len(), 1);
 
     // The objective should be quadratic
     assert_eq!(instance.objective().degree(), Some(2.into()));
@@ -690,7 +690,7 @@ ENDATA
     assert_eq!(instance.decision_variables().len(), 2);
 
     // Check that we have 1 constraint
-    assert_eq!(instance.constraints().len(), 1);
+    assert_eq!(instance.active_constraints().len(), 1);
 
     // Get variables using the helper method
     let (x1_id, _x1) = instance
@@ -701,7 +701,7 @@ ENDATA
         .unwrap();
 
     // The constraint should be quadratic
-    let (_cid, constraint) = instance.constraints().iter().next().unwrap();
+    let (_cid, constraint) = instance.active_constraints().iter().next().unwrap();
     assert_eq!(constraint.function().degree(), Some(2.into()));
 
     // Build expected constraint function: 2*x1 + 4*x2 + 0.5*x1^2 + x1*x2 - 10 <= 0

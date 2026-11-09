@@ -24,7 +24,7 @@ the separate question of which representations a solver adapter accepts.
 
 **Interpretation Context** is the information retained to recover variable
 values and evaluate or explain results in terms of the user's input. It includes
-fixed values, decision-variable dependencies, {attr}`~ommx.Instance.removed_constraints`,
+fixed values, decision-variable dependencies, {attr}`~ommx.Instance.inactive_constraints`,
 an {attr}`~ommx.Instance.output_objective`, {class}`~ommx.NamedFunction` expressions,
 and relevant modeling labels and transformation provenance.
 
@@ -107,7 +107,7 @@ problem; use {meth}`~ommx.Instance.minimize` for minimization.
 >>> instance.objective = x + y
 >>> exclusive = instance.add_constraint(x * y == 0, "exclusive")
 >>> solution = instance.evaluate({x.id: 1, y.id: 0})
->>> assert solution.feasible
+>>> assert solution.feasible()
 >>> assert solution.objective == 1.0
 
 ```
@@ -129,11 +129,11 @@ constraints refer to variables defined in that Instance.
 >>> assembled = Instance.from_components(
 ...     decision_variables=[a],
 ...     objective=a,
-...     constraints={7: a <= 1},
+...     active_constraints={7: a <= 1},
 ...     sense=Sense.Maximize,
 ... )
 >>> assert ConstraintID(7) in assembled.constraints
->>> assert assembled.evaluate({a.id: 1}).feasible
+>>> assert assembled.evaluate({a.id: 1}).feasible()
 
 ```
 
@@ -198,7 +198,7 @@ families. A typed ID identifies both the family and the number. Bare
 integers are rejected by this heterogeneous collection even though
 constraint numbers are globally unique within the Instance. Obtaining
 the collection does not collect rows; each row is fetched when accessed.
-{attr}`~ommx.Instance.removed_constraints` exposes retained constraints
+{attr}`~ommx.Instance.inactive_constraints` exposes retained constraints
 that are no longer active.
 
 ```pycon
@@ -214,7 +214,7 @@ that are no longer active.
 
 Use {meth}`~ommx.Instance.constraints_df` with an explicit ``kind``, such
 as ``kind=ConstraintKind.Regular``, to collect one family into a DataFrame. Collection
-lookup and iteration contracts belong to {class}`~ommx.ConstraintCollection`.
+lookup and iteration contracts belong to {class}`~ommx.ActiveConstraintCollection`.
 
 **Edit the Instance through attached handles**
 
@@ -307,7 +307,7 @@ been fixed:
 >>> instance = Instance.from_components(
 ...     decision_variables=[x],
 ...     objective=3 * x,
-...     constraints={},
+...     active_constraints={},
 ...     sense=Sense.Maximize,
 ... )
 >>> assert instance.convert_active_objective(Sense.Minimize)

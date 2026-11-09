@@ -22,7 +22,7 @@ def _empty_instance() -> Instance:
         sense=Sense.Minimize,
         objective=Function.from_linear(Linear.constant(0.0)),
         decision_variables=[DecisionVariable.binary(0), DecisionVariable.binary(1)],
-        constraints={},
+        active_constraints={},
     )
 
 
@@ -69,7 +69,7 @@ def test_add_constraint_does_not_mutate_input_snapshot():
 
 def test_attached_setter_writes_through_to_instance():
     """Mutations on AttachedConstraint land in the parent instance and surface
-    via instance.constraints[id]."""
+    via instance.active_constraints[id]."""
     instance = _empty_instance()
     attached = instance.add_constraint(_make_constraint(name="balance"))
     cid = attached.constraint_id
@@ -79,7 +79,7 @@ def test_attached_setter_writes_through_to_instance():
     attached.set_description("updated")
     attached.set_parameters({"a": "1", "b": "2"})
 
-    fresh = instance.constraints[cid]
+    fresh = instance.active_constraints[cid]
     assert fresh.name == "demand"
     assert fresh.subscripts == [1, 2, 3]
     assert fresh.description == "updated"
@@ -90,7 +90,7 @@ def test_two_attached_handles_share_state():
     """Two AttachedConstraint handles for the same id observe the same data."""
     instance = _empty_instance()
     a = instance.add_constraint(_make_constraint(name="balance"))
-    b = instance.constraints[a.constraint_id]
+    b = instance.active_constraints[a.constraint_id]
 
     a.set_name("demand")
 
@@ -98,12 +98,12 @@ def test_two_attached_handles_share_state():
 
 
 def test_constraints_getter_returns_attached_constraints():
-    """instance.constraints values are AttachedConstraint, not Constraint."""
+    """instance.active_constraints values are AttachedConstraint, not Constraint."""
     instance = _empty_instance()
     a = instance.add_constraint(_make_constraint(name="c1"))
     b = instance.add_constraint(_make_constraint(name="c2"))
 
-    constraints = instance.constraints
+    constraints = instance.active_constraints
     assert set(constraints.keys()) == {a.constraint_id, b.constraint_id}
     assert all(isinstance(c, AttachedConstraint) for c in constraints.values())
 
@@ -197,7 +197,7 @@ def test_add_parameters_merges_existing_parameter_dict():
     attached.add_parameters({"a": "1", "b": "2", "k": "updated"})
 
     assert attached.parameters == {"k": "updated", "a": "1", "b": "2"}
-    assert instance.constraints[attached.constraint_id].parameters == {
+    assert instance.active_constraints[attached.constraint_id].parameters == {
         "k": "updated",
         "a": "1",
         "b": "2",
@@ -225,16 +225,16 @@ def test_replacing_metadata_does_not_have_add_aliases():
 
 
 def test_attached_after_relax_constraint_still_reads_through():
-    """relax_constraint moves a constraint from active to removed; the
+    """deactivate_constraint moves a constraint from active to removed; the
     AttachedConstraint handle stays valid because lookup_constraint checks
     both maps and the SoA context store is keyed by id regardless."""
     instance = _empty_instance()
     attached = instance.add_constraint(_make_constraint(name="balance"))
     cid = attached.constraint_id
-    assert cid in instance.constraints
+    assert cid in instance.active_constraints
 
-    instance.relax_constraint(cid, "manual")
-    assert cid not in instance.constraints
+    instance.deactivate_constraint(cid, "manual")
+    assert cid not in instance.active_constraints
 
     # The handle still resolves: getters fall through to the removed map for
     # core data and to the SoA store for context.
@@ -260,7 +260,7 @@ def test_add_constraint_rejects_undefined_variable():
         instance.add_constraint(bad_constraint)
 
     # Instance is unchanged.
-    assert instance.constraints == {}
+    assert instance.active_constraints == {}
 
 
 def test_copy_and_deepcopy_share_the_same_parent_instance():

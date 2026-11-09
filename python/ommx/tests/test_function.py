@@ -292,7 +292,7 @@ def test_compact_types_reverse_magic_methods_preserve_function_lhs_order():
         sense=Sense.Minimize,
         objective=0,
         decision_variables=[DecisionVariable.continuous(2)],
-        constraints={},
+        active_constraints={},
     )
     attached = instance.decision_variables[0]
     operands = [

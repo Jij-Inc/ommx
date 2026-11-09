@@ -16,7 +16,7 @@ x = DecisionVariable.binary(0, name="x")
 instance = Instance.from_components(
     decision_variables=[x],
     objective=x,
-    constraints={0: x == 1},
+    active_constraints={0: x == 1},
     sense=Sense.Minimize,
 )
 

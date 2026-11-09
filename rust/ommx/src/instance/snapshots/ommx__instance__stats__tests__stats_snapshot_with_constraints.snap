@@ -21,4 +21,4 @@ decision_variables:
 constraints:
   total: 3
   active: 2
-  removed: 1
+  inactive: 1

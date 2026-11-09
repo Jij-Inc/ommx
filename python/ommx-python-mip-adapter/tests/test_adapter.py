@@ -46,7 +46,7 @@ def test_input_class_accepts_complete_linear_mip_boundary(sense: Sense) -> None:
     instance = Instance.from_components(
         decision_variables=[x, y, z],
         objective=x + y + z,
-        constraints={0: x + y == 1, 1: z <= 1},
+        active_constraints={0: x + y == 1, 1: z <= 1},
         sense=sense,
     )
 
@@ -62,7 +62,7 @@ def test_error_nonlinear_objective():
     ommx_instance = Instance.from_components(
         decision_variables=[x],
         objective=2.3 * x * x,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 
@@ -79,7 +79,7 @@ def test_error_non_polynomial_objective() -> None:
     instance = Instance.from_components(
         decision_variables=[x],
         objective=abs(Function(x)),
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 
@@ -97,7 +97,7 @@ def test_error_nonlinear_constraint():
     ommx_instance = Instance.from_components(
         decision_variables=[x],
         objective=0.0,
-        constraints={0: 2.3 * x * x == 0},
+        active_constraints={0: 2.3 * x * x == 0},
         sense=Sense.Minimize,
     )
 
@@ -125,7 +125,7 @@ def test_rejects_used_unsupported_variable_kinds(
     instance = Instance.from_components(
         decision_variables=[variable],
         objective=variable,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 
@@ -144,7 +144,7 @@ def test_ignores_unused_unsupported_variable_kind() -> None:
     instance = Instance.from_components(
         decision_variables=[used, unused],
         objective=used,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 
@@ -162,17 +162,17 @@ def test_rejects_special_constraints_without_mutating_input() -> None:
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
-        indicator_constraints={
+        active_indicator_constraints={
             10: IndicatorConstraint(
                 indicator_variable=x,
                 function=y - 1,
                 equality=Equality.LessThanOrEqualToZero,
             )
         },
-        one_hot_constraints={20: OneHotConstraint(variables=[x])},
-        sos1_constraints={30: Sos1Constraint(variables=[y])},
+        active_one_hot_constraints={20: OneHotConstraint(variables=[x])},
+        active_sos1_constraints={30: Sos1Constraint(variables=[y])},
     )
     before = instance.to_v2_bytes()
 
@@ -191,7 +191,7 @@ def test_rejects_special_constraints_without_mutating_input() -> None:
     assert instance.to_v2_bytes() == before
 
     solution = OMMXPythonMIPAdapter.solve(instance)
-    assert solution.feasible
+    assert solution.feasible()
     assert instance.to_v2_bytes() == before
 
 
@@ -201,17 +201,17 @@ def test_recommended_preparation_reaches_the_python_mip_input_class() -> None:
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
-        indicator_constraints={
+        active_indicator_constraints={
             10: IndicatorConstraint(
                 indicator_variable=x,
                 function=y - 1,
                 equality=Equality.LessThanOrEqualToZero,
             )
         },
-        one_hot_constraints={20: OneHotConstraint(variables=[x])},
-        sos1_constraints={30: Sos1Constraint(variables=[y])},
+        active_one_hot_constraints={20: OneHotConstraint(variables=[x])},
+        active_sos1_constraints={30: Sos1Constraint(variables=[y])},
     )
     input_class = OMMXPythonMIPAdapter.INPUT_CLASS
     assert not input_class.contains(instance)
@@ -234,10 +234,33 @@ def test_dual_mapping_preserves_typed_sparse_constraint_ids():
         decision_variables=[x],
         objective=x,
         sense=Sense.Maximize,
-        constraints={42: x <= 2},
+        active_constraints={42: x <= 2},
     )
     adapter = OMMXPythonMIPAdapter(instance)
     model = adapter.solver_input
     model.optimize()
     solution = adapter.decode(model)
     assert solution.get_dual_variable(42) == pytest.approx(1)
+
+
+@pytest.mark.parametrize("skip_feasibility_check", [False, True])
+def test_inactive_constraints_are_evaluated_but_not_imposed(skip_feasibility_check):
+    from ommx import ConstraintActiveness
+
+    instance = Instance.minimize()
+    x = instance.new_continuous("x", lower=0, upper=2)
+    instance.objective = x
+    row = instance.add_constraint(x >= 1, "retained_requirement")
+    instance.deactivate_constraint(
+        row.constraint_id, "manual", skip_feasibility_check=skip_feasibility_check
+    )
+
+    solution = OMMXPythonMIPAdapter.solve_without_preparation(instance)
+
+    assert solution.state.entries[x.id] == pytest.approx(0)
+    assert solution.constraint_violation(row.constraint_id) == pytest.approx(1)
+    assert solution.feasible_relaxed
+    assert solution.feasible() is skip_feasibility_check
+    assert not solution.feasible(
+        min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK
+    )

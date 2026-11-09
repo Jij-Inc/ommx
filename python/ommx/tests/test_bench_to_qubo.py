@@ -28,7 +28,7 @@ def small():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={0: x[0] + 2 * x[1] <= 3},
+        active_constraints={0: x[0] + 2 * x[1] <= 3},
         sense=Sense.Maximize,
     )
     return instance
@@ -44,7 +44,7 @@ def pseudo_boolean_inequality(request):
     instance = Instance.from_components(
         decision_variables=x,
         objective=0,
-        constraints={0: expr <= threshold},  # type: ignore
+        active_constraints={0: expr <= threshold},  # type: ignore
         sense=Sense.Maximize,
     )
     return instance

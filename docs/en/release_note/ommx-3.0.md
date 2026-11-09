@@ -6,6 +6,14 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### ⚠ Active and inactive constraints ([#1372](https://github.com/Jij-Inc/ommx/issues/1372))
+
+Model `constraints` now contains every activeness state. Use `active_constraints` for active attached handles and `inactive_constraints` for retained inactive rows. Rename `Removed*Constraint` to `Inactive*Constraint`, `relax_*` / `restore_*` to `deactivate_*` / `activate_*`, and `from_components` inputs to `active_*` / `inactive_*`.
+
+Inactive rows can set `skip_feasibility_check=True`. They remain numerically evaluated, but default feasibility excludes them. `ConstraintActiveness` orders `SKIP_FEASIBILITY_CHECK < INACTIVE < ACTIVE`; `min_activeness` includes rows at or above the minimum. Call `feasible()` and SampleSet feasible-sample selection as methods. These queries and `total_violation()` default to `INACTIVE`; `feasible_relaxed` retains its active-only meaning. `constraints_df` replaces `removed=` with the same selector, defaults to all rows, and always includes `activeness`. Request `include=["inactive_reason"]` for reasons.
+
+The v1 schema is unchanged and v1 export rejects a true skip flag; use v2 to preserve it. See the [migration guide](../migration/python_sdk_v2_to_v3.md) for the full API mapping.
+
 ### 🛠 ⚠ Report infeasible constant constraints through the solver ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))
 
 HiGHS and PySCIPOpt now accept constant regular equalities and inequalities
@@ -1804,7 +1812,7 @@ See the GitHub Release above for full details. The following summarizes the main
 
 ### ⚠ Removal of the `Constraint.id` field ([#806](https://github.com/Jij-Inc/ommx/pull/806))
 
-The `id` field (along with the `.id` getter, `set_id()`, and `id=` constructor argument) is removed from {class}`~ommx.Constraint` and its variants ({class}`~ommx.IndicatorConstraint` / {class}`~ommx.OneHotConstraint` / {class}`~ommx.Sos1Constraint` / {class}`~ommx.EvaluatedConstraint` / {class}`~ommx.SampledConstraint` / {class}`~ommx.RemovedConstraint`). A constraint's ID now exists only as the key of the `dict[int, Constraint]` passed to {meth}`Instance.from_components <ommx.Instance.from_components>`.
+The `id` field (along with the `.id` getter, `set_id()`, and `id=` constructor argument) is removed from {class}`~ommx.Constraint` and its variants ({class}`~ommx.IndicatorConstraint` / {class}`~ommx.OneHotConstraint` / {class}`~ommx.Sos1Constraint` / {class}`~ommx.EvaluatedConstraint` / {class}`~ommx.SampledConstraint` / `RemovedConstraint`). A constraint's ID now exists only as the key of the `dict[int, Constraint]` passed to {meth}`Instance.from_components <ommx.Instance.from_components>`.
 
 ```python
 # Before (2.5.1)

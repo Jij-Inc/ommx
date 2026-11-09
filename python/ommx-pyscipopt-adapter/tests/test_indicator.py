@@ -15,8 +15,8 @@ def test_indicator_constraint_le():
     instance = Instance.from_components(
         decision_variables=[b, x],
         objective=x,
-        constraints={},
-        indicator_constraints={0: ic},
+        active_constraints={},
+        active_indicator_constraints={0: ic},
         sense=Sense.Maximize,
     )
 
@@ -37,8 +37,8 @@ def test_indicator_constraint_forced_on():
     instance = Instance.from_components(
         decision_variables=[b, x],
         objective=x,
-        constraints={0: b >= 1},  # Force b = 1
-        indicator_constraints={1: ic},
+        active_constraints={0: b >= 1},  # Force b = 1
+        active_indicator_constraints={1: ic},
         sense=Sense.Maximize,
     )
 
@@ -59,8 +59,8 @@ def test_indicator_constraint_eq():
     instance = Instance.from_components(
         decision_variables=[b, x],
         objective=x,
-        constraints={0: b >= 1},  # Force b = 1
-        indicator_constraints={1: ic},
+        active_constraints={0: b >= 1},  # Force b = 1
+        active_indicator_constraints={1: ic},
         sense=Sense.Maximize,
     )
 
@@ -85,8 +85,8 @@ def test_indicator_constraint_multiple():
         decision_variables=[b1, b2, x],
         objective=x,
         # At least one indicator must be on
-        constraints={0: b1 + b2 >= 1},
-        indicator_constraints={10: ic1, 11: ic2},
+        active_constraints={0: b1 + b2 >= 1},
+        active_indicator_constraints={10: ic1, 11: ic2},
         sense=Sense.Maximize,
     )
 

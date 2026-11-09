@@ -35,7 +35,7 @@ def instance() -> Instance:
             DecisionVariable.integer(0, lower=0, upper=10, name="x"),
             DecisionVariable.integer(1, lower=0, upper=10, name="y"),
         ],
-        constraints={},
+        active_constraints={},
     )
 
 
@@ -267,7 +267,7 @@ def _parametric_instance() -> ParametricInstance:
             DecisionVariable.integer(0, lower=0, upper=10, name="x"),
             DecisionVariable.integer(1, lower=0, upper=10, name="y"),
         ],
-        constraints={},
+        active_constraints={},
         parameters=[Parameter(id=100, name="alpha")],
     )
 

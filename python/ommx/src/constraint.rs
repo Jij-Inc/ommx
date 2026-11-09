@@ -269,7 +269,7 @@ impl Constraint {
     }
 }
 
-/// RemovedConstraint wrapper for Python.
+/// InactiveConstraint wrapper for Python.
 ///
 /// Holds the inner `Constraint`, a snapshot of its context, and the removal
 /// reason. As with [`Constraint`], the context snapshot does not propagate
@@ -277,46 +277,48 @@ impl Constraint {
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(from_py_object, eq, extends = ConstraintView)]
 #[derive(Clone, PartialEq)]
-pub struct RemovedConstraint {
+pub struct InactiveConstraint {
     pub constraint: ommx::Constraint,
     pub context: ommx::ConstraintContext,
-    pub removed_reason: ommx::RemovedReason,
+    pub inactive_reason: ommx::InactiveConstraintMetadata,
 }
 crate::constraint_base::constraint_subclass!(
-    RemovedConstraint,
+    InactiveConstraint,
     crate::constraint_base::ConstraintView
 );
 
-impl RemovedConstraint {
+impl InactiveConstraint {
     pub fn from_parts(
         constraint: ommx::Constraint,
         context: ommx::ConstraintContext,
-        removed_reason: ommx::RemovedReason,
+        inactive_reason: ommx::InactiveConstraintMetadata,
     ) -> Self {
         Self {
             constraint,
             context,
-            removed_reason,
+            inactive_reason,
         }
     }
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
-impl RemovedConstraint {
+impl InactiveConstraint {
     #[new]
-    #[pyo3(signature = (constraint, removed_reason, removed_reason_parameters=None))]
+    #[pyo3(signature = (constraint, inactive_reason, inactive_reason_parameters=None, *, skip_feasibility_check=false))]
     pub fn new(
         constraint: Constraint,
-        removed_reason: String,
-        removed_reason_parameters: Option<HashMap<String, String>>,
+        inactive_reason: String,
+        inactive_reason_parameters: Option<HashMap<String, String>>,
+        skip_feasibility_check: bool,
     ) -> Self {
         Self {
             constraint: constraint.0,
             context: constraint.1,
-            removed_reason: ommx::RemovedReason {
-                reason: removed_reason,
-                parameters: removed_reason_parameters
+            inactive_reason: ommx::InactiveConstraintMetadata {
+                reason: inactive_reason,
+                skip_feasibility_check,
+                parameters: inactive_reason_parameters
                     .map(|params| params.into_iter().collect::<FnvHashMap<_, _>>())
                     .unwrap_or_default(),
             },
@@ -329,13 +331,23 @@ impl RemovedConstraint {
     }
 
     #[getter]
-    pub fn removed_reason(&self) -> String {
-        self.removed_reason.reason.clone()
+    pub fn activeness(&self) -> crate::ConstraintActiveness {
+        self.inactive_reason.activeness().into()
     }
 
     #[getter]
-    pub fn removed_reason_parameters(&self) -> HashMap<String, String> {
-        self.removed_reason
+    pub fn skip_feasibility_check(&self) -> bool {
+        self.inactive_reason.skip_feasibility_check
+    }
+
+    #[getter]
+    pub fn inactive_reason(&self) -> String {
+        self.inactive_reason.reason.clone()
+    }
+
+    #[getter]
+    pub fn inactive_reason_parameters(&self) -> HashMap<String, String> {
+        self.inactive_reason
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -396,10 +408,10 @@ impl RemovedConstraint {
             ommx::Equality::LessThanOrEqualToZero => "<=",
         };
 
-        let mut reason_str = format!("reason={}", self.removed_reason.reason);
-        if !self.removed_reason.parameters.is_empty() {
+        let mut reason_str = format!("reason={}", self.inactive_reason.reason);
+        if !self.inactive_reason.parameters.is_empty() {
             let params: Vec<String> = self
-                .removed_reason
+                .inactive_reason
                 .parameters
                 .iter()
                 .map(|(k, v)| format!("{k}={v}"))
@@ -408,7 +420,7 @@ impl RemovedConstraint {
         }
 
         format!(
-            "RemovedConstraint({} {} 0, {})",
+            "InactiveConstraint({} {} 0, {})",
             self.constraint.stage.function, equality_symbol, reason_str
         )
     }
@@ -466,9 +478,9 @@ impl AttachedConstraint {
 }
 
 fn lookup_constraint(inst: &ommx::Instance, id: ommx::ConstraintID) -> PyResult<&ommx::Constraint> {
-    inst.constraints()
+    inst.active_constraints()
         .get(&id)
-        .or_else(|| inst.removed_constraints().get(&id).map(|(c, _)| c))
+        .or_else(|| inst.inactive_constraints().get(&id).map(|(c, _)| c))
         .ok_or_else(|| {
             PyKeyError::new_err(format!(
                 "constraint id {} not found in instance",
@@ -481,9 +493,9 @@ fn lookup_constraint_parametric(
     inst: &ommx::ParametricInstance,
     id: ommx::ConstraintID,
 ) -> PyResult<&ommx::Constraint> {
-    inst.constraints()
+    inst.active_constraints()
         .get(&id)
-        .or_else(|| inst.removed_constraints().get(&id).map(|(c, _)| c))
+        .or_else(|| inst.inactive_constraints().get(&id).map(|(c, _)| c))
         .ok_or_else(|| {
             PyKeyError::new_err(format!(
                 "constraint id {} not found in parametric instance",
@@ -591,7 +603,14 @@ impl AttachedConstraint {
                 let evaluated =
                     lookup_constraint(&inst.inner, self.id)?.evaluate(&state.0, atol)?;
                 let context = inst.inner.constraint_context().collect_for(self.id);
-                Ok(EvaluatedConstraint::from_parts(evaluated, context))
+                Ok(
+                    EvaluatedConstraint::from_parts(evaluated, context).with_inactive_reason(
+                        inst.inner
+                            .inactive_constraints()
+                            .get(&self.id)
+                            .map(|(_, metadata)| metadata.clone()),
+                    ),
+                )
             }
             ConstraintHost::Parametric(_) => Err(pyo3::exceptions::PyValueError::new_err(
                 "AttachedConstraint.evaluate is not supported on a ParametricInstance host; \
@@ -642,5 +661,7 @@ crate::attached_constraint_context_methods!(
     AttachedConstraint,
     ommx::ConstraintID,
     constraint_context,
-    set_constraint_context
+    set_constraint_context,
+    active_constraints,
+    constraint_collection
 );

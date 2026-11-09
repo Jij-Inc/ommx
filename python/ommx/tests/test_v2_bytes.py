@@ -18,8 +18,8 @@ def _special_instance() -> Instance:
         sense=Sense.Minimize,
         objective=sum(variables),
         decision_variables=variables,
-        constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=variables)},
+        active_constraints={},
+        active_one_hot_constraints={10: OneHotConstraint(variables=variables)},
     )
 
 
@@ -31,7 +31,7 @@ def test_instance_v2_bytes_roundtrip_special_constraints():
 
     restored = Instance.from_v2_bytes(instance.to_v2_bytes())
 
-    assert restored.constraints[OneHotConstraintID(10)].variables == [0, 1, 2]
+    assert restored.active_constraints[OneHotConstraintID(10)].variables == [0, 1, 2]
     assert restored.to_v2_bytes() == instance.to_v2_bytes()
 
 
@@ -41,7 +41,7 @@ def test_parametric_instance_v2_bytes_roundtrip():
         sense=Sense.Minimize,
         objective=x,
         decision_variables=[x],
-        constraints={},
+        active_constraints={},
         parameters=[Parameter(id=100, name="alpha")],
     )
 
@@ -59,7 +59,7 @@ def test_solution_v2_bytes_roundtrip_special_constraints():
 
     restored = type(solution).from_v2_bytes(solution.to_v2_bytes())
 
-    assert restored.feasible
+    assert restored.feasible()
     assert len(restored.constraints_df(kind=ConstraintKind.OneHot)) == 1
     assert restored.to_v2_bytes() == solution.to_v2_bytes()
 

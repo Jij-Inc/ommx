@@ -15,6 +15,8 @@ necessary when it must be evaluated or reused separately after the mutation.
 
 ```pycon
 >>> from ommx import (
+...     ConstraintActiveness,
+...     ConstraintID,
 ...     Equality,
 ...     Instance,
 ...     InstanceClass,
@@ -57,20 +59,26 @@ necessary when it must be evaluated or reused separately after the mutation.
 >>> assert set(instance.constraints) == {OneHotConstraintID(0)}
 >>> assert instance.prepare(target, policy) is None
 >>> assert target.contains(instance)
->>> assert len(instance.constraints) == 1
+>>> assert set(instance.active_constraints) == {ConstraintID(1)}
+>>> assert set(instance.constraints) == {ConstraintID(1), OneHotConstraintID(0)}
+>>> assert (
+...     instance.constraints[OneHotConstraintID(0)].activeness
+...     == ConstraintActiveness.INACTIVE
+... )
 >>> assert instance.active_special_constraint_kinds == set()
->>> assert set(instance.removed_constraints) == {OneHotConstraintID(0)}
+>>> assert set(instance.inactive_constraints) == {OneHotConstraintID(0)}
 >>> assert instance.constraints_df(kind=ConstraintKind.Regular).shape[0] == 1
 >>> after = instance.evaluate(state)
->>> assert before.feasible and after.feasible
+>>> assert before.feasible() and after.feasible()
 >>> assert before.objective == after.objective == 3.0
->>> assert not before_both.feasible
->>> assert not instance.evaluate(both).feasible
+>>> assert not before_both.feasible()
+>>> assert not instance.evaluate(both).feasible()
 
 ```
 
 The active formulation now contains `x[0] + x[1] == 1`; the original OneHot is
-retained for evaluation in {attr}`~ommx.Instance.removed_constraints`. The exact
+retained for evaluation in {attr}`~ommx.Instance.inactive_constraints`. The
+all-state {attr}`~ommx.Instance.constraints` mapping contains both rows. The exact
 lowering contract is {meth}`~ommx.Instance.convert_one_hot_to_constraint`.
 Agreement for the two candidates above illustrates this operation; checking a
 few candidates does not prove the guarantees of arbitrary transformations.
@@ -120,7 +128,10 @@ this example; the factory's default weight is not a sufficiency guarantee.
 ... )
 >>> x = DecisionVariable.binary(0)
 >>> instance = Instance.from_components(
-...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
+...     decision_variables=[x],
+...     objective=x,
+...     active_constraints={7: x == 1},
+...     sense=Sense.Maximize,
 ... )
 >>> policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
 >>> assert instance.prepare(InstanceClass.qubo(), policy) is None
@@ -129,7 +140,7 @@ this example; the factory's default weight is not a sufficiency guarantee.
 >>> assert instance.objective.evaluate({0: 0}) == 2.0
 >>> solution = instance.evaluate({0: 0})
 >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)
->>> assert not solution.feasible
+>>> assert not solution.feasible()
 >>> assert instance.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified
 >>> coefficients, offset = instance.as_qubo_format()
 >>> assert coefficients == {(0, 0): -3.0}

@@ -122,17 +122,20 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_regular_constraints(
         &mut out,
         "Constraints",
-        instance.constraints().len(),
-        instance.constraints().iter().map(|(id, c)| (*id, c, None)),
+        instance.active_constraints().len(),
+        instance
+            .active_constraints()
+            .iter()
+            .map(|(id, c)| (*id, c, None)),
         instance.constraint_context(),
         |function| format_function_preview_with_symbols(&symbols.function_symbols, function),
     )?;
     write_regular_constraints(
         &mut out,
         "Removed constraints",
-        instance.removed_constraints().len(),
+        instance.inactive_constraints().len(),
         instance
-            .removed_constraints()
+            .inactive_constraints()
             .iter()
             .map(|(id, (constraint, reason))| (*id, constraint, Some(reason))),
         instance.constraint_context(),
@@ -141,9 +144,9 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_indicator_constraints(
         &mut out,
         "Indicator constraints",
-        instance.indicator_constraints().len(),
+        instance.active_indicator_constraints().len(),
         instance
-            .indicator_constraints()
+            .active_indicator_constraints()
             .iter()
             .map(|(id, c)| (*id, c, None)),
         instance.indicator_constraint_context(),
@@ -153,9 +156,9 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_indicator_constraints(
         &mut out,
         "Removed indicator constraints",
-        instance.removed_indicator_constraints().len(),
+        instance.inactive_indicator_constraints().len(),
         instance
-            .removed_indicator_constraints()
+            .inactive_indicator_constraints()
             .iter()
             .map(|(id, (constraint, reason))| (*id, constraint, Some(reason))),
         instance.indicator_constraint_context(),
@@ -165,9 +168,9 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_one_hot_constraints(
         &mut out,
         "One-hot constraints",
-        instance.one_hot_constraints().len(),
+        instance.active_one_hot_constraints().len(),
         instance
-            .one_hot_constraints()
+            .active_one_hot_constraints()
             .iter()
             .map(|(id, c)| (*id, c, None)),
         instance.one_hot_constraint_context(),
@@ -176,9 +179,9 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_one_hot_constraints(
         &mut out,
         "Removed one-hot constraints",
-        instance.removed_one_hot_constraints().len(),
+        instance.inactive_one_hot_constraints().len(),
         instance
-            .removed_one_hot_constraints()
+            .inactive_one_hot_constraints()
             .iter()
             .map(|(id, (constraint, reason))| (*id, constraint, Some(reason))),
         instance.one_hot_constraint_context(),
@@ -187,9 +190,9 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_sos1_constraints(
         &mut out,
         "SOS1 constraints",
-        instance.sos1_constraints().len(),
+        instance.active_sos1_constraints().len(),
         instance
-            .sos1_constraints()
+            .active_sos1_constraints()
             .iter()
             .map(|(id, c)| (*id, c, None)),
         instance.sos1_constraint_context(),
@@ -198,9 +201,9 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_sos1_constraints(
         &mut out,
         "Removed SOS1 constraints",
-        instance.removed_sos1_constraints().len(),
+        instance.inactive_sos1_constraints().len(),
         instance
-            .removed_sos1_constraints()
+            .inactive_sos1_constraints()
             .iter()
             .map(|(id, (constraint, reason))| (*id, constraint, Some(reason))),
         instance.sos1_constraint_context(),
@@ -236,17 +239,20 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_regular_constraints(
         &mut out,
         "Constraints",
-        instance.constraints().len(),
-        instance.constraints().iter().map(|(id, c)| (*id, c, None)),
+        instance.active_constraints().len(),
+        instance
+            .active_constraints()
+            .iter()
+            .map(|(id, c)| (*id, c, None)),
         instance.constraint_context(),
         |function| format_function_preview_with_symbols(&symbols.function_symbols, function),
     )?;
     write_regular_constraints(
         &mut out,
         "Removed constraints",
-        instance.removed_constraints().len(),
+        instance.inactive_constraints().len(),
         instance
-            .removed_constraints()
+            .inactive_constraints()
             .iter()
             .map(|(id, (constraint, reason))| (*id, constraint, Some(reason))),
         instance.constraint_context(),
@@ -255,9 +261,9 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_indicator_constraints(
         &mut out,
         "Indicator constraints",
-        instance.indicator_constraints().len(),
+        instance.active_indicator_constraints().len(),
         instance
-            .indicator_constraints()
+            .active_indicator_constraints()
             .iter()
             .map(|(id, c)| (*id, c, None)),
         instance.indicator_constraint_context(),
@@ -267,9 +273,9 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_indicator_constraints(
         &mut out,
         "Removed indicator constraints",
-        instance.removed_indicator_constraints().len(),
+        instance.inactive_indicator_constraints().len(),
         instance
-            .removed_indicator_constraints()
+            .inactive_indicator_constraints()
             .iter()
             .map(|(id, (constraint, reason))| (*id, constraint, Some(reason))),
         instance.indicator_constraint_context(),
@@ -279,9 +285,9 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_one_hot_constraints(
         &mut out,
         "One-hot constraints",
-        instance.one_hot_constraints().len(),
+        instance.active_one_hot_constraints().len(),
         instance
-            .one_hot_constraints()
+            .active_one_hot_constraints()
             .iter()
             .map(|(id, c)| (*id, c, None)),
         instance.one_hot_constraint_context(),
@@ -290,9 +296,9 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_one_hot_constraints(
         &mut out,
         "Removed one-hot constraints",
-        instance.removed_one_hot_constraints().len(),
+        instance.inactive_one_hot_constraints().len(),
         instance
-            .removed_one_hot_constraints()
+            .inactive_one_hot_constraints()
             .iter()
             .map(|(id, (constraint, reason))| (*id, constraint, Some(reason))),
         instance.one_hot_constraint_context(),
@@ -301,9 +307,9 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_sos1_constraints(
         &mut out,
         "SOS1 constraints",
-        instance.sos1_constraints().len(),
+        instance.active_sos1_constraints().len(),
         instance
-            .sos1_constraints()
+            .active_sos1_constraints()
             .iter()
             .map(|(id, c)| (*id, c, None)),
         instance.sos1_constraint_context(),
@@ -312,9 +318,9 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_sos1_constraints(
         &mut out,
         "Removed SOS1 constraints",
-        instance.removed_sos1_constraints().len(),
+        instance.inactive_sos1_constraints().len(),
         instance
-            .removed_sos1_constraints()
+            .inactive_sos1_constraints()
             .iter()
             .map(|(id, (constraint, reason))| (*id, constraint, Some(reason))),
         instance.sos1_constraint_context(),
@@ -356,7 +362,7 @@ fn write_instance_header<T>(
     }
     writeln!(
         out,
-        ", active_constraints={}, removed_constraints={}, named_functions={})",
+        ", active_constraints={}, inactive_constraints={}, named_functions={})",
         instance.active_constraint_count(),
         instance.removed_constraint_count(),
         instance.named_function_count(),
@@ -411,78 +417,78 @@ trait ConstraintFamilyCounts {
     fn regular_constraints_count(&self) -> usize;
     fn removed_regular_constraints_count(&self) -> usize;
     fn indicator_constraints_count(&self) -> usize;
-    fn removed_indicator_constraints_count(&self) -> usize;
+    fn inactive_indicator_constraints_count(&self) -> usize;
     fn one_hot_constraints_count(&self) -> usize;
-    fn removed_one_hot_constraints_count(&self) -> usize;
+    fn inactive_one_hot_constraints_count(&self) -> usize;
     fn sos1_constraints_count(&self) -> usize;
-    fn removed_sos1_constraints_count(&self) -> usize;
+    fn inactive_sos1_constraints_count(&self) -> usize;
 }
 
 impl ConstraintFamilyCounts for Instance {
     fn regular_constraints_count(&self) -> usize {
-        self.constraints().len()
+        self.active_constraints().len()
     }
 
     fn removed_regular_constraints_count(&self) -> usize {
-        self.removed_constraints().len()
+        self.inactive_constraints().len()
     }
 
     fn indicator_constraints_count(&self) -> usize {
-        self.indicator_constraints().len()
+        self.active_indicator_constraints().len()
     }
 
-    fn removed_indicator_constraints_count(&self) -> usize {
-        self.removed_indicator_constraints().len()
+    fn inactive_indicator_constraints_count(&self) -> usize {
+        self.inactive_indicator_constraints().len()
     }
 
     fn one_hot_constraints_count(&self) -> usize {
-        self.one_hot_constraints().len()
+        self.active_one_hot_constraints().len()
     }
 
-    fn removed_one_hot_constraints_count(&self) -> usize {
-        self.removed_one_hot_constraints().len()
+    fn inactive_one_hot_constraints_count(&self) -> usize {
+        self.inactive_one_hot_constraints().len()
     }
 
     fn sos1_constraints_count(&self) -> usize {
-        self.sos1_constraints().len()
+        self.active_sos1_constraints().len()
     }
 
-    fn removed_sos1_constraints_count(&self) -> usize {
-        self.removed_sos1_constraints().len()
+    fn inactive_sos1_constraints_count(&self) -> usize {
+        self.inactive_sos1_constraints().len()
     }
 }
 
 impl ConstraintFamilyCounts for ParametricInstance {
     fn regular_constraints_count(&self) -> usize {
-        self.constraints().len()
+        self.active_constraints().len()
     }
 
     fn removed_regular_constraints_count(&self) -> usize {
-        self.removed_constraints().len()
+        self.inactive_constraints().len()
     }
 
     fn indicator_constraints_count(&self) -> usize {
-        self.indicator_constraints().len()
+        self.active_indicator_constraints().len()
     }
 
-    fn removed_indicator_constraints_count(&self) -> usize {
-        self.removed_indicator_constraints().len()
+    fn inactive_indicator_constraints_count(&self) -> usize {
+        self.inactive_indicator_constraints().len()
     }
 
     fn one_hot_constraints_count(&self) -> usize {
-        self.one_hot_constraints().len()
+        self.active_one_hot_constraints().len()
     }
 
-    fn removed_one_hot_constraints_count(&self) -> usize {
-        self.removed_one_hot_constraints().len()
+    fn inactive_one_hot_constraints_count(&self) -> usize {
+        self.inactive_one_hot_constraints().len()
     }
 
     fn sos1_constraints_count(&self) -> usize {
-        self.sos1_constraints().len()
+        self.active_sos1_constraints().len()
     }
 
-    fn removed_sos1_constraints_count(&self) -> usize {
-        self.removed_sos1_constraints().len()
+    fn inactive_sos1_constraints_count(&self) -> usize {
+        self.inactive_sos1_constraints().len()
     }
 }
 
@@ -495,9 +501,9 @@ fn active_constraint_count(instance: &impl ConstraintFamilyCounts) -> usize {
 
 fn removed_constraint_count(instance: &impl ConstraintFamilyCounts) -> usize {
     instance.removed_regular_constraints_count()
-        + instance.removed_indicator_constraints_count()
-        + instance.removed_one_hot_constraints_count()
-        + instance.removed_sos1_constraints_count()
+        + instance.inactive_indicator_constraints_count()
+        + instance.inactive_one_hot_constraints_count()
+        + instance.inactive_sos1_constraints_count()
 }
 
 fn write_regular_constraints<'a, I>(
@@ -509,7 +515,13 @@ fn write_regular_constraints<'a, I>(
     mut format_function: impl FnMut(&Function) -> crate::Result<String>,
 ) -> crate::Result<()>
 where
-    I: IntoIterator<Item = (ConstraintID, &'a Constraint, Option<&'a RemovedReason>)>,
+    I: IntoIterator<
+        Item = (
+            ConstraintID,
+            &'a Constraint,
+            Option<&'a InactiveConstraintMetadata>,
+        ),
+    >,
 {
     if row_count == 0 {
         return Ok(());
@@ -551,7 +563,7 @@ where
         Item = (
             crate::IndicatorConstraintID,
             &'a IndicatorConstraint,
-            Option<&'a RemovedReason>,
+            Option<&'a InactiveConstraintMetadata>,
         ),
     >,
 {
@@ -596,7 +608,7 @@ where
         Item = (
             crate::OneHotConstraintID,
             &'a OneHotConstraint,
-            Option<&'a RemovedReason>,
+            Option<&'a InactiveConstraintMetadata>,
         ),
     >,
 {
@@ -641,7 +653,7 @@ where
         Item = (
             crate::Sos1ConstraintID,
             &'a Sos1Constraint,
-            Option<&'a RemovedReason>,
+            Option<&'a InactiveConstraintMetadata>,
         ),
     >,
 {
@@ -716,7 +728,7 @@ fn write_optional_row_label(out: &mut String, label: Option<String>) {
     }
 }
 
-fn removed_suffix(reason: Option<&RemovedReason>) -> String {
+fn removed_suffix(reason: Option<&InactiveConstraintMetadata>) -> String {
     match reason {
         Some(reason) if reason.reason.is_empty() => " (removed)".to_string(),
         Some(reason) => format!(" (removed: {})", reason.reason),
@@ -849,56 +861,56 @@ fn collect_instance_summary_symbols(instance: &Instance) -> crate::Result<Summar
     let mut ids = BTreeSet::new();
     collect_instance_function_ids(instance, instance.objective(), &mut ids)?;
     for (_, constraint) in instance
-        .constraints()
+        .active_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
         collect_instance_function_ids(instance, constraint.function(), &mut ids)?;
     }
     for (_, (constraint, _)) in instance
-        .removed_constraints()
+        .inactive_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
         collect_instance_function_ids(instance, constraint.function(), &mut ids)?;
     }
     for (_, constraint) in instance
-        .indicator_constraints()
+        .active_indicator_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
         collect_instance_indicator_ids(instance, constraint, &mut ids)?;
     }
     for (_, (constraint, _)) in instance
-        .removed_indicator_constraints()
+        .inactive_indicator_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
         collect_instance_indicator_ids(instance, constraint, &mut ids)?;
     }
     for (_, constraint) in instance
-        .one_hot_constraints()
+        .active_one_hot_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
         collect_instance_variable_ids(instance, constraint.variables.iter().copied(), &mut ids)?;
     }
     for (_, (constraint, _)) in instance
-        .removed_one_hot_constraints()
+        .inactive_one_hot_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
         collect_instance_variable_ids(instance, constraint.variables.iter().copied(), &mut ids)?;
     }
     for (_, constraint) in instance
-        .sos1_constraints()
+        .active_sos1_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
         collect_instance_variable_ids(instance, constraint.variables.iter().copied(), &mut ids)?;
     }
     for (_, (constraint, _)) in instance
-        .removed_sos1_constraints()
+        .inactive_sos1_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
@@ -927,21 +939,21 @@ fn collect_parametric_instance_summary_symbols(
     let mut variable_ids = BTreeSet::new();
     collect_parametric_function_ids(instance, instance.objective(), &mut function_ids)?;
     for (_, constraint) in instance
-        .constraints()
+        .active_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
         collect_parametric_function_ids(instance, constraint.function(), &mut function_ids)?;
     }
     for (_, (constraint, _)) in instance
-        .removed_constraints()
+        .inactive_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
         collect_parametric_function_ids(instance, constraint.function(), &mut function_ids)?;
     }
     for (_, constraint) in instance
-        .indicator_constraints()
+        .active_indicator_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
@@ -953,7 +965,7 @@ fn collect_parametric_instance_summary_symbols(
         )?;
     }
     for (_, (constraint, _)) in instance
-        .removed_indicator_constraints()
+        .inactive_indicator_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
@@ -965,7 +977,7 @@ fn collect_parametric_instance_summary_symbols(
         )?;
     }
     for (_, constraint) in instance
-        .one_hot_constraints()
+        .active_one_hot_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
@@ -976,7 +988,7 @@ fn collect_parametric_instance_summary_symbols(
         )?;
     }
     for (_, (constraint, _)) in instance
-        .removed_one_hot_constraints()
+        .inactive_one_hot_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
@@ -987,7 +999,7 @@ fn collect_parametric_instance_summary_symbols(
         )?;
     }
     for (_, constraint) in instance
-        .sos1_constraints()
+        .active_sos1_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
@@ -998,7 +1010,7 @@ fn collect_parametric_instance_summary_symbols(
         )?;
     }
     for (_, (constraint, _)) in instance
-        .removed_sos1_constraints()
+        .inactive_sos1_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
@@ -1291,7 +1303,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(decision_variables)
             .variable_labels(variable_labels)
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap()
     }
@@ -1535,7 +1547,7 @@ mod tests {
             })
             .variable_labels(variable_labels)
             .parameters(parameters)
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         let function: Function = (linear!(1) + linear!(100)).unwrap().into();
@@ -1561,7 +1573,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .parameters(parameters)
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         let function: Function = linear!(100).into();
@@ -1581,7 +1593,7 @@ mod tests {
                 VariableID::from(1) => DecisionVariable::binary(),
             })
             .parameters(ParameterTable::default())
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         instance
@@ -1604,7 +1616,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .parameters(ParameterTable::default())
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 
@@ -1625,7 +1637,7 @@ mod tests {
             (
                 ConstraintID::from(id as u64),
                 constraint,
-                None::<&RemovedReason>,
+                None::<&InactiveConstraintMetadata>,
             )
         });
         let mut out = String::new();
@@ -1729,7 +1741,7 @@ mod tests {
                 .objective((linear!(0) + linear!(1)).unwrap().into())
                 .decision_variables(decision_variables)
                 .variable_labels(variable_labels)
-                .constraints(constraints)
+                .active_constraints(constraints)
                 .constraint_context(constraint_context)
                 .named_functions(named_functions)
                 .named_function_labels(named_function_labels)
@@ -1738,7 +1750,7 @@ mod tests {
         };
 
         insta::assert_snapshot!(instance.format_summary(), @r###"
-        Instance(sense=maximize, decision_variables=3, active_constraints=1, removed_constraints=0, named_functions=1)
+        Instance(sense=maximize, decision_variables=3, active_constraints=1, inactive_constraints=0, named_functions=1)
         Objective:
           x[0] + x[1]
         Constraints:
@@ -1760,8 +1772,8 @@ mod tests {
             .parameters(ParameterTable::from_ids(BTreeSet::from([
                 VariableID::from(100),
             ])))
-            .constraints(BTreeMap::new())
-            .one_hot_constraints(btreemap! {
+            .active_constraints(BTreeMap::new())
+            .active_one_hot_constraints(btreemap! {
                 crate::OneHotConstraintID::from(7) =>
                     OneHotConstraint::new(BTreeSet::from([VariableID::from(0)])).unwrap(),
             })
@@ -1792,7 +1804,7 @@ mod tests {
             .decision_variables(btreemap! {
                 VariableID::from(0) => DecisionVariable::binary(),
             })
-            .constraints(constraints)
+            .active_constraints(constraints)
             .build()
             .unwrap();
         instance
@@ -1805,7 +1817,7 @@ mod tests {
             .unwrap();
 
         insta::assert_snapshot!(instance.format_summary(), @r###"
-        Instance(sense=minimize, decision_variables=1, active_constraints=21, removed_constraints=0, named_functions=0)
+        Instance(sense=minimize, decision_variables=1, active_constraints=21, inactive_constraints=0, named_functions=0)
         Objective:
           0
         Constraints:
@@ -1850,7 +1862,7 @@ mod tests {
                 VariableID::from(0) => DecisionVariable::binary(),
             })
             .parameters(ParameterTable::default())
-            .constraints(constraints)
+            .active_constraints(constraints)
             .build()
             .unwrap();
         instance
@@ -1863,7 +1875,7 @@ mod tests {
             .unwrap();
 
         insta::assert_snapshot!(instance.format_summary(), @r###"
-        ParametricInstance(sense=minimize, decision_variables=1, parameters=0, active_constraints=21, removed_constraints=0, named_functions=0)
+        ParametricInstance(sense=minimize, decision_variables=1, parameters=0, active_constraints=21, inactive_constraints=0, named_functions=0)
         Objective:
           0
         Constraints:
@@ -1901,7 +1913,7 @@ mod tests {
                     .map(|id| (VariableID::from(id as u64), DecisionVariable::binary()))
                     .collect(),
             )
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         let mut variables: BTreeSet<_> = (0..SUMMARY_MAX_VARIABLES_PER_SET)
@@ -1918,7 +1930,7 @@ mod tests {
             .unwrap();
 
         insta::assert_snapshot!(instance.format_summary(), @r###"
-        Instance(sense=minimize, decision_variables=20, active_constraints=1, removed_constraints=0, named_functions=0)
+        Instance(sense=minimize, decision_variables=20, active_constraints=1, inactive_constraints=0, named_functions=0)
         Objective:
           0
         One-hot constraints:

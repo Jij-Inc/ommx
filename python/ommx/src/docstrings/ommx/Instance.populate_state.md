@@ -91,7 +91,10 @@ zero as well as values in their nonzero interval.
 ...     DecisionVariable.semi_continuous(4, lower=2, upper=5),
 ... ]
 >>> reporting = Instance.from_components(
-...     decision_variables=variables, objective=0, constraints={}, sense=Sense.Minimize
+...     decision_variables=variables,
+...     objective=0,
+...     active_constraints={},
+...     sense=Sense.Minimize,
 ... )
 >>> assert reporting.irrelevant_decision_variable_ids() == {0, 1, 2, 3, 4}
 >>> assert reporting.decision_variable_role(1) == DecisionVariableRole.Irrelevant
@@ -135,7 +138,7 @@ can be rejected as inconsistent.
 ... else:
 ...     raise AssertionError("a dependent assertion overwrote the recorded expression")
 >>> assert encoded.populate_state({flag.id: 0.25}).entries[flag.id] == 0.25
->>> assert not encoded.evaluate({flag.id: 0.25}).feasible
+>>> assert not encoded.evaluate({flag.id: 0.25}).feasible()
 
 ```
 
@@ -156,7 +159,7 @@ Changing the solver-facing objective does not change which fixed value is restor
 >>> instance = Instance.from_components(
 ...     decision_variables=[reward],
 ...     objective=3 * reward,
-...     constraints={},
+...     active_constraints={},
 ...     sense=Sense.Maximize,
 ... )
 >>> assert instance.convert_active_objective(Sense.Minimize)

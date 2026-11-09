@@ -40,7 +40,7 @@ let instance = Instance::new(
 
 assert_eq!(instance.sense(), Sense::Minimize);
 assert_eq!(instance.decision_variables().len(), 2);
-assert_eq!(instance.constraints().len(), 2);
+assert_eq!(instance.active_constraints().len(), 2);
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 

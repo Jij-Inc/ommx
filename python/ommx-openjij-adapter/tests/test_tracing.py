@@ -24,7 +24,7 @@ def test_direct_sample_emits_convert_call_decode_spans():
     instance = Instance.from_components(
         decision_variables=[x0, x1],
         objective=x0 + x1,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 
@@ -41,7 +41,7 @@ def test_solve_delegates_to_sample_trace():
     instance = Instance.from_components(
         decision_variables=[x0, x1],
         objective=x0 + x1,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 

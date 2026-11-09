@@ -40,7 +40,7 @@ body is squared directly:
 >>> _ = instance.add_constraint(x <= 1)
 >>> before_zero = instance.evaluate({x.id: 0})
 >>> before_one = instance.evaluate({x.id: 1})
->>> assert before_zero.feasible and before_one.feasible
+>>> assert before_zero.feasible() and before_one.feasible()
 >>> assert (before_zero.objective, before_one.objective) == (0.0, 1.0)
 >>> policy = PreparationPolicy(
 ...     fixed_penalty=FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(
@@ -50,7 +50,7 @@ body is squared directly:
 >>> instance.prepare(InstanceClass.qubo(), policy)
 >>> assert instance.objective.evaluate({x.id: 0}) == 2.0
 >>> assert instance.objective.evaluate({x.id: 1}) == 1.0
->>> assert instance.evaluate({x.id: 0}).feasible
+>>> assert instance.evaluate({x.id: 0}).feasible()
 >>> assert instance.evaluate({x.id: 0}).objective == 0.0
 
 ```

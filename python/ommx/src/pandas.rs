@@ -8,8 +8,8 @@ use std::collections::HashMap;
 use std::hash::BuildHasher;
 
 use ommx::{
-    ConstraintContext, ConstraintContextStore, DecisionVariableLabel, Evaluate, IDType, Provenance,
-    RemovedReason, VariableID, VariableIDSet, VariableLabelStore,
+    ConstraintContext, ConstraintContextStore, DecisionVariableLabel, Evaluate, IDType,
+    InactiveConstraintMetadata, Provenance, VariableID, VariableIDSet, VariableLabelStore,
 };
 use pyo3::{
     exceptions::PyValueError,
@@ -78,26 +78,26 @@ impl pyo3_stub_gen::PyStubType for PyDataFrame {
 /// Which optional column families to fold into a wide `*_df` DataFrame.
 ///
 /// `label` toggles the `name` / `subscripts` / `description` columns.
-/// `parameters` toggles the `parameters.{key}` columns. `removed_reason`
-/// is a unit flag that gates both the `removed_reason` (reason name)
-/// column and the `removed_reason.{key}` (reason parameters) columns
+/// `parameters` toggles the `parameters.{key}` columns. `inactive_reason`
+/// is a unit flag that gates both the `inactive_reason` (reason name)
+/// column and the `inactive_reason.{key}` (reason parameters) columns
 /// together — the name without its parameters is rarely useful. The
 /// default (`Self::default_wide()`) preserves the v2-equivalent wide
-/// shape: label + parameters on, removed_reason off.
+/// shape: label + parameters on, inactive_reason off.
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub struct IncludeFlags {
     pub label: bool,
     pub parameters: bool,
-    pub removed_reason: bool,
+    pub inactive_reason: bool,
 }
 
 impl IncludeFlags {
-    /// Default for wide `*_df` — label and parameters on, removed_reason off.
+    /// Default for wide `*_df` — label and parameters on, inactive_reason off.
     pub fn default_wide() -> Self {
         Self {
             label: true,
             parameters: true,
-            removed_reason: false,
+            inactive_reason: false,
         }
     }
 
@@ -111,10 +111,10 @@ impl IncludeFlags {
                     match v.as_str() {
                         "label" => flags.label = true,
                         "parameters" => flags.parameters = true,
-                        "removed_reason" => flags.removed_reason = true,
+                        "inactive_reason" => flags.inactive_reason = true,
                         other => {
                             return Err(PyValueError::new_err(format!(
-                                "unknown include flag: {other:?} (expected one of \"label\", \"parameters\", \"removed_reason\")"
+                                "unknown include flag: {other:?} (expected one of \"label\", \"parameters\", \"inactive_reason\")"
                             )));
                         }
                     }
@@ -126,8 +126,8 @@ impl IncludeFlags {
 }
 
 const LABEL_KEYS: &[&str] = &["name", "subscripts", "description"];
-const REMOVED_REASON_KEY: &str = "removed_reason";
-const REMOVED_REASON_PREFIX: &str = "removed_reason.";
+const REMOVED_REASON_KEY: &str = "inactive_reason";
+const REMOVED_REASON_PREFIX: &str = "inactive_reason.";
 
 // ---------------------------------------------------------------------------
 // kind= dispatch — shared by the 4 constraint sidecar accessors
@@ -151,7 +151,7 @@ pub fn constraint_id_col(kind: ConstraintFamilyInput) -> &'static str {
 // Long-format / id-indexed views over the SoA label/context stores. Each builder
 // reads the store directly and produces a DataFrame with a documented column
 // schema. Used by the `*_labels_df`, `*_context_df`, `*_parameters_df`, `*_provenance_df`,
-// and `*_removed_reasons_df` accessors on Instance / ParametricInstance /
+// and `*_inactive_metadata_df` accessors on Instance / ParametricInstance /
 // Solution / SampleSet.
 // ---------------------------------------------------------------------------
 
@@ -257,9 +257,9 @@ where
 /// `pandas.NA`. Rows are sorted by `(id, key)` (NA-keyed rows sort first
 /// for ids with no parameters). Columns: `id_col`, `reason`, `key`,
 /// `value`. Default RangeIndex.
-pub fn constraint_removed_reasons_dataframe<'py, 'a, ID>(
+pub fn constraint_inactive_metadata_dataframe<'py, 'a, ID>(
     py: Python<'py>,
-    removed: impl Iterator<Item = (ID, &'a RemovedReason)>,
+    removed: impl Iterator<Item = (ID, &'a InactiveConstraintMetadata)>,
     id_col: &str,
 ) -> PyResult<Bound<'py, PyDataFrame>>
 where
@@ -402,7 +402,7 @@ fn provenance_parts(p: &Provenance) -> PyResult<(String, crate::constraint_id::A
 /// `columns` is the explicit schema used when `entries` is empty —
 /// without it pandas would return a column-less DataFrame, breaking
 /// `pd.concat` and any code that consumes the documented schema. Used
-/// by the `*_parameters_df` / `*_provenance_df` / `*_removed_reasons_df`
+/// by the `*_parameters_df` / `*_provenance_df` / `*_inactive_metadata_df`
 /// builders.
 fn long_format_dataframe<'py>(
     py: Python<'py>,
@@ -423,7 +423,7 @@ fn long_format_dataframe<'py>(
 /// Drop columns from a per-row dict according to the include flags.
 ///
 /// `label` columns are dropped by name; `parameters.*` and
-/// `removed_reason` (name + `removed_reason.*` parameters) columns are
+/// `inactive_reason` (name + `inactive_reason.*` parameters) columns are
 /// dropped by prefix. Missing keys are silently skipped (some impls
 /// don't emit every key).
 pub(crate) fn apply_include_filter(dict: &Bound<PyDict>, include: IncludeFlags) -> PyResult<()> {
@@ -445,7 +445,7 @@ pub(crate) fn apply_include_filter(dict: &Bound<PyDict>, include: IncludeFlags) 
             dict.del_item(key)?;
         }
     }
-    if !include.removed_reason {
+    if !include.inactive_reason {
         if dict.contains(REMOVED_REASON_KEY)? {
             dict.del_item(REMOVED_REASON_KEY)?;
         }
@@ -482,16 +482,16 @@ pub(crate) fn rename_id_column(dict: &Bound<PyDict>, id_col: &str) -> PyResult<(
     Ok(())
 }
 
-/// Set `removed_reason` and `removed_reason.{key}` columns on `dict`.
+/// Set `inactive_reason` and `inactive_reason.{key}` columns on `dict`.
 ///
-/// `removed_reason` carries the reason name; `removed_reason.{key}`
+/// `inactive_reason` carries the reason name; `inactive_reason.{key}`
 /// columns carry the reason parameters. Keys are emitted in lexicographic
 /// order so column ordering is deterministic across runs (the underlying
 /// `HashMap` iteration order is not). Used by call sites that fold
 /// removed-reason columns into a wide constraints DataFrame.
-pub(crate) fn set_removed_reason_columns(
+pub(crate) fn set_inactive_reason_columns(
     dict: &Bound<PyDict>,
-    reason: &RemovedReason,
+    reason: &InactiveConstraintMetadata,
 ) -> PyResult<()> {
     dict.set_item(REMOVED_REASON_KEY, &reason.reason)?;
     let mut keys: Vec<&str> = reason.parameters.keys().map(String::as_str).collect();
@@ -503,15 +503,15 @@ pub(crate) fn set_removed_reason_columns(
     Ok(())
 }
 
-/// Emit a placeholder NA `removed_reason` column on a row with no
+/// Emit a placeholder NA `inactive_reason` column on a row with no
 /// removed reason. Without this, a wide `*_df` requested with
-/// `include=("removed_reason",)` would silently drop the column when
+/// `include=("inactive_reason",)` would silently drop the column when
 /// no row in the view actually carries a reason — pandas keys columns
 /// off whatever appears in any row dict. Calling this on the
 /// reason-less rows guarantees the column appears with `<NA>` values.
-/// `removed_reason.{key}` columns are intentionally not pre-emitted —
+/// `inactive_reason.{key}` columns are intentionally not pre-emitted —
 /// their key set is data-dependent.
-pub(crate) fn set_removed_reason_na(dict: &Bound<PyDict>) -> PyResult<()> {
+pub(crate) fn set_inactive_reason_na(dict: &Bound<PyDict>) -> PyResult<()> {
     let na = get_na(dict.py())?;
     dict.set_item(REMOVED_REASON_KEY, &na)?;
     Ok(())
@@ -930,7 +930,7 @@ impl<'m> ToPandasEntry
         'm,
         (
             ommx::IndicatorConstraintID,
-            &(ommx::IndicatorConstraint, ommx::RemovedReason),
+            &(ommx::IndicatorConstraint, ommx::InactiveConstraintMetadata),
         ),
         ConstraintContext,
     >
@@ -939,7 +939,7 @@ impl<'m> ToPandasEntry
         let (id, inner) = self.item;
         let (ic, reason) = inner;
         let dict = WithModelingContext::new((id, ic), self.context).to_pandas_entry(py)?;
-        set_removed_reason_columns(&dict, reason)?;
+        set_inactive_reason_columns(&dict, reason)?;
         Ok(dict)
     }
 }
@@ -1126,7 +1126,7 @@ impl<'m> ToPandasEntry
         'm,
         (
             ommx::OneHotConstraintID,
-            &(ommx::OneHotConstraint, ommx::RemovedReason),
+            &(ommx::OneHotConstraint, ommx::InactiveConstraintMetadata),
         ),
         ConstraintContext,
     >
@@ -1135,7 +1135,7 @@ impl<'m> ToPandasEntry
         let (id, inner) = self.item;
         let (one_hot, reason) = inner;
         let dict = WithModelingContext::new((id, one_hot), self.context).to_pandas_entry(py)?;
-        set_removed_reason_columns(&dict, reason)?;
+        set_inactive_reason_columns(&dict, reason)?;
         Ok(dict)
     }
 }
@@ -1168,7 +1168,7 @@ impl<'m> ToPandasEntry
         'm,
         (
             ommx::Sos1ConstraintID,
-            &(ommx::Sos1Constraint, ommx::RemovedReason),
+            &(ommx::Sos1Constraint, ommx::InactiveConstraintMetadata),
         ),
         ConstraintContext,
     >
@@ -1177,7 +1177,7 @@ impl<'m> ToPandasEntry
         let (id, inner) = self.item;
         let (sos1, reason) = inner;
         let dict = WithModelingContext::new((id, sos1), self.context).to_pandas_entry(py)?;
-        set_removed_reason_columns(&dict, reason)?;
+        set_inactive_reason_columns(&dict, reason)?;
         Ok(dict)
     }
 }
@@ -1185,7 +1185,10 @@ impl<'m> ToPandasEntry
 impl<'m> ToPandasEntry
     for WithModelingContext<
         'm,
-        (ommx::ConstraintID, &(ommx::Constraint, ommx::RemovedReason)),
+        (
+            ommx::ConstraintID,
+            &(ommx::Constraint, ommx::InactiveConstraintMetadata),
+        ),
         ConstraintContext,
     >
 {
@@ -1193,7 +1196,7 @@ impl<'m> ToPandasEntry
         let (id, inner) = self.item;
         let (constraint, reason) = inner;
         let dict = WithModelingContext::new((id, constraint), self.context).to_pandas_entry(py)?;
-        set_removed_reason_columns(&dict, reason)?;
+        set_inactive_reason_columns(&dict, reason)?;
         Ok(dict)
     }
 }
@@ -1457,4 +1460,24 @@ fn typed_constraint_id(
             "Unknown constraint ID column: {id_col}"
         ))),
     }
+}
+
+/// Materialize a constraint table with stable mandatory columns when empty.
+pub(crate) fn constraint_entries_to_dataframe<'py>(
+    py: Python<'py>,
+    entries: Vec<Bound<'py, PyAny>>,
+    index_col: &str,
+    flags: IncludeFlags,
+) -> PyResult<Bound<'py, PyDataFrame>> {
+    let empty = entries.is_empty();
+    let df = raw_entries_to_dataframe(py, entries, index_col)?;
+    if empty {
+        df.as_any()
+            .call_method1("__setitem__", ("activeness", PyList::empty(py)))?;
+        if flags.inactive_reason {
+            df.as_any()
+                .call_method1("__setitem__", ("inactive_reason", PyList::empty(py)))?;
+        }
+    }
+    Ok(df)
 }

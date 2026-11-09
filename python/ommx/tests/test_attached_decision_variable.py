@@ -22,7 +22,7 @@ def _empty_instance() -> Instance:
         sense=Sense.Minimize,
         objective=Function.from_linear(Linear.constant(0.0)),
         decision_variables=[DecisionVariable.binary(0)],
-        constraints={},
+        active_constraints={},
     )
 
 
@@ -31,7 +31,7 @@ def _empty_parametric_instance() -> ParametricInstance:
         sense=Sense.Minimize,
         objective=Function.from_linear(Linear.constant(0.0)),
         decision_variables=[DecisionVariable.binary(0)],
-        constraints={},
+        active_constraints={},
         parameters=[Parameter(id=100, name="alpha")],
     )
 
@@ -180,7 +180,7 @@ def test_add_rejects_substituted_variable_id_as_duplicate():
             DecisionVariable.binary(0),
             DecisionVariable.binary(7),
         ],
-        constraints={},
+        active_constraints={},
     )
     instance.substitute({7: DecisionVariable.binary(0)})
 
@@ -259,7 +259,7 @@ def test_parametric_add_rejects_substituted_variable_id_as_duplicate():
             DecisionVariable.binary(0),
             DecisionVariable.binary(7),
         ],
-        constraints={},
+        active_constraints={},
         parameters=[],
     )
     parametric.substitute({7: DecisionVariable.binary(0)})

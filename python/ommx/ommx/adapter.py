@@ -53,7 +53,7 @@ both adapters return an optimal feasible solution with objective 41.
 ...         "adapter": name,
 ...         "sense": repr(solution.sense),
 ...         "objective": solution.objective,
-...         "feasible": solution.feasible,
+...         "feasible": solution.feasible(),
 ...         "optimality": repr(solution.optimality),
 ...     }
 ...     for name, solution in solutions.items()
@@ -282,10 +282,10 @@ class SolverAdapter(ABC):
     ...             bits.append(min(allowed, key=lambda b: cost * b))
     ...         return adapter.decode(bits)
     >>> x, y = DecisionVariable.binary(3), DecisionVariable.binary(17)
-    >>> problem = Instance.from_components(decision_variables=[x, y], constraints={},
+    >>> problem = Instance.from_components(decision_variables=[x, y], active_constraints={},
     ...     objective=x - 2*y, sense=Sense.Minimize)
     >>> solution = BinaryCostAdapter.solve(problem)
-    >>> assert solution.feasible and solution.state.entries == {3: 0, 17: 1}
+    >>> assert solution.feasible() and solution.state.entries == {3: 0, 17: 1}
 
     The evaluated objective includes any constant term omitted from the
     search. Evaluation alone does not set an optimality status. When a backend
@@ -417,7 +417,7 @@ class SamplerAdapter(SolverAdapter):
     >>> from ommx import DecisionVariable, Instance, Samples, Sense
     >>> x, y = DecisionVariable.binary(3), DecisionVariable.binary(17)
     >>> instance = Instance.from_components(decision_variables=[x, y],
-    ...     constraints={}, objective=x - 2*y, sense=Sense.Minimize)
+    ...     active_constraints={}, objective=x - 2*y, sense=Sense.Minimize)
     >>> columns = [17, 3]  # IDs in the order returned by this backend
     >>> samples = Samples({})
     >>> next_id = 0
@@ -425,7 +425,7 @@ class SamplerAdapter(SolverAdapter):
     ...     samples.append(list(range(next_id, next_id + count)), dict(zip(columns, bits, strict=True)))
     ...     next_id += count
     >>> result = instance.evaluate_samples(samples)
-    >>> assert result.num_samples() == 3 and result.best_feasible.objective == -2
+    >>> assert result.num_samples() == 3 and result.best_feasible().objective == -2
 
     The `OpenJij implementation <https://github.com/Jij-Inc/ommx/tree/main/python/ommx-openjij-adapter/ommx_openjij_adapter>`_
     shows these three hooks together, including how to supply values for used
@@ -482,7 +482,7 @@ class SamplerAdapter(SolverAdapter):
         return cls.sample_without_preparation(
             ommx_instance,
             diagnostics=diagnostics,
-        ).best_feasible
+        ).best_feasible()
 
     @property
     def solver_input(self) -> SolverInput:
@@ -491,7 +491,7 @@ class SamplerAdapter(SolverAdapter):
 
     def decode(self, data: SolverOutput) -> Solution:
         """Decode sampler output and return its best feasible solution."""
-        return self.decode_to_sampleset(data).best_feasible
+        return self.decode_to_sampleset(data).best_feasible()
 
     @property
     @abstractmethod

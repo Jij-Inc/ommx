@@ -22,7 +22,7 @@ corrected = Instance.from_components(
     sense=Sense.Minimize,
     objective=0,
     decision_variables=[DecisionVariable.binary(506, name="C0506")],
-    constraints={},
+    active_constraints={},
 )
 for ref, model in [(legacy_ref, Instance.empty()), (versioned_ref, corrected)]:
     draft = ArtifactDraft.new(ref)

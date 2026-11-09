@@ -12,11 +12,11 @@ subsequent collection access observes that update.
 >>> x = model.new_binary("x")
 >>> upper = model.add_constraint(x <= 1, "upper")
 >>> lower = model.add_constraint(x >= 0, "lower")
->>> model.relax_constraint(lower.constraint_id, "inspect later")
+>>> model.deactivate_constraint(lower.constraint_id, "inspect later")
 >>> solution = model.evaluate({x.id: 0})
 >>> rows = solution.constraints
 >>> assert lower.constraint_id in rows
->>> assert rows[lower.constraint_id].removed_reason == "inspect later"
+>>> assert rows[lower.constraint_id].inactive_reason == "inspect later"
 >>> snapshot = rows[upper.constraint_id]
 >>> solution.set_dual_variable(upper.constraint_id, 3.0)
 >>> assert snapshot.dual_variable is None
@@ -39,12 +39,12 @@ unsupported families when interpreting their mathematical meaning.
 | ``ConstraintKind.Sos1`` | {class}`~ommx.Sos1ConstraintID` | {class}`~ommx.EvaluatedSos1Constraint` | {class}`~ommx.SampledSos1Constraint` |
 
 For the mixed-family typed-key contract, ``get``, live views, iteration timing,
-and snapshot equality, see {class}`~ommx.ConstraintCollection`. Filter without
+and snapshot equality, see {class}`~ommx.ActiveConstraintCollection`. Filter without
 collecting rows using ``of_kind`` and {class}`~ommx.ConstraintFamilyView`.
 {meth}`~ommx.Solution.constraints_df` collects one family as a DataFrame;
 retained removed constraints remain included. Its ``kind`` argument is required,
 as it is for ``constraint_context_df``, ``constraint_parameters_df``,
-``constraint_provenance_df``, and ``constraint_removed_reasons_df`` on all owners.
+``constraint_provenance_df``, and ``constraint_inactive_reasons_df`` on all owners.
 
 For multiple candidates, {class}`~ommx.SampledConstraintCollection` returns
 sampled rows. Their ``violations`` and ``feasible(atol=...)`` are keyed by sample

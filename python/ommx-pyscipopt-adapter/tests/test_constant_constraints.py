@@ -37,7 +37,7 @@ def test_constant_constraint_solver_lifecycle(
     instance = Instance.from_components(
         decision_variables=[] if variable_mode == "none" else [x],
         objective=x + 7 if variable_mode == "active" else 7,
-        constraints={42: Constraint(function=constant, equality=equality)},
+        active_constraints={42: Constraint(function=constant, equality=equality)},
         sense=Sense.Minimize,
     )
     before = instance.to_v2_bytes()
@@ -57,7 +57,7 @@ def test_constant_constraint_solver_lifecycle(
         state = adapter.decode_to_state(model)
         assert state.entries == ({11: 0.0} if variable_mode == "active" else {})
         solution = adapter.decode(model)
-        assert solution.feasible
+        assert solution.feasible()
         assert solution.objective == 7
     else:
         assert model.getStatus() == "infeasible"
@@ -70,7 +70,7 @@ def test_constant_constraint_solver_lifecycle(
     ):
         if feasible:
             solution = solve(instance)
-            assert solution.feasible
+            assert solution.feasible()
             assert solution.objective == 7
         else:
             with pytest.raises(InfeasibleDetected):
@@ -87,7 +87,7 @@ def test_constant_constraint_with_unbounded_objective(equality, constant):
     instance = Instance.from_components(
         decision_variables=[x],
         objective=-x,
-        constraints={42: Constraint(function=constant, equality=equality)},
+        active_constraints={42: Constraint(function=constant, equality=equality)},
         sense=Sense.Minimize,
     )
     feasible = constant == 0 if equality == Equality.EqualToZero else constant <= 0
@@ -108,7 +108,7 @@ def test_constant_constraint_with_unbounded_objective(equality, constant):
 
 def test_decode_unresolved_status_does_not_solve_or_claim_infeasibility():
     instance = Instance.from_components(
-        decision_variables=[], objective=0, constraints={}, sense=Sense.Minimize
+        decision_variables=[], objective=0, active_constraints={}, sense=Sense.Minimize
     )
     adapter = OMMXPySCIPOptAdapter(instance)
     model = Mock(spec=pyscipopt.Model)
@@ -127,7 +127,7 @@ def test_constant_constraint_uses_solver_tolerance(equality, tolerance, feasible
     instance = Instance.from_components(
         decision_variables=[],
         objective=7,
-        constraints={42: Constraint(function=1e-5, equality=equality)},
+        active_constraints={42: Constraint(function=1e-5, equality=equality)},
         sense=Sense.Minimize,
     )
     assert OMMXPySCIPOptAdapter.check_applicability(instance).is_member

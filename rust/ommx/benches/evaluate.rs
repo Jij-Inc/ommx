@@ -109,7 +109,7 @@ fn instance_evaluation_fixture(
         .sense(Sense::Minimize)
         .objective(Function::Zero)
         .decision_variables(decision_variables)
-        .constraints(constraints)
+        .active_constraints(constraints)
         .build()
         .unwrap();
 

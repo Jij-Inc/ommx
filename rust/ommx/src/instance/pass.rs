@@ -2,7 +2,7 @@ use super::*;
 use crate::ATol;
 use anyhow::Result;
 
-fn normalize_restore_error<ID: std::fmt::Debug>(
+fn normalize_activation_error<ID: std::fmt::Debug>(
     kind: &'static str,
     id: ID,
     error: crate::Error,
@@ -16,82 +16,88 @@ fn normalize_restore_error<ID: std::fmt::Debug>(
         return error;
     }
 
-    // Restore applies table-owned dependencies and fixed values. Coefficient
+    // Activation applies table-owned dependencies and fixed values. Coefficient
     // arithmetic here is an Instance implementation detail, not a signal that
     // the caller can recover from by changing the constraint ID.
     crate::error!(
         { kind, id = ?id, cause = %error },
-        "failed to normalize removed {kind} {id:?} for restore: {error:#}",
+        "failed to normalize inactive {kind} {id:?} for activation: {error:#}",
     )
 }
 
-impl Instance {
-    pub fn relax_constraint(
+macro_rules! impl_constraint_activeness {
+    ($host:ty) => {
+impl $host {
+    pub fn deactivate_constraint(
         &mut self,
         id: ConstraintID,
-        removed_reason: String,
+        reason: String,
         parameters: impl IntoIterator<Item = (String, String)>,
+        skip_feasibility_check: bool,
     ) -> Result<()> {
-        self.constraint_collection.relax(
+        self.constraint_collection.deactivate(
             id,
-            crate::constraint::RemovedReason {
-                reason: removed_reason,
+            crate::constraint::InactiveConstraintMetadata {
+                reason,
                 parameters: parameters.into_iter().collect(),
+                skip_feasibility_check,
             },
         )?;
 
         Ok(())
     }
 
-    pub fn restore_constraint(&mut self, id: ConstraintID) -> Result<()> {
+    pub fn activate_constraint(&mut self, id: ConstraintID) -> Result<()> {
         let fixed_state = self.fixed_state();
         let dependency = &self.decision_variable_dependency;
         let mut constraint = self
             .constraint_collection
-            .removed()
+            .inactive()
             .get(&id)
-            .ok_or_else(|| crate::error!("Removed constraint with ID {:?} not found", id))?
+            .ok_or_else(|| crate::error!("Inactive constraint with ID {:?} not found", id))?
             .0
             .clone();
 
         if !dependency.is_empty() {
             crate::substitute_acyclic(&mut constraint.stage.function, dependency)
-                .map_err(|error| normalize_restore_error("constraint", id, error.into()))?;
+                .map_err(|error| normalize_activation_error("constraint", id, error.into()))?;
         }
         if !fixed_state.entries.is_empty() {
             constraint
                 .partial_evaluate(&fixed_state, ATol::default())
-                .map_err(|error| normalize_restore_error("constraint", id, error))?;
+                .map_err(|error| normalize_activation_error("constraint", id, error))?;
         }
         self.constraint_collection
-            .restore_removed_row(id, constraint)?;
+            .activate_row(id, constraint)?;
         Ok(())
     }
 
-    pub fn relax_indicator_constraint(
+    pub fn deactivate_indicator_constraint(
         &mut self,
         id: crate::IndicatorConstraintID,
-        removed_reason: String,
+        reason: String,
         parameters: impl IntoIterator<Item = (String, String)>,
+        skip_feasibility_check: bool,
     ) -> Result<()> {
-        self.indicator_constraint_collection.relax(
+        self.indicator_constraint_collection.deactivate(
             id,
-            crate::constraint::RemovedReason {
-                reason: removed_reason,
+            crate::constraint::InactiveConstraintMetadata {
+                reason,
                 parameters: parameters.into_iter().collect(),
+                skip_feasibility_check,
             },
         )?;
         Ok(())
     }
 
-    pub fn restore_indicator_constraint(&mut self, id: crate::IndicatorConstraintID) -> Result<()> {
+    pub fn activate_indicator_constraint(&mut self, id: crate::IndicatorConstraintID) -> Result<()> {
         // Check before restoring: if dependency contains the indicator variable, reject
         let mut ic = self
             .indicator_constraint_collection
-            .removed()
+            .inactive()
             .get(&id)
             .ok_or_else(
-                || crate::error!({ ?id }, "Removed indicator constraint with ID {id:?} not found"),
+                || crate::error!({ ?id }, "Inactive indicator constraint with ID {id:?} not found"),
             )?
             .0
             .clone();
@@ -104,7 +110,7 @@ impl Instance {
         {
             crate::bail!(
                 { ?id, ?indicator_variable },
-                "Cannot restore indicator constraint {id:?}: indicator variable {indicator_variable:?} has been substituted",
+                "Cannot activate indicator constraint {id:?}: indicator variable {indicator_variable:?} has been substituted",
             );
         }
 
@@ -114,7 +120,7 @@ impl Instance {
         {
             crate::bail!(
                 { ?id, ?indicator_variable },
-                "Cannot restore indicator constraint {id:?}: indicator variable {indicator_variable:?} has been fixed",
+                "Cannot activate indicator constraint {id:?}: indicator variable {indicator_variable:?} has been fixed",
             );
         }
 
@@ -122,16 +128,75 @@ impl Instance {
         let dependency = &self.decision_variable_dependency;
         if !dependency.is_empty() {
             crate::substitute_acyclic(&mut ic.stage.function, dependency).map_err(|error| {
-                normalize_restore_error("indicator constraint", id, error.into())
+                normalize_activation_error("indicator constraint", id, error.into())
             })?;
         }
         if !fixed_state.entries.is_empty() {
             ic.partial_evaluate(&fixed_state, ATol::default())
-                .map_err(|error| normalize_restore_error("indicator constraint", id, error))?;
+                .map_err(|error| normalize_activation_error("indicator constraint", id, error))?;
         }
         self.indicator_constraint_collection
-            .restore_removed_row(id, ic)?;
+            .activate_row(id, ic)?;
         Ok(())
+    }
+
+
+    /// Retain a structural constraint without imposing it on the solver.
+    pub fn deactivate_one_hot_constraint(&mut self, id: crate::OneHotConstraintID, reason: String, parameters: impl IntoIterator<Item=(String,String)>, skip_feasibility_check: bool) -> Result<()> {
+        self.one_hot_constraint_collection.deactivate(id, crate::InactiveConstraintMetadata { reason, parameters: parameters.into_iter().collect(), skip_feasibility_check })
+    }
+
+    /// Activate a retained structural constraint against the current variables.
+    /// Fixed or substituted members require a different formulation and are rejected atomically.
+    pub fn activate_one_hot_constraint(&mut self, id: crate::OneHotConstraintID) -> Result<()> {
+        let row = self.one_hot_constraint_collection.inactive().get(&id)
+            .ok_or_else(|| crate::error!("Inactive one_hot constraint {id:?} not found"))?.0.clone();
+        for variable in &row.variables {
+            if self.decision_variable_dependency.get(variable).is_some() || self.fixed_decision_variable_values().contains_key(variable) {
+                crate::bail!("Cannot activate one_hot constraint {id:?}: member {variable:?} has been fixed or substituted");
+            }
+        }
+        self.one_hot_constraint_collection.activate_row(id, row)?;
+        Ok(())
+    }
+
+    /// Retain a structural constraint without imposing it on the solver.
+    pub fn deactivate_sos1_constraint(&mut self, id: crate::Sos1ConstraintID, reason: String, parameters: impl IntoIterator<Item=(String,String)>, skip_feasibility_check: bool) -> Result<()> {
+        self.sos1_constraint_collection.deactivate(id, crate::InactiveConstraintMetadata { reason, parameters: parameters.into_iter().collect(), skip_feasibility_check })
+    }
+
+    /// Activate a retained structural constraint against the current variables.
+    /// Fixed or substituted members require a different formulation and are rejected atomically.
+    pub fn activate_sos1_constraint(&mut self, id: crate::Sos1ConstraintID) -> Result<()> {
+        let row = self.sos1_constraint_collection.inactive().get(&id)
+            .ok_or_else(|| crate::error!("Inactive sos1 constraint {id:?} not found"))?.0.clone();
+        for variable in &row.variables {
+            if self.decision_variable_dependency.get(variable).is_some() || self.fixed_decision_variable_values().contains_key(variable) {
+                crate::bail!("Cannot activate sos1 constraint {id:?}: member {variable:?} has been fixed or substituted");
+            }
+        }
+        self.sos1_constraint_collection.activate_row(id, row)?;
+        Ok(())
+    }
+
+    /// Change the default check policy of an inactive constraint, preserving its reason and context.
+    pub fn set_constraint_skip_feasibility_check(&mut self, id: crate::ConstraintID, skip: bool) -> Result<()> {
+        self.constraint_collection.set_skip_feasibility_check(id, skip)
+    }
+
+    /// Change the default check policy of an inactive constraint, preserving its reason and context.
+    pub fn set_indicator_constraint_skip_feasibility_check(&mut self, id: crate::IndicatorConstraintID, skip: bool) -> Result<()> {
+        self.indicator_constraint_collection.set_skip_feasibility_check(id, skip)
+    }
+
+    /// Change the default check policy of an inactive constraint, preserving its reason and context.
+    pub fn set_one_hot_constraint_skip_feasibility_check(&mut self, id: crate::OneHotConstraintID, skip: bool) -> Result<()> {
+        self.one_hot_constraint_collection.set_skip_feasibility_check(id, skip)
+    }
+
+    /// Change the default check policy of an inactive constraint, preserving its reason and context.
+    pub fn set_sos1_constraint_skip_feasibility_check(&mut self, id: crate::Sos1ConstraintID, skip: bool) -> Result<()> {
+        self.sos1_constraint_collection.set_skip_feasibility_check(id, skip)
     }
 
     /// Build a State containing all table-owned fixed variable values.
@@ -145,6 +210,11 @@ impl Instance {
         }
     }
 }
+
+    };
+}
+impl_constraint_activeness!(Instance);
+impl_constraint_activeness!(ParametricInstance);
 
 #[cfg(test)]
 mod tests {
@@ -174,10 +244,10 @@ mod tests {
             Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
 
         instance
-            .relax_constraint(ConstraintID::from(1), "test".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(1), "test".to_string(), [], false)
             .unwrap();
-        assert!(instance.constraints().is_empty());
-        assert_eq!(instance.removed_constraints().len(), 1);
+        assert!(instance.active_constraints().is_empty());
+        assert_eq!(instance.inactive_constraints().len(), 1);
 
         let fix_state = v1::State {
             entries: [(1, 3.0)].into_iter().collect(),
@@ -186,12 +256,15 @@ mod tests {
             .partial_evaluate(&fix_state, ATol::default())
             .unwrap();
 
-        instance.restore_constraint(ConstraintID::from(1)).unwrap();
-        assert_eq!(instance.constraints().len(), 1);
-        assert!(instance.removed_constraints().is_empty());
+        instance.activate_constraint(ConstraintID::from(1)).unwrap();
+        assert_eq!(instance.active_constraints().len(), 1);
+        assert!(instance.inactive_constraints().is_empty());
 
         // Original: x1 + x2 - 10, after x1=3: x2 - 7
-        let restored = instance.constraints().get(&ConstraintID::from(1)).unwrap();
+        let restored = instance
+            .active_constraints()
+            .get(&ConstraintID::from(1))
+            .unwrap();
         assert!(!restored.required_ids().contains(&VariableID::from(1)));
         assert!(restored.required_ids().contains(&VariableID::from(2)));
     }
@@ -214,20 +287,20 @@ mod tests {
         .unwrap();
 
         instance
-            .relax_constraint(constraint_id, "test".to_string(), [])
+            .deactivate_constraint(constraint_id, "test".to_string(), [], false)
             .unwrap();
         instance
             .partial_evaluate(&v1::State::from_iter([(1, f64::MAX)]), ATol::default())
             .unwrap();
         let before = instance.clone();
 
-        let error = instance.restore_constraint(constraint_id).unwrap_err();
+        let error = instance.activate_constraint(constraint_id).unwrap_err();
 
         assert!(!error.is::<crate::CoefficientError>());
         assert!(
             error
                 .to_string()
-                .contains("failed to normalize removed constraint"),
+                .contains("failed to normalize inactive constraint"),
             "unexpected error: {error:#}",
         );
         assert_eq!(instance, before);
@@ -254,7 +327,7 @@ mod tests {
         .unwrap();
 
         instance
-            .relax_constraint(constraint_id, "test".to_string(), [])
+            .deactivate_constraint(constraint_id, "test".to_string(), [], false)
             .unwrap();
         instance = instance
             .substitute_one(
@@ -264,14 +337,14 @@ mod tests {
             .unwrap();
         let before = instance.clone();
 
-        let error = instance.restore_constraint(constraint_id).unwrap_err();
+        let error = instance.activate_constraint(constraint_id).unwrap_err();
 
         assert!(!error.is::<crate::CoefficientError>());
         assert!(!error.is::<crate::SubstitutionError>());
         assert!(
             error
                 .to_string()
-                .contains("failed to normalize removed constraint"),
+                .contains("failed to normalize inactive constraint"),
             "unexpected error: {error:#}",
         );
         assert_eq!(instance, before);
@@ -304,7 +377,7 @@ mod tests {
         .unwrap();
 
         instance
-            .relax_constraint(ConstraintID::from(1), "test".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(1), "test".to_string(), [], false)
             .unwrap();
 
         let substitution = Function::from(linear!(1) + linear!(2));
@@ -312,10 +385,13 @@ mod tests {
             .substitute_one(VariableID::from(3), &substitution)
             .unwrap();
 
-        instance.restore_constraint(ConstraintID::from(1)).unwrap();
+        instance.activate_constraint(ConstraintID::from(1)).unwrap();
 
         // x3 substituted with x1 + x2
-        let restored = instance.constraints().get(&ConstraintID::from(1)).unwrap();
+        let restored = instance
+            .active_constraints()
+            .get(&ConstraintID::from(1))
+            .unwrap();
         assert!(!restored.required_ids().contains(&VariableID::from(3)));
         assert!(restored.required_ids().contains(&VariableID::from(1)));
         assert!(restored.required_ids().contains(&VariableID::from(2)));
@@ -348,7 +424,7 @@ mod tests {
         .unwrap();
 
         instance
-            .relax_constraint(ConstraintID::from(1), "test".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(1), "test".to_string(), [], false)
             .unwrap();
 
         let fix_state = v1::State {
@@ -363,10 +439,13 @@ mod tests {
             .substitute_one(VariableID::from(3), &substitution)
             .unwrap();
 
-        instance.restore_constraint(ConstraintID::from(1)).unwrap();
+        instance.activate_constraint(ConstraintID::from(1)).unwrap();
 
         // x3 = x1 + x2, x1 = 3 → x2 - 7
-        let restored = instance.constraints().get(&ConstraintID::from(1)).unwrap();
+        let restored = instance
+            .active_constraints()
+            .get(&ConstraintID::from(1))
+            .unwrap();
         assert!(!restored.required_ids().contains(&VariableID::from(3)));
         assert!(!restored.required_ids().contains(&VariableID::from(1)));
         assert!(restored.required_ids().contains(&VariableID::from(2)));
@@ -402,20 +481,25 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(instance.indicator_constraints().len(), 1);
-        assert!(instance.removed_indicator_constraints().is_empty());
+        assert_eq!(instance.active_indicator_constraints().len(), 1);
+        assert!(instance.inactive_indicator_constraints().is_empty());
 
         instance
-            .relax_indicator_constraint(IndicatorConstraintID::from(1), "test".to_string(), [])
+            .deactivate_indicator_constraint(
+                IndicatorConstraintID::from(1),
+                "test".to_string(),
+                [],
+                false,
+            )
             .unwrap();
-        assert!(instance.indicator_constraints().is_empty());
-        assert_eq!(instance.removed_indicator_constraints().len(), 1);
+        assert!(instance.active_indicator_constraints().is_empty());
+        assert_eq!(instance.inactive_indicator_constraints().len(), 1);
 
         instance
-            .restore_indicator_constraint(IndicatorConstraintID::from(1))
+            .activate_indicator_constraint(IndicatorConstraintID::from(1))
             .unwrap();
-        assert_eq!(instance.indicator_constraints().len(), 1);
-        assert!(instance.removed_indicator_constraints().is_empty());
+        assert_eq!(instance.active_indicator_constraints().len(), 1);
+        assert!(instance.inactive_indicator_constraints().is_empty());
     }
 
     #[test]
@@ -447,7 +531,7 @@ mod tests {
             .unwrap();
 
         instance
-            .relax_indicator_constraint(constraint_id, "test".to_string(), [])
+            .deactivate_indicator_constraint(constraint_id, "test".to_string(), [], false)
             .unwrap();
         instance
             .partial_evaluate(&v1::State::from_iter([(1, f64::MAX)]), ATol::default())
@@ -455,13 +539,13 @@ mod tests {
         let before = instance.clone();
 
         let error = instance
-            .restore_indicator_constraint(constraint_id)
+            .activate_indicator_constraint(constraint_id)
             .unwrap_err();
 
         assert!(!error.is::<crate::CoefficientError>());
         assert!(error
             .to_string()
-            .contains("failed to normalize removed indicator constraint"));
+            .contains("failed to normalize inactive indicator constraint"));
         assert_eq!(instance, before);
     }
 
@@ -497,7 +581,12 @@ mod tests {
             .unwrap();
 
         instance
-            .relax_indicator_constraint(IndicatorConstraintID::from(1), "test".to_string(), [])
+            .deactivate_indicator_constraint(
+                IndicatorConstraintID::from(1),
+                "test".to_string(),
+                [],
+                false,
+            )
             .unwrap();
 
         // Fix the indicator variable
@@ -509,7 +598,7 @@ mod tests {
             .unwrap();
 
         // Restore should fail
-        let result = instance.restore_indicator_constraint(IndicatorConstraintID::from(1));
+        let result = instance.activate_indicator_constraint(IndicatorConstraintID::from(1));
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -552,7 +641,12 @@ mod tests {
             .unwrap();
 
         instance
-            .relax_indicator_constraint(IndicatorConstraintID::from(1), "test".to_string(), [])
+            .deactivate_indicator_constraint(
+                IndicatorConstraintID::from(1),
+                "test".to_string(),
+                [],
+                false,
+            )
             .unwrap();
 
         // Fix x1 (function variable, not indicator)
@@ -564,11 +658,11 @@ mod tests {
             .unwrap();
 
         instance
-            .restore_indicator_constraint(IndicatorConstraintID::from(1))
+            .activate_indicator_constraint(IndicatorConstraintID::from(1))
             .unwrap();
 
         let restored = instance
-            .indicator_constraints()
+            .active_indicator_constraints()
             .get(&IndicatorConstraintID::from(1))
             .unwrap();
         // x1 substituted, x2 remains
@@ -621,14 +715,19 @@ mod tests {
 
         // Relax, then substitute indicator variable x10 = x20
         instance
-            .relax_indicator_constraint(IndicatorConstraintID::from(1), "test".to_string(), [])
+            .deactivate_indicator_constraint(
+                IndicatorConstraintID::from(1),
+                "test".to_string(),
+                [],
+                false,
+            )
             .unwrap();
         instance = instance
             .substitute_one(VariableID::from(10), &Function::from(linear!(20)))
             .unwrap();
 
         // Restore should fail because indicator variable x10 has been substituted
-        let result = instance.restore_indicator_constraint(IndicatorConstraintID::from(1));
+        let result = instance.activate_indicator_constraint(IndicatorConstraintID::from(1));
         assert!(result.is_err());
         assert!(result
             .unwrap_err()

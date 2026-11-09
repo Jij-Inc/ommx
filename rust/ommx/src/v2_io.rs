@@ -18,6 +18,7 @@ pub fn required_features(
     has_one_hot_constraints: bool,
     has_sos1_constraints: bool,
     has_finite_domain_variables: bool,
+    has_skipped_constraints: bool,
 ) -> Vec<i32> {
     let mut features = Vec::new();
     if has_indicator_constraints {
@@ -31,6 +32,9 @@ pub fn required_features(
     }
     if has_finite_domain_variables {
         features.push(Feature::DecisionVariableFiniteDomain as i32);
+    }
+    if has_skipped_constraints {
+        features.push(Feature::ConstraintSkipFeasibilityCheck as i32);
     }
     features
 }
@@ -226,6 +230,7 @@ mod required_features_tests {
                 Feature::ConstraintSos1 as i32,
                 Feature::OutputObjective as i32,
                 Feature::DecisionVariableFiniteDomain as i32,
+                Feature::ConstraintSkipFeasibilityCheck as i32,
             ],
             "test.Message",
         )

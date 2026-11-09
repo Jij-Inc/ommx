@@ -80,8 +80,8 @@ fn special_instance() -> ommx::Instance {
         .sense(ommx::Sense::Minimize)
         .objective(component_function())
         .decision_variables(BTreeMap::from([(id, ommx::DecisionVariable::binary())]))
-        .constraints(BTreeMap::new())
-        .one_hot_constraints(BTreeMap::from([(
+        .active_constraints(BTreeMap::new())
+        .active_one_hot_constraints(BTreeMap::from([(
             ommx::OneHotConstraintID::from(23),
             ommx::OneHotConstraint::new([id].into_iter().collect()).unwrap(),
         )]))
@@ -97,7 +97,7 @@ fn regular_instance() -> ommx::Instance {
             7.into(),
             ommx::DecisionVariable::binary(),
         )]))
-        .constraints(BTreeMap::from([(
+        .active_constraints(BTreeMap::from([(
             23.into(),
             ommx::Constraint::equal_to_zero(
                 (ommx::linear!(7) + ommx::coeff!(-1.0)).unwrap().into(),
@@ -229,8 +229,8 @@ macro_rules! negotiated_root {
                 return target.transfer(py, $source);
             }
             if let Some(target) = resolve_target::<ProtobufV1>(py)? {
-                // Build a v1 root explicitly. This fixture has no special results.
-                let value: ommx::v1::$wire = ($source).into();
+                // This fixed fixture has no special results or skipped constraints.
+                let value: ommx::v1::$wire = ($source).try_into().unwrap();
                 return target.transfer(py, value);
             }
             Err(BridgeError::no_supported_protocol(
@@ -243,7 +243,7 @@ macro_rules! negotiated_root {
         }
     };
 }
-// ParametricInstance has a checked v1 conversion, unlike the result roots.
+// ParametricInstance can be exported through the bridge directly.
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 fn negotiated_parametric_instance(py: Python<'_>) -> PyResult<PyParametricInstance> {

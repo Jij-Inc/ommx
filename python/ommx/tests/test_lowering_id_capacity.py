@@ -24,11 +24,13 @@ def test_lowering_id_exhaustion_returns_runtime_error_without_mutation(
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x,
-        constraints={2**64 - 1: Constraint(function=x, equality=Equality.EqualToZero)},
-        one_hot_constraints={7: OneHotConstraint(variables=[y])}
+        active_constraints={
+            2**64 - 1: Constraint(function=x, equality=Equality.EqualToZero)
+        },
+        active_one_hot_constraints={7: OneHotConstraint(variables=[y])}
         if family == "one_hot"
         else {},
-        indicator_constraints={
+        active_indicator_constraints={
             7: IndicatorConstraint(
                 indicator_variable=y, function=x, equality=Equality.EqualToZero
             )

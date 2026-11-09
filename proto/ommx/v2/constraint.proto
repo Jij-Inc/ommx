@@ -25,16 +25,19 @@ message ConstraintContext {
   repeated Provenance provenance = 2;
 }
 
-// Why a constraint row was removed or relaxed by preprocessing.
-message RemovedReason {
+// Why a constraint row is inactive and whether it participates in default feasibility checks.
+message InactiveConstraintMetadata {
   string reason = 1;
   map<string, string> parameters = 2;
+  // Exclude this inactive row from the default feasibility judgment.
+  // The row remains evaluable and can be selected explicitly for diagnostics.
+  bool skip_feasibility_check = 3;
 }
 
 // Regular scalar constraint row.
 //
-// The enclosing collection owns ConstraintID, modeling context, active/removed
-// placement, and removed reasons.
+// The enclosing collection owns ConstraintID, modeling context, active/inactive
+// placement, and inactive metadata.
 message RegularConstraint {
   ommx.v1.Equality equality = 1;
   ommx.v1.Function function = 2;
@@ -60,32 +63,32 @@ message Sos1Constraint {
 // Regular constraint collection at the definition stage.
 message RegularConstraintCollection {
   map<uint64, RegularConstraint> active = 1;
-  map<uint64, RegularConstraint> removed = 2;
-  map<uint64, RemovedReason> removed_reasons = 3;
+  map<uint64, RegularConstraint> inactive = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 3;
   map<uint64, ConstraintContext> contexts = 4;
 }
 
 // Indicator constraint collection at the definition stage.
 message IndicatorConstraintCollection {
   map<uint64, IndicatorConstraint> active = 1;
-  map<uint64, IndicatorConstraint> removed = 2;
-  map<uint64, RemovedReason> removed_reasons = 3;
+  map<uint64, IndicatorConstraint> inactive = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 3;
   map<uint64, ConstraintContext> contexts = 4;
 }
 
 // One-hot constraint collection at the definition stage.
 message OneHotConstraintCollection {
   map<uint64, OneHotConstraint> active = 1;
-  map<uint64, OneHotConstraint> removed = 2;
-  map<uint64, RemovedReason> removed_reasons = 3;
+  map<uint64, OneHotConstraint> inactive = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 3;
   map<uint64, ConstraintContext> contexts = 4;
 }
 
 // SOS1 constraint collection at the definition stage.
 message Sos1ConstraintCollection {
   map<uint64, Sos1Constraint> active = 1;
-  map<uint64, Sos1Constraint> removed = 2;
-  map<uint64, RemovedReason> removed_reasons = 3;
+  map<uint64, Sos1Constraint> inactive = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 3;
   map<uint64, ConstraintContext> contexts = 4;
 }
 
@@ -127,28 +130,28 @@ message EvaluatedSos1Constraint {
 // Evaluated regular constraint collection.
 message EvaluatedRegularConstraintCollection {
   map<uint64, EvaluatedRegularConstraint> entries = 1;
-  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 2;
   map<uint64, ConstraintContext> contexts = 3;
 }
 
 // Evaluated indicator constraint collection.
 message EvaluatedIndicatorConstraintCollection {
   map<uint64, EvaluatedIndicatorConstraint> entries = 1;
-  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 2;
   map<uint64, ConstraintContext> contexts = 3;
 }
 
 // Evaluated one-hot constraint collection.
 message EvaluatedOneHotConstraintCollection {
   map<uint64, EvaluatedOneHotConstraint> entries = 1;
-  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 2;
   map<uint64, ConstraintContext> contexts = 3;
 }
 
 // Evaluated SOS1 constraint collection.
 message EvaluatedSos1ConstraintCollection {
   map<uint64, EvaluatedSos1Constraint> entries = 1;
-  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 2;
   map<uint64, ConstraintContext> contexts = 3;
 }
 
@@ -195,27 +198,27 @@ message SampledSos1Constraint {
 // Sampled regular constraint collection.
 message SampledRegularConstraintCollection {
   map<uint64, SampledRegularConstraint> entries = 1;
-  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 2;
   map<uint64, ConstraintContext> contexts = 3;
 }
 
 // Sampled indicator constraint collection.
 message SampledIndicatorConstraintCollection {
   map<uint64, SampledIndicatorConstraint> entries = 1;
-  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 2;
   map<uint64, ConstraintContext> contexts = 3;
 }
 
 // Sampled one-hot constraint collection.
 message SampledOneHotConstraintCollection {
   map<uint64, SampledOneHotConstraint> entries = 1;
-  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 2;
   map<uint64, ConstraintContext> contexts = 3;
 }
 
 // Sampled SOS1 constraint collection.
 message SampledSos1ConstraintCollection {
   map<uint64, SampledSos1Constraint> entries = 1;
-  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 2;
   map<uint64, ConstraintContext> contexts = 3;
 }

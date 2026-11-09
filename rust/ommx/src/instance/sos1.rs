@@ -1,7 +1,7 @@
 use super::Instance;
 use crate::{
     coeff,
-    constraint::{ConstraintContext, ConstraintID, Provenance, RemovedReason},
+    constraint::{ConstraintContext, ConstraintID, InactiveConstraintMetadata, Provenance},
     linear,
     sos1_constraint::Sos1ConstraintID,
     Bound, Coefficient, Constraint, Function, Kind, Linear, LinearMonomial, VariableID,
@@ -61,7 +61,7 @@ impl Instance {
     /// All validation happens before any mutation, so a failed call leaves the instance
     /// unchanged.
     ///
-    /// The original SOS1 constraint is moved to [`Instance::removed_sos1_constraints`]
+    /// The original SOS1 constraint is moved to [`Instance::inactive_sos1_constraints`]
     /// with `reason = "ommx.Instance.convert_sos1_to_constraints"` and a
     /// `constraint_ids` parameter listing the new regular constraint IDs
     /// (comma-separated in insertion order).
@@ -288,9 +288,10 @@ impl Instance {
             .join(",");
         parameters.insert("constraint_ids".to_string(), constraint_ids_str);
         self.sos1_constraint_collection
-            .relax(
+            .deactivate(
                 id,
-                RemovedReason {
+                InactiveConstraintMetadata {
+                    skip_feasibility_check: false,
                     reason: "ommx.Instance.convert_sos1_to_constraints".to_string(),
                     parameters,
                 },
@@ -341,8 +342,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0) + linear!(1)))
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(5), sos1)]))
+            .active_constraints(BTreeMap::new())
+            .active_sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(5), sos1)]))
             .build()
             .unwrap()
     }
@@ -361,8 +362,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
             .decision_variables(btreemap! { VariableID::from(0) => dv })
-            .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(9), sos1)]))
+            .active_constraints(BTreeMap::new())
+            .active_sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(9), sos1)]))
             .build()
             .unwrap()
     }
@@ -384,7 +385,7 @@ mod tests {
             "no new indicators for binary reuse"
         );
 
-        let cardinality = instance.constraints().get(&new_ids[0]).unwrap();
+        let cardinality = instance.active_constraints().get(&new_ids[0]).unwrap();
         assert_eq!(cardinality.equality, Equality::LessThanOrEqualToZero);
         let expected = Function::from(
             ((linear!(0) + linear!(1)).unwrap() + Linear::from(coeff!(-1.0))).unwrap(),
@@ -399,9 +400,9 @@ mod tests {
         );
 
         // Original SOS1 is recorded as removed with the new constraint ID.
-        assert!(instance.sos1_constraints().is_empty());
+        assert!(instance.active_sos1_constraints().is_empty());
         let (_, reason) = instance
-            .removed_sos1_constraints()
+            .inactive_sos1_constraints()
             .get(&Sos1ConstraintID::from(5))
             .expect("SOS1 should be retained as removed");
         assert_eq!(reason.reason, "ommx.Instance.convert_sos1_to_constraints");
@@ -434,7 +435,7 @@ mod tests {
         );
 
         // Upper Big-M: x0 - 3 y == x0 + (-3) y <= 0
-        let upper = instance.constraints().get(&new_ids[0]).unwrap();
+        let upper = instance.active_constraints().get(&new_ids[0]).unwrap();
         let expected_upper = Function::from(
             ((Linear::zero() + linear!(0)).unwrap()
                 + Linear::single_term(LinearMonomial::Variable(y_id), coeff!(-3.0)))
@@ -443,7 +444,7 @@ mod tests {
         assert_abs_diff_eq!(upper.function(), &expected_upper);
 
         // Lower Big-M: -2 y - x0 <= 0
-        let lower = instance.constraints().get(&new_ids[1]).unwrap();
+        let lower = instance.active_constraints().get(&new_ids[1]).unwrap();
         let expected_lower = Function::from(
             Linear::single_term(LinearMonomial::Variable(y_id), coeff!(-2.0))
                 + Linear::single_term(LinearMonomial::Variable(VariableID::from(0)), coeff!(-1.0)),
@@ -451,7 +452,7 @@ mod tests {
         assert_abs_diff_eq!(lower.function(), &expected_lower);
 
         // Cardinality: y - 1 <= 0
-        let card = instance.constraints().get(&new_ids[2]).unwrap();
+        let card = instance.active_constraints().get(&new_ids[2]).unwrap();
         let expected_card = Function::from(
             ((Linear::zero() + linear!(y_id.into_inner())).unwrap() + Linear::from(coeff!(-1.0)))
                 .unwrap(),
@@ -460,7 +461,7 @@ mod tests {
 
         // `constraint_ids` parameter on removed reason lists all three in insertion order.
         let (_, reason) = instance
-            .removed_sos1_constraints()
+            .inactive_sos1_constraints()
             .get(&Sos1ConstraintID::from(9))
             .unwrap();
         let expected_ids = new_ids
@@ -498,12 +499,12 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
             .decision_variables(btreemap! { VariableID::from(0) => dv })
-            .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(9), sos1)]))
+            .active_constraints(BTreeMap::new())
+            .active_sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(9), sos1)]))
             .build()
             .unwrap();
         let before_vars = instance.decision_variables.clone();
-        let before_constraints = instance.constraints().clone();
+        let before_constraints = instance.active_constraints().clone();
 
         let err = instance
             .convert_sos1_to_constraints(Sos1ConstraintID::from(9))
@@ -512,8 +513,8 @@ mod tests {
 
         // State unchanged: no new variables or constraints were allocated on the failure path.
         assert_eq!(instance.decision_variables, before_vars);
-        assert_eq!(instance.constraints(), &before_constraints);
-        assert!(!instance.sos1_constraints().is_empty());
+        assert_eq!(instance.active_constraints(), &before_constraints);
+        assert!(!instance.active_sos1_constraints().is_empty());
     }
 
     #[test]
@@ -543,11 +544,11 @@ mod tests {
                 .sense(Sense::Minimize)
                 .objective(Function::from(linear!(0)))
                 .decision_variables(btreemap! { VariableID::from(0) => dv })
-                .constraints(BTreeMap::new())
-                .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(9), sos1)]))
+                .active_constraints(BTreeMap::new())
+                .active_sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(9), sos1)]))
                 .build()
                 .unwrap();
-            let before_constraints = instance.constraints().clone();
+            let before_constraints = instance.active_constraints().clone();
 
             let err = instance
                 .convert_sos1_to_constraints(Sos1ConstraintID::from(9))
@@ -559,25 +560,25 @@ mod tests {
             );
             // Error is raised before any mutation: active SOS1 still present, no new constraints.
             assert!(instance
-                .sos1_constraints()
+                .active_sos1_constraints()
                 .contains_key(&Sos1ConstraintID::from(9)));
-            assert_eq!(instance.constraints(), &before_constraints);
+            assert_eq!(instance.active_constraints(), &before_constraints);
         }
     }
 
     #[test]
     fn missing_id_errors_without_mutating_state() {
         let mut instance = binary_sos1_instance();
-        let before_sos1 = instance.sos1_constraints().clone();
-        let before_constraints = instance.constraints().clone();
+        let before_sos1 = instance.active_sos1_constraints().clone();
+        let before_constraints = instance.active_constraints().clone();
 
         let err = instance
             .convert_sos1_to_constraints(Sos1ConstraintID::from(999))
             .unwrap_err();
         assert!(err.to_string().contains("999"));
 
-        assert_eq!(instance.sos1_constraints(), &before_sos1);
-        assert_eq!(instance.constraints(), &before_constraints);
+        assert_eq!(instance.active_sos1_constraints(), &before_sos1);
+        assert_eq!(instance.active_constraints(), &before_constraints);
     }
 
     #[test]
@@ -605,8 +606,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0) + linear!(2)))
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([
+            .active_constraints(BTreeMap::new())
+            .active_sos1_constraints(BTreeMap::from([
                 (Sos1ConstraintID::from(1), a),
                 (Sos1ConstraintID::from(2), b),
             ]))
@@ -617,10 +618,10 @@ mod tests {
         assert_eq!(result.len(), 2);
         for new_ids in result.values() {
             assert_eq!(new_ids.len(), 1); // all-binary: only cardinality
-            assert!(instance.constraints().contains_key(&new_ids[0]));
+            assert!(instance.active_constraints().contains_key(&new_ids[0]));
         }
-        assert!(instance.sos1_constraints().is_empty());
-        assert_eq!(instance.removed_sos1_constraints().len(), 2);
+        assert!(instance.active_sos1_constraints().is_empty());
+        assert_eq!(instance.inactive_sos1_constraints().len(), 2);
     }
 
     #[test]
@@ -637,8 +638,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
             .decision_variables(btreemap! { VariableID::from(0) => dv })
-            .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(42), empty_sos1)]))
+            .active_constraints(BTreeMap::new())
+            .active_sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(42), empty_sos1)]))
             .build()
             .unwrap_err();
         let msg = err.to_string();
@@ -675,25 +676,25 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0) + linear!(2)))
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([
+            .active_constraints(BTreeMap::new())
+            .active_sos1_constraints(BTreeMap::from([
                 (Sos1ConstraintID::from(1), valid),
                 (Sos1ConstraintID::from(2), invalid),
             ]))
             .build()
             .unwrap();
-        let before_sos1 = instance.sos1_constraints().clone();
+        let before_sos1 = instance.active_sos1_constraints().clone();
         let before_vars = instance.decision_variables.clone();
-        let before_constraints = instance.constraints().clone();
+        let before_constraints = instance.active_constraints().clone();
 
         let err = instance.convert_all_sos1_to_constraints().unwrap_err();
         assert!(err.to_string().contains("non-finite"));
 
         // Atomicity: the earlier valid SOS1 must not have been converted either.
-        assert_eq!(instance.sos1_constraints(), &before_sos1);
+        assert_eq!(instance.active_sos1_constraints(), &before_sos1);
         assert_eq!(instance.decision_variables, before_vars);
-        assert_eq!(instance.constraints(), &before_constraints);
-        assert!(instance.removed_sos1_constraints().is_empty());
+        assert_eq!(instance.active_constraints(), &before_constraints);
+        assert!(instance.inactive_sos1_constraints().is_empty());
     }
 
     #[test]
@@ -718,8 +719,8 @@ mod tests {
                 VariableID::from(0) => dv.clone(),
                 last_existing_id => dv,
             })
-            .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(9), sos1)]))
+            .active_constraints(BTreeMap::new())
+            .active_sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(9), sos1)]))
             .build()
             .unwrap();
         let before = instance.clone();
@@ -753,8 +754,8 @@ mod tests {
                 VariableID::from(0) => dv.clone(),
                 last_existing_id => dv,
             })
-            .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([
+            .active_constraints(BTreeMap::new())
+            .active_sos1_constraints(BTreeMap::from([
                 (Sos1ConstraintID::from(8), first),
                 (Sos1ConstraintID::from(9), second),
             ]))
@@ -784,11 +785,11 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(btreemap! { VariableID::from(0) => dv })
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 ConstraintID::from(u64::MAX - 3),
                 Constraint::equal_to_zero(Function::Zero),
             )]))
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(9), sos1)]))
+            .active_sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(9), sos1)]))
             .build()
             .unwrap();
 
@@ -819,11 +820,11 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(btreemap! { VariableID::from(0) => dv })
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 ConstraintID::from(u64::MAX),
                 Constraint::equal_to_zero(Function::Zero),
             )]))
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(9), sos1)]))
+            .active_sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(9), sos1)]))
             .build()
             .unwrap();
         let before = instance.clone();
@@ -854,11 +855,11 @@ mod tests {
                 VariableID::from(0) => DecisionVariable::binary(),
                 VariableID::from(1) => integer_variable,
             })
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 ConstraintID::from(u64::MAX),
                 Constraint::equal_to_zero(Function::Zero),
             )]))
-            .sos1_constraints(BTreeMap::from([
+            .active_sos1_constraints(BTreeMap::from([
                 (Sos1ConstraintID::from(8), binary_sos1),
                 (Sos1ConstraintID::from(9), integer_sos1),
             ]))

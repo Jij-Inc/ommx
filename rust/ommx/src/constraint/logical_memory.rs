@@ -2,7 +2,7 @@ use crate::constraint::{Constraint, Created, Provenance};
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use std::mem::size_of;
 
-// ConstraintContext, CreatedData, and RemovedReason use
+// ConstraintContext, CreatedData, and InactiveConstraintMetadata use
 // `#[derive(LogicalMemoryProfile)]` on their definition sites.
 //
 // Provenance is a data-carrying enum whose current variants contain only

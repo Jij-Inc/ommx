@@ -1,15 +1,15 @@
-"""Snapshot tests for the unified `constraints_df(kind=, include=, removed=)`
+"""Snapshot tests for the unified `constraints_df(kind=, include=, min_activeness=)`
 method on Instance / ParametricInstance / Solution / SampleSet.
 
 Wave 2 of the v3-alpha pandas surface collapses 26 per-kind methods into
 4 unified `constraints_df` accessors. The `.ambr` snapshots are the
 authoritative description of the column / index schema for each host ×
-kind × include / removed combination — update via
+kind × include / activeness combination — update via
 `pytest --snapshot-update` after a deliberate API change.
 """
 
 from __future__ import annotations
-from ommx import ConstraintKind
+from ommx import ConstraintActiveness, ConstraintKind
 from ommx import ConstraintID, OneHotConstraintID
 
 import pandas as pd
@@ -57,16 +57,16 @@ def _instance_all_kinds() -> Instance:
     return Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={10: c},
-        indicator_constraints={
+        active_constraints={10: c},
+        active_indicator_constraints={
             20: IndicatorConstraint(
                 indicator_variable=x[0],
                 function=x[1] + x[2] - 1,
                 equality=Equality.EqualToZero,
             )
         },
-        one_hot_constraints={30: OneHotConstraint(variables=x)},
-        sos1_constraints={40: Sos1Constraint(variables=x)},
+        active_one_hot_constraints={30: OneHotConstraint(variables=x)},
+        active_sos1_constraints={40: Sos1Constraint(variables=x)},
         sense=Sense.Maximize,
     )
 
@@ -74,7 +74,7 @@ def _instance_all_kinds() -> Instance:
 def _instance_with_removed() -> Instance:
     """Instance whose regular constraint at id=10 has been relaxed."""
     inst = _instance_all_kinds()
-    inst.relax_constraint(10, "manual_relax", phase="warm-up")
+    inst.deactivate_constraint(10, "manual_relax", phase="warm-up")
     return inst
 
 
@@ -88,7 +88,7 @@ def _parametric_instance() -> ParametricInstance:
         sense=Sense.Maximize,
         objective=sum(x),
         decision_variables=x,
-        constraints={10: c},
+        active_constraints={10: c},
         parameters=[p],
     )
 
@@ -150,7 +150,7 @@ def test_instance_constraints_df_reports_composed_function_type():
     instance = Instance.from_components(
         decision_variables=[variable],
         objective=variable,
-        constraints={10: constraint},
+        active_constraints={10: constraint},
         sense=Sense.Minimize,
     )
 
@@ -212,24 +212,30 @@ def test_instance_constraints_df_include_parameters_only(snapshot):
 
 
 # ---------------------------------------------------------------------------
-# Instance.constraints_df — removed=
+# Instance.constraints_df — min_activeness=
 # ---------------------------------------------------------------------------
 
 
-def test_instance_constraints_df_removed_default_excludes_removed(snapshot):
-    """Default `removed=False` returns active rows only — relaxed id=10 omitted."""
+def test_instance_constraints_df_active_only_excludes_inactive(snapshot):
+    """The ACTIVE threshold excludes the deactivated constraint at id=10."""
     assert (
-        _df_snap(_instance_with_removed().constraints_df(kind=ConstraintKind.Regular))
+        _df_snap(
+            _instance_with_removed().constraints_df(
+                kind=ConstraintKind.Regular,
+                min_activeness=ConstraintActiveness.ACTIVE,
+            )
+        )
         == snapshot
     )
 
 
-def test_instance_constraints_df_removed_true_includes_both(snapshot):
-    """`removed=True` returns active + removed; auto-sets `removed_reason` columns."""
+def test_instance_constraints_df_default_includes_inactive(snapshot):
+    """The default displays every retained state, including inactive rows."""
     assert (
         _df_snap(
             _instance_with_removed().constraints_df(
-                kind=ConstraintKind.Regular, removed=True
+                kind=ConstraintKind.Regular,
+                include=["label", "parameters", "inactive_reason"],
             )
         )
         == snapshot
@@ -237,12 +243,11 @@ def test_instance_constraints_df_removed_true_includes_both(snapshot):
 
 
 def test_instance_constraints_df_removed_true_no_label(snapshot):
-    """`removed=True` together with `include=[]` keeps removed_reason columns
-    (the `removed=True` flag overrides include= for `removed_reason`)."""
+    """Inactive reasons can be requested without the modeling-label columns."""
     assert (
         _df_snap(
             _instance_with_removed().constraints_df(
-                kind=ConstraintKind.Regular, include=[], removed=True
+                kind=ConstraintKind.Regular, include=["inactive_reason"]
             )
         )
         == snapshot
@@ -250,7 +255,7 @@ def test_instance_constraints_df_removed_true_no_label(snapshot):
 
 
 def test_instance_constraints_df_removed_true_id_sorted(snapshot):
-    """`removed=True` returns a globally id-sorted union of active and
+    """An all-state query returns a globally id-sorted union of active and
     removed rows. With active ids {5, 30} and removed id 20 in the
     middle, the output is [5, 20, 30] — not [5, 30, 20] (active first
     then removed). Regression guard for the merge-sort path; the
@@ -260,15 +265,17 @@ def test_instance_constraints_df_removed_true_id_sorted(snapshot):
     inst = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={
+        active_constraints={
             5: x[0] + x[1] == 1,
             30: x[1] + x[2] == 1,
             20: x[0] + x[2] == 1,
         },
         sense=Sense.Maximize,
     )
-    inst.relax_constraint(20, "relax_middle")
-    df = inst.constraints_df(kind=ConstraintKind.Regular, removed=True)
+    inst.deactivate_constraint(20, "relax_middle")
+    df = inst.constraints_df(
+        kind=ConstraintKind.Regular, include=["label", "parameters", "inactive_reason"]
+    )
     assert list(df.index) == [ConstraintID(5), ConstraintID(20), ConstraintID(30)]
     assert _df_snap(df) == snapshot
 
@@ -276,20 +283,20 @@ def test_instance_constraints_df_removed_true_id_sorted(snapshot):
 def test_instance_constraints_df_removed_reason_active_only_keeps_column(
     snapshot,
 ):
-    """Edge case: `include=("removed_reason",)` on an active-only view
-    (no `removed=True`, no actually-removed constraints) must still
-    surface the `removed_reason` column with NA values. Regression
+    """Edge case: `include=("inactive_reason",)` on an active-only view
+    (no actually-inactive constraints) must still
+    surface the `inactive_reason` column with NA values. Regression
     guard against the column silently disappearing when no row in
     the view carries a reason."""
     df = _instance_all_kinds().constraints_df(
-        kind=ConstraintKind.Regular, include=["label", "removed_reason"]
+        kind=ConstraintKind.Regular, include=["label", "inactive_reason"]
     )
-    assert "removed_reason" in df.columns
+    assert "inactive_reason" in df.columns
     assert _df_snap(df) == snapshot
 
 
 def test_instance_constraints_df_one_hot_removed_true(snapshot):
-    """`removed=True` on `kind=ConstraintKind.OneHot` exercises the merge-sort and
+    """The all-state query on `kind=ConstraintKind.OneHot` exercises the merge-sort and
     reason-column path on a special-kind constraint. The capability-
     model docs advertise this surface for auditing OneHot →
     regular-constraint conversion (see capability_model.md), so it
@@ -298,15 +305,17 @@ def test_instance_constraints_df_one_hot_removed_true(snapshot):
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
-        one_hot_constraints={
+        active_constraints={},
+        active_one_hot_constraints={
             5: OneHotConstraint(variables=x[:2]),
             7: OneHotConstraint(variables=x[1:]),
         },
         sense=Sense.Maximize,
     )
     instance.convert_one_hot_to_constraint(7)
-    df = instance.constraints_df(kind=ConstraintKind.OneHot, removed=True)
+    df = instance.constraints_df(
+        kind=ConstraintKind.OneHot, include=["label", "parameters", "inactive_reason"]
+    )
     # Globally id-sorted: active id 5, then removed id 7.
     assert list(df.index) == [OneHotConstraintID(5), OneHotConstraintID(7)]
     assert _df_snap(df) == snapshot
@@ -379,12 +388,12 @@ def test_solution_constraints_df_no_removed_parameter():
 
 
 def test_solution_constraints_df_removed_reason_include(snapshot):
-    """Constraints removed before evaluation get `removed_reason` /
-    `removed_reason.{key}` columns when the flag is in `include=`."""
+    """Constraints removed before evaluation get `inactive_reason` /
+    `inactive_reason.{key}` columns when the flag is in `include=`."""
     assert (
         _df_snap(
             _solution_with_removed().constraints_df(
-                kind=ConstraintKind.Regular, include=["label", "removed_reason"]
+                kind=ConstraintKind.Regular, include=["label", "inactive_reason"]
             )
         )
         == snapshot
@@ -392,15 +401,15 @@ def test_solution_constraints_df_removed_reason_include(snapshot):
 
 
 def test_solution_constraints_df_removed_reason_no_removals_keeps_column(snapshot):
-    """`include=("removed_reason",)` on a Solution where no constraint
+    """`include=("inactive_reason",)` on a Solution where no constraint
     was removed before evaluation must still surface the
-    `removed_reason` column with NA values. Regression guard for the
+    `inactive_reason` column with NA values. Regression guard for the
     column silently disappearing when no row in the view carries a
     reason."""
     df = _solution_basic().constraints_df(
-        kind=ConstraintKind.Regular, include=["label", "removed_reason"]
+        kind=ConstraintKind.Regular, include=["label", "inactive_reason"]
     )
-    assert "removed_reason" in df.columns
+    assert "inactive_reason" in df.columns
     assert _df_snap(df) == snapshot
 
 

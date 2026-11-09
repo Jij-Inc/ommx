@@ -32,15 +32,15 @@ use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
 };
 use ommx::{
-    linear, quadratic, Constraint, ConstraintID, DecisionVariable, Function, Instance,
-    RemovedReason, Sense, VariableID,
+    linear, quadratic, Constraint, ConstraintID, DecisionVariable, Function,
+    InactiveConstraintMetadata, Instance, Sense, VariableID,
 };
 use std::collections::BTreeMap;
 
 /// An instance whose objective has a single binary-power term to reduce
 /// (`x0^2`), plus `num_removed` unrelated removed regular constraints that
 /// `reduce_binary_power` must neither inspect nor rewrite.
-fn instance_with_removed_constraints(num_removed: usize) -> Instance {
+fn instance_with_inactive_constraints(num_removed: usize) -> Instance {
     let decision_variables = BTreeMap::from([
         (VariableID::from(0), DecisionVariable::binary()),
         (VariableID::from(1), DecisionVariable::continuous()),
@@ -48,11 +48,12 @@ fn instance_with_removed_constraints(num_removed: usize) -> Instance {
 
     let objective = Function::Quadratic(quadratic!(0, 0).into());
 
-    let removed_reason = RemovedReason {
+    let removed_reason = InactiveConstraintMetadata {
+        skip_feasibility_check: false,
         reason: "ommx.bench.reduce_binary_power.removed_regular_constraints".to_string(),
         parameters: Default::default(),
     };
-    let removed_constraints = (1..=num_removed as u64)
+    let inactive_constraints = (1..=num_removed as u64)
         .map(|id| {
             (
                 ConstraintID::from(id),
@@ -68,8 +69,8 @@ fn instance_with_removed_constraints(num_removed: usize) -> Instance {
         .sense(Sense::Minimize)
         .objective(objective)
         .decision_variables(decision_variables)
-        .constraints(BTreeMap::new())
-        .removed_constraints(removed_constraints)
+        .active_constraints(BTreeMap::new())
+        .inactive_constraints(inactive_constraints)
         .build()
         .unwrap()
 }
@@ -99,18 +100,18 @@ fn instance_with_active_constraints(num_active: usize) -> Instance {
         .sense(Sense::Minimize)
         .objective(objective)
         .decision_variables(decision_variables)
-        .constraints(constraints)
+        .active_constraints(constraints)
         .build()
         .unwrap()
 }
 
-fn reduce_binary_power_removed_constraints(c: &mut Criterion) {
+fn reduce_binary_power_inactive_constraints(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("reduce-binary-power-removed-constraints");
     group.plot_config(plot_config);
 
     for num_removed in [1_000, 8_000, 32_000] {
-        let instance = instance_with_removed_constraints(num_removed);
+        let instance = instance_with_inactive_constraints(num_removed);
         group.bench_with_input(
             BenchmarkId::new(
                 "reduce-binary-power-removed-constraints",
@@ -162,7 +163,7 @@ fn reduce_binary_power_active_constraints(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    reduce_binary_power_removed_constraints,
+    reduce_binary_power_inactive_constraints,
     reduce_binary_power_active_constraints,
 );
 criterion_main!(benches);
