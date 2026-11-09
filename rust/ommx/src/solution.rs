@@ -1491,6 +1491,7 @@ mod tests {
                     0.into(),
                     Equality::EqualToZero,
                     Function::from(crate::coeff!(-3.0)),
+                    false,
                 ),
             )]))
             .one_hot_constraints(BTreeMap::from([(
@@ -1612,6 +1613,7 @@ mod tests {
                     VariableID::from(0),
                     Equality::LessThanOrEqualToZero,
                     Function::from(crate::coeff!(1.5)),
+                    false,
                 ),
             )]))
             .one_hot_constraints(BTreeMap::from([(

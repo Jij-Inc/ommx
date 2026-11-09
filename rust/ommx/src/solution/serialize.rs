@@ -352,6 +352,7 @@ mod tests {
                             0.into(),
                             crate::Equality::EqualToZero,
                             Function::from(crate::coeff!(1.0)),
+                            false,
                         ),
                     )]));
                 }

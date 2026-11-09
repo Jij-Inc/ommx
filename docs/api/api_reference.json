@@ -17996,7 +17996,7 @@
         {
           "kind": "Class",
           "name": "InstanceClass",
-          "doc": "A set of exact {class}`~ommx.Instance` representations, used for inspection and\nas a target for {meth}`~ommx.Instance.prepare`.\n\nMembership checks the Instance as it is: it does not convert expressions,\nprepare a model, or run a solver. An Adapter's `INPUT_CLASS` is one use of this\ncommon representation contract.\n\n**Clauses describe alternatives**\n\nAn InstanceClass is a finite union of {class}`~ommx.InstanceClassClause` values.\nAn Instance belongs to the class if it satisfies every condition in at least one\nclause. Conditions from different clauses are not combined. For example, a\nunion of continuous quadratic problems and mixed-integer linear problems does\nnot automatically include mixed-integer quadratic problems. An empty list of\nclauses accepts no Instance.\n\nA clause specifies the allowed kinds of used variables, the objective's\npolynomial representation and degree, the relations and polynomial requirements\nof regular constraints and Indicator bodies, whether active OneHot and SOS1\nconstraints are allowed, and the optimization direction. Its label identifies\nit in diagnostics without changing membership.\n\n**Inspect membership without changing the model**\n\nThis target accepts Binary variables, a linear objective, regular linear\nequalities, and maximization. It does not accept active special constraints.\n\n```pycon\n>>> from ommx import (\n...     Equality,\n...     Instance,\n...     InstanceClass,\n...     InstanceClassClause,\n...     Kind,\n...     OneHotConstraint,\n...     OneHotConstraintID,\n...     PolynomialRequirement,\n...     Sense,\n... )\n>>> linear = PolynomialRequirement.at_most(1)\n>>> target = InstanceClass(\n...     [\n...         InstanceClassClause(\n...             label=\"binary-linear-equality\",\n...             allowed_variable_kinds={Kind.Binary},\n...             objective_polynomial_requirement=linear,\n...             regular_constraint_polynomial_requirements={Equality.EqualToZero: linear},\n...             allowed_senses={Sense.Maximize},\n...         )\n...     ]\n... )\n>>> instance = Instance.maximize()\n>>> xs = [instance.new_binary(\"x\", subscripts=[i]) for i in range(2)]\n>>> instance.objective = 3 * xs[0] + 2 * xs[1]\n>>> _ = instance.add_one_hot_constraint(OneHotConstraint(variables=xs))\n>>> assert not target.contains(instance)\n>>> report = target.check_membership(instance)\n>>> assert not report.is_member\n>>> assert report.matching_clauses == []\n>>> assert report.clause_reports[0].clause_label == \"binary-linear-equality\"\n>>> assert report.clause_reports[0].mismatches\n>>> assert set(instance.constraints) == {OneHotConstraintID(0)}\n\n```\n\nOneHot means exactly one member is one. Although a linear equality can express\nthat condition for Binary variables, its dedicated representation does not\nmatch a clause that permits only regular equalities. The check leaves OneHot\nunchanged. {meth}`~ommx.Instance.prepare` contains a complete example converting\nthis representation and comparing candidate evaluations before and after it.\n\n{meth}`~ommx.InstanceClass.contains` returns a Boolean.\n{meth}`~ommx.InstanceClass.check_membership` returns an\n{class}`~ommx.InstanceClassMembershipReport`; its `clause_reports` describe each\nalternative, and `matching_clauses` identifies every matching index and label.\nEach {class}`~ommx.InstanceClassClauseReport` exposes structured\n{class}`~ommx.InstanceClassMismatch` values with the affected positions or IDs.\n\nAlternatively, add a clause that accepts the dedicated OneHot representation:\n\n```pycon\n>>> with_one_hot = InstanceClass(\n...     [\n...         InstanceClassClause(\n...             label=\"binary-linear-with-one-hot\",\n...             allowed_variable_kinds={Kind.Binary},\n...             objective_polynomial_requirement=linear,\n...             allowed_senses={Sense.Maximize},\n...             allows_one_hot=True,\n...         )\n...     ]\n... )\n>>> combined = target.union(with_one_hot)\n>>> assert combined.contains(instance)\n>>> assert combined.check_membership(instance).matching_clauses == [\n...     (1, \"binary-linear-with-one-hot\")\n... ]\n>>> assert not target.contains(instance)\n\n```\n\n**The active representation determines membership**\n\nVariable-kind checks use {attr}`~ommx.Instance.used_decision_variables`: variables\nreferenced by the active objective and active constraints, including special\nconstraints. Fixed, dependent, and irrelevant variables are excluded, as are\nvariables referenced only by removed constraints, named functions, or the output\nobjective. Removed constraints do not contribute their relations, degrees, or\nspecial-constraint kinds. A lowered Instance can therefore retain the original\nspecial constraints for evaluation while matching a class that disallows them\nas active constraints.\n\nThe stored {class}`~ommx.Function` representation matters as well as its\nmathematical meaning. Polynomial requirements reject composed expressions even\nwhen they happen to define a polynomial; see {meth}`~ommx.Function.powi` for an\nexample. Membership establishes representation requirements, not equivalence to\na previous model or a guarantee about the solution returned by a backend.\n\n**QUBO is one Instance class**\n\n{meth}`~ommx.InstanceClass.qubo` accepts Binary polynomial minimization of degree\nat most two with no active constraints. Linear and constant objectives are\nincluded. The model remains an OMMX Instance:\n\n```pycon\n>>> qubo = Instance.minimize()\n>>> a = qubo.new_binary(\"a\")\n>>> b = qubo.new_binary(\"b\")\n>>> qubo.objective = a + 2 * a * b + 3\n>>> assert InstanceClass.qubo().contains(qubo)\n>>> coefficients, offset = qubo.as_qubo_format()\n>>> assert coefficients == {(a.id, a.id): 1.0, (a.id, b.id): 2.0}\n>>> assert offset == 3.0\n\n```\n\n{meth}`~ommx.Instance.as_qubo_format` extracts active-objective coefficients and\nthe constant without Preparation. Those values do not replace the Instance's\nreconstruction rules, retained constraints, or output objective.\n{meth}`~ommx.Instance.to_qubo` combines Preparation and formatting and changes\nthe Instance in place; {meth}`~ommx.Instance.prepare` shows the explicit path.\n\nUse a concrete Adapter's `INPUT_CLASS` rather than inferring it from a solver\nname: some samplers accept Binary polynomials beyond degree two. For membership,\nrecommended policies, and the distinction between automatic and explicit\nPreparation, see {class}`~ommx.adapter.SolverAdapter` and\n{class}`~ommx.adapter.SamplerAdapter`.\n\n**Indicator activation conditions**\n\n`InstanceClassClause.indicator_body_polynomial_requirements` maps\n`(activate_on_zero, equality)` pairs to polynomial requirements. Include each\naccepted pair explicitly; the default empty map rejects all Indicators.\nFor example, the following admits linear equality bodies at either trigger value:\n\n```pycon\n>>> from ommx import Equality, PolynomialRequirement\n>>> indicator_requirements = {\n...     (False, Equality.EqualToZero): PolynomialRequirement.at_most(1),\n...     (True, Equality.EqualToZero): PolynomialRequirement.at_most(1),\n... }\n\n```\n\nA clause containing only the `False` entry rejects activation-on-zero rows with\n`InstanceClassMismatch.IndicatorActivationNotAllowed`. Body-relation and degree\nrequirements are checked for the matching activation condition. Membership\nchecking does not complement the trigger or otherwise transform the Instance.",
+          "doc": "A set of exact {class}`~ommx.Instance` representations, used for inspection and\nas a target for {meth}`~ommx.Instance.prepare`.\n\nMembership checks the Instance as it is: it does not convert expressions,\nprepare a model, or run a solver. An Adapter's `INPUT_CLASS` is one use of this\ncommon representation contract.\n\n**Clauses describe alternatives**\n\nAn InstanceClass is a finite union of {class}`~ommx.InstanceClassClause` values.\nAn Instance belongs to the class if it satisfies every condition in at least one\nclause. Conditions from different clauses are not combined. For example, a\nunion of continuous quadratic problems and mixed-integer linear problems does\nnot automatically include mixed-integer quadratic problems. An empty list of\nclauses accepts no Instance.\n\nA clause specifies the allowed kinds of used variables, the objective's\npolynomial representation and degree, the relations and polynomial requirements\nof regular constraints and Indicator bodies, whether active OneHot and SOS1\nconstraints are allowed, and the optimization direction. Its label identifies\nit in diagnostics without changing membership.\n\n**Inspect membership without changing the model**\n\nThis target accepts Binary variables, a linear objective, regular linear\nequalities, and maximization. It does not accept active special constraints.\n\n```pycon\n>>> from ommx import (\n...     Equality,\n...     Instance,\n...     InstanceClass,\n...     InstanceClassClause,\n...     Kind,\n...     OneHotConstraint,\n...     OneHotConstraintID,\n...     PolynomialRequirement,\n...     Sense,\n... )\n>>> linear = PolynomialRequirement.at_most(1)\n>>> target = InstanceClass(\n...     [\n...         InstanceClassClause(\n...             label=\"binary-linear-equality\",\n...             allowed_variable_kinds={Kind.Binary},\n...             objective_polynomial_requirement=linear,\n...             regular_constraint_polynomial_requirements={Equality.EqualToZero: linear},\n...             allowed_senses={Sense.Maximize},\n...         )\n...     ]\n... )\n>>> instance = Instance.maximize()\n>>> xs = [instance.new_binary(\"x\", subscripts=[i]) for i in range(2)]\n>>> instance.objective = 3 * xs[0] + 2 * xs[1]\n>>> _ = instance.add_one_hot_constraint(OneHotConstraint(variables=xs))\n>>> assert not target.contains(instance)\n>>> report = target.check_membership(instance)\n>>> assert not report.is_member\n>>> assert report.matching_clauses == []\n>>> assert report.clause_reports[0].clause_label == \"binary-linear-equality\"\n>>> assert report.clause_reports[0].mismatches\n>>> assert set(instance.constraints) == {OneHotConstraintID(0)}\n\n```\n\nOneHot means exactly one member is one. Although a linear equality can express\nthat condition for Binary variables, its dedicated representation does not\nmatch a clause that permits only regular equalities. The check leaves OneHot\nunchanged. {meth}`~ommx.Instance.prepare` contains a complete example converting\nthis representation and comparing candidate evaluations before and after it.\n\n{meth}`~ommx.InstanceClass.contains` returns a Boolean.\n{meth}`~ommx.InstanceClass.check_membership` returns an\n{class}`~ommx.InstanceClassMembershipReport`; its `clause_reports` describe each\nalternative, and `matching_clauses` identifies every matching index and label.\nEach {class}`~ommx.InstanceClassClauseReport` exposes structured\n{class}`~ommx.InstanceClassMismatch` values with the affected positions or IDs.\n\nAlternatively, add a clause that accepts the dedicated OneHot representation:\n\n```pycon\n>>> with_one_hot = InstanceClass(\n...     [\n...         InstanceClassClause(\n...             label=\"binary-linear-with-one-hot\",\n...             allowed_variable_kinds={Kind.Binary},\n...             objective_polynomial_requirement=linear,\n...             allowed_senses={Sense.Maximize},\n...             allows_one_hot=True,\n...         )\n...     ]\n... )\n>>> combined = target.union(with_one_hot)\n>>> assert combined.contains(instance)\n>>> assert combined.check_membership(instance).matching_clauses == [\n...     (1, \"binary-linear-with-one-hot\")\n... ]\n>>> assert not target.contains(instance)\n\n```\n\n**The active representation determines membership**\n\nVariable-kind checks use {attr}`~ommx.Instance.used_decision_variables`: variables\nreferenced by the active objective and active constraints, including special\nconstraints. Fixed, dependent, and irrelevant variables are excluded, as are\nvariables referenced only by removed constraints, named functions, or the output\nobjective. Removed constraints do not contribute their relations, degrees, or\nspecial-constraint kinds. A lowered Instance can therefore retain the original\nspecial constraints for evaluation while matching a class that disallows them\nas active constraints.\n\nThe stored {class}`~ommx.Function` representation matters as well as its\nmathematical meaning. Polynomial requirements reject composed expressions even\nwhen they happen to define a polynomial; see {meth}`~ommx.Function.powi` for an\nexample. Membership establishes representation requirements, not equivalence to\na previous model or a guarantee about the solution returned by a backend.\n\n**QUBO is one Instance class**\n\n{meth}`~ommx.InstanceClass.qubo` accepts Binary polynomial minimization of degree\nat most two with no active constraints. Linear and constant objectives are\nincluded. The model remains an OMMX Instance:\n\n```pycon\n>>> qubo = Instance.minimize()\n>>> a = qubo.new_binary(\"a\")\n>>> b = qubo.new_binary(\"b\")\n>>> qubo.objective = a + 2 * a * b + 3\n>>> assert InstanceClass.qubo().contains(qubo)\n>>> coefficients, offset = qubo.as_qubo_format()\n>>> assert coefficients == {(a.id, a.id): 1.0, (a.id, b.id): 2.0}\n>>> assert offset == 3.0\n\n```\n\n{meth}`~ommx.Instance.as_qubo_format` extracts active-objective coefficients and\nthe constant without Preparation. Those values do not replace the Instance's\nreconstruction rules, retained constraints, or output objective.\n{meth}`~ommx.Instance.to_qubo` combines Preparation and formatting and changes\nthe Instance in place; {meth}`~ommx.Instance.prepare` shows the explicit path.\n\nUse a concrete Adapter's `INPUT_CLASS` rather than inferring it from a solver\nname: some samplers accept Binary polynomials beyond degree two. For membership,\nrecommended policies, and the distinction between automatic and explicit\nPreparation, see {class}`~ommx.adapter.SolverAdapter` and\n{class}`~ommx.adapter.SamplerAdapter`.\n\n**Indicator activation conditions**\n\n`InstanceClassClause.allowed_indicator_activation_values` specifies the allowed\ntrigger values independently of `indicator_body_polynomial_requirements`.\nThe latter maps `Equality` to polynomial requirements shared by all admitted\nactivation values. The default activation set is `{1}`; an empty activation\nset or an empty body map rejects all Indicators. Values other than 0 and 1\nare rejected when constructing the clause.\n\n```pycon\n>>> from ommx import Equality, InstanceClassClause, Kind, PolynomialRequirement, Sense\n>>> clause = InstanceClassClause(\n...     label=\"linear indicators at either value\",\n...     allowed_variable_kinds={Kind.Binary},\n...     allowed_senses={Sense.Minimize},\n...     objective_polynomial_requirement=PolynomialRequirement.at_most(1),\n...     allowed_indicator_activation_values={0, 1},\n...     indicator_body_polynomial_requirements={\n...         Equality.EqualToZero: PolynomialRequirement.at_most(1),\n...     },\n... )\n>>> assert clause.allowed_indicator_activation_values == {0, 1}\n\n```\n\nAn unsupported trigger value produces `InstanceClassMismatch.IndicatorActivationNotAllowed`,\nwith `activation_value` and `allowed_activation_values`. Body-relation and degree\nrequirements are checked independently, so their diagnostics can accompany an\nactivation mismatch. Membership checking does not transform the Instance.",
           "bases": [],
           "methods": [
             {
@@ -18182,7 +18182,7 @@
         {
           "kind": "Class",
           "name": "InstanceClassClause",
-          "doc": "One conjunctive clause in an :class:`InstanceClass`.\n\nEvery condition in a clause must hold. The containing instance class is\nthe finite union of its clauses, so alternatives are not combined across\nclause boundaries.\n\nOmitted regular-constraint and Indicator-body maps are empty, so those\nconstraint families are not accepted. OneHot and SOS1 are also disabled\nunless their Boolean options are enabled. The objective and constraint\nrequirements describe stored polynomials, not a request to expand expressions.\nIndicator map keys are `(activate_on_zero, equality)` pairs: `False`\nadmits activation at one and `True` admits activation at zero.\nSee {class}`~ommx.InstanceClass` for construction and membership examples.",
+          "doc": "One conjunctive clause in an :class:`InstanceClass`.\n\nEvery condition in a clause must hold. The containing instance class is\nthe finite union of its clauses, so alternatives are not combined across\nclause boundaries.\n\nOmitted regular-constraint and Indicator-body maps are empty, so those\nconstraint families are not accepted. OneHot and SOS1 are also disabled\nunless their Boolean options are enabled. The objective and constraint\nrequirements describe stored polynomials, not a request to expand expressions.\nIndicator activation values are checked independently of the body map.\n`allowed_indicator_activation_values` defaults to `{1}` and accepts only 0 and 1.\nAn empty activation set rejects all Indicators, even with a nonempty body map.\nSee {class}`~ommx.InstanceClass` for construction and membership examples.",
           "bases": [],
           "methods": [
             {
@@ -18271,31 +18271,44 @@
                     {
                       "name": "indicator_body_polynomial_requirements",
                       "type_": {
-                        "display": "Optional[Mapping[tuple[bool, Equality], PolynomialRequirement]]",
+                        "display": "Optional[Mapping[Equality, PolynomialRequirement]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[tuple[bool, Equality], PolynomialRequirement]",
+                            "display": "Mapping[Equality, PolynomialRequirement]",
                             "link_target": null,
                             "children": [
                               {
-                                "display": "tuple[bool, Equality]",
+                                "display": "Equality",
                                 "link_target": null,
-                                "children": [
-                                  {
-                                    "display": "bool",
-                                    "link_target": null,
-                                    "children": []
-                                  },
-                                  {
-                                    "display": "Equality",
-                                    "link_target": null,
-                                    "children": []
-                                  }
-                                ]
+                                "children": []
                               },
                               {
                                 "display": "PolynomialRequirement",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "allowed_indicator_activation_values",
+                      "type_": {
+                        "display": "Optional[set[int]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "set[int]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "int",
                                 "link_target": null,
                                 "children": []
                               }
@@ -18362,6 +18375,23 @@
           ],
           "attributes": [
             {
+              "name": "allowed_indicator_activation_values",
+              "doc": "Allowed trigger values (0 and/or 1), independently of body requirements.",
+              "type_": {
+                "display": "set[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "allowed_senses",
               "doc": "",
               "type_": {
@@ -18421,24 +18451,13 @@
               "name": "indicator_body_polynomial_requirements",
               "doc": "",
               "type_": {
-                "display": "dict[tuple[bool, Equality], PolynomialRequirement]",
+                "display": "dict[Equality, PolynomialRequirement]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "tuple[bool, Equality]",
+                    "display": "Equality",
                     "link_target": null,
-                    "children": [
-                      {
-                        "display": "bool",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "Equality",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
+                    "children": []
                   },
                   {
                     "display": "PolynomialRequirement",

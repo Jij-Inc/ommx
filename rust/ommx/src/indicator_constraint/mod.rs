@@ -58,7 +58,7 @@ impl From<IndicatorConstraintID> for u64 {
 
 /// An indicator constraint: `indicator_variable = activation_value → f(x) <= 0` (or `= 0`).
 ///
-/// The activation value is 1 by default, or 0 when `activate_on_zero` is true.
+/// The activation value is 0 when `activate_on_zero` is true, and 1 otherwise.
 /// At the other binary value the constraint is unconditionally satisfied.
 ///
 /// The constraint's [`IndicatorConstraintID`] is not stored in this struct — it is held
@@ -217,20 +217,19 @@ impl ConstraintType for IndicatorConstraint {
 // ===== Created stage =====
 
 impl IndicatorConstraint<Created> {
-    /// Create a new indicator constraint.
-    pub fn new(indicator_variable: VariableID, equality: Equality, function: Function) -> Self {
+    /// Create a new indicator constraint with an explicit activation condition.
+    pub fn new(
+        indicator_variable: VariableID,
+        equality: Equality,
+        function: Function,
+        activate_on_zero: bool,
+    ) -> Self {
         Self {
             indicator_variable,
-            activate_on_zero: false,
+            activate_on_zero,
             equality,
             stage: CreatedData { function },
         }
-    }
-
-    /// Select whether the constraint activates at zero instead of one.
-    pub fn with_activate_on_zero(mut self, activate_on_zero: bool) -> Self {
-        self.activate_on_zero = activate_on_zero;
-        self
     }
 
     /// Access the constraint function.
@@ -507,6 +506,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
         assert_eq!(ic.indicator_variable, VariableID::from(10));
         assert_eq!(ic.equality, Equality::LessThanOrEqualToZero);
@@ -518,6 +518,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
         let s = format!("{}", ic);
         assert!(s.contains("IndicatorConstraint"));
@@ -527,8 +528,12 @@ mod tests {
     #[test]
     fn test_constraint_type_impl() {
         // Verify ConstraintType associated types compile correctly
-        let ic =
-            IndicatorConstraint::new(VariableID::from(10), Equality::EqualToZero, Function::Zero);
+        let ic = IndicatorConstraint::new(
+            VariableID::from(10),
+            Equality::EqualToZero,
+            Function::Zero,
+            false,
+        );
         let _: <IndicatorConstraint as ConstraintType>::Created = ic;
     }
 

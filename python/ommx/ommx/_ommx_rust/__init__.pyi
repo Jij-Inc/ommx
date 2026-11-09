@@ -8773,24 +8773,33 @@ class InstanceClass:
 
     **Indicator activation conditions**
 
-    `InstanceClassClause.indicator_body_polynomial_requirements` maps
-    `(activate_on_zero, equality)` pairs to polynomial requirements. Include each
-    accepted pair explicitly; the default empty map rejects all Indicators.
-    For example, the following admits linear equality bodies at either trigger value:
+    `InstanceClassClause.allowed_indicator_activation_values` specifies the allowed
+    trigger values independently of `indicator_body_polynomial_requirements`.
+    The latter maps `Equality` to polynomial requirements shared by all admitted
+    activation values. The default activation set is `{1}`; an empty activation
+    set or an empty body map rejects all Indicators. Values other than 0 and 1
+    are rejected when constructing the clause.
 
     ```pycon
-    >>> from ommx import Equality, PolynomialRequirement
-    >>> indicator_requirements = {
-    ...     (False, Equality.EqualToZero): PolynomialRequirement.at_most(1),
-    ...     (True, Equality.EqualToZero): PolynomialRequirement.at_most(1),
-    ... }
+    >>> from ommx import Equality, InstanceClassClause, Kind, PolynomialRequirement, Sense
+    >>> clause = InstanceClassClause(
+    ...     label="linear indicators at either value",
+    ...     allowed_variable_kinds={Kind.Binary},
+    ...     allowed_senses={Sense.Minimize},
+    ...     objective_polynomial_requirement=PolynomialRequirement.at_most(1),
+    ...     allowed_indicator_activation_values={0, 1},
+    ...     indicator_body_polynomial_requirements={
+    ...         Equality.EqualToZero: PolynomialRequirement.at_most(1),
+    ...     },
+    ... )
+    >>> assert clause.allowed_indicator_activation_values == {0, 1}
 
     ```
 
-    A clause containing only the `False` entry rejects activation-on-zero rows with
-    `InstanceClassMismatch.IndicatorActivationNotAllowed`. Body-relation and degree
-    requirements are checked for the matching activation condition. Membership
-    checking does not complement the trigger or otherwise transform the Instance.
+    An unsupported trigger value produces `InstanceClassMismatch.IndicatorActivationNotAllowed`,
+    with `activation_value` and `allowed_activation_values`. Body-relation and degree
+    requirements are checked independently, so their diagnostics can accompany an
+    activation mismatch. Membership checking does not transform the Instance.
     """
     @property
     def clauses(self) -> builtins.list[InstanceClassClause]: ...
@@ -8898,8 +8907,9 @@ class InstanceClassClause:
     constraint families are not accepted. OneHot and SOS1 are also disabled
     unless their Boolean options are enabled. The objective and constraint
     requirements describe stored polynomials, not a request to expand expressions.
-    Indicator map keys are `(activate_on_zero, equality)` pairs: `False`
-    admits activation at one and `True` admits activation at zero.
+    Indicator activation values are checked independently of the body map.
+    `allowed_indicator_activation_values` defaults to `{1}` and accepts only 0 and 1.
+    An empty activation set rejects all Indicators, even with a nonempty body map.
     See {class}`~ommx.InstanceClass` for construction and membership examples.
     """
     @property
@@ -8918,7 +8928,12 @@ class InstanceClassClause:
     @property
     def indicator_body_polynomial_requirements(
         self,
-    ) -> builtins.dict[tuple[builtins.bool, Equality], PolynomialRequirement]: ...
+    ) -> builtins.dict[Equality, PolynomialRequirement]: ...
+    @property
+    def allowed_indicator_activation_values(self) -> builtins.set[builtins.int]:
+        r"""
+        Allowed trigger values (0 and/or 1), independently of body requirements.
+        """
     @property
     def allows_one_hot(self) -> builtins.bool: ...
     @property
@@ -8936,7 +8951,10 @@ class InstanceClassClause:
             typing.Mapping[Equality, PolynomialRequirement]
         ] = None,
         indicator_body_polynomial_requirements: typing.Optional[
-            typing.Mapping[tuple[builtins.bool, Equality], PolynomialRequirement]
+            typing.Mapping[Equality, PolynomialRequirement]
+        ] = None,
+        allowed_indicator_activation_values: typing.Optional[
+            builtins.set[builtins.int]
         ] = None,
         allows_one_hot: builtins.bool = False,
         allows_sos1: builtins.bool = False,
@@ -9088,33 +9106,30 @@ class InstanceClassMismatch:
     @typing.final
     class IndicatorActivationNotAllowed(InstanceClassMismatch):
         __match_args__ = (
-            "activate_on_zero",
+            "activation_value",
             "constraint_ids",
-            "allowed_activate_on_zero",
+            "allowed_activation_values",
         )
         @property
-        def activate_on_zero(self) -> builtins.bool: ...
+        def activation_value(self) -> builtins.int: ...
         @property
         def constraint_ids(self) -> builtins.set[IndicatorConstraintID]: ...
         @property
-        def allowed_activate_on_zero(self) -> builtins.set[builtins.bool]: ...
+        def allowed_activation_values(self) -> builtins.set[builtins.int]: ...
         def __new__(
             cls,
-            activate_on_zero: builtins.bool,
+            activation_value: builtins.int,
             constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
-            allowed_activate_on_zero: builtins.set[builtins.bool],
+            allowed_activation_values: builtins.set[builtins.int],
         ) -> InstanceClassMismatch.IndicatorActivationNotAllowed: ...
 
     @typing.final
     class IndicatorConstraintRelationNotAllowed(InstanceClassMismatch):
         __match_args__ = (
-            "activate_on_zero",
             "relation",
             "constraint_ids",
             "allowed_relations",
         )
-        @property
-        def activate_on_zero(self) -> builtins.bool: ...
         @property
         def relation(self) -> Equality: ...
         @property
@@ -9123,7 +9138,6 @@ class InstanceClassMismatch:
         def allowed_relations(self) -> builtins.set[Equality]: ...
         def __new__(
             cls,
-            activate_on_zero: builtins.bool,
             relation: Equality,
             constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
             allowed_relations: builtins.set[Equality],
@@ -9132,13 +9146,10 @@ class InstanceClassMismatch:
     @typing.final
     class IndicatorBodyDegreeExceedsBound(InstanceClassMismatch):
         __match_args__ = (
-            "activate_on_zero",
             "relation",
             "actual_degrees",
             "bound",
         )
-        @property
-        def activate_on_zero(self) -> builtins.bool: ...
         @property
         def relation(self) -> Equality: ...
         @property
@@ -9149,7 +9160,6 @@ class InstanceClassMismatch:
         def bound(self) -> PolynomialRequirement: ...
         def __new__(
             cls,
-            activate_on_zero: builtins.bool,
             relation: Equality,
             actual_degrees: typing.Mapping[IndicatorConstraintID, builtins.int]
             | typing.Mapping[builtins.int, builtins.int]
@@ -9160,19 +9170,15 @@ class InstanceClassMismatch:
     @typing.final
     class IndicatorBodyFunctionNotPolynomial(InstanceClassMismatch):
         __match_args__ = (
-            "activate_on_zero",
             "relation",
             "constraint_ids",
         )
-        @property
-        def activate_on_zero(self) -> builtins.bool: ...
         @property
         def relation(self) -> Equality: ...
         @property
         def constraint_ids(self) -> builtins.set[IndicatorConstraintID]: ...
         def __new__(
             cls,
-            activate_on_zero: builtins.bool,
             relation: Equality,
             constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
         ) -> InstanceClassMismatch.IndicatorBodyFunctionNotPolynomial: ...

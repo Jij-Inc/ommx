@@ -336,13 +336,12 @@ For changes between individual v3 prereleases, see the [Python SDK 3.0 release n
 The default remains activation at one. The property is retained in attached,
 removed, evaluated, and sampled rows and Indicator DataFrames.
 
-When updating an earlier v3 beta integration, change
-`InstanceClassClause.indicator_body_polynomial_requirements` keys from
-`Equality` to `(activate_on_zero, Equality)` pairs. For example,
-`(False, Equality.EqualToZero)` admits activation-on-one equality bodies;
-add `(True, Equality.EqualToZero)` to admit activation-on-zero equality bodies.
-Each pair has its own `PolynomialRequirement`. The Rust SDK's
-`with_indicator_constraint` likewise takes the activation flag before the relation.
+`InstanceClassClause.indicator_body_polynomial_requirements` remains a map from
+`Equality` to `PolynomialRequirement`. Set
+`allowed_indicator_activation_values={0, 1}` separately to admit both trigger
+values with the same body requirements. Its default is `{1}`; `{0}` admits only
+zero activation, and an empty set rejects all Indicators. Only 0 and 1 are valid.
+An empty body map also rejects all Indicators, regardless of the activation set.
 
 PySCIPOpt accepts both activation values. Big-M conversion also handles both.
 The v2 wire format declares an additional required feature when any retained

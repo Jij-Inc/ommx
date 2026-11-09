@@ -3121,6 +3121,7 @@ mod tests {
                     selector_id(),
                     Equality::LessThanOrEqualToZero,
                     Function::Zero,
+                    false,
                 ),
                 Default::default(),
             )
@@ -3178,6 +3179,7 @@ mod tests {
                     selector_id(),
                     Equality::LessThanOrEqualToZero,
                     Function::Zero,
+                    false,
                 ),
                 Default::default(),
             )

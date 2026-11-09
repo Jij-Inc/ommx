@@ -396,6 +396,7 @@ mod tests {
                     variable_1,
                     Equality::LessThanOrEqualToZero,
                     Function::Zero,
+                    false,
                 ),
             )]))
             .indicator_constraint_context(indicator_context)

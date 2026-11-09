@@ -392,6 +392,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
         instance
             .indicator_constraint_collection
@@ -441,6 +442,7 @@ mod tests {
                     VariableID::from(10),
                     Equality::LessThanOrEqualToZero,
                     Function::from((coeff!(f64::MAX) * linear!(1)).unwrap()),
+                    false,
                 ),
                 crate::ConstraintContext::default(),
             )
@@ -486,6 +488,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
         instance
             .indicator_constraint_collection
@@ -541,6 +544,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(((linear!(1) + linear!(2)).unwrap() + coeff!(-5.0)).unwrap()),
+            false,
         );
         instance
             .indicator_constraint_collection
@@ -609,6 +613,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
         instance
             .indicator_constraint_collection

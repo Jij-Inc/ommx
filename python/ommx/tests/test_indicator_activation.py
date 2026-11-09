@@ -149,7 +149,7 @@ def test_with_indicator_and_parameter_materialization(zero):
         assert concrete.evaluate({0: int(zero), 1: 3}).feasible
 
 
-def input_class(zeros):
+def input_class(values, requirements=None):
     return InstanceClass(
         [
             InstanceClassClause(
@@ -157,10 +157,14 @@ def input_class(zeros):
                 allowed_variable_kinds={Kind.Binary, Kind.Continuous},
                 allowed_senses={Sense.Minimize},
                 objective_polynomial_requirement=PolynomialRequirement.at_most(1),
-                indicator_body_polynomial_requirements={
-                    (zero, Equality.EqualToZero): PolynomialRequirement.at_most(1)
-                    for zero in zeros
-                },
+                allowed_indicator_activation_values=None
+                if values is None
+                else set(values),
+                indicator_body_polynomial_requirements=(
+                    requirements
+                    if requirements is not None
+                    else {Equality.EqualToZero: PolynomialRequirement.at_most(1)}
+                ),
             )
         ]
     )
@@ -170,26 +174,82 @@ def input_class(zeros):
 def test_membership_distinguishes_activation(zero):
     source = model(zero)
     before = source.to_v2_bytes()
-    assert input_class([zero]).contains(source)
-    assert input_class([False, True]).contains(source)
-    report = input_class([not zero]).check_membership(source)
+    assert input_class([int(not zero)]).contains(source)
+    assert input_class([0, 1]).contains(source)
+    report = input_class([int(zero)]).check_membership(source)
     assert not report.is_member
     mismatch = report.clause_reports[0].mismatches[0]
     assert isinstance(mismatch, InstanceClassMismatch.IndicatorActivationNotAllowed)
-    assert mismatch.activate_on_zero == zero
-    assert mismatch.allowed_activate_on_zero == {not zero}
+    assert mismatch.activation_value == int(not zero)
+    assert mismatch.allowed_activation_values == {int(zero)}
     assert mismatch.constraint_ids == {IndicatorConstraintID(7)}
     assert source.to_v2_bytes() == before
-    assert input_class([zero]).clauses[0].indicator_body_polynomial_requirements == {
-        (zero, Equality.EqualToZero): PolynomialRequirement.at_most(1)
+    assert input_class([int(not zero)]).clauses[
+        0
+    ].indicator_body_polynomial_requirements == {
+        Equality.EqualToZero: PolynomialRequirement.at_most(1)
     }
     source.add_indicator_constraint(
         (DecisionVariable.continuous(1) == 2).with_indicator(
             0, activate_on_zero=not zero
         )
     )
-    assert not input_class([zero]).contains(source)
-    assert input_class([False, True]).contains(source)
+    assert not input_class([int(not zero)]).contains(source)
+    assert input_class([0, 1]).contains(source)
+
+
+@pytest.mark.parametrize("values", [[], [0], [1], [0, 1]])
+@pytest.mark.parametrize("zero", [False, True])
+@pytest.mark.parametrize(
+    "relation", [Equality.EqualToZero, Equality.LessThanOrEqualToZero]
+)
+@pytest.mark.parametrize(
+    "allowed_relation", [Equality.EqualToZero, Equality.LessThanOrEqualToZero]
+)
+@pytest.mark.parametrize("bound", [0, 1])
+def test_activation_and_body_requirements_are_orthogonal(
+    values, zero, relation, allowed_relation, bound
+):
+    target = input_class(
+        values, {allowed_relation: PolynomialRequirement.at_most(bound)}
+    )
+    source = model(zero, relation)
+    before = source.to_v2_bytes()
+    assert target.contains(source) == (
+        int(not zero) in values and relation == allowed_relation and bound >= 1
+    )
+    assert source.to_v2_bytes() == before
+
+
+def test_activation_defaults_empty_sets_and_independent_diagnostics():
+    target = input_class(None)
+    assert target.clauses[0].allowed_indicator_activation_values == {1}
+    assert target.contains(model(False))
+    assert not target.contains(model(True))
+    assert not input_class([0, 1], {}).contains(model(False))
+    assert not input_class([0, 1], {}).contains(model(True))
+    target = input_class([], {Equality.EqualToZero: PolynomialRequirement.at_most(0)})
+    mismatches = target.check_membership(model(True)).clause_reports[0].mismatches
+    assert len(mismatches) == 2
+    assert isinstance(
+        mismatches[0], InstanceClassMismatch.IndicatorActivationNotAllowed
+    )
+    assert mismatches[0].activation_value == 0
+    assert mismatches[0].allowed_activation_values == set()
+    assert isinstance(
+        mismatches[1], InstanceClassMismatch.IndicatorBodyDegreeExceedsBound
+    )
+    assert mismatches[1].actual_degrees == {IndicatorConstraintID(7): 1}
+    empty = Instance.from_components(
+        sense=Sense.Minimize, objective=0, decision_variables=[], constraints={}
+    )
+    assert target.contains(empty)
+
+
+@pytest.mark.parametrize("values", [[2], [0, 255]])
+def test_invalid_activation_values_are_rejected(values):
+    with pytest.raises(RuntimeError, match="must be 0 or 1"):
+        input_class(values)
 
 
 @pytest.mark.parametrize("zero", [False, True])

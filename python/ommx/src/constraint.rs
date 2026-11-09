@@ -252,8 +252,8 @@ impl Constraint {
             indicator_variable.0,
             self.0.equality,
             self.0.stage.function.clone(),
-        )
-        .with_activate_on_zero(activate_on_zero);
+            activate_on_zero,
+        );
         crate::IndicatorConstraint(ic, self.1.clone())
     }
 

@@ -385,6 +385,7 @@ mod tests {
                     VariableID::from(1),
                     Equality::LessThanOrEqualToZero,
                     Function::Linear((linear!(2) + coeff!(-1.0)).unwrap()),
+                    false,
                 ),
                 crate::ConstraintContext::default(),
             )

@@ -148,21 +148,30 @@ Preparation, see {class}`~ommx.adapter.SolverAdapter` and
 
 **Indicator activation conditions**
 
-`InstanceClassClause.indicator_body_polynomial_requirements` maps
-`(activate_on_zero, equality)` pairs to polynomial requirements. Include each
-accepted pair explicitly; the default empty map rejects all Indicators.
-For example, the following admits linear equality bodies at either trigger value:
+`InstanceClassClause.allowed_indicator_activation_values` specifies the allowed
+trigger values independently of `indicator_body_polynomial_requirements`.
+The latter maps `Equality` to polynomial requirements shared by all admitted
+activation values. The default activation set is `{1}`; an empty activation
+set or an empty body map rejects all Indicators. Values other than 0 and 1
+are rejected when constructing the clause.
 
 ```pycon
->>> from ommx import Equality, PolynomialRequirement
->>> indicator_requirements = {
-...     (False, Equality.EqualToZero): PolynomialRequirement.at_most(1),
-...     (True, Equality.EqualToZero): PolynomialRequirement.at_most(1),
-... }
+>>> from ommx import Equality, InstanceClassClause, Kind, PolynomialRequirement, Sense
+>>> clause = InstanceClassClause(
+...     label="linear indicators at either value",
+...     allowed_variable_kinds={Kind.Binary},
+...     allowed_senses={Sense.Minimize},
+...     objective_polynomial_requirement=PolynomialRequirement.at_most(1),
+...     allowed_indicator_activation_values={0, 1},
+...     indicator_body_polynomial_requirements={
+...         Equality.EqualToZero: PolynomialRequirement.at_most(1),
+...     },
+... )
+>>> assert clause.allowed_indicator_activation_values == {0, 1}
 
 ```
 
-A clause containing only the `False` entry rejects activation-on-zero rows with
-`InstanceClassMismatch.IndicatorActivationNotAllowed`. Body-relation and degree
-requirements are checked for the matching activation condition. Membership
-checking does not complement the trigger or otherwise transform the Instance.
+An unsupported trigger value produces `InstanceClassMismatch.IndicatorActivationNotAllowed`,
+with `activation_value` and `allowed_activation_values`. Body-relation and degree
+requirements are checked independently, so their diagnostics can accompany an
+activation mismatch. Membership checking does not transform the Instance.

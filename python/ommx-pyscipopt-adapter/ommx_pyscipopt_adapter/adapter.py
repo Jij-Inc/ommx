@@ -51,8 +51,7 @@ _QUADRATIC_REGULAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS = {
     Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(2),
 }
 _LINEAR_INDICATOR_BODY_POLYNOMIAL_REQUIREMENTS = {
-    (zero, relation): PolynomialRequirement.at_most(1)
-    for zero in (False, True)
+    relation: PolynomialRequirement.at_most(1)
     for relation in (Equality.EqualToZero, Equality.LessThanOrEqualToZero)
 }
 
@@ -830,6 +829,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 regular_constraint_polynomial_requirements=(
                     _QUADRATIC_REGULAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS
                 ),
+                allowed_indicator_activation_values={0, 1},
                 indicator_body_polynomial_requirements=(
                     _LINEAR_INDICATOR_BODY_POLYNOMIAL_REQUIREMENTS
                 ),

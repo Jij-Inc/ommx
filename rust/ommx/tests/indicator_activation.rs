@@ -26,8 +26,8 @@ fn instance(zero: bool, equality: Equality) -> Instance {
                 0.into(),
                 equality,
                 Function::from((linear!(1) - coeff!(2.0)).unwrap()),
-            )
-            .with_activate_on_zero(zero),
+                zero,
+            ),
         )]))
         .build()
         .unwrap()
@@ -184,51 +184,71 @@ fn all_wire_roots_declare_activation_feature_including_removed_rows() {
     assert!(!row.activate_on_zero);
 }
 
-fn class(conditions: &[(bool, Equality, u32)]) -> InstanceClass {
+fn class(values: &[u8], conditions: &[(Equality, u32)]) -> InstanceClass {
     let mut clause = InstanceClassClause::new(
         "activation",
         BTreeSet::from([Kind::Binary, Kind::Continuous]),
         PolynomialRequirement::at_most(1),
         BTreeSet::from([Sense::Minimize]),
-    );
-    for &(zero, relation, degree) in conditions {
-        clause = clause.with_indicator_constraint(
-            zero,
-            relation,
-            PolynomialRequirement::at_most(degree),
-        );
+    )
+    .with_allowed_indicator_activation_values(values.iter().copied().collect())
+    .unwrap();
+    for &(relation, degree) in conditions {
+        clause = clause.with_indicator_constraint(relation, PolynomialRequirement::at_most(degree));
     }
     clause.into()
 }
 
 #[test]
-fn class_checks_activation_and_body_as_a_pair_without_mutation() {
+fn class_checks_activation_and_body_independently_without_mutation() {
     let eq = Equality::EqualToZero;
     let le = Equality::LessThanOrEqualToZero;
     for zero in [false, true] {
         let model = instance(zero, eq);
+        let value = u8::from(!zero);
         let before = model.to_v2_bytes();
-        assert!(class(&[(zero, eq, 1)]).contains(&model));
-        assert!(class(&[(false, eq, 1), (true, eq, 1)]).contains(&model));
-        let report = class(&[(!zero, eq, 1)]).check_membership(&model);
-        assert!(
-            matches!(&report.clause_reports()[0].mismatches()[0], InstanceClassMismatch::IndicatorActivationNotAllowed { activate_on_zero, constraint_ids, .. } if *activate_on_zero == zero && constraint_ids == &BTreeSet::from([IndicatorConstraintID::from(7)]))
-        );
-        // A requirement for the other activation must not leak across the pair.
-        assert!(!class(&[(zero, le, 2), (!zero, eq, 2)]).contains(&model));
-        assert!(!class(&[(zero, eq, 0), (!zero, eq, 2)]).contains(&model));
+        assert!(class(&[value], &[(eq, 1)]).contains(&model));
+        assert!(class(&[0, 1], &[(eq, 1)]).contains(&model));
+        let report = class(&[1 - value], &[(eq, 1)]).check_membership(&model);
+        assert!(matches!(&report.clause_reports()[0].mismatches()[0],
+            InstanceClassMismatch::IndicatorActivationNotAllowed { activation_value, constraint_ids, .. }
+            if *activation_value == value && constraint_ids == &BTreeSet::from([IndicatorConstraintID::from(7)])));
+        assert!(!class(&[0, 1], &[(le, 2)]).contains(&model));
+        assert!(!class(&[0, 1], &[(eq, 0)]).contains(&model));
+        assert!(!class(&[], &[(eq, 1)]).contains(&model));
+        assert!(!class(&[0, 1], &[]).contains(&model));
+        // An invalid activation does not suppress the independent body mismatch.
+        let report = class(&[1 - value], &[(eq, 0)]).check_membership(&model);
+        assert_eq!(report.clause_reports()[0].mismatches().len(), 2);
+        assert!(matches!(
+            report.clause_reports()[0].mismatches()[1],
+            InstanceClassMismatch::IndicatorBodyDegreeExceedsBound { .. }
+        ));
         assert_eq!(before, model.to_v2_bytes());
     }
     let mut mixed = instance(false, eq);
     mixed
         .add_indicator_constraint(
-            IndicatorConstraint::new(0.into(), eq, Function::Zero).with_activate_on_zero(true),
+            IndicatorConstraint::new(0.into(), le, Function::Zero, true),
             Default::default(),
         )
         .unwrap();
-    assert!(!class(&[(false, eq, 1)]).contains(&mixed));
-    assert!(!class(&[(true, eq, 1)]).contains(&mixed));
-    assert!(class(&[(false, eq, 1), (true, eq, 1)]).contains(&mixed));
+    assert!(!class(&[1], &[(eq, 1), (le, 1)]).contains(&mixed));
+    assert!(!class(&[0], &[(eq, 1), (le, 1)]).contains(&mixed));
+    assert!(class(&[0, 1], &[(eq, 1), (le, 1)]).contains(&mixed));
+    let clause = InstanceClassClause::new(
+        "default",
+        BTreeSet::new(),
+        PolynomialRequirement::at_most(1),
+        BTreeSet::from([Sense::Minimize]),
+    );
+    assert_eq!(
+        clause.allowed_indicator_activation_values(),
+        &BTreeSet::from([1])
+    );
+    assert!(clause
+        .with_allowed_indicator_activation_values(BTreeSet::from([0, 2]))
+        .is_err());
 }
 
 #[test]

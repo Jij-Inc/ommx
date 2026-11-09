@@ -205,6 +205,7 @@ mod tests {
             indicator_id,
             Equality::EqualToZero,
             Function::Constant(crate::Coefficient::try_from(*atol).unwrap()),
+            false,
         );
         let boundary_state = crate::v1::State::from(HashMap::from([(10, indicator_boundary)]));
 
@@ -235,6 +236,7 @@ mod tests {
             indicator_id,
             Equality::EqualToZero,
             Function::Constant(crate::Coefficient::try_from(outside).unwrap()),
+            false,
         );
         let exact_on = crate::v1::State::from(HashMap::from([(10, 1.0)]));
         assert!(!outside_constraint
@@ -254,6 +256,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
 
         // x1 = 3, x10 = 1 (indicator ON, 3 - 5 = -2 <= 0 → feasible)
@@ -271,6 +274,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
 
         // x1 = 7, x10 = 1 (indicator ON, 7 - 5 = 2 > 0 → infeasible)
@@ -288,6 +292,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
 
         // x1 = 100, x10 = 0 (indicator OFF → always feasible regardless of f(x))
@@ -304,6 +309,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1)),
+            false,
         );
         let state = crate::v1::State::from(HashMap::from([(1, 3.0), (10, 0.5)]));
 
@@ -328,6 +334,7 @@ mod tests {
             VariableID::from(10),
             Equality::EqualToZero,
             Function::from(linear!(1) + linear!(2)),
+            false,
         );
         let ids = ic.required_ids();
         assert!(ids.contains(&VariableID::from(1)));
@@ -342,6 +349,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(((linear!(1) + linear!(2)).unwrap() + coeff!(-5.0)).unwrap()),
+            false,
         );
 
         // Fix x1 = 3, but leave x2 and indicator x10 free
@@ -361,6 +369,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
 
         // Try to fix x10 (indicator variable)
@@ -376,6 +385,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
 
         let mut samples = crate::Sampled::<crate::v1::State>::default();
@@ -424,6 +434,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1)),
+            false,
         );
         let sample_id = crate::SampleID::from(7);
         let samples = crate::Sampled::from((
@@ -455,6 +466,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
 
         // x10 = 1 → Transformed: promote inner constraint
@@ -480,6 +492,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
 
         // x10 = 0 → Consumed (vacuously satisfied)
@@ -495,6 +508,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1)),
+            false,
         );
         let state = crate::v1::State::from(HashMap::from([(10, 0.5)]));
 
@@ -518,6 +532,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(((linear!(1) + linear!(2)).unwrap() + coeff!(-5.0)).unwrap()),
+            false,
         );
 
         // x1 = 3 (not indicator) → Active: function partial-evaluated
@@ -540,6 +555,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(((linear!(1) + linear!(2)).unwrap() + coeff!(-5.0)).unwrap()),
+            false,
         );
 
         // x10=1, x1=3 → Transformed with x1 substituted in promoted function
