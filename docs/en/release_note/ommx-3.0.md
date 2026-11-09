@@ -6,7 +6,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-### ⚠ Select constraints by activeness and skip default feasibility ([#1372](https://github.com/Jij-Inc/ommx/issues/1372))
+### ⚠ Select constraints by activeness and skip default feasibility ([#1377](https://github.com/Jij-Inc/ommx/pull/1377))
 
 Inactive rows can set `skip_feasibility_check=True`. They remain numerically evaluated, but default feasibility excludes them. `ConstraintActiveness` orders `SKIP_FEASIBILITY_CHECK < INACTIVE < ACTIVE`; `min_activeness` includes rows at or above the minimum. Call `feasible()` and SampleSet feasible-sample selection as methods. These queries and `total_violation()` default to `INACTIVE`; `feasible_relaxed` retains its active-only meaning. `total_violation()` uses the same selected rows without promising an exact-zero feasibility implication.
 

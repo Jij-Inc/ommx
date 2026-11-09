@@ -6,7 +6,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-### ⚠ Activenessによる制約の選択と実行可能性判定のskip ([#1372](https://github.com/Jij-Inc/ommx/issues/1372))
+### ⚠ Activenessによる制約の選択と実行可能性判定のskip ([#1377](https://github.com/Jij-Inc/ommx/pull/1377))
 
 inactive行には `skip_feasibility_check=True` を設定できます。数値評価は行いますが、既定の実行可能性判定からは除外します。`ConstraintActiveness` の順序は `SKIP_FEASIBILITY_CHECK < INACTIVE < ACTIVE` で、`min_activeness` は指定値以上の行を含めます。`feasible()` とSampleSetの実行可能サンプル選択はメソッドとして呼び出します。これらと `total_violation()` の既定値は `INACTIVE` で、`feasible_relaxed` はactive行だけを判定する意味を維持します。`total_violation()` は同じ選択対象の行を使いますが、厳密な0と実行可能性を結び付ける契約は設けません。
 
