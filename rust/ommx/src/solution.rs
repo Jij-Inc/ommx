@@ -1118,7 +1118,7 @@ impl SolutionBuilder {
     ) -> Self {
         self.evaluated_constraints = Some(
             EvaluatedCollection::new(evaluated_constraints, BTreeMap::new())
-                .expect("empty removed reasons cannot reference unknown constraints"),
+                .expect("empty inactive metadata cannot reference unknown constraints"),
         );
         self
     }
@@ -1151,7 +1151,7 @@ impl SolutionBuilder {
     ) -> Self {
         self.evaluated_indicator_constraints =
             EvaluatedCollection::new(evaluated_indicator_constraints, BTreeMap::new())
-                .expect("empty removed reasons cannot reference unknown constraints");
+                .expect("empty inactive metadata cannot reference unknown constraints");
         self
     }
 
@@ -1651,7 +1651,7 @@ mod tests {
                 assert_eq!(derived.total_violation(Default::default()), l1);
             }
 
-            fn removed<T: crate::constraint_type::ConstraintType>(
+            fn inactive<T: crate::constraint_type::ConstraintType>(
                 collection: &EvaluatedCollection<T>,
             ) -> EvaluatedCollection<T>
             where
@@ -1675,24 +1675,24 @@ mod tests {
                 )
                 .unwrap()
             }
-            let removed_solution = Solution::builder()
+            let inactive_solution = Solution::builder()
                 .sense(Sense::Minimize)
                 .objective(0.0)
                 .decision_variables(solution.decision_variables().clone())
-                .evaluated_constraints_collection(removed(&solution.evaluated_constraints))
-                .evaluated_indicator_constraints_collection(removed(
+                .evaluated_constraints_collection(inactive(&solution.evaluated_constraints))
+                .evaluated_indicator_constraints_collection(inactive(
                     &solution.evaluated_indicator_constraints,
                 ))
-                .evaluated_one_hot_constraints_collection(removed(
+                .evaluated_one_hot_constraints_collection(inactive(
                     &solution.evaluated_one_hot_constraints,
                 ))
-                .evaluated_sos1_constraints_collection(removed(
+                .evaluated_sos1_constraints_collection(inactive(
                     &solution.evaluated_sos1_constraints,
                 ))
                 .build()
                 .unwrap();
-            assert!(removed_solution.feasible_constraints_relaxed());
-            assert_eq!(removed_solution.total_violation(Default::default()), l1);
+            assert!(inactive_solution.feasible_constraints_relaxed());
+            assert_eq!(inactive_solution.total_violation(Default::default()), l1);
         }
     }
 

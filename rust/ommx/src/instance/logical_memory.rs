@@ -66,7 +66,7 @@ impl_special_constraint_profile!(
 );
 
 macro_rules! impl_constraint_collection_profile {
-    ($constraint_type:ty, $active_name:expr, $removed_name:expr) => {
+    ($constraint_type:ty, $active_name:expr, $inactive_name:expr) => {
         impl LogicalMemoryProfile
             for crate::constraint_type::ConstraintCollection<$constraint_type>
         {
@@ -78,7 +78,7 @@ macro_rules! impl_constraint_collection_profile {
                 self.active()
                     .visit_logical_memory(path.with($active_name).as_mut(), visitor);
                 self.inactive()
-                    .visit_logical_memory(path.with($removed_name).as_mut(), visitor);
+                    .visit_logical_memory(path.with($inactive_name).as_mut(), visitor);
                 self.context()
                     .visit_logical_memory(path.with("context").as_mut(), visitor);
             }

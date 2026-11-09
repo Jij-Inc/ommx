@@ -845,12 +845,12 @@ impl SampleSetBuilder {
     pub fn constraints(mut self, constraints: BTreeMap<ConstraintID, SampledConstraint>) -> Self {
         self.constraints = Some(
             SampledCollection::new(constraints, BTreeMap::new())
-                .expect("empty removed reasons cannot reference unknown constraints"),
+                .expect("empty inactive metadata cannot reference unknown constraints"),
         );
         self
     }
 
-    /// Sets the constraints with a full `SampledCollection` (including removed reasons).
+    /// Sets the constraints with a full `SampledCollection` (including inactive metadata).
     pub fn constraints_collection(mut self, constraints: SampledCollection<Constraint>) -> Self {
         self.constraints = Some(constraints);
         self
@@ -865,11 +865,11 @@ impl SampleSetBuilder {
         >,
     ) -> Self {
         self.indicator_constraints = SampledCollection::new(indicator_constraints, BTreeMap::new())
-            .expect("empty removed reasons cannot reference unknown constraints");
+            .expect("empty inactive metadata cannot reference unknown constraints");
         self
     }
 
-    /// Sets the indicator constraints with a full `SampledCollection` (including removed reasons).
+    /// Sets the indicator constraints with a full `SampledCollection` (including inactive metadata).
     pub fn indicator_constraints_collection(
         mut self,
         indicator_constraints: SampledCollection<IndicatorConstraint>,
@@ -887,11 +887,11 @@ impl SampleSetBuilder {
         >,
     ) -> Self {
         self.one_hot_constraints = SampledCollection::new(one_hot_constraints, BTreeMap::new())
-            .expect("empty removed reasons cannot reference unknown constraints");
+            .expect("empty inactive metadata cannot reference unknown constraints");
         self
     }
 
-    /// Sets the one-hot constraints with a full `SampledCollection` (including removed reasons).
+    /// Sets the one-hot constraints with a full `SampledCollection` (including inactive metadata).
     pub fn one_hot_constraints_collection(
         mut self,
         one_hot_constraints: SampledCollection<crate::OneHotConstraint>,
@@ -909,11 +909,11 @@ impl SampleSetBuilder {
         >,
     ) -> Self {
         self.sos1_constraints = SampledCollection::new(sos1_constraints, BTreeMap::new())
-            .expect("empty removed reasons cannot reference unknown constraints");
+            .expect("empty inactive metadata cannot reference unknown constraints");
         self
     }
 
-    /// Sets the SOS1 constraints with a full `SampledCollection` (including removed reasons).
+    /// Sets the SOS1 constraints with a full `SampledCollection` (including inactive metadata).
     pub fn sos1_constraints_collection(
         mut self,
         sos1_constraints: SampledCollection<crate::Sos1Constraint>,
@@ -1636,7 +1636,7 @@ mod tests {
     }
 
     /// Regression: `SampleSet::get(sid)` must propagate variable modeling
-    /// labels, constraint label/provenance sidecars, and removed reasons into
+    /// labels, constraint label/provenance sidecars, and inactive metadata into
     /// the returned per-sample `Solution`. A previous version threaded
     /// `variable_labels` only and rebuilt the constraint collections via
     /// `EvaluatedCollection::new(map, BTreeMap::new())`, silently discarding
@@ -1689,14 +1689,14 @@ mod tests {
         let mut constraint_context = crate::ConstraintContextStore::<ConstraintID>::default();
         constraint_context.set_name(cid, "balance");
         constraint_context.set_description(cid, "demand-balance row");
-        let removed_reason = crate::InactiveConstraintMetadata {
+        let inactive_metadata = crate::InactiveConstraintMetadata {
             skip_feasibility_check: false,
             reason: "relaxed for test".to_string(),
             parameters: Default::default(),
         };
         let constraints = crate::constraint_type::SampledCollection::with_context(
             constraints_map,
-            BTreeMap::from([(cid, removed_reason)]),
+            BTreeMap::from([(cid, inactive_metadata)]),
             constraint_context,
         )
         .unwrap();

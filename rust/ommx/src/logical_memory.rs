@@ -247,7 +247,7 @@ pub(crate) fn logical_total_bytes<T: LogicalMemoryProfile>(value: &T) -> usize {
 /// # Example
 /// ```ignore
 /// impl_logical_memory_profile! {
-///     RemovedConstraint {
+///     v1::RemovedConstraint as "RemovedConstraint" {
 ///         constraint,
 ///         removed_reason,
 ///         removed_reason_parameters,
@@ -280,7 +280,7 @@ macro_rules! impl_logical_memory_profile {
             }
         }
     };
-    // For simple types (e.g., RemovedConstraint)
+    // For imported foreign types with a simple name
     ($type_name:ident { $($field:ident),* $(,)? }) => {
         impl $crate::logical_memory::LogicalMemoryProfile for $type_name {
             fn visit_logical_memory<V: $crate::logical_memory::LogicalMemoryVisitor>(

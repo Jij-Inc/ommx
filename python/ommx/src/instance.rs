@@ -273,7 +273,7 @@ impl Instance {
     /// Apply one simultaneous bound-tightening pass using selected regular constraints.
     ///
     /// ``constraint_ids`` is a set of active regular constraint IDs. Unknown
-    /// and removed IDs are errors; an empty set applies no updates. Selected
+    /// and inactive IDs are errors; an empty set applies no updates. Selected
     /// non-affine rows are skipped. All eligible variables in the selected
     /// rows may have their bounds tightened.
     /// Only compact polynomial functions of degree at most one are used;
@@ -1323,7 +1323,7 @@ impl Instance {
     /// The kinds of active special constraints this instance currently uses.
     ///
     /// Returns the set of {class}`~ommx.ConstraintKind` values corresponding
-    /// to non-empty active (non-removed) special constraint collections. An
+    /// to non-empty active special constraint collections. An
     /// empty set means the instance has no active special constraints.
     #[getter]
     pub fn active_special_constraint_kinds(
@@ -1393,7 +1393,7 @@ impl Instance {
     ///
     /// This list contains the variables referenced by the objective or by an
     /// active regular, Indicator, OneHot, or SOS1 constraint. Variables
-    /// referenced only by the output objective, named functions, removed
+    /// referenced only by the output objective, named functions, inactive
     /// constraints, or the right-hand side of a decision-variable dependency
     /// are excluded. Fixed, dependent, and irrelevant variables are also
     /// excluded; {meth}`~ommx.Instance.evaluate` and
@@ -2181,19 +2181,19 @@ impl Instance {
         Ok(())
     }
 
-    /// Make a retained removed regular constraint active again.
+    /// Make a retained inactive regular constraint active again.
     ///
     /// Applies the Instance's current variable dependencies and fixed values
-    /// before restoring the row, and removes its removal reason. The ID,
+    /// before restoring the row, and clears its inactivation reason. The ID,
     /// labels, and provenance are retained. The argument accepts a
     /// {class}`~ommx.ConstraintID` or its integer value.
     ///
     /// This restores one condition, not the state before a transformation:
     /// generated variables or constraints and objective changes remain.
     /// See {meth}`~ommx.Instance.deactivate_constraint` for a complete round trip.
-    /// Raises RuntimeError if the ID is not a removed regular constraint or
+    /// Raises RuntimeError if the ID is not an inactive regular constraint or
     /// its expression cannot be normalized for the current Instance. Failure
-    /// leaves the row removed.
+    /// leaves the row inactive.
     pub(crate) fn activate_constraint(
         &mut self,
         constraint_id: ConstraintIDInput,
@@ -2202,7 +2202,7 @@ impl Instance {
         Ok(())
     }
 
-    /// Relax an indicator constraint by moving it from active to removed.
+    /// Deactivate an indicator constraint, retaining it with a reason.
     ///
     /// Accepts an {class}`~ommx.IndicatorConstraintID` or its integer value.
     /// Records the supplied reason and string-valued keyword parameters,
@@ -2230,17 +2230,17 @@ impl Instance {
         Ok(())
     }
 
-    /// Restore a removed indicator constraint back to active.
+    /// Activate an inactive indicator constraint.
     ///
     /// Accepts an {class}`~ommx.IndicatorConstraintID` or its integer value.
     /// Applies current fixed values and dependencies to the constraint body,
-    /// preserving its ID, labels, and provenance and clearing the removal
+    /// preserving its ID, labels, and provenance and clearing the inactivation
     /// reason. This does not undo generated constraints, auxiliary variables,
     /// or objective changes from other transformations.
     ///
-    /// Raises RuntimeError if the ID is not a removed Indicator constraint,
+    /// Raises RuntimeError if the ID is not an inactive Indicator constraint,
     /// its controlling variable has been fixed or substituted, or its body
-    /// cannot be normalized. Failure leaves the row removed.
+    /// cannot be normalized. Failure leaves the row inactive.
     pub(crate) fn activate_indicator_constraint(
         &mut self,
         constraint_id: IndicatorConstraintIDInput,
@@ -3218,7 +3218,7 @@ impl Instance {
 
     /// Constraint context DataFrame (id-indexed wide format).
     ///
-    /// One row per constraint id (active + removed) with columns
+    /// One row per constraint id (active + inactive) with columns
     /// `name`, `subscripts`, `description`. Index column is
     /// `{kind}_constraint_id`. `kind` selects which constraint family
     /// to read, using a {class}`~ommx.ConstraintKind` value.
@@ -3311,7 +3311,7 @@ impl Instance {
         )
     }
 
-    /// Removed-constraint reasons DataFrame (long format).
+    /// Inactive-constraint reasons DataFrame (long format).
     ///
     /// One row per (constraint_id, parameter_key) pair, plus one row with
     /// `key`/`value` set to NA when the reason has no parameters. Columns:
@@ -3522,7 +3522,7 @@ impl Instance {
     /// contain variable sets rather than expression bodies and are unchanged.
     /// These rewrite targets belong to the **Active Formulation** defined on
     /// {class}`~ommx.Instance`. **Interpretation Context** expressions are left
-    /// unchanged: named functions, dependency right-hand sides, removed
+    /// unchanged: named functions, dependency right-hand sides, inactive
     /// constraints, and an existing output objective.
     ///
     /// **Returns:**

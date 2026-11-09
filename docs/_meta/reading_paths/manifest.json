@@ -929,6 +929,8 @@
       "aliases": [
         "inactive_constraints",
         "active_constraints",
+        "deactivate_constraint",
+        "activate_constraint",
         "skip_feasibility_check"
       ],
       "scope": "Inactive constraints are retained and evaluated; the skip flag excludes them from default feasibility."
@@ -1048,7 +1050,7 @@
         "QUBO",
         "qubo"
       ],
-      "scope": "QUBOをInstanceClassの一例として読み、classへの適合・Preparationと、Backend向けの係数整形を区別する。係数と定数項だけでは、Instanceが持つ変数の復元規則やremoved制約の評価情報を運べない。"
+      "scope": "QUBOをInstanceClassの一例として読み、classへの適合・Preparationと、Backend向けの係数整形を区別する。係数と定数項だけでは、Instanceが持つ変数の復元規則やinactive制約の評価情報を運べない。"
     },
     {
       "id": "adapter.basic",
@@ -1735,7 +1737,7 @@
         "information loss",
         "model export"
       ],
-      "scope": "二次以下の多項式・変数種の受付範囲、特殊制約の事前lowering、ラベル・removed・NamedFunction等の情報損失を理解して保存形式を選ぶ。二次拡張に対応した外部ツールでも係数の解釈が一致するとは限らず、取り込み後の式を確認する。厳密な出力・係数契約、lowering操作やArtifactの保存手順の習得までは付与しない。"
+      "scope": "二次以下の多項式・変数種の受付範囲、特殊制約の事前lowering、ラベル・inactive制約・NamedFunction等の情報損失を理解して保存形式を選ぶ。二次拡張に対応した外部ツールでも係数の解釈が一致するとは限らず、取り込み後の式を確認する。厳密な出力・係数契約、lowering操作やArtifactの保存手順の習得までは付与しない。"
     },
     {
       "id": "expression.labels",
@@ -3437,7 +3439,7 @@
       ],
       "deferred": [],
       "parent_page": "R_API",
-      "notes": "日英SampleSet Guideを共有Referenceへ統合。候補を評価し、summary、get、best_feasibleで結果を比較する完全例を置く。候補中の最良と大域最適を区別し、変換後Instanceでの評価と報告目的値・removed制約を説明する。入力のSamplesとsample ID・重複候補の個数はR_API.samplesの契約として別に追跡し、結果を読むだけの読者に入力作成を要求しない。",
+      "notes": "日英SampleSet Guideを共有Referenceへ統合。候補を評価し、summary、get、best_feasibleで結果を比較する完全例を置く。候補中の最良と大域最適を区別し、変換後Instanceでの評価と報告目的値・inactive制約を説明する。入力のSamplesとsample ID・重複候補の個数はR_API.samplesの契約として別に追跡し、結果を読むだけの読者に入力作成を要求しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -3693,7 +3695,7 @@
       ],
       "deferred": [],
       "parent_page": "R_API.preparation",
-      "notes": "旧G7.penaltyの不等式本体の二乗と違反量の二乗の反例を、uniform_penalty_method_with_fixed_weightの数学表と完全な実行例へ移管。選択したfixed-penalty phaseだけを適用し、active objectiveと保持された評価目的を区別する。重みの正規化・有限性・removed理由・slack先行変換への参照もこの設定の所有契約で扱う。",
+      "notes": "旧G7.penaltyの不等式本体の二乗と違反量の二乗の反例を、uniform_penalty_method_with_fixed_weightの数学表と完全な実行例へ移管。選択したfixed-penalty phaseだけを適用し、active objectiveと保持された評価目的を区別する。重みの正規化・有限性・無効化理由・slack先行変換への参照もこの設定の所有契約で扱う。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -3858,7 +3860,7 @@
       ],
       "deferred": [],
       "parent_page": "R_API.instance",
-      "notes": "旧removed_constraintsのデータモデルと操作を共有Referenceへ移管。removed_constraintsの概説からrelax_constraintの緩和→候補評価→理由の表→復帰を一連で読む。output_objectiveとconvert_active_objectiveは符号反転の完全例、map_active_optimalityは保証の範囲を所有する。SolutionとSampleSetの実行可能性プロパティはactive/removedとdomainの正確な判定を所有する。保持情報を参照するだけで元問題の保証は付与しない。",
+      "notes": "旧removed_constraintsのデータモデルと操作を共有Referenceへ移管。inactive_constraintsの概説からdeactivate_constraintによる無効化→候補評価→理由の表→activate_constraintによる再有効化を一連で読む。output_objectiveとconvert_active_objectiveは符号反転の完全例、map_active_optimalityは保証の範囲を所有する。SolutionとSampleSetの実行可能性APIはactive/inactiveとskip指定およびdomainの正確な判定を所有する。保持情報を参照するだけで元問題の保証は付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -3910,7 +3912,7 @@
       ],
       "deferred": [],
       "parent_page": "R_API.instance.retained_results",
-      "notes": "removed_constraintsの注意とpopulate_stateのreporting-only変数の説明を対応づける部分経路。旧Bookページへの依存は残さない。",
+      "notes": "inactive_constraintsの注意とpopulate_stateのreporting-only変数の説明を対応づける部分経路。旧Bookページへの依存は残さない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -4021,7 +4023,7 @@
       ],
       "deferred": [],
       "parent_page": "R_API.instance_class",
-      "notes": "The active representation determines membership節がactive objective/constraintsとused variablesを検査対象にし、fixed/dependent/irrelevant、removed-only、named/output-onlyを除外する契約を所有する。基本のcontains操作とは独立した詳細である。",
+      "notes": "The active representation determines membership節がactive objective/constraintsとused variablesを検査対象にし、fixed/dependent/irrelevant、inactive-only、named/output-onlyを除外する契約を所有する。基本のcontains操作とは独立した詳細である。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -7937,7 +7939,7 @@
     {
       "topic": "transformed_evaluation",
       "status": "open",
-      "note": "Recheck early removed/output-objective references, named-function prerequisites, and source-observation omissions against the reviewed revision rather than treating mention annotations as accepted judgments. PR #1280 postpones and locally glosses these details in Instance/Solution/SampleSet; other Guides and the historical observation inventory remain unverified."
+      "note": "Recheck early inactive/output-objective references, named-function prerequisites, and source-observation omissions against the reviewed revision rather than treating mention annotations as accepted judgments. PR #1280 postpones and locally glosses these details in Instance/Solution/SampleSet; other Guides and the historical observation inventory remain unverified."
     }
   ]
 }

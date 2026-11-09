@@ -92,7 +92,7 @@ OMMX is a system for adding and combining analyses and transformations on a comm
 - A transformation rewrites the problem using analysis results and applicability conditions, and states its correspondence with the original problem and the guarantees it preserves.
 - Processing that combines analyses and transformations decides whether analysis results remain reusable after a change and connects transformations according to the required guarantees.
 
-For example, a transformation may use a bound inferred from a constraint. After that constraint is removed, the same bound may no longer be justified. The processing that combines these operations is responsible for checking the analysis dependencies and deciding whether to retain, update, or recompute the result.
+For example, a transformation may use a bound inferred from a constraint. After that constraint becomes inactive, the same bound may no longer be justified. The processing that combines these operations is responsible for checking the analysis dependencies and deciding whether to retain, update, or recompute the result.
 
 New analyses and transformations must define their applicability conditions and guarantees within this division of responsibilities. Users choose the guarantees their task requires; the design makes combinations that satisfy them reusable as common processing. As declaration types and solving methods grow, the contract connecting each transformation to reconstruction and result interpretation remains shared.
 

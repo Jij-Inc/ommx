@@ -26,9 +26,9 @@ A string such as ``"sos1"`` raises ``TypeError``. See
 
 The view retains its owner without collecting rows. It follows the row ownership,
 equality, and iterator snapshot rules of {class}`~ommx.ActiveConstraintCollection`:
-active model rows are attached handles, while removed and result rows are
+active model rows are attached handles, while inactive and result rows are
 independent snapshots. This applies to Instance and ParametricInstance active
-and removed collections, and to Solution and SampleSet result collections.
+and inactive collections, and to Solution and SampleSet result collections.
 
 Filtering is an inspection operation. Selecting one family does not establish
 that a solver or transformation supports every constraint in the model. A

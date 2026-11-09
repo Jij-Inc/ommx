@@ -367,11 +367,11 @@ def test_convert_sos1_with_integer_variables_emits_bigm_pair():
     assert len(new_var_ids) == 2
     for v_id in new_var_ids:
         assert after_vars[v_id].name == "ommx.sos1_indicator"
-    # Original SOS1 is retained on the removed side with our reason string.
-    removed = instance.inactive_constraints[Sos1ConstraintID(10)]
-    assert removed.inactive_reason == "ommx.Instance.convert_sos1_to_constraints"
+    # Original SOS1 is retained on the inactive side with our reason string.
+    inactive = instance.inactive_constraints[Sos1ConstraintID(10)]
+    assert inactive.inactive_reason == "ommx.Instance.convert_sos1_to_constraints"
     # `constraint_ids` parameter lists all 5 new IDs in insertion order.
-    assert removed.inactive_reason_parameters["constraint_ids"] == "11,12,13,14,15"
+    assert inactive.inactive_reason_parameters["constraint_ids"] == "11,12,13,14,15"
 
 
 def test_convert_sos1_rejects_domain_excluding_zero():
@@ -396,9 +396,9 @@ def test_convert_sos1_rejects_domain_excluding_zero():
     )
 
 
-def test_sos1_constraints_df_roundtrips_removed_context(snapshot):
+def test_sos1_constraints_df_roundtrips_inactive_context(snapshot):
     """`constraints_df(kind=ConstraintKind.Sos1, min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK)` surfaces reason + constraint_ids
-    parameter as columns on removed rows. Active is empty after conversion."""
+    parameter as columns on inactive rows. Active is empty after conversion."""
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -543,7 +543,7 @@ def test_solution_sos1_constraints_df_all_zero(snapshot, _solution_sos1_all_zero
     )
 
 
-def test_solution_one_hot_removed_reasons_df_after_conversion(snapshot):
+def test_solution_one_hot_inactive_reasons_df_after_conversion(snapshot):
     """`Solution.constraints_df(kind=ConstraintKind.OneHot, include=(..., "inactive_reason"))`
     after `convert_one_hot_to_constraint` carries the conversion reason."""
     x = [DecisionVariable.binary(i) for i in range(3)]
@@ -566,7 +566,7 @@ def test_solution_one_hot_removed_reasons_df_after_conversion(snapshot):
     )
 
 
-def test_solution_sos1_removed_reasons_df_after_conversion(snapshot):
+def test_solution_sos1_inactive_reasons_df_after_conversion(snapshot):
     """`Solution.constraints_df(kind=ConstraintKind.Sos1, include=(..., "inactive_reason"))`
     after `convert_sos1_to_constraints` carries the conversion reason and
     the comma-joined `constraint_ids` parameter."""
@@ -648,7 +648,7 @@ def test_sample_set_sos1_constraints_df_dynamic_columns(snapshot, _sample_set_so
     )
 
 
-def test_sample_set_one_hot_removed_reasons_df_after_conversion(snapshot):
+def test_sample_set_one_hot_inactive_reasons_df_after_conversion(snapshot):
     """`SampleSet.constraints_df(kind=ConstraintKind.OneHot, include=(..., "inactive_reason"))`
     after `convert_one_hot_to_constraint` surfaces conversion reasons."""
     x = [DecisionVariable.binary(i) for i in range(3)]

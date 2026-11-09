@@ -225,7 +225,7 @@ def test_replacing_metadata_does_not_have_add_aliases():
 
 
 def test_attached_after_relax_constraint_still_reads_through():
-    """deactivate_constraint moves a constraint from active to removed; the
+    """deactivate_constraint moves a constraint from active to inactive; the
     AttachedConstraint handle stays valid because lookup_constraint checks
     both maps and the SoA context store is keyed by id regardless."""
     instance = _empty_instance()
@@ -236,7 +236,7 @@ def test_attached_after_relax_constraint_still_reads_through():
     instance.deactivate_constraint(cid, "manual")
     assert cid not in instance.active_constraints
 
-    # The handle still resolves: getters fall through to the removed map for
+    # The handle still resolves: getters fall through to the inactive map for
     # core data and to the SoA store for context.
     assert attached.name == "balance"
     assert attached.subscripts == [7]

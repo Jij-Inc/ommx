@@ -35,7 +35,7 @@ pub struct ObjectivePreparation {
 /// [`Self::max_integer_range`] and [`Self::atol`].
 ///
 /// [`Self::slack_upper_bound`] selects the required postcondition. `None`
-/// requires the constraint to become an equality or be removed as trivially
+/// requires the constraint to become an equality or be deactivated as trivially
 /// satisfied, so [`ExactIntegerSlackUnavailable`] is propagated. `Some(value)`
 /// permits the constraint to remain an inequality: only that signal selects
 /// [`Instance::add_integer_slack_to_inequality`] with `value`. The latter
@@ -677,16 +677,16 @@ mod tests {
         assert_eq!(output.sense(), Sense::Minimize);
         assert_eq!(output.function(), &objective);
         assert!(!output.preserves_optimality());
-        // Encoding now precedes penalty removal. The removed row contains the
+        // Encoding now precedes penalty deactivation. The inactive row contains the
         // encoded function, whose value must still be the original constraint.
-        let removed = instance.inactive_constraints()[&constraint_id].0.function();
+        let inactive = instance.inactive_constraints()[&constraint_id].0.function();
         for low in [0.0, 1.0] {
             for high in [0.0, 1.0] {
                 let state = crate::v1::State::from_iter([(2, low), (3, high)]);
                 let decoded = low + 2.0 * high;
                 let source_state = crate::v1::State::from_iter([(1, decoded)]);
                 assert_eq!(
-                    removed.evaluate(&state, ATol::default()).unwrap(),
+                    inactive.evaluate(&state, ATol::default()).unwrap(),
                     constraint_function
                         .evaluate(&source_state, ATol::default())
                         .unwrap()
@@ -714,7 +714,7 @@ mod tests {
     }
 
     #[test]
-    fn encoding_failure_precedes_penalty_removal() {
+    fn encoding_failure_precedes_penalty_deactivation() {
         let variable = VariableID::from(1);
         let mut instance = Instance::new(
             Sense::Minimize,

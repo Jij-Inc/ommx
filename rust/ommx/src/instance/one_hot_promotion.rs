@@ -137,7 +137,7 @@ struct PlannedOneHot {
 /// - `plans` has exactly one entry for every requested source ID;
 /// - every successful plan's source row remains active in that instance;
 /// - successful target OneHot IDs are pairwise distinct and absent from both
-///   active and removed OneHot collections;
+///   active and inactive OneHot collections;
 /// - every successful structural constraint is non-empty and all of its
 ///   members are registered Binary variables; and
 /// - every successful source context was captured before mutation.
@@ -324,7 +324,7 @@ impl<'a> OneHotPromotionPlan<'a> {
     pub fn apply(self) -> OneHotPromotion {
         let Self { instance, plans } = self;
 
-        let removal_reasons = plans
+        let inactive_metadata = plans
             .iter()
             .filter_map(|(&source_constraint_id, result)| {
                 let planned = result.as_ref().ok()?;
@@ -345,7 +345,7 @@ impl<'a> OneHotPromotionPlan<'a> {
             .collect();
         instance
             .constraint_collection
-            .move_active_rows_to_removed_with_reasons(removal_reasons)
+            .move_active_rows_to_inactive_with_reasons(inactive_metadata)
             .expect("source rows and bound Instance were validated by OneHotPromotionPlan");
 
         plans
@@ -410,7 +410,7 @@ impl Instance {
     /// the same request from being promoted.
     ///
     /// On each successful entry the source moves to `inactive_constraints`, its
-    /// context is copied to the new active one-hot constraint, and the removal
+    /// context is copied to the new active one-hot constraint, and the deactivation
     /// reason records the allocated target ID. Planning is atomic: rejected
     /// requests leave their rows unchanged. The plan exclusively
     /// borrows this instance until its infallible Apply consumes the plan.

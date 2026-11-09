@@ -44,7 +44,7 @@ no member. Numerical evaluation and reported violations use the contracts of
 constructor creates an independent value; context changes on it do not edit a
 constraint already inserted into a host. For explicit IDs, use the
 `one_hot_constraints` mapping of {meth}`~ommx.Instance.from_components`.
-Constraint numbers share the active/removed cross-family space described by
+Constraint numbers share the active/inactive cross-family space described by
 {class}`~ommx.Instance`.
 
 {meth}`~ommx.Instance.convert_one_hot_to_constraint` lowers the condition to a

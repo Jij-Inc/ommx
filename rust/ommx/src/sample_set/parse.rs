@@ -173,13 +173,13 @@ impl Parse for crate::v1::SampleSet {
             )?
             .parse_as(&(), message, "objectives")?;
 
-        // Parse constraints and extract removed reasons + context
+        // Parse constraints and extract inactive metadata + context
         let mut constraints = std::collections::BTreeMap::new();
         let mut constraint_inactive_metadata = std::collections::BTreeMap::new();
         let mut constraint_context =
             crate::ConstraintContextStore::<crate::ConstraintID>::default();
         for v1_constraint in self.constraints {
-            let (id, parsed_constraint, context, removed_reason): (
+            let (id, parsed_constraint, context, inactive_metadata): (
                 crate::ConstraintID,
                 crate::SampledConstraint,
                 crate::ConstraintContext,
@@ -195,7 +195,7 @@ impl Parse for crate::v1::SampleSet {
                     .context(message, "constraints"),
                 );
             }
-            if let Some(reason) = removed_reason {
+            if let Some(reason) = inactive_metadata {
                 constraint_inactive_metadata.insert(id, reason);
             }
             constraint_context.insert(id, context);
@@ -1534,7 +1534,7 @@ mod tests {
             equality: v1::Equality::EqualToZero as i32,
             evaluated_values: Some(sampled_values.clone()),
             feasible: std::collections::HashMap::from([(0, true)]),
-            removed_reason: Some("removed first row".to_string()),
+            removed_reason: Some("inactive first row".to_string()),
             ..Default::default()
         };
         let second = v1::SampledConstraint {

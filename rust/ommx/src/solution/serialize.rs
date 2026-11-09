@@ -229,7 +229,7 @@ mod tests {
         for (factor, value_factor, expected) in [(100.0, 10.0, false), (0.01, 0.1, true)] {
             let atol = ATol::new(default_atol.into_inner() * factor).unwrap();
             let value = default_atol.into_inner() * value_factor;
-            for source in ["regular", "removed", "variable"] {
+            for source in ["regular", "inactive", "variable"] {
                 let constraint = Constraint::equal_to_zero(Function::from(
                     Coefficient::try_from(value).unwrap(),
                 ));
@@ -244,7 +244,7 @@ mod tests {
                         builder =
                             builder.active_constraints(BTreeMap::from([(0.into(), constraint)]));
                     }
-                    "removed" => {
+                    "inactive" => {
                         builder = builder.inactive_constraints(BTreeMap::from([(
                             0.into(),
                             (
@@ -295,7 +295,7 @@ mod tests {
                 );
                 assert_eq!(
                     restored_samples.feasible_relaxed_ids().contains(&sample_id),
-                    source == "removed" || expected
+                    source == "inactive" || expected
                 );
                 let restored = Solution::from_v1_bytes(&solution.to_v1_bytes().unwrap()).unwrap();
                 for result in [restored, restored_samples.get(sample_id).unwrap()] {
@@ -303,7 +303,7 @@ mod tests {
                     assert_eq!(result.feasible(Default::default()), expected, "{source}");
                     assert_eq!(
                         result.feasible_relaxed(),
-                        source == "removed" || expected,
+                        source == "inactive" || expected,
                         "{source}"
                     );
                     assert_eq!(result.state(), solution.state());

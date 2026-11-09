@@ -271,7 +271,7 @@ impl Constraint {
 
 /// InactiveConstraint wrapper for Python.
 ///
-/// Holds the inner `Constraint`, a snapshot of its context, and the removal
+/// Holds the inner `Constraint`, a snapshot of its context, and the inactivation
 /// reason. As with [`Constraint`], the context snapshot does not propagate
 /// back to the originating instance — it is read-only context for inspection.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]

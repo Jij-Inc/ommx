@@ -60,13 +60,13 @@ impl Parse for crate::v1::Solution {
             crate::v1::instance::Sense::Maximize => Some(crate::Sense::Maximize),
         };
 
-        // Parse evaluated constraints and extract removed reasons + context
+        // Parse evaluated constraints and extract inactive metadata + context
         let mut evaluated_constraints = std::collections::BTreeMap::default();
         let mut inactive_metadata = std::collections::BTreeMap::default();
         let mut constraint_context =
             crate::ConstraintContextStore::<crate::ConstraintID>::default();
         for ec in self.evaluated_constraints {
-            let (id, parsed_constraint, context, removed_reason): (
+            let (id, parsed_constraint, context, row_inactive_metadata): (
                 crate::ConstraintID,
                 crate::EvaluatedConstraint,
                 crate::ConstraintContext,
@@ -80,7 +80,7 @@ impl Parse for crate::v1::Solution {
                 })
                 .context(message, "evaluated_constraints"));
             }
-            if let Some(reason) = removed_reason {
+            if let Some(reason) = row_inactive_metadata {
                 inactive_metadata.insert(id, reason);
             }
             constraint_context.insert(id, context);
@@ -1434,7 +1434,7 @@ mod tests {
             id: 7,
             equality: v1::Equality::EqualToZero as i32,
             evaluated_value: 0.0,
-            removed_reason: Some("removed first row".to_string()),
+            removed_reason: Some("inactive first row".to_string()),
             ..Default::default()
         };
         let second = v1::EvaluatedConstraint {
@@ -1556,7 +1556,7 @@ mod tests {
 
         // SAFETY: the inputs above satisfy Solution invariants (one DV,
         // one evaluated constraint over that DV, one named function over
-        // that DV, value 1.0 satisfies the equality, no removed reasons).
+        // that DV, value 1.0 satisfies the equality, no inactive metadata).
         let solution = unsafe {
             Solution::builder()
                 .objective(1.0)

@@ -232,9 +232,9 @@ def test_solution_total_violation_empty():
 
 @pytest.mark.parametrize("active", [False, True])
 @pytest.mark.parametrize("equality", [False, True])
-@pytest.mark.parametrize("removed", [False, True])
+@pytest.mark.parametrize("inactive", [False, True])
 @pytest.mark.parametrize("value", [-2.5, 0.0, 1.5])
-def test_total_violation_indicator(active, equality, removed, value):
+def test_total_violation_indicator(active, equality, inactive, value):
     z = DecisionVariable.binary(0)
     x = DecisionVariable.continuous(1, lower=-10, upper=10)
     constraint = x == 0 if equality else x <= 0
@@ -245,7 +245,7 @@ def test_total_violation_indicator(active, equality, removed, value):
         active_indicator_constraints={0: constraint.with_indicator(z)},
         sense=Sense.Minimize,
     )
-    if removed:
+    if inactive:
         instance.deactivate_indicator_constraint(0, "test relaxation")
     solution = instance.evaluate({0: float(active), 1: value})
     violation = (abs(value) if equality else max(0, value)) if active else 0
@@ -414,7 +414,7 @@ def test_total_is_sum_of_individual_and_dataframe_violations():
     ]
     assert solution.constraint_violation(one_hot_row) == 2
     assert sum(solution.constraint_violation(row) for row in sos1_rows) == 2
-    # Generated rows and retained removed originals both contribute.
+    # Generated rows and retained inactive originals both contribute.
     assert solution.total_violation() == 11
     dataframe_total_violation = sum(
         solution.constraints_df(kind=kind)["violation"].sum() for kind in kinds
@@ -446,7 +446,7 @@ def test_lowering_may_change_total_violation():
     lowered = instance.evaluate(state)
     assert lowered.constraint_violation(row) == 0
     assert lowered.constraint_violation(OneHotConstraintID(0)) == 1
-    # Removed native constraints and generated regular constraints both contribute.
+    # Inactive native constraints and generated regular constraints both contribute.
     assert instance.evaluate({0: 1, 1: 1}).total_violation() == 2
 
 

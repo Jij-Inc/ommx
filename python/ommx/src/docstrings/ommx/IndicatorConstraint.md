@@ -53,7 +53,7 @@ constructor above creates an independent value; context changes on it do not
 edit a constraint already inserted into a host. Alternatively, provide explicit
 IDs through the `indicator_constraints` mapping of
 {meth}`~ommx.Instance.from_components`. Constraint numbers must be distinct
-across all active and removed families, as described by {class}`~ommx.Instance`.
+across all active and inactive families, as described by {class}`~ommx.Instance`.
 
 {meth}`~ommx.Instance.deactivate_indicator_constraint` moves a condition out of the
 active formulation while retaining it for evaluation.

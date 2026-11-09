@@ -7,7 +7,7 @@ Changing that snapshot does not update its owner; a later lookup reads the
 owner's current state.
 
 Inactive constraints are excluded from the active formulation but still checked
-when candidates are evaluated. Removal can follow relaxation, an equivalent
+when candidates are evaluated. Deactivation can follow relaxation, an equivalent
 lowering, or another transformation; the collection's presence does not identify
 which guarantee holds. See {attr}`~ommx.Instance.inactive_constraints` for their
 evaluation semantics and {meth}`~ommx.Instance.deactivate_constraint` for a complete

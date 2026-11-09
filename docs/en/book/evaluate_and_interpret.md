@@ -3,7 +3,7 @@
 
 You may already have a candidate from a solver, a sampler, or a manually prepared plan. OMMX lets you evaluate it against a common problem representation: which conditions it satisfies, what objective value it has, and what other metrics it produces. You can use this evaluation without running an OMMX Adapter.
 
-**Choose what problem you are evaluating against before comparing results.** A candidate can satisfy the formulation given to a solver while violating a condition that was removed during preparation. Reconstructing its variable values, checking feasibility, and establishing optimality answer different questions.
+**Choose what problem you are evaluating against before comparing results.** A candidate can satisfy the formulation given to a solver while violating a condition that became inactive during preparation. Reconstructing its variable values, checking feasibility, and establishing optimality answer different questions.
 
 When a solve returns no candidate, read its termination report to determine what was established. Connecting the conditions identified by candidates or diagnostics back to requirements and input data helps you decide where to revise a plan, requirement, or data value.
 

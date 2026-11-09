@@ -92,7 +92,7 @@ assert_eq!(*solution.objective(), 1.0);
 ```
 
 Variable encodings can likewise replace an original variable with a dependency
-on new solver variables. Variables referenced only by named functions, removed
+on new solver variables. Variables referenced only by named functions, inactive
 constraints, or the output objective are also not solver-used. A variable may
 even be declared without being referenced at all. Use
 [`decision_variable_role()`](crate::Instance::decision_variable_role) to inspect

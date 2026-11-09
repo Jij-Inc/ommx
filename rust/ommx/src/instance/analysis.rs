@@ -535,11 +535,11 @@ impl Instance {
     /// or SOS1 constraints, including an Indicator's controlling variable.
     ///
     /// References occurring only in the output objective, named functions,
-    /// removed constraints, or dependency right-hand sides do not contribute
+    /// inactive constraints, or dependency right-hand sides do not contribute
     /// to this set. This is a solver-input view, not permission to delete the
     /// other model data: evaluate the returned state with the same instance
     /// using [`Self::evaluate`] to reconstruct fixed and dependent values and
-    /// evaluate the output objective and removed constraints.
+    /// evaluate the output objective and inactive constraints.
     /// Omitted irrelevant variables are filled with defaults, not optimized
     /// values. To choose their values for reporting, include them explicitly in
     /// the returned state; see [`Self::populate_state`].

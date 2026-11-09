@@ -48,7 +48,7 @@ The constructor creates an independent value;
 {meth}`~ommx.Instance.add_sos1_constraint` returns an attached handle.
 For explicit IDs, use the `sos1_constraints` mapping of
 {meth}`~ommx.Instance.from_components`. Constraint numbers follow the same
-cross-family uniqueness rule as regular constraints, including removed rows.
+cross-family uniqueness rule as regular constraints, including inactive rows.
 
 **Use the structure directly or express it with regular constraints**
 

@@ -12,7 +12,7 @@ and observes subsequent owner changes. Each lookup returns an independent
 snapshot with labels, provenance, and the inactivity reason; editing a snapshot
 does not change the Instance. See that class for lookup and iteration semantics.
 
-**Removal records a change, not its mathematical guarantee**
+**Deactivation records a change, not its mathematical guarantee**
 
 Different operations retain inactive constraints for different reasons:
 
@@ -21,7 +21,7 @@ Different operations retain inactive constraints for different reasons:
 | {meth}`~ommx.Instance.deactivate_constraint` or {meth}`~ommx.Instance.deactivate_indicator_constraint` | Omits the selected condition | The condition and caller-supplied inactivity reason |
 | Special-constraint lowering, such as {meth}`~ommx.Instance.convert_one_hot_to_constraint` | Represents the condition using regular constraints | The original special constraint; generated constraints carry provenance |
 | {meth}`~ommx.Instance.penalty_method` | Replaces regular constraints with weighted objective terms | The constraints to check independently of the penalized objective |
-| Removal of trivial constraints during preprocessing | Omits conditions found unnecessary by that operation | The removed conditions and their reasons |
+| Deactivation of trivial constraints during preprocessing | Omits conditions found unnecessary by that operation | The inactive conditions and their reasons |
 
 The presence of inactive constraints alone therefore does not establish
 equivalence, relaxation, or preservation of optimal solutions. Read the owning

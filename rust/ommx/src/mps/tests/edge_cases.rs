@@ -4,7 +4,7 @@ use crate::{
 };
 use maplit::btreemap;
 
-// Test variable filtering and removed constraint handling
+// Test variable filtering and inactive constraint handling
 #[test]
 fn test_unused_variable_filtering() {
     // Create instance with 3 variables but only use 2
@@ -58,7 +58,7 @@ fn test_unused_variable_filtering() {
 }
 
 #[test]
-fn test_removed_constraint_variable_filtering() {
+fn test_inactive_constraint_variable_filtering() {
     // Create instance with variables and constraints, then relax one
     let decision_variables = btreemap! {
         VariableID::from(0) => DecisionVariable::new(
@@ -85,11 +85,11 @@ fn test_removed_constraint_variable_filtering() {
     let mut instance =
         Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
 
-    // Relax the constraint to create a removed constraint
+    // Deactivate the constraint to create an inactive constraint
     instance
         .deactivate_constraint(
             ConstraintID::from(100),
-            "test_removal".to_string(),
+            "test_deactivation".to_string(),
             [],
             false,
         )
@@ -107,23 +107,23 @@ fn test_removed_constraint_variable_filtering() {
         .map(|id| id.into_inner())
         .collect();
 
-    // Only x0 should be preserved since the constraint using x1 was removed
+    // Only x0 should be preserved since the constraint using x1 was inactive
     assert_eq!(loaded_instance.decision_variables().len(), 1);
     assert_eq!(var_ids, vec![0]); // Only variable from objective is preserved
 
-    // Should have 0 constraints (removed constraint is not exported)
+    // Should have 0 constraints (inactive constraint is not exported)
     assert_eq!(loaded_instance.active_constraints().len(), 0);
 
     // Should have 0 inactive_constraints (not supported in MPS format)
     assert_eq!(loaded_instance.inactive_constraints().len(), 0);
 
-    // Original instance should have 1 removed constraint
+    // Original instance should have 1 inactive constraint
     assert_eq!(instance.inactive_constraints().len(), 1);
 }
 
 #[test]
-fn test_removed_constraint_information_loss() {
-    // Create instance with both active and removed constraints
+fn test_inactive_constraint_information_loss() {
+    // Create instance with both active and inactive constraints
     let decision_variables = btreemap! {
         VariableID::from(0) => DecisionVariable::new(
             crate::decision_variable::Kind::Continuous,
@@ -146,7 +146,7 @@ fn test_removed_constraint_information_loss() {
     let mut instance =
         Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
 
-    // Relax one constraint to create a removed constraint
+    // Deactivate one constraint to create an inactive constraint
     instance
         .deactivate_constraint(ConstraintID::from(1), "redundant".to_string(), [], false)
         .unwrap();
@@ -171,10 +171,10 @@ fn test_removed_constraint_information_loss() {
         crate::Equality::LessThanOrEqualToZero
     );
 
-    // No removed constraints in the result (MPS format doesn't support them)
+    // No inactive constraints in the result (MPS format doesn't support them)
     assert_eq!(loaded_instance.inactive_constraints().len(), 0);
 
-    // Original instance should have 1 active + 1 removed = 2 total constraint-like objects
+    // Original instance should have 1 active + 1 inactive = 2 total constraint-like objects
     assert_eq!(instance.active_constraints().len(), 1); // 1 active constraint
-    assert_eq!(instance.inactive_constraints().len(), 1); // 1 removed constraint
+    assert_eq!(instance.inactive_constraints().len(), 1); // 1 inactive constraint
 }

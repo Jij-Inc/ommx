@@ -46,7 +46,7 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 ### v3 Development (current)
 
 - **Python SDK**: v3.0.0 alpha — all top-level `ommx` SDK domain classes are direct Rust re-exports via PyO3, protobuf Python dependency removed
-- **Rust SDK**: v3 Stage Pattern — constraints are generic over lifecycle stages (`Created`, `Removed`, `Evaluated`, `Sampled`)
+- **Rust SDK**: v3 Stage Pattern — constraints are generic over evaluation stages (`Created`, `Evaluated`, `Sampled`); collections own active/inactive membership and inactive metadata
 
 ### Versioning
 - Rust SDK and Python SDK versions are managed independently.

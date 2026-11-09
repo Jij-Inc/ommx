@@ -1,15 +1,15 @@
 // Benchmark contracts for Instance::log_encode.
 //
-// Removed-constraint family
+// Inactive-constraint family
 // - Purpose: persistent scaling guardrail.
-// - Regression: atomic log encoding clones untouched removed state and becomes O(N).
+// - Regression: atomic log encoding clones untouched inactive state and becomes O(N).
 // - Origin: https://github.com/Jij-Inc/ommx/issues/1031 and
 //   https://github.com/Jij-Inc/ommx/issues/1045.
 // - Measured boundary: Rust SDK Instance::log_encode.
-// - Independent variable: removed regular constraint count N; the two decision
+// - Independent variable: inactive regular constraint count N; the two decision
 //   variables and ten-bit encoding work stay fixed.
 // - Cost model/evidence: fixed validation, encoding, and substitution plan;
-//   removed rows are not inspected, so the CodSpeed simulation same-run
+//   inactive rows are not inspected, so the CodSpeed simulation same-run
 //   cross-size exponent should be p ~= 0.
 //
 // Active-constraint family
@@ -21,7 +21,7 @@
 //   expression size, and ten-bit encoding work stay fixed.
 // - Cost model/evidence: inspect N active rows without rewriting them, so p ~= 1.
 //   This exponent is a complexity guardrail, not evidence about constant-factor
-//   whole-owner cloning; use the removed family or same-input run comparisons
+//   whole-owner cloning; use the inactive family or same-input run comparisons
 //   for that regression.
 //
 // Unrelated-named-function family
@@ -66,9 +66,9 @@ use std::collections::BTreeMap;
 const INTEGER_BOUND_WIDTH: f64 = 1023.0; // 10 log-encoding bits
 
 /// An instance with a single integer decision variable (id 0) to log-encode,
-/// plus `num_removed` unrelated removed regular constraints that log_encode
+/// plus `num_inactive` unrelated inactive regular constraints that log_encode
 /// must neither inspect nor rewrite.
-fn instance_with_inactive_constraints(num_removed: usize) -> Instance {
+fn instance_with_inactive_constraints(num_inactive: usize) -> Instance {
     let decision_variables = BTreeMap::from([
         (
             VariableID::from(0),
@@ -82,18 +82,18 @@ fn instance_with_inactive_constraints(num_removed: usize) -> Instance {
         (VariableID::from(1), DecisionVariable::continuous()),
     ]);
 
-    let removed_reason = InactiveConstraintMetadata {
+    let inactive_metadata = InactiveConstraintMetadata {
         skip_feasibility_check: false,
-        reason: "ommx.bench.log_encode.removed_regular_constraints".to_string(),
+        reason: "ommx.bench.log_encode.inactive_regular_constraints".to_string(),
         parameters: Default::default(),
     };
-    let inactive_constraints = (1..=num_removed as u64)
+    let inactive_constraints = (1..=num_inactive as u64)
         .map(|id| {
             (
                 ConstraintID::from(id),
                 (
                     Constraint::equal_to_zero(Function::from(linear!(1))),
-                    removed_reason.clone(),
+                    inactive_metadata.clone(),
                 ),
             )
         })
@@ -214,13 +214,13 @@ fn instance_with_unrelated_dependencies(num_dependencies: usize) -> Instance {
 
 fn log_encode_inactive_constraints(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
-    let mut group = c.benchmark_group("log-encode-removed-constraints");
+    let mut group = c.benchmark_group("log-encode-inactive-constraints");
     group.plot_config(plot_config);
 
-    for num_removed in [1_000, 8_000, 32_000] {
-        let instance = instance_with_inactive_constraints(num_removed);
+    for num_inactive in [1_000, 8_000, 32_000] {
+        let instance = instance_with_inactive_constraints(num_inactive);
         group.bench_with_input(
-            BenchmarkId::new("log-encode-removed-constraints", num_removed.to_string()),
+            BenchmarkId::new("log-encode-inactive-constraints", num_inactive.to_string()),
             &instance,
             |b, instance| {
                 b.iter_batched_ref(

@@ -12,7 +12,7 @@
 //! `Base(x) AND SOS1(x)`
 //!
 //! while retaining the complete formulation history in the same [`Instance`].
-//! Verified Big-M rows move to the removed collection, and fresh selectors
+//! Verified Big-M rows move to the inactive collection, and fresh selectors
 //! become dependent variables reconstructed by a composed [`Function`].
 //!
 //! Each request is first checked without allocating a target SOS1 ID. The public
@@ -239,7 +239,7 @@ struct PlannedSos1BigMPromotion {
 /// - every successful effect consumes active regular rows disjoint from those
 ///   of every other successful effect;
 /// - successful target SOS1 IDs are pairwise distinct and absent from both
-///   the active and removed SOS1 collections;
+///   the active and inactive SOS1 collections;
 /// - every successful SOS1 member and fresh selector is registered;
 /// - no successful SOS1 member is an existing assignment target;
 /// - the existing assignments are acyclic, and every new assignment has the
@@ -631,7 +631,7 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
             .clip_bounds_exact(&tightened_bounds)
             .expect("bound updates were validated against the exclusively borrowed instance");
         if entries.values().any(Result::is_ok) {
-            let removal_reasons = entries
+            let inactive_metadata = entries
                 .values()
                 .filter_map(|entry| entry.as_ref().ok())
                 .flat_map(|planned| {
@@ -657,7 +657,7 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
             // once, so this storage-level validation cannot reject a valid plan.
             instance
                 .constraint_collection
-                .move_active_rows_to_removed_with_reasons(removal_reasons)
+                .move_active_rows_to_inactive_with_reasons(inactive_metadata)
                 .expect("regular row availability is a Sos1BigMPromotionPlan invariant");
 
             let dependencies =
@@ -967,7 +967,7 @@ impl Instance {
     /// Rust-side concepts not modeled by the initial Lean semantics are
     /// handled conservatively. Selected semi variables, fixed or dependent
     /// members, and already fixed/dependent fresh
-    /// selectors are rejected. The output objective, removed constraints,
+    /// selectors are rejected. The output objective, inactive constraints,
     /// named functions, and dependency RHS expressions are outside active
     /// solver input. They may reference fresh selectors and observe the
     /// canonical dependent-selector value during evaluation. Row context,
@@ -996,7 +996,7 @@ impl Instance {
     /// finite [`crate::ATol`]. Evaluation and dependent-selector reconstruction
     /// still use the caller's evaluation tolerance. Link-bound inference and
     /// coverage validation use the mathematical domains without expanding them.
-    /// Unrelated removed history is preserved rather than reinterpreted.
+    /// Unrelated inactive history is preserved rather than reinterpreted.
     ///
     /// Planning does not mutate the instance. The returned plan holds its
     /// exclusive borrow, so callers may inspect [`Sos1BigMPromotionPlan::rejections`]
@@ -1478,7 +1478,7 @@ impl Instance {
     ///
     /// The active-formulation traversal and its family-typed `Except` visitor
     /// are the source of truth. [`Instance::decision_variable_usage`] uses the
-    /// same visitor with an empty exception set. The output objective, removed
+    /// same visitor with an empty exception set. The output objective, inactive
     /// rows, named functions, and dependency RHS expressions are intentionally
     /// outside the traversal; they may retain references and observe the
     /// canonical dependent-selector value during evaluation.
@@ -2157,7 +2157,7 @@ mod tests {
     }
 
     #[test]
-    fn batch_id_reservation_accounts_for_removed_ids_and_the_whole_batch() {
+    fn batch_id_reservation_accounts_for_inactive_ids_and_the_whole_batch() {
         for (maximum, fits) in [(u64::MAX - 2, true), (u64::MAX - 1, false)] {
             for strict in [false, true] {
                 let (mut instance, request) = shared_member_batch_instance();
@@ -2172,7 +2172,7 @@ mod tests {
                     .unwrap();
                 instance
                     .sos1_constraint_collection
-                    .deactivate(maximum, test_removed_reason())
+                    .deactivate(maximum, test_inactive_metadata())
                     .unwrap();
                 let before = instance.clone();
 
@@ -2342,7 +2342,7 @@ mod tests {
                 assert_eq!(
                     promoted_solution.feasible(Default::default()),
                     promoted_solution.feasible_relaxed(),
-                    "canonical selector does not satisfy the claimed removed rows at reused={reused_member}, fresh={fresh_member}"
+                    "canonical selector does not satisfy the claimed inactive rows at reused={reused_member}, fresh={fresh_member}"
                 );
             }
         }
@@ -2707,7 +2707,7 @@ mod tests {
             .unwrap();
         assert!(!before.feasible_relaxed());
         assert!(after.feasible_relaxed());
-        // Retained removed rows still expose their own violations.
+        // Retained inactive rows still expose their own violations.
         assert!(!after.feasible(Default::default()));
     }
 
@@ -2910,11 +2910,11 @@ mod tests {
         );
         assert_atomic_rejection(instance, &request, "is not active");
 
-        let (mut removed, request) = mixed_instance();
-        removed
+        let (mut inactive, request) = mixed_instance();
+        inactive
             .deactivate_constraint(upper_row_id(), "test".to_string(), [], false)
             .unwrap();
-        assert_atomic_rejection(removed, &request, "is not active");
+        assert_atomic_rejection(inactive, &request, "is not active");
     }
 
     #[test]
@@ -3194,7 +3194,7 @@ mod tests {
             .unwrap();
         instance
             .indicator_constraint_collection
-            .deactivate(indicator_id, test_removed_reason())
+            .deactivate(indicator_id, test_inactive_metadata())
             .unwrap();
 
         let one_hot_id = instance
@@ -3205,10 +3205,10 @@ mod tests {
             .unwrap();
         instance
             .one_hot_constraint_collection
-            .deactivate(one_hot_id, test_removed_reason())
+            .deactivate(one_hot_id, test_inactive_metadata())
             .unwrap();
 
-        let removed_sos1_id = instance
+        let inactive_sos1_id = instance
             .add_sos1_constraint(
                 Sos1Constraint::new(BTreeSet::from([selector_id()])).unwrap(),
                 Default::default(),
@@ -3216,7 +3216,7 @@ mod tests {
             .unwrap();
         instance
             .sos1_constraint_collection
-            .deactivate(removed_sos1_id, test_removed_reason())
+            .deactivate(inactive_sos1_id, test_inactive_metadata())
             .unwrap();
 
         instance
@@ -3259,7 +3259,7 @@ mod tests {
             .contains_key(&one_hot_id));
         assert!(instance
             .inactive_sos1_constraints()
-            .contains_key(&removed_sos1_id));
+            .contains_key(&inactive_sos1_id));
         assert!(instance
             .named_functions()
             .contains_key(&crate::NamedFunctionID::from(0)));
@@ -3950,7 +3950,7 @@ mod tests {
         }
     }
 
-    fn test_removed_reason() -> InactiveConstraintMetadata {
+    fn test_inactive_metadata() -> InactiveConstraintMetadata {
         InactiveConstraintMetadata {
             skip_feasibility_check: false,
             reason: "test".to_string(),

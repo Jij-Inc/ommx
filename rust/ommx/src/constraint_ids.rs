@@ -6,7 +6,7 @@ use crate::constraint_type::{
 use std::collections::BTreeMap;
 
 #[derive(Debug, thiserror::Error)]
-#[error("Constraint number {number} is shared by {first_state} {first_family} and {second_state} {second_family} constraints; constraint numbers must be unique across all families, including removed constraints")]
+#[error("Constraint number {number} is shared by {first_state} {first_family} and {second_state} {second_family} constraints; constraint numbers must be unique across all families, including inactive constraints")]
 pub(crate) struct ConstraintNumberCollision {
     pub number: u64,
     pub first_family: &'static str,
@@ -27,9 +27,9 @@ impl ConstraintIds {
         &mut self,
         id: u64,
         family: &'static str,
-        removed: bool,
+        inactive: bool,
     ) -> Result<(), ConstraintNumberCollision> {
-        let state = if removed { "removed" } else { "active" };
+        let state = if inactive { "inactive" } else { "active" };
         if let Some((previous_family, previous_state)) = self.owners.insert(id, (family, state)) {
             return Err(ConstraintNumberCollision {
                 number: id,

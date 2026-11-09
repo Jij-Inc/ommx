@@ -63,4 +63,4 @@ continues to describe its earlier evaluation.
 Raises `RuntimeError` if the ID does not identify an active regular constraint.
 Use {meth}`~ommx.Instance.deactivate_indicator_constraint` for an Indicator constraint.
 See {attr}`~ommx.Instance.inactive_constraints` for other operations that retain
-inactive constraints and for the distinction between removal and relaxation.
+inactive constraints and for the distinction between deactivation and relaxation.

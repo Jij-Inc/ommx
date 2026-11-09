@@ -144,18 +144,18 @@ mod tests {
             .convert_one_hot_to_constraint(OneHotConstraintID::from(7))
             .unwrap();
 
-        // Original one-hot moved to removed with the expected reason pointing at the new constraint.
+        // Original one-hot moved to inactive with the expected reason pointing at the new constraint.
         assert!(instance.active_one_hot_constraints().is_empty());
-        let removed = instance
+        let inactive = instance
             .inactive_one_hot_constraints()
             .get(&OneHotConstraintID::from(7))
-            .expect("original one-hot should be retained as removed");
+            .expect("original one-hot should be retained as inactive");
         assert_eq!(
-            removed.1.reason,
+            inactive.1.reason,
             "ommx.Instance.convert_one_hot_to_constraint"
         );
         assert_eq!(
-            removed
+            inactive
                 .1
                 .parameters
                 .get("constraint_id")
@@ -263,14 +263,14 @@ mod tests {
     }
 
     #[test]
-    fn single_conversion_errors_without_mutation_when_active_or_removed_ids_are_exhausted() {
-        for removed in [false, true] {
+    fn single_conversion_errors_without_mutation_when_active_or_inactive_ids_are_exhausted() {
+        for inactive in [false, true] {
             let mut instance = instance_with_one_one_hot();
             let last_id = ConstraintID::from(u64::MAX);
             instance
                 .insert_constraint(last_id, Constraint::equal_to_zero(Function::Zero))
                 .unwrap();
-            if removed {
+            if inactive {
                 instance
                     .deactivate_constraint(last_id, "test".to_owned(), [], false)
                     .unwrap();

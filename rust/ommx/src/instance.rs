@@ -171,7 +171,7 @@ impl OutputObjective {
     ///
     /// This compares the active and output objective orderings over candidate
     /// states of the active formulation after state reconstruction. It does
-    /// not assert feasibility or optimality with respect to removed
+    /// not assert feasibility or optimality with respect to inactive
     /// constraints.
     ///
     /// `false` means that no such proof is available. It does not assert that
@@ -197,7 +197,7 @@ impl OutputObjective {
 ///   a particular adapter is a separate question; see [`crate::InstanceClass`].
 /// - **Interpretation Context** is the retained information needed to recover
 ///   variable values and evaluate or explain results in terms of the user's
-///   input. It includes fixed values, decision-variable dependencies, removed
+///   input. It includes fixed values, decision-variable dependencies, inactive
 ///   constraints, an output objective, named functions, and relevant modeling
 ///   labels and transformation provenance.
 ///
@@ -227,7 +227,7 @@ impl OutputObjective {
 /// rewrite.
 /// [`Self::reduce_binary_power`] reduces only Active Formulation expressions
 /// and captures the original objective when needed for output evaluation.
-/// Partial evaluation preserves named-function and existing removed-constraint
+/// Partial evaluation preserves named-function and existing inactive-constraint
 /// expressions, storing fixed values for evaluation after state population.
 ///
 /// Interpretation Context can require updates. For example,
@@ -318,7 +318,7 @@ impl OutputObjective {
 /// - variable-space extensions such as slack-variable introduction;
 /// - constraint-family morphisms such as one-hot, indicator, and SOS1
 ///   conversion into regular constraints;
-/// - lifecycle actions such as relax and restore;
+/// - lifecycle actions such as deactivate and activate;
 /// - unit propagation as a rewrite system over constraints plus assignment
 ///   state;
 /// - modeling-context and provenance pushforward from source rows to generated
@@ -326,10 +326,10 @@ impl OutputObjective {
 ///
 /// Lower-level tables and collections only apply the table-local row effects
 /// requested by these root operations: fresh insertion, lifecycle-preserving
-/// replacement, active-to-inactive movement, restore through a host-supplied
+/// replacement, active-to-inactive movement, activation through a host-supplied
 /// normalizer, label/context updates for owned IDs, or by-value rewrites. They
 /// do not decide whether an expression rewrite, variable-space extension,
-/// family morphism, or restore is semantically valid.
+/// family morphism, or activation is semantically valid.
 ///
 /// # Invariants
 ///
@@ -353,7 +353,7 @@ impl OutputObjective {
 ///   - **irrelevant**: All other declared variables; these do not affect the active formulation
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
 /// - [`Self::inactive_constraints`] may contain fixed or dependent variable IDs.
-///   These are substituted when the constraint is restored via [`Self::activate_constraint`].
+///   These are substituted when the constraint is activated via [`Self::activate_constraint`].
 /// - [`Self::named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; named-function rows do not carry IDs.
 /// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `inactive_constraints`).
@@ -434,7 +434,7 @@ impl OutputObjective {
 /// `convert_all_one_hots_to_constraints` / `convert_all_sos1_to_constraints`
 /// paths that populate the inactive maps. Constraint-family storage is mutated
 /// through operation-level collection primitives so active/inactive
-/// disjointness, removed reasons, and context sidecars remain attached to
+/// disjointness, inactive metadata, and context sidecars remain attached to
 /// owned row IDs.
 ///
 #[derive(
@@ -461,16 +461,16 @@ pub struct Instance {
     /// Created decision-variable rows, modeling labels, and fixed values.
     decision_variables: DecisionVariableTable,
 
-    /// Regular constraints collection (active + removed).
+    /// Regular constraints collection (active + inactive).
     constraint_collection: ConstraintCollection<Constraint>,
 
-    /// Indicator constraints collection (active + removed).
+    /// Indicator constraints collection (active + inactive).
     indicator_constraint_collection: ConstraintCollection<IndicatorConstraint>,
 
-    /// One-hot constraints collection (active + removed).
+    /// One-hot constraints collection (active + inactive).
     one_hot_constraint_collection: ConstraintCollection<OneHotConstraint>,
 
-    /// SOS1 constraints collection (active + removed).
+    /// SOS1 constraints collection (active + inactive).
     sos1_constraint_collection: ConstraintCollection<Sos1Constraint>,
 
     #[getset(get = "pub")]
@@ -735,7 +735,7 @@ impl Instance {
         self.constraint_collection.active()
     }
 
-    /// Removed regular constraints retained as Interpretation Context.
+    /// Inactive regular constraints retained as Interpretation Context.
     ///
     /// These are evaluated for result interpretation but are not conditions of
     /// the Active Formulation. See [`Self`] for these roles and the owning
@@ -746,7 +746,7 @@ impl Instance {
         self.constraint_collection.inactive()
     }
 
-    /// The full constraint collection (active + removed).
+    /// The full constraint collection (active + inactive).
     pub fn constraint_collection(&self) -> &ConstraintCollection<Constraint> {
         &self.constraint_collection
     }
@@ -778,7 +778,7 @@ impl Instance {
         self.indicator_constraint_collection.active()
     }
 
-    /// Removed indicator constraints.
+    /// Inactive indicator constraints.
     pub fn inactive_indicator_constraints(
         &self,
     ) -> &BTreeMap<crate::IndicatorConstraintID, (IndicatorConstraint, InactiveConstraintMetadata)>
@@ -786,7 +786,7 @@ impl Instance {
         self.indicator_constraint_collection.inactive()
     }
 
-    /// The full indicator constraint collection (active + removed).
+    /// The full indicator constraint collection (active + inactive).
     pub fn indicator_constraint_collection(&self) -> &ConstraintCollection<IndicatorConstraint> {
         &self.indicator_constraint_collection
     }
@@ -823,14 +823,14 @@ impl Instance {
         self.one_hot_constraint_collection.active()
     }
 
-    /// Removed one-hot constraints.
+    /// Inactive one-hot constraints.
     pub fn inactive_one_hot_constraints(
         &self,
     ) -> &BTreeMap<crate::OneHotConstraintID, (OneHotConstraint, InactiveConstraintMetadata)> {
         self.one_hot_constraint_collection.inactive()
     }
 
-    /// The full one-hot constraint collection (active + removed).
+    /// The full one-hot constraint collection (active + inactive).
     pub fn one_hot_constraint_collection(&self) -> &ConstraintCollection<OneHotConstraint> {
         &self.one_hot_constraint_collection
     }
@@ -860,14 +860,14 @@ impl Instance {
         self.sos1_constraint_collection.active()
     }
 
-    /// Removed SOS1 constraints.
+    /// Inactive SOS1 constraints.
     pub fn inactive_sos1_constraints(
         &self,
     ) -> &BTreeMap<crate::Sos1ConstraintID, (Sos1Constraint, InactiveConstraintMetadata)> {
         self.sos1_constraint_collection.inactive()
     }
 
-    /// The full SOS1 constraint collection (active + removed).
+    /// The full SOS1 constraint collection (active + inactive).
     pub fn sos1_constraint_collection(&self) -> &ConstraintCollection<Sos1Constraint> {
         &self.sos1_constraint_collection
     }
@@ -888,7 +888,7 @@ impl Instance {
     }
 
     /// Return all active constraint families, including regular constraints.
-    /// Removed rows are excluded; this is not an adapter support declaration.
+    /// Inactive rows are excluded; this is not an adapter support declaration.
     pub fn active_constraint_kinds(&self) -> ConstraintKinds {
         let mut kinds = self.active_special_constraint_kinds();
         if !self.constraint_collection.active().is_empty() {
@@ -921,7 +921,7 @@ impl Instance {
     /// When writing a solver integration, select the families that the backend
     /// cannot accept natively in `kinds_to_lower`. Unselected families remain
     /// active, and passing an empty set leaves the instance unchanged. The
-    /// original constraints are retained in their removed collections, with
+    /// original constraints are retained in their inactive collections, with
     /// provenance linking generated regular constraints to their sources.
     ///
     /// Lowering alone need not make the instance acceptable to the backend:
@@ -1112,7 +1112,7 @@ impl Instance {
 ///   [`Kind::Binary`](crate::decision_variable::Kind).
 /// - For every active or inactive [`crate::Sos1Constraint`], `variables` is
 ///   non-empty and every member is registered in [`Self::decision_variables`].
-/// - The constraint id-disjointness invariants (active vs. removed, per kind)
+/// - The constraint id-disjointness invariants (active vs. inactive, per kind)
 ///   match [`Instance`].
 ///
 /// These invariants are enforced at every construction or mutation entry
@@ -1154,16 +1154,16 @@ pub struct ParametricInstance {
     #[getset(get = "pub")]
     parameters: ParameterTable,
 
-    /// Regular constraints collection (active + removed).
+    /// Regular constraints collection (active + inactive).
     constraint_collection: ConstraintCollection<Constraint>,
 
-    /// Indicator constraints collection (active + removed).
+    /// Indicator constraints collection (active + inactive).
     indicator_constraint_collection: ConstraintCollection<IndicatorConstraint>,
 
-    /// One-hot constraints collection (active + removed).
+    /// One-hot constraints collection (active + inactive).
     one_hot_constraint_collection: ConstraintCollection<OneHotConstraint>,
 
-    /// SOS1 constraints collection (active + removed).
+    /// SOS1 constraints collection (active + inactive).
     sos1_constraint_collection: ConstraintCollection<Sos1Constraint>,
 
     #[getset(get = "pub")]
@@ -1300,7 +1300,7 @@ impl ParametricInstance {
         self.constraint_collection.inactive()
     }
 
-    /// The full constraint collection (active + removed).
+    /// The full constraint collection (active + inactive).
     pub fn constraint_collection(&self) -> &ConstraintCollection<Constraint> {
         &self.constraint_collection
     }
@@ -1333,7 +1333,7 @@ impl ParametricInstance {
         self.indicator_constraint_collection.active()
     }
 
-    /// Removed indicator constraints.
+    /// Inactive indicator constraints.
     pub fn inactive_indicator_constraints(
         &self,
     ) -> &BTreeMap<crate::IndicatorConstraintID, (IndicatorConstraint, InactiveConstraintMetadata)>
@@ -1379,7 +1379,7 @@ impl ParametricInstance {
         self.one_hot_constraint_collection.active()
     }
 
-    /// Removed one-hot constraints.
+    /// Inactive one-hot constraints.
     pub fn inactive_one_hot_constraints(
         &self,
     ) -> &BTreeMap<crate::OneHotConstraintID, (OneHotConstraint, InactiveConstraintMetadata)> {
@@ -1417,7 +1417,7 @@ impl ParametricInstance {
         self.sos1_constraint_collection.active()
     }
 
-    /// Removed SOS1 constraints.
+    /// Inactive SOS1 constraints.
     pub fn inactive_sos1_constraints(
         &self,
     ) -> &BTreeMap<crate::Sos1ConstraintID, (Sos1Constraint, InactiveConstraintMetadata)> {
@@ -1528,7 +1528,7 @@ impl Instance {
             let state = if collection.active().contains_key(&id) {
                 Some("active")
             } else if collection.inactive().contains_key(&id) {
-                Some("removed")
+                Some("inactive")
             } else {
                 None
             };

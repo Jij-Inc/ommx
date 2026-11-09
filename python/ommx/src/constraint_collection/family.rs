@@ -87,7 +87,7 @@ impl<'py> IntoPyObject<'py> for FamilyRow {
 enum Owner {
     All(Py<ConstraintCollection>),
     Active(Py<ActiveConstraintCollection>),
-    Removed(Py<InactiveConstraintCollection>),
+    Inactive(Py<InactiveConstraintCollection>),
     Evaluated(Py<EvaluatedConstraintCollection>),
     Sampled(Py<SampledConstraintCollection>),
 }
@@ -126,7 +126,7 @@ macro_rules! with_parent {
                 let $parent = owner.borrow($py);
                 $body
             }
-            Owner::Removed(owner) => {
+            Owner::Inactive(owner) => {
                 let $parent = owner.borrow($py);
                 $body
             }
@@ -186,7 +186,7 @@ macro_rules! with_family {
                     )
                 })
             }
-            Owner::Removed(owner) => {
+            Owner::Inactive(owner) => {
                 let parent = owner.borrow($py);
                 with_model!(&parent.owner, $py, |root| {
                     constraint_kind_collection!(
@@ -420,7 +420,7 @@ macro_rules! of_kind {
 }
 of_kind!(ConstraintCollection, All);
 of_kind!(ActiveConstraintCollection, Active);
-of_kind!(InactiveConstraintCollection, Removed);
+of_kind!(InactiveConstraintCollection, Inactive);
 of_kind!(EvaluatedConstraintCollection, Evaluated);
 of_kind!(SampledConstraintCollection, Sampled);
 

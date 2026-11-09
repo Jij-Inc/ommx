@@ -228,7 +228,7 @@ def test_provenance_after_one_hot_conversion(snapshot):
 # ---------------------------------------------------------------------------
 
 
-def test_removed_reasons_df_after_relax(snapshot):
+def test_inactive_reasons_df_after_relax(snapshot):
     """deactivate_constraint with no extra parameters → 1 row, key/value = NA."""
     instance = _instance_with_context()
     instance.deactivate_constraint(10, "test_reason")
@@ -238,7 +238,7 @@ def test_removed_reasons_df_after_relax(snapshot):
     )
 
 
-def test_removed_reasons_df_with_parameters_after_one_hot_conversion(snapshot):
+def test_inactive_reasons_df_with_parameters_after_one_hot_conversion(snapshot):
     """`convert_one_hot_to_constraint` records the conversion reason with a
     `constraint_id` parameter — verifies the long-format expansion of the
     parameter map."""
@@ -283,14 +283,14 @@ def test_sample_set_variable_label_df_matches_instance():
 
 # ---------------------------------------------------------------------------
 # Regression: Solution/SampleSet sidecars must NOT duplicate rows for
-# removed constraints. EvaluatedCollection.inner() / SampledCollection.inner()
-# already include removed ids, so chaining `.removed_reasons().keys()` would
+# inactive constraints. EvaluatedCollection.inner() / SampledCollection.inner()
+# already include inactive ids, so chaining `.inactive_metadata().keys()` would
 # double-count them.
 # ---------------------------------------------------------------------------
 
 
 def _instance_with_relaxed_constraint() -> Instance:
-    """Two regular constraints, one of which is relaxed (moved to removed)."""
+    """Two regular constraints, one of which is relaxed (moved to inactive)."""
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -305,8 +305,8 @@ def _instance_with_relaxed_constraint() -> Instance:
     return instance
 
 
-def test_solution_sidecar_no_duplicate_rows_for_removed():
-    """The relaxed id 10 lives in both inner() and removed_reasons() — the
+def test_solution_sidecar_no_duplicate_rows_for_inactive():
+    """The relaxed id 10 lives in both inner() and inactive_metadata() — the
     sidecar must emit one row per id, not two."""
     instance = _instance_with_relaxed_constraint()
     sol = instance.evaluate({0: 1, 1: 0, 2: 0})
@@ -319,7 +319,7 @@ def test_solution_sidecar_no_duplicate_rows_for_removed():
     assert rows == [(ConstraintID(10), "k")]  # exactly one row, not duplicated
 
 
-def test_sample_set_sidecar_no_duplicate_rows_for_removed():
+def test_sample_set_sidecar_no_duplicate_rows_for_inactive():
     instance = _instance_with_relaxed_constraint()
     ss = instance.evaluate_samples({0: {0: 1, 1: 0, 2: 0}})
 

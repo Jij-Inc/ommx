@@ -162,14 +162,14 @@ before fixed penalties. `to_qubo()` and `to_hubo()` use this order, so constrain
 are rewritten before their squares expand the objective. Acyclic substitution
 resolves assignment dependencies and visits each polynomial's terms once.
 
-Constraints removed by the penalty phase now store their encoded expressions.
+Constraints deactivated by the penalty phase now store their encoded expressions.
 Their evaluated values and the original output objective are preserved through
 decision-variable reconstruction. See {meth}`~ommx.Instance.prepare`.
 
 ### ⚠ Unique constraint numbers across families ([#1309](https://github.com/Jij-Inc/ommx/pull/1309))
 
 Constraint numbers are now unique across regular, Indicator, OneHot, and SOS1
-constraints, including removed constraints, within each `Instance` or
+constraints, including inactive constraints, within each `Instance` or
 `ParametricInstance`. Automatic additions and transformations allocate from this
 shared space. Evaluation preserves the identities in `Solution` and `SampleSet`.
 
@@ -192,7 +192,7 @@ frame = solution.constraints_df(kind="regular")
 
 Collections retain their owner and fetch a row only when indexed by a typed ID.
 Integer keys are rejected. Model values are attached handles; result values are
-individual snapshots including retained removed constraints and their metadata.
+individual snapshots including retained inactive constraints and their metadata.
 The family-specific model properties are consolidated into `.constraints` and
 `.removed_constraints`; `get_constraint_by_id`, `get_removed_constraint_by_id`,
 and result `constraint_ids` are replaced by indexing and iteration. Use `.detach()`
@@ -225,7 +225,7 @@ types, so adding a special-constraint family does not change their public
 return types. Concrete-ID indexing keeps precise overloads. Solver consumers
 explicitly reject unsupported families instead of silently omitting constraints.
 
-Attached rows compare by owner identity and typed ID; removed and result rows
+Attached rows compare by owner identity and typed ID; inactive and result rows
 compare their snapshot data and metadata. Collections and their views use that
 row equality. Typed IDs support `copy` and `deepcopy`, and `.get()` preserves
 both the concrete row type and the default value's type. Invalid lookup keys
@@ -377,7 +377,7 @@ previously accepted.
 
 To migrate your code, use {meth}`~ommx.Solution.total_violation` in place of
 `total_violation_l1()`; `total_violation_l2()` has been removed. The total sums
-violations of regular, Indicator, OneHot, SOS1, and removed constraints.
+violations of regular, Indicator, OneHot, SOS1, and inactive constraints.
 
 ```python
 # Beta 6 syntax. See the migration guide for the current typed-ID API.
@@ -659,7 +659,7 @@ claimed formulation fails validation,
 {class}`~ommx.Sos1BigMPromotionBatchRejectedError` is raised and the `Instance`
 remains unchanged. The returned {class}`~ommx.Sos1BigMPromotion` is a batch
 report whose `promoted` map identifies the new SOS1 constraint. Membership,
-selector reconstruction, and removed rows can be queried from the Instance.
+selector reconstruction, and inactive rows can be queried from the Instance.
 
 ### 🆕 Incremental constructors for interval-domain variables ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
 
@@ -819,8 +819,8 @@ APIs use the shared Rust-to-Python error boundary directly. Missing or unknown
 caller-owned state, invalid caller-provided values, and recoverable
 dependent-variable assertions raise `ValueError`. Direct function and
 polynomial partial evaluation preserves `CoefficientError`, while coefficient
-failures from `Instance`-owned dependency normalization and removed-constraint
-restoration fall back to `RuntimeError`.
+failures from `Instance`-owned dependency normalization and inactive-constraint
+activation fall back to `RuntimeError`.
 
 Decision-variable insertion and substitution, `Function.content_factor`, and
 OneHot/SOS1 construction also use this boundary directly. Duplicate decision
@@ -866,7 +866,7 @@ the magnitude.
 
 `prepare()` updates the instance in place. When you evaluate returned solutions
 and samples, OMMX can restore source-variable values and check constraints that
-were removed during preparation. If a later preparation step fails, changes
+became inactive during preparation. If a later preparation step fails, changes
 from earlier completed steps remain. If you are migrating from v2 or Beta 2,
 replace OpenJij's model-conversion options and the prerelease
 `OpenJijPreparation*` APIs with this common workflow. See
@@ -1834,7 +1834,7 @@ In addition to regular constraints, the following three special constraint types
 - {class}`~ommx.OneHotConstraint` — replaces the previous `ConstraintHints.OneHot` metadata
 - {class}`~ommx.Sos1Constraint` — replaces the previous `ConstraintHints.Sos1` metadata
 
-For concrete usage, evaluation-result access, and the Indicator relax / restore workflow, see {class}`~ommx.IndicatorConstraint`, {class}`~ommx.OneHotConstraint`, {class}`~ommx.Sos1Constraint`.
+For concrete usage, evaluation-result access, and the Indicator deactivation / activation workflow, see {class}`~ommx.IndicatorConstraint`, {class}`~ommx.OneHotConstraint`, {class}`~ommx.Sos1Constraint`.
 
 Accordingly, the legacy `ConstraintHints` / `OneHot` / `Sos1` classes, the `Instance.constraint_hints` property, and the PySCIPOpt Adapter's `use_sos1` flag are removed.
 

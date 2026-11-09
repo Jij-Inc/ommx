@@ -115,8 +115,8 @@ Failures without a stable caller recovery path remain ordinary
 Direct function and polynomial partial evaluation retain
 [`CoefficientError`](crate::CoefficientError), because the caller can change
 the supplied state and retry. If the same arithmetic fails while an
-[`Instance`](crate::Instance) normalizes an Instance-owned dependency or a
-removed constraint against stored dependencies and fixed values, that signal
+[`Instance`](crate::Instance) normalizes an Instance-owned dependency or an
+inactive constraint against stored dependencies and fixed values, that signal
 no longer describes caller input and is converted to an ordinary
 [`Error`](crate::Error) with structured tracing context.
 

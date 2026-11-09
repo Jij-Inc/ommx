@@ -185,7 +185,7 @@ including inactive constraints. Their numbering is separate from variable
 IDs. Supply distinct numbers across the regular and special-constraint
 mappings passed to {meth}`~ommx.Instance.from_components`.
 The Instance allocates new constraint numbers above the maximum across all
-active and removed families. Lowering and promotion allocate fresh numbers
+active and inactive families. Lowering and promotion allocate fresh numbers
 for generated constraints while retained originals keep their IDs.
 {class}`~ommx.ParametricInstance` follows the same rule, and evaluation
 preserves those IDs in {class}`~ommx.Solution` and {class}`~ommx.SampleSet`.
@@ -283,7 +283,7 @@ the solver no longer chooses those values directly.
 ```
 
 Interpretation Context also includes information used only to interpret results:
-{class}`~ommx.NamedFunction` expressions for reporting metrics, removed
+{class}`~ommx.NamedFunction` expressions for reporting metrics, inactive
 constraints for checking original conditions, and an
 {class}`~ommx.OutputObjective` separate from the current solver-facing
 objective. A variable appearing only in this information is not thereby

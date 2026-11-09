@@ -70,13 +70,13 @@ macro_rules! constraint_result_context {
                 crate::provenance_list(&self.1)
             }
 
-            /// Reason this constraint was removed before evaluation, or None.
+            /// Reason this constraint was deactivated before evaluation, or None.
             #[getter]
             pub fn inactive_reason(&self) -> Option<String> {
                 self.2.as_ref().map(|r| r.reason.clone())
             }
 
-            /// Parameters of the removal reason; empty for an active constraint.
+            /// Parameters of the inactivation reason; empty for an active constraint.
             #[getter]
             pub fn inactive_reason_parameters(&self) -> std::collections::HashMap<String, String> {
                 self.2

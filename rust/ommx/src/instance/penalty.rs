@@ -161,7 +161,7 @@ impl Instance {
         let id_base = max_id + 1;
         let mut objective = self.take_or_clone_objective_for_penalty();
         let mut parameters = ParameterTable::default();
-        let mut removal_reasons = BTreeMap::new();
+        let mut inactive_metadata = BTreeMap::new();
         for (parameter_offset, (&constraint_id, constraint)) in
             self.constraint_collection.active().iter().enumerate()
         {
@@ -180,7 +180,7 @@ impl Instance {
             penalty_term.try_mul_assign_in_place(f)?;
             objective.try_add_assign_in_place(penalty_term)?;
 
-            let removed_reason = crate::constraint::InactiveConstraintMetadata {
+            let metadata = crate::constraint::InactiveConstraintMetadata {
                 skip_feasibility_check: false,
                 reason: "ommx.Instance.penalty_method".to_string(),
                 parameters: {
@@ -194,11 +194,11 @@ impl Instance {
             };
 
             parameters.insert(parameter_id, parameter_label)?;
-            removal_reasons.insert(constraint_id, removed_reason);
+            inactive_metadata.insert(constraint_id, metadata);
         }
-        if !removal_reasons.is_empty() {
+        if !inactive_metadata.is_empty() {
             self.constraint_collection
-                .move_active_rows_to_removed_with_reasons(removal_reasons)?;
+                .move_active_rows_to_inactive_with_reasons(inactive_metadata)?;
             self.replace_active_objective_preserving_output(objective);
             self.invalidate_output_objective_optimality();
         }
@@ -238,9 +238,9 @@ impl Instance {
     /// parameter assignments remain exactly unchanged.
     ///
     /// On success, every regular, indicator, one-hot, and SOS1 constraint is in
-    /// its removed collection; all four active collections are empty. Every
-    /// active regular constraint is moved to the removed collection, and
-    /// existing removed constraints of every family are preserved. Active
+    /// its inactive collection; all four active collections are empty. Every
+    /// active regular constraint is moved to the inactive collection, and
+    /// existing inactive constraints of every family are preserved. Active
     /// special constraints are not penalty-converted: their presence returns
     /// an error without modifying the instance.
     ///
@@ -397,7 +397,7 @@ impl Instance {
     pub fn uniform_penalty_method(mut self) -> Result<ParametricInstance> {
         self.ensure_penalty_method_supported("uniform_penalty_method")?;
 
-        // Early return if no active constraints (preserve any existing removed constraints)
+        // Early return if no active constraints (preserve any existing inactive constraints)
         if self.active_constraints().is_empty() {
             return Ok(self.into_parametric_without_penalty());
         }
@@ -424,18 +424,18 @@ impl Instance {
         };
 
         let mut quad_sum = Function::zero();
-        let mut removal_reasons = BTreeMap::new();
+        let mut inactive_metadata = BTreeMap::new();
         for (&constraint_id, constraint) in self.constraint_collection.active() {
             let f = constraint.function();
             let squared = (f * f)?;
             quad_sum.try_add_assign_in_place(squared)?;
 
-            let removed_reason = crate::constraint::InactiveConstraintMetadata {
+            let metadata = crate::constraint::InactiveConstraintMetadata {
                 skip_feasibility_check: false,
                 reason: "ommx.Instance.uniform_penalty_method".to_string(),
                 parameters: Default::default(),
             };
-            removal_reasons.insert(constraint_id, removed_reason);
+            inactive_metadata.insert(constraint_id, metadata);
         }
 
         let mut penalty_term = Function::from(linear!(parameter_id));
@@ -446,7 +446,7 @@ impl Instance {
         parameters.insert(parameter_id, parameter_label)?;
 
         self.constraint_collection
-            .move_active_rows_to_removed_with_reasons(removal_reasons)?;
+            .move_active_rows_to_inactive_with_reasons(inactive_metadata)?;
         self.replace_active_objective_preserving_output(objective);
         self.invalidate_output_objective_optimality();
 
@@ -495,8 +495,8 @@ impl Instance {
     /// parameter assignments remain exactly unchanged.
     ///
     /// On success, all active constraint collections are empty. Each previously
-    /// active regular constraint has moved to its removed collection; existing
-    /// removed constraints of every family are preserved.
+    /// active regular constraint has moved to its inactive collection; existing
+    /// inactive constraints of every family are preserved.
     ///
     /// When no constraint of any family is active, this is an exact identity
     /// operation and `weight` is not validated. Otherwise, any error leaves the
@@ -662,7 +662,7 @@ impl Instance {
 
     fn commit_fixed_penalty(&mut self, objective: Function, operation: &str) -> crate::Result<()> {
         let reason = format!("ommx.Instance.{operation}");
-        let removal_reasons = self
+        let inactive_metadata = self
             .constraint_collection
             .active()
             .keys()
@@ -680,7 +680,7 @@ impl Instance {
 
         debug_assert!(!self.constraint_collection.active().is_empty());
         self.constraint_collection
-            .move_active_rows_to_removed_with_reasons(removal_reasons)?;
+            .move_active_rows_to_inactive_with_reasons(inactive_metadata)?;
         self.replace_active_objective_preserving_output(objective);
         self.invalidate_output_objective_optimality();
         Ok(())
@@ -795,7 +795,7 @@ mod tests {
         assert!(instance.active_sos1_constraints().is_empty());
     }
 
-    fn assert_fixed_penalty_removal_provenance(instance: &Instance, operation: &str) {
+    fn assert_fixed_penalty_deactivation_provenance(instance: &Instance, operation: &str) {
         let expected_reason = format!("ommx.Instance.{operation}");
         for (_, reason) in instance.inactive_constraints().values() {
             assert_eq!(reason.reason, expected_reason);
@@ -847,7 +847,7 @@ mod tests {
         expected_param_count: usize,
         expected_param_name: &str,
     ) {
-        // Check that constraints are removed
+        // Check that constraints are inactive
         assert_eq!(parametric_instance.active_constraints().len(), 0);
         assert_eq!(
             parametric_instance.inactive_constraints().len(),
@@ -993,7 +993,7 @@ mod tests {
                 ConstraintID::from(1),
                 ConstraintContext {
                     label: ModelingLabel {
-                        name: Some("already_removed".to_string()),
+                        name: Some("already_inactive".to_string()),
                         ..Default::default()
                     },
                     ..Default::default()
@@ -1024,11 +1024,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(instance.active_constraints().len(), 1); // only constraint 2 remains active
-        assert_eq!(instance.inactive_constraints().len(), 1); // constraint 1 is removed
+        assert_eq!(instance.inactive_constraints().len(), 1); // constraint 1 is inactive
 
         let parametric_instance = instance.penalty_method().unwrap();
 
-        // Both constraints should be in removed: the pre-existing one and the newly penalized one
+        // Both constraints should be in inactive: the pre-existing one and the newly penalized one
         assert_eq!(parametric_instance.inactive_constraints().len(), 2);
         assert!(parametric_instance
             .inactive_constraints()
@@ -1040,7 +1040,7 @@ mod tests {
             parametric_instance
                 .constraint_context()
                 .name(ConstraintID::from(1)),
-            Some("already_removed")
+            Some("already_inactive")
         );
         assert_eq!(
             parametric_instance
@@ -1070,7 +1070,7 @@ mod tests {
                 ConstraintID::from(1),
                 ConstraintContext {
                     label: ModelingLabel {
-                        name: Some("already_removed".to_string()),
+                        name: Some("already_inactive".to_string()),
                         ..Default::default()
                     },
                     ..Default::default()
@@ -1105,7 +1105,7 @@ mod tests {
 
         let parametric_instance = instance.uniform_penalty_method().unwrap();
 
-        // Both constraints should be in removed
+        // Both constraints should be in inactive
         assert_eq!(parametric_instance.inactive_constraints().len(), 2);
         assert!(parametric_instance
             .inactive_constraints()
@@ -1117,7 +1117,7 @@ mod tests {
             parametric_instance
                 .constraint_context()
                 .name(ConstraintID::from(1)),
-            Some("already_removed")
+            Some("already_inactive")
         );
         assert_eq!(
             parametric_instance
@@ -1150,7 +1150,7 @@ mod tests {
         assert_no_active_constraints(&instance);
         assert_eq!(instance.inactive_constraints().len(), 2);
         assert!(instance.parameters.is_none());
-        assert_fixed_penalty_removal_provenance(
+        assert_fixed_penalty_deactivation_provenance(
             &instance,
             "uniform_penalty_method_with_fixed_weight",
         );
@@ -1443,7 +1443,10 @@ mod tests {
             instance.constraint_context().name(ConstraintID::from(1)),
             Some("penalized")
         );
-        assert_fixed_penalty_removal_provenance(&instance, "penalty_method_with_fixed_weights");
+        assert_fixed_penalty_deactivation_provenance(
+            &instance,
+            "penalty_method_with_fixed_weights",
+        );
         assert_penalty_output_semantics(&instance, 14.0, 3.0);
         let state = State::from_iter([(1, 0.0), (2, 0.0)]);
         assert_eq!(
@@ -1565,7 +1568,7 @@ mod tests {
     }
 
     #[test]
-    fn fixed_weight_penalty_success_leaves_every_constraint_family_removed() {
+    fn fixed_weight_penalty_success_leaves_every_constraint_family_inactive() {
         let mut lowered = create_test_instance_with_special_constraints(&[
             ConstraintKind::Indicator,
             ConstraintKind::OneHot,
@@ -1586,13 +1589,13 @@ mod tests {
         assert_eq!(lowered.inactive_sos1_constraints().len(), 1);
         assert!(!lowered.active_constraints().is_empty());
 
-        let already_removed_regular_id = ConstraintID::from(1);
+        let already_inactive_regular_id = ConstraintID::from(1);
         lowered
             .set_constraint_context(
-                already_removed_regular_id,
+                already_inactive_regular_id,
                 ConstraintContext {
                     label: ModelingLabel {
-                        name: Some("already_removed_regular".to_string()),
+                        name: Some("already_inactive_regular".to_string()),
                         ..Default::default()
                     },
                     ..Default::default()
@@ -1601,7 +1604,7 @@ mod tests {
             .unwrap();
         lowered
             .deactivate_constraint(
-                already_removed_regular_id,
+                already_inactive_regular_id,
                 "pre_existing".to_string(),
                 std::iter::empty::<(String, String)>(),
                 false,
@@ -1610,11 +1613,11 @@ mod tests {
 
         let regular_constraint_count =
             lowered.active_constraints().len() + lowered.inactive_constraints().len();
-        let already_removed_regular =
-            lowered.inactive_constraints()[&already_removed_regular_id].clone();
-        let removed_indicators = lowered.inactive_indicator_constraints().clone();
-        let removed_one_hots = lowered.inactive_one_hot_constraints().clone();
-        let removed_sos1s = lowered.inactive_sos1_constraints().clone();
+        let already_inactive_regular =
+            lowered.inactive_constraints()[&already_inactive_regular_id].clone();
+        let inactive_indicators = lowered.inactive_indicator_constraints().clone();
+        let inactive_one_hots = lowered.inactive_one_hot_constraints().clone();
+        let inactive_sos1s = lowered.inactive_sos1_constraints().clone();
 
         let mut keyed = lowered.clone();
         let weights = keyed
@@ -1628,16 +1631,16 @@ mod tests {
         assert_no_active_constraints(&keyed);
         assert_eq!(keyed.inactive_constraints().len(), regular_constraint_count);
         assert_eq!(
-            keyed.inactive_constraints()[&already_removed_regular_id],
-            already_removed_regular
+            keyed.inactive_constraints()[&already_inactive_regular_id],
+            already_inactive_regular
         );
         assert_eq!(
-            keyed.constraint_context().name(already_removed_regular_id),
-            Some("already_removed_regular")
+            keyed.constraint_context().name(already_inactive_regular_id),
+            Some("already_inactive_regular")
         );
-        assert_eq!(keyed.inactive_indicator_constraints(), &removed_indicators);
-        assert_eq!(keyed.inactive_one_hot_constraints(), &removed_one_hots);
-        assert_eq!(keyed.inactive_sos1_constraints(), &removed_sos1s);
+        assert_eq!(keyed.inactive_indicator_constraints(), &inactive_indicators);
+        assert_eq!(keyed.inactive_one_hot_constraints(), &inactive_one_hots);
+        assert_eq!(keyed.inactive_sos1_constraints(), &inactive_sos1s);
 
         let mut uniform = lowered;
         uniform
@@ -1649,21 +1652,21 @@ mod tests {
             regular_constraint_count
         );
         assert_eq!(
-            uniform.inactive_constraints()[&already_removed_regular_id],
-            already_removed_regular
+            uniform.inactive_constraints()[&already_inactive_regular_id],
+            already_inactive_regular
         );
         assert_eq!(
             uniform
                 .constraint_context()
-                .name(already_removed_regular_id),
-            Some("already_removed_regular")
+                .name(already_inactive_regular_id),
+            Some("already_inactive_regular")
         );
         assert_eq!(
             uniform.inactive_indicator_constraints(),
-            &removed_indicators
+            &inactive_indicators
         );
-        assert_eq!(uniform.inactive_one_hot_constraints(), &removed_one_hots);
-        assert_eq!(uniform.inactive_sos1_constraints(), &removed_sos1s);
+        assert_eq!(uniform.inactive_one_hot_constraints(), &inactive_one_hots);
+        assert_eq!(uniform.inactive_sos1_constraints(), &inactive_sos1s);
     }
 
     #[test]

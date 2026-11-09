@@ -28,14 +28,14 @@ pub(crate) const VAR_PREFIX: &str = "OMMX_VAR_";
 /// description fields, parameters, annotations, output objective, named
 /// functions, dependencies, fixed values, and modeling labels.
 ///
-/// **Removed Constraints**: All `inactive_constraints` are completely ignored
+/// **Inactive Constraints**: All `inactive_constraints` are completely ignored
 /// and not written to the MPS file. The MPS format cannot represent the
-/// concept of removed constraints, so this information is lost during export.
+/// concept of inactive constraints, so this information is lost during export.
 ///
 /// **Variable Filtering**: Only decision variables used by the objective or
 /// active constraints are written. Variables defined in `decision_variables`
 /// but not used by the active model are omitted. This includes variables used
-/// only by removed constraints, because those constraints are not exported.
+/// only by inactive constraints, because those constraints are not exported.
 pub fn format<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
     super::preflight(instance)?;
     write_beginning(instance, out)?;

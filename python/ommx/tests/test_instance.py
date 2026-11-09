@@ -532,7 +532,7 @@ def test_add_integer_slack_to_inequality_trivial():
     b = instance.add_integer_slack_to_inequality(0, 4)
     assert b is None
 
-    # Check that the constraint is removed
+    # Check that the constraint is inactive
     assert instance.active_constraints == {}
     assert ConstraintID(0) in instance.inactive_constraints
 
@@ -799,8 +799,8 @@ def test_stats_with_constraints():
         sense=Sense.Minimize,
     )
 
-    # Remove one constraint
-    instance.deactivate_constraint(1, reason="test removal")
+    # Deactivate one constraint
+    instance.deactivate_constraint(1, reason="test deactivation")
 
     stats = instance.stats()
 

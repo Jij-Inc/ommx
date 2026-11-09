@@ -330,7 +330,7 @@ let id = instance.add_constraint(
 // — the raw map mutators on `ConstraintCollection<T>` are `pub(crate)`.
 ```
 
-**Removed constraints** are no longer constructed as `Constraint<Removed>`. They are stored as `(Constraint<Created>, InactiveConstraintMetadata)` tuples in `ConstraintCollection`:
+**Inactive constraints** are no longer constructed as `Constraint<Removed>`. They are stored as `(Constraint<Created>, InactiveConstraintMetadata)` tuples in `ConstraintCollection`:
 ```rust,ignore
 // ❌ Before (v2)
 let removed = RemovedConstraint {
@@ -343,7 +343,7 @@ let removed = RemovedConstraint {
 instance.deactivate_constraint(id, "reason".to_string(), [], false)?;
 
 // Or if constructing directly:
-let removed: (Constraint, InactiveConstraintMetadata) = (
+let inactive: (Constraint, InactiveConstraintMetadata) = (
     constraint,
     InactiveConstraintMetadata {
         reason: "reason".to_string(),
@@ -648,10 +648,10 @@ pub struct SampledCollection<T: ConstraintType> {
 }
 
 // Both Deref to BTreeMap<T::ID, T::Evaluated/Sampled> for backward-compatible access
-// and provide feasibility / removal / context accessors:
+// and provide feasibility / inactivity / context accessors:
 collection.is_feasible(atol, min_activeness) // selected constraints feasible
 collection.is_feasible_relaxed(atol)       // all non-inactive constraints feasible
-collection.is_inactive(&id)             // check if a constraint was removed
+collection.is_inactive(&id)             // check if a constraint is inactive
 collection.inactive_metadata()           // &BTreeMap<T::ID, InactiveConstraintMetadata>
 collection.context()                   // &ConstraintContextStore<T::ID>
 ```
@@ -1086,7 +1086,7 @@ let air05_annotations = annotations.get("air05");
 - [ ] Update `constraint.name` reads — context is no longer on the constraint struct. Query the host's SoA store: `instance.constraint_context().name(id)` (and `subscripts`, `parameters`, `description`, `provenance`); use `collect_for(id) -> ConstraintContext` for an owned snapshot.
 - [ ] Update `evaluated.evaluated_value()` → `evaluated.stage.evaluated_value` (and other getset methods)
 - [ ] Update `RemovedConstraint` construction → `(Constraint, InactiveConstraintMetadata)` tuple
-- [ ] Update `removed.constraint.xxx` → `removed.0.xxx` (tuple access)
+- [ ] Update `removed.constraint.xxx` → `inactive.0.xxx` (tuple access)
 - [ ] Update `removed_reason` / `removed_reason_parameters` → `InactiveConstraintMetadata { reason, parameters, skip_feasibility_check }`
 - [ ] Update `evaluated.removed_reason()` → `collection.inactive_metadata().get(&id)`
 - [ ] Update struct literals to use `stage: CreatedData { ... }` / `EvaluatedData { ... }` / etc.

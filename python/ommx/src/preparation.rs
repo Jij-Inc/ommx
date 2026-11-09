@@ -30,7 +30,7 @@ impl SpecialConstraintPreparation {
     ///
     /// ``kinds`` is passed unchanged as the set of active special-constraint
     /// families to lower. See the owner operation and its per-family conversion
-    /// methods for formulas, prerequisites, generated artifacts, stored removal
+    /// methods for formulas, prerequisites, generated artifacts, stored inactivation
     /// reasons and provenance, and failure semantics.
     ///
     /// ``atol`` is used when Indicator Function bodies require zero-sensitive
@@ -121,7 +121,7 @@ impl From<ommx::ObjectivePreparation> for ObjectivePreparation {
 ///
 /// Preparation first attempts exact conversion to equality using
 /// ``max_integer_range`` and ``atol``. ``slack_upper_bound=None`` requires the
-/// constraint to become an equality or be removed as trivially satisfied, so
+/// constraint to become an equality or be deactivated as trivially satisfied, so
 /// {class}`~ommx.ExactIntegerSlackError` is propagated. An integer value permits the
 /// constraint to remain an inequality: only that signal selects the
 /// inequality-preserving owner operation with this upper bound. The latter is
@@ -296,7 +296,7 @@ impl From<ommx::BinaryPowerPreparation> for BinaryPowerPreparation {
 /// one-sided penalty $\max(0, g_i(x))^2$.
 ///
 /// On success, every active regular constraint moves to
-/// {attr}`~ommx.Instance.inactive_constraints`, while existing removed
+/// {attr}`~ommx.Instance.inactive_constraints`, while existing inactive
 /// constraints are preserved. When at least one active regular constraint is
 /// converted, the entry output semantics are preserved in
 /// {attr}`~ommx.Instance.output_objective` for solution and sample evaluation

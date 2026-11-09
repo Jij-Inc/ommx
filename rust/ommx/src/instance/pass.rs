@@ -91,7 +91,7 @@ impl $host {
     }
 
     pub fn activate_indicator_constraint(&mut self, id: crate::IndicatorConstraintID) -> Result<()> {
-        // Check before restoring: if dependency contains the indicator variable, reject
+        // Check before activating: if dependency contains the indicator variable, reject
         let mut ic = self
             .indicator_constraint_collection
             .inactive()
@@ -223,7 +223,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     #[test]
-    fn test_restore_constraint_with_fixed_variable() {
+    fn test_activate_constraint_with_fixed_variable() {
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(VariableID::from(1), DecisionVariable::continuous());
         decision_variables.insert(VariableID::from(2), DecisionVariable::continuous());
@@ -261,16 +261,16 @@ mod tests {
         assert!(instance.inactive_constraints().is_empty());
 
         // Original: x1 + x2 - 10, after x1=3: x2 - 7
-        let restored = instance
+        let activated = instance
             .active_constraints()
             .get(&ConstraintID::from(1))
             .unwrap();
-        assert!(!restored.required_ids().contains(&VariableID::from(1)));
-        assert!(restored.required_ids().contains(&VariableID::from(2)));
+        assert!(!activated.required_ids().contains(&VariableID::from(1)));
+        assert!(activated.required_ids().contains(&VariableID::from(2)));
     }
 
     #[test]
-    fn test_restore_constraint_fixed_value_overflow_is_unclassified_and_atomic() {
+    fn test_activate_constraint_fixed_value_overflow_is_unclassified_and_atomic() {
         let constraint_id = ConstraintID::from(1);
         let constraint = Constraint {
             equality: Equality::LessThanOrEqualToZero,
@@ -307,7 +307,7 @@ mod tests {
     }
 
     #[test]
-    fn test_restore_constraint_dependency_overflow_is_unclassified_and_atomic() {
+    fn test_activate_constraint_dependency_overflow_is_unclassified_and_atomic() {
         let constraint_id = ConstraintID::from(1);
         let constraint = Constraint {
             equality: Equality::LessThanOrEqualToZero,
@@ -351,7 +351,7 @@ mod tests {
     }
 
     #[test]
-    fn test_restore_constraint_with_dependent_variable() {
+    fn test_activate_constraint_with_dependent_variable() {
         let mut decision_variables = BTreeMap::new();
         for i in 1..=3 {
             decision_variables.insert(VariableID::from(i), DecisionVariable::continuous());
@@ -388,17 +388,17 @@ mod tests {
         instance.activate_constraint(ConstraintID::from(1)).unwrap();
 
         // x3 substituted with x1 + x2
-        let restored = instance
+        let activated = instance
             .active_constraints()
             .get(&ConstraintID::from(1))
             .unwrap();
-        assert!(!restored.required_ids().contains(&VariableID::from(3)));
-        assert!(restored.required_ids().contains(&VariableID::from(1)));
-        assert!(restored.required_ids().contains(&VariableID::from(2)));
+        assert!(!activated.required_ids().contains(&VariableID::from(3)));
+        assert!(activated.required_ids().contains(&VariableID::from(1)));
+        assert!(activated.required_ids().contains(&VariableID::from(2)));
     }
 
     #[test]
-    fn test_restore_constraint_with_fixed_variable_in_dependency() {
+    fn test_activate_constraint_with_fixed_variable_in_dependency() {
         let mut decision_variables = BTreeMap::new();
         for i in 1..=3 {
             decision_variables.insert(VariableID::from(i), DecisionVariable::continuous());
@@ -442,17 +442,17 @@ mod tests {
         instance.activate_constraint(ConstraintID::from(1)).unwrap();
 
         // x3 = x1 + x2, x1 = 3 → x2 - 7
-        let restored = instance
+        let activated = instance
             .active_constraints()
             .get(&ConstraintID::from(1))
             .unwrap();
-        assert!(!restored.required_ids().contains(&VariableID::from(3)));
-        assert!(!restored.required_ids().contains(&VariableID::from(1)));
-        assert!(restored.required_ids().contains(&VariableID::from(2)));
+        assert!(!activated.required_ids().contains(&VariableID::from(3)));
+        assert!(!activated.required_ids().contains(&VariableID::from(1)));
+        assert!(activated.required_ids().contains(&VariableID::from(2)));
     }
 
     #[test]
-    fn test_relax_restore_indicator_constraint() {
+    fn test_deactivate_activate_indicator_constraint() {
         use crate::IndicatorConstraintID;
 
         let mut decision_variables = BTreeMap::new();
@@ -503,7 +503,7 @@ mod tests {
     }
 
     #[test]
-    fn test_restore_indicator_constraint_fixed_value_overflow_is_unclassified_and_atomic() {
+    fn test_activate_indicator_constraint_fixed_value_overflow_is_unclassified_and_atomic() {
         use crate::IndicatorConstraintID;
 
         let constraint_id = IndicatorConstraintID::from(1);
@@ -551,7 +551,7 @@ mod tests {
 
     /// Restoring an indicator constraint fails if the indicator variable was fixed.
     #[test]
-    fn test_restore_indicator_constraint_fails_when_indicator_fixed() {
+    fn test_activate_indicator_constraint_fails_when_indicator_fixed() {
         use crate::IndicatorConstraintID;
 
         let mut decision_variables = BTreeMap::new();
@@ -597,7 +597,7 @@ mod tests {
             .partial_evaluate(&fix_state, ATol::default())
             .unwrap();
 
-        // Restore should fail
+        // Activate should fail
         let result = instance.activate_indicator_constraint(IndicatorConstraintID::from(1));
         assert!(result.is_err());
         assert!(result
@@ -609,7 +609,7 @@ mod tests {
     /// Restoring an indicator constraint applies pending substitutions to the function
     /// but not to the indicator variable.
     #[test]
-    fn test_restore_indicator_constraint_with_fixed_function_variable() {
+    fn test_activate_indicator_constraint_with_fixed_function_variable() {
         use crate::IndicatorConstraintID;
 
         let mut decision_variables = BTreeMap::new();
@@ -661,28 +661,28 @@ mod tests {
             .activate_indicator_constraint(IndicatorConstraintID::from(1))
             .unwrap();
 
-        let restored = instance
+        let activated = instance
             .active_indicator_constraints()
             .get(&IndicatorConstraintID::from(1))
             .unwrap();
         // x1 substituted, x2 remains
-        assert!(!restored
+        assert!(!activated
             .stage
             .function
             .required_ids()
             .contains(&VariableID::from(1)));
-        assert!(restored
+        assert!(activated
             .stage
             .function
             .required_ids()
             .contains(&VariableID::from(2)));
-        assert_eq!(restored.indicator_variable, VariableID::from(10));
+        assert_eq!(activated.indicator_variable, VariableID::from(10));
     }
 
     /// Restoring an indicator constraint fails if the indicator variable
-    /// was substituted (via dependency) while the constraint was removed.
+    /// was substituted (via dependency) while the constraint was inactive.
     #[test]
-    fn test_restore_indicator_constraint_fails_when_indicator_substituted() {
+    fn test_activate_indicator_constraint_fails_when_indicator_substituted() {
         use crate::IndicatorConstraintID;
 
         let mut decision_variables = BTreeMap::new();
@@ -713,7 +713,7 @@ mod tests {
             )
             .unwrap();
 
-        // Relax, then substitute indicator variable x10 = x20
+        // Deactivate, then substitute indicator variable x10 = x20
         instance
             .deactivate_indicator_constraint(
                 IndicatorConstraintID::from(1),
@@ -726,7 +726,7 @@ mod tests {
             .substitute_one(VariableID::from(10), &Function::from(linear!(20)))
             .unwrap();
 
-        // Restore should fail because indicator variable x10 has been substituted
+        // Activate should fail because indicator variable x10 has been substituted
         let result = instance.activate_indicator_constraint(IndicatorConstraintID::from(1));
         assert!(result.is_err());
         assert!(result

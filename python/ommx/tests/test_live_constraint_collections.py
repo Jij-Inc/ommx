@@ -111,34 +111,34 @@ def test_retained_views_observe_additions_and_keep_owner_alive(host):
     assert len(rows) == 5
 
 
-def test_removal_restoration_and_lowering_update_retained_views():
+def test_deactivation_activation_and_lowering_update_retained_views():
     model = make_model(Instance)
-    active, removed = model.active_constraints, model.inactive_constraints
+    active, inactive = model.active_constraints, model.inactive_constraints
     assert_type(active, ActiveConstraintCollection)
-    assert_type(removed, InactiveConstraintCollection)
+    assert_type(inactive, InactiveConstraintCollection)
     assert_type(
         active.get(ConstraintID(5)),
         AttachedConstraint | None,
     )
     model.deactivate_constraint(5, "manual")
     assert ConstraintID(5) not in active
-    assert ConstraintID(5) in removed
-    assert_type(removed[ConstraintID(5)], InactiveConstraint)
-    assert removed[ConstraintID(5)].inactive_reason == "manual"
+    assert ConstraintID(5) in inactive
+    assert_type(inactive[ConstraintID(5)], InactiveConstraint)
+    assert inactive[ConstraintID(5)].inactive_reason == "manual"
     with pytest.raises(KeyError) as error:
         active[ConstraintID(5)]
     assert error.value.args == (ConstraintID(5),)
     model.activate_constraint(5)
     assert ConstraintID(5) in active
-    assert ConstraintID(5) not in removed
+    assert ConstraintID(5) not in inactive
     generated = model.convert_one_hot_to_constraint(7)
     assert OneHotConstraintID(7) not in active
-    assert OneHotConstraintID(7) in removed
+    assert OneHotConstraintID(7) in inactive
     assert generated in active
     assert active[generated].provenance[0].original_id == OneHotConstraintID(7)
     for kind, id_type, _ in FAMILIES:
         expected = {key for key in active if isinstance(key, id_type)} | {
-            key for key in removed if isinstance(key, id_type)
+            key for key in inactive if isinstance(key, id_type)
         }
         assert (
             set(
@@ -170,7 +170,7 @@ def test_result_rows_are_fetched_at_access_time():
     assert rows[ConstraintID(5)].dual_variable == 3
 
 
-def test_value_iteration_reports_ids_removed_after_iteration_started():
+def test_value_iteration_reports_ids_deactivated_after_iteration_started():
     model = make_model(Instance)
     items = iter(model.active_constraints.items())
     assert next(items)[0] == ConstraintID(5)
@@ -311,7 +311,7 @@ def test_result_equality_compares_snapshot_data_and_context():
         )
 
 
-def remove_all(model: Instance) -> InactiveConstraintCollection:
+def deactivate_all(model: Instance) -> InactiveConstraintCollection:
     model.deactivate_constraint(5, "manual")
     model.deactivate_indicator_constraint(6, "manual")
     model.convert_one_hot_to_constraint(7)
@@ -319,9 +319,9 @@ def remove_all(model: Instance) -> InactiveConstraintCollection:
     return model.inactive_constraints
 
 
-def test_removed_equality_compares_snapshot_context_and_reason():
+def test_inactive_equality_compares_snapshot_context_and_reason():
     model, other = make_model(Instance), make_model(Instance)
-    rows, equivalent = remove_all(model), remove_all(other)
+    rows, equivalent = deactivate_all(model), deactivate_all(other)
     assert rows == equivalent
     assert rows == dict(rows)
     for key in rows:
@@ -407,11 +407,11 @@ def test_new_family_requires_explicit_consumer_support():
             rows.get(future, "missing")
 
 
-def test_removed_rows_share_the_open_metadata_interface():
+def test_inactive_rows_share_the_open_metadata_interface():
     model = make_model(Instance)
     indicator = model.active_constraints[IndicatorConstraintID(6)]
     indicator.set_name("retained indicator")
-    indicator.set_description("metadata survives removal")
+    indicator.set_description("metadata survives deactivation")
     indicator.set_subscripts([2])
     indicator.set_parameters({"group": "test"})
     model.deactivate_constraint(5, "manual")
@@ -425,7 +425,7 @@ def test_removed_rows_share_the_open_metadata_interface():
         assert isinstance(row, ConstraintView)
         if isinstance(key, IndicatorConstraintID):
             assert row.name == "retained indicator"
-            assert row.description == "metadata survives removal"
+            assert row.description == "metadata survives deactivation"
             assert row.subscripts == [2]
             assert row.parameters == {"group": "test"}
         else:

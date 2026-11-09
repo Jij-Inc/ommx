@@ -30,13 +30,13 @@ fn mixed() -> Instance {
         .unwrap()
 }
 
-fn change_wire_id(wire: &mut v2::Instance, family: usize, number: u64, removed: bool) {
+fn change_wire_id(wire: &mut v2::Instance, family: usize, number: u64, inactive: bool) {
     macro_rules! change {
         ($field:ident) => {{
             let collection = wire.$field.as_mut().unwrap();
             let old = family as u64;
             let row = collection.active.remove(&old).unwrap();
-            if removed {
+            if inactive {
                 collection.inactive.insert(number, row);
                 collection.inactive_metadata.insert(
                     number,
@@ -68,19 +68,19 @@ fn protobuf_rejects_every_cross_family_and_lifecycle_collision() {
     let families = ["regular", "indicator", "one-hot", "SOS1"];
     for first in 0..4 {
         for second in first + 1..4 {
-            for first_removed in [false, true] {
-                for second_removed in [false, true] {
+            for first_inactive in [false, true] {
+                for second_inactive in [false, true] {
                     let mut wire: v2::Instance = mixed().into();
-                    change_wire_id(&mut wire, first, 42, first_removed);
-                    change_wire_id(&mut wire, second, 42, second_removed);
+                    change_wire_id(&mut wire, first, 42, first_inactive);
+                    change_wire_id(&mut wire, second, 42, second_inactive);
                     let error = Instance::from_v2_bytes(&wire.encode_to_vec()).unwrap_err();
                     let message = format!("{error:#}");
                     assert!(message.contains("42"), "{message}");
-                    for (family, removed) in [(first, first_removed), (second, second_removed)] {
+                    for (family, inactive) in [(first, first_inactive), (second, second_inactive)] {
                         assert!(
                             message.contains(&format!(
                                 "{} {}",
-                                if removed { "removed" } else { "active" },
+                                if inactive { "inactive" } else { "active" },
                                 families[family]
                             )),
                             "{message}"
@@ -197,7 +197,7 @@ fn explicit_insertions_reject_other_families_before_any_mutation() {
 }
 
 #[test]
-fn removed_special_maximum_exhausts_all_model_allocators_atomically() {
+fn inactive_special_maximum_exhausts_all_model_allocators_atomically() {
     let mut wire: v2::Instance = mixed().into();
     change_wire_id(&mut wire, 3, u64::MAX, true);
     let mut instance = Instance::try_from(wire).unwrap();
@@ -230,7 +230,7 @@ fn removed_special_maximum_exhausts_all_model_allocators_atomically() {
     assert_eq!(instance, before);
 
     // Activating the indicator would generate a regular row. Propagation must
-    // also respect numbers reserved by a removed constraint of another family.
+    // also respect numbers reserved by an inactive constraint of another family.
     assert!(instance
         .partial_evaluate(&v1::State::from_iter([(0, 1.0)]), ATol::default())
         .is_err());
@@ -282,14 +282,14 @@ proptest! {
 }
 
 #[test]
-fn result_builders_and_protobuf_reject_duplicate_numbers_including_removed() {
+fn result_builders_and_protobuf_reject_duplicate_numbers_including_inactive() {
     for first in 0..4 {
         for second in first + 1..4 {
-            for first_removed in [false, true] {
-                for second_removed in [false, true] {
+            for first_inactive in [false, true] {
+                for second_inactive in [false, true] {
                     let mut wire: v2::Instance = mixed().into();
-                    change_wire_id(&mut wire, first, first as u64, first_removed);
-                    change_wire_id(&mut wire, second, second as u64, second_removed);
+                    change_wire_id(&mut wire, first, first as u64, first_inactive);
+                    change_wire_id(&mut wire, second, second as u64, second_inactive);
                     let instance = Instance::try_from(wire).unwrap();
                     let state = v1::State::from_iter([(0, 1.0)]);
                     let solution = instance.evaluate(&state, ATol::default()).unwrap();

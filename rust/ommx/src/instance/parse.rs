@@ -353,8 +353,8 @@ impl Parse for v1::Instance {
             }
         }
         // `parse_as` for `Vec<v1::RemovedConstraint>` returns the active constraints
-        // joined with context + removed reason. Strip context into the SoA store
-        // so the collection-level `(active, removed)` shape stays uniform.
+        // joined with context + inactive reason. Strip context into the SoA store
+        // so the collection-level `(active, inactive)` shape stays uniform.
         let inactive_constraints_with_context: BTreeMap<
             ConstraintID,
             (Constraint, ConstraintContext, InactiveConstraintMetadata),
@@ -785,8 +785,8 @@ impl Parse for v1::ParametricInstance {
             }
         }
 
-        // Drain removed-constraint context into the SoA store, then keep
-        // (active, removed) tuples without context for the collection.
+        // Drain inactive-constraint context into the SoA store, then keep
+        // (active, inactive) tuples without context for the collection.
         let inactive_constraints_with_context: BTreeMap<
             ConstraintID,
             (Constraint, ConstraintContext, InactiveConstraintMetadata),
@@ -1286,16 +1286,16 @@ mod tests {
         }
     }
 
-    fn removed_constraint_to_v1(
+    fn inactive_constraint_to_v1(
         id: ConstraintID,
         constraint: Constraint,
         context: ConstraintContext,
-        removed_reason: InactiveConstraintMetadata,
+        inactive_metadata: InactiveConstraintMetadata,
     ) -> v1::RemovedConstraint {
         v1::RemovedConstraint {
             constraint: Some(constraint_to_v1(id, constraint, context)),
-            removed_reason: removed_reason.reason,
-            removed_reason_parameters: removed_reason.parameters.into_iter().collect(),
+            removed_reason: inactive_metadata.reason,
+            removed_reason_parameters: inactive_metadata.parameters.into_iter().collect(),
         }
     }
 
@@ -1364,12 +1364,12 @@ mod tests {
     }
 
     fn inactive_constraints_for_hint_tests() -> Vec<v1::RemovedConstraint> {
-        vec![removed_constraint_to_v1(
+        vec![inactive_constraint_to_v1(
             ConstraintID::from(20),
             Constraint::equal_to_zero(Function::Zero),
             ConstraintContext {
                 label: crate::ModelingLabel {
-                    name: Some("removed_source".to_string()),
+                    name: Some("inactive_source".to_string()),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -1441,11 +1441,11 @@ mod tests {
             assert!(parsed.active_constraints().contains_key(&id));
             assert_eq!(parsed.constraint_context().name(id), Some(expected_name));
         }
-        let removed_id = ConstraintID::from(20);
-        assert!(parsed.inactive_constraints().contains_key(&removed_id));
+        let inactive_id = ConstraintID::from(20);
+        assert!(parsed.inactive_constraints().contains_key(&inactive_id));
         assert_eq!(
-            parsed.constraint_context().name(removed_id),
-            Some("removed_source")
+            parsed.constraint_context().name(inactive_id),
+            Some("inactive_source")
         );
 
         let roundtripped = Instance::from_v1_bytes(&parsed.to_v1_bytes().unwrap()).unwrap();
@@ -1550,11 +1550,11 @@ mod tests {
             assert!(parsed.active_constraints().contains_key(&id));
             assert_eq!(parsed.constraint_context().name(id), Some(expected_name));
         }
-        let removed_id = ConstraintID::from(20);
-        assert!(parsed.inactive_constraints().contains_key(&removed_id));
+        let inactive_id = ConstraintID::from(20);
+        assert!(parsed.inactive_constraints().contains_key(&inactive_id));
         assert_eq!(
-            parsed.constraint_context().name(removed_id),
-            Some("removed_source")
+            parsed.constraint_context().name(inactive_id),
+            Some("inactive_source")
         );
 
         let roundtripped =
@@ -1892,13 +1892,17 @@ mod tests {
         // Create a v1::ParametricInstance with duplicate constraint IDs in constraints and inactive_constraints
         let cid = ConstraintID::from(1);
         let constraint = Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(1.0)));
-        let removed_reason = crate::constraint::InactiveConstraintMetadata {
+        let inactive_metadata = crate::constraint::InactiveConstraintMetadata {
             skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         };
-        let removed_constraint =
-            removed_constraint_to_v1(cid, constraint.clone(), Default::default(), removed_reason);
+        let inactive_constraint = inactive_constraint_to_v1(
+            cid,
+            constraint.clone(),
+            Default::default(),
+            inactive_metadata,
+        );
 
         let v1_parametric_instance = v1::ParametricInstance {
             sense: v1::instance::Sense::Minimize as i32,
@@ -1915,7 +1919,7 @@ mod tests {
             }],
             constraints: vec![constraint_to_v1(cid, constraint, Default::default())],
             named_functions: vec![],
-            removed_constraints: vec![removed_constraint],
+            removed_constraints: vec![inactive_constraint],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
             description: None,
@@ -1941,13 +1945,17 @@ mod tests {
         // Create a v1::Instance with duplicate constraint IDs in constraints and inactive_constraints
         let cid = ConstraintID::from(1);
         let constraint = Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(1.0)));
-        let removed_reason = crate::constraint::InactiveConstraintMetadata {
+        let inactive_metadata = crate::constraint::InactiveConstraintMetadata {
             skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         };
-        let removed_constraint =
-            removed_constraint_to_v1(cid, constraint.clone(), Default::default(), removed_reason);
+        let inactive_constraint = inactive_constraint_to_v1(
+            cid,
+            constraint.clone(),
+            Default::default(),
+            inactive_metadata,
+        );
 
         let v1_instance = v1::Instance {
             sense: v1::instance::Sense::Minimize as i32,
@@ -1959,7 +1967,7 @@ mod tests {
             )],
             constraints: vec![constraint_to_v1(cid, constraint, Default::default())],
             named_functions: vec![],
-            removed_constraints: vec![removed_constraint],
+            removed_constraints: vec![inactive_constraint],
             decision_variable_dependency: HashMap::new(),
             parameters: None,
             description: None,

@@ -836,7 +836,7 @@ impl ParametricInstance {
         Ok(crate::AttachedConstraint::from_parametric(slf.unbind(), id))
     }
 
-    /// Live mapping of all removed constraint families, keyed by typed IDs.
+    /// Live mapping of all inactive constraint families, keyed by typed IDs.
     /// The view retains this owner and fetches each constraint on demand.
     #[getter]
     pub fn inactive_constraints(
@@ -1043,7 +1043,7 @@ impl ParametricInstance {
 
     /// DataFrame of constraints, dispatched on `kind=`. See
     /// {meth}`ommx.Instance.constraints_df` for column / `kind=` /
-    /// `include=` / `removed=` semantics.
+    /// `include=` / `min_activeness=` semantics.
     #[pyo3(signature = (*, kind, include=None, min_activeness=crate::ConstraintActiveness::SKIP_FEASIBILITY_CHECK))]
     pub fn constraints_df<'py>(
         &self,
@@ -1240,7 +1240,7 @@ impl ParametricInstance {
         )
     }
 
-    /// Removed-constraint reasons DataFrame (long format).
+    /// Inactive-constraint reasons DataFrame (long format).
     #[pyo3(signature = (*, kind))]
     pub fn constraint_inactive_reasons_df<'py>(
         &self,

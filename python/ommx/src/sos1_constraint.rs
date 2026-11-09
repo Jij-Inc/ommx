@@ -124,7 +124,7 @@ impl Sos1Constraint {
     }
 }
 
-/// A removed SOS1 constraint together with the reason it was removed.
+/// An inactive SOS1 constraint together with the reason it was deactivated.
 #[gen_stub_pyclass]
 #[pyclass(from_py_object, eq, extends = ConstraintView)]
 #[derive(Clone, PartialEq)]

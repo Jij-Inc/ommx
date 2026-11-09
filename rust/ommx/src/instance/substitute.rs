@@ -75,7 +75,7 @@ impl Instance {
             Some(self.objective.clone().substitute_acyclic(acyclic)?)
         };
 
-        // Removed constraints are intentionally not rewritten here; they are
+        // Inactive constraints are intentionally not rewritten here; they are
         // normalized through `activate_constraint` when reactivated.
         let mut constraint_replacements = BTreeMap::new();
         for (&constraint_id, constraint) in self.constraint_collection.active() {
@@ -180,7 +180,7 @@ impl Instance {
 /// # Postconditions
 ///
 /// Substitution rewrites the Active Formulation and composes reconstruction
-/// rules. Named functions, removed constraints, and an existing output objective
+/// rules. Named functions, inactive constraints, and an existing output objective
 /// retain their source expressions. If the active objective is affected and no
 /// output objective exists, its previous function and sense are retained.
 /// Evaluation reconstructs the substituted variables before evaluating these

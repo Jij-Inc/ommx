@@ -17,7 +17,7 @@ use std::collections::HashMap;
 /// {class}`~ommx.Sos1ConstraintID`. An ID carries its family and an unsigned
 /// 64-bit number. IDs from different families are unequal, even if their
 /// numbers coincide. Within one Instance, constraint numbers must still be
-/// unique across all active and removed families.
+/// unique across all active and inactive families.
 ///
 /// APIs whose argument already fixes a family promote integer inputs to that
 /// family's ID: for example, ``active_constraints={1: constraint}`` in
@@ -48,7 +48,7 @@ use std::collections::HashMap;
 /// **Supporting additional families**
 ///
 /// New special-constraint families are additive API extensions. Collections,
-/// including removed and result collections, expose the open common interfaces
+/// including inactive and result collections, expose the open common interfaces
 /// ``Mapping[ConstraintIDBase, ConstraintView]``. Filtered active/inactive and
 /// evaluated/sampled mappings retain precise row overloads for known ID families.
 /// Model ``constraints`` combines active and inactive rows, so even concrete IDs

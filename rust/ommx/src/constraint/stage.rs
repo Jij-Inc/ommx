@@ -43,7 +43,7 @@ pub enum ConstraintActiveness {
 #[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
 pub struct InactiveConstraintMetadata {
     /// Fully qualified, dot-separated path identifying the method, function,
-    /// or application that removed the constraint.
+    /// or application that deactivated the constraint.
     ///
     /// External libraries are expected to mutate constraint collections (e.g.
     /// solver adapters, preprocessing passes), so the convention is to write a

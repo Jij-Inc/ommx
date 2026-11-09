@@ -73,7 +73,7 @@ use std::collections::BTreeSet;
 ///
 /// For queries without pandas, {attr}`~ommx.Solution.constraints` is a live
 /// {class}`~ommx.EvaluatedConstraintCollection` indexed by typed constraint IDs.
-/// It includes active constraints and constraints retained after removal.
+/// It includes active constraints and constraints retained after deactivation.
 /// Each fetched row is an independent snapshot; editing it does not update
 /// the Solution. Use an owner method such as
 /// {meth}`~ommx.Solution.set_dual_variable` when changing result data.
@@ -93,7 +93,7 @@ use std::collections::BTreeSet;
 ///
 /// Evaluate a solver's returned State with the transformed Instance that was
 /// supplied to it. That Instance retains the fixed values, dependencies,
-/// removed constraints, and output objective needed to interpret the result.
+/// inactive constraints, and output objective needed to interpret the result.
 /// Passing the State directly to the original Instance may lose that context
 /// or leave required original variables unspecified.
 ///
@@ -113,9 +113,9 @@ use std::collections::BTreeSet;
 /// Fixed and dependent values are reconstructed. Otherwise irrelevant variables
 /// omitted from the candidate receive defaults; a default is not a value found
 /// by the solver. Supply such a value when it matters to reported metrics.
-/// Distinguish successful reconstruction, feasibility including removed
+/// Distinguish successful reconstruction, feasibility including inactive
 /// constraints, and transport of objective or optimality information.
-/// {attr}`~ommx.Solution.feasible_relaxed` excludes removed constraints but
+/// {attr}`~ommx.Solution.feasible_relaxed` excludes inactive constraints but
 /// still checks variable domains. Output objective and optimality transport
 /// follow {attr}`~ommx.Instance.output_objective` and
 /// {meth}`~ommx.Instance.map_active_optimality`, respectively.
@@ -138,7 +138,7 @@ impl_solution_annotations!(Solution);
 impl Solution {
     /// Unique names across all constraint families, as a set of strings.
     ///
-    /// Retained removed constraints are included; no sample ID is needed.
+    /// Retained inactive constraints are included; no sample ID is needed.
     /// The scope matches `extract_constraints`. Unnamed constraints are excluded;
     /// an explicitly empty name is included. Duplicate names appear once, even
     /// when extraction would reject duplicate subscripts.
@@ -233,10 +233,10 @@ impl Solution {
 
     /// Whether active constraints and all retained variable domains are satisfied.
     ///
-    /// Excludes constraints retained after removal, across all constraint families.
+    /// Excludes constraints retained after deactivation, across all constraint families.
     /// Variable kind and bound checks are still applied with
     /// {attr}`~ommx.Solution.feasibility_atol`. A result can satisfy this property
-    /// while failing {meth}`~ommx.Solution.feasible` because a removed constraint
+    /// while failing {meth}`~ommx.Solution.feasible` because an inactive constraint
     /// is violated.
     ///
     /// >>> from ommx import ConstraintKind, Instance
@@ -254,7 +254,7 @@ impl Solution {
         self.inner.feasible_relaxed()
     }
 
-    /// Alias for {meth}`~ommx.Solution.feasible`, including removed constraints
+    /// Alias for {meth}`~ommx.Solution.feasible`, including inactive constraints
     /// and every retained variable's kind and bounds.
     #[getter]
     pub fn feasible_unrelaxed(&self) -> bool {
@@ -334,10 +334,10 @@ impl Solution {
             .collect()
     }
 
-    /// Live mapping of all constraint families, including removed results.
+    /// Live mapping of all constraint families, including inactive results.
     ///
     /// Typed IDs select the family. Rows are fetched only when indexed, as
-    /// independent snapshots with labels, provenance, removal reasons, and
+    /// independent snapshots with labels, provenance, inactivation reasons, and
     /// evaluation diagnostics. Changing a snapshot does not update this
     /// Solution; subsequent lookups read the owner's current result.
     /// Use {meth}`~ommx.Solution.set_dual_variable` to update a stored regular
@@ -538,7 +538,7 @@ impl Solution {
     ///
     /// Raises KeyError if no constraint has the requested name. Raises
     /// ValueError if matching constraints share subscripts, including across families.
-    /// Parameters and descriptions are ignored. Retained removed constraints are
+    /// Parameters and descriptions are ignored. Retained inactive constraints are
     /// included. Regular constraints return violations, not signed function values.
     /// Indicator violations account for activation, while OneHot and SOS1 use
     /// their respective metrics; see {meth}`~ommx.Solution.total_violation`.
@@ -553,7 +553,7 @@ impl Solution {
     /// Related methods on {meth}`~ommx.Instance.extract_constraints` and
     /// {meth}`~ommx.ParametricInstance.extract_constraints` return attached
     /// handles for active constraints; {meth}`~ommx.SampleSet.extract_constraints`
-    /// returns violations for a selected sample, including removed constraints.
+    /// returns violations for a selected sample, including inactive constraints.
     ///
     /// # Examples
     ///
@@ -808,7 +808,7 @@ impl Solution {
     /// min_activeness selects the same ordered states as feasibility queries,
     /// defaulting to all rows. Reason data is gated by
     /// `"inactive_reason"` in `include=`. When the flag is on, rows for
-    /// constraints removed before evaluation get `inactive_reason` /
+    /// constraints deactivated before evaluation get `inactive_reason` /
     /// `inactive_reason.{key}` columns populated; other rows have NA.
     /// The related metadata queries {meth}`~ommx.Solution.constraint_context_df`,
     /// {meth}`~ommx.Solution.constraint_parameters_df`,
@@ -1001,7 +1001,7 @@ impl Solution {
         )
     }
 
-    /// Removed-constraint reasons DataFrame (long format).
+    /// Inactive-constraint reasons DataFrame (long format).
     #[pyo3(signature = (*, kind))]
     pub fn constraint_inactive_reasons_df<'py>(
         &self,
@@ -1082,7 +1082,7 @@ impl Solution {
 
     /// Get one constraint's nonnegative scalar violation.
     ///
-    /// Uses the definitions in {meth}`total_violation`, including for removed
+    /// Uses the definitions in {meth}`total_violation`, including for inactive
     /// constraints. The ID type selects its family. Raises `KeyError` when
     /// the ID is absent from that constraint family.
     pub fn constraint_violation(

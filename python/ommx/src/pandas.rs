@@ -126,8 +126,8 @@ impl IncludeFlags {
 }
 
 const LABEL_KEYS: &[&str] = &["name", "subscripts", "description"];
-const REMOVED_REASON_KEY: &str = "inactive_reason";
-const REMOVED_REASON_PREFIX: &str = "inactive_reason.";
+const INACTIVE_REASON_KEY: &str = "inactive_reason";
+const INACTIVE_REASON_PREFIX: &str = "inactive_reason.";
 
 // ---------------------------------------------------------------------------
 // kind= dispatch — shared by the 4 constraint sidecar accessors
@@ -250,16 +250,16 @@ where
     long_format_dataframe(py, entries, &[id_col, "step", "source_kind", "source_id"])
 }
 
-/// Long-format removed-reasons DataFrame for constraints.
+/// Long-format inactive-reasons DataFrame for constraints.
 ///
-/// One row per (id, parameter_key) pair when the removed reason has
+/// One row per (id, parameter_key) pair when the inactivation reason has
 /// parameters; ids without parameters get one row with `key`/`value` set to
 /// `pandas.NA`. Rows are sorted by `(id, key)` (NA-keyed rows sort first
 /// for ids with no parameters). Columns: `id_col`, `reason`, `key`,
 /// `value`. Default RangeIndex.
 pub fn constraint_inactive_metadata_dataframe<'py, 'a, ID>(
     py: Python<'py>,
-    removed: impl Iterator<Item = (ID, &'a InactiveConstraintMetadata)>,
+    inactive: impl Iterator<Item = (ID, &'a InactiveConstraintMetadata)>,
     id_col: &str,
 ) -> PyResult<Bound<'py, PyDataFrame>>
 where
@@ -286,7 +286,7 @@ where
         }
     }
     let mut rows: Vec<Row<'a>> = Vec::new();
-    for (id, reason) in removed {
+    for (id, reason) in inactive {
         let id_u64: u64 = id.into();
         if reason.parameters.is_empty() {
             rows.push(Row::Bare {
@@ -446,14 +446,14 @@ pub(crate) fn apply_include_filter(dict: &Bound<PyDict>, include: IncludeFlags) 
         }
     }
     if !include.inactive_reason {
-        if dict.contains(REMOVED_REASON_KEY)? {
-            dict.del_item(REMOVED_REASON_KEY)?;
+        if dict.contains(INACTIVE_REASON_KEY)? {
+            dict.del_item(INACTIVE_REASON_KEY)?;
         }
         let to_drop: Vec<String> = dict
             .keys()
             .iter()
             .filter_map(|k| k.extract::<String>().ok())
-            .filter(|k| k.starts_with(REMOVED_REASON_PREFIX))
+            .filter(|k| k.starts_with(INACTIVE_REASON_PREFIX))
             .collect();
         for key in to_drop {
             dict.del_item(key)?;
@@ -488,23 +488,23 @@ pub(crate) fn rename_id_column(dict: &Bound<PyDict>, id_col: &str) -> PyResult<(
 /// columns carry the reason parameters. Keys are emitted in lexicographic
 /// order so column ordering is deterministic across runs (the underlying
 /// `HashMap` iteration order is not). Used by call sites that fold
-/// removed-reason columns into a wide constraints DataFrame.
+/// inactive-reason columns into a wide constraints DataFrame.
 pub(crate) fn set_inactive_reason_columns(
     dict: &Bound<PyDict>,
     reason: &InactiveConstraintMetadata,
 ) -> PyResult<()> {
-    dict.set_item(REMOVED_REASON_KEY, &reason.reason)?;
+    dict.set_item(INACTIVE_REASON_KEY, &reason.reason)?;
     let mut keys: Vec<&str> = reason.parameters.keys().map(String::as_str).collect();
     keys.sort_unstable();
     for key in keys {
         let value = &reason.parameters[key];
-        dict.set_item(format!("{REMOVED_REASON_PREFIX}{key}"), value)?;
+        dict.set_item(format!("{INACTIVE_REASON_PREFIX}{key}"), value)?;
     }
     Ok(())
 }
 
 /// Emit a placeholder NA `inactive_reason` column on a row with no
-/// removed reason. Without this, a wide `*_df` requested with
+/// inactivation reason. Without this, a wide `*_df` requested with
 /// `include=("inactive_reason",)` would silently drop the column when
 /// no row in the view actually carries a reason — pandas keys columns
 /// off whatever appears in any row dict. Calling this on the
@@ -513,7 +513,7 @@ pub(crate) fn set_inactive_reason_columns(
 /// their key set is data-dependent.
 pub(crate) fn set_inactive_reason_na(dict: &Bound<PyDict>) -> PyResult<()> {
     let na = get_na(dict.py())?;
-    dict.set_item(REMOVED_REASON_KEY, &na)?;
+    dict.set_item(INACTIVE_REASON_KEY, &na)?;
     Ok(())
 }
 

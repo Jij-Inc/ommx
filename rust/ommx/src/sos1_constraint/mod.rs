@@ -22,7 +22,7 @@ pub enum Sos1ConstraintError {
 
 /// Family-specific ID for SOS1 constraints.
 /// Its numeric value is unique across every constraint family in an instance,
-/// including removed constraints.
+/// including inactive constraints.
 #[derive(
     Clone,
     Copy,

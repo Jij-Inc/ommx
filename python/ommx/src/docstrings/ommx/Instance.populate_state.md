@@ -103,7 +103,7 @@ zero as well as values in their nonzero interval.
 
 ```
 
-A reference only from a named function, removed constraint, output objective, or
+A reference only from a named function, inactive constraint, output objective, or
 dependency right-hand side does not make a variable used. If such a variable is
 irrelevant, omitting its value means these expressions use its default. Supply the
 value explicitly when checking a particular candidate; the default is neither a

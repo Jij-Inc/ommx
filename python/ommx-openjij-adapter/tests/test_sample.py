@@ -351,7 +351,7 @@ def test_decode_to_sampleset_uses_instance_variables():
         ),
     ],
 )
-def test_prepared_instance_evaluation_populates_variable_removed_with_trivial_inequality(
+def test_prepared_instance_evaluation_populates_variable_unused_after_trivial_inequality(
     variable,
     constraint,
     expected_value,

@@ -162,7 +162,7 @@ impl Instance {
     /// rewrite is planned against `self` before anything is mutated, so any
     /// validation or coefficient-arithmetic failure leaves the entire instance
     /// unchanged. The validated plan is then committed with narrow table-local
-    /// effects. No whole-instance clone is made, and unrelated removed
+    /// effects. No whole-instance clone is made, and unrelated inactive
     /// constraints, special constraints, named functions, or metadata are not
     /// cloned or dropped. Duplicate IDs are encoded once. Pass a single-element
     /// iterator such as `[id]` to encode exactly one variable.
@@ -175,7 +175,7 @@ impl Instance {
     /// # Postconditions
     ///
     /// Encoding rewrites the Active Formulation and records reconstruction
-    /// rules. Named functions, removed constraints, and existing output
+    /// rules. Named functions, inactive constraints, and existing output
     /// objectives keep their expressions in Interpretation Context. Evaluation
     /// restores the original variables before evaluating those expressions.
     ///

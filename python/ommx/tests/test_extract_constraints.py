@@ -19,7 +19,12 @@ from ommx import (
     Sense,
     Solution,
 )
-from test_live_constraint_collections import FAMILIES, NUMBERS, make_model, remove_all
+from test_live_constraint_collections import (
+    FAMILIES,
+    NUMBERS,
+    make_model,
+    deactivate_all,
+)
 
 Model = TypeVar("Model", bound=Instance | ParametricInstance)
 
@@ -61,7 +66,7 @@ def test_model_extraction_returns_attached_rows_of_all_families(
     assert indicator.name == "c"  # Extracted handles retain their owner.
 
 
-def test_model_extraction_excludes_removed_rows_on_both_roots():
+def test_model_extraction_excludes_inactive_rows_on_both_roots():
     model = label_model(make_model(Instance))
     model.deactivate_constraint(5, "manual")
     for root in [model, model.as_parametric_instance()]:
@@ -69,11 +74,11 @@ def test_model_extraction_excludes_removed_rows_on_both_roots():
         assert ConstraintID(5) in root.inactive_constraints
 
 
-@pytest.mark.parametrize("removed", [False, True])
-def test_results_extract_violations_including_retained_removed_constraints(removed):
+@pytest.mark.parametrize("inactive", [False, True])
+def test_results_extract_violations_including_retained_inactive_constraints(inactive):
     model = label_model(make_model(Instance))
-    if removed:
-        remove_all(model)
+    if inactive:
+        deactivate_all(model)
         # Lowering copies labels to generated rows. Retained source rows are
         # also searched, so this ambiguity must fail rather than overwrite.
         with pytest.raises(ValueError, match="Duplicate subscript"):
@@ -213,11 +218,11 @@ def test_constraint_names_deduplicate_without_validating_subscripts():
         samples.extract_constraints("c", 7)
 
 
-def test_constraint_name_scope_tracks_removal_and_retained_results():
+def test_constraint_name_scope_tracks_deactivation_and_retained_results():
     model = make_model(Instance)
     for name, id_type, _ in FAMILIES:
         model.active_constraints[id_type(NUMBERS[id_type])].set_name(str(name))
-    remove_all(model)
+    deactivate_all(model)
     for row in model.active_constraints.values():
         assert isinstance(row, AttachedConstraint)
         row.set_name("generated")

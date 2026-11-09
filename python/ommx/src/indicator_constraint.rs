@@ -135,7 +135,7 @@ impl IndicatorConstraint {
     }
 }
 
-/// A removed indicator constraint together with the reason it was removed.
+/// An inactive indicator constraint together with the reason it was deactivated.
 #[gen_stub_pyclass]
 #[pyclass(from_py_object, eq, extends = ConstraintView)]
 #[derive(Clone, PartialEq)]

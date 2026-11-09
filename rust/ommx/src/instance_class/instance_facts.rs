@@ -42,7 +42,7 @@ impl ConstraintFacts {
 /// This private value is diagnostic evidence for instance-class membership,
 /// not another mutable source of truth. It includes the objective and every
 /// active constraint family, and groups only used decision variables by
-/// [`Kind`]. Fixed, dependent, irrelevant, removed-constraint-only, and
+/// [`Kind`]. Fixed, dependent, irrelevant, inactive-constraint-only, and
 /// named-function-only variables are excluded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstanceFacts {
@@ -256,8 +256,8 @@ mod tests {
         let dependent = VariableID::from(3);
         let dependency_source = VariableID::from(4);
         let named_only = VariableID::from(5);
-        let removed_only = VariableID::from(6);
-        let removed_reason = crate::constraint::InactiveConstraintMetadata {
+        let inactive_only = VariableID::from(6);
+        let inactive_metadata = crate::constraint::InactiveConstraintMetadata {
             skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
@@ -271,15 +271,15 @@ mod tests {
                 (dependent, DecisionVariable::semi_continuous()),
                 (dependency_source, DecisionVariable::integer()),
                 (named_only, DecisionVariable::continuous()),
-                (removed_only, DecisionVariable::semi_integer()),
+                (inactive_only, DecisionVariable::semi_integer()),
             ]))
             .fixed_decision_variable_values(BTreeMap::from([(fixed, 0.0)]))
             .active_constraints(BTreeMap::new())
             .inactive_constraints(BTreeMap::from([(
                 ConstraintID::from(10),
                 (
-                    Constraint::equal_to_zero(Function::from(linear!(removed_only))),
-                    removed_reason,
+                    Constraint::equal_to_zero(Function::from(linear!(inactive_only))),
+                    inactive_metadata,
                 ),
             )]))
             .named_functions(BTreeMap::from([(

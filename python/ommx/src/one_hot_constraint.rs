@@ -124,7 +124,7 @@ impl OneHotConstraint {
     }
 }
 
-/// A removed one-hot constraint together with the reason it was removed.
+/// An inactive one-hot constraint together with the reason it was deactivated.
 #[gen_stub_pyclass]
 #[pyclass(from_py_object, eq, extends = ConstraintView)]
 #[derive(Clone, PartialEq)]

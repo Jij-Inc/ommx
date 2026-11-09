@@ -195,6 +195,6 @@ through its `report` attribute:
 ...     assert not error.report.is_member
 ...     assert error.report == target.check_membership(blocked)
 ... else:
-...     raise AssertionError("an empty policy unexpectedly removed a constraint")
+...     raise AssertionError("an empty policy unexpectedly deactivated a constraint")
 
 ```

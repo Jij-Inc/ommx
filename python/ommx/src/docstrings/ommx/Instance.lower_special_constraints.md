@@ -58,14 +58,14 @@ the active SOS1, retains the original OneHot for evaluation, and adds an equalit
 ... }
 >>> assert instance.active_special_constraint_kinds == {ConstraintKind.Sos1}
 >>> assert original.constraint_id not in instance.active_constraints
->>> removed = instance.inactive_constraints[original.constraint_id]
->>> assert removed.inactive_reason == "ommx.Instance.convert_one_hot_to_constraint"
->>> assert removed.inactive_reason_parameters == {"constraint_id": "2"}
+>>> inactive = instance.inactive_constraints[original.constraint_id]
+>>> assert inactive.inactive_reason == "ommx.Instance.convert_one_hot_to_constraint"
+>>> assert inactive.inactive_reason_parameters == {"constraint_id": "2"}
 >>> generated = instance.constraints[ConstraintID(2)]
 >>> assert generated.provenance[-1].kind == ProvenanceKind.OneHotConstraint
 >>> assert generated.provenance[-1].original_id == OneHotConstraintID(0)
 >>> rows = instance.constraints_df(kind=ConstraintKind.OneHot, include=("inactive_reason",))
->>> assert rows.loc[original.constraint_id, "inactive_reason"] == removed.inactive_reason
+>>> assert rows.loc[original.constraint_id, "inactive_reason"] == inactive.inactive_reason
 >>> assert instance.evaluate(
 ...     {choices[0].id: 1, choices[1].id: 0, choices[2].id: 0}
 ... ).feasible()
@@ -75,8 +75,8 @@ the active SOS1, retains the original OneHot for evaluation, and adds an equalit
 ```
 
 The default includes all active and inactive rows. `include=("inactive_reason",)` adds
-the removal-reason columns. Each generated regular constraint records its source
-through {attr}`~ommx.Constraint.provenance`; removed rows record generated IDs in
+the inactivation-reason columns. Each generated regular constraint records its source
+through {attr}`~ommx.Constraint.provenance`; inactive rows record generated IDs in
 their reason parameters. The single-constraint conversion APIs define the
 family-specific parameter names and ordering. See
 {meth}`~ommx.Instance.convert_one_hot_to_constraint`,

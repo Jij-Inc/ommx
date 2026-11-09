@@ -153,13 +153,13 @@ SCIP の目的関数用補助変数にも、指定した初期値から計算し
 目的関数の項が増える前に書き換えます。非循環の置換は、置換同士の依存関係を
 先に解決し、各多項式の項を一度走査してまとめて処理します。
 
-penaltyによって除去される制約には、エンコード後の式が保存されます。
+penaltyによって無効化される制約には、エンコード後の式が保存されます。
 制約の評価値と元の出力目的値は、決定変数の復元を通じて保持されます。
 詳しくは {meth}`~ommx.Instance.prepare` を参照してください。
 
 ### ⚠ 全種類の制約でIDの番号を一意にする ([#1309](https://github.com/Jij-Inc/ommx/pull/1309))
 
-`Instance`・`ParametricInstance`内では、removedを含む通常制約・Indicator・OneHot・SOS1の
+`Instance`・`ParametricInstance`内では、inactiveを含む通常制約・Indicator・OneHot・SOS1の
 全種類を通じてIDの番号が一意になります。自動追加や変換もこの共通空間から採番し、
 評価後の`Solution`・`SampleSet`でもIDを維持します。
 
@@ -181,7 +181,7 @@ frame = solution.constraints_df(kind="regular")
 ```
 
 コレクションは所有元を保持し、型付きIDで参照された行だけを取得します。整数キーは拒否します。
-モデルの値はAttachedハンドル、結果の値は削除済み制約の情報も含む個別のスナップショットです。
+モデルの値はAttachedハンドル、結果の値はinactive制約の情報も含む個別のスナップショットです。
 種類別プロパティは `.constraints` と `.removed_constraints` に統合し、
 `get_constraint_by_id`・`get_removed_constraint_by_id`と結果の`constraint_ids`は
 添字アクセスと列挙へ置き換えます。モデルの独立したコピーが必要ならAttachedの行を`.detach()`します。
@@ -210,7 +210,7 @@ IDの型は `ConstraintID`、`IndicatorConstraintID`、`OneHotConstraintID`、
 特殊制約の種類が追加されても公開返り値型を変えず、具体的なIDによる添字アクセスでは
 具体型を返します。ソルバー側は未対応種類を黙って除外せず、明示的に拒否します。
 
-Attachedの行は所有元の同一性と型付きIDで比較し、Removedと結果の行は
+Attachedの行は所有元の同一性と型付きIDで比較し、Inactiveと結果の行は
 スナップショットのデータとメタデータで比較します。コレクションとそのビューも
 この比較に従います。型付きIDは `copy`・`deepcopy` に対応し、`.get()` は
 具体的な行の型と代わりの値の型を保持します。不正な検索キーへのエラーは、
@@ -620,7 +620,7 @@ formulationの検証に失敗すると
 {class}`~ommx.Sos1BigMPromotionBatchRejectedError`となり、`Instance`は
 変更されません。戻り値の{class}`~ommx.Sos1BigMPromotion`はbatch全体のReportで、
 `promoted` Mapから新しいSOS1 IDを取得できます。member、selectorの復元、
-removed rowの情報はInstanceから参照できます。
+inactive rowの情報はInstanceから参照できます。
 
 ### 🆕 区間で定義する決定変数の逐次作成 ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
 
@@ -771,7 +771,7 @@ Function、polynomial、constraint、named function、`Instance` のevaluation A
 RustからPythonへの共通error boundaryを直接使います。呼び出し側が渡したstateの不足・
 未知のID・不正な値と、回復可能なdependent-variable assertionは`ValueError`になります。
 Functionとpolynomialを直接partial evaluationする場合は`CoefficientError`を保持し、
-`Instance`が所有するdependencyの正規化と`removed constraint`の復元で発生した
+`Instance`が所有するdependencyの正規化とinactive制約の再有効化で発生した
 coefficient failureは`RuntimeError`にfallbackします。
 
 Decision variableの追加とsubstitution、`Function.content_factor`、OneHot/SOS1の
@@ -1760,7 +1760,7 @@ Instance.from_components(..., constraints={5: c}, ...)
 - {class}`~ommx.OneHotConstraint` — 従来 `ConstraintHints.OneHot` として扱われていた one-hot 制約
 - {class}`~ommx.Sos1Constraint` — 従来 `ConstraintHints.Sos1` として扱われていた SOS1 制約
 
-具体的な使い方と評価結果の参照については {class}`~ommx.IndicatorConstraint`・{class}`~ommx.OneHotConstraint`・{class}`~ommx.Sos1Constraint`、Indicator 制約を含む active / removed の扱いについては [候補を評価して結果を判断する](../book/evaluate_and_interpret.md) を参照してください。
+具体的な使い方と評価結果の参照については {class}`~ommx.IndicatorConstraint`・{class}`~ommx.OneHotConstraint`・{class}`~ommx.Sos1Constraint`、Indicator 制約を含む active / inactive の扱いについては [候補を評価して結果を判断する](../book/evaluate_and_interpret.md) を参照してください。
 
 これに伴い旧 API である `ConstraintHints` / `OneHot` / `Sos1` クラス、`Instance.constraint_hints` プロパティ、PySCIPOpt Adapter の `use_sos1` フラグは削除されています。
 

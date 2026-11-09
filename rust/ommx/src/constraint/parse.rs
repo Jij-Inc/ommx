@@ -91,12 +91,12 @@ impl Parse for v1::RemovedConstraint {
                 field: "constraint",
             })?
             .parse_as(&(), message, "constraint")?;
-        let removed_reason = InactiveConstraintMetadata {
+        let inactive_metadata = InactiveConstraintMetadata {
             reason: self.removed_reason,
             parameters: self.removed_reason_parameters.into_iter().collect(),
             skip_feasibility_check: false,
         };
-        Ok((id, constraint, context, removed_reason))
+        Ok((id, constraint, context, inactive_metadata))
     }
 }
 
@@ -179,7 +179,7 @@ impl Parse for v1::EvaluatedConstraint {
             provenance: Vec::new(),
         };
 
-        let removed_reason = self
+        let inactive_metadata = self
             .removed_reason
             .map(|reason| InactiveConstraintMetadata {
                 reason,
@@ -202,7 +202,7 @@ impl Parse for v1::EvaluatedConstraint {
                 },
             },
             context,
-            removed_reason,
+            inactive_metadata,
         ))
     }
 }
@@ -257,7 +257,7 @@ impl Parse for v1::SampledConstraint {
             provenance: Vec::new(),
         };
 
-        let removed_reason = self
+        let inactive_metadata = self
             .removed_reason
             .map(|reason| InactiveConstraintMetadata {
                 reason,
@@ -280,7 +280,7 @@ impl Parse for v1::SampledConstraint {
                 },
             },
             context,
-            removed_reason,
+            inactive_metadata,
         ))
     }
 }
@@ -361,13 +361,13 @@ mod tests {
             removed_reason_parameters: Default::default(),
         };
 
-        let (id, parsed, context, removed_reason): (
+        let (id, parsed, context, inactive_metadata): (
             ConstraintID,
             EvaluatedConstraint,
             ConstraintContext,
             _,
         ) = v1_constraint.parse(&()).unwrap();
-        assert!(removed_reason.is_none());
+        assert!(inactive_metadata.is_none());
 
         assert_eq!(id, ConstraintID(42));
         assert_eq!(parsed.equality, Equality::EqualToZero);

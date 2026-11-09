@@ -137,7 +137,7 @@ impl Instance {
         self.ensure_constraint_id_capacity(generated_constraint_count)?;
         // Phase 2: apply. Planned state only references variables that existed at
         // plan time; `apply_sos1_conversion` only adds fresh variables / constraints
-        // and relaxes its own SOS1, so earlier applications cannot invalidate later
+        // and deactivates its own SOS1, so earlier applications cannot invalidate later
         // plans.
         let mut result = BTreeMap::new();
         for (id, plans) in all_plans {
@@ -279,7 +279,7 @@ impl Instance {
             new_constraint_ids.push(new_id);
         }
 
-        // Move SOS1 to removed with a listing of the new constraint IDs.
+        // Move SOS1 to inactive with a listing of the new constraint IDs.
         let mut parameters = fnv::FnvHashMap::default();
         let constraint_ids_str = new_constraint_ids
             .iter()
@@ -399,12 +399,12 @@ mod tests {
             &[Provenance::Sos1Constraint(Sos1ConstraintID::from(5))]
         );
 
-        // Original SOS1 is recorded as removed with the new constraint ID.
+        // Original SOS1 is recorded as inactive with the new constraint ID.
         assert!(instance.active_sos1_constraints().is_empty());
         let (_, reason) = instance
             .inactive_sos1_constraints()
             .get(&Sos1ConstraintID::from(5))
-            .expect("SOS1 should be retained as removed");
+            .expect("SOS1 should be retained as inactive");
         assert_eq!(reason.reason, "ommx.Instance.convert_sos1_to_constraints");
         assert_eq!(
             reason.parameters.get("constraint_ids").map(String::as_str),
@@ -459,7 +459,7 @@ mod tests {
         );
         assert_abs_diff_eq!(card.function(), &expected_card);
 
-        // `constraint_ids` parameter on removed reason lists all three in insertion order.
+        // `constraint_ids` parameter on inactive reason lists all three in insertion order.
         let (_, reason) = instance
             .inactive_sos1_constraints()
             .get(&Sos1ConstraintID::from(9))

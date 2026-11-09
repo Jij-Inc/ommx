@@ -37,7 +37,7 @@ impl Propagate for IndicatorConstraint<Created> {
         if let Some(&indicator_value) = state.entries.get(&self.indicator_variable.into_inner()) {
             if indicator_is_active(self.indicator_variable, indicator_value, None, atol)? {
                 // Indicator ON (~1) → promote inner constraint to regular Constraint.
-                // Clone the function so self (going to removed) retains its data.
+                // Clone the function so self (going to inactive) retains its data.
                 let mut promoted_function = self.stage.function.clone();
                 promoted_function.partial_evaluate(state, atol)?;
 
@@ -452,7 +452,7 @@ mod tests {
                 // Per-element constraint context is gone in v3; provenance and
                 // modeling labels are added by the caller (Instance) into its
                 // ConstraintContextStore at the collection level.
-                // Original indicator constraint preserved for removed set
+                // Original indicator constraint preserved for inactive set
                 assert_eq!(original.indicator_variable, VariableID::from(10));
             }
             _ => panic!("Expected Transformed"),

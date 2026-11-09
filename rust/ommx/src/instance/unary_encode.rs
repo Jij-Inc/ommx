@@ -75,7 +75,7 @@ impl Instance {
     /// # Postconditions
     ///
     /// Encoding rewrites the Active Formulation and records reconstruction
-    /// rules. Named functions, removed constraints, and existing output
+    /// rules. Named functions, inactive constraints, and existing output
     /// objectives keep their expressions in Interpretation Context. Evaluation
     /// restores the original variables before evaluating those expressions.
     ///

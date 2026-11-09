@@ -2,10 +2,10 @@
 //!
 //! Expression families vary total term count while assignment density is one,
 //! half, or all required IDs; each should traverse terms linearly. Instance
-//! families originate from issue #1027. Removed-only and active families scale
+//! families originate from issue #1027. Inactive-only and active families scale
 //! state or semantic work with the constraint count C and should remain O(C).
-//! The mixed-regular family holds state and active work fixed while C removed
-//! rows grow, so its Plan/Commit path should avoid O(C) removed-row traversal;
+//! The mixed-regular family holds state and active work fixed while C inactive
+//! rows grow, so its Plan/Commit path should avoid O(C) inactive-row traversal;
 //! O(C) growth would indicate that whole-Instance cloning returned.
 
 use criterion::{
@@ -25,13 +25,13 @@ use std::collections::BTreeMap;
 // instrumented expression benchmark pay for a 10,000-term profile.
 const EXPRESSION_SCALE: [usize; 3] = [100, 320, 1_000];
 
-fn removed_constraint_instance(num_constraints: usize) -> (Instance, ommx::v1::State) {
+fn inactive_constraint_instance(num_constraints: usize) -> (Instance, ommx::v1::State) {
     let decision_variables = (0..num_constraints as u64)
         .map(|id| (VariableID::from(id), DecisionVariable::continuous()))
         .collect();
-    let removed_reason = InactiveConstraintMetadata {
+    let inactive_metadata = InactiveConstraintMetadata {
         skip_feasibility_check: false,
-        reason: "ommx.bench.partial_evaluate.removed_regular_constraints".to_string(),
+        reason: "ommx.bench.partial_evaluate.inactive_regular_constraints".to_string(),
         parameters: Default::default(),
     };
     let inactive_constraints = (0..num_constraints as u64)
@@ -40,7 +40,7 @@ fn removed_constraint_instance(num_constraints: usize) -> (Instance, ommx::v1::S
                 ConstraintID::from(id),
                 (
                     Constraint::equal_to_zero(Function::from(linear!(id))),
-                    removed_reason.clone(),
+                    inactive_metadata.clone(),
                 ),
             )
         })
@@ -94,7 +94,7 @@ fn mixed_regular_instance(num_inactive_constraints: usize) -> (Instance, ommx::v
     decision_variables.insert(objective_var, DecisionVariable::continuous());
     decision_variables.insert(named_var, DecisionVariable::continuous());
 
-    let removed_reason = InactiveConstraintMetadata {
+    let inactive_metadata = InactiveConstraintMetadata {
         skip_feasibility_check: false,
         reason: "ommx.bench.partial_evaluate.mixed_regular_inactive_constraints".to_string(),
         parameters: Default::default(),
@@ -105,7 +105,7 @@ fn mixed_regular_instance(num_inactive_constraints: usize) -> (Instance, ommx::v
                 ConstraintID::from(id),
                 (
                     Constraint::equal_to_zero(Function::from(linear!(id))),
-                    removed_reason.clone(),
+                    inactive_metadata.clone(),
                 ),
             )
         })
@@ -142,14 +142,14 @@ fn mixed_regular_instance(num_inactive_constraints: usize) -> (Instance, ommx::v
 /// constraints already moved into inactive_constraints.
 fn partial_evaluate_instance_inactive_constraints(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
-    let mut group = c.benchmark_group("partial-evaluate-instance-removed-constraints");
+    let mut group = c.benchmark_group("partial-evaluate-instance-inactive-constraints");
     group.plot_config(plot_config);
 
     for num_constraints in [1_000, 8_000, 32_000] {
-        let (instance, state) = removed_constraint_instance(num_constraints);
+        let (instance, state) = inactive_constraint_instance(num_constraints);
         group.bench_with_input(
             BenchmarkId::new(
-                "partial-evaluate-instance-removed-constraints",
+                "partial-evaluate-instance-inactive-constraints",
                 num_constraints.to_string(),
             ),
             &(instance, state),
@@ -223,9 +223,9 @@ fn partial_evaluate_instance_active_constraints(c: &mut Criterion) {
 
 /// Persistent scaling guardrail for issue #1027 and PR #1048.
 ///
-/// The removed regular-constraint count is the only growing dimension. The
+/// The inactive regular-constraint count is the only growing dimension. The
 /// state, objective, active regular constraints, and named functions stay fixed,
-/// so private Plan/Commit should avoid O(C) removed-table work; clone-backed
+/// so private Plan/Commit should avoid O(C) inactive-table work; clone-backed
 /// fallback would add it. The measured boundary is borrowed atomic
 /// `Instance::partial_evaluate`; `iter_batched_ref` keeps fixture cloning outside
 /// that boundary. The existing three Instance scale points bound runner cost.

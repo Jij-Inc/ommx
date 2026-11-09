@@ -173,7 +173,7 @@ impl ParametricInstanceBuilder {
         self
     }
 
-    /// Sets the removed indicator constraints.
+    /// Sets the inactive indicator constraints.
     pub fn inactive_indicator_constraints(
         mut self,
         inactive_indicator_constraints: BTreeMap<
@@ -336,8 +336,8 @@ impl ParametricInstanceBuilder {
         }
         // Validate that all variable IDs in inactive_constraints are defined
         // (inactive_constraints may contain fixed or dependent variable IDs)
-        for (removed, _reason) in self.inactive_constraints.values() {
-            for id in removed.required_ids() {
+        for (inactive, _reason) in self.inactive_constraints.values() {
+            for id in inactive.required_ids() {
                 if !all_variable_ids.contains(&id) {
                     crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
                 }

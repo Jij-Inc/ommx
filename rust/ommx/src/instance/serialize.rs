@@ -1234,13 +1234,13 @@ mod activeness_wire_tests {
         // The old message carried only fields 1 and 2. Verify those exact bytes
         // remain readable after the source-level message/field renames.
         #[derive(Clone, PartialEq, prost::Message)]
-        struct LegacyRemovedReason {
+        struct LegacyInactiveReason {
             #[prost(string, tag = "1")]
             reason: String,
             #[prost(btree_map = "string, string", tag = "2")]
             parameters: BTreeMap<String, String>,
         }
-        let legacy = LegacyRemovedReason {
+        let legacy = LegacyInactiveReason {
             reason: "preprocess".into(),
             parameters: BTreeMap::from([("rule".into(), "redundant".into())]),
         };
@@ -1255,15 +1255,15 @@ mod activeness_wire_tests {
             #[prost(btree_map = "uint64, message", tag = "1")]
             active: BTreeMap<u64, v2::RegularConstraint>,
             #[prost(btree_map = "uint64, message", tag = "2")]
-            removed: BTreeMap<u64, v2::RegularConstraint>,
+            inactive: BTreeMap<u64, v2::RegularConstraint>,
             #[prost(btree_map = "uint64, message", tag = "3")]
-            removed_reasons: BTreeMap<u64, LegacyRemovedReason>,
+            inactive_metadatas: BTreeMap<u64, LegacyInactiveReason>,
             #[prost(btree_map = "uint64, message", tag = "4")]
             contexts: BTreeMap<u64, v2::ConstraintContext>,
         }
         let old_collection = LegacyRegularConstraintCollection {
             active: BTreeMap::new(),
-            removed: BTreeMap::from([(
+            inactive: BTreeMap::from([(
                 10,
                 v2::RegularConstraint {
                     equality: v1::Equality::LessThanOrEqualToZero as i32,
@@ -1272,7 +1272,7 @@ mod activeness_wire_tests {
                     ),
                 },
             )]),
-            removed_reasons: BTreeMap::from([(10, legacy)]),
+            inactive_metadatas: BTreeMap::from([(10, legacy)]),
             contexts: BTreeMap::from([(
                 10,
                 v2::ConstraintContext {

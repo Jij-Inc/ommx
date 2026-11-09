@@ -1,7 +1,7 @@
 Live mapping of a SampleSet's constraint results, including retained inactive rows.
 
 Obtained from {attr}`~ommx.SampleSet.constraints`. Each access returns an
-independent snapshot with labels, provenance, removal reasons, and sampled
+independent snapshot with labels, provenance, inactivation reasons, and sampled
 evaluation diagnostics. Changing that snapshot does not update the SampleSet;
 a later lookup reads the owner's current state. The collection keeps its owner
 alive.

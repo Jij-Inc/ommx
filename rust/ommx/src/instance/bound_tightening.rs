@@ -30,7 +30,7 @@ impl Instance {
     /// Apply one simultaneous bound-tightening pass using selected regular constraints.
     ///
     /// `constraint_ids` contains active regular constraint IDs. Unknown and
-    /// removed IDs are errors; an empty set applies no updates. Non-affine
+    /// inactive IDs are errors; an empty set applies no updates. Non-affine
     /// selected rows are skipped, as in [`Self::tighten_bounds_simultaneously_once`].
     /// All eligible variables in the selected rows may have their bounds tightened.
     /// Only compact polynomial functions convertible with [`Function::as_linear`]
@@ -579,7 +579,7 @@ mod tests {
     }
 
     #[test]
-    fn unknown_and_removed_selected_constraints_are_atomic_errors() {
+    fn unknown_and_inactive_selected_constraints_are_atomic_errors() {
         let mut problem = instance(
             vec![continuous(-10.0, 10.0)],
             vec![
@@ -758,7 +758,7 @@ mod tests {
     }
 
     #[test]
-    fn ignores_nonlinear_and_removed_rows_but_uses_a_finite_candidate() {
+    fn ignores_nonlinear_and_inactive_rows_but_uses_a_finite_candidate() {
         let mut problem = instance(
             vec![continuous(-10.0, 10.0)],
             vec![

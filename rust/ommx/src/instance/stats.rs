@@ -276,7 +276,12 @@ mod tests {
 
         // Remove one constraint
         instance
-            .deactivate_constraint(ConstraintID::from(2), "Test removal".to_string(), [], false)
+            .deactivate_constraint(
+                ConstraintID::from(2),
+                "Test deactivation".to_string(),
+                [],
+                false,
+            )
             .unwrap();
 
         let stats = instance.stats();
@@ -285,7 +290,7 @@ mod tests {
         assert_eq!(stats.constraints.active, 1);
         assert_eq!(stats.constraints.inactive, 1);
         // Variables 1 and 2 are used in constraint 1 (active)
-        // Note: Removed constraints are NOT counted in used_in_constraints
+        // Note: Inactive constraints are NOT counted in used_in_constraints
         assert_eq!(stats.decision_variables.by_usage.used_in_constraints, 2);
         // Variable 1 is used in both objective and constraint 1, variable 2 is used in constraint 1
         assert_eq!(stats.decision_variables.by_usage.used, 2);

@@ -370,12 +370,12 @@ mod tests {
             )]
         );
 
-        // Original indicator moved to removed with expected reason + constraint_ids.
+        // Original indicator moved to inactive with expected reason + constraint_ids.
         assert!(instance.active_indicator_constraints().is_empty());
         let (_, reason) = instance
             .inactive_indicator_constraints()
             .get(&IndicatorConstraintID::from(7))
-            .expect("indicator retained as removed");
+            .expect("indicator retained as inactive");
         assert_eq!(
             reason.reason,
             "ommx.Instance.convert_indicator_to_constraint"
@@ -453,7 +453,7 @@ mod tests {
     #[test]
     fn redundant_side_is_skipped() {
         // y=1 → x - 10 <= 0 with x in [0, 5]: upper = -5 <= 0, so constraint is
-        // always satisfied by bounds. No big-M emitted; indicator simply relaxed.
+        // always satisfied by bounds. No big-M emitted; indicator simply deactivated.
         let f = Function::from(linear!(1) + coeff!(-10.0));
         let mut instance = single_indicator_instance(
             Bound::new(0.0, 5.0).unwrap(),
@@ -718,12 +718,12 @@ mod tests {
 
     fn indicator_instance_with_constraint_id(
         regular_id: u64,
-        regular_is_removed: bool,
+        regular_is_inactive: bool,
         indicators: BTreeMap<IndicatorConstraintID, IndicatorConstraint>,
     ) -> Instance {
         let constraint_id = ConstraintID::from(regular_id);
         let constraint = Constraint::equal_to_zero(Function::Zero);
-        let (constraints, inactive_constraints) = if regular_is_removed {
+        let (constraints, inactive_constraints) = if regular_is_inactive {
             (
                 BTreeMap::new(),
                 BTreeMap::from([(
@@ -811,9 +811,9 @@ mod tests {
     }
 
     #[test]
-    fn conversion_rejects_exhausted_active_and_removed_constraint_ids_without_mutation() {
+    fn conversion_rejects_exhausted_active_and_inactive_constraint_ids_without_mutation() {
         let id = IndicatorConstraintID::from(7);
-        for regular_is_removed in [false, true] {
+        for regular_is_inactive in [false, true] {
             let indicator = IndicatorConstraint::new(
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
@@ -821,7 +821,7 @@ mod tests {
             );
             let mut instance = indicator_instance_with_constraint_id(
                 u64::MAX,
-                regular_is_removed,
+                regular_is_inactive,
                 BTreeMap::from([(id, indicator)]),
             );
             let before = instance.clone();

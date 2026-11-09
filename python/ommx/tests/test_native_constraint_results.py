@@ -165,7 +165,7 @@ def test_all_families_native_dataframe_and_roundtrip(
         }
 
 
-def test_removed_context_provenance_and_owned_snapshots():
+def test_inactive_context_provenance_and_owned_snapshots():
     instance = model()
     generated = instance.convert_one_hot_to_constraint(OneHotConstraintID(9))
     instance.deactivate_constraint(ConstraintID(7), "manual", phase="test")
@@ -176,11 +176,11 @@ def test_removed_context_provenance_and_owned_snapshots():
             ConstraintID(7),
             generated,
         }
-        removed = rows[ConstraintID(7)]
-        assert removed.name == "balance"
-        assert removed.parameters == {"group": "a"}
-        assert removed.inactive_reason == "manual"
-        assert removed.inactive_reason_parameters == {"phase": "test"}
+        inactive = rows[ConstraintID(7)]
+        assert inactive.name == "balance"
+        assert inactive.parameters == {"group": "a"}
+        assert inactive.inactive_reason == "manual"
+        assert inactive.inactive_reason_parameters == {"phase": "test"}
         assert rows[generated].provenance[0].original_id == OneHotConstraintID(9)
         assert root.constraints[OneHotConstraintID(9)].inactive_reason is not None
         frame = root.constraint_provenance_df(kind=ConstraintKind.Regular)

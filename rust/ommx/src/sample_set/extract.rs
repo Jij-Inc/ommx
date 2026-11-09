@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use super::*;
 
 impl SampleSet {
-    /// Unique constraint names across every family, including retained removed rows.
+    /// Unique constraint names across every family, including retained inactive rows.
     ///
     /// Searches the same rows as `extract_constraints`. Unnamed constraints are
     /// excluded; explicitly empty names are included. Duplicate names are
@@ -147,7 +147,7 @@ impl SampleSet {
 
     /// Extract nonnegative constraint violations by name for one sample.
     ///
-    /// Searches every family, including retained removed constraints, and returns
+    /// Searches every family, including retained inactive constraints, and returns
     /// a mapping from subscripts to violations. Parameters and descriptions are
     /// ignored. Regular constraints return violations, not signed function values.
     ///

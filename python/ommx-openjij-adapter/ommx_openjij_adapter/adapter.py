@@ -62,7 +62,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         sufficient values depend on the application. The shared ``Instance``
         owner operation validates their nonnegative-with-tolerance domain. Set
         ``fixed_penalty`` on the fresh returned policy when active constraints
-        must be removed.
+        must be deactivated.
         """
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(

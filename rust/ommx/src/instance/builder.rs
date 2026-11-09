@@ -163,7 +163,7 @@ impl InstanceBuilder {
         self
     }
 
-    /// Sets the removed indicator constraints.
+    /// Sets the inactive indicator constraints.
     pub fn inactive_indicator_constraints(
         mut self,
         inactive_indicator_constraints: BTreeMap<
@@ -866,9 +866,9 @@ mod tests {
 
         let constraint_id = ConstraintID::from(1);
         let constraint = Constraint::equal_to_zero(Function::Zero);
-        let removed_constraint = Constraint::equal_to_zero(Function::Zero);
+        let inactive_constraint = Constraint::equal_to_zero(Function::Zero);
         let _ = constraint_id;
-        let removed_reason = crate::constraint::InactiveConstraintMetadata {
+        let inactive_metadata = crate::constraint::InactiveConstraintMetadata {
             skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
@@ -880,7 +880,7 @@ mod tests {
             .decision_variables(BTreeMap::new())
             .active_constraints(btreemap! { constraint_id => constraint })
             .inactive_constraints(
-                btreemap! { constraint_id => (removed_constraint, removed_reason) },
+                btreemap! { constraint_id => (inactive_constraint, inactive_metadata) },
             )
             .build()
             .unwrap_err();
@@ -1094,14 +1094,14 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_undefined_variable_in_removed_constraint() {
+    fn test_builder_undefined_variable_in_inactive_constraint() {
         use maplit::btreemap;
 
         let constraint_id = ConstraintID::from(1);
-        // Create a removed constraint that references undefined variable ID 999
-        let removed_constraint =
+        // Create an inactive constraint that references undefined variable ID 999
+        let inactive_constraint =
             Constraint::equal_to_zero(Function::from(linear!(999) + coeff!(1.0)));
-        let removed_reason = crate::constraint::InactiveConstraintMetadata {
+        let inactive_metadata = crate::constraint::InactiveConstraintMetadata {
             skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
@@ -1113,7 +1113,7 @@ mod tests {
             .decision_variables(BTreeMap::new())
             .active_constraints(BTreeMap::new())
             .inactive_constraints(
-                btreemap! { constraint_id => (removed_constraint, removed_reason) },
+                btreemap! { constraint_id => (inactive_constraint, inactive_metadata) },
             )
             .build()
             .unwrap_err();

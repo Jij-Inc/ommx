@@ -2,7 +2,7 @@ Live mapping of a Solution's constraint results, including retained inactive row
 
 Obtained from {attr}`~ommx.Solution.constraints`. The collection keeps its
 Solution alive and fetches each row on access. Each row is an independent
-snapshot containing labels, provenance, removal reasons, and evaluation
+snapshot containing labels, provenance, inactivation reasons, and evaluation
 diagnostics. Editing a fetched snapshot does not update the Solution. Use an
 owner method such as {meth}`~ommx.Solution.set_dual_variable` to update the result;
 subsequent collection access observes that update.

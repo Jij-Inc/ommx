@@ -216,7 +216,7 @@ def test_explicit_all_constraints_matches_all_constraints_api() -> None:
 
 
 @pytest.mark.parametrize("invalid", [1, 999])
-def test_unknown_and_removed_selected_constraints_are_atomic(invalid: int) -> None:
+def test_unknown_and_inactive_selected_constraints_are_atomic(invalid: int) -> None:
     instance = bound_tightening_instance()
     instance.deactivate_constraint(1, "test")
     before = instance.to_v2_bytes()

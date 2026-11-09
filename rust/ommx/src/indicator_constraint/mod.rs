@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 
 /// Family-specific ID for indicator constraints.
 /// Its numeric value is unique across every constraint family in an instance,
-/// including removed constraints.
+/// including inactive constraints.
 #[derive(
     Clone,
     Copy,

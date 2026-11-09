@@ -22,7 +22,7 @@ pub enum OneHotConstraintError {
 
 /// Family-specific ID for one-hot constraints.
 /// Its numeric value is unique across every constraint family in an instance,
-/// including removed constraints.
+/// including inactive constraints.
 #[derive(
     Clone,
     Copy,
