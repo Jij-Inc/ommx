@@ -239,6 +239,11 @@ Version 2.9.4 already preserves annotations in root payloads. In v3, set typed m
 
 If a 2.x program must still consume your output, check that it supports the representation as well as the wire format. For example, 2.9.4's schema includes finite-domain variables but its SDK rejects them when loading a model. An explicit output objective cannot be written with `to_v1_bytes()`. Use the v2 wire format to preserve native special constraints and a result's feasibility tolerance.
 
+`Solution.to_v1_bytes()` and `SampleSet.to_v1_bytes()` raise `RuntimeError`
+when Indicator, OneHot, or SOS1 constraints are retained, even if they are inactive,
+satisfied, or removed by lowering. They no longer silently discard those results.
+Use `to_v2_bytes()` for these objects. Reading existing v1 payloads is unchanged.
+
 If you export MPS to another tool, replace `write_mps` with {meth}`~ommx.Instance.save_mps`. Use the SDK byte format to restore model structure and metadata that MPS cannot represent.
 
 (13-artifact-api-archive-becomes-an-exchange-format)=

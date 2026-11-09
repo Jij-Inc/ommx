@@ -31130,7 +31130,7 @@
             },
             {
               "name": "to_v1_bytes",
-              "doc": "",
+              "doc": "Serialize to v1. Raises RuntimeError if Indicator, OneHot, or SOS1\nconstraints are retained, including removed rows. Use `to_v2_bytes()`\nto preserve these constraints and the feasibility tolerance.",
               "signatures": [
                 {
                   "parameters": [],
@@ -35353,7 +35353,7 @@
             },
             {
               "name": "to_v1_bytes",
-              "doc": "",
+              "doc": "Serialize to v1. Raises RuntimeError if Indicator, OneHot, or SOS1\nconstraints are retained, including removed rows. Use `to_v2_bytes()`\nto preserve these constraints and the feasibility tolerance.",
               "signatures": [
                 {
                   "parameters": [],

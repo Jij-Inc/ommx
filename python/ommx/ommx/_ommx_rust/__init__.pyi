@@ -12487,7 +12487,12 @@ class SampleSet:
     def from_v1_bytes(bytes: bytes) -> SampleSet: ...
     @staticmethod
     def from_v2_bytes(bytes: bytes) -> SampleSet: ...
-    def to_v1_bytes(self) -> bytes: ...
+    def to_v1_bytes(self) -> bytes:
+        r"""
+        Serialize to v1. Raises RuntimeError if Indicator, OneHot, or SOS1
+        constraints are retained, including removed rows. Use `to_v2_bytes()`
+        to preserve these constraints and the feasibility tolerance.
+        """
     def to_v2_bytes(self) -> bytes: ...
     def get(self, sample_id: builtins.int) -> Solution:
         r"""
@@ -13899,7 +13904,12 @@ class Solution:
     def from_v1_bytes(bytes: bytes) -> Solution: ...
     @staticmethod
     def from_v2_bytes(bytes: bytes) -> Solution: ...
-    def to_v1_bytes(self) -> bytes: ...
+    def to_v1_bytes(self) -> bytes:
+        r"""
+        Serialize to v1. Raises RuntimeError if Indicator, OneHot, or SOS1
+        constraints are retained, including removed rows. Use `to_v2_bytes()`
+        to preserve these constraints and the feasibility tolerance.
+        """
     def to_v2_bytes(self) -> bytes: ...
     def extract_decision_variables(self, name: builtins.str) -> dict:
         r"""

@@ -442,19 +442,30 @@ impl TryFrom<v2::Solution> for Solution {
     }
 }
 
-/// Lossy: `v1::Solution` only has a `evaluated_constraints` field for
-/// regular constraints — it has no fields for indicator / one-hot / sos1
-/// evaluated constraints, so any data the in-memory [`Solution`] holds
-/// in those collections is dropped on serialization. This is a wire-format
-/// limitation that pre-dates the label/context SoA refactor; the matching
-/// `Parse` impl above initializes those collections to
-/// `Default::default()` for symmetry. Round-trip through `to_v1_bytes` /
-/// `from_v1_bytes` preserves variable labels and regular-constraint context.
-/// Since v1 cannot store a tolerance, feasibility flags are recomputed from
-/// the retained constraints and variable values using [`ATol::default`],
-/// which the v1 parser also uses.
-impl From<Solution> for crate::v1::Solution {
-    fn from(solution: Solution) -> Self {
+/// Convert to v1 only when no native special constraints are retained.
+///
+/// Indicator, OneHot, and SOS1 results cannot be represented in v1, including
+/// removed constraints. Use `to_v2_bytes()` to preserve them. Since v1 cannot
+/// store a tolerance, feasibility is recomputed at [`ATol::default`].
+impl TryFrom<Solution> for crate::v1::Solution {
+    type Error = crate::Error;
+
+    fn try_from(solution: Solution) -> crate::Result<Self> {
+        if !solution.evaluated_indicator_constraints.is_empty() {
+            crate::bail!(
+                "Indicator constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
+        }
+        if !solution.evaluated_one_hot_constraints.is_empty() {
+            crate::bail!(
+                "One-hot constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
+        }
+        if !solution.evaluated_sos1_constraints.is_empty() {
+            crate::bail!(
+                "SOS1 constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
+        }
         let Solution {
             objective,
             evaluated_constraints,
@@ -498,7 +509,7 @@ impl From<Solution> for crate::v1::Solution {
         };
 
         #[allow(deprecated)]
-        crate::v1::Solution {
+        Ok(crate::v1::Solution {
             state: Some(state),
             objective,
             evaluated_constraints,
@@ -513,7 +524,7 @@ impl From<Solution> for crate::v1::Solution {
             format_version: crate::CURRENT_FORMAT_VERSION,
             metadata,
             annotations: crate::protobuf_extension_annotations(annotations),
-        }
+        })
     }
 }
 
@@ -934,7 +945,7 @@ mod tests {
             ("org.example.owner".to_string(), "domain".to_string()),
         ]);
 
-        let restored = Solution::from_v1_bytes(&solution.to_v1_bytes()).unwrap();
+        let restored = Solution::from_v1_bytes(&solution.to_v1_bytes().unwrap()).unwrap();
 
         assert!(!restored.annotations.contains_key(&reserved_key));
         assert_eq!(
@@ -987,7 +998,7 @@ mod tests {
         assert_eq!(parsed.sense().unwrap(), crate::Sense::Maximize);
 
         // Test round-trip conversion
-        let v1_converted: v1::Solution = parsed.into();
+        let v1_converted: v1::Solution = parsed.try_into().unwrap();
         assert_eq!(v1_converted.objective, 42.5);
         assert!(v1_converted.feasible);
         assert_eq!(v1_converted.feasible_relaxed, Some(true));
@@ -1544,7 +1555,7 @@ mod tests {
                 .unwrap()
         };
 
-        let bytes = solution.to_v1_bytes();
+        let bytes = solution.to_v1_bytes().unwrap();
         let recovered = Solution::from_v1_bytes(&bytes).unwrap();
 
         assert_eq!(recovered.variable_labels().name(var_id), Some("x"));

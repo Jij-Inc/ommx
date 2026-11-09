@@ -167,9 +167,12 @@ impl SampleSet {
         })
     }
 
-    pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+    /// Serialize to v1. Raises RuntimeError if Indicator, OneHot, or SOS1
+    /// constraints are retained, including removed rows. Use `to_v2_bytes()`
+    /// to preserve these constraints and the feasibility tolerance.
+    pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        PyBytes::new(py, &self.inner.to_v1_bytes())
+        Ok(PyBytes::new(py, &self.inner.to_v1_bytes()?))
     }
 
     pub fn to_v2_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {

@@ -3,15 +3,16 @@ use crate::{message_io, v1, v2, Message, Parse};
 use anyhow::Result;
 
 impl Solution {
-    /// Serialize using the lossy v1 format.
+    /// Serialize to v1, rejecting native special constraints.
     ///
-    /// Native special constraints are omitted. Feasibility is recomputed from
+    /// Indicator, OneHot, and SOS1 constraints (including removed rows) return an
+    /// error. Use [`Self::to_v2_bytes`] to preserve them. Feasibility is recomputed from
     /// retained regular constraints and variable values at [`ATol::default`],
     /// as on v1 import. Use the same default on write and read, or use
     /// [`Self::to_v2_bytes`] to preserve the original tolerance and constraints.
-    pub fn to_v1_bytes(&self) -> Vec<u8> {
-        let v1_solution = v1::Solution::from(self.clone());
-        v1_solution.encode_to_vec()
+    pub fn to_v1_bytes(&self) -> crate::Result<Vec<u8>> {
+        let v1_solution = v1::Solution::try_from(self.clone())?;
+        Ok(v1_solution.encode_to_vec())
     }
 
     pub fn to_v2_bytes(&self) -> Vec<u8> {
@@ -251,11 +252,12 @@ mod tests {
                     "{source}"
                 );
 
-                let wire: v1::SampleSet = samples.clone().into();
+                let wire: v1::SampleSet = samples.clone().try_into().unwrap();
                 if source != "variable" {
                     assert_eq!(wire.constraints[0].feasible[&7], expected);
                 }
-                let restored_samples = SampleSet::from_v1_bytes(&samples.to_v1_bytes()).unwrap();
+                let restored_samples =
+                    SampleSet::from_v1_bytes(&samples.to_v1_bytes().unwrap()).unwrap();
                 assert_eq!(
                     restored_samples.feasible_ids().contains(&sample_id),
                     expected
@@ -264,7 +266,7 @@ mod tests {
                     restored_samples.feasible_relaxed_ids().contains(&sample_id),
                     source == "removed" || expected
                 );
-                let restored = Solution::from_v1_bytes(&solution.to_v1_bytes()).unwrap();
+                let restored = Solution::from_v1_bytes(&solution.to_v1_bytes().unwrap()).unwrap();
                 for result in [restored, restored_samples.get(sample_id).unwrap()] {
                     assert_eq!(result.feasibility_atol(), default_atol);
                     assert_eq!(result.feasible(), expected, "{source}");
@@ -314,7 +316,7 @@ mod tests {
                 .unwrap();
             assert!(!solution.feasible());
             for with_state in [true, false] {
-                let mut wire = v1::Solution::from(solution.clone());
+                let mut wire = v1::Solution::try_from(solution.clone()).unwrap();
                 if !with_state {
                     wire.state = None;
                 }
@@ -322,7 +324,7 @@ mod tests {
                 assert_eq!(restored, solution);
             }
             for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-                let mut wire = v1::Solution::from(solution.clone());
+                let mut wire = v1::Solution::try_from(solution.clone()).unwrap();
                 wire.state = None;
                 wire.decision_variables[0].substituted_value = Some(value);
                 assert!(Solution::from_v1_bytes(&wire.encode_to_vec()).is_err());
@@ -331,61 +333,98 @@ mod tests {
     }
 
     #[test]
-    fn v1_roundtrip_excludes_omitted_special_constraints_from_feasibility() {
-        for family in ["indicator", "one-hot", "sos1"] {
-            let variables: crate::VariableIDSet = [0.into(), 1.into()].into_iter().collect();
-            let mut builder = Instance::builder()
-                .sense(Sense::Minimize)
-                .objective(Function::Zero)
-                .constraints(BTreeMap::new())
-                .decision_variables(
-                    variables
-                        .iter()
-                        .map(|&id| (id, DecisionVariable::binary()))
-                        .collect(),
-                );
-            match family {
-                "indicator" => {
-                    builder = builder.indicator_constraints(BTreeMap::from([(
-                        0.into(),
-                        crate::IndicatorConstraint::new(
+    fn v1_rejects_active_and_removed_special_constraints() {
+        for family in ["indicator-one", "indicator-zero", "one-hot", "sos1"] {
+            for removed in [false, true] {
+                let variables: crate::VariableIDSet = [0.into(), 1.into()].into_iter().collect();
+                let mut builder = Instance::builder()
+                    .sense(Sense::Minimize)
+                    .objective(Function::Zero)
+                    .constraints(BTreeMap::new())
+                    .decision_variables(
+                        variables
+                            .iter()
+                            .map(|&id| (id, DecisionVariable::binary()))
+                            .collect(),
+                    );
+                let reason = RemovedReason {
+                    reason: "test relaxation".into(),
+                    parameters: Default::default(),
+                };
+                let expected_family = match family {
+                    "indicator-one" | "indicator-zero" => {
+                        let constraint = crate::IndicatorConstraint::new(
                             0.into(),
                             crate::Equality::EqualToZero,
-                            Function::from(crate::coeff!(1.0)),
-                            false,
-                        ),
-                    )]));
+                            Function::from(crate::linear!(1)),
+                            family == "indicator-zero",
+                        );
+                        builder = if removed {
+                            builder.removed_indicator_constraints(BTreeMap::from([(
+                                0.into(),
+                                (constraint, reason),
+                            )]))
+                        } else {
+                            builder.indicator_constraints(BTreeMap::from([(0.into(), constraint)]))
+                        };
+                        "Indicator"
+                    }
+                    "one-hot" => {
+                        let constraint = crate::OneHotConstraint::new(variables).unwrap();
+                        builder =
+                            builder.one_hot_constraints(BTreeMap::from([(0.into(), constraint)]));
+                        "One-hot"
+                    }
+                    "sos1" => {
+                        let constraint = crate::Sos1Constraint::new(variables).unwrap();
+                        builder =
+                            builder.sos1_constraints(BTreeMap::from([(0.into(), constraint)]));
+                        "SOS1"
+                    }
+                    _ => unreachable!(),
+                };
+                let mut instance = builder.build().unwrap();
+                if removed {
+                    match family {
+                        "one-hot" => {
+                            instance.convert_one_hot_to_constraint(0.into()).unwrap();
+                        }
+                        "sos1" => {
+                            instance.convert_sos1_to_constraints(0.into()).unwrap();
+                        }
+                        _ => {}
+                    }
                 }
-                "one-hot" => {
-                    builder = builder.one_hot_constraints(BTreeMap::from([(
-                        0.into(),
-                        crate::OneHotConstraint::new(variables).unwrap(),
-                    )]));
+                // Serialization must reject even satisfied or inactive conditions.
+                for z in [0.0, 1.0] {
+                    for x in [0.0, 1.0] {
+                        let state = v1::State::from_iter([(0, z), (1, x)]);
+                        let solution = instance.evaluate(&state, ATol::default()).unwrap();
+                        let samples = instance
+                            .evaluate_samples(&Sampled::from((7.into(), state)), ATol::default())
+                            .unwrap();
+                        for error in [
+                            solution.to_v1_bytes().unwrap_err(),
+                            samples.to_v1_bytes().unwrap_err(),
+                            v1::Solution::try_from(solution.clone()).unwrap_err(),
+                            v1::SampleSet::try_from(samples.clone()).unwrap_err(),
+                        ] {
+                            let message = error.to_string();
+                            assert!(message.contains(expected_family), "{message}");
+                            assert!(message.contains("to_v2_bytes()"), "{message}");
+                        }
+                        assert_eq!(
+                            Solution::from_v2_bytes(&solution.to_v2_bytes()).unwrap(),
+                            solution
+                        );
+                        assert_eq!(
+                            SampleSet::from_v2_bytes(&samples.to_v2_bytes())
+                                .unwrap()
+                                .to_v2_bytes(),
+                            samples.to_v2_bytes()
+                        );
+                    }
                 }
-                "sos1" => {
-                    builder = builder.sos1_constraints(BTreeMap::from([(
-                        0.into(),
-                        crate::Sos1Constraint::new(variables).unwrap(),
-                    )]));
-                }
-                _ => unreachable!(),
-            }
-            let instance = builder.build().unwrap();
-            let state = v1::State {
-                entries: [(0, 1.0), (1, 1.0)].into(),
-            };
-            let solution = instance.evaluate(&state, ATol::default()).unwrap();
-            let samples = instance
-                .evaluate_samples(&Sampled::from((7.into(), state)), ATol::default())
-                .unwrap();
-            assert!(!solution.feasible(), "{family}");
-            assert!(samples.feasible_ids().is_empty(), "{family}");
-            let restored = Solution::from_v1_bytes(&solution.to_v1_bytes()).unwrap();
-            let restored_samples = SampleSet::from_v1_bytes(&samples.to_v1_bytes()).unwrap();
-            for result in [restored, restored_samples.get(7.into()).unwrap()] {
-                assert!(result.feasible(), "{family}");
-                assert!(result.feasible_relaxed(), "{family}");
-                assert_eq!(result.total_violation(), 0.0);
             }
         }
     }
@@ -408,8 +447,8 @@ mod tests {
         }
 
         #[test]
-        fn v1_roundtrip_preserves_the_retained_projection(
-            (instance, state) in Instance::arbitrary().prop_flat_map(|instance| {
+        fn v1_export_rejects_special_constraints_or_preserves_regular_results(
+            (instance, state) in prop_oneof![Instance::arbitrary(), Instance::arbitrary_with(crate::InstanceParameters::v1_compatible())].prop_flat_map(|instance| {
                 let state = instance.arbitrary_state();
                 (Just(instance), state)
             }),
@@ -425,12 +464,22 @@ mod tests {
                 }
             };
             let samples = instance.evaluate_samples(&Sampled::from((7.into(), state)), atol).unwrap();
-            let restored = Solution::from_v1_bytes(&solution.to_v1_bytes()).unwrap();
-            let restored_samples = SampleSet::from_v1_bytes(&samples.to_v1_bytes()).unwrap();
+            if !solution.evaluated_indicator_constraints().is_empty()
+                || !solution.evaluated_one_hot_constraints().is_empty()
+                || !solution.evaluated_sos1_constraints().is_empty()
+            {
+                prop_assert!(solution.to_v1_bytes().is_err());
+                prop_assert!(samples.to_v1_bytes().is_err());
+                prop_assert!(v1::Solution::try_from(solution).is_err());
+                prop_assert!(v1::SampleSet::try_from(samples).is_err());
+                return Ok(());
+            }
+            let restored = Solution::from_v1_bytes(&solution.to_v1_bytes().unwrap()).unwrap();
+            let restored_samples = SampleSet::from_v1_bytes(&samples.to_v1_bytes().unwrap()).unwrap();
             // v1 also omits provenance references to native special constraints.
             // Check the representable projection, including its wire idempotence.
-            prop_assert_eq!(v1::Solution::from(restored.clone()), v1::Solution::from(solution.clone()));
-            prop_assert_eq!(v1::SampleSet::from(restored_samples.clone()), v1::SampleSet::from(samples));
+            prop_assert_eq!(v1::Solution::try_from(restored.clone()).unwrap(), v1::Solution::try_from(solution.clone()).unwrap());
+            prop_assert_eq!(v1::SampleSet::try_from(restored_samples.clone()).unwrap(), v1::SampleSet::try_from(samples).unwrap());
             for result in [&restored, &restored_samples.get(7.into()).unwrap()] {
                 prop_assert_eq!(result.state(), solution.state());
                 prop_assert_eq!(result.evaluated_constraints().inner(), solution.evaluated_constraints().inner());

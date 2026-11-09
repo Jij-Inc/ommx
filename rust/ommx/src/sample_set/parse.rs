@@ -603,19 +603,30 @@ impl TryFrom<v2::SampleSet> for SampleSet {
     }
 }
 
-/// Lossy: `v1::SampleSet` only has a `constraints` field for regular
-/// sampled constraints — it has no fields for indicator / one-hot / sos1
-/// sampled constraints, so any data the in-memory [`SampleSet`] holds in
-/// those collections is dropped on serialization. This is a wire-format
-/// limitation that pre-dates the label/context SoA refactor; the matching
-/// `Parse` impl above initializes those collections to
-/// `Default::default()` for symmetry. Round-trip through `to_v1_bytes` /
-/// `from_v1_bytes` preserves variable labels and regular-constraint context.
-/// Since v1 cannot store a tolerance, row and root feasibility maps are
-/// recomputed from the retained constraints and variable values using
-/// [`ATol::default`], which the v1 parser also uses.
-impl From<SampleSet> for crate::v1::SampleSet {
-    fn from(sample_set: SampleSet) -> Self {
+/// Convert to v1 only when no native special constraints are retained.
+///
+/// Indicator, OneHot, and SOS1 results cannot be represented in v1, including
+/// removed constraints. Use `to_v2_bytes()` to preserve them. Since v1 cannot
+/// store a tolerance, feasibility is recomputed at [`ATol::default`].
+impl TryFrom<SampleSet> for crate::v1::SampleSet {
+    type Error = crate::Error;
+
+    fn try_from(sample_set: SampleSet) -> crate::Result<Self> {
+        if !sample_set.indicator_constraints.is_empty() {
+            crate::bail!(
+                "Indicator constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
+        }
+        if !sample_set.one_hot_constraints.is_empty() {
+            crate::bail!(
+                "One-hot constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
+        }
+        if !sample_set.sos1_constraints.is_empty() {
+            crate::bail!(
+                "SOS1 constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
+        }
         let SampleSet {
             decision_variables,
             objectives,
@@ -656,7 +667,7 @@ impl From<SampleSet> for crate::v1::SampleSet {
             .map(|(sample_id, value)| (sample_id.into_inner(), value))
             .collect();
 
-        crate::v1::SampleSet {
+        Ok(crate::v1::SampleSet {
             decision_variables,
             objectives,
             constraints,
@@ -668,7 +679,7 @@ impl From<SampleSet> for crate::v1::SampleSet {
             metadata,
             annotations: crate::protobuf_extension_annotations(annotations),
             ..Default::default()
-        }
+        })
     }
 }
 
@@ -1346,7 +1357,7 @@ mod tests {
             ("org.example.owner".to_string(), "domain".to_string()),
         ]);
 
-        let restored = SampleSet::from_v1_bytes(&sample_set.to_v1_bytes()).unwrap();
+        let restored = SampleSet::from_v1_bytes(&sample_set.to_v1_bytes().unwrap()).unwrap();
 
         assert!(!restored.annotations.contains_key(&reserved_key));
         assert_eq!(
@@ -1429,7 +1440,7 @@ mod tests {
             .is_none());
 
         // Test round-trip conversion
-        let v1_converted: v1::SampleSet = parsed.into();
+        let v1_converted: v1::SampleSet = parsed.try_into().unwrap();
         assert_eq!(v1_converted.sense, v1::instance::Sense::Minimize as i32);
         assert_eq!(v1_converted.decision_variables.len(), 1);
     }
@@ -1751,7 +1762,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let bytes = sample_set.to_v1_bytes();
+        let bytes = sample_set.to_v1_bytes().unwrap();
         let recovered = SampleSet::from_v1_bytes(&bytes).unwrap();
 
         assert_eq!(recovered.variable_labels().name(var_id), Some("x"));
