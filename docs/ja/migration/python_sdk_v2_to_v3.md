@@ -43,7 +43,7 @@ PyrightはOMMXに同梱された型情報を使い、スクリプトを実行せ
 
 ### Inactive制約への名称変更
 
-SDKでは、現在の定式化から外れた制約を **inactive** と呼びます。`Removed*Constraint` は `Inactive*Constraint`、`removed_constraints` は `inactive_constraints`、既存の `relax_constraint` / `restore_constraint` は `deactivate_constraint` / `activate_constraint` に変更してください。indicator制約の操作も同様です。理由のアクセサーと表のメタデータには `inactive_reason` と `constraint_inactive_metadata_df` を使います。
+SDKでは、現在の定式化から外れた制約を **inactive** と呼びます。`Removed*Constraint` は `Inactive*Constraint`、`removed_constraints` は `inactive_constraints`、既存の `relax_constraint` / `restore_constraint` は `deactivate_constraint` / `activate_constraint` に変更してください。indicator制約の操作も同様です。理由のアクセサーと表のメタデータには `inactive_reason` と `constraint_inactive_reasons_df` を使います。
 
 この変更は名称の整理です。`constraints` は引き続きactiveな接続済み行、`inactive_constraints` はinactiveなスナップショットを返し、通常の実行可能性判定は両方を検査します。`feasible_relaxed` はactiveのみを判定します。v1のschemaは変更せず、v2もfield番号を維持します。
 

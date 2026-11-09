@@ -3799,8 +3799,8 @@
       "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "python/ommx/src/docstrings/ommx/Instance.removed_constraints.md",
-        "python/ommx/src/docstrings/ommx/Instance.relax_constraint.md",
+        "python/ommx/src/docstrings/ommx/Instance.inactive_constraints.md",
+        "python/ommx/src/docstrings/ommx/Instance.deactivate_constraint.md",
         "python/ommx/src/docstrings/ommx/Instance.convert_active_objective.md",
         "python/ommx/src/instance.rs",
         "python/ommx/src/solution.rs",
@@ -3861,8 +3861,8 @@
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "python/ommx/src/docstrings/ommx/Instance.removed_constraints.md",
-        "python/ommx/src/docstrings/ommx/Instance.relax_constraint.md",
+        "python/ommx/src/docstrings/ommx/Instance.inactive_constraints.md",
+        "python/ommx/src/docstrings/ommx/Instance.deactivate_constraint.md",
         "python/ommx/src/docstrings/ommx/Instance.convert_active_objective.md",
         "python/ommx/src/instance.rs",
         "python/ommx/src/solution.rs",
@@ -3877,8 +3877,8 @@
       "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "python/ommx/src/docstrings/ommx/Instance.removed_constraints.md",
-        "python/ommx/src/docstrings/ommx/Instance.relax_constraint.md",
+        "python/ommx/src/docstrings/ommx/Instance.inactive_constraints.md",
+        "python/ommx/src/docstrings/ommx/Instance.deactivate_constraint.md",
         "python/ommx/src/instance.rs",
         "python/ommx/src/solution.rs",
         "python/ommx/src/sample_set.rs",
@@ -3913,8 +3913,8 @@
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "python/ommx/src/docstrings/ommx/Instance.removed_constraints.md",
-        "python/ommx/src/docstrings/ommx/Instance.relax_constraint.md",
+        "python/ommx/src/docstrings/ommx/Instance.inactive_constraints.md",
+        "python/ommx/src/docstrings/ommx/Instance.deactivate_constraint.md",
         "python/ommx/src/instance.rs",
         "python/ommx/src/solution.rs",
         "python/ommx/src/sample_set.rs",

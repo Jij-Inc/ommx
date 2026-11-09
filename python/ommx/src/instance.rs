@@ -3245,7 +3245,7 @@ impl Instance {
     /// `key`/`value` set to NA when the reason has no parameters. Columns:
     /// `{kind}_constraint_id`, `reason`, `key`, `value`.
     #[pyo3(signature = (*, kind))]
-    pub fn constraint_inactive_metadata_df<'py>(
+    pub fn constraint_inactive_reasons_df<'py>(
         &self,
         py: Python<'py>,
         kind: ConstraintFamilyInput,

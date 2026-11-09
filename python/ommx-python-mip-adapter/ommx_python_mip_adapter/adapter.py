@@ -86,7 +86,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
     ):
         """
         :param ommx_instance: The ommx.Instance to solve.
-        :param relax: Applies integer relaxation globally to this model using Python-MIP's `Model.deactivate() <https://docs.python-mip.com/en/latest/classes.html#mip.Model.relax>`.
+        :param relax: Applies integer relaxation globally to this model using Python-MIP's `Model.relax() <https://docs.python-mip.com/en/latest/classes.html#mip.Model.relax>`.
         :param solver_name: Passes a specific solver name to the Python-MIP model. Defaults to `CBC`.
         :param solver: Passes a specific solver to the Python-MIP model.
         :param verbose: If True, enable Python-MIP's verbose mode
@@ -117,7 +117,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             self._set_constraints()
 
             if relax:
-                self.model.deactivate()
+                self.model.relax()
                 self._relax = True
             else:
                 self._relax = False

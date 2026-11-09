@@ -817,7 +817,7 @@ impl Solution {
     /// The related metadata queries {meth}`~ommx.Solution.constraint_context_df`,
     /// {meth}`~ommx.Solution.constraint_parameters_df`,
     /// {meth}`~ommx.Solution.constraint_provenance_df`, and
-    /// {meth}`~ommx.Solution.constraint_inactive_metadata_df` also require ``kind``.
+    /// {meth}`~ommx.Solution.constraint_inactive_reasons_df` also require ``kind``.
     ///
     /// >>> from ommx import ConstraintKind, Instance
     /// >>> instance = Instance.minimize()
@@ -1000,7 +1000,7 @@ impl Solution {
 
     /// Removed-constraint reasons DataFrame (long format).
     #[pyo3(signature = (*, kind))]
-    pub fn constraint_inactive_metadata_df<'py>(
+    pub fn constraint_inactive_reasons_df<'py>(
         &self,
         py: Python<'py>,
         kind: ConstraintFamilyInput,

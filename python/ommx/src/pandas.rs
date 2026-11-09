@@ -151,7 +151,7 @@ pub fn constraint_id_col(kind: ConstraintFamilyInput) -> &'static str {
 // Long-format / id-indexed views over the SoA label/context stores. Each builder
 // reads the store directly and produces a DataFrame with a documented column
 // schema. Used by the `*_labels_df`, `*_context_df`, `*_parameters_df`, `*_provenance_df`,
-// and `*_inactive_metadata_df` accessors on Instance / ParametricInstance /
+// and `*_inactive_reasons_df` accessors on Instance / ParametricInstance /
 // Solution / SampleSet.
 // ---------------------------------------------------------------------------
 
@@ -402,7 +402,7 @@ fn provenance_parts(p: &Provenance) -> PyResult<(String, crate::constraint_id::A
 /// `columns` is the explicit schema used when `entries` is empty —
 /// without it pandas would return a column-less DataFrame, breaking
 /// `pd.concat` and any code that consumes the documented schema. Used
-/// by the `*_parameters_df` / `*_provenance_df` / `*_inactive_metadata_df`
+/// by the `*_parameters_df` / `*_provenance_df` / `*_inactive_reasons_df`
 /// builders.
 fn long_format_dataframe<'py>(
     py: Python<'py>,

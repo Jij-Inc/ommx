@@ -61,6 +61,25 @@ def test_integration_milp():
     assert ommx_state.entries[2] == pytest.approx(3)
 
 
+@pytest.mark.parametrize("relax, expected", [(False, 0.0), (True, 0.5)])
+def test_integer_relaxation_preserves_constraints(relax: bool, expected: float):
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={0: x <= 0.5},
+        sense=Sense.Maximize,
+    )
+
+    adapter = OMMXPythonMIPAdapter(instance, relax=relax)
+    model = adapter.solver_input
+    model.optimize()
+
+    assert model.num_int == (0 if relax else 1)
+    assert len(model.constrs) == 1
+    assert adapter.decode_to_state(model).entries[0] == pytest.approx(expected)
+
+
 def test_solution_optimality():
     x = DecisionVariable.integer(1, lower=0, upper=5)
     y = DecisionVariable.integer(2, lower=0, upper=5)

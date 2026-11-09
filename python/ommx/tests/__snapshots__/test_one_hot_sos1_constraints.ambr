@@ -6,7 +6,7 @@
   OneHotConstraintID(10)  {1, 2, 3}  <NA>         []        <NA>        True                  1       False              <NA>
   '''
 # ---
-# name: test_sample_set_one_hot_inactive_metadata_df_after_conversion
+# name: test_sample_set_one_hot_removed_reasons_df_after_conversion
   '''
                           used_ids  name subscripts description  feasible.0  active_variable.0                              inactive_reason inactive_reason.constraint_id
   one_hot_constraint_id                                                                                                                                                  
@@ -34,7 +34,7 @@
   OneHotConstraintID(10)     False            <NA>  {1, 2, 3}  <NA>         []        <NA>        1.0
   '''
 # ---
-# name: test_solution_one_hot_inactive_metadata_df_after_conversion
+# name: test_solution_one_hot_removed_reasons_df_after_conversion
   '''
                          feasible  active_variable   used_ids  name subscripts description  violation                              inactive_reason inactive_reason.constraint_id
   one_hot_constraint_id                                                                                                                                                         
@@ -55,7 +55,7 @@
   Sos1ConstraintID(20)      True                2  {1, 2, 3}  <NA>         []        <NA>        0.0
   '''
 # ---
-# name: test_solution_sos1_inactive_metadata_df_after_conversion
+# name: test_solution_sos1_removed_reasons_df_after_conversion
   '''
                        feasible  active_variable   used_ids  name subscripts description  violation                            inactive_reason inactive_reason.constraint_ids
   sos1_constraint_id                                                                                                                                                         

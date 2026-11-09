@@ -43,7 +43,7 @@ If your v2 code imports `ommx.v1.*_pb2` or accesses `.raw`, identify what it nee
 
 ### Inactive constraint terminology
 
-The SDK now calls constraints outside the active formulation **inactive**. Rename `Removed*Constraint` wrappers to `Inactive*Constraint`, `removed_constraints` to `inactive_constraints`, and the existing `relax_constraint` / `restore_constraint` methods to `deactivate_constraint` / `activate_constraint` (likewise for indicator constraints). Reason accessors and table metadata use `inactive_reason` and `constraint_inactive_metadata_df`.
+The SDK now calls constraints outside the active formulation **inactive**. Rename `Removed*Constraint` wrappers to `Inactive*Constraint`, `removed_constraints` to `inactive_constraints`, and the existing `relax_constraint` / `restore_constraint` methods to `deactivate_constraint` / `activate_constraint` (likewise for indicator constraints). Reason accessors and table metadata use `inactive_reason` and `constraint_inactive_reasons_df`.
 
 This is a terminology change: `constraints` still returns active attached rows, `inactive_constraints` returns inactive snapshots, and both kinds still participate in ordinary feasibility. `feasible_relaxed` continues to check only active rows. The v1 schema is unchanged; v2 source names change without changing field numbers.
 

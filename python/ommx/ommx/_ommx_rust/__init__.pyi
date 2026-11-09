@@ -2639,7 +2639,7 @@ class EvaluatedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintV
     {meth}`~ommx.Solution.constraints_df` collects one family as a DataFrame;
     retained inactive constraints remain included. Its ``kind`` argument is required,
     as it is for ``constraint_context_df``, ``constraint_parameters_df``,
-    ``constraint_provenance_df``, and ``constraint_inactive_metadata_df`` on all owners.
+    ``constraint_provenance_df``, and ``constraint_inactive_reasons_df`` on all owners.
 
     For multiple candidates, {class}`~ommx.SampledConstraintCollection` returns
     sampled rows. Their ``violations`` and ``feasible(atol=...)`` are keyed by sample
@@ -8157,7 +8157,7 @@ class Instance:
         One row per (constraint_id, step) pair. Columns:
         `{kind}_constraint_id`, `step`, `source_kind`, `source_id`.
         """
-    def constraint_inactive_metadata_df(
+    def constraint_inactive_reasons_df(
         self, *, kind: ConstraintKind[ConstraintIDBase]
     ) -> pandas.DataFrame:
         r"""
@@ -11084,7 +11084,7 @@ class ParametricInstance:
         r"""
         Constraint provenance DataFrame (long format).
         """
-    def constraint_inactive_metadata_df(
+    def constraint_inactive_reasons_df(
         self, *, kind: ConstraintKind[ConstraintIDBase]
     ) -> pandas.DataFrame:
         r"""
@@ -12595,7 +12595,7 @@ class SampleSet:
         r"""
         Constraint provenance DataFrame (long format).
         """
-    def constraint_inactive_metadata_df(
+    def constraint_inactive_reasons_df(
         self, *, kind: ConstraintKind[ConstraintIDBase]
     ) -> pandas.DataFrame:
         r"""
@@ -14062,7 +14062,7 @@ class Solution:
         The related metadata queries {meth}`~ommx.Solution.constraint_context_df`,
         {meth}`~ommx.Solution.constraint_parameters_df`,
         {meth}`~ommx.Solution.constraint_provenance_df`, and
-        {meth}`~ommx.Solution.constraint_inactive_metadata_df` also require ``kind``.
+        {meth}`~ommx.Solution.constraint_inactive_reasons_df` also require ``kind``.
 
         >>> from ommx import ConstraintKind, Instance
         >>> instance = Instance.minimize()
@@ -14105,7 +14105,7 @@ class Solution:
         r"""
         Constraint provenance DataFrame (long format).
         """
-    def constraint_inactive_metadata_df(
+    def constraint_inactive_reasons_df(
         self, *, kind: ConstraintKind[ConstraintIDBase]
     ) -> pandas.DataFrame:
         r"""

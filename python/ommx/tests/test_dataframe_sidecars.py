@@ -118,7 +118,7 @@ def test_string_kind_is_rejected():
         "constraint_context_df",
         "constraint_parameters_df",
         "constraint_provenance_df",
-        "constraint_inactive_metadata_df",
+        "constraint_inactive_reasons_df",
     ],
 )
 def test_constraint_sidecars_require_explicit_keyword_kind(owner, accessor):
@@ -224,21 +224,21 @@ def test_provenance_after_one_hot_conversion(snapshot):
 
 
 # ---------------------------------------------------------------------------
-# constraint_inactive_metadata_df
+# constraint_inactive_reasons_df
 # ---------------------------------------------------------------------------
 
 
-def test_inactive_metadata_df_after_relax(snapshot):
+def test_removed_reasons_df_after_relax(snapshot):
     """deactivate_constraint with no extra parameters → 1 row, key/value = NA."""
     instance = _instance_with_context()
     instance.deactivate_constraint(10, "test_reason")
     assert (
-        _df_snap(instance.constraint_inactive_metadata_df(kind=ConstraintKind.Regular))
+        _df_snap(instance.constraint_inactive_reasons_df(kind=ConstraintKind.Regular))
         == snapshot
     )
 
 
-def test_inactive_metadata_df_with_parameters_after_one_hot_conversion(snapshot):
+def test_removed_reasons_df_with_parameters_after_one_hot_conversion(snapshot):
     """`convert_one_hot_to_constraint` records the conversion reason with a
     `constraint_id` parameter — verifies the long-format expansion of the
     parameter map."""
@@ -252,7 +252,7 @@ def test_inactive_metadata_df_with_parameters_after_one_hot_conversion(snapshot)
     )
     instance.convert_one_hot_to_constraint(7)
     assert (
-        _df_snap(instance.constraint_inactive_metadata_df(kind=ConstraintKind.OneHot))
+        _df_snap(instance.constraint_inactive_reasons_df(kind=ConstraintKind.OneHot))
         == snapshot
     )
 
