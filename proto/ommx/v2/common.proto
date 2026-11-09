@@ -33,6 +33,8 @@ enum Feature {
   FEATURE_OUTPUT_OBJECTIVE = 4;
   // The payload contains a decision variable with an explicitly enumerated finite domain.
   FEATURE_DECISION_VARIABLE_FINITE_DOMAIN = 5;
+  // An indicator row (including removed/evaluated/sampled rows) activates at zero.
+  FEATURE_INDICATOR_ACTIVATE_ON_ZERO = 6;
 }
 
 // Human-authored modeling notation for one table or collection row.

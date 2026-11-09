@@ -101,10 +101,6 @@ impl RelationPolynomialRequirements {
             .iter()
             .map(|(relation, requirement)| (*relation, *requirement))
     }
-
-    fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
 }
 
 impl FromIterator<(Equality, PolynomialRequirement)> for RelationPolynomialRequirements {
@@ -128,7 +124,7 @@ pub struct InstanceClassClause {
     allowed_variable_kinds: BTreeSet<Kind>,
     objective_polynomial_requirement: PolynomialRequirement,
     regular_constraints: RelationPolynomialRequirements,
-    indicator_constraints: RelationPolynomialRequirements,
+    indicator_constraints: BTreeMap<bool, RelationPolynomialRequirements>,
     allows_one_hot: bool,
     allows_sos1: bool,
     allowed_senses: BTreeSet<Sense>,
@@ -150,7 +146,7 @@ impl InstanceClassClause {
             allowed_variable_kinds,
             objective_polynomial_requirement,
             regular_constraints: RelationPolynomialRequirements::new(),
-            indicator_constraints: RelationPolynomialRequirements::new(),
+            indicator_constraints: BTreeMap::new(),
             allows_one_hot: false,
             allows_sos1: false,
             allowed_senses,
@@ -168,14 +164,20 @@ impl InstanceClassClause {
         self
     }
 
-    /// Include one Indicator body relation whose function is polynomial and
-    /// satisfies `body_requirement`.
+    /// Include one activation condition and Indicator body relation whose function is polynomial and
+    /// satisfies `body_requirement`. `activate_on_zero=false` admits activation at one.
+    /// Call once for each allowed `(activate_on_zero, relation)` pair.
     pub fn with_indicator_constraint(
         mut self,
+        activate_on_zero: bool,
         relation: Equality,
         body_requirement: PolynomialRequirement,
     ) -> Self {
-        self.indicator_constraints = self.indicator_constraints.with(relation, body_requirement);
+        self.indicator_constraints
+            .entry(activate_on_zero)
+            .or_default()
+            .0
+            .insert(relation, body_requirement);
         self
     }
 
@@ -214,11 +216,17 @@ impl InstanceClassClause {
         self.regular_constraints.iter()
     }
 
-    /// Iterate over admitted Indicator-body relations and polynomial requirements.
+    /// Iterate over `(activate_on_zero, relation)` keys and their polynomial requirements.
     pub fn indicator_body_polynomial_requirements(
         &self,
-    ) -> impl Iterator<Item = (Equality, PolynomialRequirement)> + '_ {
-        self.indicator_constraints.iter()
+    ) -> impl Iterator<Item = ((bool, Equality), PolynomialRequirement)> + '_ {
+        self.indicator_constraints
+            .iter()
+            .flat_map(|(&activate_on_zero, requirements)| {
+                requirements
+                    .iter()
+                    .map(move |(relation, requirement)| ((activate_on_zero, relation), requirement))
+            })
     }
 
     /// Return whether active OneHot constraints are admitted.
@@ -363,8 +371,8 @@ fn check_regular_constraints(
 
 fn check_indicator_constraints(
     mismatches: &mut Vec<InstanceClassMismatch>,
-    facts: &BTreeMap<IndicatorConstraintID, ConstraintFacts>,
-    allowed: &RelationPolynomialRequirements,
+    facts: &BTreeMap<IndicatorConstraintID, instance_facts::IndicatorConstraintFacts>,
+    allowed: &BTreeMap<bool, RelationPolynomialRequirements>,
 ) {
     if facts.is_empty() {
         return;
@@ -375,43 +383,64 @@ fn check_indicator_constraints(
         });
         return;
     }
-    for (relation, constraints) in group_constraint_facts(facts) {
-        let Some(requirement) = allowed.requirement_for(relation) else {
-            mismatches.push(
-                InstanceClassMismatch::IndicatorConstraintRelationNotAllowed {
-                    relation,
-                    constraint_ids: constraints.keys().copied().collect(),
-                    allowed_relations: allowed.relations(),
-                },
-            );
+    for activate_on_zero in [false, true] {
+        let facts: BTreeMap<_, _> = facts
+            .iter()
+            .filter(|(_, fact)| fact.activate_on_zero() == activate_on_zero)
+            .map(|(id, fact)| (*id, fact.body()))
+            .collect();
+        if facts.is_empty() {
+            continue;
+        }
+        let Some(allowed) = allowed.get(&activate_on_zero) else {
+            mismatches.push(InstanceClassMismatch::IndicatorActivationNotAllowed {
+                activate_on_zero,
+                constraint_ids: facts.keys().copied().collect(),
+                allowed_activate_on_zero: allowed.keys().copied().collect(),
+            });
             continue;
         };
-        let non_polynomial_ids = constraints
-            .iter()
-            .filter_map(|(id, classification)| {
-                matches!(classification, FunctionClassification::NonPolynomial).then_some(*id)
-            })
-            .collect::<BTreeSet<_>>();
-        if !non_polynomial_ids.is_empty() {
-            mismatches.push(InstanceClassMismatch::IndicatorBodyFunctionNotPolynomial {
-                relation,
-                constraint_ids: non_polynomial_ids,
-            });
-        }
-        let actual_degrees = constraints
-            .into_iter()
-            .filter_map(|(id, classification)| match classification {
-                FunctionClassification::Polynomial(degree) => Some((id, degree)),
-                FunctionClassification::NonPolynomial => None,
-            })
-            .filter(|(_, degree)| !requirement.accepts_degree(*degree))
-            .collect::<BTreeMap<_, _>>();
-        if !actual_degrees.is_empty() {
-            mismatches.push(InstanceClassMismatch::IndicatorBodyDegreeExceedsBound {
-                relation,
-                actual_degrees,
-                bound: requirement,
-            });
+        for (relation, constraints) in group_constraint_facts(&facts) {
+            let Some(requirement) = allowed.requirement_for(relation) else {
+                mismatches.push(
+                    InstanceClassMismatch::IndicatorConstraintRelationNotAllowed {
+                        activate_on_zero,
+                        relation,
+                        constraint_ids: constraints.keys().copied().collect(),
+                        allowed_relations: allowed.relations(),
+                    },
+                );
+                continue;
+            };
+            let non_polynomial_ids = constraints
+                .iter()
+                .filter_map(|(id, classification)| {
+                    matches!(classification, FunctionClassification::NonPolynomial).then_some(*id)
+                })
+                .collect::<BTreeSet<_>>();
+            if !non_polynomial_ids.is_empty() {
+                mismatches.push(InstanceClassMismatch::IndicatorBodyFunctionNotPolynomial {
+                    activate_on_zero,
+                    relation,
+                    constraint_ids: non_polynomial_ids,
+                });
+            }
+            let actual_degrees = constraints
+                .into_iter()
+                .filter_map(|(id, classification)| match classification {
+                    FunctionClassification::Polynomial(degree) => Some((id, degree)),
+                    FunctionClassification::NonPolynomial => None,
+                })
+                .filter(|(_, degree)| !requirement.accepts_degree(*degree))
+                .collect::<BTreeMap<_, _>>();
+            if !actual_degrees.is_empty() {
+                mismatches.push(InstanceClassMismatch::IndicatorBodyDegreeExceedsBound {
+                    activate_on_zero,
+                    relation,
+                    actual_degrees,
+                    bound: requirement,
+                });
+            }
         }
     }
 }
@@ -646,17 +675,25 @@ pub enum InstanceClassMismatch {
     IndicatorConstraintsNotAllowed {
         constraint_ids: BTreeSet<IndicatorConstraintID>,
     },
+    IndicatorActivationNotAllowed {
+        activate_on_zero: bool,
+        constraint_ids: BTreeSet<IndicatorConstraintID>,
+        allowed_activate_on_zero: BTreeSet<bool>,
+    },
     IndicatorConstraintRelationNotAllowed {
+        activate_on_zero: bool,
         relation: Equality,
         constraint_ids: BTreeSet<IndicatorConstraintID>,
         allowed_relations: BTreeSet<Equality>,
     },
     IndicatorBodyDegreeExceedsBound {
+        activate_on_zero: bool,
         relation: Equality,
         actual_degrees: BTreeMap<IndicatorConstraintID, Degree>,
         bound: PolynomialRequirement,
     },
     IndicatorBodyFunctionNotPolynomial {
+        activate_on_zero: bool,
         relation: Equality,
         constraint_ids: BTreeSet<IndicatorConstraintID>,
     },
@@ -716,28 +753,34 @@ impl std::fmt::Display for InstanceClassMismatch {
             Self::IndicatorConstraintsNotAllowed { constraint_ids } => {
                 write!(f, "indicator constraints {constraint_ids:?} are not allowed")
             }
+            Self::IndicatorActivationNotAllowed { activate_on_zero, constraint_ids, allowed_activate_on_zero } => write!(f,
+                "indicator activation at {} for IDs {constraint_ids:?} is not allowed; allowed activation values are {:?}",
+                u8::from(!activate_on_zero), allowed_activate_on_zero.iter().map(|zero| u8::from(!zero)).collect::<BTreeSet<_>>()),
             Self::IndicatorConstraintRelationNotAllowed {
+                activate_on_zero,
                 relation,
                 constraint_ids,
                 allowed_relations,
             } => write!(
                 f,
-                "indicator relation {relation:?} for IDs {constraint_ids:?} is not allowed; allowed relations are {allowed_relations:?}"
+                "indicator (activate_on_zero={activate_on_zero}) relation {relation:?} for IDs {constraint_ids:?} is not allowed; allowed relations are {allowed_relations:?}"
             ),
             Self::IndicatorBodyDegreeExceedsBound {
+                activate_on_zero,
                 relation,
                 actual_degrees,
                 bound,
             } => write!(
                 f,
-                "indicator {relation:?} body degrees {actual_degrees:?} exceed {bound}"
+                "indicator (activate_on_zero={activate_on_zero}) {relation:?} body degrees {actual_degrees:?} exceed {bound}"
             ),
             Self::IndicatorBodyFunctionNotPolynomial {
+                activate_on_zero,
                 relation,
                 constraint_ids,
             } => write!(
                 f,
-                "indicator {relation:?} body functions for IDs {constraint_ids:?} are not polynomial"
+                "indicator (activate_on_zero={activate_on_zero}) {relation:?} body functions for IDs {constraint_ids:?} are not polynomial"
             ),
             Self::OneHotConstraintsNotAllowed { constraint_ids } => {
                 write!(f, "one-hot constraints {constraint_ids:?} are not allowed")
@@ -895,19 +938,22 @@ mod tests {
                 clause.with_regular_constraint(relation, PolynomialRequirement::AtMost(degree));
         }
 
-        let mut indicator = BTreeMap::<Equality, Degree>::new();
+        let mut indicator = BTreeMap::<(bool, Equality), Degree>::new();
         for fact in facts.indicator_constraints().values() {
             let FunctionClassification::Polynomial(fact_degree) = fact.classification() else {
                 return None;
             };
             indicator
-                .entry(fact.relation())
+                .entry((fact.activate_on_zero(), fact.relation()))
                 .and_modify(|degree| *degree = (*degree).max(fact_degree))
                 .or_insert(fact_degree);
         }
-        for (relation, degree) in indicator {
-            clause =
-                clause.with_indicator_constraint(relation, PolynomialRequirement::AtMost(degree));
+        for ((activate_on_zero, relation), degree) in indicator {
+            clause = clause.with_indicator_constraint(
+                activate_on_zero,
+                relation,
+                PolynomialRequirement::AtMost(degree),
+            );
         }
         if !facts.one_hot_constraint_ids().is_empty() {
             clause = clause.with_one_hot();
@@ -1045,7 +1091,11 @@ mod tests {
             BTreeSet::from([Sense::Minimize]),
         )
         .with_regular_constraint(Equality::EqualToZero, PolynomialRequirement::at_most(1))
-        .with_indicator_constraint(Equality::EqualToZero, PolynomialRequirement::at_most(1));
+        .with_indicator_constraint(
+            false,
+            Equality::EqualToZero,
+            PolynomialRequirement::at_most(1),
+        );
         let report = InstanceClass::new(vec![limited]).check_membership(&instance);
 
         assert!(!report.is_member());
@@ -1072,11 +1122,13 @@ mod tests {
                     allowed_relations: BTreeSet::from([Equality::EqualToZero]),
                 },
                 InstanceClassMismatch::IndicatorBodyDegreeExceedsBound {
+                    activate_on_zero: false,
                     relation: Equality::EqualToZero,
                     actual_degrees: BTreeMap::from([(indicator_eq, 2.into())]),
                     bound: PolynomialRequirement::at_most(1),
                 },
                 InstanceClassMismatch::IndicatorConstraintRelationNotAllowed {
+                    activate_on_zero: false,
                     relation: Equality::LessThanOrEqualToZero,
                     constraint_ids: BTreeSet::from([indicator_le]),
                     allowed_relations: BTreeSet::from([Equality::EqualToZero]),
@@ -1124,7 +1176,7 @@ mod tests {
             let polynomial_only = InstanceClass::from(
                 clause("polynomial-only", &[Kind::Binary], requirement)
                     .with_regular_constraint(Equality::EqualToZero, requirement)
-                    .with_indicator_constraint(Equality::EqualToZero, requirement),
+                    .with_indicator_constraint(false, Equality::EqualToZero, requirement),
             );
 
             let report = polynomial_only.check_membership(&instance);
@@ -1137,6 +1189,7 @@ mod tests {
                         constraint_ids: BTreeSet::from([regular_id]),
                     },
                     InstanceClassMismatch::IndicatorBodyFunctionNotPolynomial {
+                        activate_on_zero: false,
                         relation: Equality::EqualToZero,
                         constraint_ids: BTreeSet::from([indicator_id]),
                     },
@@ -1267,6 +1320,49 @@ mod tests {
                 .collect::<Vec<_>>(),
             [(1, "linear")]
         );
+    }
+
+    #[test]
+    fn derived_clause_retains_both_activation_conditions() {
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(0.into(), DecisionVariable::binary())]))
+            .constraints(BTreeMap::new())
+            .indicator_constraints(BTreeMap::from([
+                (
+                    0.into(),
+                    IndicatorConstraint::new(0.into(), Equality::EqualToZero, Function::Zero),
+                ),
+                (
+                    1.into(),
+                    IndicatorConstraint::new(
+                        0.into(),
+                        Equality::EqualToZero,
+                        Function::from(linear!(0)),
+                    )
+                    .with_activate_on_zero(true),
+                ),
+            ]))
+            .build()
+            .unwrap();
+        let clause = covering_clause(&InstanceFacts::from(&instance)).unwrap();
+        assert_eq!(
+            clause
+                .indicator_body_polynomial_requirements()
+                .collect::<BTreeMap<_, _>>(),
+            BTreeMap::from([
+                (
+                    (false, Equality::EqualToZero),
+                    PolynomialRequirement::at_most(0)
+                ),
+                (
+                    (true, Equality::EqualToZero),
+                    PolynomialRequirement::at_most(1)
+                ),
+            ])
+        );
+        assert!(InstanceClass::from(clause).contains(&instance));
     }
 
     proptest! {

@@ -145,3 +145,24 @@ name: some samplers accept Binary polynomials beyond degree two. For membership,
 recommended policies, and the distinction between automatic and explicit
 Preparation, see {class}`~ommx.adapter.SolverAdapter` and
 {class}`~ommx.adapter.SamplerAdapter`.
+
+**Indicator activation conditions**
+
+`InstanceClassClause.indicator_body_polynomial_requirements` maps
+`(activate_on_zero, equality)` pairs to polynomial requirements. Include each
+accepted pair explicitly; the default empty map rejects all Indicators.
+For example, the following admits linear equality bodies at either trigger value:
+
+```pycon
+>>> from ommx import Equality, PolynomialRequirement
+>>> indicator_requirements = {
+...     (False, Equality.EqualToZero): PolynomialRequirement.at_most(1),
+...     (True, Equality.EqualToZero): PolynomialRequirement.at_most(1),
+... }
+
+```
+
+A clause containing only the `False` entry rejects activation-on-zero rows with
+`InstanceClassMismatch.IndicatorActivationNotAllowed`. Body-relation and degree
+requirements are checked for the matching activation condition. Membership
+checking does not complement the trigger or otherwise transform the Instance.

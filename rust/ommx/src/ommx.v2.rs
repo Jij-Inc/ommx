@@ -53,6 +53,8 @@ pub enum Feature {
     OutputObjective = 4,
     /// The payload contains a decision variable with an explicitly enumerated finite domain.
     DecisionVariableFiniteDomain = 5,
+    /// An indicator row (including removed/evaluated/sampled rows) activates at zero.
+    IndicatorActivateOnZero = 6,
 }
 impl Feature {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -67,6 +69,7 @@ impl Feature {
             Feature::ConstraintSos1 => "FEATURE_CONSTRAINT_SOS1",
             Feature::OutputObjective => "FEATURE_OUTPUT_OBJECTIVE",
             Feature::DecisionVariableFiniteDomain => "FEATURE_DECISION_VARIABLE_FINITE_DOMAIN",
+            Feature::IndicatorActivateOnZero => "FEATURE_INDICATOR_ACTIVATE_ON_ZERO",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -78,6 +81,7 @@ impl Feature {
             "FEATURE_CONSTRAINT_SOS1" => Some(Self::ConstraintSos1),
             "FEATURE_OUTPUT_OBJECTIVE" => Some(Self::OutputObjective),
             "FEATURE_DECISION_VARIABLE_FINITE_DOMAIN" => Some(Self::DecisionVariableFiniteDomain),
+            "FEATURE_INDICATOR_ACTIVATE_ON_ZERO" => Some(Self::IndicatorActivateOnZero),
             _ => None,
         }
     }
@@ -154,6 +158,9 @@ pub struct IndicatorConstraint {
     pub equality: i32,
     #[prost(message, optional, tag = "3")]
     pub function: ::core::option::Option<super::v1::Function>,
+    /// False activates at one (including legacy payloads); true activates at zero.
+    #[prost(bool, tag = "4")]
+    pub activate_on_zero: bool,
 }
 /// One-hot constraint row.
 #[non_exhaustive]
@@ -260,6 +267,8 @@ pub struct EvaluatedIndicatorConstraint {
     pub indicator_active: bool,
     #[prost(uint64, repeated, tag = "6")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
+    #[prost(bool, tag = "7")]
+    pub activate_on_zero: bool,
 }
 /// Evaluated one-hot constraint row.
 #[non_exhaustive]
@@ -378,6 +387,8 @@ pub struct SampledIndicatorConstraint {
     pub indicator_active: ::prost::alloc::collections::BTreeMap<u64, bool>,
     #[prost(uint64, repeated, tag = "6")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
+    #[prost(bool, tag = "7")]
+    pub activate_on_zero: bool,
 }
 /// Sampled one-hot constraint row.
 #[non_exhaustive]

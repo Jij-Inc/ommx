@@ -218,6 +218,12 @@ impl EvaluatedIndicatorConstraint {
         self.0.indicator_variable.into_inner()
     }
 
+    /// Whether zero activates the body instead of one.
+    #[getter]
+    pub fn activate_on_zero(&self) -> bool {
+        self.0.activate_on_zero
+    }
+
     /// Equality of the inner constraint.
     #[getter]
     pub fn equality(&self) -> crate::Equality {
@@ -276,6 +282,12 @@ impl SampledIndicatorConstraint {
     #[getter]
     pub fn indicator_variable_id(&self) -> u64 {
         self.0.indicator_variable.into_inner()
+    }
+
+    /// Whether zero activates the body instead of one.
+    #[getter]
+    pub fn activate_on_zero(&self) -> bool {
+        self.0.activate_on_zero
     }
 
     /// Equality of the inner constraint.

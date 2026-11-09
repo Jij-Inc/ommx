@@ -45,7 +45,7 @@ def clause(
         dict[Equality, PolynomialRequirement] | None
     ) = None,
     indicator_body_polynomial_requirements: (
-        dict[Equality, PolynomialRequirement] | None
+        dict[tuple[bool, Equality], PolynomialRequirement] | None
     ) = None,
     allows_one_hot: bool = False,
     allows_sos1: bool = False,
@@ -232,7 +232,7 @@ def test_mismatch_variants_preserve_all_structured_payloads() -> None:
             Equality.EqualToZero: PolynomialRequirement.at_most(1)
         },
         indicator_body_polynomial_requirements={
-            Equality.EqualToZero: PolynomialRequirement.at_most(1)
+            (False, Equality.EqualToZero): PolynomialRequirement.at_most(1)
         },
     )
     mismatches = (
@@ -340,7 +340,7 @@ def test_non_polynomial_mismatches_preserve_function_location() -> None:
             Equality.EqualToZero: PolynomialRequirement.any_degree()
         },
         indicator_body_polynomial_requirements={
-            Equality.EqualToZero: PolynomialRequirement.any_degree()
+            (False, Equality.EqualToZero): PolynomialRequirement.any_degree()
         },
     )
 

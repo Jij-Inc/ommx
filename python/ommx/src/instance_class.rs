@@ -57,6 +57,8 @@ impl PolynomialRequirement {
 /// constraint families are not accepted. OneHot and SOS1 are also disabled
 /// unless their Boolean options are enabled. The objective and constraint
 /// requirements describe stored polynomials, not a request to expand expressions.
+/// Indicator map keys are `(activate_on_zero, equality)` pairs: `False`
+/// admits activation at one and `True` admits activation at zero.
 /// See {class}`~ommx.InstanceClass` for construction and membership examples.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(from_py_object, frozen)]
@@ -77,7 +79,9 @@ impl InstanceClassClause {
         regular_constraint_polynomial_requirements: Option<
             BTreeMap<Equality, PolynomialRequirement>,
         >,
-        indicator_body_polynomial_requirements: Option<BTreeMap<Equality, PolynomialRequirement>>,
+        indicator_body_polynomial_requirements: Option<
+            BTreeMap<(bool, Equality), PolynomialRequirement>,
+        >,
         allows_one_hot: bool,
         allows_sos1: bool,
     ) -> Self {
@@ -92,8 +96,11 @@ impl InstanceClassClause {
         {
             clause = clause.with_regular_constraint(relation.into(), requirement.0);
         }
-        for (relation, requirement) in indicator_body_polynomial_requirements.unwrap_or_default() {
-            clause = clause.with_indicator_constraint(relation.into(), requirement.0);
+        for ((activate_on_zero, relation), requirement) in
+            indicator_body_polynomial_requirements.unwrap_or_default()
+        {
+            clause =
+                clause.with_indicator_constraint(activate_on_zero, relation.into(), requirement.0);
         }
         if allows_one_hot {
             clause = clause.with_one_hot();
@@ -138,10 +145,12 @@ impl InstanceClassClause {
     #[getter]
     pub fn indicator_body_polynomial_requirements(
         &self,
-    ) -> BTreeMap<Equality, PolynomialRequirement> {
+    ) -> BTreeMap<(bool, Equality), PolynomialRequirement> {
         self.0
             .indicator_body_polynomial_requirements()
-            .map(|(relation, requirement)| (relation.into(), PolynomialRequirement(requirement)))
+            .map(|((zero, relation), requirement)| {
+                ((zero, relation.into()), PolynomialRequirement(requirement))
+            })
             .collect()
     }
 
@@ -324,17 +333,25 @@ pub(crate) enum InstanceClassMismatch {
     IndicatorConstraintsNotAllowed {
         constraint_ids: ConstraintSetInput<IndicatorConstraintIDInput>,
     },
+    IndicatorActivationNotAllowed {
+        activate_on_zero: bool,
+        constraint_ids: ConstraintSetInput<IndicatorConstraintIDInput>,
+        allowed_activate_on_zero: BTreeSet<bool>,
+    },
     IndicatorConstraintRelationNotAllowed {
+        activate_on_zero: bool,
         relation: Equality,
         constraint_ids: ConstraintSetInput<IndicatorConstraintIDInput>,
         allowed_relations: BTreeSet<Equality>,
     },
     IndicatorBodyDegreeExceedsBound {
+        activate_on_zero: bool,
         relation: Equality,
         actual_degrees: ConstraintMapInput<IndicatorConstraintIDInput, u32>,
         bound: PolynomialRequirement,
     },
     IndicatorBodyFunctionNotPolynomial {
+        activate_on_zero: bool,
         relation: Equality,
         constraint_ids: ConstraintSetInput<IndicatorConstraintIDInput>,
     },
@@ -408,20 +425,33 @@ impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
                     constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
                 }
             }
+            ommx::InstanceClassMismatch::IndicatorActivationNotAllowed {
+                activate_on_zero,
+                constraint_ids,
+                allowed_activate_on_zero,
+            } => Self::IndicatorActivationNotAllowed {
+                activate_on_zero,
+                constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
+                allowed_activate_on_zero,
+            },
             ommx::InstanceClassMismatch::IndicatorConstraintRelationNotAllowed {
+                activate_on_zero,
                 relation,
                 constraint_ids,
                 allowed_relations,
             } => Self::IndicatorConstraintRelationNotAllowed {
+                activate_on_zero,
                 relation: relation.into(),
                 constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
                 allowed_relations: allowed_relations.into_iter().map(Into::into).collect(),
             },
             ommx::InstanceClassMismatch::IndicatorBodyDegreeExceedsBound {
+                activate_on_zero,
                 relation,
                 actual_degrees,
                 bound,
             } => Self::IndicatorBodyDegreeExceedsBound {
+                activate_on_zero,
                 relation: relation.into(),
                 actual_degrees: actual_degrees
                     .into_iter()
@@ -430,9 +460,11 @@ impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
                 bound: PolynomialRequirement(bound),
             },
             ommx::InstanceClassMismatch::IndicatorBodyFunctionNotPolynomial {
+                activate_on_zero,
                 relation,
                 constraint_ids,
             } => Self::IndicatorBodyFunctionNotPolynomial {
+                activate_on_zero,
                 relation: relation.into(),
                 constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
             },

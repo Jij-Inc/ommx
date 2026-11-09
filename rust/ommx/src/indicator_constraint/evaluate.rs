@@ -8,6 +8,7 @@ use anyhow::Context;
 fn indicator_is_active(
     indicator_variable: VariableID,
     value: f64,
+    activate_on_zero: bool,
     sample_id: Option<SampleID>,
     atol: ATol,
 ) -> crate::Result<bool> {
@@ -21,7 +22,7 @@ fn indicator_is_active(
                 "indicator variable {indicator_variable:?} has an invalid activation value"
             ),
         })?;
-    Ok(atol.approx_eq(value, 1.0))
+    Ok(atol.approx_eq(value, if activate_on_zero { 0.0 } else { 1.0 }))
 }
 
 impl Propagate for IndicatorConstraint<Created> {
@@ -35,8 +36,14 @@ impl Propagate for IndicatorConstraint<Created> {
         let empty_state = crate::v1::State::default();
 
         if let Some(&indicator_value) = state.entries.get(&self.indicator_variable.into_inner()) {
-            if indicator_is_active(self.indicator_variable, indicator_value, None, atol)? {
-                // Indicator ON (~1) → promote inner constraint to regular Constraint.
+            if indicator_is_active(
+                self.indicator_variable,
+                indicator_value,
+                self.activate_on_zero,
+                None,
+                atol,
+            )? {
+                // Indicator at activation value → promote inner constraint to regular Constraint.
                 // Clone the function so self (going to removed) retains its data.
                 let mut promoted_function = self.stage.function.clone();
                 promoted_function.partial_evaluate(state, atol)?;
@@ -61,7 +68,7 @@ impl Propagate for IndicatorConstraint<Created> {
                     empty_state,
                 ))
             } else {
-                // Indicator OFF (~0) → vacuously satisfied; the constraint is consumed.
+                // Indicator at inactive value → vacuously satisfied; the constraint is consumed.
                 Ok((PropagateOutcome::Consumed(self), empty_state))
             }
         } else {
@@ -91,11 +98,17 @@ impl Evaluate for IndicatorConstraint<Created> {
                 )
             })?;
 
-        let indicator_on =
-            indicator_is_active(self.indicator_variable, *indicator_value, None, atol)?;
+        let indicator_on = indicator_is_active(
+            self.indicator_variable,
+            *indicator_value,
+            self.activate_on_zero,
+            None,
+            atol,
+        )?;
 
         Ok(IndicatorConstraint {
             indicator_variable: self.indicator_variable,
+            activate_on_zero: self.activate_on_zero,
             equality: self.equality,
             stage: IndicatorEvaluatedData {
                 evaluated_value,
@@ -133,6 +146,7 @@ impl Evaluate for IndicatorConstraint<Created> {
             let indicator_on = indicator_is_active(
                 self.indicator_variable,
                 *indicator_value,
+                self.activate_on_zero,
                 Some(sample_id),
                 atol,
             )?;
@@ -142,6 +156,7 @@ impl Evaluate for IndicatorConstraint<Created> {
 
         Ok(IndicatorConstraint {
             indicator_variable: self.indicator_variable,
+            activate_on_zero: self.activate_on_zero,
             equality: self.equality,
             stage: IndicatorSampledData {
                 evaluated_values,

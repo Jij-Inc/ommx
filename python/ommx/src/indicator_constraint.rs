@@ -26,13 +26,15 @@ impl IndicatorConstraint {
 impl IndicatorConstraint {
     /// Create a new indicator constraint.
     ///
-    /// An indicator constraint is: `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).
+    /// By default, `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).
+    /// Set `activate_on_zero=True` to activate the body at zero instead.
     ///
     /// **Args:**
     ///
     /// - `indicator_variable`: A variable ID or decision-variable object that
     ///   activates this constraint. Only its ID is stored; the enclosing host
     ///   requires the referenced variable to be binary when the constraint is inserted.
+    /// - `activate_on_zero`: If true, activate at zero instead of one (default false).
     /// - `function`: The constraint function
     /// - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
     /// - `name`: Optional name for the constraint
@@ -40,17 +42,19 @@ impl IndicatorConstraint {
     /// - `description`: Optional description
     /// - `parameters`: Optional key-value parameters
     #[new]
-    #[pyo3(signature = (*, indicator_variable, function, equality, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
+    #[pyo3(signature = (*, indicator_variable, function, equality, activate_on_zero=false, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
     fn new(
         indicator_variable: VariableIDInput,
         function: Function,
         equality: Equality,
+        activate_on_zero: bool,
         name: Option<String>,
         subscripts: Vec<i64>,
         description: Option<String>,
         parameters: HashMap<String, String>,
     ) -> PyResult<Self> {
-        let ic = ommx::IndicatorConstraint::new(indicator_variable.0, equality.into(), function.0);
+        let ic = ommx::IndicatorConstraint::new(indicator_variable.0, equality.into(), function.0)
+            .with_activate_on_zero(activate_on_zero);
         let context = ommx::ConstraintContext {
             label: ommx::ModelingLabel {
                 name,
@@ -66,6 +70,12 @@ impl IndicatorConstraint {
     #[getter]
     pub fn indicator_variable_id(&self) -> u64 {
         self.0.indicator_variable.into_inner()
+    }
+
+    /// Whether zero activates the body instead of one.
+    #[getter]
+    pub fn activate_on_zero(&self) -> bool {
+        self.0.activate_on_zero
     }
 
     #[getter]
@@ -204,6 +214,12 @@ impl RemovedIndicatorConstraint {
     #[getter]
     pub fn indicator_variable_id(&self) -> u64 {
         self.constraint.indicator_variable.into_inner()
+    }
+
+    /// Whether zero activates the body instead of one.
+    #[getter]
+    pub fn activate_on_zero(&self) -> bool {
+        self.constraint.activate_on_zero
     }
 
     #[getter]
@@ -361,6 +377,19 @@ impl AttachedIndicatorConstraint {
                     .indicator_constraint_context()
                     .collect_for(self.id);
                 Ok(IndicatorConstraint::from_parts(c, context))
+            }
+        }
+    }
+
+    /// Whether zero activates the body instead of one.
+    #[getter]
+    pub fn activate_on_zero(&self, py: Python<'_>) -> PyResult<bool> {
+        match &self.host {
+            ConstraintHost::Instance(p) => {
+                Ok(lookup_indicator(&p.borrow(py).inner, self.id)?.activate_on_zero)
+            }
+            ConstraintHost::Parametric(p) => {
+                Ok(lookup_indicator_parametric(&p.borrow(py).inner, self.id)?.activate_on_zero)
             }
         }
     }

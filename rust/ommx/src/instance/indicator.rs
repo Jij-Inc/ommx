@@ -28,6 +28,9 @@ impl Instance {
     /// where $u \geq \sup f(x)$ and $l \leq \inf f(x)$ are taken from
     /// [`Function::evaluate_bound`] over the decision variables' bounds.
     ///
+    /// For activation at zero, the sides are `f(x) - u y <= 0` and
+    /// `-f(x) + l y <= 0`.
+    ///
     /// Side emission rules:
     /// - For [`Equality::LessThanOrEqualToZero`], only the upper side is considered.
     ///   It is emitted only if $u > 0$; otherwise $f(x) \leq 0$ is already implied by
@@ -214,19 +217,33 @@ impl Instance {
         let mut generated_constraints = Vec::new();
 
         if let Some(u) = upper_big_m {
-            // f(x) + u y - u <= 0
+            // f(x) <= u * inactive_literal, with inactive_literal = y or 1-y.
             let f = (function.clone()
-                + Linear::single_term(LinearMonomial::Variable(indicator_variable), u))?;
-            let f = (f + Linear::from(-u))?;
+                + Linear::single_term(
+                    LinearMonomial::Variable(indicator_variable),
+                    if ic.activate_on_zero { -u } else { u },
+                ))?;
+            let f = if ic.activate_on_zero {
+                f
+            } else {
+                (f + Linear::from(-u))?
+            };
             generated_constraints.push(Constraint::less_than_or_equal_to_zero(f));
         }
 
         if let Some(l) = lower_big_m {
-            // -f(x) - l y + l <= 0
+            // -f(x) <= -l * inactive_literal.
             let neg_l = -l;
             let f = (-function.clone()
-                + Linear::single_term(LinearMonomial::Variable(indicator_variable), neg_l))?;
-            let f = (f + Linear::from(l))?;
+                + Linear::single_term(
+                    LinearMonomial::Variable(indicator_variable),
+                    if ic.activate_on_zero { l } else { neg_l },
+                ))?;
+            let f = if ic.activate_on_zero {
+                f
+            } else {
+                (f + Linear::from(l))?
+            };
             generated_constraints.push(Constraint::less_than_or_equal_to_zero(f));
         }
 

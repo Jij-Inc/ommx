@@ -1,16 +1,17 @@
-A condition enforced when a controlling Binary variable equals one.
+A condition enforced when a controlling Binary variable equals its activation value.
 
 For a Binary variable $z$, an Indicator requires $f(x)\leq0$ or $f(x)=0$
-when $z=1$. At $z=0$, the Indicator is satisfied regardless of the body's
+when $z=1$ by default. With `activate_on_zero=True`, it is enforced when $z=0$.
+At the other binary value, the Indicator is satisfied regardless of the body's
 value; variable domains and other constraints still apply. This is a one-way
-implication: a satisfied body does not require $z=1$.
+implication: a satisfied body does not force the trigger to its activation value.
 
 Construct one from a regular constraint with {meth}`~ommx.Constraint.with_indicator`,
 or pass `indicator_variable`, `function`, and `equality` to this class.
 The controlling variable accepts a variable ID, a standalone
 {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.
 These accepted forms are exposed as the `VariableIDLike` type alias.
-Only its ID is stored. The enclosing Instance validates that the referenced
+Its ID and activation condition are stored. The enclosing Instance validates that the referenced
 variables exist and that the controlling variable is Binary when inserting it.
 
 **Construct and evaluate a conditional limit**
@@ -39,6 +40,19 @@ The following model limits the amount to five only when the facility is enabled:
 >>> assert on.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_active"]
 
 ```
+
+Pass `activate_on_zero=True` to enforce the body when the trigger is zero:
+
+```pycon
+>>> disabled_limit = (amount <= 5).with_indicator(enabled, activate_on_zero=True)
+>>> assert disabled_limit.activate_on_zero
+
+```
+
+The constructor accepts the same keyword. Attached, removed, evaluated, and
+sampled rows expose `activate_on_zero`; Indicator DataFrames retain it as a
+column. It describes the constraint, independently of whether a particular
+candidate activates it.
 
 The `indicator_active` column distinguishes an inactive condition from an active
 condition whose body is satisfied. Indicator results do not have a dual variable.

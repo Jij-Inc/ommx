@@ -56,10 +56,10 @@ impl From<IndicatorConstraintID> for u64 {
     }
 }
 
-/// An indicator constraint: `indicator_variable = 1 → f(x) <= 0` (or `= 0`).
+/// An indicator constraint: `indicator_variable = activation_value → f(x) <= 0` (or `= 0`).
 ///
-/// When the binary indicator variable is 0, the constraint is unconditionally satisfied.
-/// When it is 1, the constraint `f(x) <= 0` (or `f(x) = 0`) must hold.
+/// The activation value is 1 by default, or 0 when `activate_on_zero` is true.
+/// At the other binary value the constraint is unconditionally satisfied.
 ///
 /// The constraint's [`IndicatorConstraintID`] is not stored in this struct — it is held
 /// by the enclosing collection (e.g. the `BTreeMap` key in [`Instance`]).
@@ -72,6 +72,8 @@ impl From<IndicatorConstraintID> for u64 {
 pub struct IndicatorConstraint<S: Stage<Self> = Created> {
     /// The binary decision variable that activates this constraint.
     pub indicator_variable: VariableID,
+    /// Whether zero activates the body. False activates at one.
+    pub activate_on_zero: bool,
     pub equality: Equality,
     pub stage: S::Data,
 }
@@ -191,6 +193,7 @@ impl SampledConstraintData for SampledIndicatorConstraint {
 
         Some(IndicatorConstraint {
             indicator_variable: self.indicator_variable,
+            activate_on_zero: self.activate_on_zero,
             equality: self.equality,
             stage: IndicatorEvaluatedData {
                 evaluated_value,
@@ -218,9 +221,16 @@ impl IndicatorConstraint<Created> {
     pub fn new(indicator_variable: VariableID, equality: Equality, function: Function) -> Self {
         Self {
             indicator_variable,
+            activate_on_zero: false,
             equality,
             stage: CreatedData { function },
         }
+    }
+
+    /// Select whether the constraint activates at zero instead of one.
+    pub fn with_activate_on_zero(mut self, activate_on_zero: bool) -> Self {
+        self.activate_on_zero = activate_on_zero;
+        self
     }
 
     /// Access the constraint function.
@@ -238,6 +248,7 @@ impl From<IndicatorConstraint<Created>> for crate::v2::IndicatorConstraint {
     fn from(constraint: IndicatorConstraint<Created>) -> Self {
         Self {
             indicator_variable: constraint.indicator_variable.into_inner(),
+            activate_on_zero: constraint.activate_on_zero,
             equality: constraint.equality.into(),
             function: Some(constraint.stage.function.into()),
         }
@@ -266,6 +277,7 @@ impl Parse for crate::v2::IndicatorConstraint {
             .parse_as(&(), message, "function")?;
         Ok(IndicatorConstraint {
             indicator_variable: VariableID::from(self.indicator_variable),
+            activate_on_zero: self.activate_on_zero,
             equality,
             stage: CreatedData { function },
         })
@@ -279,6 +291,7 @@ impl EvaluatedIndicatorConstraint {
         let feasible = constraint.is_feasible(atol);
         crate::v2::EvaluatedIndicatorConstraint {
             indicator_variable: constraint.indicator_variable.into_inner(),
+            activate_on_zero: constraint.activate_on_zero,
             equality: constraint.equality.into(),
             evaluated_value: constraint.stage.evaluated_value,
             feasible,
@@ -346,6 +359,7 @@ impl Parse for crate::v2::EvaluatedIndicatorConstraint {
         )?;
         Ok(IndicatorConstraint {
             indicator_variable: VariableID::from(self.indicator_variable),
+            activate_on_zero: self.activate_on_zero,
             equality,
             stage: IndicatorEvaluatedData {
                 evaluated_value: self.evaluated_value,
@@ -380,6 +394,7 @@ impl SampledIndicatorConstraint {
             .collect();
         crate::v2::SampledIndicatorConstraint {
             indicator_variable: constraint.indicator_variable.into_inner(),
+            activate_on_zero: constraint.activate_on_zero,
             equality: constraint.equality.into(),
             evaluated_values: Some(constraint.stage.evaluated_values.into()),
             feasible,
@@ -446,6 +461,7 @@ impl Parse for crate::v2::SampledIndicatorConstraint {
         }
         Ok(IndicatorConstraint {
             indicator_variable: VariableID::from(self.indicator_variable),
+            activate_on_zero: self.activate_on_zero,
             equality,
             stage: IndicatorSampledData {
                 evaluated_values,
@@ -469,8 +485,9 @@ impl std::fmt::Display for IndicatorConstraint<Created> {
         };
         write!(
             f,
-            "IndicatorConstraint(x{} = 1 → {} {} 0)",
+            "IndicatorConstraint(x{} = {} → {} {} 0)",
             self.indicator_variable.into_inner(),
+            u8::from(!self.activate_on_zero),
             self.stage.function,
             equality_symbol
         )
@@ -519,6 +536,7 @@ mod tests {
     fn parse_v2_evaluated_rejects_non_finite_value_even_when_inactive() {
         let proto = crate::v2::EvaluatedIndicatorConstraint {
             indicator_variable: 1,
+            activate_on_zero: false,
             equality: crate::v1::Equality::EqualToZero.into(),
             evaluated_value: f64::INFINITY,
             feasible: true,
@@ -538,6 +556,7 @@ mod tests {
     fn parse_v2_evaluated_feasibility_mismatch_is_an_ordinary_error() {
         let proto = crate::v2::EvaluatedIndicatorConstraint {
             indicator_variable: 1,
+            activate_on_zero: false,
             equality: crate::v1::Equality::EqualToZero.into(),
             evaluated_value: 0.0,
             feasible: false,
@@ -561,6 +580,7 @@ mod tests {
     fn parse_v2_sampled_rejects_non_finite_values_even_when_inactive() {
         let proto = crate::v2::SampledIndicatorConstraint {
             indicator_variable: 1,
+            activate_on_zero: false,
             equality: crate::v1::Equality::EqualToZero.into(),
             evaluated_values: Some(crate::v1::SampledValues {
                 entries: vec![crate::v1::sampled_values::SampledValuesEntry {
@@ -591,6 +611,7 @@ mod tests {
         ] {
             let proto = crate::v2::SampledIndicatorConstraint {
                 indicator_variable: 1,
+                activate_on_zero: false,
                 equality: crate::v1::Equality::EqualToZero.into(),
                 evaluated_values: Some(crate::Sampled::from((SampleID::from(0), 1.0)).into()),
                 feasible: BTreeMap::from([(0, true)]),
@@ -606,6 +627,7 @@ mod tests {
     fn inactive_indicator_does_not_create_a_sample_without_an_evaluated_value() {
         let constraint = SampledIndicatorConstraint {
             indicator_variable: 1.into(),
+            activate_on_zero: false,
             equality: Equality::EqualToZero,
             stage: IndicatorSampledData {
                 evaluated_values: crate::Sampled::from((SampleID::from(0), 1.0)),
