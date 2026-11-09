@@ -117,6 +117,7 @@ def test_lifecycle_and_bigm(zero, equality):
             )
             assert source.evaluate(state).feasible == expected
             assert lowered.evaluate(state).feasible == expected
+            assert lowered.evaluate(state).feasible_relaxed == expected
 
 
 @pytest.mark.parametrize("zero", [False, True])
@@ -201,11 +202,61 @@ def test_fixed_trigger_propagates_and_preserves_removed_condition(zero, active):
     removed = source.removed_constraints[IndicatorConstraintID(7)]
     assert removed.activate_on_zero == zero
     assert source.evaluate({1: 3}).feasible == (not active)
+    assert source.evaluate({1: 3}).feasible_relaxed == (not active)
     restored = Instance.from_v2_bytes(source.to_v2_bytes())
     assert (
         restored.removed_constraints[IndicatorConstraintID(7)].activate_on_zero == zero
     )
     assert restored.evaluate({1: 3}).feasible == (not active)
+    assert restored.evaluate({1: 3}).feasible_relaxed == (not active)
+
+
+@pytest.mark.parametrize("zero", [False, True])
+@pytest.mark.parametrize(
+    "equality", [Equality.EqualToZero, Equality.LessThanOrEqualToZero]
+)
+@pytest.mark.parametrize(
+    "a,b,c,d",
+    [
+        (1, -2, 3, -4),
+        (-1, 2, -3, 4),
+        (0, 1, -2, 0),
+        (0, 0, 1, -1),
+        (1, 0, 1, 0),
+        (-1, 0, -1, 0),
+        (0, 0, 0, 0),
+    ],
+)
+def test_bigm_active_formulation_with_trigger_in_body(zero, equality, a, b, c, d):
+    z = DecisionVariable.binary(0)
+    x = DecisionVariable.continuous(1, lower=-5, upper=5)
+    body = a * x * x + b * x + c * z + d
+    source = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x,
+        decision_variables=[z, x],
+        constraints={},
+        indicator_constraints={
+            7: IndicatorConstraint(
+                indicator_variable=z,
+                function=body,
+                equality=equality,
+                activate_on_zero=zero,
+            )
+        },
+    )
+    lowered = copy.deepcopy(source)
+    lowered.convert_all_indicators_to_constraints()
+    for zv in [0, 1]:
+        for xv in [-5, -1, 0, 1, 5]:
+            residual = a * xv * xv + b * xv + c * zv + d
+            expected = zv != int(not zero) or (
+                residual == 0 if equality == Equality.EqualToZero else residual <= 0
+            )
+            state = {0: zv, 1: xv}
+            assert source.evaluate(state).feasible == expected
+            # Removed indicators must not hide a missing or weakened Big-M side.
+            assert lowered.evaluate(state).feasible_relaxed == expected
 
 
 @pytest.mark.parametrize("zero", [False, True])

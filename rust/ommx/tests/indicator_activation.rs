@@ -78,6 +78,14 @@ fn activation_evaluation_propagation_and_bigm() {
                             .feasible(),
                         expected
                     );
+                    // Check generated rows independently of the retained original indicator.
+                    assert_eq!(
+                        lowered
+                            .evaluate(&state, ATol::default())
+                            .unwrap()
+                            .feasible_relaxed(),
+                        expected
+                    );
                     let row = &result.evaluated_indicator_constraints().inner()[&7.into()];
                     assert_eq!(row.activate_on_zero, zero);
                     assert_eq!(row.stage.indicator_active, active);
@@ -262,6 +270,13 @@ fn constant_body_lowering_and_wire_activation_consistency() {
                             .evaluate(&state, ATol::default())
                             .unwrap()
                             .feasible(),
+                        expected
+                    );
+                    assert_eq!(
+                        lowered
+                            .evaluate(&state, ATol::default())
+                            .unwrap()
+                            .feasible_relaxed(),
                         expected
                     );
                 }
