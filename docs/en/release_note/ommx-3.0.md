@@ -6,7 +6,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-### ⚠ Active and inactive constraints ([#1372](https://github.com/Jij-Inc/ommx/issues/1372))
+### ⚠ Active and inactive constraints ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
 
 Model `constraints` now contains every activeness state. Use `active_constraints` for active attached handles and `inactive_constraints` for retained inactive rows. Rename `Removed*Constraint` to `Inactive*Constraint`, `relax_*` / `restore_*` to `deactivate_*` / `activate_*`, and `from_components` inputs to `active_*` / `inactive_*`.
 

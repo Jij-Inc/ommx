@@ -6,7 +6,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-### ⚠ Active / inactiveへの整理 ([#1372](https://github.com/Jij-Inc/ommx/issues/1372))
+### ⚠ Active / inactiveへの整理 ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
 
 モデルの `constraints` は全状態を含むようになります。activeな接続済みハンドルには `active_constraints`、保持したinactive行には `inactive_constraints` を使います。`Removed*Constraint` は `Inactive*Constraint`、`relax_*` / `restore_*` は `deactivate_*` / `activate_*` に変更します。`from_components` の入力も `active_*` / `inactive_*` に揃えます。
 
