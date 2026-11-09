@@ -6,7 +6,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-### ⚠ Removed制約をinactive制約に改名 ([#1372](https://github.com/Jij-Inc/ommx/issues/1372))
+### ⚠ Removed制約をinactive制約に改名 ([#1375](https://github.com/Jij-Inc/ommx/pull/1375))
 
 `Removed*Constraint` は `Inactive*Constraint`、`removed_constraints` は `inactive_constraints`、既存の `relax_*` / `restore_*` は `deactivate_*` / `activate_*` に変更します。理由のアクセサーや表のメタデータもinactiveという名称に揃えます。制約の参照と実行可能性判定の意味は変わりません。v2の名称も変更しますがfield番号は維持し、v1のschemaは変更しません。詳細は[移行ガイド](../migration/python_sdk_v2_to_v3.md)にあります。
 

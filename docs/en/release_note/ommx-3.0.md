@@ -6,7 +6,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-### ⚠ Rename removed constraints to inactive constraints ([#1372](https://github.com/Jij-Inc/ommx/issues/1372))
+### ⚠ Rename removed constraints to inactive constraints ([#1375](https://github.com/Jij-Inc/ommx/pull/1375))
 
 Replace `Removed*Constraint` with `Inactive*Constraint`, `removed_constraints` with `inactive_constraints`, and the existing `relax_*` / `restore_*` operations with `deactivate_*` / `activate_*`. Reason accessors and table metadata now use inactive terminology. Constraint lookup and feasibility semantics are unchanged. v2 source names follow the same terminology with unchanged field numbers; the v1 schema is unchanged. See the [migration guide](../migration/python_sdk_v2_to_v3.md).
 
