@@ -328,3 +328,21 @@ Local Registryに書き込まずにアーカイブの内容を調べるには {m
 | `write_mps(path)` | {meth}`save_mps(path) <ommx.Instance.save_mps>` | {ref}`5 <migration-storage>` |
 
 v3の各プレリリースでの変更経緯は[Python SDK 3.0のリリースノート](../release_note/ommx-3.0.md)を参照してください。
+
+## Indicator の発火値
+
+`IndicatorConstraint` と `Constraint.with_indicator` に
+`activate_on_zero=True` を指定すると、二値の制御変数が 0 のときに本体を強制します。
+既定値は従来どおり 1 で発火します。この属性は attached・removed・evaluated・sampled
+の各行と Indicator の DataFrame にも保持されます。
+
+`InstanceClassClause.indicator_body_polynomial_requirements` は従来どおり
+`Equality` から `PolynomialRequirement` への対応です。
+`allowed_indicator_activation_values={0, 1}` を独立に指定すると、同じ本体条件で
+両方の発火値を許可します。既定値は `{1}`、0 発火のみなら `{0}`、空集合なら
+すべての Indicator を拒否します。指定できる値は 0 と 1 だけです。
+本体条件の辞書が空の場合も、発火値の指定にかかわらずすべての Indicator を拒否します。
+
+PySCIPOpt と Big-M 変換は両方の発火値に対応します。
+v2 保存形式では、保持している Indicator に 0 発火が含まれる場合、専用の required
+feature を宣言します。旧 reader は発火条件を誤解釈せず、読み込みを拒否します。

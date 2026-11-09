@@ -34,6 +34,11 @@ impl From<Solution> for v2::Solution {
     fn from(value: Solution) -> Self {
         let required_features = crate::v2_io::required_features(
             !value.evaluated_indicator_constraints.is_empty(),
+            value
+                .evaluated_indicator_constraints
+                .inner()
+                .values()
+                .any(|c| c.activate_on_zero),
             !value.evaluated_one_hot_constraints.is_empty(),
             !value.evaluated_sos1_constraints.is_empty(),
             value
@@ -347,6 +352,7 @@ mod tests {
                             0.into(),
                             crate::Equality::EqualToZero,
                             Function::from(crate::coeff!(1.0)),
+                            false,
                         ),
                     )]));
                 }

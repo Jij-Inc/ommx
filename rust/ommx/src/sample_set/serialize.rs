@@ -34,6 +34,11 @@ impl From<SampleSet> for v2::SampleSet {
     fn from(value: SampleSet) -> Self {
         let required_features = crate::v2_io::required_features(
             !value.indicator_constraints.is_empty(),
+            value
+                .indicator_constraints
+                .inner()
+                .values()
+                .any(|c| c.activate_on_zero),
             !value.one_hot_constraints.is_empty(),
             !value.sos1_constraints.is_empty(),
             value

@@ -46,6 +46,7 @@ impl_special_constraint_profile!(
     crate::IndicatorConstraint,
     "IndicatorConstraint" {
         indicator_variable,
+        activate_on_zero,
         equality,
         stage,
     }
@@ -384,6 +385,7 @@ mod tests {
                     VariableID::from(1),
                     Equality::LessThanOrEqualToZero,
                     Function::Linear((linear!(2) + coeff!(-1.0)).unwrap()),
+                    false,
                 ),
                 crate::ConstraintContext::default(),
             )
@@ -444,6 +446,7 @@ mod tests {
         Instance.indicator_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[key];IndicatorConstraintID.0 8
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
+        Instance.indicator_constraint_collection;indicator_constraints;IndicatorConstraint.activate_on_zero 1
         Instance.indicator_constraint_collection;indicator_constraints;IndicatorConstraint.equality 1
         Instance.indicator_constraint_collection;indicator_constraints;IndicatorConstraint.indicator_variable;VariableID.0 8
         Instance.indicator_constraint_collection;indicator_constraints;IndicatorConstraint.stage;CreatedData.function;Linear;PolynomialBase.terms 80

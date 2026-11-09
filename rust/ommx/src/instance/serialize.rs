@@ -169,6 +169,16 @@ impl From<Instance> for v2::Instance {
     fn from(value: Instance) -> Self {
         let mut required_features = crate::v2_io::required_features(
             created_collection_has_payload(&value.indicator_constraint_collection),
+            value
+                .indicator_constraints()
+                .values()
+                .chain(
+                    value
+                        .removed_indicator_constraints()
+                        .values()
+                        .map(|(c, _)| c),
+                )
+                .any(|c| c.activate_on_zero),
             created_collection_has_payload(&value.one_hot_constraint_collection),
             created_collection_has_payload(&value.sos1_constraint_collection),
             value
@@ -231,6 +241,16 @@ impl From<ParametricInstance> for v2::ParametricInstance {
     fn from(value: ParametricInstance) -> Self {
         let mut required_features = crate::v2_io::required_features(
             created_collection_has_payload(&value.indicator_constraint_collection),
+            value
+                .indicator_constraints()
+                .values()
+                .chain(
+                    value
+                        .removed_indicator_constraints()
+                        .values()
+                        .map(|(c, _)| c),
+                )
+                .any(|c| c.activate_on_zero),
             created_collection_has_payload(&value.one_hot_constraint_collection),
             created_collection_has_payload(&value.sos1_constraint_collection),
             value
@@ -376,6 +396,7 @@ mod tests {
                     variable_1,
                     Equality::LessThanOrEqualToZero,
                     Function::Zero,
+                    false,
                 ),
             )]))
             .indicator_constraint_context(indicator_context)
@@ -937,6 +958,30 @@ mod tests {
 
         assert_eq!(restored, instance);
         assert_eq!(restored.parameters().labels().name(parameter_id), Some("p"));
+    }
+
+    proptest! {
+        #[test]
+        fn v2_round_trip_preserves_both_activation_conditions(
+            instance in Instance::arbitrary_with(crate::InstanceParameters::full_v3()),
+            active_zero in any::<bool>(),
+            removed_zero in any::<bool>(),
+        ) {
+            // Sample the activation dimension independently for active and removed rows.
+            // The existing full_v3 generator supplies the other root invariants.
+            let mut proto: v2::Instance = instance.into();
+            let rows = proto.indicator_constraints.as_mut().unwrap();
+            for row in rows.active.values_mut() { row.activate_on_zero = active_zero; }
+            for row in rows.removed.values_mut() { row.activate_on_zero = removed_zero; }
+            if active_zero || removed_zero {
+                proto.required_features.push(v2::Feature::IndicatorActivateOnZero as i32);
+            }
+            let source: Instance = proto.parse(&()).unwrap();
+            let restored = Instance::from_v2_bytes(&source.to_v2_bytes()).unwrap();
+            prop_assert_eq!(&restored, &source);
+            let parameterized: ParametricInstance = source.into();
+            prop_assert_eq!(ParametricInstance::from_v2_bytes(&parameterized.to_v2_bytes()).unwrap(), parameterized);
+        }
     }
 
     proptest! {

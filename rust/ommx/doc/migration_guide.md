@@ -110,7 +110,16 @@ Query individual values with [`Solution::constraint_violation`](crate::Solution:
 [`Solution::sos1_constraint_violation`](crate::Solution::sos1_constraint_violation),
 passing the corresponding typed ID. Unknown IDs return `None`.
 
-Indicator uses its inner violation when active and zero otherwise. OneHot and
+Indicator uses its inner violation when active and zero otherwise.
+[`IndicatorConstraint::new`](crate::IndicatorConstraint::new) requires an explicit
+`activate_on_zero` argument after the function: `false` activates at one and
+`true` at zero. The field is retained at every stage and in v2 serialization.
+Existing v2 payloads that omit the field still activate at one.
+[`InstanceClassClause::with_indicator_constraint`](crate::InstanceClassClause::with_indicator_constraint)
+sets the body relation and polynomial requirement, shared by all allowed activation values.
+Use [`InstanceClassClause::with_allowed_indicator_activation_values`](crate::InstanceClassClause::with_allowed_indicator_activation_values)
+to set those values independently (`{1}` by default); values other than 0 and 1
+are rejected. OneHot and
 SOS1 measure the minimum sum of absolute changes needed to satisfy their
 structural condition. Every constraint is feasible exactly when its violation is
 at most `atol`. For OneHot and SOS1, tolerance now applies to the total change,

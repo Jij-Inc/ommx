@@ -45,6 +45,8 @@ message IndicatorConstraint {
   uint64 indicator_variable = 1;
   ommx.v1.Equality equality = 2;
   ommx.v1.Function function = 3;
+  // False activates at one (including legacy payloads); true activates at zero.
+  bool activate_on_zero = 4;
 }
 
 // One-hot constraint row.
@@ -106,6 +108,7 @@ message EvaluatedIndicatorConstraint {
   bool feasible = 4;
   bool indicator_active = 5;
   repeated uint64 used_decision_variable_ids = 6;
+  bool activate_on_zero = 7;
 }
 
 // Evaluated one-hot constraint row.
@@ -174,6 +177,7 @@ message SampledIndicatorConstraint {
   map<uint64, bool> feasible = 4;
   map<uint64, bool> indicator_active = 5;
   repeated uint64 used_decision_variable_ids = 6;
+  bool activate_on_zero = 7;
 }
 
 // Sampled one-hot constraint row.

@@ -625,6 +625,7 @@ mod tests {
                     var_id,
                     crate::Equality::LessThanOrEqualToZero,
                     Function::Zero,
+                    false,
                 ),
             )]))
             .indicator_constraint_context(indicator_context)
@@ -878,6 +879,7 @@ mod tests {
             VariableID::from(1),
             Equality::EqualToZero,
             Function::from(((linear!(2) + linear!(100)).unwrap() + coeff!(1.0)).unwrap()),
+            false,
         );
 
         let instance = ParametricInstance::builder()
@@ -972,6 +974,7 @@ mod tests {
             VariableID::from(100), // parameter id, not a decision variable
             Equality::EqualToZero,
             Function::from(linear!(1) + coeff!(1.0)),
+            false,
         );
 
         let err = ParametricInstance::builder()
@@ -1005,6 +1008,7 @@ mod tests {
             VariableID::from(1),
             Equality::EqualToZero,
             Function::from(linear!(2) + coeff!(1.0)),
+            false,
         );
 
         let err = ParametricInstance::builder()

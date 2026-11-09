@@ -476,6 +476,7 @@ impl Arbitrary for Instance {
                                             Function::from(
                                                 linear!(indicator_body_var.into_inner()),
                                             ),
+                                            false,
                                         ),
                                     );
                                     indicator_constraint_context
@@ -492,6 +493,7 @@ impl Arbitrary for Instance {
                                                 Function::from(linear!(
                                                     removed_indicator_body_var.into_inner()
                                                 )),
+                                                false,
                                             ),
                                             arbitrary_removed_reason(),
                                         ),

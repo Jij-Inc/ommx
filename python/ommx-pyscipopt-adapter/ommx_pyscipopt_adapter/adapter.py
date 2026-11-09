@@ -51,8 +51,8 @@ _QUADRATIC_REGULAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS = {
     Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(2),
 }
 _LINEAR_INDICATOR_BODY_POLYNOMIAL_REQUIREMENTS = {
-    Equality.EqualToZero: PolynomialRequirement.at_most(1),
-    Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(1),
+    relation: PolynomialRequirement.at_most(1)
+    for relation in (Equality.EqualToZero, Equality.LessThanOrEqualToZero)
 }
 
 
@@ -654,8 +654,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     native ``addConsIndicator`` and ``addConsSOS1`` operations. A nonconstant
     equality indicator becomes two inequality indicators. A constant body is
     simplified: a satisfied body needs no row, while an unsatisfied body forces
-    its indicator to zero. OneHot constraints are lowered to regular equalities
-    by the recommended preparation policy.
+    its indicator to the inactive value. Both activation values are supported.
+    OneHot constraints are lowered to regular equalities by the recommended
+    preparation policy.
 
     :meth:`solve` prepares an isolated copy, leaving the caller's Instance
     unchanged. :meth:`solve_without_preparation` and the constructor require
@@ -828,6 +829,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 regular_constraint_polynomial_requirements=(
                     _QUADRATIC_REGULAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS
                 ),
+                allowed_indicator_activation_values={0, 1},
                 indicator_body_polynomial_requirements=(
                     _LINEAR_INDICATOR_BODY_POLYNOMIAL_REQUIREMENTS
                 ),
@@ -1308,9 +1310,12 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             if is_feasible:
                 return  # Always feasible, skip
             # If infeasible when indicator is ON, add indicator constraint
-            # that forces indicator to be 0
+            # that forces the indicator to its inactive value
             binvar = self.varname_map[str(indicator.indicator_variable_id)]
-            self.model.addCons(binvar == 0, name=f"ind_{ind_id}_forced_off")
+            self.model.addCons(
+                binvar == int(indicator.activate_on_zero),
+                name=f"ind_{ind_id}_forced_off",
+            )
             return
         elif degree == 1:
             expr = self._make_linear_expr(f)
@@ -1324,13 +1329,24 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         if indicator.equality == Equality.EqualToZero:
             # Decompose f(x) == 0 into two indicator constraints
             self.model.addConsIndicator(
-                expr <= 0, binvar=binvar, name=f"ind_{ind_id}_le"
+                expr <= 0,
+                binvar=binvar,
+                activeone=not indicator.activate_on_zero,
+                name=f"ind_{ind_id}_le",
             )
             self.model.addConsIndicator(
-                -expr <= 0, binvar=binvar, name=f"ind_{ind_id}_ge"
+                -expr <= 0,
+                binvar=binvar,
+                activeone=not indicator.activate_on_zero,
+                name=f"ind_{ind_id}_ge",
             )
         elif indicator.equality == Equality.LessThanOrEqualToZero:
-            self.model.addConsIndicator(expr <= 0, binvar=binvar, name=f"ind_{ind_id}")
+            self.model.addConsIndicator(
+                expr <= 0,
+                binvar=binvar,
+                activeone=not indicator.activate_on_zero,
+                name=f"ind_{ind_id}",
+            )
         else:
             raise OMMXPySCIPOptAdapterError(
                 f"Not supported indicator constraint equality: "

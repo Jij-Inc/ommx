@@ -1,4 +1,5 @@
 import sys
+import copy
 
 import pytest
 from ommx import (
@@ -12,6 +13,44 @@ from ommx import (
     Polynomial,
     Sense,
 )
+
+
+@pytest.mark.parametrize("zero", [False, True])
+@pytest.mark.parametrize(
+    "equality", [Equality.EqualToZero, Equality.LessThanOrEqualToZero]
+)
+def test_reduction_preserves_indicator_activation(zero, equality):
+    z = DecisionVariable.binary(0)
+    x = DecisionVariable.binary(1)
+    source = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x,
+        decision_variables=[z, x],
+        constraints={},
+        indicator_constraints={
+            7: IndicatorConstraint(
+                indicator_variable=z,
+                function=x * x,
+                equality=equality,
+                activate_on_zero=zero,
+                name="conditional_square",
+            )
+        },
+    )
+    reduced = copy.deepcopy(source)
+    assert reduced.reduce_binary_power()
+    row = reduced.constraints[IndicatorConstraintID(7)]
+    assert row.activate_on_zero == zero
+    assert row.equality == equality
+    assert row.name == "conditional_square"
+    assert row.function.terms == {(1,): 1.0}
+    for zv in (0, 1):
+        for xv in (0, 1):
+            state = {0: zv, 1: xv}
+            expected = zv != int(not zero) or xv == 0
+            assert source.evaluate(state).feasible == expected
+            assert reduced.evaluate(state).feasible_relaxed == expected
+    assert not reduced.reduce_binary_power()
 
 
 def test_reduction_changes_indicator_but_preserves_named_function() -> None:

@@ -145,3 +145,33 @@ name: some samplers accept Binary polynomials beyond degree two. For membership,
 recommended policies, and the distinction between automatic and explicit
 Preparation, see {class}`~ommx.adapter.SolverAdapter` and
 {class}`~ommx.adapter.SamplerAdapter`.
+
+**Indicator activation conditions**
+
+`InstanceClassClause.allowed_indicator_activation_values` specifies the allowed
+trigger values independently of `indicator_body_polynomial_requirements`.
+The latter maps `Equality` to polynomial requirements shared by all admitted
+activation values. The default activation set is `{1}`; an empty activation
+set or an empty body map rejects all Indicators. Values other than 0 and 1
+are rejected when constructing the clause.
+
+```pycon
+>>> from ommx import Equality, InstanceClassClause, Kind, PolynomialRequirement, Sense
+>>> clause = InstanceClassClause(
+...     label="linear indicators at either value",
+...     allowed_variable_kinds={Kind.Binary},
+...     allowed_senses={Sense.Minimize},
+...     objective_polynomial_requirement=PolynomialRequirement.at_most(1),
+...     allowed_indicator_activation_values={0, 1},
+...     indicator_body_polynomial_requirements={
+...         Equality.EqualToZero: PolynomialRequirement.at_most(1),
+...     },
+... )
+>>> assert clause.allowed_indicator_activation_values == {0, 1}
+
+```
+
+An unsupported trigger value produces `InstanceClassMismatch.IndicatorActivationNotAllowed`,
+with `activation_value` and `allowed_activation_values`. Body-relation and degree
+requirements are checked independently, so their diagnostics can accompany an
+activation mismatch. Membership checking does not transform the Instance.

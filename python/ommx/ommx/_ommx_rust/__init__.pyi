@@ -1349,6 +1349,11 @@ class AttachedIndicatorConstraint(ConstraintView):
         The parent host this constraint lives in.
         """
     @property
+    def activate_on_zero(self) -> builtins.bool:
+        r"""
+        Whether zero activates the body instead of one.
+        """
+    @property
     def indicator_variable_id(self) -> builtins.int: ...
     @property
     def function(self) -> Function: ...
@@ -1792,11 +1797,17 @@ class Constraint:
         Add a parameter to the constraint
         Returns self for method chaining
         """
-    def with_indicator(self, indicator_variable: VariableIDLike) -> IndicatorConstraint:
+    def with_indicator(
+        self,
+        indicator_variable: VariableIDLike,
+        *,
+        activate_on_zero: builtins.bool = False,
+    ) -> IndicatorConstraint:
         r"""
         Create an indicator constraint from this constraint.
 
-        Returns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.
+        Returns `indicator_variable = 1 → this constraint`, or activation at zero
+        when `activate_on_zero=True`.
         `indicator_variable` may be a variable ID or a decision-variable object.
         Only its ID is stored; the enclosing host requires the referenced variable
         to be binary when the constraint is inserted.
@@ -2866,6 +2877,11 @@ class EvaluatedIndicatorConstraint(ConstraintView):
     def indicator_variable_id(self) -> builtins.int:
         r"""
         Decision variable that activates this constraint.
+        """
+    @property
+    def activate_on_zero(self) -> builtins.bool:
+        r"""
+        Whether zero activates the body instead of one.
         """
     @property
     def equality(self) -> Equality:
@@ -4709,19 +4725,20 @@ class GcRoot:
 @typing.final
 class IndicatorConstraint:
     r"""
-    A condition enforced when a controlling Binary variable equals one.
+    A condition enforced when a controlling Binary variable equals its activation value.
 
     For a Binary variable $z$, an Indicator requires $f(x)\leq0$ or $f(x)=0$
-    when $z=1$. At $z=0$, the Indicator is satisfied regardless of the body's
+    when $z=1$ by default. With `activate_on_zero=True`, it is enforced when $z=0$.
+    At the other binary value, the Indicator is satisfied regardless of the body's
     value; variable domains and other constraints still apply. This is a one-way
-    implication: a satisfied body does not require $z=1$.
+    implication: a satisfied body does not force the trigger to its activation value.
 
     Construct one from a regular constraint with {meth}`~ommx.Constraint.with_indicator`,
     or pass `indicator_variable`, `function`, and `equality` to this class.
     The controlling variable accepts a variable ID, a standalone
     {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.
     These accepted forms are exposed as the `VariableIDLike` type alias.
-    Only its ID is stored. The enclosing Instance validates that the referenced
+    Its ID and activation condition are stored. The enclosing Instance validates that the referenced
     variables exist and that the controlling variable is Binary when inserting it.
 
     **Construct and evaluate a conditional limit**
@@ -4750,6 +4767,19 @@ class IndicatorConstraint:
     >>> assert on.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_active"]
 
     ```
+
+    Pass `activate_on_zero=True` to enforce the body when the trigger is zero:
+
+    ```pycon
+    >>> disabled_limit = (amount <= 5).with_indicator(enabled, activate_on_zero=True)
+    >>> assert disabled_limit.activate_on_zero
+
+    ```
+
+    The constructor accepts the same keyword. Attached, removed, evaluated, and
+    sampled rows expose `activate_on_zero`; Indicator DataFrames retain it as a
+    column. It describes the constraint, independently of whether a particular
+    candidate activates it.
 
     The `indicator_active` column distinguishes an inactive condition from an active
     condition whose body is satisfied. Indicator results do not have a dual variable.
@@ -4780,6 +4810,11 @@ class IndicatorConstraint:
     @property
     def indicator_variable_id(self) -> builtins.int: ...
     @property
+    def activate_on_zero(self) -> builtins.bool:
+        r"""
+        Whether zero activates the body instead of one.
+        """
+    @property
     def function(self) -> Function: ...
     @property
     def equality(self) -> Equality: ...
@@ -4797,6 +4832,7 @@ class IndicatorConstraint:
         indicator_variable: VariableIDLike,
         function: ToFunction,
         equality: Equality,
+        activate_on_zero: builtins.bool = False,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
@@ -4805,13 +4841,15 @@ class IndicatorConstraint:
         r"""
         Create a new indicator constraint.
 
-        An indicator constraint is: `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).
+        By default, `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).
+        Set `activate_on_zero=True` to activate the body at zero instead.
 
         **Args:**
 
         - `indicator_variable`: A variable ID or decision-variable object that
           activates this constraint. Only its ID is stored; the enclosing host
           requires the referenced variable to be binary when the constraint is inserted.
+        - `activate_on_zero`: If true, activate at zero instead of one (default false).
         - `function`: The constraint function
         - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
         - `name`: Optional name for the constraint
@@ -7302,6 +7340,9 @@ class Instance:
         where $u \geq \sup f(x)$ and $l \leq \inf f(x)$ are the upper and lower
         bounds of $f$ over the decision variables' domains.
 
+        With `activate_on_zero=True`, the sides are `f(x) - u y <= 0` and
+        `-f(x) + l y <= 0`; the same side-emission rules apply.
+
         Side emission:
 
         - For ``<=`` indicators, only the upper side is considered; it is emitted
@@ -8729,6 +8770,36 @@ class InstanceClass:
     recommended policies, and the distinction between automatic and explicit
     Preparation, see {class}`~ommx.adapter.SolverAdapter` and
     {class}`~ommx.adapter.SamplerAdapter`.
+
+    **Indicator activation conditions**
+
+    `InstanceClassClause.allowed_indicator_activation_values` specifies the allowed
+    trigger values independently of `indicator_body_polynomial_requirements`.
+    The latter maps `Equality` to polynomial requirements shared by all admitted
+    activation values. The default activation set is `{1}`; an empty activation
+    set or an empty body map rejects all Indicators. Values other than 0 and 1
+    are rejected when constructing the clause.
+
+    ```pycon
+    >>> from ommx import Equality, InstanceClassClause, Kind, PolynomialRequirement, Sense
+    >>> clause = InstanceClassClause(
+    ...     label="linear indicators at either value",
+    ...     allowed_variable_kinds={Kind.Binary},
+    ...     allowed_senses={Sense.Minimize},
+    ...     objective_polynomial_requirement=PolynomialRequirement.at_most(1),
+    ...     allowed_indicator_activation_values={0, 1},
+    ...     indicator_body_polynomial_requirements={
+    ...         Equality.EqualToZero: PolynomialRequirement.at_most(1),
+    ...     },
+    ... )
+    >>> assert clause.allowed_indicator_activation_values == {0, 1}
+
+    ```
+
+    An unsupported trigger value produces `InstanceClassMismatch.IndicatorActivationNotAllowed`,
+    with `activation_value` and `allowed_activation_values`. Body-relation and degree
+    requirements are checked independently, so their diagnostics can accompany an
+    activation mismatch. Membership checking does not transform the Instance.
     """
     @property
     def clauses(self) -> builtins.list[InstanceClassClause]: ...
@@ -8836,6 +8907,9 @@ class InstanceClassClause:
     constraint families are not accepted. OneHot and SOS1 are also disabled
     unless their Boolean options are enabled. The objective and constraint
     requirements describe stored polynomials, not a request to expand expressions.
+    Indicator activation values are checked independently of the body map.
+    `allowed_indicator_activation_values` defaults to `{1}` and accepts only 0 and 1.
+    An empty activation set rejects all Indicators, even with a nonempty body map.
     See {class}`~ommx.InstanceClass` for construction and membership examples.
     """
     @property
@@ -8856,6 +8930,11 @@ class InstanceClassClause:
         self,
     ) -> builtins.dict[Equality, PolynomialRequirement]: ...
     @property
+    def allowed_indicator_activation_values(self) -> builtins.set[builtins.int]:
+        r"""
+        Allowed trigger values (0 and/or 1), independently of body requirements.
+        """
+    @property
     def allows_one_hot(self) -> builtins.bool: ...
     @property
     def allows_sos1(self) -> builtins.bool: ...
@@ -8873,6 +8952,9 @@ class InstanceClassClause:
         ] = None,
         indicator_body_polynomial_requirements: typing.Optional[
             typing.Mapping[Equality, PolynomialRequirement]
+        ] = None,
+        allowed_indicator_activation_values: typing.Optional[
+            builtins.set[builtins.int]
         ] = None,
         allows_one_hot: builtins.bool = False,
         allows_sos1: builtins.bool = False,
@@ -9020,6 +9102,26 @@ class InstanceClassMismatch:
             cls,
             constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
         ) -> InstanceClassMismatch.IndicatorConstraintsNotAllowed: ...
+
+    @typing.final
+    class IndicatorActivationNotAllowed(InstanceClassMismatch):
+        __match_args__ = (
+            "activation_value",
+            "constraint_ids",
+            "allowed_activation_values",
+        )
+        @property
+        def activation_value(self) -> builtins.int: ...
+        @property
+        def constraint_ids(self) -> builtins.set[IndicatorConstraintID]: ...
+        @property
+        def allowed_activation_values(self) -> builtins.set[builtins.int]: ...
+        def __new__(
+            cls,
+            activation_value: builtins.int,
+            constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
+            allowed_activation_values: builtins.set[builtins.int],
+        ) -> InstanceClassMismatch.IndicatorActivationNotAllowed: ...
 
     @typing.final
     class IndicatorConstraintRelationNotAllowed(InstanceClassMismatch):
@@ -11652,6 +11754,11 @@ class RemovedIndicatorConstraint(ConstraintView):
     @property
     def indicator_variable_id(self) -> builtins.int: ...
     @property
+    def activate_on_zero(self) -> builtins.bool:
+        r"""
+        Whether zero activates the body instead of one.
+        """
+    @property
     def equality(self) -> Equality: ...
     @property
     def function(self) -> Function: ...
@@ -12913,6 +13020,11 @@ class SampledIndicatorConstraint(ConstraintView):
     def indicator_variable_id(self) -> builtins.int:
         r"""
         Decision variable that activates this constraint.
+        """
+    @property
+    def activate_on_zero(self) -> builtins.bool:
+        r"""
+        Whether zero activates the body instead of one.
         """
     @property
     def equality(self) -> Equality:

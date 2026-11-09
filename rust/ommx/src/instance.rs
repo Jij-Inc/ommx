@@ -1530,6 +1530,7 @@ mod lower_special_constraints_tests {
             VariableID::from(1),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(0)),
+            false,
         );
         Instance::builder()
             .sense(Sense::Minimize)

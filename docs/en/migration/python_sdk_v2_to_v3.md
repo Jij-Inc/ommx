@@ -328,3 +328,22 @@ The site-wide {ref}`general index <genindex>` also lists the detailed examples u
 | `write_mps(path)` | {meth}`save_mps(path) <ommx.Instance.save_mps>` | {ref}`5 <migration-storage>` |
 
 For changes between individual v3 prereleases, see the [Python SDK 3.0 release notes](../release_note/ommx-3.0.md).
+
+## Indicator activation values
+
+`IndicatorConstraint` and `Constraint.with_indicator` accept
+`activate_on_zero=True` to enforce the body when the binary trigger is zero.
+The default remains activation at one. The property is retained in attached,
+removed, evaluated, and sampled rows and Indicator DataFrames.
+
+`InstanceClassClause.indicator_body_polynomial_requirements` remains a map from
+`Equality` to `PolynomialRequirement`. Set
+`allowed_indicator_activation_values={0, 1}` separately to admit both trigger
+values with the same body requirements. Its default is `{1}`; `{0}` admits only
+zero activation, and an empty set rejects all Indicators. Only 0 and 1 are valid.
+An empty body map also rejects all Indicators, regardless of the activation set.
+
+PySCIPOpt accepts both activation values. Big-M conversion also handles both.
+The v2 wire format declares an additional required feature when any retained
+Indicator activates at zero, so older readers reject the payload instead of
+interpreting the trigger incorrectly.
