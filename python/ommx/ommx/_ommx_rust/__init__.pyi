@@ -3988,8 +3988,12 @@ class FixedPenaltyPreparation:
         r"""
         Select the keyed fixed-weight penalty owner operation.
 
-        The keys of ``weights`` must be exactly the active regular constraint
-        IDs. Each value is the corresponding $w_i$ in the class formula.
+        Each active regular constraint uses its own ID's weight if supplied,
+        otherwise the nearest retained regular source in its provenance.
+        This carries source-keyed weights through Integer-slack introduction.
+        Every active row needs a weight and every supplied key must be used;
+        unknown keys and ancestor keys shadowed by nearer keys raise ``ValueError``.
+        Each value is the corresponding $w_i$ in the class formula.
         ``atol`` is used by the owner operation to accept a penalty magnitude
         down to ``-atol`` and normalize a tolerated negative value to zero. Every
         weight must be finite.
@@ -5011,13 +5015,14 @@ class Instance:
     objectives; assigning a new {attr}`~ommx.Instance.objective` also rebases output
     evaluation.
 
+    {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` and
+    {meth}`~ommx.Instance.add_integer_slack_to_inequality` retain the original row
+    as a removed constraint and link it to a generated active row with a fresh ID.
+
     Consult each operation's rewrite scope and preservation guarantees. The
     principle above does not imply that all current operations leave context
     expressions unchanged or retain every source detail:
 
-    - {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` and
-      {meth}`~ommx.Instance.add_integer_slack_to_inequality` replace a rewritten
-      source row in place; they do not retain that original row separately.
     - {meth}`~ommx.Instance.tighten_bounds_simultaneously_once` updates the retained
       variable bounds without retaining their previous values as original-domain
       information.
@@ -6191,6 +6196,10 @@ class Instance:
     def to_v1_bytes(self) -> bytes:
         r"""
         Serialize this instance in the OMMX v1 wire format.
+
+        Regular source rows and removal parameters survive Integer-slack
+        conversion, but v1 omits typed constraint provenance. Use
+        {meth}`to_v2_bytes` to retain the complete transformation lineage.
 
         # Errors
 
@@ -7655,6 +7664,12 @@ class Instance:
             the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,
             and this method returns without introducing slack variable or raising an error.
 
+        The source row and its labels remain in {attr}`~ommx.Instance.removed_constraints`.
+        A generated row has a fresh ID recorded in the source's
+        ``removed_reason_parameters["constraint_id"]`` and records its source in
+        ``provenance``. Select the new ID for subsequent transformations.
+        Errors leave the instance unchanged.
+
         # Examples
 
         Let's consider a simple inequality constraint x0 + 2*x1 <= 5.
@@ -7678,10 +7693,10 @@ class Instance:
         ...     constraint_id=0,
         ...     max_integer_range=32
         ... )
-        >>> assert instance.constraints[ConstraintID(0)].function.terms == {
+        >>> assert instance.constraints[ConstraintID(1)].function.terms == {
         ...     (0,): 1.0, (1,): 2.0, (3,): 1.0, (): -5.0
         ... }
-        >>> assert instance.constraints[ConstraintID(0)].equality == Equality.EqualToZero
+        >>> assert instance.constraints[ConstraintID(1)].equality == Equality.EqualToZero
 
         Raises {class}`~ommx.ExactIntegerSlackError` when exact conversion is
         unavailable because the coefficients cannot be normalized or the slack
@@ -7711,6 +7726,11 @@ class Instance:
 
           - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,
             but it needs more bits for the slack variable, and thus the problem size becomes larger.
+
+        The source row and labels are retained in {attr}`~ommx.Instance.removed_constraints`.
+        The generated inequality receives a fresh ID, linked by the source's
+        ``removed_reason_parameters["constraint_id"]`` and its own ``provenance``.
+        Errors leave the instance unchanged.
 
         **Returns:**
         The coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
@@ -7744,10 +7764,10 @@ class Instance:
         ...     slack_upper_bound=2
         ... )
         >>> assert b == 2.0
-        >>> assert instance.constraints[ConstraintID(0)].function.terms == {
+        >>> assert instance.constraints[ConstraintID(1)].function.terms == {
         ...     (0,): 1.0, (1,): 2.0, (3,): 2.0, (): -4.0
         ... }
-        >>> assert instance.constraints[ConstraintID(0)].equality == Equality.LessThanOrEqualToZero
+        >>> assert instance.constraints[ConstraintID(1)].equality == Equality.LessThanOrEqualToZero
         """
     def decision_variable_role(
         self, id: builtins.int
@@ -11312,7 +11332,7 @@ class PreparationTargetNotReachedError(builtins.RuntimeError):
 @typing.final
 class Provenance:
     r"""
-    One step in a regular constraint's transformation history.
+    One step in a constraint's transformation history.
 
     When a special constraint (indicator / one-hot / SOS1) is converted into a
     regular {class}`~ommx.Constraint` — for example via
@@ -11320,17 +11340,18 @@ class Provenance:
     {meth}`~ommx.Instance.lower_special_constraints` —
     the generated constraint records a {class}`Provenance` entry naming the
     original special constraint. This lets callers trace a regular constraint
-    back to the special constraint it was derived from.
+    back to the special constraint it was derived from. Integer-slack operations
+    similarly record the original regular constraint using ``ProvenanceKind.Constraint``.
     """
     @property
     def kind(self) -> ProvenanceKind:
         r"""
-        The kind of special constraint this regular constraint was generated from.
+        The kind of source constraint this constraint was generated from.
         """
     @property
     def original_id(self) -> ConstraintIDBase:
         r"""
-        The ID of the original special constraint (before transformation).
+        The ID of the original source constraint (before transformation).
         """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __hash__(self) -> builtins.int: ...
@@ -11342,6 +11363,7 @@ class ProvenanceKind:
     Source constraint family. Additional provenance families may be added.
     """
 
+    Constraint: ProvenanceKind
     IndicatorConstraint: ProvenanceKind
     OneHotConstraint: ProvenanceKind
     Sos1Constraint: ProvenanceKind

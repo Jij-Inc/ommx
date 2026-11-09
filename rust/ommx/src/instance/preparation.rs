@@ -92,7 +92,10 @@ pub struct BinaryPowerPreparation;
 pub enum FixedPenaltyPreparation {
     /// Invoke [`Instance::penalty_method_with_fixed_weights`].
     PenaltyMethodWithFixedWeights {
-        /// Constraint-ID-keyed weights passed unchanged to the owner operation.
+        /// Constraint-ID-keyed weights. An active row's own ID takes priority;
+        /// otherwise use the nearest retained regular source in its provenance.
+        /// Every supplied key must be used, including when a nearer key shadows
+        /// an ancestor. Missing or unused keys retain the owner's ID-mismatch error.
         weights: BTreeMap<ConstraintID, f64>,
         /// Absolute tolerance passed to the owner operation for weight validation.
         atol: ATol,
@@ -351,7 +354,8 @@ impl PreparationStep for FixedPenaltyPreparation {
     fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
         match self {
             Self::PenaltyMethodWithFixedWeights { weights, atol } => {
-                instance.penalty_method_with_fixed_weights(weights, *atol)?;
+                let weights = instance.preparation_penalty_weights(weights);
+                instance.penalty_method_with_fixed_weights(&weights, *atol)?;
             }
             Self::UniformPenaltyMethodWithFixedWeight { weight, atol } => {
                 instance.uniform_penalty_method_with_fixed_weight(*weight, *atol)?;
@@ -383,6 +387,46 @@ fn apply_preparation_step<S: PreparationStep>(
 }
 
 impl Instance {
+    /// Resolve user-selected weights across retained regular source rows only.
+    /// Provenance selects a weight; it does not establish formulation equivalence.
+    /// Keep unused keys so the exact-ID penalty owner still rejects them.
+    fn preparation_penalty_weights(
+        &self,
+        weights: &BTreeMap<ConstraintID, f64>,
+    ) -> BTreeMap<ConstraintID, f64> {
+        let mut used = std::collections::BTreeSet::new();
+        let mut resolved = BTreeMap::new();
+        for &id in self.constraints().keys() {
+            let source = if weights.contains_key(&id) {
+                Some(id)
+            } else {
+                self.constraint_context()
+                    .provenance(id)
+                    .iter()
+                    .rev()
+                    .find_map(|source| {
+                        let crate::Provenance::Constraint(source) = source else {
+                            return None;
+                        };
+                        (self.removed_constraints().contains_key(source)
+                            && weights.contains_key(source))
+                        .then_some(*source)
+                    })
+            };
+            if let Some(source) = source {
+                used.insert(source);
+                resolved.insert(id, weights[&source]);
+            }
+        }
+        resolved.extend(
+            weights
+                .iter()
+                .filter(|(id, _)| !used.contains(id))
+                .map(|(&id, &weight)| (id, weight)),
+        );
+        resolved
+    }
+
     /// Transform this instance in place to reach the target `input_class`.
     ///
     /// Use this when a solver or export format requires a particular model
@@ -583,6 +627,117 @@ mod tests {
             )]),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn keyed_penalty_follows_slack_sources_and_preserves_direct_exact_id_contract() {
+        for exact in [true, false] {
+            let mut instance = integer_inequality_instance();
+            let mut policy = PreparationPolicy::default();
+            policy.integer_slack = Some(IntegerSlackPreparation {
+                max_integer_range: if exact { 10 } else { 1 },
+                slack_upper_bound: Some(2),
+                atol: ATol::default(),
+            });
+            policy.fixed_penalty = Some(FixedPenaltyPreparation::PenaltyMethodWithFixedWeights {
+                weights: BTreeMap::from([(1.into(), 7.0)]),
+                atol: ATol::default(),
+            });
+            let mut expected = instance.clone();
+            policy
+                .integer_slack
+                .as_ref()
+                .unwrap()
+                .apply(&mut expected)
+                .unwrap();
+            let before = expected.clone();
+            let error = expected
+                .penalty_method_with_fixed_weights(
+                    &BTreeMap::from([(1.into(), 7.0)]),
+                    ATol::default(),
+                )
+                .unwrap_err();
+            assert!(error.is::<crate::FixedPenaltyWeightIDMismatch>());
+            assert_eq!(expected, before);
+            expected
+                .penalty_method_with_fixed_weights(
+                    &BTreeMap::from([(2.into(), 7.0)]),
+                    ATol::default(),
+                )
+                .unwrap();
+            instance
+                .prepare(
+                    &unconstrained_class(
+                        "integer polynomial",
+                        [Kind::Integer],
+                        PolynomialRequirement::at_most(2),
+                    ),
+                    &policy,
+                )
+                .unwrap();
+            assert_eq!(instance, expected);
+        }
+    }
+
+    #[test]
+    fn keyed_penalty_resolves_chains_but_rejects_unused_keys_atomically() {
+        let mut instance = integer_inequality_instance();
+        instance
+            .add_integer_slack_to_inequality(1, 2, ATol::default())
+            .unwrap();
+        instance
+            .convert_inequality_to_equality_with_integer_slack(2, 10, ATol::default())
+            .unwrap();
+        for key in [1, 2, 3] {
+            let mut actual = instance.clone();
+            let mut expected = instance.clone();
+            expected
+                .penalty_method_with_fixed_weights(
+                    &BTreeMap::from([(3.into(), 7.0)]),
+                    ATol::default(),
+                )
+                .unwrap();
+            FixedPenaltyPreparation::PenaltyMethodWithFixedWeights {
+                weights: BTreeMap::from([(key.into(), 7.0)]),
+                atol: ATol::default(),
+            }
+            .apply(&mut actual)
+            .unwrap();
+            assert_eq!(actual, expected);
+        }
+        for (weights, missing, unexpected) in [
+            (BTreeMap::from([(99.into(), 1.0)]), vec![3], vec![99]),
+            (
+                BTreeMap::from([(1.into(), 1.0), (2.into(), 2.0)]),
+                vec![],
+                vec![1],
+            ),
+            (
+                BTreeMap::from([(2.into(), 2.0), (3.into(), 3.0)]),
+                vec![],
+                vec![2],
+            ),
+        ] {
+            let mut actual = instance.clone();
+            let error = FixedPenaltyPreparation::PenaltyMethodWithFixedWeights {
+                weights,
+                atol: ATol::default(),
+            }
+            .apply(&mut actual)
+            .unwrap_err();
+            let mismatch = error
+                .downcast_ref::<crate::FixedPenaltyWeightIDMismatch>()
+                .unwrap();
+            assert_eq!(
+                mismatch.missing_ids(),
+                &missing.into_iter().map(ConstraintID::from).collect()
+            );
+            assert_eq!(
+                mismatch.unexpected_ids(),
+                &unexpected.into_iter().map(ConstraintID::from).collect()
+            );
+            assert_eq!(actual, instance);
+        }
     }
 
     fn cubic_binary_instance(ids: Vec<VariableID>) -> Instance {
@@ -970,8 +1125,12 @@ mod tests {
         ));
         assert_eq!(instance.sense(), Sense::Minimize);
         assert_eq!(instance.removed_one_hot_constraints().len(), 1);
+        let (source, reason) = &instance.removed_constraints()[&converted_id];
+        assert_eq!(source.equality, Equality::LessThanOrEqualToZero);
+        let generated_id =
+            ConstraintID::from(reason.parameters["constraint_id"].parse::<u64>().unwrap());
         assert_eq!(
-            instance.constraints()[&converted_id].equality,
+            instance.constraints()[&generated_id].equality,
             Equality::EqualToZero
         );
     }

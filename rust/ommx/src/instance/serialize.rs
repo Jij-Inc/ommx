@@ -5,6 +5,11 @@ use anyhow::Result;
 impl Instance {
     /// Serialize this instance using the v1 wire format.
     ///
+    /// v1 retains regular source rows and removal parameters, including the
+    /// generated row and slack-variable IDs from Integer-slack introduction.
+    /// It does not encode typed constraint provenance; use v2 to retain the
+    /// complete transformation lineage.
+    ///
     /// # Errors
     ///
     /// `ommx.v1.Instance` cannot represent the presence of an

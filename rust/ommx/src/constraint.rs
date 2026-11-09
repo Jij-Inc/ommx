@@ -148,6 +148,8 @@ impl ConstraintKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Provenance {
+    /// A regular source row retained when introducing an auxiliary formulation.
+    Constraint(ConstraintID),
     IndicatorConstraint(crate::IndicatorConstraintID),
     OneHotConstraint(crate::OneHotConstraintID),
     Sos1Constraint(crate::Sos1ConstraintID),
@@ -157,6 +159,7 @@ impl Provenance {
     /// Source family, including families added in future SDK versions.
     pub fn kind(&self) -> crate::ConstraintKind {
         match self {
+            Self::Constraint(_) => crate::ConstraintKind::Regular,
             Self::IndicatorConstraint(_) => crate::ConstraintKind::Indicator,
             Self::OneHotConstraint(_) => crate::ConstraintKind::OneHot,
             Self::Sos1Constraint(_) => crate::ConstraintKind::Sos1,
@@ -165,6 +168,7 @@ impl Provenance {
     /// Source constraint number. Interpret it together with the source family.
     pub fn original_id(&self) -> u64 {
         match self {
+            Self::Constraint(id) => id.into_inner(),
             Self::IndicatorConstraint(id) => id.into_inner(),
             Self::OneHotConstraint(id) => id.into_inner(),
             Self::Sos1Constraint(id) => id.into_inner(),
@@ -195,6 +199,7 @@ impl From<Provenance> for crate::v2::Provenance {
         use crate::v2::provenance::Source;
 
         let source = match provenance {
+            Provenance::Constraint(id) => Source::ConstraintId(id.into_inner()),
             Provenance::IndicatorConstraint(id) => Source::IndicatorConstraintId(id.into_inner()),
             Provenance::OneHotConstraint(id) => Source::OneHotConstraintId(id.into_inner()),
             Provenance::Sos1Constraint(id) => Source::Sos1ConstraintId(id.into_inner()),
@@ -216,6 +221,7 @@ impl Parse for crate::v2::Provenance {
             message: "ommx.v2.Provenance",
             field: "source",
         })? {
+            Source::ConstraintId(id) => Ok(Provenance::Constraint(id.into())),
             Source::IndicatorConstraintId(id) => Ok(Provenance::IndicatorConstraint(
                 crate::IndicatorConstraintID::from(id),
             )),
@@ -620,6 +626,44 @@ mod tests {
 
     use super::*;
     use crate::{Coefficient, Evaluate};
+
+    #[test]
+    fn regular_provenance_is_rejected_by_a_reader_without_its_oneof_variant() {
+        use prost::Message;
+        // The previous wire schema knew exactly these three source tags.
+        #[derive(Clone, PartialEq, prost::Message)]
+        struct LegacyProvenance {
+            #[prost(oneof = "LegacySource", tags = "1, 2, 3")]
+            source: Option<LegacySource>,
+        }
+        #[derive(Clone, PartialEq, prost::Oneof)]
+        enum LegacySource {
+            #[prost(uint64, tag = "1")]
+            Indicator(u64),
+            #[prost(uint64, tag = "2")]
+            OneHot(u64),
+            #[prost(uint64, tag = "3")]
+            Sos1(u64),
+        }
+        let raw = crate::v2::Provenance::from(Provenance::Constraint(7.into()));
+        let legacy = LegacyProvenance::decode(raw.encode_to_vec().as_slice()).unwrap();
+        assert!(legacy.source.is_none());
+        // An unknown oneof is absent after decoding; the existing semantic
+        // parser rejects that absence instead of dropping the lineage entry.
+        let error = crate::v2::Provenance { source: None }
+            .parse(&())
+            .unwrap_err();
+        assert!(matches!(
+            error
+                .source()
+                .unwrap()
+                .downcast_ref::<crate::RawParseError>(),
+            Some(crate::RawParseError::MissingField {
+                message: "ommx.v2.Provenance",
+                field: "source"
+            })
+        ));
+    }
 
     #[test]
     fn test_violation_equality_positive() {

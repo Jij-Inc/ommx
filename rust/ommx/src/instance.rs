@@ -227,6 +227,8 @@ impl OutputObjective {
 /// and captures the original objective when needed for output evaluation.
 /// Partial evaluation preserves named-function and existing removed-constraint
 /// expressions, storing fixed values for evaluation after state population.
+/// Integer-slack introduction retains the original inequality as a removed
+/// constraint and links it to a generated active row with a fresh ID.
 ///
 /// Interpretation Context can require updates. For example,
 /// [`ParametricInstance::with_parameters`] specializes parameter-bearing
@@ -240,9 +242,6 @@ impl OutputObjective {
 /// principle above does not imply that all current operations leave context
 /// expressions unchanged or retain every source detail:
 ///
-/// - [`Self::convert_inequality_to_equality_with_integer_slack`] and
-///   [`Self::add_integer_slack_to_inequality`] replace a rewritten source row
-///   in place without separately retaining that original row.
 /// - [`Self::tighten_bounds_simultaneously_once`] updates retained variable
 ///   bounds without preserving their previous values as original-domain
 ///   information.

@@ -1338,6 +1338,10 @@ impl Instance {
 
     /// Serialize this instance in the OMMX v1 wire format.
     ///
+    /// Regular source rows and removal parameters survive Integer-slack
+    /// conversion, but v1 omits typed constraint provenance. Use
+    /// {meth}`to_v2_bytes` to retain the complete transformation lineage.
+    ///
     /// # Errors
     ///
     /// Serialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.
@@ -2750,6 +2754,12 @@ impl Instance {
     ///     the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,
     ///     and this method returns without introducing slack variable or raising an error.
     ///
+    /// The source row and its labels remain in {attr}`~ommx.Instance.removed_constraints`.
+    /// A generated row has a fresh ID recorded in the source's
+    /// ``removed_reason_parameters["constraint_id"]`` and records its source in
+    /// ``provenance``. Select the new ID for subsequent transformations.
+    /// Errors leave the instance unchanged.
+    ///
     /// # Examples
     ///
     /// Let's consider a simple inequality constraint x0 + 2*x1 <= 5.
@@ -2773,10 +2783,10 @@ impl Instance {
     /// ...     constraint_id=0,
     /// ...     max_integer_range=32
     /// ... )
-    /// >>> assert instance.constraints[ConstraintID(0)].function.terms == {
+    /// >>> assert instance.constraints[ConstraintID(1)].function.terms == {
     /// ...     (0,): 1.0, (1,): 2.0, (3,): 1.0, (): -5.0
     /// ... }
-    /// >>> assert instance.constraints[ConstraintID(0)].equality == Equality.EqualToZero
+    /// >>> assert instance.constraints[ConstraintID(1)].equality == Equality.EqualToZero
     ///
     /// Raises {class}`~ommx.ExactIntegerSlackError` when exact conversion is
     /// unavailable because the coefficients cannot be normalized or the slack
@@ -2818,6 +2828,11 @@ impl Instance {
     ///   - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,
     ///     but it needs more bits for the slack variable, and thus the problem size becomes larger.
     ///
+    /// The source row and labels are retained in {attr}`~ommx.Instance.removed_constraints`.
+    /// The generated inequality receives a fresh ID, linked by the source's
+    /// ``removed_reason_parameters["constraint_id"]`` and its own ``provenance``.
+    /// Errors leave the instance unchanged.
+    ///
     /// **Returns:**
     /// The coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
     ///
@@ -2850,10 +2865,10 @@ impl Instance {
     /// ...     slack_upper_bound=2
     /// ... )
     /// >>> assert b == 2.0
-    /// >>> assert instance.constraints[ConstraintID(0)].function.terms == {
+    /// >>> assert instance.constraints[ConstraintID(1)].function.terms == {
     /// ...     (0,): 1.0, (1,): 2.0, (3,): 2.0, (): -4.0
     /// ... }
-    /// >>> assert instance.constraints[ConstraintID(0)].equality == Equality.LessThanOrEqualToZero
+    /// >>> assert instance.constraints[ConstraintID(1)].equality == Equality.LessThanOrEqualToZero
     #[pyo3(signature = (constraint_id, slack_upper_bound, *, atol=None))]
     pub(crate) fn add_integer_slack_to_inequality(
         &mut self,

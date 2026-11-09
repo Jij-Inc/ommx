@@ -488,7 +488,7 @@ def test_convert_inequality_to_equality_with_integer_slack_uses_atol():
         constraint_id=0, max_integer_range=1, atol=0.4
     )
 
-    constraint = instance.constraints[ConstraintID(0)]
+    constraint = instance.constraints[ConstraintID(1)]
     slack_id = (constraint.function.required_ids() - {0}).pop()
     assert constraint.evaluate({0: 0.0, slack_id: 0.0}, atol=0.4).is_feasible(atol=0.4)
     assert not constraint.evaluate({0: 1.0, slack_id: 0.0}, atol=0.4).is_feasible(

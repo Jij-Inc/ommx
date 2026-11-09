@@ -1,7 +1,8 @@
 use super::Instance;
 use crate::{
-    constraint::Equality, ATol, Bound, Bounds, Coefficient, ConstraintID, Evaluate,
-    InfeasibleDetected, Kind, Linear, LinearMonomial, VariableID,
+    constraint::{Equality, Provenance, RemovedReason},
+    ATol, Bound, Bounds, Coefficient, Constraint, ConstraintID, DecisionVariable, Evaluate,
+    Function, InfeasibleDetected, Kind, Linear, LinearMonomial, VariableID,
 };
 use anyhow::{bail, Context, Result};
 use num::traits::Inv;
@@ -60,6 +61,15 @@ impl Instance {
     /// Convert an inequality $f(x) \leq 0$ to an equality $f(x) + s/a = 0$ with a
     /// newly introduced integer slack variable $s$, where $a$ is the minimal positive
     /// factor that makes every coefficient of $a f(x)$ integer.
+    ///
+    /// The original row, ID, labels, and context are retained in
+    /// [`Self::removed_constraints`]. The generated equality has a fresh ID
+    /// recorded as `constraint_id` in the source's removal parameters, and
+    /// appends [`Provenance::Constraint`] to its inherited context. Subsequent
+    /// transformations must select the generated ID, not the removed source ID.
+    /// If the inequality is already satisfied throughout its domain, only the
+    /// source is removed and no generated row is created. Failures leave the
+    /// instance unchanged.
     ///
     /// # Errors
     ///
@@ -150,32 +160,15 @@ impl Instance {
             .into());
         }
 
-        let slack_id = self.new_integer(
+        self.introduce_integer_slack(
+            constraint_id,
+            function,
             slack_bound,
-            crate::ModelingLabel {
-                name: Some("ommx.slack".to_string()),
-                subscripts: vec![constraint_id.into_inner() as i64],
-                ..Default::default()
-            },
-            None,
+            Some(a.inv()?),
+            Equality::EqualToZero,
+            "ommx.Instance.convert_inequality_to_equality_with_integer_slack",
             atol,
-        )?;
-
-        let slack_term = Linear::single_term(LinearMonomial::Variable(slack_id), a.inv()?);
-        let new_function = (function + slack_term)?;
-
-        let mut constraint = self
-            .constraint_collection
-            .active()
-            .get(&constraint_id)
-            .cloned()
-            .expect("constraint presence was verified above");
-        *constraint.function_mut() = new_function;
-        constraint.equality = Equality::EqualToZero;
-        self.constraint_collection
-            .replace_active_row(constraint_id, constraint)?;
-
-        Ok(())
+        )
     }
 
     /// Convert an inequality $f(x) \leq 0$ to $f(x) + b s \leq 0$ with an integer
@@ -191,6 +184,10 @@ impl Instance {
     /// Returns the coefficient $b = -\mathrm{lower}(f(x)) / \text{slack\_upper\_bound}$.
     /// Returns `None` if the constraint was trivially satisfied and was moved to
     /// removed_constraints.
+    /// The source row, ID, labels, and context remain in Interpretation Context;
+    /// the generated inequality has a fresh ID linked through the source's
+    /// `constraint_id` removal parameter and [`Provenance::Constraint`].
+    /// All validation and arithmetic complete before any mutation.
     /// `atol` controls both zero-sensitive operations while computing the
     /// function bound and the inequality feasibility threshold used to classify
     /// infeasible or trivial bounds. It must be less than `0.5` so its use while
@@ -266,18 +263,34 @@ impl Instance {
             Err(e) => return Err(e).context("Slack coefficient must be finite"),
         };
 
-        let slack_id = self.new_integer(
+        self.introduce_integer_slack(
+            constraint_id,
+            function,
             slack_bound,
-            crate::ModelingLabel {
-                name: Some("ommx.slack".to_string()),
-                subscripts: vec![constraint_id.into_inner() as i64],
-                ..Default::default()
-            },
-            None,
+            b_coeff,
+            Equality::LessThanOrEqualToZero,
+            "ommx.Instance.add_integer_slack_to_inequality",
             atol,
         )?;
+        Ok(Some(b))
+    }
 
-        let new_function = match b_coeff {
+    /// Stage the generated row and variable before publishing either one.
+    #[allow(clippy::too_many_arguments)]
+    fn introduce_integer_slack(
+        &mut self,
+        source_id: ConstraintID,
+        function: Function,
+        slack_bound: Bound,
+        coefficient: Option<Coefficient>,
+        equality: Equality,
+        reason: &str,
+        atol: ATol,
+    ) -> Result<()> {
+        let generated_id = self.next_constraint_number()?.into();
+        let slack_id = self.next_variable_id()?;
+        let slack = DecisionVariable::new(Kind::Integer, slack_bound, atol)?;
+        let function = match coefficient {
             Some(c) => {
                 let slack_term = Linear::single_term(LinearMonomial::Variable(slack_id), c);
                 (function + slack_term)?
@@ -285,17 +298,48 @@ impl Instance {
             None => function,
         };
 
-        let mut constraint = self
-            .constraint_collection
-            .active()
-            .get(&constraint_id)
-            .cloned()
-            .expect("constraint presence was verified above");
-        *constraint.function_mut() = new_function;
-        self.constraint_collection
-            .replace_active_row(constraint_id, constraint)?;
+        let mut constraint = Constraint::equal_to_zero(function);
+        constraint.equality = equality;
+        let mut context = self.constraint_collection.context().collect_for(source_id);
+        context.provenance.push(Provenance::Constraint(source_id));
 
-        Ok(Some(b))
+        self.decision_variables
+            .insert(
+                slack_id,
+                slack,
+                crate::ModelingLabel {
+                    name: Some("ommx.slack".to_string()),
+                    subscripts: vec![source_id.into_inner() as i64],
+                    ..Default::default()
+                },
+                None,
+                atol,
+            )
+            .expect("fresh ID and integer slack domain were validated before mutation");
+        self.constraint_collection
+            .insert_active_with_context(generated_id, constraint, context)
+            .expect("fresh constraint ID was allocated before mutation");
+        self.constraint_collection
+            .relax(
+                source_id,
+                RemovedReason {
+                    reason: reason.to_owned(),
+                    parameters: [
+                        (
+                            "constraint_id".to_owned(),
+                            generated_id.into_inner().to_string(),
+                        ),
+                        (
+                            "slack_variable_id".to_owned(),
+                            slack_id.into_inner().to_string(),
+                        ),
+                    ]
+                    .into_iter()
+                    .collect(),
+                },
+            )
+            .expect("source row was validated before mutation");
+        Ok(())
     }
 
     /// Snapshot of bounds for every decision variable.
@@ -321,6 +365,259 @@ mod tests {
     use crate::{coeff, linear, ConstraintID, DecisionVariable, Function, Sense, VariableID};
     use maplit::btreemap;
     use std::collections::BTreeMap;
+
+    fn source_instance() -> Instance {
+        Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            btreemap! { 0.into() => DecisionVariable::new(
+                Kind::Integer, Bound::new(0.0, 2.0).unwrap(), ATol::default()
+            ).unwrap() },
+            btreemap! { 0.into() => Constraint::less_than_or_equal_to_zero(
+                Function::from(linear!(0) + coeff!(-1.0))
+            ) },
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn slack_preserves_source_context_and_separates_source_feasibility() {
+        use crate::{ConstraintContext, ModelingLabel, Parse};
+        for exact in [true, false] {
+            let mut instance = source_instance();
+            let source = instance.constraints()[&0.into()].clone();
+            let context = ConstraintContext {
+                label: ModelingLabel {
+                    name: Some("capacity".into()),
+                    subscripts: vec![4],
+                    ..Default::default()
+                },
+                provenance: vec![Provenance::OneHotConstraint(7.into())],
+            };
+            instance
+                .set_constraint_context(0.into(), context.clone())
+                .unwrap();
+            if exact {
+                instance
+                    .convert_inequality_to_equality_with_integer_slack(0, 10, ATol::default())
+                    .unwrap();
+            } else {
+                instance
+                    .add_integer_slack_to_inequality(0, 2, ATol::default())
+                    .unwrap();
+            }
+            let (retained, reason) = &instance.removed_constraints()[&0.into()];
+            assert_eq!(retained, &source);
+            assert_eq!(reason.parameters["constraint_id"], "1");
+            assert_eq!(reason.parameters["slack_variable_id"], "1");
+            assert_eq!(instance.constraint_context().collect_for(0.into()), context);
+            let mut generated_context = context;
+            generated_context
+                .provenance
+                .push(Provenance::Constraint(0.into()));
+            assert_eq!(
+                instance.constraint_context().collect_for(1.into()),
+                generated_context
+            );
+            // The original source condition is feasible, independently of whether
+            // the chosen auxiliary value satisfies the generated row.
+            let state = crate::v1::State::from_iter([(0, 1.0), (1, 1.0)]);
+            assert!(retained
+                .evaluate(&state, ATol::default())
+                .unwrap()
+                .is_feasible(ATol::default()));
+            assert!(!instance.constraints()[&1.into()]
+                .evaluate(&state, ATol::default())
+                .unwrap()
+                .is_feasible(ATol::default()));
+            let raw: crate::v2::Instance = instance.clone().into();
+            assert_eq!(raw.parse(&()).unwrap(), instance);
+        }
+    }
+
+    #[test]
+    fn slack_chains_retain_each_source_and_append_lineage() {
+        let mut instance = source_instance();
+        instance
+            .add_integer_slack_to_inequality(0, 1, ATol::default())
+            .unwrap();
+        let intermediate = instance.constraints()[&1.into()].clone();
+        instance
+            .convert_inequality_to_equality_with_integer_slack(1, 10, ATol::default())
+            .unwrap();
+        assert_eq!(instance.removed_constraints()[&1.into()].0, intermediate);
+        assert_eq!(
+            instance.removed_constraints()[&0.into()].1.parameters["constraint_id"],
+            "1"
+        );
+        assert_eq!(
+            instance.removed_constraints()[&1.into()].1.parameters["constraint_id"],
+            "2"
+        );
+        assert_eq!(
+            instance.constraint_context().provenance(2.into()),
+            &[
+                Provenance::Constraint(0.into()),
+                Provenance::Constraint(1.into())
+            ]
+        );
+        assert_eq!(instance.constraints().len(), 1);
+        instance
+            .log_encode_all_used_integers(ATol::default())
+            .unwrap();
+        assert_eq!(instance.removed_constraints()[&1.into()].0, intermediate);
+    }
+
+    #[test]
+    fn slack_v1_retains_source_and_reverse_links() {
+        for exact in [true, false] {
+            let mut instance = source_instance();
+            instance
+                .set_constraint_context(
+                    0.into(),
+                    crate::ConstraintContext {
+                        label: crate::ModelingLabel {
+                            name: Some("capacity".into()),
+                            subscripts: vec![7],
+                            ..Default::default()
+                        },
+                        provenance: vec![],
+                    },
+                )
+                .unwrap();
+            if exact {
+                instance
+                    .convert_inequality_to_equality_with_integer_slack(0, 10, ATol::default())
+                    .unwrap();
+            } else {
+                instance
+                    .add_integer_slack_to_inequality(0, 2, ATol::default())
+                    .unwrap();
+            }
+            let restored = Instance::from_v1_bytes(&instance.to_v1_bytes().unwrap()).unwrap();
+            assert_eq!(restored.constraints(), instance.constraints());
+            assert_eq!(
+                restored.removed_constraints(),
+                instance.removed_constraints()
+            );
+            assert_eq!(
+                restored.constraint_context().collect_for(0.into()),
+                instance.constraint_context().collect_for(0.into())
+            );
+            assert_eq!(
+                restored.constraint_context().collect_for(1.into()).label,
+                instance.constraint_context().collect_for(1.into()).label
+            );
+            assert!(restored
+                .constraint_context()
+                .provenance(1.into())
+                .is_empty());
+        }
+    }
+
+    #[test]
+    fn slack_ids_account_for_active_and_removed_special_constraints() {
+        for exact in [true, false] {
+            for removed in [true, false] {
+                let mut instance = source_instance();
+                let binary = instance
+                    .new_binary(
+                        Bound::new(0.0, 1.0).unwrap(),
+                        Default::default(),
+                        None,
+                        ATol::default(),
+                    )
+                    .unwrap();
+                instance
+                    .one_hot_constraint_collection
+                    .insert_active_with_context(
+                        50.into(),
+                        crate::OneHotConstraint::new([binary].into_iter().collect()).unwrap(),
+                        Default::default(),
+                    )
+                    .unwrap();
+                if removed {
+                    instance
+                        .one_hot_constraint_collection
+                        .relax(
+                            50.into(),
+                            RemovedReason {
+                                reason: "test".into(),
+                                parameters: Default::default(),
+                            },
+                        )
+                        .unwrap();
+                }
+                if exact {
+                    instance
+                        .convert_inequality_to_equality_with_integer_slack(0, 10, ATol::default())
+                        .unwrap();
+                } else {
+                    instance
+                        .add_integer_slack_to_inequality(0, 2, ATol::default())
+                        .unwrap();
+                }
+                assert!(instance.constraints().contains_key(&51.into()));
+                assert_eq!(
+                    instance.removed_constraints()[&0.into()].1.parameters["constraint_id"],
+                    "51"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn slack_allocation_failure_is_atomic_for_active_and_removed_ids() {
+        for exact in [true, false] {
+            for removed in [true, false] {
+                let mut instance = source_instance();
+                instance
+                    .insert_constraint(u64::MAX.into(), Constraint::equal_to_zero(Function::Zero))
+                    .unwrap();
+                if removed {
+                    instance
+                        .relax_constraint(u64::MAX.into(), "test".into(), [])
+                        .unwrap();
+                }
+                let before = instance.clone();
+                let result = if exact {
+                    instance.convert_inequality_to_equality_with_integer_slack(
+                        0,
+                        10,
+                        ATol::default(),
+                    )
+                } else {
+                    instance
+                        .add_integer_slack_to_inequality(0, 2, ATol::default())
+                        .map(|_| ())
+                };
+                assert!(result.is_err());
+                assert_eq!(instance, before);
+            }
+        }
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn slack_provenance_roundtrips(
+            mut instance in proptest::arbitrary::any::<Instance>(),
+            exact in proptest::bool::ANY, upper in 2_u32..100,
+        ) {
+            use crate::Parse;
+            let variable = instance.new_integer(Bound::new(0.0, 2.0).unwrap(), Default::default(), None, ATol::default()).unwrap();
+            let source_id = instance.add_constraint(
+                Constraint::less_than_or_equal_to_zero(Function::from(linear!(variable) + coeff!(-1.0))),
+                Default::default(),
+            ).unwrap();
+            if exact {
+                instance.convert_inequality_to_equality_with_integer_slack(source_id.into_inner(), u64::from(upper), ATol::default()).unwrap();
+            } else {
+                instance.add_integer_slack_to_inequality(source_id.into_inner(), u64::from(upper), ATol::default()).unwrap();
+            }
+            let raw: crate::v2::Instance = instance.clone().into();
+            proptest::prop_assert_eq!(raw.parse(&()).unwrap(), instance);
+        }
+    }
 
     fn tolerance_boundary_instance() -> Instance {
         let id = VariableID::from(1);
@@ -368,8 +665,8 @@ mod tests {
 
         let constraint = instance
             .constraints()
-            .get(&ConstraintID::from(0))
-            .expect("constraint should still be present");
+            .get(&ConstraintID::from(1))
+            .expect("generated constraint should be present");
         assert_eq!(constraint.equality, Equality::EqualToZero);
         // Slack var should have been added
         let store = instance.variable_labels();
@@ -398,7 +695,7 @@ mod tests {
             .copied()
             .find(|id| instance.variable_labels().name(*id) == Some("ommx.slack"))
             .unwrap();
-        let constraint = &instance.constraints()[&ConstraintID::from(0)];
+        let constraint = &instance.constraints()[&ConstraintID::from(1)];
         let feasible = constraint
             .evaluate(
                 &crate::v1::State::from_iter([(1, 0.0), (slack_id.into_inner(), 0.0)]),
@@ -425,7 +722,7 @@ mod tests {
             .unwrap();
         assert_eq!(coefficient, Some(0.0));
 
-        let constraint = &instance.constraints()[&ConstraintID::from(0)];
+        let constraint = &instance.constraints()[&ConstraintID::from(1)];
         let feasible = constraint
             .evaluate(&crate::v1::State::from_iter([(1, 0.0)]), atol)
             .unwrap();
@@ -620,8 +917,8 @@ mod tests {
 
         let constraint = instance
             .constraints()
-            .get(&ConstraintID::from(0))
-            .expect("constraint should still be present");
+            .get(&ConstraintID::from(1))
+            .expect("generated constraint should be present");
         assert_eq!(constraint.equality, Equality::LessThanOrEqualToZero);
         let store = instance.variable_labels();
         assert!(instance

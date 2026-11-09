@@ -701,6 +701,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     }
 
     /// Replace one active row in place while preserving row identity and context.
+    #[cfg(test)]
     pub(crate) fn replace_active_row(
         &mut self,
         id: T::ID,
