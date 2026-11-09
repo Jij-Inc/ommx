@@ -129,7 +129,7 @@ constraints refer to variables defined in that Instance.
 >>> assembled = Instance.from_components(
 ...     decision_variables=[a],
 ...     objective=a,
-...     constraints={7: a <= 1},
+...     active_constraints={7: a <= 1},
 ...     sense=Sense.Maximize,
 ... )
 >>> assert ConstraintID(7) in assembled.constraints
@@ -214,7 +214,7 @@ that are no longer active.
 
 Use {meth}`~ommx.Instance.constraints_df` with an explicit ``kind``, such
 as ``kind=ConstraintKind.Regular``, to collect one family into a DataFrame. Collection
-lookup and iteration contracts belong to {class}`~ommx.ConstraintCollection`.
+lookup and iteration contracts belong to {class}`~ommx.ActiveConstraintCollection`.
 
 **Edit the Instance through attached handles**
 
@@ -307,7 +307,7 @@ been fixed:
 >>> instance = Instance.from_components(
 ...     decision_variables=[x],
 ...     objective=3 * x,
-...     constraints={},
+...     active_constraints={},
 ...     sense=Sense.Maximize,
 ... )
 >>> assert instance.convert_active_objective(Sense.Minimize)

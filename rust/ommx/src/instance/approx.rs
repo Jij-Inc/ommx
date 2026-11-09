@@ -175,8 +175,8 @@ impl AbsDiffEq for Instance {
 
         // Compare constraints
         // Note that `inactive_constraints` are not considered in the comparison
-        for (id, c_self) in self.constraints() {
-            match other.constraints().get(id) {
+        for (id, c_self) in self.active_constraints() {
+            match other.active_constraints().get(id) {
                 Some(c_other) => {
                     if !c_self.abs_diff_eq(c_other, epsilon) {
                         return false;
@@ -245,7 +245,7 @@ mod tests {
                 .objective(Function::Zero)
                 .decision_variables(BTreeMap::from([(id, DecisionVariable::binary())]))
                 .fixed_decision_variable_values(BTreeMap::from([(id, value)]))
-                .constraints(BTreeMap::new())
+                .active_constraints(BTreeMap::new())
                 .build()
                 .unwrap();
             instance.output_objective = Some(OutputObjective::new(
@@ -344,7 +344,7 @@ mod tests {
                     (free, DecisionVariable::binary()),
                     (dependent, DecisionVariable::binary()),
                 ]))
-                .constraints(BTreeMap::new())
+                .active_constraints(BTreeMap::new())
                 .decision_variable_dependency(
                     AcyclicAssignments::new([(dependent, dependency)]).unwrap(),
                 )
@@ -374,7 +374,7 @@ mod tests {
                 .objective(Function::Zero)
                 .decision_variables(BTreeMap::from([(id, DecisionVariable::binary())]))
                 .fixed_decision_variable_values(BTreeMap::from([(id, 1.0)]))
-                .constraints(BTreeMap::new())
+                .active_constraints(BTreeMap::new())
                 .build()
                 .unwrap();
             instance.output_objective = Some(OutputObjective::new(Sense::Minimize, output, true));

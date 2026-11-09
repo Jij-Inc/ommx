@@ -6,6 +6,10 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### ⚠ Active / inactive制約の参照と構築 ([#1372](https://github.com/Jij-Inc/ommx/issues/1372))
+
+モデルの `constraints` はactiveとinactiveの両方の行を含むようになります。activeな接続済みハンドルには `active_constraints`、保持したinactive行には `inactive_constraints` を使います。`from_components` は4種類すべての制約に対して `active_*` / `inactive_*` 入力を受け取ります。両方のモデル型でactivate/deactivateでき、接続済みハンドルは対象の行がinactiveになった後の変更を拒否します。ソルバーのAdapterはactiveな定式化を使います。
+
 ### ⚠ Removed制約をinactive制約に改名 ([#1375](https://github.com/Jij-Inc/ommx/pull/1375))
 
 `Removed*Constraint` は `Inactive*Constraint`、`removed_constraints` は `inactive_constraints`、既存の `relax_*` / `restore_*` は `deactivate_*` / `activate_*` に変更します。理由のアクセサーや表のメタデータもinactiveという名称に揃えます。制約の参照と実行可能性判定の意味は変わりません。v2の名称も変更しますがfield番号は維持し、v1のschemaは変更しません。詳細は[移行ガイド](../migration/python_sdk_v2_to_v3.md)にあります。
@@ -767,7 +771,7 @@ Function、polynomial、constraint、named function、`Instance` のevaluation A
 RustからPythonへの共通error boundaryを直接使います。呼び出し側が渡したstateの不足・
 未知のID・不正な値と、回復可能なdependent-variable assertionは`ValueError`になります。
 Functionとpolynomialを直接partial evaluationする場合は`CoefficientError`を保持し、
-`Instance`が所有するdependencyの正規化と{attr}`removed constraint <ommx.Instance.inactive_constraints>`の復元で発生した
+`Instance`が所有するdependencyの正規化と`removed constraint`の復元で発生した
 coefficient failureは`RuntimeError`にfallbackします。
 
 Decision variableの追加とsubstitution、`Function.content_factor`、OneHot/SOS1の
@@ -1458,7 +1462,6 @@ registry を変更し、notebook や script で扱いやすい structured report
 ```python
 from ommx.experiment import Experiment
 
-
 class TextCodec:
     media_type = "text/plain"
 
@@ -1469,7 +1472,6 @@ class TextCodec:
     @staticmethod
     def decode(data: bytes) -> str:
         return data.decode()
-
 
 with Experiment.with_temp_local_registry() as experiment:
     experiment.log_with_codec(TextCodec, "note", "created outside OMMX")
@@ -1734,7 +1736,7 @@ b = f.evaluate_bound({1: Bound(0.0, 2.0)})
 
 ### ⚠ `Constraint.id` フィールドの削除 ([#806](https://github.com/Jij-Inc/ommx/pull/806))
 
-{class}`~ommx.Constraint` およびその派生型 ({class}`~ommx.IndicatorConstraint` / {class}`~ommx.OneHotConstraint` / {class}`~ommx.Sos1Constraint` / {class}`~ommx.EvaluatedConstraint` / {class}`~ommx.SampledConstraint` / {class}`~ommx.InactiveConstraint`) から `id` フィールド（および `.id` getter、`set_id()`、`id=` コンストラクタ引数）が削除されました。制約IDは {meth}`Instance.from_components <ommx.Instance.from_components>` に渡す `dict[int, Constraint]` のキーとしてのみ保持されます。
+{class}`~ommx.Constraint` およびその派生型 ({class}`~ommx.IndicatorConstraint` / {class}`~ommx.OneHotConstraint` / {class}`~ommx.Sos1Constraint` / {class}`~ommx.EvaluatedConstraint` / {class}`~ommx.SampledConstraint` / `RemovedConstraint`) から `id` フィールド（および `.id` getter、`set_id()`、`id=` コンストラクタ引数）が削除されました。制約IDは {meth}`Instance.from_components <ommx.Instance.from_components>` に渡す `dict[int, Constraint]` のキーとしてのみ保持されます。
 
 ```python
 # Before (2.5.1)

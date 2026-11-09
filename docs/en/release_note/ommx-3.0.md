@@ -6,6 +6,10 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### ⚠ Inspect and construct active and inactive constraints ([#1372](https://github.com/Jij-Inc/ommx/issues/1372))
+
+Model `constraints` now contains active and inactive rows. Use `active_constraints` for active attached handles and `inactive_constraints` for retained inactive rows. `from_components` takes explicit `active_*` / `inactive_*` inputs for all four constraint families. Both model roots support activation and deactivation, and attached handles reject mutations after their row becomes inactive. Solver adapters consume the active formulation.
+
 ### ⚠ Rename removed constraints to inactive constraints ([#1375](https://github.com/Jij-Inc/ommx/pull/1375))
 
 Replace `Removed*Constraint` with `Inactive*Constraint`, `removed_constraints` with `inactive_constraints`, and the existing `relax_*` / `restore_*` operations with `deactivate_*` / `activate_*`. Reason accessors and table metadata now use inactive terminology. Constraint lookup and feasibility semantics are unchanged. v2 source names follow the same terminology with unchanged field numbers; the v1 schema is unchanged. See the [migration guide](../migration/python_sdk_v2_to_v3.md).
@@ -1532,7 +1536,6 @@ See {meth}`~ommx.experiment.Experiment.log_with_codec` for a complete custom-cod
 ```python
 from ommx.experiment import Experiment
 
-
 class TextCodec:
     media_type = "text/plain"
 
@@ -1543,7 +1546,6 @@ class TextCodec:
     @staticmethod
     def decode(data: bytes) -> str:
         return data.decode()
-
 
 with Experiment.with_temp_local_registry() as experiment:
     experiment.log_with_codec(TextCodec, "note", "created outside OMMX")
@@ -1808,7 +1810,7 @@ See the GitHub Release above for full details. The following summarizes the main
 
 ### ⚠ Removal of the `Constraint.id` field ([#806](https://github.com/Jij-Inc/ommx/pull/806))
 
-The `id` field (along with the `.id` getter, `set_id()`, and `id=` constructor argument) is removed from {class}`~ommx.Constraint` and its variants ({class}`~ommx.IndicatorConstraint` / {class}`~ommx.OneHotConstraint` / {class}`~ommx.Sos1Constraint` / {class}`~ommx.EvaluatedConstraint` / {class}`~ommx.SampledConstraint` / {class}`~ommx.InactiveConstraint`). A constraint's ID now exists only as the key of the `dict[int, Constraint]` passed to {meth}`Instance.from_components <ommx.Instance.from_components>`.
+The `id` field (along with the `.id` getter, `set_id()`, and `id=` constructor argument) is removed from {class}`~ommx.Constraint` and its variants ({class}`~ommx.IndicatorConstraint` / {class}`~ommx.OneHotConstraint` / {class}`~ommx.Sos1Constraint` / {class}`~ommx.EvaluatedConstraint` / {class}`~ommx.SampledConstraint` / `RemovedConstraint`). A constraint's ID now exists only as the key of the `dict[int, Constraint]` passed to {meth}`Instance.from_components <ommx.Instance.from_components>`.
 
 ```python
 # Before (2.5.1)

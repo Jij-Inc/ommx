@@ -1127,7 +1127,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::from([(id, DecisionVariable::binary())]))
             .parameters(crate::ParameterTable::default())
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap()
     }
@@ -1140,7 +1140,7 @@ mod tests {
                 (VariableID::from(0), DecisionVariable::binary()),
                 (VariableID::from(1), DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap()
     }
@@ -1371,9 +1371,9 @@ mod tests {
         let parsed = Instance::from_v1_bytes(&v1_instance.encode_to_vec()).unwrap();
 
         assert_eq!(parsed, expected);
-        assert_eq!(parsed.constraints().len(), 3);
-        assert!(parsed.one_hot_constraints().is_empty());
-        assert!(parsed.sos1_constraints().is_empty());
+        assert_eq!(parsed.active_constraints().len(), 3);
+        assert!(parsed.active_one_hot_constraints().is_empty());
+        assert!(parsed.active_sos1_constraints().is_empty());
         assert!(parsed.active_special_constraint_kinds().is_empty());
         for (id, expected_name) in [
             (1, "one_hot_source"),
@@ -1381,7 +1381,7 @@ mod tests {
             (11, "sos1_big_m_source"),
         ] {
             let id = ConstraintID::from(id);
-            assert!(parsed.constraints().contains_key(&id));
+            assert!(parsed.active_constraints().contains_key(&id));
             assert_eq!(parsed.constraint_context().name(id), Some(expected_name));
         }
         let removed_id = ConstraintID::from(20);
@@ -1422,8 +1422,8 @@ mod tests {
 
         let parsed = Instance::from_v1_bytes(&v1_instance.encode_to_vec()).unwrap();
 
-        assert_eq!(parsed.constraints().get(&source_id), Some(&source));
-        assert!(parsed.one_hot_constraints().is_empty());
+        assert_eq!(parsed.active_constraints().get(&source_id), Some(&source));
+        assert!(parsed.active_one_hot_constraints().is_empty());
         assert!(parsed.active_special_constraint_kinds().is_empty());
     }
 
@@ -1455,8 +1455,8 @@ mod tests {
 
         let parsed = Instance::from_v1_bytes(&v1_instance.encode_to_vec()).unwrap();
 
-        assert_eq!(parsed.constraints().get(&source_id), Some(&source));
-        assert!(parsed.sos1_constraints().is_empty());
+        assert_eq!(parsed.active_constraints().get(&source_id), Some(&source));
+        assert!(parsed.active_sos1_constraints().is_empty());
         assert!(parsed.active_special_constraint_kinds().is_empty());
     }
 
@@ -1481,16 +1481,16 @@ mod tests {
                 .unwrap();
 
         assert_eq!(parsed, expected);
-        assert_eq!(parsed.constraints().len(), 3);
-        assert!(parsed.one_hot_constraints().is_empty());
-        assert!(parsed.sos1_constraints().is_empty());
+        assert_eq!(parsed.active_constraints().len(), 3);
+        assert!(parsed.active_one_hot_constraints().is_empty());
+        assert!(parsed.active_sos1_constraints().is_empty());
         for (id, expected_name) in [
             (1, "one_hot_source"),
             (10, "sos1_cardinality_source"),
             (11, "sos1_big_m_source"),
         ] {
             let id = ConstraintID::from(id);
-            assert!(parsed.constraints().contains_key(&id));
+            assert!(parsed.active_constraints().contains_key(&id));
             assert_eq!(parsed.constraint_context().name(id), Some(expected_name));
         }
         let removed_id = ConstraintID::from(20);
@@ -2246,7 +2246,7 @@ mod tests {
             .decision_variables(maplit::btreemap! {
                 VariableID::from(1) => DecisionVariable::binary(),
             })
-            .constraints(Default::default())
+            .active_constraints(Default::default())
             .build()
             .unwrap();
         let mut proto = crate::v2::Instance::from(instance);
@@ -2303,7 +2303,7 @@ mod tests {
                 var_id => DecisionVariable::binary(),
             })
             .parameters(ParameterTable::default())
-            .constraints(maplit::btreemap! {
+            .active_constraints(maplit::btreemap! {
                 cid => Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(-1.0))),
             })
             .build()
@@ -2367,7 +2367,7 @@ mod tests {
             .decision_variables(maplit::btreemap! {
                 var_id => DecisionVariable::binary(),
             })
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 

@@ -117,7 +117,7 @@ pub struct ConstraintContext {
     #[prost(message, repeated, tag = "2")]
     pub provenance: ::prost::alloc::vec::Vec<Provenance>,
 }
-/// Why a constraint row is inactive after preprocessing.
+/// Why a constraint row is inactive.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

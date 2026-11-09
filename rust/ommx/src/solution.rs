@@ -1413,12 +1413,12 @@ mod tests {
             let instance = crate::Instance::builder()
                 .sense(Sense::Minimize)
                 .objective(Function::Zero)
-                .constraints(BTreeMap::new())
+                .active_constraints(BTreeMap::new())
                 .decision_variables(ids.iter().map(|id| (*id, crate::DecisionVariable::binary())).collect())
-                .one_hot_constraints(BTreeMap::from([(
+                .active_one_hot_constraints(BTreeMap::from([(
                     crate::OneHotConstraintID::from(0), crate::OneHotConstraint::new(ids.clone()).unwrap(),
                 )]))
-                .sos1_constraints(BTreeMap::from([(
+                .active_sos1_constraints(BTreeMap::from([(
                     crate::Sos1ConstraintID::from(1), crate::Sos1Constraint::new(ids).unwrap(),
                 )]))
                 .build().unwrap();
@@ -1473,11 +1473,11 @@ mod tests {
                     .map(|&id| (id, DecisionVariable::binary()))
                     .collect(),
             )
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 0.into(),
                 Constraint::equal_to_zero(Function::from(crate::coeff!(-2.0))),
             )]))
-            .indicator_constraints(BTreeMap::from([(
+            .active_indicator_constraints(BTreeMap::from([(
                 1.into(),
                 IndicatorConstraint::new(
                     0.into(),
@@ -1485,11 +1485,11 @@ mod tests {
                     Function::from(crate::coeff!(-3.0)),
                 ),
             )]))
-            .one_hot_constraints(BTreeMap::from([(
+            .active_one_hot_constraints(BTreeMap::from([(
                 2.into(),
                 OneHotConstraint::new(variables.clone()).unwrap(),
             )]))
-            .sos1_constraints(BTreeMap::from([(
+            .active_sos1_constraints(BTreeMap::from([(
                 3.into(),
                 Sos1Constraint::new(variables).unwrap(),
             )]))
@@ -1594,11 +1594,11 @@ mod tests {
                     .map(|&id| (id, DecisionVariable::binary()))
                     .collect(),
             )
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 ConstraintID::from(0),
                 Constraint::equal_to_zero(Function::from(crate::coeff!(2.5))),
             )]))
-            .indicator_constraints(BTreeMap::from([(
+            .active_indicator_constraints(BTreeMap::from([(
                 crate::IndicatorConstraintID::from(1),
                 IndicatorConstraint::new(
                     VariableID::from(0),
@@ -1606,11 +1606,11 @@ mod tests {
                     Function::from(crate::coeff!(1.5)),
                 ),
             )]))
-            .one_hot_constraints(BTreeMap::from([(
+            .active_one_hot_constraints(BTreeMap::from([(
                 crate::OneHotConstraintID::from(2),
                 OneHotConstraint::new(variables.clone()).unwrap(),
             )]))
-            .sos1_constraints(BTreeMap::from([(
+            .active_sos1_constraints(BTreeMap::from([(
                 crate::Sos1ConstraintID::from(3),
                 Sos1Constraint::new(variables).unwrap(),
             )]))

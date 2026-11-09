@@ -88,7 +88,7 @@ no matching cardinality row, illustrating rejection without relying on a solver.
 ...     sense=Sense.Minimize,
 ...     objective=integer_member,
 ...     decision_variables=[binary_member, integer_member, selector],
-...     constraints={
+...     active_constraints={
 ...         100: integer_member - 3 * selector <= 0,
 ...         101: -integer_member - 2 * selector <= 0,
 ...         102: binary_member + selector - 1 <= 0,

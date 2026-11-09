@@ -166,6 +166,26 @@ impl InactiveIndicatorConstraint {
 #[gen_stub_pymethods]
 #[pymethods]
 impl InactiveIndicatorConstraint {
+    #[new]
+    #[pyo3(signature = (constraint, inactive_reason, inactive_reason_parameters=None))]
+    pub fn new(
+        constraint: IndicatorConstraint,
+        inactive_reason: String,
+        inactive_reason_parameters: Option<HashMap<String, String>>,
+    ) -> Self {
+        Self::from_parts(
+            constraint.0,
+            constraint.1,
+            ommx::InactiveConstraintMetadata {
+                reason: inactive_reason,
+                parameters: inactive_reason_parameters
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+            },
+        )
+    }
+
     #[getter]
     pub fn name(&self) -> Option<String> {
         self.context.label.name.clone()
@@ -291,7 +311,7 @@ fn lookup_indicator(
     inst: &ommx::Instance,
     id: ommx::IndicatorConstraintID,
 ) -> PyResult<&ommx::IndicatorConstraint> {
-    inst.indicator_constraints()
+    inst.active_indicator_constraints()
         .get(&id)
         .or_else(|| {
             inst.inactive_indicator_constraints()
@@ -310,7 +330,7 @@ fn lookup_indicator_parametric(
     inst: &ommx::ParametricInstance,
     id: ommx::IndicatorConstraintID,
 ) -> PyResult<&ommx::IndicatorConstraint> {
-    inst.indicator_constraints()
+    inst.active_indicator_constraints()
         .get(&id)
         .or_else(|| {
             inst.inactive_indicator_constraints()
@@ -463,5 +483,7 @@ crate::attached_constraint_context_methods!(
     AttachedIndicatorConstraint,
     ommx::IndicatorConstraintID,
     indicator_constraint_context,
-    set_indicator_constraint_context
+    set_indicator_constraint_context,
+    active_indicator_constraints,
+    indicator_constraint_collection
 );

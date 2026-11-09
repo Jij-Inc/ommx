@@ -65,18 +65,22 @@ def model():
         sense=Sense.Minimize,
         objective=x + y,
         decision_variables=[x, y],
-        constraints={
+        active_constraints={
             ConstraintID(7): (x + y == 1)
             .set_name("balance")
             .set_parameters({"group": "a"})
         },
-        indicator_constraints={
+        active_indicator_constraints={
             IndicatorConstraintID(8): IndicatorConstraint(
                 indicator_variable=x, function=y - 1, equality=Equality.EqualToZero
             )
         },
-        one_hot_constraints={OneHotConstraintID(9): OneHotConstraint(variables=[x, y])},
-        sos1_constraints={Sos1ConstraintID(10): Sos1Constraint(variables=[x, y])},
+        active_one_hot_constraints={
+            OneHotConstraintID(9): OneHotConstraint(variables=[x, y])
+        },
+        active_sos1_constraints={
+            Sos1ConstraintID(10): Sos1Constraint(variables=[x, y])
+        },
     )
 
 
@@ -108,7 +112,7 @@ def test_reject_wrong_family_before_mutation_and_ambiguous_integer():
         Sos1ConstraintID(7),
     ]:
         with pytest.raises(TypeError):
-            instance.constraints.of_kind(ConstraintKind.Regular)[wrong]
+            instance.active_constraints.of_kind(ConstraintKind.Regular)[wrong]
         with pytest.raises(TypeError):
             instance.deactivate_constraint(wrong, "manual")
         solution = instance.evaluate({0: 1, 1: 0})
@@ -218,7 +222,7 @@ from ommx import ConstraintKind, Instance
 instance = Instance.empty()
 x = instance.new_binary("x")
 c = instance.add_constraint(x == 1)
-regular = instance.constraints.of_kind(ConstraintKind.Regular)
+regular = instance.active_constraints.of_kind(ConstraintKind.Regular)
 assert regular[c.constraint_id] == c
 assert list(regular.values()) == [c]
 solution = instance.evaluate({x.id: 1})

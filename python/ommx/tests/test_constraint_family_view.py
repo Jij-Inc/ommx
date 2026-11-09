@@ -46,7 +46,7 @@ from test_live_constraint_collections import (
 def test_family_views_filter_and_promote_integers(host, kind, id_type, row_type):
     number = NUMBERS[id_type]
     model = make_model(host)
-    rows = model.constraints.of_kind(kind)
+    rows = model.active_constraints.of_kind(kind)
     assert isinstance(rows, ConstraintFamilyView)
     assert isinstance(rows, Mapping)
     assert len(rows) == 1
@@ -61,7 +61,9 @@ def test_family_views_filter_and_promote_integers(host, kind, id_type, row_type)
     assert rows != {number: rows[number]}
     assert rows == rows
     rows[number].set_name("changed through family view")
-    assert model.constraints[id_type(number)].name == "changed through family view"
+    assert (
+        model.active_constraints[id_type(number)].name == "changed through family view"
+    )
     del model
     assert rows[number].name == "changed through family view"
 
@@ -74,8 +76,8 @@ def test_every_lifecycle_uses_same_key_rules(kind, id_type, _):
     samples = model.evaluate_samples({9: {0: 1, 1: 0}})
     removed = remove_all(model)
     collections = [
-        make_model(Instance).constraints,
-        make_model(ParametricInstance).constraints,
+        make_model(Instance).active_constraints,
+        make_model(ParametricInstance).active_constraints,
         removed,
         model.as_parametric_instance().inactive_constraints,
         solution.constraints,
@@ -122,7 +124,7 @@ def test_every_lifecycle_uses_same_key_rules(kind, id_type, _):
 @pytest.mark.parametrize("host", [Instance, ParametricInstance])
 def test_live_views_and_iteration_timing(host):
     model = make_model(host)
-    rows = model.constraints.of_kind(ConstraintKind.Regular)
+    rows = model.active_constraints.of_kind(ConstraintKind.Regular)
     keys, values, items = rows.keys(), rows.values(), rows.items()
     direct = iter(rows)
     key_iterator = iter(keys)
@@ -132,12 +134,12 @@ def test_live_views_and_iteration_timing(host):
     assert added.constraint_id in list(key_iterator)
     assert len(rows) == len(keys) == len(values) == len(items) == 2
     assert any(row.name == "later" for row in values)
-    assert len(model.constraints.of_kind(ConstraintKind.Sos1)) == 1
+    assert len(model.active_constraints.of_kind(ConstraintKind.Sos1)) == 1
 
 
 def test_removal_and_restoration_update_family_views():
     model = make_model(Instance)
-    active = model.constraints.of_kind(ConstraintKind.Regular)
+    active = model.active_constraints.of_kind(ConstraintKind.Regular)
     removed = model.inactive_constraints.of_kind(ConstraintKind.Regular)
     assert not removed
     model.deactivate_constraint(5, "manual")
@@ -148,7 +150,7 @@ def test_removal_and_restoration_update_family_views():
     assert not removed
     assert 5 in active
     assert snapshot.inactive_reason == "manual"
-    sos1 = model.constraints.of_kind(ConstraintKind.Sos1)
+    sos1 = model.active_constraints.of_kind(ConstraintKind.Sos1)
     removed_sos1 = model.inactive_constraints.of_kind(ConstraintKind.Sos1)
     model.convert_sos1_to_constraints(8)
     assert not sos1
@@ -171,7 +173,7 @@ def test_result_rows_are_fetched_lazily_and_owner_is_retained():
 
 def test_precise_types_and_runtime_generic_alias():
     model = make_model(Instance)
-    rows = model.constraints.of_kind(ConstraintKind.Sos1)
+    rows = model.active_constraints.of_kind(ConstraintKind.Sos1)
     assert_type(rows, ConstraintFamilyView[Sos1ConstraintID, AttachedSos1Constraint])
     assert_type(rows[8], AttachedSos1Constraint)
     assert_type(rows[Sos1ConstraintID(8)], AttachedSos1Constraint)
@@ -189,14 +191,15 @@ def test_precise_types_and_runtime_generic_alias():
     alias = ConstraintFamilyView[Sos1ConstraintID, AttachedSos1Constraint]
     assert get_origin(alias) is ConstraintFamilyView
     assert_type(
-        model.constraints.of_kind(ConstraintKind.Regular)[5], AttachedConstraint
+        model.active_constraints.of_kind(ConstraintKind.Regular)[5], AttachedConstraint
     )
     assert_type(
-        model.constraints.of_kind(ConstraintKind.Indicator)[6],
+        model.active_constraints.of_kind(ConstraintKind.Indicator)[6],
         AttachedIndicatorConstraint,
     )
     assert_type(
-        model.constraints.of_kind(ConstraintKind.OneHot)[7], AttachedOneHotConstraint
+        model.active_constraints.of_kind(ConstraintKind.OneHot)[7],
+        AttachedOneHotConstraint,
     )
     solution = model.evaluate({0: 1, 1: 0})
     assert_type(

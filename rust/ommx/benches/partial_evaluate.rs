@@ -49,7 +49,7 @@ fn removed_constraint_instance(num_constraints: usize) -> (Instance, ommx::v1::S
         .sense(Sense::Minimize)
         .objective(Function::Zero)
         .decision_variables(decision_variables)
-        .constraints(BTreeMap::new())
+        .active_constraints(BTreeMap::new())
         .inactive_constraints(inactive_constraints)
         .build()
         .unwrap();
@@ -74,7 +74,7 @@ fn active_constraint_instance(num_constraints: usize) -> (Instance, ommx::v1::St
         .sense(Sense::Minimize)
         .objective(Function::Zero)
         .decision_variables(decision_variables)
-        .constraints(constraints)
+        .active_constraints(constraints)
         .build()
         .unwrap();
 
@@ -127,7 +127,7 @@ fn mixed_regular_instance(num_inactive_constraints: usize) -> (Instance, ommx::v
         .sense(Sense::Minimize)
         .objective(Function::from(linear!(objective_var.into_inner())))
         .decision_variables(decision_variables)
-        .constraints(constraints)
+        .active_constraints(constraints)
         .inactive_constraints(inactive_constraints)
         .named_functions(named_functions)
         .build()

@@ -282,7 +282,7 @@ class SolverAdapter(ABC):
     ...             bits.append(min(allowed, key=lambda b: cost * b))
     ...         return adapter.decode(bits)
     >>> x, y = DecisionVariable.binary(3), DecisionVariable.binary(17)
-    >>> problem = Instance.from_components(decision_variables=[x, y], constraints={},
+    >>> problem = Instance.from_components(decision_variables=[x, y], active_constraints={},
     ...     objective=x - 2*y, sense=Sense.Minimize)
     >>> solution = BinaryCostAdapter.solve(problem)
     >>> assert solution.feasible and solution.state.entries == {3: 0, 17: 1}
@@ -417,7 +417,7 @@ class SamplerAdapter(SolverAdapter):
     >>> from ommx import DecisionVariable, Instance, Samples, Sense
     >>> x, y = DecisionVariable.binary(3), DecisionVariable.binary(17)
     >>> instance = Instance.from_components(decision_variables=[x, y],
-    ...     constraints={}, objective=x - 2*y, sense=Sense.Minimize)
+    ...     active_constraints={}, objective=x - 2*y, sense=Sense.Minimize)
     >>> columns = [17, 3]  # IDs in the order returned by this backend
     >>> samples = Samples({})
     >>> next_id = 0

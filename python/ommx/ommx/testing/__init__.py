@@ -132,7 +132,7 @@ class SingleFeasibleLPGenerator:
             description=Instance.Description(name="LPTest"),
             decision_variables=decision_variables,
             objective=0,
-            constraints=constraints,
+            active_constraints=constraints,
             sense=Sense.Minimize,
         )
 

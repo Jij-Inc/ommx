@@ -41,12 +41,6 @@ If your v2 code imports `ommx.v1.*_pb2` or accesses `.raw`, identify what it nee
 (migration-build)=
 ## 2. Build and edit a model
 
-### Inactive constraint terminology
-
-The SDK now calls constraints outside the active formulation **inactive**. Rename `Removed*Constraint` wrappers to `Inactive*Constraint`, `removed_constraints` to `inactive_constraints`, and the existing `relax_constraint` / `restore_constraint` methods to `deactivate_constraint` / `activate_constraint` (likewise for indicator constraints). Reason accessors and table metadata use `inactive_reason` and `constraint_inactive_reasons_df`.
-
-This is a terminology change: `constraints` still returns active attached rows, `inactive_constraints` returns inactive snapshots, and both kinds still participate in ordinary feasibility. `feasible_relaxed` continues to check only active rows. The v1 schema is unchanged; v2 source names change without changing field numbers.
-
 (migration-automatic-ids)=
 ### Let the model allocate IDs, or preserve external IDs
 
@@ -60,20 +54,20 @@ x = model.new_binary("x")
 y = model.new_binary("y")
 model.objective = x + y
 limit = model.add_constraint(x + y <= 1, "limit")
-assert model.constraints[limit.constraint_id].name == "limit"
+assert model.active_constraints[limit.constraint_id].name == "limit"
 ```
 
 `new_integer`, `new_continuous`, `new_semi_integer`, `new_semi_continuous`, and `new_finite_domain` also allocate variable IDs. On both `Instance` and `ParametricInstance`, `add_constraint`, `add_indicator_constraint`, `add_one_hot_constraint`, and `add_sos1_constraint` allocate constraint numbers.
 
-If an external consumer requires the model itself to keep variable 0 or constraint 7, **preserve those numbers**. Keep the ID when constructing the variable. Replace v2's `constraints=[(x <= 1).set_id(7)]` with `constraints={7: x <= 1}` in {meth}`~ommx.Instance.from_components`. A detached constraint has no ID. All constraint families share one number space per model, including removed constraints. Construction and loading reject collisions.
+If an external consumer requires the model itself to keep variable 0 or constraint 7, **preserve those numbers**. Keep the ID when constructing the variable. Replace v2's `constraints=[(x <= 1).set_id(7)]` with `active_constraints={7: x <= 1}` in {meth}`~ommx.Instance.from_components`. A detached constraint has no ID. All constraint families share one number space per model, including inactive constraints. Construction and loading reject collisions.
 
 (42-constraint-accessors-on-instance--parametricinstance--solution-return-dicts)=
 (typed-constraint-ids-and-live-collections)=
 ### Find the row you intend to edit
 
-Look up a regular constraint as `model.constraints[ConstraintID(7)]`. The collection contains all families, so a bare integer cannot identify the family for lookup. In a family-specific view, `model.constraints.of_kind(ConstraintKind.Regular)[7]` also works. Iteration yields typed IDs. Use `.items()` for ID/row pairs.
+Look up a regular constraint as `model.active_constraints[ConstraintID(7)]`. The collection contains all families, so a bare integer cannot identify the family for lookup. In a family-specific view, `model.active_constraints.of_kind(ConstraintKind.Regular)[7]` also works. Iteration yields typed IDs. Use `.items()` for ID/row pairs.
 
-On a model, an active row is an attached handle. Calling `row.set_name("limit")` updates the model. Call `row.detach()` to keep an independent copy. Replace v2's `add_name` and `add_description` with `set_name` and `set_description`. Use `set_parameters` to replace the whole mapping and `add_parameters` to merge entries. Read fixed variable values from `model.fixed_decision_variables()`. The model owns that state even when a variable definition has been detached. See {class}`~ommx.ConstraintCollection` and {class}`~ommx.DecisionVariable`.
+On a model, an active row is an attached handle. Calling `row.set_name("limit")` updates the model. Call `row.detach()` to keep an independent copy. Replace v2's `add_name` and `add_description` with `set_name` and `set_description`. Use `set_parameters` to replace the whole mapping and `add_parameters` to merge entries. Read fixed variable values from `model.fixed_decision_variables()`. The model owns that state even when a variable definition has been detached. See {class}`~ommx.ActiveConstraintCollection` and {class}`~ommx.DecisionVariable`.
 
 (migration-constraint-metadata)=
 ### Check where a metadata edit lands
@@ -91,12 +85,12 @@ x = model.new_binary("x")
 live = model.add_constraint(x <= 1, "original")
 local = live.detach()
 local.set_name("display")
-assert model.constraints[live.constraint_id].name == "original"
+assert model.active_constraints[live.constraint_id].name == "original"
 live.set_name("capacity")
-assert model.constraints[live.constraint_id].name == "capacity"
+assert model.active_constraints[live.constraint_id].name == "capacity"
 ```
 
-A dictionary made with `dict(model.constraints)` still holds attached rows. Detach each active row you want to copy. On a detached constraint, a setter changes the receiver and returns a clone. To apply several edits to the same detached object, call its setters separately.
+A dictionary made with `dict(model.active_constraints)` still holds attached rows. Detach each active row you want to copy. On a detached constraint, a setter changes the receiver and returns a clone. To apply several edits to the same detached object, call its setters separately.
 
 ### Replace a variable analysis query
 
@@ -160,6 +154,16 @@ Declare the accepted input as `INPUT_CLASS` and implement `solve_without_prepara
 (migration-results)=
 ## 4. Evaluate candidates and read results
 
+### Read active and inactive constraints
+
+Replace `relax_constraint` / `restore_constraint` with `deactivate_constraint` / `activate_constraint`, and `RemovedConstraint` with `InactiveConstraint`. The same naming applies to indicator, OneHot, and SOS1 families. Deactivation retains the row and its reason. Every inactive row remains numerically evaluated and contributes to full feasibility.
+
+`Instance.constraints` and `ParametricInstance.constraints` now include every state. A typed ID identifies the family, not activeness: lookup returns the common `ConstraintView`, whose concrete runtime type depends on the row's current state. Use `active_constraints` for typed attached handles and `inactive_constraints` for inactive snapshots. `Solution.constraints` and `SampleSet.constraints` continue to contain all evaluated rows.
+
+For `from_components`, rename `constraints=` to `active_constraints=`, and similarly use `active_indicator_constraints=`, `active_one_hot_constraints=`, and `active_sos1_constraints=`. Initial inactive rows use the corresponding `inactive_*` arguments and `Inactive*Constraint` wrappers.
+
+`feasible` still checks active and inactive constraints; `feasible_relaxed` checks only active constraints. Both include variable domains. The v1 wire schema and its existing export restrictions are unchanged.
+
 (migration-compare-model)=
 (constraint-violation-migration)=
 ### Does your report need the signed value or the violation?
@@ -196,11 +200,11 @@ assert result.get_constraint_value(limit.constraint_id) == -1.0
 
 {meth}`~ommx.Solution.extract_constraints` now searches all families and returns nonnegative violations keyed by subscript tuple. Duplicate subscripts for a name are ambiguous, even across families. If you relied on the sign or slack of a regular row, use `get_constraint_value` as above. For a violation by typed ID use `constraint_violation`. When reading a single evaluated row, use `row.is_feasible(atol=result.feasibility_atol)` to apply the result's tolerance. Overall feasibility also checks variable domains. A zero total constraint violation alone is insufficient.
 
-For a regular equality, the violation is the absolute residual. For an inequality it is the excess above the limit. Special constraints have family-specific metrics. `total_violation()` adds these values, including retained removed rows. Adding rows during transformation can therefore change the total. See {meth}`~ommx.Solution.total_violation` for definitions and tolerances. Update error handling for a missing required variable in `evaluate()` to catch `ValueError`. Partial assignments remain valid inputs to `partial_evaluate()`.
+For a regular equality, the violation is the absolute residual. For an inequality it is the excess above the limit. Special constraints have family-specific metrics. `total_violation()` adds these values, including retained inactive rows. Adding rows during transformation can therefore change the total. See {meth}`~ommx.Solution.total_violation` for definitions and tolerances. Update error handling for a missing required variable in `evaluate()` to catch `ValueError`. Partial assignments remain valid inputs to `partial_evaluate()`.
 
 ### Update tables and sample aggregation
 
-Call the `*_df` methods. In particular, replace `solution.constraints_df` with `solution.constraints_df(kind=ConstraintKind.Regular)`. Constraint indexes contain family-specific ID objects. Update joins that expected integers. For a model, `removed=True` includes both active and retained removed rows. Results already include retained removed constraints and return snapshots on lookup. The constraint metadata tables for context, parameters, provenance, and removal reasons also require `kind=`.
+Call the `*_df` methods. In particular, replace `solution.constraints_df` with `solution.constraints_df(kind=ConstraintKind.Regular)`. Constraint indexes contain family-specific ID objects. Update joins that expected integers. For a model, `removed=True` includes both active and retained inactive rows. Results already include retained inactive constraints and return snapshots on lookup. The constraint metadata tables for context, parameters, provenance, and inactivation reasons also require `kind=`.
 
 For multiple samples, use `samples.summary` for objectives and overall feasibility, and `samples.constraints_df(kind=...)` for per-constraint results. `samples.sample_ids()` returns a set. Use `samples.sample_ids_list` when the consumer needs a list. See {class}`~ommx.Solution` and {class}`~ommx.SampleSet` for complete examples.
 
@@ -319,7 +323,7 @@ The site-wide {ref}`general index <genindex>` also lists the detailed examples u
 | `DecisionVariable.substituted_value` | {meth}`model.fixed_decision_variables() <ommx.Instance.fixed_decision_variables>` | {ref}`2 <migration-build>` |
 | `evaluated.feasible` / `sampled.feasible` | {meth}`evaluated.is_feasible(atol=...) <ommx.EvaluatedConstraint.is_feasible>` / {meth}`sampled.feasible(atol=...) <ommx.SampledConstraint.feasible>` | {ref}`4 <migration-results>` |
 | `extract_constraints(name)` | {meth}`extract_constraints <ommx.Solution.extract_constraints>` for violations, {meth}`get_constraint_value <ommx.Solution.get_constraint_value>` for signed regular values | {ref}`4 <migration-results>` |
-| `get_constraint_by_id` / `get_removed_constraint_by_id` | {attr}`constraints[ConstraintID(n)] <ommx.Instance.constraints>` / {attr}`removed_constraints[ConstraintID(n)] <ommx.Instance.inactive_constraints>` | {ref}`2 <migration-build>` |
+| `get_constraint_by_id` / `get_removed_constraint_by_id` | {attr}`active_constraints[ConstraintID(n)] <ommx.Instance.active_constraints>` / {attr}`inactive_constraints[ConstraintID(n)] <ommx.Instance.inactive_constraints>` | {ref}`2 <migration-build>` |
 | `Linear.from_object` / `Linear.equals_to` | Arithmetic or {meth}`Linear.single_term <ommx.Linear.single_term>` / {meth}`almost_equal <ommx.Linear.almost_equal>` | {ref}`2 <migration-build>` |
 | `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` | {meth}`Linear.terms() <ommx.Linear.terms>` / {meth}`Quadratic.terms() <ommx.Quadratic.terms>` / {meth}`Polynomial.terms() <ommx.Polynomial.terms>` | {ref}`2 <migration-build>` |
 | `ommx.v1` / `ommx.v1.*_pb2` | {doc}`ommx </api/index>` | {ref}`1 <migration-imports>` |

@@ -1,5 +1,5 @@
 # serializer version: 1
-# name: test_inactive_indicator_constraints_df_surfaces_reason_and_ids
+# name: test_removed_indicator_constraints_df_surfaces_reason_and_ids
   '''
                             indicator_variable_id equality    type used_ids  name subscripts description                                inactive_reason inactive_reason.constraint_ids
   indicator_constraint_id                                                                                                                                                             

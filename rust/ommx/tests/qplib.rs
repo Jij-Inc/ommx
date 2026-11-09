@@ -30,9 +30,15 @@ fn objective_preserves_diagonal_cross_linear_and_constant_terms() -> ommx::Resul
 #[test]
 fn quadratic_constraint_preserves_both_bound_residuals() -> ommx::Result<()> {
     let instance = qplib::parse(QUADRATIC_SCALING)?;
-    assert_eq!(instance.constraints().len(), 2);
-    let upper = instance.constraints().get(&ConstraintID::from(0)).unwrap();
-    let lower = instance.constraints().get(&ConstraintID::from(1)).unwrap();
+    assert_eq!(instance.active_constraints().len(), 2);
+    let upper = instance
+        .active_constraints()
+        .get(&ConstraintID::from(0))
+        .unwrap();
+    let lower = instance
+        .active_constraints()
+        .get(&ConstraintID::from(1))
+        .unwrap();
     for (a, b) in POINTS {
         let state = State::from(std::collections::HashMap::from([(0, a), (1, b)]));
         let g = 2.0 * a * a - 5.0 * a * b + 3.0 * b * b + 13.0 * a + 17.0 * b;

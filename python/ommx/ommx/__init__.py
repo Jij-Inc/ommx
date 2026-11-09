@@ -2,6 +2,7 @@
 # ruff: noqa: F401
 
 from ommx._ommx_rust import (
+    ActiveConstraintCollection,
     AttachedConstraint,
     AttachedDecisionVariable,
     AttachedIndicatorConstraint,
@@ -95,6 +96,7 @@ from ommx._ommx_rust import (
 )
 
 __all__ = [
+    "ActiveConstraintCollection",
     "AttachedConstraint",
     "AttachedDecisionVariable",
     "AttachedIndicatorConstraint",

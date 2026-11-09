@@ -197,7 +197,7 @@ impl Instance {
     ///     .sense(Sense::Maximize)
     ///     .objective(Function::from(linear!(0)))
     ///     .decision_variables(BTreeMap::from([(variable, integer)]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// let original = instance.objective().clone();
@@ -399,7 +399,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::from([(id, var)]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .fixed_decision_variable_values(BTreeMap::from([(id, 1.0)]))
             .build()
             .unwrap()
@@ -416,19 +416,19 @@ mod tests {
         let mut ids = BTreeSet::new();
         ids.extend(
             instance
-                .indicator_constraints()
+                .active_indicator_constraints()
                 .values()
                 .map(|constraint| constraint.indicator_variable),
         );
         ids.extend(
             instance
-                .one_hot_constraints()
+                .active_one_hot_constraints()
                 .values()
                 .flat_map(|constraint| constraint.variables.iter().copied()),
         );
         ids.extend(
             instance
-                .sos1_constraints()
+                .active_sos1_constraints()
                 .values()
                 .flat_map(|constraint| constraint.variables.iter().copied()),
         );
@@ -819,7 +819,7 @@ mod tests {
                 .sense(Sense::Maximize)
                 .objective(Function::from(crate::linear!(0)))
                 .decision_variables(BTreeMap::from([(id, variable)]))
-                .constraints(BTreeMap::new())
+                .active_constraints(BTreeMap::new())
                 .build()
                 .unwrap()
         };
@@ -867,7 +867,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::from([(id, variable)]))
-            .constraints(BTreeMap::from([(ConstraintID::from(0), constraint)]))
+            .active_constraints(BTreeMap::from([(ConstraintID::from(0), constraint)]))
             .build()
             .unwrap();
 
@@ -1030,8 +1030,8 @@ mod tests {
                     .unwrap(),
                 ),
             ]))
-            .constraints(BTreeMap::new())
-            .indicator_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(BTreeMap::from([(
                 IndicatorConstraintID::from(0),
                 IndicatorConstraint::new(
                     indicator_id,
@@ -1064,8 +1064,8 @@ mod tests {
                 (id0, DecisionVariable::binary()),
                 (id1, DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::new())
-            .one_hot_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_one_hot_constraints(BTreeMap::from([(
                 OneHotConstraintID::from(0),
                 OneHotConstraint::new(BTreeSet::from([id0, id1])).unwrap(),
             )]))
@@ -1096,7 +1096,7 @@ mod tests {
                 ),
                 (VariableID::from(u64::MAX), DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 
@@ -1122,8 +1122,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(crate::linear!(0)))
             .decision_variables(BTreeMap::from([(id, var)]))
-            .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_sos1_constraints(BTreeMap::from([(
                 Sos1ConstraintID::from(0),
                 Sos1Constraint::new(BTreeSet::from([id])).unwrap(),
             )]))
@@ -1153,7 +1153,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(crate::linear!(0)))
             .decision_variables(BTreeMap::from([(id, variable)]))
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 crate::ConstraintID::from(0),
                 overflowing_constraint,
             )]))
@@ -1190,7 +1190,7 @@ mod tests {
                 (source_id, DecisionVariable::continuous()),
                 (dependent_id, DecisionVariable::continuous()),
             ]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .decision_variable_dependency(crate::assign! {
                 2 <- crate::linear!(1)
             })
@@ -1227,7 +1227,7 @@ mod tests {
                 (crate::linear!(0) + crate::linear!(1)).unwrap(),
             ))
             .decision_variables(BTreeMap::from([(id0, var0), (id1, var1)]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 
@@ -1266,7 +1266,7 @@ mod tests {
                 (used1, bounded_integer()),
                 (irrelevant, bounded_integer()),
             ]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         let used_before = instance
@@ -1317,7 +1317,7 @@ mod tests {
                 (bounded, bounded_integer),
                 (unbounded, DecisionVariable::integer()),
             ]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         let before = instance.clone();
@@ -1353,8 +1353,8 @@ mod tests {
                 (ordinary, bounded_integer()),
                 (sos1_member, bounded_integer()),
             ]))
-            .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_sos1_constraints(BTreeMap::from([(
                 sos1_id,
                 Sos1Constraint::new(BTreeSet::from([sos1_member])).unwrap(),
             )]))
@@ -1398,7 +1398,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(crate::linear!(0)))
             .decision_variables(BTreeMap::from([(id0, var0)]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 

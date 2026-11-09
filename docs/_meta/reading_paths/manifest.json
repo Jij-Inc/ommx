@@ -919,7 +919,7 @@
     },
     {
       "id": "constraints.lifecycle",
-      "label": "activeとremovedの制約を区別する",
+      "label": "activeとinactiveの制約を区別する",
       "owner": "R_API.instance.retained_results",
       "requires": [
         "instance.model",
@@ -927,9 +927,9 @@
       ],
       "external": false,
       "aliases": [
-        "removed_constraints",
+        "inactive_constraints",
         "active_constraints",
-        "removed constraint"
+        "inactive constraint"
       ],
       "scope": ""
     },
@@ -952,7 +952,7 @@
     },
     {
       "id": "feasibility.views",
-      "label": "activeのみとremovedを含む実行可能性を区別する",
+      "label": "activeのみとinactiveを含む実行可能性を区別する",
       "owner": "R_API.instance.retained_results",
       "requires": [
         "constraints.lifecycle",

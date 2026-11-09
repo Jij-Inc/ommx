@@ -183,7 +183,7 @@ fn public_api_promotes_independent_requests_with_a_shared_member() {
             .collect::<Vec<_>>(),
         vec![Sos1ConstraintID::from(203), Sos1ConstraintID::from(204)]
     );
-    assert!(instance.constraints().is_empty());
+    assert!(instance.active_constraints().is_empty());
     assert_eq!(instance.inactive_constraints().len(), 6);
-    assert_eq!(instance.sos1_constraints().len(), 2);
+    assert_eq!(instance.active_sos1_constraints().len(), 2);
 }

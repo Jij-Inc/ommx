@@ -53,7 +53,7 @@ def _instance_with_context() -> Instance:
     return Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={10: c},
+        active_constraints={10: c},
         sense=Sense.Maximize,
     )
 
@@ -173,16 +173,16 @@ def _special_instance() -> Instance:
     return Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
-        indicator_constraints={
+        active_constraints={},
+        active_indicator_constraints={
             5: IndicatorConstraint(
                 indicator_variable=x[0],
                 function=x[1] + x[2] - 1,
                 equality=Equality.EqualToZero,
             )
         },
-        one_hot_constraints={6: OneHotConstraint(variables=x[1:])},
-        sos1_constraints={7: Sos1Constraint(variables=x)},
+        active_one_hot_constraints={6: OneHotConstraint(variables=x[1:])},
+        active_sos1_constraints={7: Sos1Constraint(variables=x)},
         sense=Sense.Maximize,
     )
 
@@ -212,8 +212,8 @@ def test_provenance_after_one_hot_conversion(snapshot):
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
-        one_hot_constraints={7: OneHotConstraint(variables=x)},
+        active_constraints={},
+        active_one_hot_constraints={7: OneHotConstraint(variables=x)},
         sense=Sense.Minimize,
     )
     instance.convert_one_hot_to_constraint(7)
@@ -246,8 +246,8 @@ def test_removed_reasons_df_with_parameters_after_one_hot_conversion(snapshot):
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
-        one_hot_constraints={7: OneHotConstraint(variables=x)},
+        active_constraints={},
+        active_one_hot_constraints={7: OneHotConstraint(variables=x)},
         sense=Sense.Minimize,
     )
     instance.convert_one_hot_to_constraint(7)
@@ -284,7 +284,7 @@ def test_sample_set_variable_label_df_matches_instance():
 # ---------------------------------------------------------------------------
 # Regression: Solution/SampleSet sidecars must NOT duplicate rows for
 # removed constraints. EvaluatedCollection.inner() / SampledCollection.inner()
-# already include removed ids, so chaining `.inactive_metadata().keys()` would
+# already include removed ids, so chaining `.removed_reasons().keys()` would
 # double-count them.
 # ---------------------------------------------------------------------------
 
@@ -295,7 +295,7 @@ def _instance_with_relaxed_constraint() -> Instance:
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={
+        active_constraints={
             10: (x[0] + x[1] == 1).set_name("balance").set_parameters({"k": "v"}),
             11: (x[1] + x[2] <= 1).set_name("cap"),
         },
@@ -306,7 +306,7 @@ def _instance_with_relaxed_constraint() -> Instance:
 
 
 def test_solution_sidecar_no_duplicate_rows_for_removed():
-    """The relaxed id 10 lives in both inner() and inactive_metadata() — the
+    """The relaxed id 10 lives in both inner() and removed_reasons() — the
     sidecar must emit one row per id, not two."""
     instance = _instance_with_relaxed_constraint()
     sol = instance.evaluate({0: 1, 1: 0, 2: 0})

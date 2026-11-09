@@ -41,7 +41,7 @@ impl Instance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// assert!(instance.convert_active_objective(Sense::Minimize));
@@ -64,7 +64,7 @@ impl Instance {
         if self.sense() == Sense::Maximize {
             bail!("QUBO format is only for minimization problems.");
         }
-        if !self.constraints().is_empty() {
+        if !self.active_constraints().is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
         let special_constraint_kinds = self.active_special_constraint_kinds();
@@ -134,7 +134,7 @@ impl Instance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// assert!(instance.convert_active_objective(Sense::Minimize));
@@ -158,7 +158,7 @@ impl Instance {
         if self.sense() == Sense::Maximize {
             bail!("HUBO format is only for minimization problems.");
         }
-        if !self.constraints().is_empty() {
+        if !self.active_constraints().is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
         let special_constraint_kinds = self.active_special_constraint_kinds();

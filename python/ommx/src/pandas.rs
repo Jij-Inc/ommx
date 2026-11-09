@@ -151,7 +151,7 @@ pub fn constraint_id_col(kind: ConstraintFamilyInput) -> &'static str {
 // Long-format / id-indexed views over the SoA label/context stores. Each builder
 // reads the store directly and produces a DataFrame with a documented column
 // schema. Used by the `*_labels_df`, `*_context_df`, `*_parameters_df`, `*_provenance_df`,
-// and `*_inactive_reasons_df` accessors on Instance / ParametricInstance /
+// and `*_inactive_metadata_df` accessors on Instance / ParametricInstance /
 // Solution / SampleSet.
 // ---------------------------------------------------------------------------
 
@@ -250,9 +250,9 @@ where
     long_format_dataframe(py, entries, &[id_col, "step", "source_kind", "source_id"])
 }
 
-/// Long-format inactive-metadata DataFrame for constraints.
+/// Long-format inactive-reasons DataFrame for constraints.
 ///
-/// One row per (id, parameter_key) pair when the removed reason has
+/// One row per (id, parameter_key) pair when the inactive reason has
 /// parameters; ids without parameters get one row with `key`/`value` set to
 /// `pandas.NA`. Rows are sorted by `(id, key)` (NA-keyed rows sort first
 /// for ids with no parameters). Columns: `id_col`, `reason`, `key`,
@@ -402,7 +402,7 @@ fn provenance_parts(p: &Provenance) -> PyResult<(String, crate::constraint_id::A
 /// `columns` is the explicit schema used when `entries` is empty —
 /// without it pandas would return a column-less DataFrame, breaking
 /// `pd.concat` and any code that consumes the documented schema. Used
-/// by the `*_parameters_df` / `*_provenance_df` / `*_inactive_reasons_df`
+/// by the `*_parameters_df` / `*_provenance_df` / `*_inactive_metadata_df`
 /// builders.
 fn long_format_dataframe<'py>(
     py: Python<'py>,
@@ -488,7 +488,7 @@ pub(crate) fn rename_id_column(dict: &Bound<PyDict>, id_col: &str) -> PyResult<(
 /// columns carry the reason parameters. Keys are emitted in lexicographic
 /// order so column ordering is deterministic across runs (the underlying
 /// `HashMap` iteration order is not). Used by call sites that fold
-/// removed-reason columns into a wide constraints DataFrame.
+/// inactive-reason columns into a wide constraints DataFrame.
 pub(crate) fn set_inactive_reason_columns(
     dict: &Bound<PyDict>,
     reason: &InactiveConstraintMetadata,
@@ -504,7 +504,7 @@ pub(crate) fn set_inactive_reason_columns(
 }
 
 /// Emit a placeholder NA `inactive_reason` column on a row with no
-/// removed reason. Without this, a wide `*_df` requested with
+/// inactive reason. Without this, a wide `*_df` requested with
 /// `include=("inactive_reason",)` would silently drop the column when
 /// no row in the view actually carries a reason — pandas keys columns
 /// off whatever appears in any row dict. Calling this on the

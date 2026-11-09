@@ -455,7 +455,7 @@ impl InstanceClass {
     ///         .sense(sense)
     ///         .objective(objective)
     ///         .decision_variables(binary.clone())
-    ///         .constraints(constraints)
+    ///         .active_constraints(constraints)
     ///         .build()
     ///         .unwrap()
     /// };
@@ -483,7 +483,7 @@ impl InstanceClass {
     ///     .sense(Sense::Minimize)
     ///     .objective(Function::from(linear!(1)))
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::continuous())]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     ///
@@ -525,7 +525,7 @@ impl InstanceClass {
     ///         .sense(sense)
     ///         .objective(objective)
     ///         .decision_variables(BTreeMap::from([(variable, decision_variable)]))
-    ///         .constraints(BTreeMap::new())
+    ///         .active_constraints(BTreeMap::new())
     ///         .build()
     ///         .unwrap()
     /// };
@@ -545,7 +545,7 @@ impl InstanceClass {
     ///     .sense(Sense::Minimize)
     ///     .objective(Function::from(linear!(1)))
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-    ///     .constraints(BTreeMap::from([(
+    ///     .active_constraints(BTreeMap::from([(
     ///         ConstraintID::from(1),
     ///         Constraint::equal_to_zero(Function::from(linear!(1))),
     ///     )]))
@@ -1003,14 +1003,14 @@ mod tests {
                 (x, DecisionVariable::binary()),
                 (y, DecisionVariable::continuous()),
             ]))
-            .constraints(BTreeMap::from([
+            .active_constraints(BTreeMap::from([
                 (regular_eq, Constraint::equal_to_zero(quadratic_y())),
                 (
                     regular_le,
                     Constraint::less_than_or_equal_to_zero(Function::from(linear!(y))),
                 ),
             ]))
-            .indicator_constraints(BTreeMap::from([
+            .active_indicator_constraints(BTreeMap::from([
                 (
                     indicator_eq,
                     IndicatorConstraint::new(x, Equality::EqualToZero, quadratic_y()),
@@ -1024,11 +1024,11 @@ mod tests {
                     ),
                 ),
             ]))
-            .one_hot_constraints(BTreeMap::from([(
+            .active_one_hot_constraints(BTreeMap::from([(
                 one_hot,
                 OneHotConstraint::new(BTreeSet::from([x])).unwrap(),
             )]))
-            .sos1_constraints(BTreeMap::from([(
+            .active_sos1_constraints(BTreeMap::from([(
                 sos1,
                 Sos1Constraint::new(BTreeSet::from([y])).unwrap(),
             )]))
@@ -1106,11 +1106,11 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(absolute_x())
             .decision_variables(BTreeMap::from([(x, DecisionVariable::binary())]))
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 regular_id,
                 Constraint::equal_to_zero(absolute_x()),
             )]))
-            .indicator_constraints(BTreeMap::from([(
+            .active_indicator_constraints(BTreeMap::from([(
                 indicator_id,
                 IndicatorConstraint::new(x, Equality::EqualToZero, absolute_x()),
             )]))
@@ -1175,8 +1175,8 @@ mod tests {
                 (x, DecisionVariable::binary()),
                 (y, DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::new())
-            .one_hot_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_one_hot_constraints(BTreeMap::from([(
                 one_hot_id,
                 OneHotConstraint::new(BTreeSet::from([x, y])).unwrap(),
             )]))

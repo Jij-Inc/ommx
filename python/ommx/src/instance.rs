@@ -329,7 +329,7 @@ impl Instance {
     /// >>> x = DecisionVariable.continuous(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=0, sense=Sense.Minimize,
-    /// ...     constraints={100: 2 * x <= 6, 101: x >= -2},
+    /// ...     active_constraints={100: 2 * x <= 6, 101: x >= -2},
     /// ... )
     /// >>> changed = instance.tighten_bounds_simultaneously_once_using_constraints(
     /// ...     {ConstraintID(100)}, max_terms=64, atol=0.125,
@@ -363,6 +363,10 @@ impl Instance {
             Function(ommx::Function::Zero),
             Vec::new(),
             Default::default(),
+            None,
+            None,
+            None,
+            None,
             None,
             None,
             None,
@@ -445,21 +449,35 @@ impl Instance {
     /// **Returns:**
     /// A new Instance
     #[staticmethod]
-    #[pyo3(signature = (*, sense, objective, decision_variables, constraints, indicator_constraints=None, one_hot_constraints=None, sos1_constraints=None, named_functions=None, description=None))]
+    #[pyo3(signature = (*, sense, objective, decision_variables, active_constraints, active_indicator_constraints=None, active_one_hot_constraints=None, active_sos1_constraints=None, named_functions=None, description=None, inactive_constraints=None, inactive_indicator_constraints=None, inactive_one_hot_constraints=None, inactive_sos1_constraints=None))]
     pub(crate) fn from_components(
         sense: Sense,
         objective: Function,
         decision_variables: Vec<DecisionVariable>,
-        constraints: ConstraintMapInput<ConstraintIDInput, Constraint>,
-        indicator_constraints: Option<
+        active_constraints: ConstraintMapInput<ConstraintIDInput, Constraint>,
+        active_indicator_constraints: Option<
             ConstraintMapInput<IndicatorConstraintIDInput, crate::IndicatorConstraint>,
         >,
-        one_hot_constraints: Option<
+        active_one_hot_constraints: Option<
             ConstraintMapInput<OneHotConstraintIDInput, crate::OneHotConstraint>,
         >,
-        sos1_constraints: Option<ConstraintMapInput<Sos1ConstraintIDInput, crate::Sos1Constraint>>,
+        active_sos1_constraints: Option<
+            ConstraintMapInput<Sos1ConstraintIDInput, crate::Sos1Constraint>,
+        >,
         named_functions: Option<Vec<NamedFunction>>,
         description: Option<InstanceDescription>,
+        inactive_constraints: Option<
+            ConstraintMapInput<ConstraintIDInput, crate::InactiveConstraint>,
+        >,
+        inactive_indicator_constraints: Option<
+            ConstraintMapInput<IndicatorConstraintIDInput, crate::InactiveIndicatorConstraint>,
+        >,
+        inactive_one_hot_constraints: Option<
+            ConstraintMapInput<OneHotConstraintIDInput, crate::InactiveOneHotConstraint>,
+        >,
+        inactive_sos1_constraints: Option<
+            ConstraintMapInput<Sos1ConstraintIDInput, crate::InactiveSos1Constraint>,
+        >,
     ) -> OmmxPyResult<Self> {
         let mut rust_decision_variables = BTreeMap::new();
         let mut variable_labels = ommx::VariableLabelStore::default();
@@ -476,7 +494,7 @@ impl Instance {
         }
 
         let mut constraint_context = ommx::ConstraintContextStore::default();
-        let rust_constraints: BTreeMap<ConstraintID, ommx::Constraint> = constraints
+        let rust_constraints: BTreeMap<ConstraintID, ommx::Constraint> = active_constraints
             .into_iter()
             .map(|(id, c)| {
                 let cid = ConstraintID::from(id);
@@ -490,13 +508,13 @@ impl Instance {
             .objective(objective.0)
             .decision_variables(rust_decision_variables)
             .variable_labels(variable_labels)
-            .constraints(rust_constraints);
+            .active_constraints(rust_constraints);
 
         let mut indicator_context_pairs: Vec<(
             ommx::IndicatorConstraintID,
             ommx::ConstraintContext,
         )> = Vec::new();
-        if let Some(ics) = indicator_constraints {
+        if let Some(ics) = active_indicator_constraints {
             let rust_indicator_constraints: BTreeMap<
                 ommx::IndicatorConstraintID,
                 ommx::IndicatorConstraint,
@@ -508,11 +526,11 @@ impl Instance {
                     (iid, ic.0)
                 })
                 .collect();
-            builder = builder.indicator_constraints(rust_indicator_constraints);
+            builder = builder.active_indicator_constraints(rust_indicator_constraints);
         }
 
         let mut one_hot_context = ommx::ConstraintContextStore::default();
-        if let Some(ohs) = one_hot_constraints {
+        if let Some(ohs) = active_one_hot_constraints {
             let rust_one_hot_constraints: BTreeMap<
                 ommx::OneHotConstraintID,
                 ommx::OneHotConstraint,
@@ -524,11 +542,11 @@ impl Instance {
                     (oid, oh.0)
                 })
                 .collect();
-            builder = builder.one_hot_constraints(rust_one_hot_constraints);
+            builder = builder.active_one_hot_constraints(rust_one_hot_constraints);
         }
 
         let mut sos1_context = ommx::ConstraintContextStore::default();
-        if let Some(s1s) = sos1_constraints {
+        if let Some(s1s) = active_sos1_constraints {
             let rust_sos1_constraints: BTreeMap<ommx::Sos1ConstraintID, ommx::Sos1Constraint> = s1s
                 .into_iter()
                 .map(|(id, s1)| {
@@ -537,7 +555,7 @@ impl Instance {
                     (sid, s1.0)
                 })
                 .collect();
-            builder = builder.sos1_constraints(rust_sos1_constraints);
+            builder = builder.active_sos1_constraints(rust_sos1_constraints);
         }
 
         let mut named_function_labels = ommx::NamedFunctionLabelStore::default();
@@ -564,6 +582,50 @@ impl Instance {
         let mut indicator_context = ommx::ConstraintContextStore::default();
         for (id, context) in indicator_context_pairs {
             indicator_context.insert(id, context);
+        }
+        if let Some(rows) = inactive_constraints {
+            let rows = rows
+                .into_iter()
+                .map(|(id, row)| {
+                    let id = ommx::ConstraintID::from(id);
+                    constraint_context.insert(id, row.context);
+                    (id, (row.constraint, row.inactive_reason))
+                })
+                .collect::<BTreeMap<_, _>>();
+            builder = builder.inactive_constraints(rows);
+        }
+        if let Some(rows) = inactive_indicator_constraints {
+            let rows = rows
+                .into_iter()
+                .map(|(id, row)| {
+                    let id = ommx::IndicatorConstraintID::from(id);
+                    indicator_context.insert(id, row.context);
+                    (id, (row.constraint, row.inactive_reason))
+                })
+                .collect::<BTreeMap<_, _>>();
+            builder = builder.inactive_indicator_constraints(rows);
+        }
+        if let Some(rows) = inactive_one_hot_constraints {
+            let rows = rows
+                .into_iter()
+                .map(|(id, row)| {
+                    let id = ommx::OneHotConstraintID::from(id);
+                    one_hot_context.insert(id, row.context);
+                    (id, (row.constraint, row.inactive_reason))
+                })
+                .collect::<BTreeMap<_, _>>();
+            builder = builder.inactive_one_hot_constraints(rows);
+        }
+        if let Some(rows) = inactive_sos1_constraints {
+            let rows = rows
+                .into_iter()
+                .map(|(id, row)| {
+                    let id = ommx::Sos1ConstraintID::from(id);
+                    sos1_context.insert(id, row.context);
+                    (id, (row.constraint, row.inactive_reason))
+                })
+                .collect::<BTreeMap<_, _>>();
+            builder = builder.inactive_sos1_constraints(rows);
         }
         let inner = builder
             .constraint_context(constraint_context)
@@ -638,7 +700,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.convert_active_objective(Sense.Minimize)
     /// >>> assert instance.sense == Sense.Minimize
@@ -657,7 +719,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.convert_active_objective(Sense.Minimize)
     /// >>> assert instance.objective.evaluate({0: 1}) == -1.0
@@ -693,7 +755,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=3 * x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.output_objective is None
     /// >>> assert instance.convert_active_objective(Sense.Minimize)
@@ -1099,7 +1161,7 @@ impl Instance {
 
     /// Extract active constraints of every family by name, keyed by subscript tuples.
     ///
-    /// Values are attached handles, just as in `constraints`: edits update this
+    /// Values are attached handles, just as in `active_constraints`: edits update this
     /// model. The returned dictionary snapshots the matching keys; it does not
     /// track later label or membership changes. Inactive constraints are excluded.
     /// Parameters and descriptions do not participate in matching.
@@ -1111,19 +1173,34 @@ impl Instance {
         slf: Bound<'_, Self>,
         name: &str,
     ) -> PyResult<
-        crate::subscript_map::SubscriptMap<crate::constraint_collection::ConstraintCollectionValue>,
+        crate::subscript_map::SubscriptMap<
+            crate::constraint_collection::ActiveConstraintCollectionValue,
+        >,
     > {
         let py = slf.py();
-        Self::constraints(slf).extract_by_name(py, name)
+        Self::active_constraints(slf).extract_by_name(py, name)
     }
 
-    /// Live mapping of all active constraint families, keyed by typed IDs.
-    /// The view retains this owner and fetches each constraint on demand.
+    /// Live lookup of every retained constraint, including active and inactive rows.
+    ///
+    /// IDs determine the constraint family, not its activeness. Active rows are
+    /// attached handles; inactive rows are independent snapshots. Inspect the
+    /// returned row's concrete type, or use active_constraints for attached rows.
     #[getter]
     pub fn constraints(slf: Bound<'_, Self>) -> crate::constraint_collection::ConstraintCollection {
         crate::constraint_collection::ConstraintCollection::new(crate::ConstraintHost::Instance(
             slf.unbind(),
         ))
+    }
+
+    /// Live mapping of active constraints, with attached rows for each family.
+    #[getter]
+    pub fn active_constraints(
+        slf: Bound<'_, Self>,
+    ) -> crate::constraint_collection::ActiveConstraintCollection {
+        crate::constraint_collection::ActiveConstraintCollection::new(
+            crate::ConstraintHost::Instance(slf.unbind()),
+        )
     }
 
     /// Add a regular constraint to this instance.
@@ -1345,7 +1422,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.convert_active_objective(Sense.Minimize)
     /// >>> assert instance.convert_active_objective(Sense.Maximize)
@@ -1369,7 +1446,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=3 * x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.convert_active_objective(Sense.Minimize)
     /// >>> restored = Instance.from_v2_bytes(instance.to_v2_bytes())
@@ -1482,7 +1559,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.convert_active_objective(Sense.Minimize)
     /// >>> fixed = instance.partial_evaluate({0: 1})
@@ -1555,7 +1632,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=3 * x + 5, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=3 * x + 5, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.convert_active_objective(Sense.Minimize)
     /// >>> qubo, offset = instance.as_qubo_format()
@@ -1585,7 +1662,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=3 * x + 5, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=3 * x + 5, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.convert_active_objective(Sense.Minimize)
     /// >>> hubo, offset = instance.as_hubo_format()
@@ -1611,7 +1688,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Maximize
     /// ... )
     /// >>> explicit = copy.copy(instance)
     /// >>> policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
@@ -1630,7 +1707,7 @@ impl Instance {
     /// Mutually exclusive penalty options raise ``ValueError`` before mutating the instance.
     ///
     /// >>> unchanged = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Maximize
     /// ... )
     /// >>> before = unchanged.to_v2_bytes()
     /// >>> try:
@@ -1671,7 +1748,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Maximize
     /// ... )
     /// >>> explicit = copy.copy(instance)
     /// >>> policy = PreparationPolicy.for_hubo(uniform_penalty_weight=2.0)
@@ -1690,7 +1767,7 @@ impl Instance {
     /// Mutually exclusive penalty options raise ``ValueError`` before mutating the instance.
     ///
     /// >>> unchanged = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Maximize
     /// ... )
     /// >>> before = unchanged.to_v2_bytes()
     /// >>> try:
@@ -1727,7 +1804,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.convert_active_objective(Sense.Minimize)
     /// >>> restored = instance.as_parametric_instance().with_parameters({})
@@ -1754,7 +1831,9 @@ impl Instance {
     /// where $\lambda_i$ and $\rho_j$ are the penalty weight parameters for each constraint.
     /// If you want to use single weight parameter, use {meth}`~ommx.Instance.uniform_penalty_method` instead.
     ///
-    /// The inactive constraints are stored in {attr}`~ommx.ParametricInstance.inactive_constraints`.
+    /// The penalized constraints become inactive and remain in the all-state
+    /// {attr}`~ommx.ParametricInstance.constraints` mapping. The active formulation
+    /// is unconstrained; ordinary inactive rows still participate in feasibility.
     ///
     /// > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
     /// > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
@@ -1764,16 +1843,18 @@ impl Instance {
     ///
     /// Penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
     ///
-    /// >>> from ommx import ConstraintKind, ConstraintID
-    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Optimality, Sense
+    /// >>> from ommx import InactiveConstraint, ConstraintID
+    /// >>> from ommx import DecisionVariable, Instance, Optimality, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Minimize
     /// ... )
     /// >>> parametric = instance.penalty_method()
     /// >>> parameters = {parameter.id: 2.0 for parameter in parametric.parameters}
     /// >>> prepared = parametric.with_parameters(parameters)
-    /// >>> assert parametric.constraints == {}
+    /// >>> assert parametric.active_constraints == {}
+    /// >>> assert set(parametric.constraints) == {ConstraintID(7)}
+    /// >>> assert isinstance(parametric.constraints[ConstraintID(7)], InactiveConstraint)
     /// >>> assert ConstraintID(7) in parametric.inactive_constraints
     /// >>> assert prepared.objective.evaluate({0: 0}) == 2.0
     /// >>> solution = prepared.evaluate({0: 0})
@@ -1809,16 +1890,18 @@ impl Instance {
     ///
     /// Uniform-penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
     ///
-    /// >>> from ommx import ConstraintKind, ConstraintID
-    /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Optimality, Sense
+    /// >>> from ommx import InactiveConstraint, ConstraintID
+    /// >>> from ommx import DecisionVariable, Instance, Optimality, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Minimize
     /// ... )
     /// >>> parametric = instance.uniform_penalty_method()
     /// >>> parameter_id = parametric.parameters[0].id
     /// >>> prepared = parametric.with_parameters({parameter_id: 2.0})
-    /// >>> assert parametric.constraints == {}
+    /// >>> assert parametric.active_constraints == {}
+    /// >>> assert set(parametric.constraints) == {ConstraintID(7)}
+    /// >>> assert isinstance(parametric.constraints[ConstraintID(7)], InactiveConstraint)
     /// >>> assert ConstraintID(7) in parametric.inactive_constraints
     /// >>> assert prepared.objective.evaluate({0: 0}) == 2.0
     /// >>> solution = prepared.evaluate({0: 0})
@@ -1856,7 +1939,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=3 * x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.convert_active_objective(Sense.Minimize)
     /// >>> fixed = instance.partial_evaluate({0: 1})
@@ -1868,7 +1951,7 @@ impl Instance {
     /// Evaluation raises ``ValueError`` when an active required ID is missing.
     ///
     /// >>> required = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Minimize
     /// ... )
     /// >>> try:
     /// ...     required.evaluate({})
@@ -1948,7 +2031,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=3 * x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.convert_active_objective(Sense.Minimize)
     /// >>> fixed = instance.partial_evaluate({0: 1})
@@ -1994,7 +2077,7 @@ impl Instance {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=x[0] + x[1],
-    /// ...     constraints={},
+    /// ...     active_constraints={},
     /// ...     sense=Sense.Maximize,
     /// ... )
     ///
@@ -2045,7 +2128,7 @@ impl Instance {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints={0: sum(x) <= 2},
+    /// ...     active_constraints={0: sum(x) <= 2},
     /// ...     sense=Sense.Maximize,
     /// ... )
     ///
@@ -2188,15 +2271,17 @@ impl Instance {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints={},
-    /// ...     one_hot_constraints={1: OneHotConstraint(variables=x)},
+    /// ...     active_constraints={},
+    /// ...     active_one_hot_constraints={1: OneHotConstraint(variables=x)},
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> new_id = instance.convert_one_hot_to_constraint(1)
-    /// >>> instance.constraints
+    /// >>> instance.active_constraints
     /// {ConstraintID(2): Constraint(x0 + x1 + x2 - 1 == 0)}
     /// >>> instance.inactive_constraints
     /// {OneHotConstraintID(1): InactiveOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=2)}
+    /// >>> assert len(instance.constraints) == 2
+    /// >>> assert set(instance.constraints) == set(instance.active_constraints) | set(instance.inactive_constraints)
     pub(crate) fn convert_one_hot_to_constraint(
         &mut self,
         one_hot_id: OneHotConstraintIDInput,
@@ -2225,8 +2310,8 @@ impl Instance {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints={},
-    /// ...     one_hot_constraints={
+    /// ...     active_constraints={},
+    /// ...     active_one_hot_constraints={
     /// ...         1: OneHotConstraint(variables=x[:2]),
     /// ...         2: OneHotConstraint(variables=x[2:]),
     /// ...     },
@@ -2234,8 +2319,10 @@ impl Instance {
     /// ... )
     /// >>> instance.convert_all_one_hots_to_constraints()
     /// [ConstraintID(3), ConstraintID(4)]
-    /// >>> instance.constraints
+    /// >>> instance.active_constraints
     /// {ConstraintID(3): Constraint(x0 + x1 - 1 == 0), ConstraintID(4): Constraint(x2 + x3 - 1 == 0)}
+    /// >>> assert len(instance.constraints) == 4
+    /// >>> assert set(instance.constraints) == set(instance.active_constraints) | set(instance.inactive_constraints)
     pub fn convert_all_one_hots_to_constraints(
         &mut self,
     ) -> OmmxPyResult<Vec<crate::ConstraintID>> {
@@ -2291,16 +2378,18 @@ impl Instance {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints={},
-    /// ...     sos1_constraints={1: Sos1Constraint(variables=x)},
+    /// ...     active_constraints={},
+    /// ...     active_sos1_constraints={1: Sos1Constraint(variables=x)},
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_sos1_to_constraints(1)
     /// [ConstraintID(2)]
-    /// >>> instance.constraints
+    /// >>> instance.active_constraints
     /// {ConstraintID(2): Constraint(x0 + x1 + x2 - 1 <= 0)}
     /// >>> instance.inactive_constraints
     /// {Sos1ConstraintID(1): InactiveSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=2)}
+    /// >>> assert len(instance.constraints) == 2
+    /// >>> assert set(instance.constraints) == set(instance.active_constraints) | set(instance.inactive_constraints)
     pub(crate) fn convert_sos1_to_constraints(
         &mut self,
         sos1_id: Sos1ConstraintIDInput,
@@ -2326,8 +2415,8 @@ impl Instance {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints={},
-    /// ...     sos1_constraints={
+    /// ...     active_constraints={},
+    /// ...     active_sos1_constraints={
     /// ...         1: Sos1Constraint(variables=x[:2]),
     /// ...         2: Sos1Constraint(variables=x[2:]),
     /// ...     },
@@ -2335,8 +2424,10 @@ impl Instance {
     /// ... )
     /// >>> instance.convert_all_sos1_to_constraints()
     /// {Sos1ConstraintID(1): [ConstraintID(3)], Sos1ConstraintID(2): [ConstraintID(4)]}
-    /// >>> instance.constraints
+    /// >>> instance.active_constraints
     /// {ConstraintID(3): Constraint(x0 + x1 - 1 <= 0), ConstraintID(4): Constraint(x2 + x3 - 1 <= 0)}
+    /// >>> assert len(instance.constraints) == 4
+    /// >>> assert set(instance.constraints) == set(instance.active_constraints) | set(instance.inactive_constraints)
     pub fn convert_all_sos1_to_constraints(
         &mut self,
     ) -> OmmxPyResult<BTreeMap<crate::Sos1ConstraintID, Vec<crate::ConstraintID>>> {
@@ -2416,14 +2507,16 @@ impl Instance {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x, y],
     /// ...     objective=x,
-    /// ...     constraints={},
-    /// ...     indicator_constraints={1: ic},
+    /// ...     active_constraints={},
+    /// ...     active_indicator_constraints={1: ic},
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_indicator_to_constraint(1)
     /// [ConstraintID(2)]
-    /// >>> instance.constraints
+    /// >>> instance.active_constraints
     /// {ConstraintID(2): Constraint(x0 + 3*x1 - 5 <= 0)}
+    /// >>> assert len(instance.constraints) == 2
+    /// >>> assert set(instance.constraints) == set(instance.active_constraints) | set(instance.inactive_constraints)
     #[pyo3(signature = (indicator_id, *, atol=None))]
     pub(crate) fn convert_indicator_to_constraint(
         &mut self,
@@ -2499,7 +2592,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.integer(0, lower=0, upper=3)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> instance.log_encode({0})
     /// >>> encoded_ids = instance.required_ids()
@@ -2573,7 +2666,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.integer(0, lower=2, upper=5, name="x")
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> instance.unary_encode({0})
     /// >>> encoded_ids = instance.required_ids()
@@ -2706,7 +2799,7 @@ impl Instance {
     /// >>> x = DecisionVariable.binary(0)
     /// >>> b = DecisionVariable.binary(1)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x, b], objective=x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x, b], objective=x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.convert_active_objective(Sense.Minimize)
     /// >>> instance.substitute({0: b})
@@ -2760,7 +2853,7 @@ impl Instance {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints={0: x[0] + 2*x[1] <= 5},
+    /// ...     active_constraints={0: x[0] + 2*x[1] <= 5},
     /// ...     sense=Sense.Maximize,
     /// ... )
     ///
@@ -2836,7 +2929,7 @@ impl Instance {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints={0: x[0] + 2*x[1] <= 4},
+    /// ...     active_constraints={0: x[0] + 2*x[1] <= 4},
     /// ...     sense=Sense.Maximize,
     /// ... )
     ///
@@ -3323,7 +3416,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=3 * x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.convert_active_objective(Sense.Minimize)
     /// >>> assert instance.evaluate({0: 1}).objective == 3.0
@@ -3352,7 +3445,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=3 * x, active_constraints={}, sense=Sense.Minimize
     /// ... )
     /// >>> assert instance.convert_active_objective(Sense.Maximize)
     /// >>> assert instance.evaluate({0: 1}).objective == 3.0
@@ -3390,14 +3483,14 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Optimality, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> equivalent = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert equivalent.convert_active_objective(Sense.Minimize)
     /// >>> statuses = (Optimality.Unspecified, Optimality.Optimal, Optimality.NotOptimal)
     /// >>> for status in statuses:
     /// ...     assert equivalent.map_active_optimality(status) == status
     /// >>> penalized = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Minimize
     /// ... )
     /// >>> _ = penalized.to_qubo(uniform_penalty_weight=1.0)
     /// >>> for status in statuses:
@@ -3466,7 +3559,7 @@ impl Instance {
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x * x * x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.reduce_binary_power()
     /// >>> assert instance.objective.evaluate({0: 1}) == 1.0
@@ -3524,7 +3617,7 @@ impl Instance {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=x[0] + x[1],
-    /// ...     constraints={},
+    /// ...     active_constraints={},
     /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> profile = instance.logical_memory_profile()
@@ -3618,5 +3711,58 @@ impl InstanceDescription {
 
     fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
         self.clone()
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl Instance {
+    /// Move an active constraint to inactive, preserving its identity and context.
+    #[pyo3(signature=(constraint_id, reason, **parameters))]
+    pub(crate) fn deactivate_one_hot_constraint(
+        &mut self,
+        constraint_id: OneHotConstraintIDInput,
+        reason: String,
+        #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
+    ) -> OmmxPyResult<()> {
+        self.inner.deactivate_one_hot_constraint(
+            constraint_id.into(),
+            reason,
+            parameters.unwrap_or_default(),
+        )?;
+        Ok(())
+    }
+    /// Activate an inactive constraint.
+    pub(crate) fn activate_one_hot_constraint(
+        &mut self,
+        constraint_id: OneHotConstraintIDInput,
+    ) -> OmmxPyResult<()> {
+        self.inner
+            .activate_one_hot_constraint(constraint_id.into())?;
+        Ok(())
+    }
+
+    /// Move an active constraint to inactive, preserving its identity and context.
+    #[pyo3(signature=(constraint_id, reason, **parameters))]
+    pub(crate) fn deactivate_sos1_constraint(
+        &mut self,
+        constraint_id: Sos1ConstraintIDInput,
+        reason: String,
+        #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
+    ) -> OmmxPyResult<()> {
+        self.inner.deactivate_sos1_constraint(
+            constraint_id.into(),
+            reason,
+            parameters.unwrap_or_default(),
+        )?;
+        Ok(())
+    }
+    /// Activate an inactive constraint.
+    pub(crate) fn activate_sos1_constraint(
+        &mut self,
+        constraint_id: Sos1ConstraintIDInput,
+    ) -> OmmxPyResult<()> {
+        self.inner.activate_sos1_constraint(constraint_id.into())?;
+        Ok(())
     }
 }

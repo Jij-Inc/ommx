@@ -107,7 +107,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(crate::linear!(17)))
             .decision_variables(BTreeMap::from([(variable_id, variable)]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         let states = Sampled::new_no_dedup(candidates.iter().map(|&(id, value, _)| {
@@ -206,11 +206,12 @@ mod tests {
                     .sense(Sense::Minimize)
                     .objective(Function::Zero)
                     .decision_variables(BTreeMap::new())
-                    .constraints(BTreeMap::new());
+                    .active_constraints(BTreeMap::new());
                 let mut state = v1::State::default();
                 match source {
                     "regular" => {
-                        builder = builder.constraints(BTreeMap::from([(0.into(), constraint)]));
+                        builder =
+                            builder.active_constraints(BTreeMap::from([(0.into(), constraint)]));
                     }
                     "removed" => {
                         builder = builder.inactive_constraints(BTreeMap::from([(
@@ -296,7 +297,7 @@ mod tests {
                 .sense(Sense::Minimize)
                 .objective(Function::Zero)
                 .decision_variables(BTreeMap::from([(0.into(), variable)]))
-                .constraints(BTreeMap::new())
+                .active_constraints(BTreeMap::new())
                 .build()
                 .unwrap();
             let solution = instance
@@ -332,7 +333,7 @@ mod tests {
             let mut builder = Instance::builder()
                 .sense(Sense::Minimize)
                 .objective(Function::Zero)
-                .constraints(BTreeMap::new())
+                .active_constraints(BTreeMap::new())
                 .decision_variables(
                     variables
                         .iter()
@@ -341,7 +342,7 @@ mod tests {
                 );
             match family {
                 "indicator" => {
-                    builder = builder.indicator_constraints(BTreeMap::from([(
+                    builder = builder.active_indicator_constraints(BTreeMap::from([(
                         0.into(),
                         crate::IndicatorConstraint::new(
                             0.into(),
@@ -351,13 +352,13 @@ mod tests {
                     )]));
                 }
                 "one-hot" => {
-                    builder = builder.one_hot_constraints(BTreeMap::from([(
+                    builder = builder.active_one_hot_constraints(BTreeMap::from([(
                         0.into(),
                         crate::OneHotConstraint::new(variables).unwrap(),
                     )]));
                 }
                 "sos1" => {
-                    builder = builder.sos1_constraints(BTreeMap::from([(
+                    builder = builder.active_sos1_constraints(BTreeMap::from([(
                         0.into(),
                         crate::Sos1Constraint::new(variables).unwrap(),
                     )]));

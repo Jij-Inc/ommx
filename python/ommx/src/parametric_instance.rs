@@ -39,7 +39,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 /// >>> family = ParametricInstance.from_components(
 /// ...     decision_variables=xs, parameters=[capacity],
 /// ...     objective=3 * xs[0] + 2 * xs[1],
-/// ...     constraints={0: xs[0] + xs[1] <= capacity}, sense=Sense.Maximize,
+/// ...     active_constraints={0: xs[0] + xs[1] <= capacity}, sense=Sense.Maximize,
 /// ... )
 /// >>> one_item = family.with_parameters({capacity.id: 1})
 /// >>> two_items = family.with_parameters({capacity.id: 2})
@@ -155,7 +155,7 @@ impl ParametricInstance {
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.convert_active_objective(Sense.Minimize)
     /// >>> assert instance.convert_active_objective(Sense.Maximize)
@@ -180,7 +180,7 @@ impl ParametricInstance {
     /// >>> from ommx import DecisionVariable, Instance, ParametricInstance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> source = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Minimize
     /// ... )
     /// >>> parametric = source.uniform_penalty_method()
     /// >>> parameter_id = parametric.parameters[0].id
@@ -228,7 +228,7 @@ impl ParametricInstance {
     /// >>> family = ParametricInstance.from_components(
     /// ...     decision_variables=xs, parameters=profits + weights + [capacity],
     /// ...     objective=sum(p * x for p, x in zip(profits, xs)),
-    /// ...     constraints={0: sum(w * x for w, x in zip(weights, xs)) <= capacity},
+    /// ...     active_constraints={0: sum(w * x for w, x in zip(weights, xs)) <= capacity},
     /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> values = {p.id: value for p, value in zip(profits, [3, 2])}
@@ -239,22 +239,36 @@ impl ParametricInstance {
     /// >>> assert solution.feasible and solution.objective == 3.0
     /// >>> assert not instance.evaluate({xs[0].id: 1, xs[1].id: 1}).feasible
     #[staticmethod]
-    #[pyo3(signature = (*, sense, objective, decision_variables, constraints, parameters, indicator_constraints=None, one_hot_constraints=None, sos1_constraints=None, named_functions=None, description=None))]
+    #[pyo3(signature = (*, sense, objective, decision_variables, active_constraints, parameters, active_indicator_constraints=None, active_one_hot_constraints=None, active_sos1_constraints=None, named_functions=None, description=None, inactive_constraints=None, inactive_indicator_constraints=None, inactive_one_hot_constraints=None, inactive_sos1_constraints=None))]
     pub(crate) fn from_components(
         sense: Sense,
         objective: Function,
         decision_variables: Vec<DecisionVariable>,
-        constraints: ConstraintMapInput<ConstraintIDInput, Constraint>,
+        active_constraints: ConstraintMapInput<ConstraintIDInput, Constraint>,
         parameters: Vec<Parameter>,
-        indicator_constraints: Option<
+        active_indicator_constraints: Option<
             ConstraintMapInput<IndicatorConstraintIDInput, crate::IndicatorConstraint>,
         >,
-        one_hot_constraints: Option<
+        active_one_hot_constraints: Option<
             ConstraintMapInput<OneHotConstraintIDInput, crate::OneHotConstraint>,
         >,
-        sos1_constraints: Option<ConstraintMapInput<Sos1ConstraintIDInput, crate::Sos1Constraint>>,
+        active_sos1_constraints: Option<
+            ConstraintMapInput<Sos1ConstraintIDInput, crate::Sos1Constraint>,
+        >,
         named_functions: Option<Vec<NamedFunction>>,
         description: Option<crate::InstanceDescription>,
+        inactive_constraints: Option<
+            ConstraintMapInput<ConstraintIDInput, crate::InactiveConstraint>,
+        >,
+        inactive_indicator_constraints: Option<
+            ConstraintMapInput<IndicatorConstraintIDInput, crate::InactiveIndicatorConstraint>,
+        >,
+        inactive_one_hot_constraints: Option<
+            ConstraintMapInput<OneHotConstraintIDInput, crate::InactiveOneHotConstraint>,
+        >,
+        inactive_sos1_constraints: Option<
+            ConstraintMapInput<Sos1ConstraintIDInput, crate::InactiveSos1Constraint>,
+        >,
     ) -> OmmxPyResult<Self> {
         let mut rust_decision_variables = BTreeMap::new();
         let mut variable_labels = ommx::VariableLabelStore::default();
@@ -271,7 +285,7 @@ impl ParametricInstance {
         }
 
         let mut constraint_context = ommx::ConstraintContextStore::default();
-        let rust_constraints: BTreeMap<ConstraintID, ommx::Constraint> = constraints
+        let rust_constraints: BTreeMap<ConstraintID, ommx::Constraint> = active_constraints
             .into_iter()
             .map(|(id, c)| {
                 let cid = ConstraintID::from(id);
@@ -288,14 +302,14 @@ impl ParametricInstance {
             .objective(objective.0)
             .decision_variables(rust_decision_variables)
             .variable_labels(variable_labels)
-            .constraints(rust_constraints)
+            .active_constraints(rust_constraints)
             .parameters(rust_parameters);
 
         let mut indicator_context_pairs: Vec<(
             ommx::IndicatorConstraintID,
             ommx::ConstraintContext,
         )> = Vec::new();
-        if let Some(ics) = indicator_constraints {
+        if let Some(ics) = active_indicator_constraints {
             let rust_indicator_constraints: BTreeMap<
                 ommx::IndicatorConstraintID,
                 ommx::IndicatorConstraint,
@@ -307,11 +321,11 @@ impl ParametricInstance {
                     (iid, ic.0)
                 })
                 .collect();
-            builder = builder.indicator_constraints(rust_indicator_constraints);
+            builder = builder.active_indicator_constraints(rust_indicator_constraints);
         }
 
         let mut one_hot_context = ommx::ConstraintContextStore::default();
-        if let Some(ohs) = one_hot_constraints {
+        if let Some(ohs) = active_one_hot_constraints {
             let rust_one_hot_constraints: BTreeMap<
                 ommx::OneHotConstraintID,
                 ommx::OneHotConstraint,
@@ -323,11 +337,11 @@ impl ParametricInstance {
                     (oid, oh.0)
                 })
                 .collect();
-            builder = builder.one_hot_constraints(rust_one_hot_constraints);
+            builder = builder.active_one_hot_constraints(rust_one_hot_constraints);
         }
 
         let mut sos1_context = ommx::ConstraintContextStore::default();
-        if let Some(s1s) = sos1_constraints {
+        if let Some(s1s) = active_sos1_constraints {
             let rust_sos1_constraints: BTreeMap<ommx::Sos1ConstraintID, ommx::Sos1Constraint> = s1s
                 .into_iter()
                 .map(|(id, s1)| {
@@ -336,7 +350,7 @@ impl ParametricInstance {
                     (sid, s1.0)
                 })
                 .collect();
-            builder = builder.sos1_constraints(rust_sos1_constraints);
+            builder = builder.active_sos1_constraints(rust_sos1_constraints);
         }
 
         let mut named_function_labels = ommx::NamedFunctionLabelStore::default();
@@ -364,6 +378,50 @@ impl ParametricInstance {
         for (id, context) in indicator_context_pairs {
             indicator_context.insert(id, context);
         }
+        if let Some(rows) = inactive_constraints {
+            let rows = rows
+                .into_iter()
+                .map(|(id, row)| {
+                    let id = ommx::ConstraintID::from(id);
+                    constraint_context.insert(id, row.context);
+                    (id, (row.constraint, row.inactive_reason))
+                })
+                .collect::<BTreeMap<_, _>>();
+            builder = builder.inactive_constraints(rows);
+        }
+        if let Some(rows) = inactive_indicator_constraints {
+            let rows = rows
+                .into_iter()
+                .map(|(id, row)| {
+                    let id = ommx::IndicatorConstraintID::from(id);
+                    indicator_context.insert(id, row.context);
+                    (id, (row.constraint, row.inactive_reason))
+                })
+                .collect::<BTreeMap<_, _>>();
+            builder = builder.inactive_indicator_constraints(rows);
+        }
+        if let Some(rows) = inactive_one_hot_constraints {
+            let rows = rows
+                .into_iter()
+                .map(|(id, row)| {
+                    let id = ommx::OneHotConstraintID::from(id);
+                    one_hot_context.insert(id, row.context);
+                    (id, (row.constraint, row.inactive_reason))
+                })
+                .collect::<BTreeMap<_, _>>();
+            builder = builder.inactive_one_hot_constraints(rows);
+        }
+        if let Some(rows) = inactive_sos1_constraints {
+            let rows = rows
+                .into_iter()
+                .map(|(id, row)| {
+                    let id = ommx::Sos1ConstraintID::from(id);
+                    sos1_context.insert(id, row.context);
+                    (id, (row.constraint, row.inactive_reason))
+                })
+                .collect::<BTreeMap<_, _>>();
+            builder = builder.inactive_sos1_constraints(rows);
+        }
         let inner = builder
             .constraint_context(constraint_context)
             .indicator_constraint_context(indicator_context)
@@ -384,6 +442,10 @@ impl ParametricInstance {
             Vec::new(),
             Default::default(),
             Vec::new(),
+            None,
+            None,
+            None,
+            None,
             None,
             None,
             None,
@@ -423,7 +485,7 @@ impl ParametricInstance {
     /// >>> p, unused = Parameter(1, name="p"), Parameter(2, name="unused")
     /// >>> family = ParametricInstance.from_components(
     /// ...     decision_variables=[x], parameters=[p, unused], objective=x + p,
-    /// ...     constraints={}, sense=Sense.Minimize
+    /// ...     active_constraints={}, sense=Sense.Minimize
     /// ... )
     /// >>> try:
     /// ...     family.with_parameters({p.id: 3})
@@ -441,7 +503,7 @@ impl ParametricInstance {
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> source = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Minimize
     /// ... )
     /// >>> parametric = source.uniform_penalty_method()
     /// >>> parameter_id = parametric.parameters[0].id
@@ -468,7 +530,7 @@ impl ParametricInstance {
     /// >>> p = Parameter(100, name="p", parameters={"scenario": "base"})
     /// >>> model = ParametricInstance.from_components(
     /// ...     sense=Sense.Minimize, objective=x + p, decision_variables=[x],
-    /// ...     parameters=[p], constraints={},
+    /// ...     parameters=[p], active_constraints={},
     /// ... )
     /// >>> assert model.format_function(model.objective) == "x + p[scenario=base]"
     ///
@@ -513,7 +575,7 @@ impl ParametricInstance {
     /// >>> p = Parameter(100, name="p")
     /// >>> model = ParametricInstance.from_components(
     /// ...     sense=Sense.Minimize, objective=x + p, decision_variables=[x],
-    /// ...     parameters=[p], constraints={},
+    /// ...     parameters=[p], active_constraints={},
     /// ... )
     /// >>> preview = model.display_function(model.objective)
     /// >>> assert preview.text == "x + p"
@@ -584,7 +646,7 @@ impl ParametricInstance {
     /// >>> x = DecisionVariable.binary(0)
     /// >>> b = DecisionVariable.binary(1)
     /// >>> source = Instance.from_components(
-    /// ...     decision_variables=[x, b], objective=x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x, b], objective=x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert source.convert_active_objective(Sense.Minimize)
     /// >>> parametric = source.as_parametric_instance()
@@ -628,7 +690,7 @@ impl ParametricInstance {
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> source = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert source.as_parametric_instance().output_objective is None
     /// >>> assert source.convert_active_objective(Sense.Minimize)
@@ -709,7 +771,7 @@ impl ParametricInstance {
 
     /// Extract active constraints of every family by name, keyed by subscript tuples.
     ///
-    /// Values are attached handles, just as in `constraints`: edits update this
+    /// Values are attached handles, just as in `active_constraints`: edits update this
     /// model. The returned dictionary snapshots the matching keys; it does not
     /// track later label or membership changes. Inactive constraints are excluded.
     /// Parameters and descriptions do not participate in matching.
@@ -721,19 +783,34 @@ impl ParametricInstance {
         slf: Bound<'_, Self>,
         name: &str,
     ) -> PyResult<
-        crate::subscript_map::SubscriptMap<crate::constraint_collection::ConstraintCollectionValue>,
+        crate::subscript_map::SubscriptMap<
+            crate::constraint_collection::ActiveConstraintCollectionValue,
+        >,
     > {
         let py = slf.py();
-        Self::constraints(slf).extract_by_name(py, name)
+        Self::active_constraints(slf).extract_by_name(py, name)
     }
 
-    /// Live mapping of all active constraint families, keyed by typed IDs.
-    /// The view retains this owner and fetches each constraint on demand.
+    /// Live lookup of every retained constraint, including active and inactive rows.
+    ///
+    /// IDs determine the constraint family, not its activeness. Active rows are
+    /// attached handles; inactive rows are independent snapshots. Inspect the
+    /// returned row's concrete type, or use active_constraints for attached rows.
     #[getter]
     pub fn constraints(slf: Bound<'_, Self>) -> crate::constraint_collection::ConstraintCollection {
         crate::constraint_collection::ConstraintCollection::new(crate::ConstraintHost::Parametric(
             slf.unbind(),
         ))
+    }
+
+    /// Live mapping of active constraints, with attached rows for each family.
+    #[getter]
+    pub fn active_constraints(
+        slf: Bound<'_, Self>,
+    ) -> crate::constraint_collection::ActiveConstraintCollection {
+        crate::constraint_collection::ActiveConstraintCollection::new(
+            crate::ConstraintHost::Parametric(slf.unbind()),
+        )
     }
 
     /// Add a regular constraint to this parametric instance.
@@ -1235,5 +1312,107 @@ impl ParametricInstance {
 
     fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
         self.clone()
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl ParametricInstance {
+    /// Move an active constraint to inactive, preserving its identity and context.
+    #[pyo3(signature=(constraint_id, reason, **parameters))]
+    pub(crate) fn deactivate_constraint(
+        &mut self,
+        constraint_id: ConstraintIDInput,
+        reason: String,
+        #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
+    ) -> OmmxPyResult<()> {
+        self.inner.deactivate_constraint(
+            constraint_id.into(),
+            reason,
+            parameters.unwrap_or_default(),
+        )?;
+        Ok(())
+    }
+    /// Activate an inactive constraint.
+    pub(crate) fn activate_constraint(
+        &mut self,
+        constraint_id: ConstraintIDInput,
+    ) -> OmmxPyResult<()> {
+        self.inner.activate_constraint(constraint_id.into())?;
+        Ok(())
+    }
+
+    /// Move an active constraint to inactive, preserving its identity and context.
+    #[pyo3(signature=(constraint_id, reason, **parameters))]
+    pub(crate) fn deactivate_indicator_constraint(
+        &mut self,
+        constraint_id: IndicatorConstraintIDInput,
+        reason: String,
+        #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
+    ) -> OmmxPyResult<()> {
+        self.inner.deactivate_indicator_constraint(
+            constraint_id.into(),
+            reason,
+            parameters.unwrap_or_default(),
+        )?;
+        Ok(())
+    }
+    /// Activate an inactive constraint.
+    pub(crate) fn activate_indicator_constraint(
+        &mut self,
+        constraint_id: IndicatorConstraintIDInput,
+    ) -> OmmxPyResult<()> {
+        self.inner
+            .activate_indicator_constraint(constraint_id.into())?;
+        Ok(())
+    }
+
+    /// Move an active constraint to inactive, preserving its identity and context.
+    #[pyo3(signature=(constraint_id, reason, **parameters))]
+    pub(crate) fn deactivate_one_hot_constraint(
+        &mut self,
+        constraint_id: OneHotConstraintIDInput,
+        reason: String,
+        #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
+    ) -> OmmxPyResult<()> {
+        self.inner.deactivate_one_hot_constraint(
+            constraint_id.into(),
+            reason,
+            parameters.unwrap_or_default(),
+        )?;
+        Ok(())
+    }
+    /// Activate an inactive constraint.
+    pub(crate) fn activate_one_hot_constraint(
+        &mut self,
+        constraint_id: OneHotConstraintIDInput,
+    ) -> OmmxPyResult<()> {
+        self.inner
+            .activate_one_hot_constraint(constraint_id.into())?;
+        Ok(())
+    }
+
+    /// Move an active constraint to inactive, preserving its identity and context.
+    #[pyo3(signature=(constraint_id, reason, **parameters))]
+    pub(crate) fn deactivate_sos1_constraint(
+        &mut self,
+        constraint_id: Sos1ConstraintIDInput,
+        reason: String,
+        #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
+    ) -> OmmxPyResult<()> {
+        self.inner.deactivate_sos1_constraint(
+            constraint_id.into(),
+            reason,
+            parameters.unwrap_or_default(),
+        )?;
+        Ok(())
+    }
+    /// Activate an inactive constraint.
+    pub(crate) fn activate_sos1_constraint(
+        &mut self,
+        constraint_id: Sos1ConstraintIDInput,
+    ) -> OmmxPyResult<()> {
+        self.inner.activate_sos1_constraint(constraint_id.into())?;
+        Ok(())
     }
 }

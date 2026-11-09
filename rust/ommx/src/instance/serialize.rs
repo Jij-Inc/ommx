@@ -22,7 +22,7 @@ impl Instance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// assert!(instance.convert_active_objective(Sense::Minimize));
@@ -53,7 +53,7 @@ impl Instance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// assert!(instance.convert_active_objective(Sense::Minimize));
@@ -105,7 +105,7 @@ impl ParametricInstance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// assert!(source.convert_active_objective(Sense::Minimize));
@@ -137,7 +137,7 @@ impl ParametricInstance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// assert!(source.convert_active_objective(Sense::Minimize));
@@ -325,7 +325,7 @@ mod tests {
                 VariableID::from(1),
                 DecisionVariable::continuous(),
             )]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 
@@ -369,8 +369,8 @@ mod tests {
                 (variable_1, DecisionVariable::binary()),
                 (variable_2, DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::new())
-            .indicator_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(BTreeMap::from([(
                 indicator_id,
                 IndicatorConstraint::new(
                     variable_1,
@@ -379,12 +379,12 @@ mod tests {
                 ),
             )]))
             .indicator_constraint_context(indicator_context)
-            .one_hot_constraints(BTreeMap::from([(
+            .active_one_hot_constraints(BTreeMap::from([(
                 one_hot_id,
                 OneHotConstraint::new(BTreeSet::from([variable_1, variable_2])).unwrap(),
             )]))
             .one_hot_constraint_context(one_hot_context)
-            .sos1_constraints(BTreeMap::from([(
+            .active_sos1_constraints(BTreeMap::from([(
                 sos1_id,
                 Sos1Constraint::new(BTreeSet::from([variable_1, variable_2])).unwrap(),
             )]))
@@ -409,7 +409,7 @@ mod tests {
                 VariableID::from(1),
                 DecisionVariable::new_finite_domain(vec![0.1, 0.5, 1.0]).unwrap(),
             )]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap()
     }
@@ -422,7 +422,7 @@ mod tests {
                 (VariableID::from(1), DecisionVariable::binary()),
                 (VariableID::from(2), DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         assert!(instance.convert_active_objective(Sense::Minimize));
@@ -441,7 +441,7 @@ mod tests {
                 DecisionVariable::binary(),
             )]))
             .parameters(ParameterTable::from_ids(BTreeSet::from([parameter_id])))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         instance.output_objective = Some(OutputObjective::new(
@@ -895,7 +895,7 @@ mod tests {
             .parameters(
                 ParameterTable::new(BTreeSet::from([parameter_id]), parameter_labels).unwrap(),
             )
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 
@@ -929,7 +929,7 @@ mod tests {
             .parameters(
                 ParameterTable::new(BTreeSet::from([parameter_id]), parameter_labels).unwrap(),
             )
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 

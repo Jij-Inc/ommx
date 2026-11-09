@@ -1,6 +1,6 @@
 Live mapping of retained constraints that are no longer active.
 
-Active constraints in {attr}`~ommx.Instance.constraints` belong to the
+Active constraints in {attr}`~ommx.Instance.active_constraints` belong to the
 **Active Formulation**. Inactive constraints are retained as **Interpretation
 Context**, as defined on {class}`~ommx.Instance`, and remain available for evaluation
 and inspection, but are not imposed as active conditions. Both collections
@@ -9,7 +9,7 @@ Indicator, OneHot, and SOS1, keyed by their typed IDs.
 
 The returned {class}`~ommx.InactiveConstraintCollection` keeps this Instance alive
 and observes subsequent owner changes. Each lookup returns an independent
-snapshot with labels, provenance, and the deactivation reason; editing a snapshot
+snapshot with labels, provenance, and the inactivity reason; editing a snapshot
 does not change the Instance. See that class for lookup and iteration semantics.
 
 **Removal records a change, not its mathematical guarantee**
@@ -18,7 +18,7 @@ Different operations retain inactive constraints for different reasons:
 
 | Operation | Active formulation | Retained information |
 | --- | --- | --- |
-| {meth}`~ommx.Instance.deactivate_constraint` or {meth}`~ommx.Instance.deactivate_indicator_constraint` | Omits the selected condition | The condition and caller-supplied removal reason |
+| {meth}`~ommx.Instance.deactivate_constraint` or {meth}`~ommx.Instance.deactivate_indicator_constraint` | Omits the selected condition | The condition and caller-supplied inactivity reason |
 | Special-constraint lowering, such as {meth}`~ommx.Instance.convert_one_hot_to_constraint` | Represents the condition using regular constraints | The original special constraint; generated constraints carry provenance |
 | {meth}`~ommx.Instance.penalty_method` | Replaces regular constraints with weighted objective terms | The constraints to check independently of the penalized objective |
 | Removal of trivial constraints during preprocessing | Omits conditions found unnecessary by that operation | The removed conditions and their reasons |
@@ -34,11 +34,12 @@ inactive constraints.
 {meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Instance.evaluate_samples`
 evaluate both active and inactive constraints after restoring and completing
 variable values through {meth}`~ommx.Instance.populate_state`.
-{attr}`~ommx.Solution.feasible` includes all retained constraints;
+{attr}`~ommx.Solution.feasible` checks active and ordinary inactive constraints by default; skipped constraints require
+`removed=True`.
 {attr}`~ommx.Solution.feasible_relaxed` excludes inactive constraints. Both also
 check every retained variable's kind and bounds. The corresponding
 {attr}`~ommx.SampleSet.feasible` and {attr}`~ommx.SampleSet.feasible_relaxed`
-properties return these judgments by sample ID.
+queries return these judgments by sample ID.
 
 A variable used only in inactive constraints may be irrelevant to the active
 formulation. If omitted, its default is used for evaluation. Supply its actual
@@ -48,6 +49,6 @@ solver choice.
 For a table of active and inactive rows, use
 {meth}`~ommx.Instance.constraints_df` with `removed=True` and an explicit
 `kind`. On a Solution, use {meth}`~ommx.Solution.constraints_df` with
-`include=("inactive_reason",)` to inspect deactivation reasons alongside evaluated
+`include=("inactive_reason",)` to inspect inactivity reasons alongside evaluated
 values and violations. The complete relax, evaluate, inspect, and restore
 example is in {meth}`~ommx.Instance.deactivate_constraint`.

@@ -113,7 +113,7 @@ use std::collections::BTreeSet;
 /// Fixed and dependent values are reconstructed. Otherwise irrelevant variables
 /// omitted from the candidate receive defaults; a default is not a value found
 /// by the solver. Supply such a value when it matters to reported metrics.
-/// Distinguish successful reconstruction, feasibility including removed
+/// Distinguish successful reconstruction, feasibility including inactive
 /// constraints, and transport of objective or optimality information.
 /// {attr}`~ommx.Solution.feasible_relaxed` excludes inactive constraints but
 /// still checks variable domains. Output objective and optimality transport
@@ -240,7 +240,7 @@ impl Solution {
     /// Excludes constraints retained after removal, across all constraint families.
     /// Variable kind and bound checks are still applied with
     /// {attr}`~ommx.Solution.feasibility_atol`. A result can satisfy this property
-    /// while failing {attr}`~ommx.Solution.feasible` because a removed constraint
+    /// while failing {attr}`~ommx.Solution.feasible` because a inactive constraint
     /// is violated.
     ///
     /// >>> from ommx import ConstraintKind, Instance
@@ -338,7 +338,7 @@ impl Solution {
             .collect()
     }
 
-    /// Live mapping of all constraint families, including removed results.
+    /// Live mapping of all constraint families, including inactive results.
     ///
     /// Typed IDs select the family. Rows are fetched only when indexed, as
     /// independent snapshots with labels, provenance, removal reasons, and
@@ -406,7 +406,7 @@ impl Solution {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x + y,
     /// ...     objective=sum(x) + sum(y),
-    /// ...     constraints={},
+    /// ...     active_constraints={},
     /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> solution = instance.evaluate({i: 1 for i in range(5)})
@@ -508,7 +508,7 @@ impl Solution {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x + y,
     /// ...     objective=sum(x) + sum(y),
-    /// ...     constraints={},
+    /// ...     active_constraints={},
     /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> solution = instance.evaluate({i: 1 for i in range(5)})
@@ -568,7 +568,7 @@ impl Solution {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints={0: c0, 1: c1},
+    /// ...     active_constraints={0: c0, 1: c1},
     /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
@@ -616,7 +616,7 @@ impl Solution {
     /// >>> x = DecisionVariable.binary(0, name="selected")
     /// >>> cost = NamedFunction(id=10, function=4 * x, name="cost")
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={},
+    /// ...     decision_variables=[x], objective=x, active_constraints={},
     /// ...     sense=Sense.Maximize, named_functions=[cost],
     /// ... )
     /// >>> solution = instance.evaluate({x.id: 1})
@@ -809,10 +809,10 @@ impl Solution {
     /// {meth}`ommx.Instance.constraints_df` for column / `kind=` /
     /// `include=` semantics.
     ///
-    /// `Solution` has no `removed=` parameter (no active/removed
+    /// `Solution` has no `removed=` parameter (no active/inactive
     /// distinction at the evaluated stage); reason data is gated by
     /// `"inactive_reason"` in `include=`. When the flag is on, rows for
-    /// constraints removed before evaluation get `inactive_reason` /
+    /// constraints inactive before evaluation get `inactive_reason` /
     /// `inactive_reason.{key}` columns populated; other rows have NA.
     /// The related metadata queries {meth}`~ommx.Solution.constraint_context_df`,
     /// {meth}`~ommx.Solution.constraint_parameters_df`,
@@ -998,7 +998,7 @@ impl Solution {
         )
     }
 
-    /// Removed-constraint reasons DataFrame (long format).
+    /// Inactive-constraint reasons DataFrame (long format).
     #[pyo3(signature = (*, kind))]
     pub fn constraint_inactive_reasons_df<'py>(
         &self,
@@ -1079,7 +1079,7 @@ impl Solution {
 
     /// Get one constraint's nonnegative scalar violation.
     ///
-    /// Uses the definitions in {meth}`total_violation`, including for removed
+    /// Uses the definitions in {meth}`total_violation`, including for inactive
     /// constraints. The ID type selects its family. Raises `KeyError` when
     /// the ID is absent from that constraint family.
     pub fn constraint_violation(

@@ -68,7 +68,7 @@ fn instance_with_inactive_constraints(num_removed: usize) -> Instance {
         .sense(Sense::Minimize)
         .objective(objective)
         .decision_variables(decision_variables)
-        .constraints(BTreeMap::new())
+        .active_constraints(BTreeMap::new())
         .inactive_constraints(inactive_constraints)
         .build()
         .unwrap()
@@ -99,7 +99,7 @@ fn instance_with_active_constraints(num_active: usize) -> Instance {
         .sense(Sense::Minimize)
         .objective(objective)
         .decision_variables(decision_variables)
-        .constraints(constraints)
+        .active_constraints(constraints)
         .build()
         .unwrap()
 }

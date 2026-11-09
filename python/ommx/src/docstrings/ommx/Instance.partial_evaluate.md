@@ -57,7 +57,7 @@ expressions while retaining canonical fixed values for output evaluation.
 >>> from ommx import DecisionVariable, Instance, Sense
 >>> x = DecisionVariable.binary(0)
 >>> instance = Instance.from_components(
-...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+...     decision_variables=[x], objective=3 * x, active_constraints={}, sense=Sense.Maximize
 ... )
 >>> assert instance.convert_active_objective(Sense.Minimize)
 >>> fixed = instance.partial_evaluate({0: 1.0000005}, atol=1e-6)

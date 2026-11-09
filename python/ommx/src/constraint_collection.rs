@@ -215,29 +215,29 @@ macro_rules! mapping_methods {
 
 #[derive(IntoPyObject)]
 // Root name-based extraction returns the same open row type as ID lookup.
-pub(crate) enum ConstraintCollectionValue {
+pub(crate) enum ActiveConstraintCollectionValue {
     Regular(crate::AttachedConstraint),
     Indicator(crate::AttachedIndicatorConstraint),
     OneHot(crate::AttachedOneHotConstraint),
     Sos1(crate::AttachedSos1Constraint),
 }
-impl PyStubType for ConstraintCollectionValue {
+impl PyStubType for ActiveConstraintCollectionValue {
     fn type_output() -> TypeInfo {
         crate::constraint_base::ConstraintView::type_output()
     }
 }
 
-#[doc = include_str!("docstrings/ommx/ConstraintCollection.md")]
+#[doc = include_str!("docstrings/ommx/ActiveConstraintCollection.md")]
 #[pyclass(frozen)]
-pub struct ConstraintCollection {
+pub struct ActiveConstraintCollection {
     owner: ConstraintHost,
 }
 collection_stub!(
-    ConstraintCollection,
-    ConstraintCollectionValue,
-    include_str!("docstrings/ommx/ConstraintCollection.md")
+    ActiveConstraintCollection,
+    ActiveConstraintCollectionValue,
+    include_str!("docstrings/ommx/ActiveConstraintCollection.md")
 );
-impl ConstraintCollection {
+impl ActiveConstraintCollection {
     /// Constructed only by the owning root property; no rows are copied.
     pub(crate) fn new(owner: ConstraintHost) -> Self {
         Self { owner }
@@ -247,7 +247,7 @@ impl ConstraintCollection {
         &self,
         py: Python<'_>,
         name: &str,
-    ) -> PyResult<crate::subscript_map::SubscriptMap<ConstraintCollectionValue>> {
+    ) -> PyResult<crate::subscript_map::SubscriptMap<ActiveConstraintCollectionValue>> {
         let ids = with_model!(&self.owner, py, |root| {
             let mut ids = std::collections::BTreeMap::new();
             macro_rules! collect {
@@ -290,25 +290,25 @@ impl ConstraintCollection {
         with_model!(&self.owner, py, |root| {
             let mut ids = Vec::new();
             ids.extend(
-                root.constraints()
+                root.active_constraints()
                     .keys()
                     .copied()
                     .map(AnyConstraintID::from),
             );
             ids.extend(
-                root.indicator_constraints()
+                root.active_indicator_constraints()
                     .keys()
                     .copied()
                     .map(AnyConstraintID::from),
             );
             ids.extend(
-                root.one_hot_constraints()
+                root.active_one_hot_constraints()
                     .keys()
                     .copied()
                     .map(AnyConstraintID::from),
             );
             ids.extend(
-                root.sos1_constraints()
+                root.active_sos1_constraints()
                     .keys()
                     .copied()
                     .map(AnyConstraintID::from),
@@ -319,13 +319,13 @@ impl ConstraintCollection {
 }
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
-impl ConstraintCollection {
+impl ActiveConstraintCollection {
     fn __len__(&self, py: Python<'_>) -> usize {
         with_model!(&self.owner, py, |root| {
-            root.constraints().len()
-                + root.indicator_constraints().len()
-                + root.one_hot_constraints().len()
-                + root.sos1_constraints().len()
+            root.active_constraints().len()
+                + root.active_indicator_constraints().len()
+                + root.active_one_hot_constraints().len()
+                + root.active_sos1_constraints().len()
         })
     }
     // Mapping accepts object for membership checks; extraction still rejects
@@ -337,12 +337,16 @@ impl ConstraintCollection {
     ) -> bool {
         with_model!(&self.owner, py, |root| {
             match key {
-                AnyConstraintID::Regular(id) => root.constraints().contains_key(&id.into()),
+                AnyConstraintID::Regular(id) => root.active_constraints().contains_key(&id.into()),
                 AnyConstraintID::Indicator(id) => {
-                    root.indicator_constraints().contains_key(&id.into())
+                    root.active_indicator_constraints().contains_key(&id.into())
                 }
-                AnyConstraintID::OneHot(id) => root.one_hot_constraints().contains_key(&id.into()),
-                AnyConstraintID::Sos1(id) => root.sos1_constraints().contains_key(&id.into()),
+                AnyConstraintID::OneHot(id) => {
+                    root.active_one_hot_constraints().contains_key(&id.into())
+                }
+                AnyConstraintID::Sos1(id) => {
+                    root.active_sos1_constraints().contains_key(&id.into())
+                }
             }
         })
     }
@@ -351,22 +355,22 @@ impl ConstraintCollection {
         &self,
         py: Python<'_>,
         key: AnyConstraintID,
-    ) -> PyResult<ConstraintCollectionValue> {
+    ) -> PyResult<ActiveConstraintCollectionValue> {
         with_model!(&self.owner, py, |root| {
             match key {
                 AnyConstraintID::Regular(id) => {
-                    if !root.constraints().contains_key(&id.into()) {
+                    if !root.active_constraints().contains_key(&id.into()) {
                         return Err(missing(key, py));
                     }
-                    Ok(ConstraintCollectionValue::Regular(
+                    Ok(ActiveConstraintCollectionValue::Regular(
                         crate::AttachedConstraint::new(self.owner.clone_ref(py), id.into()),
                     ))
                 }
                 AnyConstraintID::Indicator(id) => {
-                    if !root.indicator_constraints().contains_key(&id.into()) {
+                    if !root.active_indicator_constraints().contains_key(&id.into()) {
                         return Err(missing(key, py));
                     }
-                    Ok(ConstraintCollectionValue::Indicator(
+                    Ok(ActiveConstraintCollectionValue::Indicator(
                         crate::AttachedIndicatorConstraint::new(
                             self.owner.clone_ref(py),
                             id.into(),
@@ -374,18 +378,18 @@ impl ConstraintCollection {
                     ))
                 }
                 AnyConstraintID::OneHot(id) => {
-                    if !root.one_hot_constraints().contains_key(&id.into()) {
+                    if !root.active_one_hot_constraints().contains_key(&id.into()) {
                         return Err(missing(key, py));
                     }
-                    Ok(ConstraintCollectionValue::OneHot(
+                    Ok(ActiveConstraintCollectionValue::OneHot(
                         crate::AttachedOneHotConstraint::new(self.owner.clone_ref(py), id.into()),
                     ))
                 }
                 AnyConstraintID::Sos1(id) => {
-                    if !root.sos1_constraints().contains_key(&id.into()) {
+                    if !root.active_sos1_constraints().contains_key(&id.into()) {
                         return Err(missing(key, py));
                     }
-                    Ok(ConstraintCollectionValue::Sos1(
+                    Ok(ActiveConstraintCollectionValue::Sos1(
                         crate::AttachedSos1Constraint::new(self.owner.clone_ref(py), id.into()),
                     ))
                 }
@@ -393,10 +397,10 @@ impl ConstraintCollection {
         })
     }
 }
-mapping_methods!(ConstraintCollection, ConstraintCollectionValue);
+mapping_methods!(ActiveConstraintCollection, ActiveConstraintCollectionValue);
 pyo3_stub_gen::inventory::submit! {
  pyo3_stub_gen::derive::gen_methods_from_python! { r#"
-class ConstraintCollection:
+class ActiveConstraintCollection:
     @overload
     def __getitem__(self, key: ConstraintID) -> AttachedConstraint:
         """Fetch the constraint identified by a typed ID from the current owner."""
@@ -455,7 +459,7 @@ class ConstraintCollection:
 }
 
 #[derive(IntoPyObject)]
-enum InactiveConstraintCollectionValue {
+pub(crate) enum InactiveConstraintCollectionValue {
     Regular(crate::InactiveConstraint),
     Indicator(crate::InactiveIndicatorConstraint),
     OneHot(crate::InactiveOneHotConstraint),
@@ -681,6 +685,113 @@ class InactiveConstraintCollection:
     def get(self, key: ConstraintIDBase, default: pyo3_stub_gen.RustType["GetDefault"]) -> ConstraintView | pyo3_stub_gen.RustType["GetDefault"]:
         ...
 
+"# }
+}
+
+pub(crate) enum ConstraintCollectionValue {
+    Active(ActiveConstraintCollectionValue),
+    Inactive(Box<InactiveConstraintCollectionValue>),
+}
+impl<'py> IntoPyObject<'py> for ConstraintCollectionValue {
+    type Target = PyAny;
+    type Output = Bound<'py, PyAny>;
+    type Error = PyErr;
+    fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
+        match self {
+            Self::Active(row) => row.into_pyobject(py),
+            Self::Inactive(row) => (*row).into_pyobject(py),
+        }
+    }
+}
+impl PyStubType for ConstraintCollectionValue {
+    fn type_output() -> TypeInfo {
+        crate::constraint_base::ConstraintView::type_output()
+    }
+}
+
+/// Live mapping of every retained constraint, independent of activeness.
+///
+/// IDs identify the family, not the state. Lookups return an attached active
+/// row or an independent inactive snapshot; inspect the concrete row type at runtime.
+#[pyclass(frozen)]
+pub struct ConstraintCollection {
+    owner: ConstraintHost,
+}
+collection_stub!(
+    ConstraintCollection,
+    ConstraintCollectionValue,
+    "Live mapping of all retained constraints. IDs do not determine activeness."
+);
+impl ConstraintCollection {
+    pub(crate) fn new(owner: ConstraintHost) -> Self {
+        Self { owner }
+    }
+    fn ids(&self, py: Python<'_>) -> Vec<AnyConstraintID> {
+        with_model!(&self.owner, py, |_root| {
+            let mut ids = ActiveConstraintCollection::new(self.owner.clone_ref(py)).ids(py);
+            ids.extend(InactiveConstraintCollection::new(self.owner.clone_ref(py)).ids(py));
+            ids.sort_by_key(|id| match id {
+                AnyConstraintID::Regular(id) => (0, ommx::ConstraintID::from(*id).into_inner()),
+                AnyConstraintID::Indicator(id) => {
+                    (1, ommx::IndicatorConstraintID::from(*id).into_inner())
+                }
+                AnyConstraintID::OneHot(id) => {
+                    (2, ommx::OneHotConstraintID::from(*id).into_inner())
+                }
+                AnyConstraintID::Sos1(id) => (3, ommx::Sos1ConstraintID::from(*id).into_inner()),
+            });
+            ids
+        })
+    }
+}
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl ConstraintCollection {
+    fn __len__(&self, py: Python<'_>) -> usize {
+        with_model!(&self.owner, py, |_root| {
+            ActiveConstraintCollection::new(self.owner.clone_ref(py)).__len__(py)
+                + InactiveConstraintCollection::new(self.owner.clone_ref(py)).__len__(py)
+        })
+    }
+    fn __contains__(
+        &self,
+        py: Python<'_>,
+        #[gen_stub(override_type(type_repr = "builtins.object"))] key: AnyConstraintID,
+    ) -> bool {
+        with_model!(&self.owner, py, |_root| {
+            ActiveConstraintCollection::new(self.owner.clone_ref(py)).__contains__(py, key)
+                || InactiveConstraintCollection::new(self.owner.clone_ref(py)).__contains__(py, key)
+        })
+    }
+    fn __getitem__(
+        &self,
+        py: Python<'_>,
+        key: AnyConstraintID,
+    ) -> PyResult<ConstraintCollectionValue> {
+        with_model!(&self.owner, py, |_root| {
+            let active = ActiveConstraintCollection::new(self.owner.clone_ref(py));
+            if active.__contains__(py, key) {
+                active
+                    .__getitem__(py, key)
+                    .map(ConstraintCollectionValue::Active)
+            } else {
+                InactiveConstraintCollection::new(self.owner.clone_ref(py))
+                    .__getitem__(py, key)
+                    .map(|row| ConstraintCollectionValue::Inactive(Box::new(row)))
+            }
+        })
+    }
+}
+mapping_methods!(ConstraintCollection, ConstraintCollectionValue);
+pyo3_stub_gen::inventory::submit! {
+ pyo3_stub_gen::derive::gen_methods_from_python! { r#"
+class ConstraintCollection:
+    @overload
+    def get(self, key: ConstraintIDBase, default: None = None) -> ConstraintView | None: ...
+    @overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
+    @overload
+    def get(self, key: ConstraintIDBase, default: pyo3_stub_gen.RustType["GetDefault"]) -> ConstraintView | pyo3_stub_gen.RustType["GetDefault"]: ...
 "# }
 }
 
@@ -1108,6 +1219,11 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let mapping = m.py().import("collections.abc")?.getattr("Mapping")?;
     m.add_class::<ConstraintCollection>()?;
     mapping.call_method1("register", (m.py().get_type::<ConstraintCollection>(),))?;
+    m.add_class::<ActiveConstraintCollection>()?;
+    mapping.call_method1(
+        "register",
+        (m.py().get_type::<ActiveConstraintCollection>(),),
+    )?;
     m.add_class::<InactiveConstraintCollection>()?;
     mapping.call_method1(
         "register",

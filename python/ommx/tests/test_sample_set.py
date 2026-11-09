@@ -9,7 +9,7 @@ def test_evaluate_samples_type_check():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + 2 * x[1] + 3 * x[2],
-        constraints={0: x[1] + x[2] <= 1},
+        active_constraints={0: x[1] + x[2] <= 1},
         sense=Sense.Maximize,
     )
 
@@ -29,7 +29,7 @@ def test_sample_set_sense_minimize():
     instance = Instance.from_components(
         decision_variables=[],
         objective=0,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     sample_set = instance.evaluate_samples([{}])
@@ -45,7 +45,7 @@ def test_sample_set_sense_maximize():
     instance = Instance.from_components(
         decision_variables=[],
         objective=0,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
     sample_set = instance.evaluate_samples([{}])

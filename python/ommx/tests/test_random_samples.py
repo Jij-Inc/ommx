@@ -7,7 +7,7 @@ def _single_binary_instance() -> Instance:
     return Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
 
@@ -19,7 +19,7 @@ def test_random_samples_basic():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={0: sum(x) <= 3},  # type: ignore
+        active_constraints={0: sum(x) <= 3},  # type: ignore
         sense=Sense.Maximize,
     )
 
@@ -51,7 +51,7 @@ def test_random_samples_only_used_variables():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1] + x[2],  # Only use first 3 variables
-        constraints={0: x[1] + x[3] <= 1},  # Also use x[3]
+        active_constraints={0: x[1] + x[3] <= 1},  # Also use x[3]
         sense=Sense.Maximize,
     )
 
@@ -82,7 +82,7 @@ def test_random_samples_with_different_variable_types():
     instance = Instance.from_components(
         decision_variables=[x_bin, x_int, x_cont],
         objective=x_bin + x_int + x_cont,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 
@@ -118,7 +118,7 @@ def test_random_samples_custom_max_sample_id():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
 

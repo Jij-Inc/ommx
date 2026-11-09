@@ -347,6 +347,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "Parameter",
     // Instance classes and explicit special-constraint lowering
     "ConstraintKind",
+    "ConstraintCollection",
     "PolynomialRequirement",
     "InstanceClassClause",
     "InstanceClass",
@@ -362,7 +363,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "FixedPenaltyPreparation",
     "PreparationPolicy",
     // Constraint and named function
-    "ConstraintCollection",
+    "ActiveConstraintCollection",
     "ConstraintFamilyView",
     "InactiveConstraintCollection",
     "EvaluatedConstraintCollection",

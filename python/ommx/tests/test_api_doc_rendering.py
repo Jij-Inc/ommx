@@ -154,7 +154,7 @@ def test_generated_reference_context_and_type_links(
         "NamedFunction",
         "State",
         "Samples",
-        "ConstraintCollection",
+        "ActiveConstraintCollection",
         "InactiveConstraintCollection",
         "EvaluatedConstraintCollection",
         "SampledConstraintCollection",

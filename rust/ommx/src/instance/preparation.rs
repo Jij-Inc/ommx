@@ -305,7 +305,7 @@ impl PreparationStep for ObjectivePreparation {
 impl PreparationStep for IntegerSlackPreparation {
     fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
         let inequality_ids = instance
-            .constraints()
+            .active_constraints()
             .iter()
             .filter_map(|(&id, constraint)| {
                 (constraint.equality == Equality::LessThanOrEqualToZero).then_some(id)
@@ -466,7 +466,7 @@ impl Instance {
     ///     .sense(Sense::Maximize)
     ///     .objective(Function::from(linear!(1)))
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-    ///     .constraints(BTreeMap::from([(
+    ///     .active_constraints(BTreeMap::from([(
     ///         ConstraintID::from(1),
     ///         Constraint::equal_to_zero(constraint),
     ///     )]))
@@ -927,7 +927,7 @@ mod tests {
             .sense(Sense::Maximize)
             .objective(Function::from(linear!(1)))
             .decision_variables(variables)
-            .constraints(BTreeMap::from([
+            .active_constraints(BTreeMap::from([
                 (
                     converted_id,
                     Constraint::less_than_or_equal_to_zero(converted_function),
@@ -937,7 +937,7 @@ mod tests {
                     Constraint::less_than_or_equal_to_zero(infeasible_function),
                 ),
             ]))
-            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(3), one_hot)]))
+            .active_one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(3), one_hot)]))
             .build()
             .unwrap();
         let target = unconstrained_class(
@@ -971,7 +971,7 @@ mod tests {
         assert_eq!(instance.sense(), Sense::Minimize);
         assert_eq!(instance.inactive_one_hot_constraints().len(), 1);
         assert_eq!(
-            instance.constraints()[&converted_id].equality,
+            instance.active_constraints()[&converted_id].equality,
             Equality::EqualToZero
         );
     }

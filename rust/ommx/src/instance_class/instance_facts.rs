@@ -108,7 +108,7 @@ impl From<&Instance> for InstanceFacts {
             used_variables_by_kind,
             objective_classification: instance.objective().into(),
             regular_constraints: instance
-                .constraints()
+                .active_constraints()
                 .iter()
                 .map(|(id, constraint)| {
                     (
@@ -121,7 +121,7 @@ impl From<&Instance> for InstanceFacts {
                 })
                 .collect(),
             indicator_constraints: instance
-                .indicator_constraints()
+                .active_indicator_constraints()
                 .iter()
                 .map(|(id, constraint)| {
                     (
@@ -133,8 +133,12 @@ impl From<&Instance> for InstanceFacts {
                     )
                 })
                 .collect(),
-            one_hot_constraint_ids: instance.one_hot_constraints().keys().copied().collect(),
-            sos1_constraint_ids: instance.sos1_constraints().keys().copied().collect(),
+            one_hot_constraint_ids: instance
+                .active_one_hot_constraints()
+                .keys()
+                .copied()
+                .collect(),
+            sos1_constraint_ids: instance.active_sos1_constraints().keys().copied().collect(),
         }
     }
 }
@@ -170,9 +174,9 @@ mod tests {
 
             prop_assert_eq!(
                 facts.regular_constraints().keys().copied().collect::<BTreeSet<_>>(),
-                instance.constraints().keys().copied().collect::<BTreeSet<_>>()
+                instance.active_constraints().keys().copied().collect::<BTreeSet<_>>()
             );
-            for (id, constraint) in instance.constraints() {
+            for (id, constraint) in instance.active_constraints() {
                 let fact = facts.regular_constraints().get(id).unwrap();
                 prop_assert_eq!(fact.relation(), constraint.equality);
                 prop_assert_eq!(
@@ -183,9 +187,9 @@ mod tests {
 
             prop_assert_eq!(
                 facts.indicator_constraints().keys().copied().collect::<BTreeSet<_>>(),
-                instance.indicator_constraints().keys().copied().collect::<BTreeSet<_>>()
+                instance.active_indicator_constraints().keys().copied().collect::<BTreeSet<_>>()
             );
-            for (id, constraint) in instance.indicator_constraints() {
+            for (id, constraint) in instance.active_indicator_constraints() {
                 let fact = facts.indicator_constraints().get(id).unwrap();
                 prop_assert_eq!(fact.relation(), constraint.equality);
                 prop_assert_eq!(
@@ -196,11 +200,11 @@ mod tests {
 
             prop_assert_eq!(
                 facts.one_hot_constraint_ids(),
-                &instance.one_hot_constraints().keys().copied().collect()
+                &instance.active_one_hot_constraints().keys().copied().collect()
             );
             prop_assert_eq!(
                 facts.sos1_constraint_ids(),
-                &instance.sos1_constraints().keys().copied().collect()
+                &instance.active_sos1_constraints().keys().copied().collect()
             );
         }
     }
@@ -217,8 +221,8 @@ mod tests {
                 (x, DecisionVariable::binary()),
                 (y, DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::new())
-            .one_hot_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_one_hot_constraints(BTreeMap::from([(
                 one_hot_id,
                 OneHotConstraint::new(BTreeSet::from([x, y])).unwrap(),
             )]))
@@ -269,7 +273,7 @@ mod tests {
                 (removed_only, DecisionVariable::semi_integer()),
             ]))
             .fixed_decision_variable_values(BTreeMap::from([(fixed, 0.0)]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .inactive_constraints(BTreeMap::from([(
                 ConstraintID::from(10),
                 (

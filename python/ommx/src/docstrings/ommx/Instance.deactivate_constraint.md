@@ -1,4 +1,4 @@
-Move an active regular constraint to the retained inactive collection.
+Move an active regular constraint to the inactive collection.
 
 The Instance is changed in place. `constraint_id` accepts a {class}`~ommx.ConstraintID`
 or its integer value. `reason` records why the condition was deactivated, and
@@ -17,7 +17,7 @@ allows `x=1`, while the retained `x <= 0` condition rejects it:
 >>> limit = instance.add_constraint(x <= 0, "limit")
 >>> limit_id = limit.constraint_id
 >>> instance.deactivate_constraint(limit_id, "example.relax_limit", purpose="inspection")
->>> assert limit_id not in instance.constraints
+>>> assert limit_id not in instance.active_constraints
 >>> inactive = instance.inactive_constraints[limit_id]
 >>> assert inactive.inactive_reason == "example.relax_limit"
 >>> assert inactive.inactive_reason_parameters == {"purpose": "inspection"}
@@ -27,13 +27,15 @@ allows `x=1`, while the retained `x <= 0` condition rejects it:
 
 ```
 
-Inspect the deactivation reason on the model and the evaluated violation on the
+Inspect the inactivity reason on the model and the evaluated violation on the
 result. Use `kind=ConstraintKind.Regular` for regular constraints. The same table
 APIs accept `ConstraintKind.Indicator`, `ConstraintKind.OneHot`, and `ConstraintKind.Sos1`
 for the corresponding special families.
 
 ```pycon
->>> model_rows = instance.constraints_df(kind=ConstraintKind.Regular, removed=True)
+>>> model_rows = instance.constraints_df(
+...     kind=ConstraintKind.Regular, include=("inactive_reason",), removed=True
+... )
 >>> assert model_rows.loc[limit_id, "inactive_reason"] == "example.relax_limit"
 >>> result_rows = solution.constraints_df(
 ...     kind=ConstraintKind.Regular, include=("inactive_reason",)
@@ -57,4 +59,4 @@ continues to describe its earlier evaluation.
 Raises `RuntimeError` if the ID does not identify an active regular constraint.
 Use {meth}`~ommx.Instance.deactivate_indicator_constraint` for an Indicator constraint.
 See {attr}`~ommx.Instance.inactive_constraints` for other operations that retain
-inactive constraints and for the distinction between deactivation and relaxation.
+inactive constraints and for the distinction between removal and relaxation.

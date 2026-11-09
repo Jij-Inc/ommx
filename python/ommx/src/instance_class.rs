@@ -196,23 +196,23 @@ impl InstanceClass {
     /// >>> from ommx import DecisionVariable, Instance, InstanceClass, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> linear = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Minimize
     /// ... )
     /// >>> quadratic = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x * x, constraints={}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x * x, active_constraints={}, sense=Sense.Minimize
     /// ... )
     /// >>> cubic = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x * x * x, active_constraints={}, sense=Sense.Minimize
     /// ... )
     /// >>> maximizing = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> continuous = DecisionVariable.continuous(1)
     /// >>> non_binary = Instance.from_components(
-    /// ...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize
+    /// ...     decision_variables=[continuous], objective=continuous, active_constraints={}, sense=Sense.Minimize
     /// ... )
     /// >>> constrained = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x, active_constraints={0: x == 1}, sense=Sense.Minimize
     /// ... )
     /// >>> target = InstanceClass.qubo()
     /// >>> assert target.contains(linear)
@@ -236,20 +236,20 @@ impl InstanceClass {
     /// >>> from ommx import DecisionVariable, Instance, InstanceClass, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> linear = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Minimize
     /// ... )
     /// >>> cubic = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x * x * x, active_constraints={}, sense=Sense.Minimize
     /// ... )
     /// >>> maximizing = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> continuous = DecisionVariable.continuous(1)
     /// >>> non_binary = Instance.from_components(
-    /// ...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize
+    /// ...     decision_variables=[continuous], objective=continuous, active_constraints={}, sense=Sense.Minimize
     /// ... )
     /// >>> constrained = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x, active_constraints={0: x == 1}, sense=Sense.Minimize
     /// ... )
     /// >>> target = InstanceClass.hubo()
     /// >>> assert target.contains(linear)

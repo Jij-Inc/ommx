@@ -768,7 +768,7 @@ impl Instance {
         }
 
         let cardinality_constraint = ConstraintID::from(hint.binary_constraint_id);
-        let cardinality_row = self.constraints().get(&cardinality_constraint).ok_or_else(|| {
+        let cardinality_row = self.active_constraints().get(&cardinality_constraint).ok_or_else(|| {
             crate::error!(
                 { ?cardinality_constraint },
                 "Legacy v1 SOS1 hint cardinality constraint {cardinality_constraint:?} is not active"
@@ -795,7 +795,7 @@ impl Instance {
         let mut fresh_claims = BTreeMap::<VariableID, LegacyV1FreshSelectorClaim>::new();
         let mut selector_owners = BTreeMap::<VariableID, VariableID>::new();
         for &id in &link_ids {
-            let row = self.constraints().get(&id).ok_or_else(|| {
+            let row = self.active_constraints().get(&id).ok_or_else(|| {
                 crate::error!(
                     { ?id },
                     "Legacy v1 SOS1 hint Big-M constraint {id:?} is not active"
@@ -1341,7 +1341,7 @@ impl Instance {
         side: Sos1LinkSide,
     ) -> crate::Result<(f64, f64)> {
         let side_name = side.name();
-        let actual = self.constraints().get(&id).ok_or_else(|| {
+        let actual = self.active_constraints().get(&id).ok_or_else(|| {
             crate::error!(
                 { ?id, side = side_name },
                 "Claimed SOS1 {side_name} link constraint {id:?} is not active"
@@ -1457,7 +1457,7 @@ impl Instance {
         expected: &Constraint,
         role: &'static str,
     ) -> crate::Result<()> {
-        let actual = self.constraints().get(&id).ok_or_else(|| {
+        let actual = self.active_constraints().get(&id).ok_or_else(|| {
             crate::error!(
                 { ?id, role },
                 "Claimed SOS1 {role} constraint {id:?} is not active"
@@ -1627,7 +1627,7 @@ mod tests {
                 (selector_id(), DecisionVariable::binary()),
                 (unrelated_id(), DecisionVariable::continuous()),
             ]))
-            .constraints(constraints)
+            .active_constraints(constraints)
             .build()
             .unwrap();
         let request = BTreeMap::from([(
@@ -1671,7 +1671,7 @@ mod tests {
                 (member_integer_id(), member),
                 (selector_id(), DecisionVariable::binary()),
             ]))
-            .constraints(constraints)
+            .active_constraints(constraints)
             .build()
             .unwrap();
         let request = BTreeMap::from([(
@@ -1728,7 +1728,7 @@ mod tests {
                 (selectors[0], DecisionVariable::binary()),
                 (selectors[1], DecisionVariable::binary()),
             ]))
-            .constraints(constraints)
+            .active_constraints(constraints)
             .build()
             .unwrap();
         (instance, requests)
@@ -1737,7 +1737,7 @@ mod tests {
     fn overlapping_batch_instance() -> (Instance, Sos1BigMPromotionRequest) {
         let (mut instance, mut request) = shared_member_batch_instance();
         let duplicate_cardinality = ConstraintID::from(103);
-        let row = instance.constraints()[&cardinality_row_id()].clone();
+        let row = instance.active_constraints()[&cardinality_row_id()].clone();
         instance
             .constraint_collection
             .insert_active_with_context(duplicate_cardinality, row, ConstraintContext::default())
@@ -1790,7 +1790,7 @@ mod tests {
 
         assert_eq!(promotion, Sos1ConstraintID::from(103));
         assert_eq!(
-            &instance.sos1_constraints()[&promotion].variables,
+            &instance.active_sos1_constraints()[&promotion].variables,
             &VariableIDSet::from([member_binary_id(), member_integer_id()])
         );
         assert_eq!(
@@ -1814,7 +1814,7 @@ mod tests {
             instance.decision_variable_role(selector_id()),
             Some(DecisionVariableRole::Dependent)
         );
-        assert!(instance.constraints().is_empty());
+        assert!(instance.active_constraints().is_empty());
         assert_eq!(instance.inactive_constraints().len(), 3);
         assert!(instance
             .inactive_constraints()
@@ -1862,11 +1862,13 @@ mod tests {
         );
         assert!(promotions
             .iter()
-            .all(|promotion| instance.sos1_constraints()[promotion].variables
-                == VariableIDSet::from([member_integer_id()])));
-        assert!(instance.constraints().is_empty());
+            .all(
+                |promotion| instance.active_sos1_constraints()[promotion].variables
+                    == VariableIDSet::from([member_integer_id()])
+            ));
+        assert!(instance.active_constraints().is_empty());
         assert_eq!(instance.inactive_constraints().len(), 6);
-        assert_eq!(instance.sos1_constraints().len(), 2);
+        assert_eq!(instance.active_sos1_constraints().len(), 2);
         assert_eq!(instance.decision_variable_dependency().len(), 2);
         assert!(instance
             .decision_variable_dependency()
@@ -2017,9 +2019,9 @@ mod tests {
             promotions.keys().collect::<Vec<_>>(),
             requests.keys().collect::<Vec<_>>()
         );
-        assert!(instance.constraints().is_empty());
+        assert!(instance.active_constraints().is_empty());
         assert_eq!(instance.inactive_constraints().len(), 6);
-        assert_eq!(instance.sos1_constraints().len(), 2);
+        assert_eq!(instance.active_sos1_constraints().len(), 2);
     }
 
     #[test]
@@ -2053,14 +2055,14 @@ mod tests {
         assert!(outcomes[&ConstraintID::from(103)].is_err());
         let promotion = outcomes[&ConstraintID::from(202)].as_ref().unwrap();
         assert_eq!(*promotion, Sos1ConstraintID::from(203));
-        assert_eq!(instance.sos1_constraints().len(), 1);
+        assert_eq!(instance.active_sos1_constraints().len(), 1);
         for id in [
             upper_row_id(),
             lower_row_id(),
             cardinality_row_id(),
             ConstraintID::from(103),
         ] {
-            assert!(instance.constraints().contains_key(&id));
+            assert!(instance.active_constraints().contains_key(&id));
         }
         for id in [
             ConstraintID::from(200),
@@ -2098,7 +2100,7 @@ mod tests {
             Sos1ConstraintID::from(203)
         );
         for id in [upper_row_id(), lower_row_id(), cardinality_row_id()] {
-            assert!(instance.constraints().contains_key(&id));
+            assert!(instance.active_constraints().contains_key(&id));
         }
         for id in [
             ConstraintID::from(200),
@@ -2124,9 +2126,9 @@ mod tests {
             *outcomes[&cardinality_row_id()].as_ref().unwrap(),
             Sos1ConstraintID::from(103)
         );
-        assert!(instance.constraints().is_empty());
+        assert!(instance.active_constraints().is_empty());
         assert_eq!(instance.inactive_constraints().len(), 3);
-        assert_eq!(instance.sos1_constraints().len(), 1);
+        assert_eq!(instance.active_sos1_constraints().len(), 1);
     }
 
     #[test]
@@ -2236,7 +2238,7 @@ mod tests {
         assert!(report[&ConstraintID::from(202)].is_ok());
         let reused_sos1 = report[&reused_cardinality].as_ref().unwrap();
         assert_eq!(
-            instance.sos1_constraints()[reused_sos1].variables,
+            instance.active_sos1_constraints()[reused_sos1].variables,
             VariableIDSet::from([selector_id()])
         );
         assert!(instance
@@ -2247,7 +2249,9 @@ mod tests {
             .decision_variable_dependency()
             .get(&VariableID::from(11))
             .is_some());
-        assert!(instance.constraints().contains_key(&cardinality_row_id()));
+        assert!(instance
+            .active_constraints()
+            .contains_key(&cardinality_row_id()));
     }
 
     #[test]
@@ -2502,12 +2506,12 @@ mod tests {
     fn accepts_finite_member_bounds_that_exclude_zero() {
         let (mut positive, request) = fresh_instance(integer(1.0, 3.0), Some(upper_row_id()), None);
         let _promotion = promote_one(&mut positive, &request).unwrap();
-        assert_eq!(positive.sos1_constraints().len(), 1);
+        assert_eq!(positive.active_sos1_constraints().len(), 1);
 
         let (mut negative, request) =
             fresh_instance(integer(-3.0, -1.0), None, Some(lower_row_id()));
         let _promotion = promote_one(&mut negative, &request).unwrap();
-        assert_eq!(negative.sos1_constraints().len(), 1);
+        assert_eq!(negative.active_sos1_constraints().len(), 1);
     }
 
     #[test]
@@ -2537,12 +2541,12 @@ mod tests {
         )]);
         let promotion = promote_one(&mut instance, &request).unwrap();
         assert_eq!(
-            instance.sos1_constraints()[&promotion].variables,
+            instance.active_sos1_constraints()[&promotion].variables,
             VariableIDSet::from([VariableID::from(3), VariableID::from(4)])
         );
         assert!(instance.decision_variable_dependency().is_empty());
         assert_eq!(instance.decision_variables().len(), 2);
-        assert!(instance.constraints().is_empty());
+        assert!(instance.active_constraints().is_empty());
         assert!(instance.inactive_constraints().contains_key(&cardinality));
     }
 
@@ -2640,7 +2644,7 @@ mod tests {
                             .plan_promote_sos1_big_m(&request)
                             .apply_bound_tightening_and_convert_to_v1_hints_if_fully_valid()
                             .unwrap();
-                        assert_eq!(instance.constraints().len(), 3);
+                        assert_eq!(instance.active_constraints().len(), 3);
                     } else {
                         instance
                             .promote_sos1_big_m_if_fully_valid(&request)
@@ -3370,7 +3374,7 @@ mod tests {
                 (first, DecisionVariable::binary()),
                 (second, DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 cardinality,
                 canonical_sos1_big_m_cardinality([first, second]).unwrap(),
             )]))
@@ -3388,7 +3392,7 @@ mod tests {
         let promotion = promote_one(&mut instance, &request).unwrap();
 
         assert_eq!(
-            &instance.sos1_constraints()[&promotion].variables,
+            &instance.active_sos1_constraints()[&promotion].variables,
             &VariableIDSet::from([first, second])
         );
         assert!(instance.decision_variable_dependency().is_empty());
@@ -3414,7 +3418,7 @@ mod tests {
                 (member, integer(0.0, 0.0)),
                 (selector, DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 cardinality,
                 canonical_sos1_big_m_cardinality([selector]).unwrap(),
             )]))
@@ -3431,7 +3435,7 @@ mod tests {
             .unwrap();
         let promotion = promote_one(&mut instance, &request).unwrap();
 
-        assert!(instance.sos1_constraints().contains_key(&promotion));
+        assert!(instance.active_sos1_constraints().contains_key(&promotion));
         assert!(instance
             .decision_variable_dependency()
             .get(&selector)
@@ -3597,7 +3601,7 @@ mod tests {
                 (first_selector, DecisionVariable::binary()),
                 (second_selector, DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 cardinality,
                 canonical_sos1_big_m_cardinality([first_selector, second_selector]).unwrap(),
             )]))
@@ -3684,7 +3688,7 @@ mod tests {
             Sense::Minimize,
             Function::Zero,
             variables,
-            instance.constraints().clone(),
+            instance.active_constraints().clone(),
         )
         .unwrap();
         (instance, request)
@@ -3844,7 +3848,7 @@ mod tests {
             Sense::Minimize,
             Function::Zero,
             variables,
-            source.constraints().clone(),
+            source.active_constraints().clone(),
         )
         .unwrap();
         instance
@@ -3906,7 +3910,7 @@ mod tests {
                     Sense::Minimize,
                     Function::Zero,
                     variables,
-                    source.constraints().clone(),
+                    source.active_constraints().clone(),
                 )
                 .unwrap();
                 instance

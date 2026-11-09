@@ -157,7 +157,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             >>> instance = Instance.from_components(
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
+            ...     active_constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
             ...     sense=Sense.Maximize,
             ... )
 
@@ -192,7 +192,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 >>> instance = Instance.from_components(
                 ...     decision_variables=[x],
                 ...     objective=x,
-                ...     constraints={0: x >= 4},
+                ...     active_constraints={0: x >= 4},
                 ...     sense=Sense.Maximize,
                 ... )
 
@@ -212,7 +212,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 >>> instance = Instance.from_components(
                 ...     decision_variables=[x],
                 ...     objective=x,
-                ...     constraints={},
+                ...     active_constraints={},
                 ...     sense=Sense.Maximize,
                 ... )
 
@@ -233,7 +233,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 >>> instance = Instance.from_components(
                 ...     decision_variables=[x, y],
                 ...     objective=x + y,
-                ...     constraints={0: x + y <= 1},
+                ...     active_constraints={0: x + y <= 1},
                 ...     sense=Sense.Maximize,
                 ... )
 
@@ -313,7 +313,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             >>> instance = Instance.from_components(
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
+            ...     active_constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
             ...     sense=Sense.Maximize,
             ... )
 
@@ -367,7 +367,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             >>> ommx_instance = Instance.from_components(
             ...     decision_variables=[x1],
             ...     objective=x1,
-            ...     constraints={},
+            ...     active_constraints={},
             ...     sense=Sense.Minimize,
             ... )
             >>> adapter = OMMXPythonMIPAdapter(ommx_instance)
@@ -471,12 +471,12 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
     def _set_constraints(self):
         self._constraint_names: dict[ConstraintID, str] = {}
-        for cid in self.instance.constraints:
+        for cid in self.instance.active_constraints:
             if not isinstance(cid, ConstraintID):
                 raise OMMXPythonMIPAdapterError(
                     f"Unsupported constraint family: {type(cid).__name__} (id: {cid})"
                 )
-            constraint = self.instance.constraints[cid]
+            constraint = self.instance.active_constraints[cid]
             lin_expr = self._as_lin_expr(constraint.function)
             if constraint.equality == Equality.EqualToZero:
                 constr_expr = lin_expr == 0

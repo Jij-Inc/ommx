@@ -327,10 +327,10 @@ macro_rules! impl_instance_annotations {
 
             #[getter]
             pub fn num_constraints(&self) -> Option<i64> {
-                let count = self.inner.constraints().len()
-                    + self.inner.indicator_constraints().len()
-                    + self.inner.one_hot_constraints().len()
-                    + self.inner.sos1_constraints().len();
+                let count = self.inner.active_constraints().len()
+                    + self.inner.active_indicator_constraints().len()
+                    + self.inner.active_one_hot_constraints().len()
+                    + self.inner.active_sos1_constraints().len();
                 Some(count as i64)
             }
 

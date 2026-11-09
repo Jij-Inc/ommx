@@ -42,8 +42,8 @@ def _instance_with_indicator() -> Instance:
     return Instance.from_components(
         decision_variables=[x, y],
         objective=x,
-        constraints={},
-        indicator_constraints={7: ic},
+        active_constraints={},
+        active_indicator_constraints={7: ic},
         sense=Sense.Minimize,
     )
 
@@ -143,7 +143,7 @@ def test_evaluate_emits_rust_span_under_python_parent() -> None:
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
 
@@ -171,7 +171,7 @@ def test_to_qubo_emits_active_format_span() -> None:
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 

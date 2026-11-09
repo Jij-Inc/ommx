@@ -20,7 +20,7 @@ use std::collections::HashMap;
 /// unique across all active and removed families.
 ///
 /// APIs whose argument already fixes a family promote integer inputs to that
-/// family's ID: for example, ``constraints={1: constraint}`` in
+/// family's ID: for example, ``active_constraints={1: constraint}`` in
 /// {meth}`~ommx.Instance.from_components`, or
 /// ``instance.constraints.of_kind(ConstraintKind.Regular)[1]``. They reject IDs of another
 /// family. Such mapping inputs reject ``1`` and ``ConstraintID(1)`` together
@@ -49,8 +49,10 @@ use std::collections::HashMap;
 ///
 /// New special-constraint families are additive API extensions. Collections,
 /// including removed and result collections, expose the open common interfaces
-/// ``Mapping[ConstraintIDBase, ConstraintView]``; their known concrete ID
-/// overloads retain precise row types. The currently supported families are
+/// ``Mapping[ConstraintIDBase, ConstraintView]``. Filtered active/inactive and
+/// evaluated/sampled mappings retain precise row overloads for known ID families.
+/// Model ``constraints`` combines active and inactive rows, so even concrete IDs
+/// return the common ``ConstraintView`` type; the concrete row type must be checked at runtime. The currently supported families are
 /// not an exhaustive list of future possibilities.
 ///
 /// A solver adapter or transformation must reject families it cannot handle.
@@ -102,7 +104,7 @@ impl ConstraintIDBase {
 /// row type before using family-specific mathematical operations, and reject
 /// unsupported families rather than dropping their constraints. This interface
 /// does not imply whether the row is attached or an owned result snapshot.
-/// See {class}`~ommx.ConstraintCollection` for the ownership and iteration
+/// See {class}`~ommx.ActiveConstraintCollection` for the ownership and iteration
 /// contracts and {class}`~ommx.ConstraintIDBase` for explicit family dispatch.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(subclass)]

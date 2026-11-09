@@ -953,7 +953,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 >>> instance = Instance.from_components(
                 ...     decision_variables=[x],
                 ...     objective=x,
-                ...     constraints={0: x >= 4},
+                ...     active_constraints={0: x >= 4},
                 ...     sense=Sense.Maximize,
                 ... )
 
@@ -973,7 +973,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 >>> instance = Instance.from_components(
                 ...     decision_variables=[x],
                 ...     objective=x,
-                ...     constraints={},
+                ...     active_constraints={},
                 ...     sense=Sense.Maximize,
                 ... )
 
@@ -1055,7 +1055,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             >>> instance = Instance.from_components(
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
+            ...     active_constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
             ...     sense=Sense.Maximize,
             ... )
 
@@ -1108,7 +1108,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             >>> ommx_instance = Instance.from_components(
             ...     decision_variables=[x1],
             ...     objective=x1,
-            ...     constraints={},
+            ...     active_constraints={},
             ...     sense=Sense.Minimize,
             ... )
             >>> adapter = OMMXPySCIPOptAdapter(ommx_instance)
@@ -1244,7 +1244,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
 
     def _set_constraints(self):
-        for cid in self.instance.constraints:
+        for cid in self.instance.active_constraints:
             if isinstance(cid, ConstraintID):
                 self._set_regular_constraint(cid)
             elif isinstance(cid, Sos1ConstraintID):
@@ -1257,13 +1257,13 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 )
 
     def _set_sos1_constraint(self, sos1_id: Sos1ConstraintID):
-        sos1 = self.instance.constraints[sos1_id]
+        sos1 = self.instance.active_constraints[sos1_id]
         name = f"sos1_{sos1_id}"
         vars = [self.varname_map[str(v)] for v in sos1.variables]
         self.model.addConsSOS1(vars, name=name)
 
     def _set_regular_constraint(self, cid: ConstraintID):
-        constraint = self.instance.constraints[cid]
+        constraint = self.instance.active_constraints[cid]
         # Handle constraint function based on its type
         f = constraint.function
         degree = f.degree()
@@ -1291,7 +1291,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         self.model.addCons(constr_expr, name=str(cid))
 
     def _set_indicator_constraint(self, ind_id: IndicatorConstraintID):
-        indicator = self.instance.constraints[ind_id]
+        indicator = self.instance.active_constraints[ind_id]
         f = indicator.function
         degree = f.degree()
         if degree == 0:

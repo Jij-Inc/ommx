@@ -244,8 +244,8 @@ fn hint_conversion_commits_only_bounds_and_retains_the_regular_formulation() {
         ordinary.decision_variables()[&2.into()].bound(),
         Bound::new(-2.0, 3.0).unwrap()
     );
-    assert!(ordinary.sos1_constraints().is_empty());
-    assert_eq!(promoted.sos1_constraints().len(), 1);
+    assert!(ordinary.active_sos1_constraints().is_empty());
+    assert_eq!(promoted.active_sos1_constraints().len(), 1);
     for value in [-3.0, -2.0, 0.0, 3.0, 4.0] {
         let regular = ordinary
             .evaluate(
@@ -418,7 +418,7 @@ fn with_formulation(
     });
     variables.insert(selector.into(), DecisionVariable::binary());
     variables.insert(reused.into(), DecisionVariable::binary());
-    let mut rows = instance.constraints().clone();
+    let mut rows = instance.active_constraints().clone();
     rows.insert(
         cardinality.into(),
         Constraint::less_than_or_equal_to_zero(
@@ -729,7 +729,7 @@ fn best_effort_preserves_regular_rows_variables_dependencies_and_metadata() {
         .sense(source.sense())
         .objective(source.objective().clone())
         .decision_variables(variables)
-        .constraints(source.constraints().clone())
+        .active_constraints(source.active_constraints().clone())
         .decision_variable_dependency(assignments)
         .build()
         .unwrap();
@@ -777,8 +777,8 @@ fn best_effort_preserves_regular_rows_variables_dependencies_and_metadata() {
         .unwrap();
     assert_eq!(instance, expected);
     assert_eq!(instance.decision_variable_dependency().len(), 1);
-    assert!(instance.sos1_constraints().is_empty());
-    assert!(instance.one_hot_constraints().is_empty());
+    assert!(instance.active_sos1_constraints().is_empty());
+    assert!(instance.active_one_hot_constraints().is_empty());
     assert!(instance.inactive_constraints().is_empty());
 }
 
@@ -1060,7 +1060,7 @@ proptest! {
         prop_assert_eq!(Instance::from_v1_bytes(&bytes).unwrap(), original);
         let (promoted, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
         prop_assert!(report.one_hot_outcomes()[0].is_promoted());
-        prop_assert_eq!(promoted.one_hot_constraints().values().next().unwrap().variables.iter()
+        prop_assert_eq!(promoted.active_one_hot_constraints().values().next().unwrap().variables.iter()
             .map(|id| id.into_inner()).collect::<std::collections::BTreeSet<_>>(), members);
     }
 

@@ -93,7 +93,7 @@ impl Instance {
     ///     .sense(Sense::Maximize)
     ///     .objective(Function::from(linear!(1)))
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// assert!(instance.convert_active_objective(Sense::Minimize));
@@ -708,9 +708,9 @@ mod tests {
 
         // Should return None since no constraint with ID 10 existed before
         assert!(result.is_none());
-        assert_eq!(instance.constraints().len(), 1);
+        assert_eq!(instance.active_constraints().len(), 1);
         assert_eq!(
-            instance.constraints().get(&ConstraintID::from(10)),
+            instance.active_constraints().get(&ConstraintID::from(10)),
             Some(&constraint)
         );
     }
@@ -742,9 +742,9 @@ mod tests {
 
         // Should return the old constraint that was replaced
         assert_eq!(result, Some(original_constraint));
-        assert_eq!(instance.constraints().len(), 1);
+        assert_eq!(instance.active_constraints().len(), 1);
         assert_eq!(
-            instance.constraints().get(&ConstraintID::from(5)),
+            instance.active_constraints().get(&ConstraintID::from(5)),
             Some(&new_constraint)
         );
     }
@@ -781,7 +781,7 @@ mod tests {
             "Undefined variable ID is used: VariableID(999)"
         );
         // Ensure no constraint was added
-        assert_eq!(instance.constraints().len(), 0);
+        assert_eq!(instance.active_constraints().len(), 0);
     }
 
     #[test]
@@ -822,7 +822,7 @@ mod tests {
             .insert_constraint(ConstraintID::from(3), constraint3.clone())
             .unwrap()
             .is_none());
-        assert_eq!(instance.constraints().len(), 3);
+        assert_eq!(instance.active_constraints().len(), 3);
 
         // Replace constraint 2 with new one
         let new_constraint2 = Constraint::equal_to_zero((linear!(1) + coeff!(1.0)).into());
@@ -830,9 +830,9 @@ mod tests {
             .insert_constraint(ConstraintID::from(2), new_constraint2.clone())
             .unwrap();
         assert_eq!(replaced, Some(constraint2));
-        assert_eq!(instance.constraints().len(), 3);
+        assert_eq!(instance.active_constraints().len(), 3);
         assert_eq!(
-            instance.constraints().get(&ConstraintID::from(2)),
+            instance.active_constraints().get(&ConstraintID::from(2)),
             Some(&new_constraint2)
         );
     }
@@ -867,7 +867,7 @@ mod tests {
             "Dependent variable cannot be used in objectives or constraints: VariableID(2)"
         );
         // Ensure no constraint was added
-        assert_eq!(instance.constraints().len(), 0);
+        assert_eq!(instance.active_constraints().len(), 0);
     }
 
     #[test]
@@ -887,7 +887,7 @@ mod tests {
             .fixed_decision_variable_values(btreemap! {
                 VariableID::from(2) => 0.0,
             })
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 
@@ -899,7 +899,7 @@ mod tests {
             err.to_string().contains("Fixed variable") && err.to_string().contains("VariableID(2)"),
             "unexpected error: {err}"
         );
-        assert!(instance.constraints().is_empty());
+        assert!(instance.active_constraints().is_empty());
     }
 
     #[test]
@@ -927,7 +927,7 @@ mod tests {
             err.to_string().contains("at least one variable"),
             "unexpected error: {err}"
         );
-        assert!(instance.one_hot_constraints().is_empty());
+        assert!(instance.active_one_hot_constraints().is_empty());
     }
 
     #[test]
@@ -956,7 +956,7 @@ mod tests {
             err.to_string().contains("at least one variable"),
             "unexpected error: {err}"
         );
-        assert!(instance.one_hot_constraints().is_empty());
+        assert!(instance.active_one_hot_constraints().is_empty());
     }
 
     #[test]
@@ -977,7 +977,7 @@ mod tests {
             err.downcast_ref::<crate::Sos1ConstraintError>(),
             Some(crate::Sos1ConstraintError::EmptyVariables)
         ));
-        assert!(instance.sos1_constraints().is_empty());
+        assert!(instance.active_sos1_constraints().is_empty());
     }
 
     #[test]
@@ -999,7 +999,7 @@ mod tests {
             err.downcast_ref::<crate::Sos1ConstraintError>(),
             Some(crate::Sos1ConstraintError::EmptyVariables)
         ));
-        assert!(instance.sos1_constraints().is_empty());
+        assert!(instance.active_sos1_constraints().is_empty());
     }
 
     #[test]
@@ -1059,7 +1059,7 @@ mod tests {
             .unwrap();
 
         // Verify initial state
-        assert_eq!(instance.constraints().len(), 1);
+        assert_eq!(instance.active_constraints().len(), 1);
         assert_eq!(instance.inactive_constraints().len(), 1);
 
         // Insert a new constraint with the same ID as the removed constraint
@@ -1078,7 +1078,7 @@ mod tests {
             Some(Constraint::equal_to_zero((linear!(2) + coeff!(2.0)).into(),))
         );
 
-        assert_eq!(instance.constraints().len(), 1);
+        assert_eq!(instance.active_constraints().len(), 1);
         assert_eq!(instance.inactive_constraints().len(), 1);
         let (removed, _reason) = instance
             .inactive_constraints()
@@ -1125,11 +1125,11 @@ mod tests {
 
         // No constraints were replaced since none existed before
         assert!(replaced.is_empty());
-        assert_eq!(instance.constraints().len(), 3);
+        assert_eq!(instance.active_constraints().len(), 3);
 
         // Verify constraints were inserted correctly
         for (id, constraint) in &constraints {
-            assert_eq!(instance.constraints().get(id), Some(constraint));
+            assert_eq!(instance.active_constraints().get(id), Some(constraint));
         }
     }
 
@@ -1174,7 +1174,7 @@ mod tests {
             "Undefined variable ID is used: VariableID(999)"
         );
         // Ensure no constraints were added (atomic operation)
-        assert_eq!(instance.constraints().len(), 0);
+        assert_eq!(instance.active_constraints().len(), 0);
     }
 
     #[test]
@@ -1218,7 +1218,7 @@ mod tests {
         // Should have replaced constraint 1
         assert_eq!(replaced.len(), 1);
         assert!(replaced.contains_key(&ConstraintID::from(1)));
-        assert_eq!(instance.constraints().len(), 3);
+        assert_eq!(instance.active_constraints().len(), 3);
     }
 
     #[test]
@@ -1245,7 +1245,7 @@ mod tests {
         instance
             .deactivate_constraint(ConstraintID::from(1), "test".to_string(), [])
             .unwrap();
-        assert_eq!(instance.constraints().len(), 0);
+        assert_eq!(instance.active_constraints().len(), 0);
         assert_eq!(instance.inactive_constraints().len(), 1);
 
         // Replace the removed constraint
@@ -1306,7 +1306,7 @@ mod tests {
             "Dependent variable cannot be used in objectives or constraints: VariableID(2)"
         );
         // Ensure no constraints were added (atomic operation)
-        assert_eq!(instance.constraints().len(), 0);
+        assert_eq!(instance.active_constraints().len(), 0);
     }
 
     #[test]

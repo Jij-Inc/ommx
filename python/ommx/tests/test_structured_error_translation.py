@@ -10,7 +10,7 @@ def _evaluated_results() -> tuple[ommx.Solution, ommx.SampleSet]:
     instance = ommx.Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={0: constraint},
+        active_constraints={0: constraint},
         sense=ommx.Sense.Minimize,
         named_functions=[named_function],
     )
@@ -82,7 +82,7 @@ def test_instance_rejects_raw_integer_sense() -> None:
         ommx.Instance.from_components(
             decision_variables=[],
             objective=0,
-            constraints={},
+            active_constraints={},
             sense=1,  # pyright: ignore[reportArgumentType] - intentional invalid input
         )
 
@@ -99,7 +99,7 @@ def test_duplicate_variable_subscripts_raise_value_error() -> None:
     instance = ommx.Instance.from_components(
         decision_variables=variables,
         objective=0,
-        constraints={},
+        active_constraints={},
         sense=ommx.Sense.Minimize,
     )
     solution = instance.evaluate({0: 0, 1: 1})
@@ -137,7 +137,7 @@ def test_duplicate_named_function_subscripts_raise_value_error() -> None:
     instance = ommx.Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=ommx.Sense.Minimize,
         named_functions=named_functions,
     )
@@ -161,7 +161,7 @@ def test_constraint_extraction_ignores_parameters() -> None:
     instance = ommx.Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={0: constraint},
+        active_constraints={0: constraint},
         sense=ommx.Sense.Minimize,
     )
     solution = instance.evaluate({0: 1})
@@ -176,7 +176,7 @@ def test_missing_feasible_sample_raises_value_error_for_all_aliases() -> None:
     instance = ommx.Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={0: x == 1},
+        active_constraints={0: x == 1},
         sense=ommx.Sense.Minimize,
     )
     sample_set = instance.evaluate_samples({7: {0: 0}})
@@ -197,7 +197,7 @@ def test_all_extractors_validate_sample_id_before_skipping_unnamed_entries() -> 
     instance = ommx.Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=ommx.Sense.Minimize,
         named_functions=[ommx.NamedFunction(id=0, function=x)],
     )

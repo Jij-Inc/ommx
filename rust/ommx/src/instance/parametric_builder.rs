@@ -14,7 +14,7 @@ use crate::constraint_type::ConstraintCollection;
 ///     .objective(Function::Zero)
 ///     .decision_variables(BTreeMap::new())
 ///     .parameters(ParameterTable::default())
-///     .constraints(BTreeMap::new())
+///     .active_constraints(BTreeMap::new())
 ///     .build()
 ///     .unwrap();
 /// ```
@@ -42,8 +42,16 @@ pub struct ParametricInstanceBuilder {
         ),
     >,
     one_hot_constraints: BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
+    inactive_one_hot_constraints: BTreeMap<
+        crate::OneHotConstraintID,
+        (crate::OneHotConstraint, crate::InactiveConstraintMetadata),
+    >,
     one_hot_constraint_context: ConstraintContextStore<crate::OneHotConstraintID>,
     sos1_constraints: BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
+    inactive_sos1_constraints: BTreeMap<
+        crate::Sos1ConstraintID,
+        (crate::Sos1Constraint, crate::InactiveConstraintMetadata),
+    >,
     sos1_constraint_context: ConstraintContextStore<crate::Sos1ConstraintID>,
     decision_variable_dependency: AcyclicAssignments,
     description: Option<v1::instance::Description>,
@@ -103,7 +111,7 @@ impl ParametricInstanceBuilder {
     }
 
     /// Sets the constraints.
-    pub fn constraints(mut self, constraints: BTreeMap<ConstraintID, Constraint>) -> Self {
+    pub fn active_constraints(mut self, constraints: BTreeMap<ConstraintID, Constraint>) -> Self {
         self.constraints = Some(constraints);
         self
     }
@@ -148,7 +156,7 @@ impl ParametricInstanceBuilder {
     }
 
     /// Sets the indicator constraints.
-    pub fn indicator_constraints(
+    pub fn active_indicator_constraints(
         mut self,
         indicator_constraints: BTreeMap<crate::IndicatorConstraintID, crate::IndicatorConstraint>,
     ) -> Self {
@@ -181,11 +189,23 @@ impl ParametricInstanceBuilder {
     }
 
     /// Sets the one-hot constraints.
-    pub fn one_hot_constraints(
+    pub fn active_one_hot_constraints(
         mut self,
         one_hot_constraints: BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
     ) -> Self {
         self.one_hot_constraints = one_hot_constraints;
+        self
+    }
+
+    /// Set initially inactive one_hot constraints and their participation metadata.
+    pub fn inactive_one_hot_constraints(
+        mut self,
+        constraints: BTreeMap<
+            crate::OneHotConstraintID,
+            (crate::OneHotConstraint, crate::InactiveConstraintMetadata),
+        >,
+    ) -> Self {
+        self.inactive_one_hot_constraints = constraints;
         self
     }
 
@@ -199,11 +219,23 @@ impl ParametricInstanceBuilder {
     }
 
     /// Sets the SOS1 constraints.
-    pub fn sos1_constraints(
+    pub fn active_sos1_constraints(
         mut self,
         sos1_constraints: BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
     ) -> Self {
         self.sos1_constraints = sos1_constraints;
+        self
+    }
+
+    /// Set initially inactive sos1 constraints and their participation metadata.
+    pub fn inactive_sos1_constraints(
+        mut self,
+        constraints: BTreeMap<
+            crate::Sos1ConstraintID,
+            (crate::Sos1Constraint, crate::InactiveConstraintMetadata),
+        >,
+    ) -> Self {
+        self.inactive_sos1_constraints = constraints;
         self
     }
 
@@ -235,11 +267,11 @@ impl ParametricInstanceBuilder {
     ///
     /// # Errors
     /// Returns an error if:
-    /// - Required fields (`sense`, `objective`, `decision_variables`, `parameters`, `constraints`) are not set
+    /// - Required fields (`sense`, `objective`, `decision_variables`, `parameters`, `active_constraints`) are not set
     /// - Decision variable IDs and parameter IDs overlap (the error chain
     ///   contains [`crate::ParameterIDCollision`])
     /// - The objective function, constraints, or named functions reference undefined variable IDs
-    /// - The keys of `constraints` and `inactive_constraints` are not disjoint
+    /// - The keys of `active_constraints` and `inactive_constraints` are not disjoint
     /// - Label/context stores contain IDs that are not owned by the
     ///   corresponding decision-variable, named-function, or constraint collection
     /// - The keys of `decision_variable_dependency` are not in `decision_variables`
@@ -261,7 +293,7 @@ impl ParametricInstanceBuilder {
             .ok_or_else(|| crate::error!("Required field is missing: parameters"))?;
         let constraints = self
             .constraints
-            .ok_or_else(|| crate::error!("Required field is missing: constraints"))?;
+            .ok_or_else(|| crate::error!("Required field is missing: active_constraints"))?;
 
         let decision_variables = DecisionVariableTable::with_fixed_values(
             decision_variables,
@@ -366,14 +398,18 @@ impl ParametricInstanceBuilder {
             if self.indicator_constraints.contains_key(id) {
                 crate::bail!(
                     { ?id },
-                    "Indicator constraint ID {id:?} is in both indicator_constraints and inactive_indicator_constraints, but they must be disjoint",
+                    "Indicator constraint ID {id:?} is in both active_indicator_constraints and inactive_indicator_constraints, but they must be disjoint",
                 );
             }
         }
 
         // Validate one-hot constraints. Every variable is structural; must
         // be a binary decision variable (parameter ids rejected).
-        for (id, value) in &self.one_hot_constraints {
+        for (id, value) in self.one_hot_constraints.iter().chain(
+            self.inactive_one_hot_constraints
+                .iter()
+                .map(|(id, (row, _))| (id, row)),
+        ) {
             if value.variables.is_empty() {
                 return Err(crate::Error::new(
                     crate::OneHotConstraintError::EmptyVariables,
@@ -404,7 +440,11 @@ impl ParametricInstanceBuilder {
         // Validate SOS1 constraints. Variables are structural decision
         // variables (parameter ids rejected); the variable set must be
         // non-empty. SOS1 does not require Kind::Binary.
-        for (id, value) in &self.sos1_constraints {
+        for (id, value) in self.sos1_constraints.iter().chain(
+            self.inactive_sos1_constraints
+                .iter()
+                .map(|(id, (row, _))| (id, row)),
+        ) {
             if value.variables.is_empty() {
                 return Err(crate::Error::new(
                     crate::Sos1ConstraintError::EmptyVariables,
@@ -434,7 +474,7 @@ impl ParametricInstanceBuilder {
             if constraints.contains_key(id) {
                 crate::bail!(
                     { ?id },
-                    "Constraint ID {id:?} is in both constraints and inactive_constraints, but they must be disjoint",
+                    "Constraint ID {id:?} is in both active_constraints and inactive_constraints, but they must be disjoint",
                 );
             }
         }
@@ -520,12 +560,12 @@ impl ParametricInstanceBuilder {
             )?,
             one_hot_constraint_collection: ConstraintCollection::with_context(
                 self.one_hot_constraints,
-                BTreeMap::new(),
+                self.inactive_one_hot_constraints,
                 self.one_hot_constraint_context,
             )?,
             sos1_constraint_collection: ConstraintCollection::with_context(
                 self.sos1_constraints,
-                BTreeMap::new(),
+                self.inactive_sos1_constraints,
                 self.sos1_constraint_context,
             )?,
             named_functions,
@@ -562,7 +602,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .parameters(ParameterTable::default())
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 
@@ -570,7 +610,7 @@ mod tests {
         assert!(instance.output_objective().is_none());
         assert!(instance.decision_variables().is_empty());
         assert!(instance.parameters().is_empty());
-        assert!(instance.constraints().is_empty());
+        assert!(instance.active_constraints().is_empty());
     }
 
     #[test]
@@ -593,7 +633,7 @@ mod tests {
             .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary())]))
             .variable_labels(variable_labels)
             .parameters(parameters)
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 constraint_id,
                 Constraint::equal_to_zero(Function::Zero),
             )]))
@@ -628,8 +668,8 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary())]))
             .parameters(ParameterTable::default())
-            .constraints(BTreeMap::new())
-            .indicator_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(BTreeMap::from([(
                 indicator_id,
                 crate::IndicatorConstraint::new(
                     var_id,
@@ -638,12 +678,12 @@ mod tests {
                 ),
             )]))
             .indicator_constraint_context(indicator_context)
-            .one_hot_constraints(BTreeMap::from([(
+            .active_one_hot_constraints(BTreeMap::from([(
                 one_hot_id,
                 crate::OneHotConstraint::new(BTreeSet::from([var_id])).unwrap(),
             )]))
             .one_hot_constraint_context(one_hot_context)
-            .sos1_constraints(BTreeMap::from([(
+            .active_sos1_constraints(BTreeMap::from([(
                 sos1_id,
                 crate::Sos1Constraint::new(BTreeSet::from([var_id])).unwrap(),
             )]))
@@ -677,7 +717,7 @@ mod tests {
             .decision_variables(BTreeMap::new())
             .variable_labels(variable_labels)
             .parameters(parameters([parameter_id]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap_err();
 
@@ -698,7 +738,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .parameters(ParameterTable::default())
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .named_function_labels(named_function_labels)
             .build()
             .unwrap_err();
@@ -720,7 +760,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .parameters(ParameterTable::default())
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .constraint_context(constraint_context)
             .build()
             .unwrap_err();
@@ -741,7 +781,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .parameters(ParameterTable::default())
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .indicator_constraint_context(indicator_context)
             .build()
             .unwrap_err();
@@ -758,7 +798,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .parameters(ParameterTable::default())
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .one_hot_constraint_context(one_hot_context)
             .build()
             .unwrap_err();
@@ -775,7 +815,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .parameters(ParameterTable::default())
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .sos1_constraint_context(sos1_context)
             .build()
             .unwrap_err();
@@ -794,7 +834,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .parameters(parameters([parameter_id]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 
@@ -816,7 +856,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap_err();
         assert!(
@@ -839,7 +879,7 @@ mod tests {
                 var_id => DecisionVariable::binary(),
             })
             .parameters(parameters([var_id]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap_err();
 
@@ -864,7 +904,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .parameters(ParameterTable::default())
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .named_functions(btreemap! {
                 NamedFunctionID::from(1) => named_function,
             })
@@ -898,16 +938,16 @@ mod tests {
                 VariableID::from(2) => DecisionVariable::binary(),
             })
             .parameters(parameters([VariableID::from(100)]))
-            .constraints(BTreeMap::new())
-            .indicator_constraints(btreemap! {
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(btreemap! {
                 crate::IndicatorConstraintID::from(7) => indicator,
             })
             .build()
             .unwrap();
 
-        assert_eq!(instance.indicator_constraints().len(), 1);
+        assert_eq!(instance.active_indicator_constraints().len(), 1);
         assert!(instance
-            .indicator_constraints()
+            .active_indicator_constraints()
             .contains_key(&crate::IndicatorConstraintID::from(7)));
     }
 
@@ -932,7 +972,7 @@ mod tests {
                 x => DecisionVariable::binary(),
             })
             .parameters(parameters([p]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .decision_variable_dependency(dependency)
             .build();
 
@@ -958,7 +998,7 @@ mod tests {
                 dep => DecisionVariable::binary(),
             })
             .parameters(ParameterTable::default())
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .decision_variable_dependency(dependency)
             .build()
             .unwrap_err();
@@ -991,8 +1031,8 @@ mod tests {
                 VariableID::from(1) => DecisionVariable::binary(),
             })
             .parameters(parameters([VariableID::from(100)]))
-            .constraints(BTreeMap::new())
-            .indicator_constraints(btreemap! {
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(btreemap! {
                 crate::IndicatorConstraintID::from(0) => indicator,
             })
             .build()
@@ -1025,8 +1065,8 @@ mod tests {
                 VariableID::from(2) => DecisionVariable::binary(),
             })
             .parameters(ParameterTable::default())
-            .constraints(BTreeMap::new())
-            .indicator_constraints(btreemap! {
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(btreemap! {
                 crate::IndicatorConstraintID::from(0) => indicator,
             })
             .build()
@@ -1054,8 +1094,8 @@ mod tests {
                 VariableID::from(1) => DecisionVariable::binary(),
             })
             .parameters(parameters([VariableID::from(100)]))
-            .constraints(BTreeMap::new())
-            .one_hot_constraints(btreemap! {
+            .active_constraints(BTreeMap::new())
+            .active_one_hot_constraints(btreemap! {
                 crate::OneHotConstraintID::from(0) => one_hot,
             })
             .build()
@@ -1084,8 +1124,8 @@ mod tests {
                 VariableID::from(1) => DecisionVariable::binary(),
             })
             .parameters(ParameterTable::default())
-            .constraints(BTreeMap::new())
-            .one_hot_constraints(btreemap! {
+            .active_constraints(BTreeMap::new())
+            .active_one_hot_constraints(btreemap! {
                 crate::OneHotConstraintID::from(0) => one_hot,
             })
             .build()
@@ -1118,8 +1158,8 @@ mod tests {
                 VariableID::from(1) => DecisionVariable::binary(),
             })
             .parameters(ParameterTable::default())
-            .constraints(BTreeMap::new())
-            .sos1_constraints(btreemap! {
+            .active_constraints(BTreeMap::new())
+            .active_sos1_constraints(btreemap! {
                 crate::Sos1ConstraintID::from(0) => sos1,
             })
             .build()
@@ -1156,7 +1196,7 @@ mod tests {
                 var_id => DecisionVariable::binary(),
             })
             .parameters(parameters([param_id]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .named_functions(btreemap! {
                 NamedFunctionID::from(1) => named_function,
             })

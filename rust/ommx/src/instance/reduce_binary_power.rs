@@ -38,7 +38,7 @@ impl Instance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// let original = instance.objective().clone();
@@ -177,7 +177,7 @@ mod tests {
             Function::Quadratic(((quadratic!(1) + quadratic!(2)).unwrap() + coeff!(-5.0)).unwrap());
         assert_eq!(
             instance
-                .constraints()
+                .active_constraints()
                 .get(&ConstraintID::from(1))
                 .unwrap()
                 .function(),
@@ -286,13 +286,13 @@ mod tests {
         let mut instance =
             Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
         let before_objective = instance.objective().clone();
-        let before_constraints = instance.constraints().clone();
+        let before_constraints = instance.active_constraints().clone();
 
         let err = instance.reduce_binary_power().unwrap_err();
 
         assert_eq!(err, crate::CoefficientError::Infinite);
         assert_eq!(instance.objective(), &before_objective);
-        assert_eq!(instance.constraints(), &before_constraints);
+        assert_eq!(instance.active_constraints(), &before_constraints);
         assert!(instance.output_objective().is_none());
     }
 
@@ -312,11 +312,11 @@ mod tests {
                 (VariableID::from(2), DecisionVariable::continuous()),
                 (VariableID::from(3), DecisionVariable::continuous()),
             ]))
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 ConstraintID::from(10),
                 Constraint::equal_to_zero(regular),
             )]))
-            .indicator_constraints(BTreeMap::from([(
+            .active_indicator_constraints(BTreeMap::from([(
                 crate::IndicatorConstraintID::from(11),
                 crate::IndicatorConstraint::new(
                     VariableID::from(1),
@@ -377,8 +377,8 @@ mod tests {
     fn owned_functions(instance: &Instance) -> [&Function; 5] {
         [
             instance.objective(),
-            instance.constraints()[&ConstraintID::from(10)].function(),
-            &instance.indicator_constraints()[&crate::IndicatorConstraintID::from(11)]
+            instance.active_constraints()[&ConstraintID::from(10)].function(),
+            &instance.active_indicator_constraints()[&crate::IndicatorConstraintID::from(11)]
                 .stage
                 .function,
             &instance.named_functions()[&NamedFunctionID::from(12)].function,

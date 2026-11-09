@@ -173,8 +173,8 @@ fn wire_consumers_can_read_feasibility_and_its_tolerance_without_sdk_evaluation(
                 .map(|id| (id.into(), crate::DecisionVariable::continuous()))
                 .collect(),
         )
-        .constraints(BTreeMap::new())
-        .sos1_constraints(BTreeMap::from([(
+        .active_constraints(BTreeMap::new())
+        .active_sos1_constraints(BTreeMap::from([(
             0.into(),
             Sos1Constraint::new((0..3).map(Into::into).collect()).unwrap(),
         )]))
@@ -227,8 +227,8 @@ fn partial_evaluation_preserves_instance_invariants_and_failure_is_atomic() {
                 .map(|id| (id.into(), crate::DecisionVariable::continuous()))
                 .collect(),
         )
-        .constraints(BTreeMap::new())
-        .sos1_constraints(BTreeMap::from([(
+        .active_constraints(BTreeMap::new())
+        .active_sos1_constraints(BTreeMap::from([(
             0.into(),
             Sos1Constraint::new((0..3).map(Into::into).collect()).unwrap(),
         )]))
@@ -306,12 +306,12 @@ fn hosts_reject_activation_conditions_the_current_wire_format_cannot_represent()
     let instance = crate::Instance::builder()
         .sense(crate::Sense::Minimize)
         .objective(crate::Function::Zero)
-        .constraints(BTreeMap::new())
+        .active_constraints(BTreeMap::new())
         .decision_variables(BTreeMap::from([(
             0.into(),
             crate::DecisionVariable::binary(),
         )]))
-        .indicator_constraints(BTreeMap::from([(
+        .active_indicator_constraints(BTreeMap::from([(
             0.into(),
             IndicatorConstraint::new(
                 0.into(),
@@ -319,11 +319,11 @@ fn hosts_reject_activation_conditions_the_current_wire_format_cannot_represent()
                 crate::Function::Zero,
             ),
         )]))
-        .one_hot_constraints(BTreeMap::from([(
+        .active_one_hot_constraints(BTreeMap::from([(
             1.into(),
             OneHotConstraint::new([0.into()].into()).unwrap(),
         )]))
-        .sos1_constraints(BTreeMap::from([(
+        .active_sos1_constraints(BTreeMap::from([(
             2.into(),
             Sos1Constraint::new([0.into()].into()).unwrap(),
         )]))
@@ -414,9 +414,9 @@ fn sample_feasibility_matches_extracted_solutions_including_variable_domains() {
         let instance = crate::Instance::builder()
             .sense(crate::Sense::Minimize)
             .objective(crate::Function::from(crate::linear!(0)))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .decision_variables(BTreeMap::from([(0.into(), variable)]))
-            .sos1_constraints(BTreeMap::from([(
+            .active_sos1_constraints(BTreeMap::from([(
                 0.into(),
                 Sos1Constraint::new([0.into()].into()).unwrap(),
             )]))

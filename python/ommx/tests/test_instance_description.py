@@ -22,7 +22,7 @@ def test_instance_description_none():
     """Test that instance description is None when not set."""
     x = DecisionVariable.binary(0)
     instance = Instance.from_components(
-        decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize
+        decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Minimize
     )
 
     assert instance.description is None
@@ -43,7 +43,7 @@ def test_instance_description_with_from_components():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
         description=desc,
     )
@@ -120,8 +120,8 @@ def test_instance_annotations_do_not_serialize_structural_constraints():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0],
-        constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=x)},
+        active_constraints={},
+        active_one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Sense.Minimize,
     )
 
@@ -218,8 +218,8 @@ def test_solution_annotations_preserve_structural_constraint_evaluations():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=x)},
+        active_constraints={},
+        active_one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Sense.Maximize,
     )
     solution = instance.evaluate({1: 0.0, 2: 1.0, 3: 0.0})
@@ -255,7 +255,7 @@ def test_parametric_instance_annotations_round_trip_through_bytes():
         decision_variables=[x],
         parameters=[p],
         objective=x + p,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     instance.title = "Parametric Proto Title"
@@ -277,7 +277,7 @@ def test_parametric_instance_replace_annotations_replaces_existing_metadata():
         decision_variables=[x],
         parameters=[p],
         objective=x + p,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     instance.title = "Old Parametric Title"
@@ -328,8 +328,8 @@ def test_sample_set_annotations_preserve_structural_constraint_samples():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=x)},
+        active_constraints={},
+        active_one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Sense.Maximize,
     )
     sample_set = instance.evaluate_samples(

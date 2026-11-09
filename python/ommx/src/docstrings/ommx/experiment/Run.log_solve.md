@@ -46,7 +46,7 @@ modifying existing records.
 ...     decision_variables=x,
 ...     parameters=[capacity],
 ...     objective=sum(value * variable for value, variable in zip(values, x)),
-...     constraints={
+...     active_constraints={
 ...         0: sum(weight * variable for weight, variable in zip(weights, x)) <= capacity
 ...     },
 ...     sense=Sense.Maximize,

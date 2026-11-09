@@ -155,6 +155,26 @@ impl InactiveOneHotConstraint {
 #[gen_stub_pymethods]
 #[pymethods]
 impl InactiveOneHotConstraint {
+    #[new]
+    #[pyo3(signature = (constraint, inactive_reason, inactive_reason_parameters=None))]
+    pub fn new(
+        constraint: OneHotConstraint,
+        inactive_reason: String,
+        inactive_reason_parameters: Option<HashMap<String, String>>,
+    ) -> Self {
+        Self::from_parts(
+            constraint.0,
+            constraint.1,
+            ommx::InactiveConstraintMetadata {
+                reason: inactive_reason,
+                parameters: inactive_reason_parameters
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+            },
+        )
+    }
+
     #[getter]
     pub fn constraint(&self) -> OneHotConstraint {
         OneHotConstraint(self.constraint.clone(), self.context.clone())
@@ -273,7 +293,7 @@ fn lookup_one_hot(
     inst: &ommx::Instance,
     id: ommx::OneHotConstraintID,
 ) -> PyResult<&ommx::OneHotConstraint> {
-    inst.one_hot_constraints()
+    inst.active_one_hot_constraints()
         .get(&id)
         .or_else(|| inst.inactive_one_hot_constraints().get(&id).map(|(c, _)| c))
         .ok_or_else(|| {
@@ -288,7 +308,7 @@ fn lookup_one_hot_parametric(
     inst: &ommx::ParametricInstance,
     id: ommx::OneHotConstraintID,
 ) -> PyResult<&ommx::OneHotConstraint> {
-    inst.one_hot_constraints()
+    inst.active_one_hot_constraints()
         .get(&id)
         .or_else(|| inst.inactive_one_hot_constraints().get(&id).map(|(c, _)| c))
         .ok_or_else(|| {
@@ -399,5 +419,7 @@ crate::attached_constraint_context_methods!(
     AttachedOneHotConstraint,
     ommx::OneHotConstraintID,
     one_hot_constraint_context,
-    set_one_hot_constraint_context
+    set_one_hot_constraint_context,
+    active_one_hot_constraints,
+    one_hot_constraint_collection
 );

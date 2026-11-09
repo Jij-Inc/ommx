@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod activeness_tests;
 mod analysis;
 mod approx;
 pub(crate) mod arbitrary;
@@ -129,7 +131,7 @@ pub enum Sense {
 ///         VariableID::from(1),
 ///         DecisionVariable::binary(),
 ///     )]))
-///     .constraints(BTreeMap::new())
+///     .active_constraints(BTreeMap::new())
 ///     .build()
 ///     .unwrap();
 ///
@@ -337,7 +339,7 @@ impl OutputObjective {
 /// - The decision-variable table rejects labels or fixed values for unknown
 ///   variable IDs, and fixed values must satisfy the corresponding row's
 ///   kind/bound.
-/// - The keys of [`Self::constraints`] and [`Self::inactive_constraints`] are disjoint sets.
+/// - The keys of [`Self::active_constraints`] and [`Self::inactive_constraints`] are disjoint sets.
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
 ///   but must NOT be used in the active objective or active constraints.
 ///   These are "dependent variables" whose values are computed from other variables.
@@ -381,7 +383,7 @@ impl OutputObjective {
 ///     .sense(Sense::Maximize)
 ///     .objective(Function::from(linear!(1)))
 ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-///     .constraints(BTreeMap::new())
+///     .active_constraints(BTreeMap::new())
 ///     .build()
 ///     .unwrap();
 /// assert!(instance.convert_active_objective(Sense::Minimize));
@@ -404,10 +406,10 @@ impl OutputObjective {
 ///
 /// ## Special-constraint invariants
 ///
-/// Active and removed indicator / one-hot / SOS1 constraints are subject to the
+/// Active and inactive indicator / one-hot / SOS1 constraints are subject to the
 /// same id-resolution rules as regular constraints, and additionally:
 ///
-/// - [`Self::indicator_constraints`] and [`Self::inactive_indicator_constraints`]
+/// - [`Self::active_indicator_constraints`] and [`Self::inactive_indicator_constraints`]
 ///   are disjoint sets; same for the one-hot and SOS1 collections (within each
 ///   kind and across all kinds).
 /// - For every active or inactive [`crate::IndicatorConstraint`], the
@@ -422,14 +424,15 @@ impl OutputObjective {
 ///   SOS1 does not require [`Kind::Binary`](crate::decision_variable::Kind).
 ///
 /// These invariants are enforced at every construction or mutation entry
-/// point: [`Instance::builder`] (which accepts active maps for all three
-/// kinds, a removed map for regular and indicator constraints, and validates
+/// point: [`Instance::builder`] (which accepts active and inactive maps for all four
+/// families and validates
 /// each), the post-construction setters [`Self::insert_constraint`] /
 /// [`Self::add_constraint`] / [`Self::add_indicator_constraint`] /
 /// [`Self::add_one_hot_constraint`] / [`Self::add_sos1_constraint`], and the
-/// internal `deactivate_constraint` / `deactivate_indicator_constraint` /
+/// `deactivate_constraint` / `deactivate_indicator_constraint` /
+/// `deactivate_one_hot_constraint` / `deactivate_sos1_constraint` /
 /// `convert_all_one_hots_to_constraints` / `convert_all_sos1_to_constraints`
-/// paths that populate the removed maps. Constraint-family storage is mutated
+/// paths that populate the inactive maps. Constraint-family storage is mutated
 /// through operation-level collection primitives so active/inactive
 /// disjointness, removed reasons, and context sidecars remain attached to
 /// owned row IDs.
@@ -540,7 +543,7 @@ impl Instance {
     ///     .sense(Sense::Minimize)
     ///     .objective(Function::from(linear!(1)))
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-    ///     .constraints(BTreeMap::from([(
+    ///     .active_constraints(BTreeMap::from([(
     ///         ConstraintID::from(1),
     ///         Constraint::equal_to_zero(Function::from(linear!(1))),
     ///     )]))
@@ -722,8 +725,13 @@ impl Instance {
         self.named_functions.set_label(id, label)
     }
 
+    /// All retained constraints, regardless of activeness.
+    pub fn constraints(&self) -> &ConstraintCollection<Constraint> {
+        &self.constraint_collection
+    }
+
     /// Active constraints.
-    pub fn constraints(&self) -> &BTreeMap<ConstraintID, Constraint> {
+    pub fn active_constraints(&self) -> &BTreeMap<ConstraintID, Constraint> {
         self.constraint_collection.active()
     }
 
@@ -758,8 +766,13 @@ impl Instance {
             .set_context_for_owner(id, context, "constraint")
     }
 
+    /// All retained indicator constraints, regardless of activeness.
+    pub fn indicator_constraints(&self) -> &ConstraintCollection<IndicatorConstraint> {
+        &self.indicator_constraint_collection
+    }
+
     /// Active indicator constraints.
-    pub fn indicator_constraints(
+    pub fn active_indicator_constraints(
         &self,
     ) -> &BTreeMap<crate::IndicatorConstraintID, IndicatorConstraint> {
         self.indicator_constraint_collection.active()
@@ -798,8 +811,15 @@ impl Instance {
         )
     }
 
+    /// All retained one hot constraints, regardless of activeness.
+    pub fn one_hot_constraints(&self) -> &ConstraintCollection<crate::OneHotConstraint> {
+        &self.one_hot_constraint_collection
+    }
+
     /// Active one-hot constraints.
-    pub fn one_hot_constraints(&self) -> &BTreeMap<crate::OneHotConstraintID, OneHotConstraint> {
+    pub fn active_one_hot_constraints(
+        &self,
+    ) -> &BTreeMap<crate::OneHotConstraintID, OneHotConstraint> {
         self.one_hot_constraint_collection.active()
     }
 
@@ -830,8 +850,13 @@ impl Instance {
             .set_context_for_owner(id, context, "one-hot constraint")
     }
 
+    /// All retained sos1 constraints, regardless of activeness.
+    pub fn sos1_constraints(&self) -> &ConstraintCollection<crate::Sos1Constraint> {
+        &self.sos1_constraint_collection
+    }
+
     /// Active SOS1 constraints.
-    pub fn sos1_constraints(&self) -> &BTreeMap<crate::Sos1ConstraintID, Sos1Constraint> {
+    pub fn active_sos1_constraints(&self) -> &BTreeMap<crate::Sos1ConstraintID, Sos1Constraint> {
         self.sos1_constraint_collection.active()
     }
 
@@ -1032,7 +1057,7 @@ impl Instance {
 ///   disjoint sets. This shared-namespace invariant is host-level state and
 ///   is validated by [`ParametricInstance::builder`] / protobuf parsing, not
 ///   by [`ParameterTable`] alone.
-/// - The keys of [`Self::constraints`] and [`Self::inactive_constraints`] are disjoint sets.
+/// - The keys of [`Self::active_constraints`] and [`Self::inactive_constraints`] are disjoint sets.
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
 ///   but must NOT be used in the active objective or active constraints.
 ///   The RHS expressions of [`Self::decision_variable_dependency`] may
@@ -1092,8 +1117,8 @@ impl Instance {
 ///
 /// These invariants are enforced at every construction or mutation entry
 /// point: [`ParametricInstance::builder`] (which mirrors
-/// [`Instance::builder`] and accepts active maps for all three kinds, plus
-/// removed maps for regular and indicator constraints, validating each),
+/// [`Instance::builder`] and accepts active and inactive maps for all four families,
+/// validating each),
 /// and the post-construction setters [`Self::add_constraint`] /
 /// [`Self::add_indicator_constraint`] / [`Self::add_one_hot_constraint`] /
 /// [`Self::add_sos1_constraint`].
@@ -1258,8 +1283,13 @@ impl ParametricInstance {
         self.named_functions.set_label(id, label)
     }
 
+    /// All retained constraints, regardless of activeness.
+    pub fn constraints(&self) -> &ConstraintCollection<Constraint> {
+        &self.constraint_collection
+    }
+
     /// Active constraints.
-    pub fn constraints(&self) -> &BTreeMap<ConstraintID, Constraint> {
+    pub fn active_constraints(&self) -> &BTreeMap<ConstraintID, Constraint> {
         self.constraint_collection.active()
     }
 
@@ -1291,8 +1321,13 @@ impl ParametricInstance {
             .set_context_for_owner(id, context, "constraint")
     }
 
+    /// All retained indicator constraints, regardless of activeness.
+    pub fn indicator_constraints(&self) -> &ConstraintCollection<IndicatorConstraint> {
+        &self.indicator_constraint_collection
+    }
+
     /// Active indicator constraints.
-    pub fn indicator_constraints(
+    pub fn active_indicator_constraints(
         &self,
     ) -> &BTreeMap<crate::IndicatorConstraintID, IndicatorConstraint> {
         self.indicator_constraint_collection.active()
@@ -1332,8 +1367,15 @@ impl ParametricInstance {
         )
     }
 
+    /// All retained one hot constraints, regardless of activeness.
+    pub fn one_hot_constraints(&self) -> &ConstraintCollection<crate::OneHotConstraint> {
+        &self.one_hot_constraint_collection
+    }
+
     /// Active one-hot constraints.
-    pub fn one_hot_constraints(&self) -> &BTreeMap<crate::OneHotConstraintID, OneHotConstraint> {
+    pub fn active_one_hot_constraints(
+        &self,
+    ) -> &BTreeMap<crate::OneHotConstraintID, OneHotConstraint> {
         self.one_hot_constraint_collection.active()
     }
 
@@ -1365,8 +1407,13 @@ impl ParametricInstance {
             .set_context_for_owner(id, context, "one-hot constraint")
     }
 
+    /// All retained sos1 constraints, regardless of activeness.
+    pub fn sos1_constraints(&self) -> &ConstraintCollection<crate::Sos1Constraint> {
+        &self.sos1_constraint_collection
+    }
+
     /// Active SOS1 constraints.
-    pub fn sos1_constraints(&self) -> &BTreeMap<crate::Sos1ConstraintID, Sos1Constraint> {
+    pub fn active_sos1_constraints(&self) -> &BTreeMap<crate::Sos1ConstraintID, Sos1Constraint> {
         self.sos1_constraint_collection.active()
     }
 
@@ -1541,13 +1588,13 @@ mod lower_special_constraints_tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
-            .indicator_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(BTreeMap::from([(
                 IndicatorConstraintID::from(1),
                 indicator,
             )]))
-            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(2), one_hot)]))
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
+            .active_one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(2), one_hot)]))
+            .active_sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
             .build()
             .unwrap()
     }
@@ -1556,18 +1603,18 @@ mod lower_special_constraints_tests {
     fn noop_when_no_kinds_are_selected() {
         let mut instance = instance_with_all_special_constraint_kinds();
         let kinds_to_lower = ConstraintKinds::new();
-        let before_indicators = instance.indicator_constraints().clone();
-        let before_one_hots = instance.one_hot_constraints().clone();
-        let before_sos1 = instance.sos1_constraints().clone();
+        let before_indicators = instance.active_indicator_constraints().clone();
+        let before_one_hots = instance.active_one_hot_constraints().clone();
+        let before_sos1 = instance.active_sos1_constraints().clone();
 
         let lowered = instance
             .lower_special_constraints(&kinds_to_lower, ATol::default())
             .unwrap();
 
         assert!(lowered.is_empty());
-        assert_eq!(instance.indicator_constraints(), &before_indicators);
-        assert_eq!(instance.one_hot_constraints(), &before_one_hots);
-        assert_eq!(instance.sos1_constraints(), &before_sos1);
+        assert_eq!(instance.active_indicator_constraints(), &before_indicators);
+        assert_eq!(instance.active_one_hot_constraints(), &before_one_hots);
+        assert_eq!(instance.active_sos1_constraints(), &before_sos1);
     }
 
     #[test]
@@ -1582,9 +1629,9 @@ mod lower_special_constraints_tests {
             .unwrap();
 
         assert_eq!(lowered, kinds_to_lower);
-        assert!(instance.indicator_constraints().is_empty());
-        assert!(instance.one_hot_constraints().is_empty());
-        assert!(!instance.sos1_constraints().is_empty());
+        assert!(instance.active_indicator_constraints().is_empty());
+        assert!(instance.active_one_hot_constraints().is_empty());
+        assert!(!instance.active_sos1_constraints().is_empty());
         assert_eq!(
             instance.active_special_constraint_kinds(),
             [ConstraintKind::Sos1].into_iter().collect()
@@ -1626,8 +1673,8 @@ mod lower_special_constraints_tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
-            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(2), one_hot)]))
+            .active_constraints(BTreeMap::new())
+            .active_one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(2), one_hot)]))
             .build()
             .unwrap();
         let kinds_to_lower: ConstraintKinds = [
@@ -1644,7 +1691,7 @@ mod lower_special_constraints_tests {
 
         let expected: ConstraintKinds = [ConstraintKind::OneHot].into_iter().collect();
         assert_eq!(lowered, expected);
-        assert!(instance.one_hot_constraints().is_empty());
+        assert!(instance.active_one_hot_constraints().is_empty());
     }
 
     #[test]
@@ -1658,8 +1705,8 @@ mod lower_special_constraints_tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
             .decision_variables(btreemap! { VariableID::from(0) => dv })
-            .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
+            .active_constraints(BTreeMap::new())
+            .active_sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
             .build()
             .unwrap();
         let kinds_to_lower: ConstraintKinds = [ConstraintKind::Sos1].into_iter().collect();
@@ -1689,9 +1736,9 @@ mod lower_special_constraints_tests {
                 VariableID::from(1) => DecisionVariable::binary(),
                 VariableID::from(2) => DecisionVariable::continuous(),
             })
-            .constraints(BTreeMap::new())
-            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(2), one_hot)]))
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
+            .active_constraints(BTreeMap::new())
+            .active_one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(2), one_hot)]))
+            .active_sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
             .build()
             .unwrap();
         let kinds_to_lower: ConstraintKinds = [ConstraintKind::OneHot, ConstraintKind::Sos1]
@@ -1703,10 +1750,10 @@ mod lower_special_constraints_tests {
             .unwrap_err();
 
         assert!(err.to_string().contains("non-finite"));
-        assert!(instance.one_hot_constraints().is_empty());
+        assert!(instance.active_one_hot_constraints().is_empty());
         assert_eq!(instance.inactive_one_hot_constraints().len(), 1);
-        assert_eq!(instance.constraints().len(), 1);
-        assert_eq!(instance.sos1_constraints().len(), 1);
+        assert_eq!(instance.active_constraints().len(), 1);
+        assert_eq!(instance.active_sos1_constraints().len(), 1);
         assert_eq!(
             instance.active_special_constraint_kinds(),
             [ConstraintKind::Sos1].into_iter().collect()
@@ -1741,8 +1788,8 @@ mod lower_special_constraints_tests {
             .unwrap_err();
 
         assert_eq!(instance, after_indicator_conversion);
-        assert!(instance.indicator_constraints().is_empty());
-        assert_eq!(instance.one_hot_constraints().len(), 1);
+        assert!(instance.active_indicator_constraints().is_empty());
+        assert_eq!(instance.active_one_hot_constraints().len(), 1);
     }
 
     #[test]
@@ -1762,8 +1809,8 @@ mod lower_special_constraints_tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
             .decision_variables(btreemap! { VariableID::from(0) => dv })
-            .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
+            .active_constraints(BTreeMap::new())
+            .active_sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
             .build()
             .unwrap();
 
@@ -1775,7 +1822,7 @@ mod lower_special_constraints_tests {
         assert_eq!(lowered, kinds_to_lower);
         // Fresh binary indicator was allocated → decision variable count went up.
         assert_eq!(instance.decision_variables.len(), 2);
-        assert!(instance.sos1_constraints().is_empty());
-        assert!(!instance.constraints().is_empty());
+        assert!(instance.active_sos1_constraints().is_empty());
+        assert!(!instance.active_constraints().is_empty());
     }
 }

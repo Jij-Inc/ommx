@@ -57,16 +57,16 @@ def _instance_all_kinds() -> Instance:
     return Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={10: c},
-        indicator_constraints={
+        active_constraints={10: c},
+        active_indicator_constraints={
             20: IndicatorConstraint(
                 indicator_variable=x[0],
                 function=x[1] + x[2] - 1,
                 equality=Equality.EqualToZero,
             )
         },
-        one_hot_constraints={30: OneHotConstraint(variables=x)},
-        sos1_constraints={40: Sos1Constraint(variables=x)},
+        active_one_hot_constraints={30: OneHotConstraint(variables=x)},
+        active_sos1_constraints={40: Sos1Constraint(variables=x)},
         sense=Sense.Maximize,
     )
 
@@ -88,7 +88,7 @@ def _parametric_instance() -> ParametricInstance:
         sense=Sense.Maximize,
         objective=sum(x),
         decision_variables=x,
-        constraints={10: c},
+        active_constraints={10: c},
         parameters=[p],
     )
 
@@ -150,7 +150,7 @@ def test_instance_constraints_df_reports_composed_function_type():
     instance = Instance.from_components(
         decision_variables=[variable],
         objective=variable,
-        constraints={10: constraint},
+        active_constraints={10: constraint},
         sense=Sense.Minimize,
     )
 
@@ -260,7 +260,7 @@ def test_instance_constraints_df_removed_true_id_sorted(snapshot):
     inst = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={
+        active_constraints={
             5: x[0] + x[1] == 1,
             30: x[1] + x[2] == 1,
             20: x[0] + x[2] == 1,
@@ -298,8 +298,8 @@ def test_instance_constraints_df_one_hot_removed_true(snapshot):
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={},
-        one_hot_constraints={
+        active_constraints={},
+        active_one_hot_constraints={
             5: OneHotConstraint(variables=x[:2]),
             7: OneHotConstraint(variables=x[1:]),
         },

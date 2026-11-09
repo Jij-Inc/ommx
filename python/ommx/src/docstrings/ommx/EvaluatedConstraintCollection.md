@@ -39,7 +39,7 @@ unsupported families when interpreting their mathematical meaning.
 | ``ConstraintKind.Sos1`` | {class}`~ommx.Sos1ConstraintID` | {class}`~ommx.EvaluatedSos1Constraint` | {class}`~ommx.SampledSos1Constraint` |
 
 For the mixed-family typed-key contract, ``get``, live views, iteration timing,
-and snapshot equality, see {class}`~ommx.ConstraintCollection`. Filter without
+and snapshot equality, see {class}`~ommx.ActiveConstraintCollection`. Filter without
 collecting rows using ``of_kind`` and {class}`~ommx.ConstraintFamilyView`.
 {meth}`~ommx.Solution.constraints_df` collects one family as a DataFrame;
 retained inactive constraints remain included. Its ``kind`` argument is required,

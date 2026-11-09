@@ -11,10 +11,10 @@ def _attached_constraint_with_missing_state():
     instance = ommx.Instance.from_components(
         decision_variables=[variable],
         objective=0,
-        constraints={0: variable == 0},
+        active_constraints={0: variable == 0},
         sense=ommx.Sense.Minimize,
     )
-    return instance.constraints[ConstraintID(0)].evaluate({})
+    return instance.active_constraints[ConstraintID(0)].evaluate({})
 
 
 def _instance_with_required_variable() -> ommx.Instance:
@@ -22,7 +22,7 @@ def _instance_with_required_variable() -> ommx.Instance:
     return ommx.Instance.from_components(
         decision_variables=[variable],
         objective=variable,
-        constraints={},
+        active_constraints={},
         sense=ommx.Sense.Minimize,
     )
 
@@ -32,8 +32,8 @@ def _instance_with_one_hot_constraint() -> ommx.Instance:
     return ommx.Instance.from_components(
         decision_variables=variables,
         objective=0,
-        constraints={},
-        one_hot_constraints={0: ommx.OneHotConstraint(variables=variables)},
+        active_constraints={},
+        active_one_hot_constraints={0: ommx.OneHotConstraint(variables=variables)},
         sense=ommx.Sense.Minimize,
     )
 
@@ -44,7 +44,7 @@ def _dependent_instance_y_eq_scaled_x(coefficient: float) -> ommx.Instance:
     instance = ommx.Instance.from_components(
         decision_variables=[x, y],
         objective=y,
-        constraints={},
+        active_constraints={},
         sense=ommx.Sense.Minimize,
     )
     instance.substitute({10: coefficient * x})
@@ -59,8 +59,8 @@ def _instance_with_sos1_derived_bound_conflict() -> ommx.Instance:
     return ommx.Instance.from_components(
         decision_variables=variables,
         objective=0,
-        constraints={},
-        sos1_constraints={0: ommx.Sos1Constraint(variables=variables)},
+        active_constraints={},
+        active_sos1_constraints={0: ommx.Sos1Constraint(variables=variables)},
         sense=ommx.Sense.Minimize,
     )
 
@@ -71,8 +71,8 @@ def _instance_with_indicator_constraint() -> ommx.Instance:
     return ommx.Instance.from_components(
         decision_variables=[variable, indicator],
         objective=0,
-        constraints={},
-        indicator_constraints={
+        active_constraints={},
+        active_indicator_constraints={
             0: ommx.IndicatorConstraint(
                 indicator_variable=indicator,
                 function=variable,
@@ -149,7 +149,7 @@ def test_non_binary_value_without_indicator_semantics_remains_infeasible() -> No
     instance = ommx.Instance.from_components(
         decision_variables=[variable],
         objective=variable,
-        constraints={},
+        active_constraints={},
         sense=ommx.Sense.Minimize,
     )
 
@@ -175,7 +175,7 @@ def test_constraint_restore_overflow_falls_back_to_runtime_error() -> None:
     instance = ommx.Instance.from_components(
         decision_variables=[variable],
         objective=0,
-        constraints={0: sys.float_info.max * variable <= 0},
+        active_constraints={0: sys.float_info.max * variable <= 0},
         sense=ommx.Sense.Minimize,
     )
     instance.deactivate_constraint(0, "test")
@@ -184,7 +184,7 @@ def test_constraint_restore_overflow_falls_back_to_runtime_error() -> None:
     with pytest.raises(RuntimeError, match="failed to normalize inactive constraint"):
         instance.activate_constraint(0)
 
-    assert instance.constraints == {}
+    assert instance.active_constraints == {}
     assert set(instance.inactive_constraints) == {ConstraintID(0)}
 
 
@@ -194,8 +194,8 @@ def test_indicator_constraint_restore_overflow_falls_back_to_runtime_error() -> 
     instance = ommx.Instance.from_components(
         decision_variables=[variable, indicator],
         objective=0,
-        constraints={},
-        indicator_constraints={
+        active_constraints={},
+        active_indicator_constraints={
             0: ommx.IndicatorConstraint(
                 indicator_variable=indicator,
                 function=sys.float_info.max * variable,
@@ -213,7 +213,7 @@ def test_indicator_constraint_restore_overflow_falls_back_to_runtime_error() -> 
         instance.activate_indicator_constraint(0)
 
     assert not any(
-        isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
+        isinstance(cid, IndicatorConstraintID) for cid in instance.active_constraints
     )
     assert set(
         (

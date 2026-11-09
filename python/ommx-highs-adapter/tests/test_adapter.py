@@ -23,7 +23,7 @@ def test_variable_domains_and_column_mapping():
     instance = Instance.from_components(
         decision_variables=[continuous, unused, binary, integer],
         objective=3 * binary + 5 * integer + 7 * continuous,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     adapter = OMMXHighsAdapter(instance)
@@ -52,7 +52,7 @@ def test_constructor_without_active_variables(has_unused_variable):
     instance = Instance.from_components(
         decision_variables=[DecisionVariable.binary(11)] if has_unused_variable else [],
         objective=7,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     adapter = OMMXHighsAdapter(instance)
@@ -83,7 +83,7 @@ def test_constructor_without_active_variables(has_unused_variable):
 def test_variable_registration_error(monkeypatch, method, message):
     x = DecisionVariable.binary(11)
     instance = Instance.from_components(
-        decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize
+        decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Minimize
     )
     monkeypatch.setattr(highspy.Highs, method, lambda *args: highspy.HighsStatus.kError)
     with pytest.raises(OMMXHighsAdapterError, match=message):
@@ -102,7 +102,7 @@ def test_constructor_preserves_model_without_solving(
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=objective,
-        constraints={
+        active_constraints={
             10: x + y == 3,
             20: x - 2 * y <= 0,
             30: Constraint(function=0, equality=Equality.EqualToZero),
@@ -159,7 +159,7 @@ def test_integration_lp():
     instance = Instance.from_components(
         decision_variables=[x1, x2],
         objective=x1 + 2 * x2,
-        constraints={0: x1 + x2 <= 5},
+        active_constraints={0: x1 + x2 <= 5},
         sense=Sense.Minimize,
     )
     adapter = OMMXHighsAdapter(instance)
@@ -180,7 +180,7 @@ def test_integration_milp():
     instance = Instance.from_components(
         decision_variables=[x1, x2],
         objective=-x1 - x2,
-        constraints={0: 3 * x1 - x2 <= 6, 1: -x1 + 3 * x2 <= 6},
+        active_constraints={0: 3 * x1 - x2 <= 6, 1: -x1 + 3 * x2 <= 6},
         sense=Sense.Minimize,
     )
 
@@ -200,7 +200,7 @@ def test_solution_optimality():
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
 
@@ -213,7 +213,7 @@ def test_solution_optimality_is_not_transported_through_fixed_penalty():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={7: x == 1},
+        active_constraints={7: x == 1},
         sense=Sense.Minimize,
     )
     instance.to_qubo(uniform_penalty_weight=0.0)
@@ -229,7 +229,7 @@ def test_output_objective_omits_active_formulation_dual_values():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={0: x <= 1},
+        active_constraints={0: x <= 1},
         sense=Sense.Maximize,
     )
     assert instance.convert_active_objective(Sense.Minimize)
@@ -267,7 +267,7 @@ def test_partial_evaluate():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1] + x[2],
-        constraints={0: x[0] + x[1] + x[2] <= 1},  # one-hot constraint
+        active_constraints={0: x[0] + x[1] + x[2] <= 1},  # one-hot constraint
         sense=Sense.Minimize,
     )
     assert instance.used_decision_variables == x
@@ -287,12 +287,12 @@ def test_partial_evaluate():
     assert [var.value for var in solution.decision_variables] == [0, 0, 1]
 
 
-def test_deactivate_constraint():
+def test_relax_constraint():
     x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints={0: x[0] + 2 * x[1] <= 1, 1: x[1] + x[2] <= 1},
+        active_constraints={0: x[0] + 2 * x[1] <= 1, 1: x[1] + x[2] <= 1},
         sense=Sense.Minimize,
     )
 
@@ -304,3 +304,19 @@ def test_deactivate_constraint():
     solution = OMMXHighsAdapter.solve(instance)
     # x[2] is still present as part of the evaluate/decoding process but has a value of 0
     assert [var.value for var in solution.decision_variables] == [0, 0, 0]
+
+
+def test_inactive_constraints_are_evaluated_but_not_imposed():
+
+    instance = Instance.minimize()
+    x = instance.new_continuous("x", lower=0, upper=2)
+    instance.objective = x
+    row = instance.add_constraint(x >= 1, "retained_requirement")
+    instance.deactivate_constraint(row.constraint_id, "manual")
+
+    solution = OMMXHighsAdapter.solve_without_preparation(instance)
+
+    assert solution.state.entries[x.id] == pytest.approx(0)
+    assert solution.constraint_violation(row.constraint_id) == pytest.approx(1)
+    assert solution.feasible_relaxed
+    assert not solution.feasible

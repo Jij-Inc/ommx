@@ -41,12 +41,6 @@ PyrightはOMMXに同梱された型情報を使い、スクリプトを実行せ
 (migration-build)=
 ## 2. モデルを組み立て、編集する
 
-### Inactive制約への名称変更
-
-SDKでは、現在の定式化から外れた制約を **inactive** と呼びます。`Removed*Constraint` は `Inactive*Constraint`、`removed_constraints` は `inactive_constraints`、既存の `relax_constraint` / `restore_constraint` は `deactivate_constraint` / `activate_constraint` に変更してください。indicator制約の操作も同様です。理由のアクセサーと表のメタデータには `inactive_reason` と `constraint_inactive_reasons_df` を使います。
-
-この変更は名称の整理です。`constraints` は引き続きactiveな接続済み行、`inactive_constraints` はinactiveなスナップショットを返し、通常の実行可能性判定は両方を検査します。`feasible_relaxed` はactiveのみを判定します。v1のschemaは変更せず、v2もfield番号を維持します。
-
 (migration-automatic-ids)=
 ### モデルに採番を任せるか、外部のIDを引き継ぐか
 
@@ -60,20 +54,20 @@ x = model.new_binary("x")
 y = model.new_binary("y")
 model.objective = x + y
 limit = model.add_constraint(x + y <= 1, "limit")
-assert model.constraints[limit.constraint_id].name == "limit"
+assert model.active_constraints[limit.constraint_id].name == "limit"
 ```
 
 整数・連続・半整数・半連続・有限集合を値域とする変数にも、それぞれ `new_integer`、`new_continuous`、`new_semi_integer`、`new_semi_continuous`、`new_finite_domain` があります。`Instance` と `ParametricInstance` では、`add_constraint`、`add_indicator_constraint`、`add_one_hot_constraint`、`add_sos1_constraint` が各制約の番号を割り当てます。
 
-外部のアプリケーションがモデル内の変数0や制約7をその番号で参照する必要がある場合は、**その番号を維持します**。変数は作成時にIDを指定します。制約はv2の `constraints=[(x <= 1).set_id(7)]` を、{meth}`~ommx.Instance.from_components` に渡す `constraints={7: x <= 1}` に置き換えます。モデルに属していない制約はIDを持ちません。一つのモデルでは削除済みを含めて全種類の制約が番号を共有し、構築時や読込み時に重複を拒否します。
+外部のアプリケーションがモデル内の変数0や制約7をその番号で参照する必要がある場合は、**その番号を維持します**。変数は作成時にIDを指定します。制約はv2の `constraints=[(x <= 1).set_id(7)]` を、{meth}`~ommx.Instance.from_components` に渡す `active_constraints={7: x <= 1}` に置き換えます。モデルに属していない制約はIDを持ちません。一つのモデルではinactiveを含めて全種類の制約が番号を共有し、構築時や読込み時に重複を拒否します。
 
 (42-constraint-accessors-on-instance--parametricinstance--solution-return-dicts)=
 (typed-constraint-ids-and-live-collections)=
 ### 編集する行を選ぶ
 
-通常制約7は `model.constraints[ConstraintID(7)]` で参照します。全種類を含むコレクションでは、検索キーに制約の種類を示す型付きIDが必要です。通常制約だけに絞った `model.constraints.of_kind(ConstraintKind.Regular)[7]` なら整数も使えます。反復すると型付きIDが得られます。IDと行の両方を使う場合は `.items()` を呼びます。
+通常制約7は `model.active_constraints[ConstraintID(7)]` で参照します。全種類を含むコレクションでは、検索キーに制約の種類を示す型付きIDが必要です。通常制約だけに絞った `model.active_constraints.of_kind(ConstraintKind.Regular)[7]` なら整数も使えます。反復すると型付きIDが得られます。IDと行の両方を使う場合は `.items()` を呼びます。
 
-モデルから取得した有効な行は、モデルに接続されたハンドルです。`row.set_name("limit")` はモデル上の名前を更新します。独立したコピーが必要なら `row.detach()` を呼びます。v2の `add_name` と `add_description` は `set_name` と `set_description` に置き換えます。パラメータ全体の置換には `set_parameters`、指定したキーだけの更新には `add_parameters` を使います。変数の固定値は変数定義をコピーしてもモデル側に残るため、`model.fixed_decision_variables()` から取得します。詳しくは {class}`~ommx.ConstraintCollection` と {class}`~ommx.DecisionVariable` を参照してください。
+モデルから取得した有効な行は、モデルに接続されたハンドルです。`row.set_name("limit")` はモデル上の名前を更新します。独立したコピーが必要なら `row.detach()` を呼びます。v2の `add_name` と `add_description` は `set_name` と `set_description` に置き換えます。パラメータ全体の置換には `set_parameters`、指定したキーだけの更新には `add_parameters` を使います。変数の固定値は変数定義をコピーしてもモデル側に残るため、`model.fixed_decision_variables()` から取得します。詳しくは {class}`~ommx.ActiveConstraintCollection` と {class}`~ommx.DecisionVariable` を参照してください。
 
 (migration-constraint-metadata)=
 ### メタデータの編集先を確認する
@@ -91,12 +85,12 @@ x = model.new_binary("x")
 live = model.add_constraint(x <= 1, "original")
 local = live.detach()
 local.set_name("display")
-assert model.constraints[live.constraint_id].name == "original"
+assert model.active_constraints[live.constraint_id].name == "original"
 live.set_name("capacity")
-assert model.constraints[live.constraint_id].name == "capacity"
+assert model.active_constraints[live.constraint_id].name == "capacity"
 ```
 
-`dict(model.constraints)` で辞書を作っても、値は引き続きモデルに接続されています。独立させたい有効な行ごとに `detach()` を呼んでください。切り離した制約のsetterは呼出し元を変更してコピーを返すため、一つのオブジェクトに複数の変更を加えるときは、そのオブジェクトに対して個別に呼びます。
+`dict(model.active_constraints)` で辞書を作っても、値は引き続きモデルに接続されています。独立させたい有効な行ごとに `detach()` を呼んでください。切り離した制約のsetterは呼出し元を変更してコピーを返すため、一つのオブジェクトに複数の変更を加えるときは、そのオブジェクトに対して個別に呼びます。
 
 ### 変数の役割を読む処理を置き換える
 
@@ -159,6 +153,16 @@ v2の `sample_qubo_sa` が返したのは生のサンプルです。v3のAdapter
 
 (migration-results)=
 ## 4. 候補を評価し、結果を取り出す
+
+### Activeとinactiveの制約を参照する
+
+`relax_constraint` / `restore_constraint` を `deactivate_constraint` / `activate_constraint` に、`RemovedConstraint` を `InactiveConstraint` に置き換えます。Indicator、OneHot、SOS1でも同じ命名を使います。無効化しても行と理由は保持されます。すべてのinactive行は数値評価され、元の条件全体の実行可能性判定に含まれます。
+
+`Instance.constraints` と `ParametricInstance.constraints` は全状態を含むようになります。型付きIDが識別するのは制約の種類であり、activenessではありません。検索結果の共通型は `ConstraintView` で、具体的な型はその時点の状態で決まります。型付きの接続されたハンドルには `active_constraints`、inactiveのスナップショットには `inactive_constraints` を使います。`Solution.constraints` と `SampleSet.constraints` は引き続き評価済みの全行を含みます。
+
+`from_components` の `constraints=` は `active_constraints=` に変更します。同様に `active_indicator_constraints=`、`active_one_hot_constraints=`、`active_sos1_constraints=` を使います。初期状態からinactiveにする行には、対応する `inactive_*` 引数と `Inactive*Constraint` ラッパーを使います。
+
+`feasible` はactiveとinactiveの両方を判定し、`feasible_relaxed` はactiveだけを判定します。どちらも変数の定義域を検査します。v1のwire schemaと既存の出力制限は変わりません。
 
 (migration-compare-model)=
 (constraint-violation-migration)=
@@ -319,7 +323,7 @@ Local Registryに書き込まずにアーカイブの内容を調べるには {m
 | `DecisionVariable.substituted_value` | {meth}`model.fixed_decision_variables() <ommx.Instance.fixed_decision_variables>` | {ref}`2 <migration-build>` |
 | `evaluated.feasible` / `sampled.feasible` | {meth}`evaluated.is_feasible(atol=...) <ommx.EvaluatedConstraint.is_feasible>` / {meth}`sampled.feasible(atol=...) <ommx.SampledConstraint.feasible>` | {ref}`4 <migration-results>` |
 | `extract_constraints(name)` | 違反量は {meth}`extract_constraints <ommx.Solution.extract_constraints>`、通常制約の式の値は {meth}`get_constraint_value <ommx.Solution.get_constraint_value>` | {ref}`4 <migration-results>` |
-| `get_constraint_by_id` / `get_removed_constraint_by_id` | {attr}`constraints[ConstraintID(n)] <ommx.Instance.constraints>` / {attr}`removed_constraints[ConstraintID(n)] <ommx.Instance.inactive_constraints>` | {ref}`2 <migration-build>` |
+| `get_constraint_by_id` / `get_removed_constraint_by_id` | {attr}`active_constraints[ConstraintID(n)] <ommx.Instance.active_constraints>` / {attr}`inactive_constraints[ConstraintID(n)] <ommx.Instance.inactive_constraints>` | {ref}`2 <migration-build>` |
 | `Linear.from_object` / `Linear.equals_to` | 式または {meth}`Linear.single_term <ommx.Linear.single_term>` / {meth}`almost_equal <ommx.Linear.almost_equal>` | {ref}`2 <migration-build>` |
 | `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` | {meth}`Linear.terms() <ommx.Linear.terms>` / {meth}`Quadratic.terms() <ommx.Quadratic.terms>` / {meth}`Polynomial.terms() <ommx.Polynomial.terms>` | {ref}`2 <migration-build>` |
 | `ommx.v1` / `ommx.v1.*_pb2` | {doc}`ommx </api/index>` | {ref}`1 <migration-imports>` |

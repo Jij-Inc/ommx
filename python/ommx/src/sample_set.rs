@@ -40,7 +40,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// >>> instance = Instance.from_components(
 /// ...     decision_variables=x,
 /// ...     objective=x[0] + 2*x[1] + 3*x[2],
-/// ...     constraints={0: sum(x) == 1},
+/// ...     active_constraints={0: sum(x) == 1},
 /// ...     sense=Sense.Maximize,
 /// ... )
 ///
@@ -121,7 +121,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// >>> assert results.best_feasible.optimality == Optimality.Unspecified
 ///
 /// Successful value reconstruction, feasibility, and optimality remain separate
-/// questions. {attr}`~ommx.SampleSet.feasible` includes retained removed
+/// questions. {attr}`~ommx.SampleSet.feasible` includes retained inactive
 /// constraints; {attr}`~ommx.SampleSet.feasible_relaxed` excludes them while
 /// still checking all variable domains. See {class}`~ommx.Solution` for output
 /// interpretation and {meth}`~ommx.Instance.populate_state` for reconstruction,
@@ -340,7 +340,7 @@ impl SampleSet {
 
     /// Get feasibility status for all samples, including variable bounds and kinds.
     ///
-    /// Includes all retained regular and special constraints, even removed ones.
+    /// Includes all retained regular and special constraints, even inactive ones.
     /// Each value matches {attr}`~ommx.Solution.feasible` on the corresponding
     /// extracted Solution and uses {attr}`~ommx.SampleSet.feasibility_atol`.
     #[getter]
@@ -403,7 +403,7 @@ impl SampleSet {
             .collect()
     }
 
-    /// Live mapping of all constraint families, including removed results.
+    /// Live mapping of all constraint families, including inactive results.
     /// Typed IDs select the family. Rows are fetched only when indexed.
     #[getter]
     pub fn constraints(
@@ -451,7 +451,7 @@ impl SampleSet {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x + y,
     /// ...     objective=sum(x) + sum(y),
-    /// ...     constraints={},
+    /// ...     active_constraints={},
     /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
@@ -524,7 +524,7 @@ impl SampleSet {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x + y,
     /// ...     objective=sum(x) + sum(y),
-    /// ...     constraints={},
+    /// ...     active_constraints={},
     /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
@@ -584,7 +584,7 @@ impl SampleSet {
     /// >>> x = DecisionVariable.binary(0, name="selected")
     /// >>> cost = NamedFunction(id=10, function=4 * x, name="cost")
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={},
+    /// ...     decision_variables=[x], objective=x, active_constraints={},
     /// ...     sense=Sense.Maximize, named_functions=[cost],
     /// ... )
     /// >>> results = instance.evaluate_samples({7: {x.id: 0}, 9: {x.id: 1}})
@@ -694,7 +694,7 @@ impl SampleSet {
     ///
     /// The index is ``sample_id`` and the columns are ``objective`` and
     /// ``feasible``. Feasibility matches {attr}`~ommx.SampleSet.feasible`, including
-    /// variable kinds and bounds and all retained constraints, even removed ones.
+    /// variable kinds and bounds and all retained constraints, even inactive ones.
     /// Feasible candidates appear first; within each feasibility group, objective
     /// values are ascending for minimization and descending for maximization,
     /// according to {attr}`~ommx.SampleSet.sense`.
@@ -775,7 +775,7 @@ impl SampleSet {
     /// (`value.{sample_id}`, `feasible.{sample_id}`, etc.) on top of
     /// the kind-specific core columns.
     ///
-    /// `SampleSet` has no `removed=` parameter (no active/removed
+    /// `SampleSet` has no `removed=` parameter (no active/inactive
     /// distinction at the sampled stage); reason data is gated by
     /// `"inactive_reason"` in `include=`.
     #[pyo3(signature = (*, kind, include = None))]
@@ -951,7 +951,7 @@ impl SampleSet {
         )
     }
 
-    /// Removed-constraint reasons DataFrame (long format).
+    /// Inactive-constraint reasons DataFrame (long format).
     #[pyo3(signature = (*, kind))]
     pub fn constraint_inactive_reasons_df<'py>(
         &self,

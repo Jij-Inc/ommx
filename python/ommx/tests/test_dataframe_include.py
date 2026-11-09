@@ -41,7 +41,7 @@ def _build_instance() -> Instance:
     return Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={10: c},
+        active_constraints={10: c},
         sense=Sense.Maximize,
     )
 
@@ -86,7 +86,7 @@ def test_decision_variables_df_state_role():
     instance = Instance.from_components(
         decision_variables=list(x.values()),
         objective=x[0],
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     instance.substitute({2: x[0] + 1})

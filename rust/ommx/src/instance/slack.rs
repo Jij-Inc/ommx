@@ -367,7 +367,7 @@ mod tests {
             .unwrap();
 
         let constraint = instance
-            .constraints()
+            .active_constraints()
             .get(&ConstraintID::from(0))
             .expect("constraint should still be present");
         assert_eq!(constraint.equality, Equality::EqualToZero);
@@ -398,7 +398,7 @@ mod tests {
             .copied()
             .find(|id| instance.variable_labels().name(*id) == Some("ommx.slack"))
             .unwrap();
-        let constraint = &instance.constraints()[&ConstraintID::from(0)];
+        let constraint = &instance.active_constraints()[&ConstraintID::from(0)];
         let feasible = constraint
             .evaluate(
                 &crate::v1::State::from_iter([(1, 0.0), (slack_id.into_inner(), 0.0)]),
@@ -425,7 +425,7 @@ mod tests {
             .unwrap();
         assert_eq!(coefficient, Some(0.0));
 
-        let constraint = &instance.constraints()[&ConstraintID::from(0)];
+        let constraint = &instance.active_constraints()[&ConstraintID::from(0)];
         let feasible = constraint
             .evaluate(&crate::v1::State::from_iter([(1, 0.0)]), atol)
             .unwrap();
@@ -464,7 +464,7 @@ mod tests {
                     None
                 );
             }
-            assert!(instance.constraints().is_empty());
+            assert!(instance.active_constraints().is_empty());
             assert!(instance
                 .inactive_constraints()
                 .contains_key(&ConstraintID::from(0)));
@@ -591,7 +591,9 @@ mod tests {
             Some(crate::ContentFactorError::CannotApproximateCoefficient)
         ));
         assert_eq!(instance.decision_variables().len(), 1);
-        assert!(instance.constraints().contains_key(&ConstraintID::from(0)));
+        assert!(instance
+            .active_constraints()
+            .contains_key(&ConstraintID::from(0)));
     }
 
     #[test]
@@ -619,7 +621,7 @@ mod tests {
         assert!(b > 0.0);
 
         let constraint = instance
-            .constraints()
+            .active_constraints()
             .get(&ConstraintID::from(0))
             .expect("constraint should still be present");
         assert_eq!(constraint.equality, Equality::LessThanOrEqualToZero);
@@ -652,7 +654,7 @@ mod tests {
             .add_integer_slack_to_inequality(0, 2, ATol::default())
             .unwrap();
         assert!(result.is_none());
-        assert!(instance.constraints().is_empty());
+        assert!(instance.active_constraints().is_empty());
         assert_eq!(instance.inactive_constraints().len(), 1);
     }
 
@@ -684,7 +686,10 @@ mod tests {
         // No slack variable should have been added on the failure path.
         assert_eq!(instance.decision_variables.len(), before);
         // The original constraint is still the untouched inequality.
-        let constraint = instance.constraints().get(&ConstraintID::from(0)).unwrap();
+        let constraint = instance
+            .active_constraints()
+            .get(&ConstraintID::from(0))
+            .unwrap();
         assert_eq!(constraint.equality, Equality::LessThanOrEqualToZero);
     }
 

@@ -13,13 +13,13 @@ A production line can make up to 100 units per hour, but only 60 in reduced mode
 
 You can apply the same check to a candidate from a solver or one supplied by hand. Passing this one check still leaves the other constraints and variable domains to check. Even a plan that satisfies them all might have a worse objective value than another feasible plan.
 
-OMMX can retain a constraint after removing it from the conditions imposed on the solver. The imposed constraints are called **active**; the retained ones are called **removed**. Evaluation can therefore distinguish satisfying the active conditions from satisfying all retained conditions. Variable domains, such as integrality and bounds, matter in both cases.
+OMMX can keep a constraint after removing it from the conditions imposed on the solver. The imposed constraints are **active**; the kept ones are **inactive**. `feasible` checks both active and inactive conditions, while `feasible_relaxed` checks active conditions. Values and violations remain available for every evaluated row. Both judgments include variable domains, such as integrality and bounds.
 
-Inactive constraints also arise when a special constraint is replaced by an equivalent expression using ordinary constraints, or when a constraint is converted into a penalty term in the objective. A removed constraint is a record of a change; its presence alone does not tell you whether that change preserves the original problem. In particular, a finite penalty weight can allow an infeasible candidate to be preferred.
+Inactive constraints also arise when a special constraint is replaced by an equivalent expression using ordinary constraints, or when a constraint is converted into a penalty term in the objective. An inactive constraint is a record of a change; its presence alone does not tell you whether that change preserves the original problem. In particular, a finite penalty weight can allow an infeasible candidate to be preferred.
 
 Use the transformed Instance—OMMX's representation of the problem associated with the solve—to interpret the returned values and retained conditions. Check the transformations' guarantees before treating that evaluation as a claim about the original problem: retained information does not certify that every change preserved its feasible region or optima.
 
-The {class}`Solution Reference <ommx.Solution>` explains the feasibility results and how to inspect violations. The {attr}`removed-constraint Reference <ommx.Instance.inactive_constraints>` covers the retained data and its relationship to active constraints.
+The {class}`Solution Reference <ommx.Solution>` explains the feasibility results and how to inspect violations. The {attr}`inactive-constraint Reference <ommx.Instance.inactive_constraints>` covers the retained data and its relationship to active constraints.
 
 ## Distinguish reconstructed values from filled-in values
 
@@ -78,7 +78,7 @@ For business decisions, you may also need costs, distances, or other metrics bey
 
 Suppose you convert the reduced-mode limit into an ordinary inequality. With output $q$ and a variable $r$ equal to 1 in reduced mode, the normal-mode upper bound of 100 gives $q\leq100-40r$. The candidate $q=65, r=1$ violates this inequality. Tracing the generated constraint's provenance connects it to the original indicator constraint: at most 60 units in reduced mode.
 
-In OMMX, labels identify mathematical objects, and {class}`provenance <ommx.Provenance>` connects a generated ordinary constraint to its source special constraint. {attr}`Solution constraint rows <ommx.Solution.constraints>` retain labels, provenance, removal reasons, and evaluation information. The {meth}`special-constraint lowering example <ommx.Instance.lower_special_constraints>` shows how to inspect source and generated constraints.
+In OMMX, labels identify mathematical objects, and {class}`provenance <ommx.Provenance>` connects a generated ordinary constraint to its source special constraint. {attr}`Solution constraint rows <ommx.Solution.constraints>` retain labels, provenance, inactivation reasons, and evaluation information. The {meth}`special-constraint lowering example <ommx.Instance.lower_special_constraints>` shows how to inspect source and generated constraints.
 
 To identify the corresponding business declaration or input data, combine this information with the mapping maintained by a modeler such as JijModeling or by your application. For example, a constraint label can identify the production line and time period whose planned output, operating mode, capacity data, or requested deadline needs inspection. The user then decides whether to revise the plan, correct an input error, or reconsider a requirement.
 

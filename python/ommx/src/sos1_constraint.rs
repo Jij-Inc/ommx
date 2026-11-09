@@ -155,6 +155,26 @@ impl InactiveSos1Constraint {
 #[gen_stub_pymethods]
 #[pymethods]
 impl InactiveSos1Constraint {
+    #[new]
+    #[pyo3(signature = (constraint, inactive_reason, inactive_reason_parameters=None))]
+    pub fn new(
+        constraint: Sos1Constraint,
+        inactive_reason: String,
+        inactive_reason_parameters: Option<HashMap<String, String>>,
+    ) -> Self {
+        Self::from_parts(
+            constraint.0,
+            constraint.1,
+            ommx::InactiveConstraintMetadata {
+                reason: inactive_reason,
+                parameters: inactive_reason_parameters
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+            },
+        )
+    }
+
     #[getter]
     pub fn constraint(&self) -> Sos1Constraint {
         Sos1Constraint(self.constraint.clone(), self.context.clone())
@@ -272,7 +292,7 @@ fn lookup_sos1(
     inst: &ommx::Instance,
     id: ommx::Sos1ConstraintID,
 ) -> PyResult<&ommx::Sos1Constraint> {
-    inst.sos1_constraints()
+    inst.active_sos1_constraints()
         .get(&id)
         .or_else(|| inst.inactive_sos1_constraints().get(&id).map(|(c, _)| c))
         .ok_or_else(|| {
@@ -287,7 +307,7 @@ fn lookup_sos1_parametric(
     inst: &ommx::ParametricInstance,
     id: ommx::Sos1ConstraintID,
 ) -> PyResult<&ommx::Sos1Constraint> {
-    inst.sos1_constraints()
+    inst.active_sos1_constraints()
         .get(&id)
         .or_else(|| inst.inactive_sos1_constraints().get(&id).map(|(c, _)| c))
         .ok_or_else(|| {
@@ -396,5 +416,7 @@ crate::attached_constraint_context_methods!(
     AttachedSos1Constraint,
     ommx::Sos1ConstraintID,
     sos1_constraint_context,
-    set_sos1_constraint_context
+    set_sos1_constraint_context,
+    active_sos1_constraints,
+    sos1_constraint_collection
 );

@@ -723,7 +723,7 @@ impl Evaluate for Instance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// assert!(instance.convert_active_objective(Sense::Minimize));
@@ -792,7 +792,7 @@ impl Evaluate for Instance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// assert!(instance.convert_active_objective(Sense::Minimize));
@@ -889,7 +889,7 @@ impl Evaluate for Instance {
     ///     .sense(Sense::Maximize)
     ///     .objective(Function::from(linear!(1)))
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// assert!(instance.convert_active_objective(Sense::Minimize));
@@ -1112,7 +1112,7 @@ mod tests {
                 (VariableID::from(1), crate::DecisionVariable::continuous()),
                 (VariableID::from(2), crate::DecisionVariable::continuous()),
             ]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap()
     }
@@ -1131,7 +1131,7 @@ mod tests {
                     crate::DecisionVariable::semi_continuous(),
                 ),
             ]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap()
     }
@@ -1366,7 +1366,7 @@ mod tests {
                 11 <- coeff!(1_000_000.0) * linear!(10),
                 30 <- coeff!(2.0) * linear!(20)
             })
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap()
     }
@@ -1459,7 +1459,7 @@ mod tests {
             .decision_variable_dependency(crate::assign! {
                 10 <- coeff!(2.1) * linear!(1)
             })
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         let before = instance.clone();
@@ -1673,7 +1673,7 @@ mod tests {
             .objective(Function::from(linear!(1)))
             .decision_variables(decision_variables)
             .fixed_decision_variable_values(BTreeMap::from([(VariableID::from(2), 3.0)]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         let state = v1::State::from(HashMap::from([(1, 1.0), (2, f64::NAN)]));
@@ -1716,7 +1716,7 @@ mod tests {
             .objective(Function::from(linear!(1)))
             .decision_variables(decision_variables)
             .fixed_decision_variable_values(BTreeMap::from([(VariableID::from(2), 0.0)]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 
@@ -1744,7 +1744,7 @@ mod tests {
                 (VariableID::from(2), crate::DecisionVariable::continuous()),
             ]))
             .fixed_decision_variable_values(fixed_values)
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .inactive_constraints(BTreeMap::from([(
                 constraint_id,
                 (
@@ -1769,7 +1769,7 @@ mod tests {
                 crate::DecisionVariable::integer(),
             )]))
             .fixed_decision_variable_values(BTreeMap::from([(var_id, existing_value)]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 
@@ -1793,7 +1793,7 @@ mod tests {
                 var_id,
                 crate::DecisionVariable::binary(),
             )]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         let atol = ATol::new(0.125).unwrap();
@@ -1816,7 +1816,7 @@ mod tests {
         let state = v1::State::from(HashMap::from([(1, 3.0), (2, 4.0)]));
         instance.partial_evaluate(&state, ATol::default()).unwrap();
 
-        assert!(instance.constraints().is_empty());
+        assert!(instance.active_constraints().is_empty());
         assert_eq!(instance.inactive_constraints(), &removed_before);
         assert_eq!(
             instance.fixed_decision_variable_values(),
@@ -1824,7 +1824,7 @@ mod tests {
         );
 
         instance.activate_constraint(constraint_id).unwrap();
-        let restored = instance.constraints().get(&constraint_id).unwrap();
+        let restored = instance.active_constraints().get(&constraint_id).unwrap();
         assert!(restored.required_ids().is_empty());
     }
 
@@ -1838,7 +1838,7 @@ mod tests {
             .into_partial_evaluated(&state, ATol::default())
             .unwrap();
 
-        assert!(instance.constraints().is_empty());
+        assert!(instance.active_constraints().is_empty());
         assert_eq!(instance.inactive_constraints(), &removed_before);
         assert_eq!(
             instance.fixed_decision_variable_values(),
@@ -1846,7 +1846,7 @@ mod tests {
         );
 
         instance.activate_constraint(constraint_id).unwrap();
-        let restored = instance.constraints().get(&constraint_id).unwrap();
+        let restored = instance.active_constraints().get(&constraint_id).unwrap();
         assert!(restored.required_ids().is_empty());
     }
 
@@ -1890,7 +1890,7 @@ mod tests {
                 (VariableID::from(3), DecisionVariable::binary()),
                 (VariableID::from(4), DecisionVariable::continuous()),
             ]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         instance
@@ -1935,7 +1935,7 @@ mod tests {
                 (VariableID::from(3), DecisionVariable::binary()),
                 (VariableID::from(4), DecisionVariable::continuous()),
             ]))
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 ConstraintID::from(10),
                 Constraint::equal_to_zero(Function::from(linear!(4))),
             )]))
@@ -1965,7 +1965,7 @@ mod tests {
 
         assert_eq!(instance.inactive_one_hot_constraints(), &removed_before);
         assert!(instance
-            .constraints()
+            .active_constraints()
             .get(&ConstraintID::from(10))
             .unwrap()
             .required_ids()
@@ -1990,7 +1990,7 @@ mod tests {
                 (VariableID::from(3), crate::DecisionVariable::continuous()),
             ]))
             .fixed_decision_variable_values(BTreeMap::from([(VariableID::from(2), 3.0)]))
-            .constraints(BTreeMap::from([
+            .active_constraints(BTreeMap::from([
                 (
                     constraint_id,
                     Constraint::equal_to_zero(Function::from((linear!(1) + linear!(3)).unwrap())),
@@ -2035,7 +2035,7 @@ mod tests {
                     (VariableID::from(2), DecisionVariable::binary()),
                     (VariableID::from(3), DecisionVariable::continuous()),
                 ]))
-                .constraints(BTreeMap::new())
+                .active_constraints(BTreeMap::new())
                 .inactive_constraints(BTreeMap::from([(
                     ConstraintID::from(7),
                     (
@@ -2147,7 +2147,7 @@ mod tests {
                 VariableID::from(1),
                 crate::DecisionVariable::continuous(),
             )]))
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 ConstraintID::from(1),
                 Constraint::equal_to_zero(Function::from(linear!(1))),
             )]))
@@ -2197,7 +2197,7 @@ mod tests {
         );
         assert_eq!(
             borrowed
-                .constraints()
+                .active_constraints()
                 .get(&ConstraintID::from(1))
                 .unwrap()
                 .required_ids(),
@@ -2249,7 +2249,7 @@ mod tests {
                 (VariableID::from(2), crate::DecisionVariable::continuous()),
                 (VariableID::from(3), crate::DecisionVariable::continuous()),
             ]))
-            .constraints(BTreeMap::from([
+            .active_constraints(BTreeMap::from([
                 (
                     changed_constraint_id,
                     Constraint::less_than_or_equal_to_zero(Function::from(
@@ -2306,7 +2306,7 @@ mod tests {
 
         let original_objective = instance.objective().clone();
         let original_unchanged_constraint = instance
-            .constraints()
+            .active_constraints()
             .get(&unchanged_constraint_id)
             .unwrap()
             .clone();
@@ -2316,13 +2316,13 @@ mod tests {
 
         assert_eq!(rewritten.objective(), &original_objective);
         assert_eq!(
-            rewritten.constraints().get(&unchanged_constraint_id),
+            rewritten.active_constraints().get(&unchanged_constraint_id),
             Some(&original_unchanged_constraint)
         );
         assert_eq!(rewritten.named_function_table(), &original_named_functions);
         assert_eq!(
             rewritten
-                .constraints()
+                .active_constraints()
                 .get(&changed_constraint_id)
                 .unwrap()
                 .equality,
@@ -2343,7 +2343,7 @@ mod tests {
                 VariableID::from(1),
                 crate::DecisionVariable::continuous(),
             )]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .inactive_constraints(BTreeMap::from([(
                 ConstraintID::from(1),
                 (
@@ -2396,7 +2396,7 @@ mod tests {
                 (VariableID::from(2), DecisionVariable::binary()),
                 (VariableID::from(3), DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .inactive_constraints(BTreeMap::from([(
                 ConstraintID::from(10),
                 (
@@ -2469,7 +2469,7 @@ mod tests {
                 VariableID::from(1),
                 crate::DecisionVariable::continuous(),
             )]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         let samples = crate::Sampled::new(
@@ -2523,7 +2523,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(1)))
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .inactive_constraints(BTreeMap::from([(
                 ConstraintID::from(1),
                 (
@@ -2695,7 +2695,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(1)))
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .decision_variable_dependency(crate::assign! {
                 10 <- coeff!(2.0) * linear!(1),
                 11 <- linear!(10) + coeff!(1.0)
@@ -2829,7 +2829,7 @@ mod tests {
             .fixed_decision_variable_values(btreemap! {
                 VariableID::from(2) => 3.0,
             })
-            .constraints(BTreeMap::new()) // No constraints
+            .active_constraints(BTreeMap::new()) // No constraints
             .named_functions(named_functions)
             .build()
             .unwrap();
@@ -3237,8 +3237,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(objective)
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
-            .indicator_constraints(indicator_constraints)
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(indicator_constraints)
             .build()
             .unwrap();
 
@@ -3286,8 +3286,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(1)))
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
-            .indicator_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(BTreeMap::from([(
                 indicator_id,
                 crate::IndicatorConstraint::new(
                     VariableID::from(10),
@@ -3363,8 +3363,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(objective)
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
-            .indicator_constraints(indicator_constraints)
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(indicator_constraints)
             .build()
             .unwrap();
 

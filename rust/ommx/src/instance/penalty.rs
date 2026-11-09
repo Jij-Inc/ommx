@@ -123,7 +123,7 @@ impl Instance {
     ///     .sense(Sense::Minimize)
     ///     .objective(original.clone())
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-    ///     .constraints(BTreeMap::from([(
+    ///     .active_constraints(BTreeMap::from([(
     ///         ConstraintID::from(1),
     ///         Constraint::equal_to_zero(Function::from(linear!(1))),
     ///     )]))
@@ -131,7 +131,7 @@ impl Instance {
     ///     .unwrap();
     ///
     /// let parametric = instance.penalty_method().unwrap();
-    /// assert!(parametric.constraints().is_empty());
+    /// assert!(parametric.active_constraints().is_empty());
     /// assert_eq!(parametric.parameters().len(), 1);
     /// let output = parametric.output_objective().unwrap();
     /// assert_eq!(output.sense(), Sense::Minimize);
@@ -140,7 +140,7 @@ impl Instance {
     /// ```
     pub fn penalty_method(mut self) -> Result<ParametricInstance> {
         self.ensure_penalty_method_supported("penalty_method")?;
-        if self.constraints().is_empty() {
+        if self.active_constraints().is_empty() {
             return Ok(self.into_parametric_without_penalty());
         }
 
@@ -266,7 +266,7 @@ impl Instance {
     ///     .sense(Sense::Minimize)
     ///     .objective(original.clone())
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-    ///     .constraints(BTreeMap::from([(
+    ///     .active_constraints(BTreeMap::from([(
     ///         ConstraintID::from(1),
     ///         Constraint::equal_to_zero(Function::from(linear!(1))),
     ///     )]))
@@ -303,7 +303,7 @@ impl Instance {
         let operation = "penalty_method_with_fixed_weights";
         self.ensure_penalty_method_supported(operation)?;
         self.ensure_fixed_penalty_weight_ids(weights)?;
-        if self.constraints().is_empty() {
+        if self.active_constraints().is_empty() {
             return Ok(());
         }
 
@@ -378,7 +378,7 @@ impl Instance {
     ///     .sense(Sense::Minimize)
     ///     .objective(original.clone())
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-    ///     .constraints(BTreeMap::from([(
+    ///     .active_constraints(BTreeMap::from([(
     ///         ConstraintID::from(1),
     ///         Constraint::equal_to_zero(Function::from(linear!(1))),
     ///     )]))
@@ -386,7 +386,7 @@ impl Instance {
     ///     .unwrap();
     ///
     /// let parametric = instance.uniform_penalty_method().unwrap();
-    /// assert!(parametric.constraints().is_empty());
+    /// assert!(parametric.active_constraints().is_empty());
     /// assert_eq!(parametric.parameters().len(), 1);
     /// let output = parametric.output_objective().unwrap();
     /// assert_eq!(output.sense(), Sense::Minimize);
@@ -397,7 +397,7 @@ impl Instance {
         self.ensure_penalty_method_supported("uniform_penalty_method")?;
 
         // Early return if no active constraints (preserve any existing removed constraints)
-        if self.constraints().is_empty() {
+        if self.active_constraints().is_empty() {
             return Ok(self.into_parametric_without_penalty());
         }
 
@@ -518,7 +518,7 @@ impl Instance {
     ///     .sense(Sense::Minimize)
     ///     .objective(original.clone())
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-    ///     .constraints(BTreeMap::from([(
+    ///     .active_constraints(BTreeMap::from([(
     ///         ConstraintID::from(1),
     ///         Constraint::equal_to_zero(Function::from(linear!(1))),
     ///     )]))
@@ -550,7 +550,7 @@ impl Instance {
     ) -> crate::Result<()> {
         let operation = "uniform_penalty_method_with_fixed_weight";
         self.ensure_penalty_method_supported(operation)?;
-        if self.constraints().is_empty() {
+        if self.active_constraints().is_empty() {
             return Ok(());
         }
 
@@ -634,7 +634,11 @@ impl Instance {
         &self,
         weights: &BTreeMap<ConstraintID, f64>,
     ) -> crate::Result<()> {
-        let active_ids = self.constraints().keys().copied().collect::<BTreeSet<_>>();
+        let active_ids = self
+            .active_constraints()
+            .keys()
+            .copied()
+            .collect::<BTreeSet<_>>();
         let weight_ids = weights.keys().copied().collect::<BTreeSet<_>>();
         let missing_ids = active_ids
             .difference(&weight_ids)
@@ -770,22 +774,22 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 ConstraintID::from(1),
                 regular_constraint,
             )]))
-            .indicator_constraints(indicator_constraints)
-            .one_hot_constraints(one_hot_constraints)
-            .sos1_constraints(sos1_constraints)
+            .active_indicator_constraints(indicator_constraints)
+            .active_one_hot_constraints(one_hot_constraints)
+            .active_sos1_constraints(sos1_constraints)
             .build()
             .unwrap()
     }
 
     fn assert_no_active_constraints(instance: &Instance) {
-        assert!(instance.constraints().is_empty());
-        assert!(instance.indicator_constraints().is_empty());
-        assert!(instance.one_hot_constraints().is_empty());
-        assert!(instance.sos1_constraints().is_empty());
+        assert!(instance.active_constraints().is_empty());
+        assert!(instance.active_indicator_constraints().is_empty());
+        assert!(instance.active_one_hot_constraints().is_empty());
+        assert!(instance.active_sos1_constraints().is_empty());
     }
 
     fn assert_fixed_penalty_removal_provenance(instance: &Instance, operation: &str) {
@@ -841,7 +845,7 @@ mod tests {
         expected_param_name: &str,
     ) {
         // Check that constraints are removed
-        assert_eq!(parametric_instance.constraints().len(), 0);
+        assert_eq!(parametric_instance.active_constraints().len(), 0);
         assert_eq!(
             parametric_instance.inactive_constraints().len(),
             original_constraint_count
@@ -892,14 +896,14 @@ mod tests {
         assert_eq!(output.sense(), substituted.sense);
         assert_eq!(output.function(), &original_objective);
         assert!(!output.preserves_optimality());
-        assert_eq!(substituted.constraints().len(), 0);
+        assert_eq!(substituted.active_constraints().len(), 0);
     }
 
     #[test]
     fn test_penalty_method() {
         let instance = create_test_instance_with_constraints();
         let original_objective = instance.objective.clone();
-        let original_constraint_count = instance.constraints().len();
+        let original_constraint_count = instance.active_constraints().len();
         let parametric_instance = instance.penalty_method().unwrap();
 
         verify_penalty_method_properties(
@@ -915,7 +919,7 @@ mod tests {
     fn test_uniform_penalty_method() {
         let instance = create_test_instance_with_constraints();
         let original_objective = instance.objective.clone();
-        let original_constraint_count = instance.constraints().len();
+        let original_constraint_count = instance.active_constraints().len();
         let parametric_instance = instance.uniform_penalty_method().unwrap();
 
         verify_penalty_method_properties(
@@ -947,14 +951,14 @@ mod tests {
         // Test penalty_method
         let parametric_instance = instance.clone().penalty_method().unwrap();
         assert_eq!(parametric_instance.parameters.len(), 0);
-        assert_eq!(parametric_instance.constraints().len(), 0);
+        assert_eq!(parametric_instance.active_constraints().len(), 0);
         assert_eq!(parametric_instance.inactive_constraints().len(), 0);
         assert_eq!(parametric_instance.objective, objective);
 
         // Test uniform_penalty_method
         let parametric_instance = instance.uniform_penalty_method().unwrap();
         assert_eq!(parametric_instance.parameters.len(), 0);
-        assert_eq!(parametric_instance.constraints().len(), 0);
+        assert_eq!(parametric_instance.active_constraints().len(), 0);
         assert_eq!(parametric_instance.inactive_constraints().len(), 0);
         assert_eq!(parametric_instance.objective, objective);
     }
@@ -1015,7 +1019,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(instance.constraints().len(), 1); // only constraint 2 remains active
+        assert_eq!(instance.active_constraints().len(), 1); // only constraint 2 remains active
         assert_eq!(instance.inactive_constraints().len(), 1); // constraint 1 is removed
 
         let parametric_instance = instance.penalty_method().unwrap();
@@ -1091,7 +1095,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(instance.constraints().len(), 1);
+        assert_eq!(instance.active_constraints().len(), 1);
         assert_eq!(instance.inactive_constraints().len(), 1);
 
         let parametric_instance = instance.uniform_penalty_method().unwrap();
@@ -1511,7 +1515,11 @@ mod tests {
             ConstraintKind::Sos1,
         ] {
             let before = create_test_instance_with_special_constraints(&[kind]);
-            let weights = before.constraints().keys().map(|id| (*id, 2.0)).collect();
+            let weights = before
+                .active_constraints()
+                .keys()
+                .map(|id| (*id, 2.0))
+                .collect();
 
             let mut keyed = before.clone();
             keyed
@@ -1538,7 +1546,7 @@ mod tests {
             instance
                 .deactivate_constraint(ConstraintID::from(1), "test".to_owned(), [])
                 .unwrap();
-            assert!(instance.constraints().is_empty());
+            assert!(instance.active_constraints().is_empty());
             let before = instance.clone();
 
             for weight in [2.0, f64::NAN] {
@@ -1571,7 +1579,7 @@ mod tests {
         assert_eq!(lowered.inactive_indicator_constraints().len(), 1);
         assert_eq!(lowered.inactive_one_hot_constraints().len(), 1);
         assert_eq!(lowered.inactive_sos1_constraints().len(), 1);
-        assert!(!lowered.constraints().is_empty());
+        assert!(!lowered.active_constraints().is_empty());
 
         let already_removed_regular_id = ConstraintID::from(1);
         lowered
@@ -1595,7 +1603,7 @@ mod tests {
             .unwrap();
 
         let regular_constraint_count =
-            lowered.constraints().len() + lowered.inactive_constraints().len();
+            lowered.active_constraints().len() + lowered.inactive_constraints().len();
         let already_removed_regular =
             lowered.inactive_constraints()[&already_removed_regular_id].clone();
         let removed_indicators = lowered.inactive_indicator_constraints().clone();
@@ -1603,7 +1611,11 @@ mod tests {
         let removed_sos1s = lowered.inactive_sos1_constraints().clone();
 
         let mut keyed = lowered.clone();
-        let weights = keyed.constraints().keys().map(|id| (*id, 2.0)).collect();
+        let weights = keyed
+            .active_constraints()
+            .keys()
+            .map(|id| (*id, 2.0))
+            .collect();
         keyed
             .penalty_method_with_fixed_weights(&weights, ATol::default())
             .unwrap();

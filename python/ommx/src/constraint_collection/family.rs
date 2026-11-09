@@ -85,7 +85,8 @@ impl<'py> IntoPyObject<'py> for FamilyRow {
 }
 
 enum Owner {
-    Active(Py<ConstraintCollection>),
+    All(Py<ConstraintCollection>),
+    Active(Py<ActiveConstraintCollection>),
     Removed(Py<InactiveConstraintCollection>),
     Evaluated(Py<EvaluatedConstraintCollection>),
     Sampled(Py<SampledConstraintCollection>),
@@ -117,6 +118,10 @@ pyo3_stub_gen::inventory::submit! {
 macro_rules! with_parent {
     ($this:ident, $py:ident, |$parent:ident| $body:block) => {
         match &$this.owner {
+            Owner::All(owner) => {
+                let $parent = owner.borrow($py);
+                $body
+            }
             Owner::Active(owner) => {
                 let $parent = owner.borrow($py);
                 $body
@@ -141,6 +146,30 @@ macro_rules! with_parent {
 macro_rules! with_family {
     ($this:ident, $py:ident, |$map:ident| $body:block) => {
         match &$this.owner {
+            Owner::All(owner) => {
+                let parent = owner.borrow($py);
+                with_model!(&parent.owner, $py, |root| {
+                    constraint_kind_collection!(
+                        root,
+                        $this.kind,
+                        [
+                            constraint_collection,
+                            indicator_constraint_collection,
+                            one_hot_constraint_collection,
+                            sos1_constraint_collection
+                        ],
+                        |collection| {
+                            let $map: std::collections::BTreeMap<_, ()> = collection
+                                .active()
+                                .keys()
+                                .chain(collection.inactive().keys())
+                                .map(|id| (*id, ()))
+                                .collect();
+                            $body
+                        }
+                    )
+                })
+            }
             Owner::Active(owner) => {
                 let parent = owner.borrow($py);
                 with_model!(&parent.owner, $py, |root| {
@@ -148,10 +177,10 @@ macro_rules! with_family {
                         root,
                         $this.kind,
                         [
-                            constraints,
-                            indicator_constraints,
-                            one_hot_constraints,
-                            sos1_constraints
+                            active_constraints,
+                            active_indicator_constraints,
+                            active_one_hot_constraints,
+                            active_sos1_constraints
                         ],
                         |$map| $body
                     )
@@ -389,7 +418,8 @@ macro_rules! of_kind {
         }
     };
 }
-of_kind!(ConstraintCollection, Active);
+of_kind!(ConstraintCollection, All);
+of_kind!(ActiveConstraintCollection, Active);
 of_kind!(InactiveConstraintCollection, Removed);
 of_kind!(EvaluatedConstraintCollection, Evaluated);
 of_kind!(SampledConstraintCollection, Sampled);
@@ -406,7 +436,7 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 pyo3_stub_gen::inventory::submit! {
  pyo3_stub_gen::derive::gen_methods_from_python! { r#"
-class ConstraintCollection:
+class ActiveConstraintCollection:
     @overload
     def of_kind(self, kind: ConstraintKind[ConstraintID]) -> ConstraintFamilyView[ConstraintID, AttachedConstraint]:
         """Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection."""
@@ -501,5 +531,12 @@ class SampledConstraintCollection:
     @overload
     def of_kind(self, kind: ConstraintKind[_K]) -> ConstraintFamilyView[_K, ConstraintView]: ...
 
+"# }
+}
+
+pyo3_stub_gen::inventory::submit! {
+ pyo3_stub_gen::derive::gen_methods_from_python! { r#"
+class ConstraintCollection:
+    def of_kind(self, kind: ConstraintKind[_K]) -> ConstraintFamilyView[_K, ConstraintView]: ...
 "# }
 }

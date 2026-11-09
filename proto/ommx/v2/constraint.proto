@@ -25,7 +25,7 @@ message ConstraintContext {
   repeated Provenance provenance = 2;
 }
 
-// Why a constraint row is inactive after preprocessing.
+// Why a constraint row is inactive.
 message InactiveConstraintMetadata {
   string reason = 1;
   map<string, string> parameters = 2;

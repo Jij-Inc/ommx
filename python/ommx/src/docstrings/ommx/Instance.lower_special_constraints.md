@@ -57,7 +57,7 @@ the active SOS1, retains the original OneHot for evaluation, and adds an equalit
 ...     ConstraintKind.OneHot,
 ... }
 >>> assert instance.active_special_constraint_kinds == {ConstraintKind.Sos1}
->>> assert original.constraint_id not in instance.constraints
+>>> assert original.constraint_id not in instance.active_constraints
 >>> removed = instance.inactive_constraints[original.constraint_id]
 >>> assert removed.inactive_reason == "ommx.Instance.convert_one_hot_to_constraint"
 >>> assert removed.inactive_reason_parameters == {"constraint_id": "2"}
@@ -74,8 +74,8 @@ the active SOS1, retains the original OneHot for evaluation, and adds an equalit
 
 ```
 
-`removed=True` includes active and removed rows for the selected family and adds
-the removal-reason columns. Each generated regular constraint records its source
+`removed=True` includes active and inactive rows and adds the inactivation-reason
+columns. Each generated regular constraint records its source
 through {attr}`~ommx.Constraint.provenance`; removed rows record generated IDs in
 their reason parameters. The single-constraint conversion APIs define the
 family-specific parameter names and ordering. See

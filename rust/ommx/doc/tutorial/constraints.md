@@ -1,7 +1,7 @@
 # Constraints
 
 Constraints define the feasible region of optimization problems. Constraints can be equality
-or inequality types, and can be temporarily removed while preserving their definition.
+or inequality types, and can be deactivated while preserving their definition.
 
 ```rust
 use ommx::{Constraint, Function, Linear, linear, coeff};
@@ -48,7 +48,7 @@ lifecycle phase, with three inhabited stages:
   [`Function`](crate::Function).
 - `Evaluated` — the result of evaluating the constraint against a
   single [`State`](crate::v1::State); carries `evaluated_value`,
-  `feasible`, `dual_variable`, and the set of variable IDs it used.
+  `dual_variable`, and the set of variable IDs it used.
 - `Sampled` — the result of evaluating against a
   [`Sampled<State>`](crate::Sampled); carries per-sample evaluated
   values and feasibility.
@@ -56,7 +56,7 @@ lifecycle phase, with three inhabited stages:
 Each constraint type implements the
 [`ConstraintType`](crate::ConstraintType) trait, which maps all three
 stages as associated types — a defunctionalization of `Stage → Type`
-since Rust lacks HKTs. "Removed" is **not** a stage: removal is
+since Rust lacks HKTs. Activeness is **not** an evaluation stage: inactive membership is
 collection-level state tracked as a
 [`InactiveConstraintMetadata`](crate::InactiveConstraintMetadata) paired with the original
 `Created` constraint.
@@ -66,7 +66,7 @@ collection-level state tracked as a
 Three generic collection wrappers handle constraints uniformly:
 
 - [`ConstraintCollection`](crate::ConstraintCollection) —
-  active + removed, used in [`Instance`](crate::Instance). Removed
+  active + inactive, used in [`Instance`](crate::Instance). Inactive
   constraints are stored as `(T::Created, InactiveConstraintMetadata)` tuples.
 - [`EvaluatedCollection`](crate::EvaluatedCollection) — evaluation
   results, used in [`Solution`](crate::Solution).

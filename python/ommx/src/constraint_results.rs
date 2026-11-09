@@ -60,7 +60,7 @@ macro_rules! constraint_result_context {
                 crate::provenance_list(&self.1)
             }
 
-            /// Reason this constraint was removed before evaluation, or None.
+            /// Reason this constraint was inactive before evaluation, or None.
             #[getter]
             pub fn inactive_reason(&self) -> Option<String> {
                 self.2.as_ref().map(|r| r.reason.clone())

@@ -130,8 +130,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(1) + linear!(2)))
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
-            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(7), one_hot)]))
+            .active_constraints(BTreeMap::new())
+            .active_one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(7), one_hot)]))
             .build()
             .unwrap()
     }
@@ -144,7 +144,7 @@ mod tests {
             .unwrap();
 
         // Original one-hot moved to removed with the expected reason pointing at the new constraint.
-        assert!(instance.one_hot_constraints().is_empty());
+        assert!(instance.active_one_hot_constraints().is_empty());
         let removed = instance
             .inactive_one_hot_constraints()
             .get(&OneHotConstraintID::from(7))
@@ -163,7 +163,7 @@ mod tests {
         );
 
         // Newly inserted regular constraint is an equality `x1 + x2 - 1 == 0`.
-        let new_constraint = instance.constraints().get(&new_id).unwrap();
+        let new_constraint = instance.active_constraints().get(&new_id).unwrap();
         assert_eq!(new_constraint.equality, Equality::EqualToZero);
         let expected = Function::from(
             ((linear!(1) + linear!(2)).unwrap() + Linear::from(coeff!(-1.0))).unwrap(),
@@ -216,16 +216,16 @@ mod tests {
     fn missing_id_errors_without_mutating_state() {
         // Unknown IDs return Err and leave both collections untouched.
         let mut instance = instance_with_one_one_hot();
-        let before_one_hots = instance.one_hot_constraints().clone();
-        let before_constraints = instance.constraints().clone();
+        let before_one_hots = instance.active_one_hot_constraints().clone();
+        let before_constraints = instance.active_constraints().clone();
 
         let err = instance
             .convert_one_hot_to_constraint(OneHotConstraintID::from(999))
             .unwrap_err();
         assert!(err.to_string().contains("999"));
 
-        assert_eq!(instance.one_hot_constraints(), &before_one_hots);
-        assert_eq!(instance.constraints(), &before_constraints);
+        assert_eq!(instance.active_one_hot_constraints(), &before_one_hots);
+        assert_eq!(instance.active_constraints(), &before_constraints);
     }
 
     #[test]
@@ -244,8 +244,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(1) + linear!(3)))
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
-            .one_hot_constraints(BTreeMap::from([
+            .active_constraints(BTreeMap::new())
+            .active_one_hot_constraints(BTreeMap::from([
                 (OneHotConstraintID::from(1), a),
                 (OneHotConstraintID::from(2), b),
             ]))
@@ -254,10 +254,10 @@ mod tests {
 
         let new_ids = instance.convert_all_one_hots_to_constraints().unwrap();
         assert_eq!(new_ids.len(), 2);
-        assert!(instance.one_hot_constraints().is_empty());
+        assert!(instance.active_one_hot_constraints().is_empty());
         assert_eq!(instance.inactive_one_hot_constraints().len(), 2);
         for id in new_ids {
-            assert!(instance.constraints().contains_key(&id));
+            assert!(instance.active_constraints().contains_key(&id));
         }
     }
 
@@ -299,8 +299,8 @@ mod tests {
             .unwrap();
 
         assert_eq!(id, ConstraintID::from(u64::MAX));
-        assert!(instance.constraints().contains_key(&id));
-        assert!(instance.one_hot_constraints().is_empty());
+        assert!(instance.active_constraints().contains_key(&id));
+        assert!(instance.active_one_hot_constraints().is_empty());
         assert_eq!(instance.inactive_one_hot_constraints().len(), 1);
     }
 
@@ -340,7 +340,11 @@ mod tests {
                 Constraint::equal_to_zero(Function::Zero),
             )
             .unwrap();
-        let source_ids: Vec<_> = instance.one_hot_constraints().keys().copied().collect();
+        let source_ids: Vec<_> = instance
+            .active_one_hot_constraints()
+            .keys()
+            .copied()
+            .collect();
 
         let generated_ids = instance.convert_all_one_hots_to_constraints().unwrap();
 
@@ -357,7 +361,7 @@ mod tests {
                 &[Provenance::OneHotConstraint(source_id)],
             );
         }
-        assert!(instance.one_hot_constraints().is_empty());
+        assert!(instance.active_one_hot_constraints().is_empty());
         assert_eq!(instance.inactive_one_hot_constraints().len(), 2);
     }
 
@@ -367,7 +371,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 ConstraintID::from(u64::MAX),
                 Constraint::equal_to_zero(Function::Zero),
             )]))

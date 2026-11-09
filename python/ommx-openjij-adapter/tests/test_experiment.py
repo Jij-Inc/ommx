@@ -10,7 +10,7 @@ def test_log_sample_records_the_exact_prepared_adapter_input() -> None:
     source = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={7: x == 1},
+        active_constraints={7: x == 1},
         sense=Sense.Maximize,
     )
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS

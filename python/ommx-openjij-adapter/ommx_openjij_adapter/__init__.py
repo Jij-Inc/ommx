@@ -105,7 +105,7 @@ class OMMXOpenJijSAAdapter(_OMMXOpenJijSAAdapter):
 
     **Select among the obtained feasible candidates**
 
-    :attr:`ommx.SampleSet.best_feasible` selects by the reported objective among
+    :meth:`ommx.SampleSet.best_feasible` selects by the reported objective among
     the feasible candidates actually obtained. The names and subscripts set
     while modeling identify the selected values:
 

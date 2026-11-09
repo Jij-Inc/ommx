@@ -562,15 +562,15 @@ impl Arbitrary for Instance {
                                     .decision_variables(decision_variables)
                                     .variable_labels(variable_labels)
                                     .fixed_decision_variable_values(fixed_decision_variable_values)
-                                    .constraints(constraints)
+                                    .active_constraints(constraints)
                                     .constraint_context(constraint_context)
                                     .inactive_constraints(inactive_constraints)
-                                    .indicator_constraints(indicator_constraints)
+                                    .active_indicator_constraints(indicator_constraints)
                                     .indicator_constraint_context(indicator_constraint_context)
                                     .inactive_indicator_constraints(inactive_indicator_constraints)
-                                    .one_hot_constraints(one_hot_constraints)
+                                    .active_one_hot_constraints(one_hot_constraints)
                                     .one_hot_constraint_context(one_hot_constraint_context)
-                                    .sos1_constraints(sos1_constraints)
+                                    .active_sos1_constraints(sos1_constraints)
                                     .sos1_constraint_context(sos1_constraint_context)
                                     .named_functions(named_functions)
                                     .named_function_labels(named_function_labels)
@@ -647,7 +647,7 @@ mod tests {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for c in instance.constraints().values() {
+            for c in instance.active_constraints().values() {
                 for id in c.function().required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
@@ -657,7 +657,7 @@ mod tests {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for c in instance.indicator_constraints().values() {
+            for c in instance.active_indicator_constraints().values() {
                 for id in c.required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
@@ -667,7 +667,7 @@ mod tests {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for c in instance.one_hot_constraints().values() {
+            for c in instance.active_one_hot_constraints().values() {
                 for id in c.required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
@@ -677,7 +677,7 @@ mod tests {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for c in instance.sos1_constraints().values() {
+            for c in instance.active_sos1_constraints().values() {
                 for id in c.required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
@@ -708,11 +708,11 @@ mod tests {
             prop_assert!(!instance.fixed_decision_variable_values().is_empty());
             prop_assert!(!instance.decision_variable_dependency().is_empty());
             prop_assert!(!instance.inactive_constraints().is_empty());
-            prop_assert!(!instance.indicator_constraints().is_empty());
+            prop_assert!(!instance.active_indicator_constraints().is_empty());
             prop_assert!(!instance.inactive_indicator_constraints().is_empty());
-            prop_assert!(!instance.one_hot_constraints().is_empty());
+            prop_assert!(!instance.active_one_hot_constraints().is_empty());
             prop_assert!(!instance.inactive_one_hot_constraints().is_empty());
-            prop_assert!(!instance.sos1_constraints().is_empty());
+            prop_assert!(!instance.active_sos1_constraints().is_empty());
             prop_assert!(!instance.inactive_sos1_constraints().is_empty());
             prop_assert!(instance.parameters.is_some());
             prop_assert!(instance.description.is_some());
@@ -729,7 +729,7 @@ mod tests {
             }
             prop_assert!(
                 instance
-                    .indicator_constraints()
+                    .active_indicator_constraints()
                     .values()
                     .any(|constraint| !constraint.function().required_ids().is_empty())
             );

@@ -25,7 +25,9 @@ fn normalize_activation_error<ID: std::fmt::Debug>(
     )
 }
 
-impl Instance {
+macro_rules! impl_constraint_activeness {
+    ($host:ty) => {
+impl $host {
     pub fn deactivate_constraint(
         &mut self,
         id: ConstraintID,
@@ -63,7 +65,8 @@ impl Instance {
                 .partial_evaluate(&fixed_state, ATol::default())
                 .map_err(|error| normalize_activation_error("constraint", id, error))?;
         }
-        self.constraint_collection.activate_row(id, constraint)?;
+        self.constraint_collection
+            .activate_row(id, constraint)?;
         Ok(())
     }
 
@@ -83,10 +86,7 @@ impl Instance {
         Ok(())
     }
 
-    pub fn activate_indicator_constraint(
-        &mut self,
-        id: crate::IndicatorConstraintID,
-    ) -> Result<()> {
+    pub fn activate_indicator_constraint(&mut self, id: crate::IndicatorConstraintID) -> Result<()> {
         // Check before restoring: if dependency contains the indicator variable, reject
         let mut ic = self
             .indicator_constraint_collection
@@ -131,7 +131,47 @@ impl Instance {
             ic.partial_evaluate(&fixed_state, ATol::default())
                 .map_err(|error| normalize_activation_error("indicator constraint", id, error))?;
         }
-        self.indicator_constraint_collection.activate_row(id, ic)?;
+        self.indicator_constraint_collection
+            .activate_row(id, ic)?;
+        Ok(())
+    }
+
+
+    /// Retain a structural constraint without imposing it on the solver.
+    pub fn deactivate_one_hot_constraint(&mut self, id: crate::OneHotConstraintID, reason: String, parameters: impl IntoIterator<Item=(String,String)>) -> Result<()> {
+        self.one_hot_constraint_collection.deactivate(id, crate::InactiveConstraintMetadata { reason, parameters: parameters.into_iter().collect() })
+    }
+
+    /// Activate a retained structural constraint against the current variables.
+    /// Fixed or substituted members require a different formulation and are rejected atomically.
+    pub fn activate_one_hot_constraint(&mut self, id: crate::OneHotConstraintID) -> Result<()> {
+        let row = self.one_hot_constraint_collection.inactive().get(&id)
+            .ok_or_else(|| crate::error!("Inactive one_hot constraint {id:?} not found"))?.0.clone();
+        for variable in &row.variables {
+            if self.decision_variable_dependency.get(variable).is_some() || self.fixed_decision_variable_values().contains_key(variable) {
+                crate::bail!("Cannot activate one_hot constraint {id:?}: member {variable:?} has been fixed or substituted");
+            }
+        }
+        self.one_hot_constraint_collection.activate_row(id, row)?;
+        Ok(())
+    }
+
+    /// Retain a structural constraint without imposing it on the solver.
+    pub fn deactivate_sos1_constraint(&mut self, id: crate::Sos1ConstraintID, reason: String, parameters: impl IntoIterator<Item=(String,String)>) -> Result<()> {
+        self.sos1_constraint_collection.deactivate(id, crate::InactiveConstraintMetadata { reason, parameters: parameters.into_iter().collect() })
+    }
+
+    /// Activate a retained structural constraint against the current variables.
+    /// Fixed or substituted members require a different formulation and are rejected atomically.
+    pub fn activate_sos1_constraint(&mut self, id: crate::Sos1ConstraintID) -> Result<()> {
+        let row = self.sos1_constraint_collection.inactive().get(&id)
+            .ok_or_else(|| crate::error!("Inactive sos1 constraint {id:?} not found"))?.0.clone();
+        for variable in &row.variables {
+            if self.decision_variable_dependency.get(variable).is_some() || self.fixed_decision_variable_values().contains_key(variable) {
+                crate::bail!("Cannot activate sos1 constraint {id:?}: member {variable:?} has been fixed or substituted");
+            }
+        }
+        self.sos1_constraint_collection.activate_row(id, row)?;
         Ok(())
     }
 
@@ -146,6 +186,11 @@ impl Instance {
         }
     }
 }
+
+    };
+}
+impl_constraint_activeness!(Instance);
+impl_constraint_activeness!(ParametricInstance);
 
 #[cfg(test)]
 mod tests {
@@ -177,7 +222,7 @@ mod tests {
         instance
             .deactivate_constraint(ConstraintID::from(1), "test".to_string(), [])
             .unwrap();
-        assert!(instance.constraints().is_empty());
+        assert!(instance.active_constraints().is_empty());
         assert_eq!(instance.inactive_constraints().len(), 1);
 
         let fix_state = v1::State {
@@ -188,11 +233,14 @@ mod tests {
             .unwrap();
 
         instance.activate_constraint(ConstraintID::from(1)).unwrap();
-        assert_eq!(instance.constraints().len(), 1);
+        assert_eq!(instance.active_constraints().len(), 1);
         assert!(instance.inactive_constraints().is_empty());
 
         // Original: x1 + x2 - 10, after x1=3: x2 - 7
-        let restored = instance.constraints().get(&ConstraintID::from(1)).unwrap();
+        let restored = instance
+            .active_constraints()
+            .get(&ConstraintID::from(1))
+            .unwrap();
         assert!(!restored.required_ids().contains(&VariableID::from(1)));
         assert!(restored.required_ids().contains(&VariableID::from(2)));
     }
@@ -316,7 +364,10 @@ mod tests {
         instance.activate_constraint(ConstraintID::from(1)).unwrap();
 
         // x3 substituted with x1 + x2
-        let restored = instance.constraints().get(&ConstraintID::from(1)).unwrap();
+        let restored = instance
+            .active_constraints()
+            .get(&ConstraintID::from(1))
+            .unwrap();
         assert!(!restored.required_ids().contains(&VariableID::from(3)));
         assert!(restored.required_ids().contains(&VariableID::from(1)));
         assert!(restored.required_ids().contains(&VariableID::from(2)));
@@ -367,7 +418,10 @@ mod tests {
         instance.activate_constraint(ConstraintID::from(1)).unwrap();
 
         // x3 = x1 + x2, x1 = 3 → x2 - 7
-        let restored = instance.constraints().get(&ConstraintID::from(1)).unwrap();
+        let restored = instance
+            .active_constraints()
+            .get(&ConstraintID::from(1))
+            .unwrap();
         assert!(!restored.required_ids().contains(&VariableID::from(3)));
         assert!(!restored.required_ids().contains(&VariableID::from(1)));
         assert!(restored.required_ids().contains(&VariableID::from(2)));
@@ -403,19 +457,19 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(instance.indicator_constraints().len(), 1);
+        assert_eq!(instance.active_indicator_constraints().len(), 1);
         assert!(instance.inactive_indicator_constraints().is_empty());
 
         instance
             .deactivate_indicator_constraint(IndicatorConstraintID::from(1), "test".to_string(), [])
             .unwrap();
-        assert!(instance.indicator_constraints().is_empty());
+        assert!(instance.active_indicator_constraints().is_empty());
         assert_eq!(instance.inactive_indicator_constraints().len(), 1);
 
         instance
             .activate_indicator_constraint(IndicatorConstraintID::from(1))
             .unwrap();
-        assert_eq!(instance.indicator_constraints().len(), 1);
+        assert_eq!(instance.active_indicator_constraints().len(), 1);
         assert!(instance.inactive_indicator_constraints().is_empty());
     }
 
@@ -569,7 +623,7 @@ mod tests {
             .unwrap();
 
         let restored = instance
-            .indicator_constraints()
+            .active_indicator_constraints()
             .get(&IndicatorConstraintID::from(1))
             .unwrap();
         // x1 substituted, x2 remains

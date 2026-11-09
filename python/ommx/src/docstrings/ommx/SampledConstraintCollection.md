@@ -7,7 +7,7 @@ a later lookup reads the owner's current state. The collection keeps its owner
 alive.
 
 The typed-key, ``get``, live-view, iteration, and snapshot equality rules are
-documented in {class}`~ommx.ConstraintCollection`. See
+documented in {class}`~ommx.ActiveConstraintCollection`. See
 {class}`~ommx.EvaluatedConstraintCollection` for the current ID and result-type
 table, and {class}`~ommx.ConstraintFamilyView` for ``of_kind`` filtering.
 Sampled rows expose ``violations`` and ``feasible(atol=...)`` keyed by sample ID.

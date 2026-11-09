@@ -21,7 +21,7 @@ def test_adapter_identity_in_applicability_error_uses_public_facade() -> None:
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 

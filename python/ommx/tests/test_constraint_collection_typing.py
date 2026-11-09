@@ -37,20 +37,20 @@ class Missing:
 def check_open_key(
     model: Instance, key: ConstraintIDBase, default: ConstraintView
 ) -> None:
-    assert_type(model.constraints.get(key), ConstraintView | None)
-    assert_type(model.constraints.get(key, Missing()), ConstraintView | Missing)
-    assert_type(model.constraints.get(key, default), ConstraintView)
+    assert_type(model.active_constraints.get(key), ConstraintView | None)
+    assert_type(model.active_constraints.get(key, Missing()), ConstraintView | Missing)
+    assert_type(model.active_constraints.get(key, default), ConstraintView)
     # A concrete row unioned with its base remains assignable to that base.
-    value: ConstraintView = model.constraints.get(ConstraintID(5), default)
+    value: ConstraintView = model.active_constraints.get(ConstraintID(5), default)
     assert isinstance(value, ConstraintView)
-    mapping: Mapping[ConstraintIDBase, ConstraintView] = model.constraints
+    mapping: Mapping[ConstraintIDBase, ConstraintView] = model.active_constraints
     assert_type(mapping.get(key, Missing()), ConstraintView | Missing)
-    assert mapping.get(key, default) == model.constraints.get(key, default)
+    assert mapping.get(key, default) == model.active_constraints.get(key, default)
 
 
 def test_get_types():
     model = make_model(Instance)
-    active = model.constraints
+    active = model.active_constraints
     evaluated = model.evaluate({0: 1, 1: 0}).constraints
     sampled = model.evaluate_samples({9: {0: 1, 1: 0}}).constraints
     removed = remove_all(make_model(Instance))

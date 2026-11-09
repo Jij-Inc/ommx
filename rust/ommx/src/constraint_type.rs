@@ -513,6 +513,40 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         &self.removed
     }
 
+    /// All retained rows, without their membership metadata.
+    pub fn iter(&self) -> impl Iterator<Item = (&T::ID, &T::Created)> {
+        self.active
+            .iter()
+            .chain(self.removed.iter().map(|(id, (row, _))| (id, row)))
+    }
+
+    /// IDs of all retained constraints.
+    pub fn keys(&self) -> impl Iterator<Item = &T::ID> {
+        self.iter().map(|(id, _)| id)
+    }
+
+    /// All retained constraint payloads.
+    pub fn values(&self) -> impl Iterator<Item = &T::Created> {
+        self.iter().map(|(_, row)| row)
+    }
+
+    /// Look up a retained row regardless of its activeness.
+    pub fn get(&self, id: &T::ID) -> Option<&T::Created> {
+        self.active
+            .get(id)
+            .or_else(|| self.removed.get(id).map(|(row, _)| row))
+    }
+
+    /// Number of active and inactive rows.
+    pub fn len(&self) -> usize {
+        self.active.len() + self.removed.len()
+    }
+
+    /// Whether this collection contains no retained rows.
+    pub fn is_empty(&self) -> bool {
+        self.active.is_empty() && self.removed.is_empty()
+    }
+
     /// Return whether `id` belongs to either active or inactive constraints.
     fn contains_id(&self, id: T::ID) -> bool {
         self.active.contains_key(&id) || self.removed.contains_key(&id)

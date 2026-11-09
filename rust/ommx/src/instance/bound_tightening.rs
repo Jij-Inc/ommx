@@ -23,7 +23,7 @@ impl Instance {
         max_terms: usize,
         atol: ATol,
     ) -> crate::Result<Bounds> {
-        let rows = self.constraints().keys().copied().collect();
+        let rows = self.active_constraints().keys().copied().collect();
         self.tighten_bounds_simultaneously_once_using_constraints(&rows, max_terms, atol)
     }
 
@@ -119,7 +119,7 @@ fn infer_bounds_simultaneously_once(
         .collect();
     let mut updates = std::collections::BTreeMap::new();
     for &row_id in rows {
-        let row = instance.constraints().get(&row_id).ok_or_else(
+        let row = instance.active_constraints().get(&row_id).ok_or_else(
             || crate::error!({ ?row_id }, "Bound tightening constraint {row_id:?} is not active"),
         )?;
         let function = row.function();
@@ -1031,7 +1031,7 @@ mod tests {
             .decision_variable_dependency(
                 crate::AcyclicAssignments::new([(1.into(), Function::from(linear!(2)))]).unwrap(),
             )
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 0.into(),
                 Constraint::less_than_or_equal_to_zero(linear!(2).into()),
             )]))

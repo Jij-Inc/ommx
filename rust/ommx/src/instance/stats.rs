@@ -169,8 +169,8 @@ impl super::Instance {
         };
 
         let constraints = ConstraintStats {
-            total: self.constraints().len() + self.inactive_constraints().len(),
-            active: self.constraints().len(),
+            total: self.active_constraints().len() + self.inactive_constraints().len(),
+            active: self.active_constraints().len(),
             inactive: self.inactive_constraints().len(),
         };
 

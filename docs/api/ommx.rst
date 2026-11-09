@@ -31,6 +31,7 @@ ommx
    _items/ommx.AttachedDecisionVariable
    _items/ommx.Parameter
    _items/ommx.ConstraintKind
+   _items/ommx.ConstraintCollection
    _items/ommx.PolynomialRequirement
    _items/ommx.InstanceClassClause
    _items/ommx.InstanceClass
@@ -44,7 +45,7 @@ ommx
    _items/ommx.BinaryPowerPreparation
    _items/ommx.FixedPenaltyPreparation
    _items/ommx.PreparationPolicy
-   _items/ommx.ConstraintCollection
+   _items/ommx.ActiveConstraintCollection
    _items/ommx.ConstraintFamilyView
    _items/ommx.InactiveConstraintCollection
    _items/ommx.EvaluatedConstraintCollection

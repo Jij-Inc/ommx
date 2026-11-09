@@ -466,7 +466,7 @@ impl AttachedConstraint {
 }
 
 fn lookup_constraint(inst: &ommx::Instance, id: ommx::ConstraintID) -> PyResult<&ommx::Constraint> {
-    inst.constraints()
+    inst.active_constraints()
         .get(&id)
         .or_else(|| inst.inactive_constraints().get(&id).map(|(c, _)| c))
         .ok_or_else(|| {
@@ -481,7 +481,7 @@ fn lookup_constraint_parametric(
     inst: &ommx::ParametricInstance,
     id: ommx::ConstraintID,
 ) -> PyResult<&ommx::Constraint> {
-    inst.constraints()
+    inst.active_constraints()
         .get(&id)
         .or_else(|| inst.inactive_constraints().get(&id).map(|(c, _)| c))
         .ok_or_else(|| {
@@ -591,7 +591,14 @@ impl AttachedConstraint {
                 let evaluated =
                     lookup_constraint(&inst.inner, self.id)?.evaluate(&state.0, atol)?;
                 let context = inst.inner.constraint_context().collect_for(self.id);
-                Ok(EvaluatedConstraint::from_parts(evaluated, context))
+                Ok(
+                    EvaluatedConstraint::from_parts(evaluated, context).with_inactive_reason(
+                        inst.inner
+                            .inactive_constraints()
+                            .get(&self.id)
+                            .map(|(_, metadata)| metadata.clone()),
+                    ),
+                )
             }
             ConstraintHost::Parametric(_) => Err(pyo3::exceptions::PyValueError::new_err(
                 "AttachedConstraint.evaluate is not supported on a ParametricInstance host; \
@@ -642,5 +649,7 @@ crate::attached_constraint_context_methods!(
     AttachedConstraint,
     ommx::ConstraintID,
     constraint_context,
-    set_constraint_context
+    set_constraint_context,
+    active_constraints,
+    constraint_collection
 );

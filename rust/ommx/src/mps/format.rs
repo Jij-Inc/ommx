@@ -76,7 +76,7 @@ fn write_rows<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
     // each line must be ` Kind  constr_name`, and include objective
     writeln!(out, " N OBJ")?;
     // ommx instances are always <= 0 or = 0, so `Kind` will always be either N or L.
-    for (id, constr) in instance.constraints().iter() {
+    for (id, constr) in instance.active_constraints().iter() {
         let kind = match constr.equality {
             Equality::LessThanOrEqualToZero => "L",
             // assuming EqualToZero when unspecified. Error instead?
@@ -136,7 +136,7 @@ fn write_columns<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()
     }
 
     // Collect linear terms from constraints
-    for (constr_id, constr) in instance.constraints().iter() {
+    for (constr_id, constr) in instance.active_constraints().iter() {
         let row_name = constr_name(*constr_id);
         for (var_id, coeff) in constr
             .function()
@@ -216,7 +216,7 @@ fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
         writeln!(out, "  RHS1    {OBJ_NAME}   {rhs}")?;
     }
 
-    for (constr_id, constr) in instance.constraints().iter() {
+    for (constr_id, constr) in instance.active_constraints().iter() {
         let name = constr_name(*constr_id);
         let constant = if let Some(linear) = constr.function().as_linear() {
             linear.constant_term()
@@ -329,7 +329,7 @@ fn write_quadobj<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()
 
 fn write_qcmatrix<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
     // Write QCMATRIX sections for each constraint that has quadratic terms
-    for (constr_id, constr) in instance.constraints().iter() {
+    for (constr_id, constr) in instance.active_constraints().iter() {
         if let Some(quadratic) = constr.function().as_quadratic() {
             let has_quadratic_terms = quadratic
                 .iter()
@@ -423,7 +423,7 @@ mod tests {
                 (semi_integer, DecisionVariable::semi_integer()),
                 (binary, DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::from([
+            .active_constraints(BTreeMap::from([
                 (
                     ConstraintID::from(1),
                     Constraint::equal_to_zero(Function::from(linear!(semi_continuous)).signum()),
@@ -437,7 +437,7 @@ mod tests {
                     ))),
                 ),
             ]))
-            .indicator_constraints(BTreeMap::from([(
+            .active_indicator_constraints(BTreeMap::from([(
                 IndicatorConstraintID::from(10),
                 IndicatorConstraint::new(
                     binary,
@@ -445,11 +445,11 @@ mod tests {
                     Function::from(linear!(binary)),
                 ),
             )]))
-            .one_hot_constraints(BTreeMap::from([(
+            .active_one_hot_constraints(BTreeMap::from([(
                 OneHotConstraintID::from(11),
                 OneHotConstraint::new(BTreeSet::from([binary])).unwrap(),
             )]))
-            .sos1_constraints(BTreeMap::from([(
+            .active_sos1_constraints(BTreeMap::from([(
                 Sos1ConstraintID::from(12),
                 Sos1Constraint::new(BTreeSet::from([binary])).unwrap(),
             )]))

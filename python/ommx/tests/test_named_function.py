@@ -40,7 +40,7 @@ def _make_instance_with_named_functions():
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints={0: Function(sum(x)) <= 2},
+        active_constraints={0: Function(sum(x)) <= 2},
         sense=Sense.Maximize,
         named_functions=[nf0, nf1],
     )
@@ -239,7 +239,7 @@ class TestInstanceNamedFunctions:
         instance = Instance.from_components(
             decision_variables=x,
             objective=x[0] + x[1],
-            constraints={},
+            active_constraints={},
             sense=Sense.Minimize,
         )
         assert instance.named_functions == []
@@ -253,7 +253,7 @@ class TestInstanceNamedFunctions:
             Instance.from_components(
                 decision_variables=[x],
                 objective=x,
-                constraints={},
+                active_constraints={},
                 sense=Sense.Minimize,
                 named_functions=[first, second],
             )
@@ -266,7 +266,7 @@ class TestInstanceNamedFunctions:
             Instance.from_components(
                 decision_variables=[x],
                 objective=x,
-                constraints={},
+                active_constraints={},
                 sense=Sense.Minimize,
                 named_functions=[rogue],
             )
@@ -280,7 +280,7 @@ class TestInstanceNamedFunctions:
             decision_variables=[x],
             parameters=[p],
             objective=x + p,
-            constraints={},
+            active_constraints={},
             sense=Sense.Minimize,
             named_functions=[nf],
         )
@@ -297,7 +297,7 @@ class TestInstanceNamedFunctions:
                 decision_variables=[x],
                 parameters=[p],
                 objective=x + p,
-                constraints={},
+                active_constraints={},
                 sense=Sense.Minimize,
                 named_functions=[rogue],
             )

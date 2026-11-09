@@ -1040,8 +1040,8 @@ mod tests {
                 (variable_1, crate::DecisionVariable::binary()),
                 (variable_2, crate::DecisionVariable::binary()),
             ]))
-            .constraints(std::collections::BTreeMap::new())
-            .one_hot_constraints(std::collections::BTreeMap::from([(
+            .active_constraints(std::collections::BTreeMap::new())
+            .active_one_hot_constraints(std::collections::BTreeMap::from([(
                 one_hot_id,
                 crate::OneHotConstraint::new(std::collections::BTreeSet::from([
                     variable_1, variable_2,
