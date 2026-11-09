@@ -178,14 +178,14 @@ def test_constraint_restore_overflow_falls_back_to_runtime_error() -> None:
         constraints={0: sys.float_info.max * variable <= 0},
         sense=ommx.Sense.Minimize,
     )
-    instance.relax_constraint(0, "test")
+    instance.deactivate_constraint(0, "test")
     instance = instance.partial_evaluate({1: sys.float_info.max})
 
-    with pytest.raises(RuntimeError, match="failed to normalize removed constraint"):
-        instance.restore_constraint(0)
+    with pytest.raises(RuntimeError, match="failed to normalize inactive constraint"):
+        instance.activate_constraint(0)
 
     assert instance.constraints == {}
-    assert set(instance.removed_constraints) == {ConstraintID(0)}
+    assert set(instance.inactive_constraints) == {ConstraintID(0)}
 
 
 def test_indicator_constraint_restore_overflow_falls_back_to_runtime_error() -> None:
@@ -204,13 +204,13 @@ def test_indicator_constraint_restore_overflow_falls_back_to_runtime_error() -> 
         },
         sense=ommx.Sense.Minimize,
     )
-    instance.relax_indicator_constraint(0, "test")
+    instance.deactivate_indicator_constraint(0, "test")
     instance = instance.partial_evaluate({1: sys.float_info.max})
 
     with pytest.raises(
-        RuntimeError, match="failed to normalize removed indicator constraint"
+        RuntimeError, match="failed to normalize inactive indicator constraint"
     ):
-        instance.restore_indicator_constraint(0)
+        instance.activate_indicator_constraint(0)
 
     assert not any(
         isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
@@ -218,7 +218,7 @@ def test_indicator_constraint_restore_overflow_falls_back_to_runtime_error() -> 
     assert set(
         (
             cid
-            for cid in instance.removed_constraints
+            for cid in instance.inactive_constraints
             if isinstance(cid, IndicatorConstraintID)
         )
     ) == {IndicatorConstraintID(0)}

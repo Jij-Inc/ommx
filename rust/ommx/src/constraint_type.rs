@@ -40,7 +40,7 @@ use crate::Result;
 use crate::{
     constraint::{
         ConstraintContext, ConstraintContextStore, ConstraintID, EvaluatedConstraint,
-        RemovedReason, SampledConstraint,
+        InactiveConstraintMetadata, SampledConstraint,
     },
     v1, ATol, Constraint, Evaluate, Parse, ParseError, SampleID, SampleIDSet, VariableIDSet,
 };
@@ -70,18 +70,18 @@ where
     Ok(())
 }
 
-fn validate_removed_reasons_reference_entries<ID, V>(
+fn validate_inactive_metadata_reference_entries<ID, V>(
     constraints: &BTreeMap<ID, V>,
-    removed_reasons: &BTreeMap<ID, RemovedReason>,
+    inactive_metadata: &BTreeMap<ID, InactiveConstraintMetadata>,
 ) -> crate::Result<()>
 where
     ID: IDType,
 {
-    if let Some(id) = removed_reasons
+    if let Some(id) = inactive_metadata
         .keys()
         .find(|id| !constraints.contains_key(id))
     {
-        crate::bail!({ ?id }, "Removed reason references unknown constraint ID {id:?}");
+        crate::bail!({ ?id }, "Inactive metadata references unknown constraint ID {id:?}");
     }
     Ok(())
 }
@@ -296,7 +296,7 @@ impl<T: SampledConstraintData + ?Sized> SampledConstraintBehavior for T {
 /// its context sidecars.
 pub(crate) enum ActiveRowRewrite<T> {
     Active(T),
-    Removed(T, RemovedReason),
+    Removed(T, InactiveConstraintMetadata),
 }
 
 // ===== Evaluation data supplied by regular constraints =====
@@ -369,10 +369,10 @@ impl ConstraintType for Constraint {
     type Sampled = SampledConstraint;
 }
 
-/// A collection of active and removed constraints of the same type.
+/// A collection of active and inactive constraints of the same type.
 ///
-/// Removed constraints are stored as `(T::Created, RemovedReason)` pairs.
-/// The `RemovedReason` is removal state, not part of the constraint itself.
+/// Inactive constraints are stored as `(T::Created, InactiveConstraintMetadata)` pairs.
+/// The `InactiveConstraintMetadata` is removal state, not part of the constraint itself.
 ///
 /// Per-constraint modeling labels and transformation provenance are held by
 /// [`Self::context`] in Struct-of-Arrays form keyed by `T::ID`. The store
@@ -382,9 +382,9 @@ impl ConstraintType for Constraint {
 ///
 /// This collection owns the table-level invariants for one constraint family:
 ///
-/// - active and removed IDs are disjoint;
-/// - removed reasons exist only for removed constraints;
-/// - every label/provenance sidecar ID belongs to either an active or removed
+/// - active and inactive IDs are disjoint;
+/// - removed reasons exist only for inactive constraints;
+/// - every label/provenance sidecar ID belongs to either an active or inactive
 ///   constraint in this collection.
 ///
 /// Host objects such as [`crate::Instance`] and [`crate::ParametricInstance`]
@@ -398,19 +398,19 @@ impl ConstraintType for Constraint {
 /// `C_tau = Active_tau + Removed_tau + Context_tau` of an enclosing instance.
 /// It supports only family-local row effects:
 ///
-/// - construction from active rows, removed rows, and context;
-/// - read access to active rows, removed rows, and context;
+/// - construction from active rows, inactive rows, and context;
+/// - read access to active rows, inactive rows, and context;
 /// - fresh active-row insertion together with context;
 /// - lifecycle-preserving row replacement after host validation;
 /// - by-value active-row rewrites that either keep rows active or move them to
 ///   removed with a host-supplied reason;
-/// - active-to-removed lifecycle movement;
+/// - active-to-inactive lifecycle movement;
 /// - restore through a host-supplied normalizer;
 /// - context updates for IDs owned by this collection;
-/// - consuming active rows, removed rows, and context at conversion boundaries.
+/// - consuming active rows, inactive rows, and context at conversion boundaries.
 ///
 /// It intentionally does not expose mutable row references, arbitrary
-/// active/removed map mutation, or semantic operations such as substitution,
+/// active/inactive map mutation, or semantic operations such as substitution,
 /// partial evaluation, propagation, slack conversion, preparation, or
 /// special-constraint lowering. When implementing a model transformation, use
 /// the enclosing [`crate::Instance`] / [`crate::ParametricInstance`] operation
@@ -419,7 +419,7 @@ impl ConstraintType for Constraint {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConstraintCollection<T: ConstraintType> {
     active: BTreeMap<T::ID, T::Created>,
-    removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
+    removed: BTreeMap<T::ID, (T::Created, InactiveConstraintMetadata)>,
     context: ConstraintContextStore<T::ID>,
 }
 
@@ -434,20 +434,20 @@ impl<T: ConstraintType> Default for ConstraintCollection<T> {
 }
 
 impl<T: ConstraintType> ConstraintCollection<T> {
-    /// Construct a collection from active and removed constraint maps.
+    /// Construct a collection from active and inactive constraint maps.
     ///
     /// # Errors
     ///
     /// Returns an error if the same constraint ID appears in both `active` and `removed`.
     pub fn new(
         active: BTreeMap<T::ID, T::Created>,
-        removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
+        removed: BTreeMap<T::ID, (T::Created, InactiveConstraintMetadata)>,
     ) -> crate::Result<Self> {
         validate_no_key_overlap(
             &active,
             &removed,
             "active constraints",
-            "removed constraints",
+            "inactive constraints",
         )?;
         Ok(Self {
             active,
@@ -457,7 +457,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     }
 
     /// Construct a collection together with its label/provenance sidecar store.
-    /// Used by the parse boundary, where sidecars for both active and removed
+    /// Used by the parse boundary, where sidecars for both active and inactive
     /// entries are drained from per-element protobuf messages into one store.
     ///
     /// # Errors
@@ -465,14 +465,14 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     /// Returns an error if the same constraint ID appears in both `active` and `removed`.
     pub fn with_context(
         active: BTreeMap<T::ID, T::Created>,
-        removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
+        removed: BTreeMap<T::ID, (T::Created, InactiveConstraintMetadata)>,
         context: ConstraintContextStore<T::ID>,
     ) -> crate::Result<Self> {
         validate_no_key_overlap(
             &active,
             &removed,
             "active constraints",
-            "removed constraints",
+            "inactive constraints",
         )?;
         let owned_ids = active
             .keys()
@@ -508,12 +508,12 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         &self.active
     }
 
-    /// Access removed constraints with their removal reasons.
-    pub fn removed(&self) -> &BTreeMap<T::ID, (T::Created, RemovedReason)> {
+    /// Access inactive constraints with their inactive metadata.
+    pub fn inactive(&self) -> &BTreeMap<T::ID, (T::Created, InactiveConstraintMetadata)> {
         &self.removed
     }
 
-    /// Return whether `id` belongs to either active or removed constraints.
+    /// Return whether `id` belongs to either active or inactive constraints.
     fn contains_id(&self, id: T::ID) -> bool {
         self.active.contains_key(&id) || self.removed.contains_key(&id)
     }
@@ -547,14 +547,14 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         }
     }
 
-    /// Replace a removed constraint payload while preserving its removal reason and context.
+    /// Replace a removed constraint payload while preserving its inactive metadata and context.
     fn replace_removed(&mut self, id: T::ID, constraint: T::Created) -> Option<T::Created> {
         self.removed
             .get_mut(&id)
             .map(|(removed_constraint, _reason)| std::mem::replace(removed_constraint, constraint))
     }
 
-    /// Replace an existing active or removed constraint without changing lifecycle.
+    /// Replace an existing active or inactive constraint without changing lifecycle.
     ///
     /// Returns [`None`] when `id` is unknown to this collection. Host-level
     /// callers must validate the payload before calling this method.
@@ -570,12 +570,12 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         }
     }
 
-    /// Replace active and removed row payloads without changing lifecycle or context.
+    /// Replace active and inactive row payloads without changing lifecycle or context.
     ///
     /// The parent object owns semantic transformations such as parameter
     /// substitution. This collection only validates and commits the storage
     /// effect: active replacements must refer to active rows, removed
-    /// replacements must refer to removed rows, and removal reasons plus
+    /// replacements must refer to inactive rows, and inactive metadata plus
     /// context sidecars are preserved.
     pub(crate) fn replace_rows_preserving_lifecycle(
         &mut self,
@@ -595,7 +595,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         }
         for id in removed_replacements.keys() {
             if !self.removed.contains_key(id) {
-                crate::bail!({ ?id }, "Removed constraint with ID {id:?} not found");
+                crate::bail!({ ?id }, "Inactive constraint with ID {id:?} not found");
             }
         }
 
@@ -623,7 +623,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     pub(crate) fn replace_and_remove_active_rows(
         &mut self,
         replacements: BTreeMap<T::ID, T::Created>,
-        removals: BTreeMap<T::ID, (T::Created, RemovedReason)>,
+        removals: BTreeMap<T::ID, (T::Created, InactiveConstraintMetadata)>,
     ) -> crate::Result<()> {
         if let Some(id) = replacements.keys().find(|id| removals.contains_key(id)) {
             crate::bail!(
@@ -653,7 +653,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     ///
     /// The caller owns the semantic rewrite and chooses whether each row stays
     /// active or moves to the removed set. This collection-owned operation keeps
-    /// active/removed IDs disjoint and carries the existing context sidecars
+    /// active/inactive IDs disjoint and carries the existing context sidecars
     /// through unchanged.
     ///
     /// This is intended for consuming root-object operations, or for operations
@@ -716,7 +716,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     /// cloned into a replacement map.
     pub(crate) fn move_active_rows_to_removed_with_reasons(
         &mut self,
-        reasons: BTreeMap<T::ID, RemovedReason>,
+        reasons: BTreeMap<T::ID, InactiveConstraintMetadata>,
     ) -> crate::Result<()> {
         for id in reasons.keys() {
             if !self.active.contains_key(id) {
@@ -737,7 +737,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
 
     /// Insert an active constraint along with its context in one step.
     ///
-    /// `id` must not already be present in either the active or removed map.
+    /// `id` must not already be present in either the active or inactive map.
     /// The context is written to the store; empty context fields are stored
     /// sparsely (i.e. omitted) by [`ConstraintContextStore::insert`].
     ///
@@ -779,7 +779,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         }
     }
 
-    /// Return an ID that is not used by any active or removed constraint in this collection.
+    /// Return an ID that is not used by any active or inactive constraint in this collection.
     ///
     /// Returns `0` when the collection is empty, otherwise `max(existing id) + 1`.
     /// This is only a collection-local query. Model insertion must use the
@@ -800,30 +800,34 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         T::ID::from(next)
     }
 
-    /// Move an active constraint to the removed set with a reason.
-    pub fn relax(&mut self, id: T::ID, removed_reason: RemovedReason) -> crate::Result<()> {
+    /// Move an active constraint to the inactive set with a reason.
+    pub fn deactivate(
+        &mut self,
+        id: T::ID,
+        metadata: InactiveConstraintMetadata,
+    ) -> crate::Result<()> {
         let c = self
             .active
             .remove(&id)
             .ok_or_else(|| crate::error!("Constraint with ID {:?} not found", id))?;
-        self.removed.insert(id, (c, removed_reason));
+        self.removed.insert(id, (c, metadata));
         Ok(())
     }
 
-    /// Restore a removed row using a host-normalized payload.
+    /// Activate an inactive row using a host-normalized payload.
     ///
-    /// The parent object owns semantic normalization before restore because it
+    /// The parent object owns semantic normalization before activation because it
     /// may depend on cross-table facts such as fixed variables or decision
     /// variable dependencies. This collection only moves the row between
     /// lifecycle maps while preserving context sidecars.
-    pub(crate) fn restore_removed_row(
+    pub(crate) fn activate_row(
         &mut self,
         id: T::ID,
         constraint: T::Created,
-    ) -> crate::Result<RemovedReason> {
+    ) -> crate::Result<InactiveConstraintMetadata> {
         let Some((_removed, reason)) = self.removed.remove(&id) else {
             return Err(crate::error!(
-                "Removed constraint with ID {:?} not found",
+                "Inactive constraint with ID {:?} not found",
                 id
             ));
         };
@@ -885,7 +889,7 @@ fn removed_constraint_to_v1(
     id: ConstraintID,
     constraint: Constraint,
     context: ConstraintContext,
-    removed_reason: RemovedReason,
+    removed_reason: InactiveConstraintMetadata,
 ) -> v1::RemovedConstraint {
     v1::RemovedConstraint {
         constraint: Some(constraint_to_v1(id, constraint, context)),
@@ -903,11 +907,11 @@ macro_rules! impl_v2_created_collection {
                     removed,
                     context,
                 } = value;
-                let (removed, removed_reasons) = removed_entries_to_v2_maps(removed);
+                let (removed, inactive_metadata) = inactive_entries_to_v2_maps(removed);
                 Self {
                     active: entries_to_v2_map(active),
-                    removed,
-                    removed_reasons,
+                    inactive: removed,
+                    inactive_metadata,
                     contexts: constraint_context_store_to_v2_map(&context),
                 }
             }
@@ -928,7 +932,7 @@ macro_rules! impl_v2_evaluated_collection {
                 let value = self;
                 let EvaluatedCollection {
                     constraints,
-                    removed_reasons,
+                    inactive_metadata,
                     context,
                 } = value;
                 crate::v2::$target {
@@ -936,7 +940,7 @@ macro_rules! impl_v2_evaluated_collection {
                         .into_iter()
                         .map(|(id, row)| (id.into(), row.into_v2(atol)))
                         .collect(),
-                    removed_reasons: removed_reasons_to_v2_map(removed_reasons),
+                    inactive_metadata: inactive_metadata_to_v2_map(inactive_metadata),
                     contexts: constraint_context_store_to_v2_map(&context),
                 }
             }
@@ -957,7 +961,7 @@ macro_rules! impl_v2_sampled_collection {
                 let value = self;
                 let SampledCollection {
                     constraints,
-                    removed_reasons,
+                    inactive_metadata,
                     context,
                 } = value;
                 crate::v2::$target {
@@ -965,7 +969,7 @@ macro_rules! impl_v2_sampled_collection {
                         .into_iter()
                         .map(|(id, row)| (id.into(), row.into_v2(atol)))
                         .collect(),
-                    removed_reasons: removed_reasons_to_v2_map(removed_reasons),
+                    inactive_metadata: inactive_metadata_to_v2_map(inactive_metadata),
                     contexts: constraint_context_store_to_v2_map(&context),
                 }
             }
@@ -1009,9 +1013,9 @@ macro_rules! impl_parse_v2_created_collection {
             fn parse(self, _: &Self::Context) -> std::result::Result<Self::Output, ParseError> {
                 let message = stringify!($target);
                 let active = parse_v2_constraint_entries(self.active, message, "active")?;
-                let removed = parse_v2_removed_constraint_entries(
-                    self.removed,
-                    self.removed_reasons,
+                let removed = parse_v2_inactive_constraint_entries(
+                    self.inactive,
+                    self.inactive_metadata,
                     message,
                 )?;
                 let context =
@@ -1049,15 +1053,18 @@ macro_rules! impl_parse_v2_evaluated_collection {
                     "entries",
                     atol,
                 )?;
-                let removed_reasons =
-                    parse_v2_removed_reasons(self.removed_reasons, message, "removed_reasons")?;
+                let inactive_metadata = parse_v2_inactive_metadata(
+                    self.inactive_metadata,
+                    message,
+                    "inactive_metadata",
+                )?;
                 let context =
                     constraint_context_store_from_v2_map(self.contexts, message, "contexts")?;
                 let owned_ids = entries.keys().copied().collect::<BTreeSet<_>>();
                 validate_context_reference_ids(&context, &owned_ids)
                     .map_err(|e| ParseError::new(e).context(message, "contexts"))?;
-                EvaluatedCollection::with_context(entries, removed_reasons, context)
-                    .map_err(|e| ParseError::new(e).context(message, "removed_reasons"))
+                EvaluatedCollection::with_context(entries, inactive_metadata, context)
+                    .map_err(|e| ParseError::new(e).context(message, "inactive_metadata"))
             }
         }
     };
@@ -1080,15 +1087,18 @@ macro_rules! impl_parse_v2_sampled_collection {
                     "entries",
                     atol,
                 )?;
-                let removed_reasons =
-                    parse_v2_removed_reasons(self.removed_reasons, message, "removed_reasons")?;
+                let inactive_metadata = parse_v2_inactive_metadata(
+                    self.inactive_metadata,
+                    message,
+                    "inactive_metadata",
+                )?;
                 let context =
                     constraint_context_store_from_v2_map(self.contexts, message, "contexts")?;
                 let owned_ids = entries.keys().copied().collect::<BTreeSet<_>>();
                 validate_context_reference_ids(&context, &owned_ids)
                     .map_err(|e| ParseError::new(e).context(message, "contexts"))?;
-                SampledCollection::with_context(entries, removed_reasons, context)
-                    .map_err(|e| ParseError::new(e).context(message, "removed_reasons"))
+                SampledCollection::with_context(entries, inactive_metadata, context)
+                    .map_err(|e| ParseError::new(e).context(message, "inactive_metadata"))
             }
         }
     };
@@ -1125,15 +1135,18 @@ macro_rules! impl_restore_v2_structural_collection {
                         Ok((<<$source as ConstraintType>::ID>::from(id), constraint))
                     })
                     .collect::<std::result::Result<BTreeMap<_, _>, ParseError>>()?;
-                let removed_reasons =
-                    parse_v2_removed_reasons(self.removed_reasons, message, "removed_reasons")?;
+                let inactive_metadata = parse_v2_inactive_metadata(
+                    self.inactive_metadata,
+                    message,
+                    "inactive_metadata",
+                )?;
                 let context =
                     constraint_context_store_from_v2_map(self.contexts, message, "contexts")?;
                 let owned_ids = entries.keys().copied().collect::<BTreeSet<_>>();
                 validate_context_reference_ids(&context, &owned_ids)
                     .map_err(|error| ParseError::new(error).context(message, "contexts"))?;
-                EvaluatedCollection::with_context(entries, removed_reasons, context)
-                    .map_err(|error| ParseError::new(error).context(message, "removed_reasons"))
+                EvaluatedCollection::with_context(entries, inactive_metadata, context)
+                    .map_err(|error| ParseError::new(error).context(message, "inactive_metadata"))
             }
         }
 
@@ -1162,15 +1175,18 @@ macro_rules! impl_restore_v2_structural_collection {
                         Ok((<<$source as ConstraintType>::ID>::from(id), constraint))
                     })
                     .collect::<std::result::Result<BTreeMap<_, _>, ParseError>>()?;
-                let removed_reasons =
-                    parse_v2_removed_reasons(self.removed_reasons, message, "removed_reasons")?;
+                let inactive_metadata = parse_v2_inactive_metadata(
+                    self.inactive_metadata,
+                    message,
+                    "inactive_metadata",
+                )?;
                 let context =
                     constraint_context_store_from_v2_map(self.contexts, message, "contexts")?;
                 let owned_ids = entries.keys().copied().collect::<BTreeSet<_>>();
                 validate_context_reference_ids(&context, &owned_ids)
                     .map_err(|error| ParseError::new(error).context(message, "contexts"))?;
-                SampledCollection::with_context(entries, removed_reasons, context)
-                    .map_err(|error| ParseError::new(error).context(message, "removed_reasons"))
+                SampledCollection::with_context(entries, inactive_metadata, context)
+                    .map_err(|error| ParseError::new(error).context(message, "inactive_metadata"))
             }
         }
     };
@@ -1221,11 +1237,11 @@ where
         .collect()
 }
 
-fn removed_entries_to_v2_maps<ID, Row, V2Row>(
-    removed: BTreeMap<ID, (Row, RemovedReason)>,
+fn inactive_entries_to_v2_maps<ID, Row, V2Row>(
+    removed: BTreeMap<ID, (Row, InactiveConstraintMetadata)>,
 ) -> (
     BTreeMap<u64, V2Row>,
-    BTreeMap<u64, crate::v2::RemovedReason>,
+    BTreeMap<u64, crate::v2::InactiveConstraintMetadata>,
 )
 where
     ID: IDType,
@@ -1241,54 +1257,54 @@ where
     (rows, reasons)
 }
 
-fn parse_v2_removed_constraint_entries<ID, V2Row, Row>(
+fn parse_v2_inactive_constraint_entries<ID, V2Row, Row>(
     removed: BTreeMap<u64, V2Row>,
-    mut removed_reasons: BTreeMap<u64, crate::v2::RemovedReason>,
+    mut inactive_metadata: BTreeMap<u64, crate::v2::InactiveConstraintMetadata>,
     message: &'static str,
-) -> std::result::Result<BTreeMap<ID, (Row, RemovedReason)>, ParseError>
+) -> std::result::Result<BTreeMap<ID, (Row, InactiveConstraintMetadata)>, ParseError>
 where
     ID: IDType,
     V2Row: Parse<Output = Row, Context = ()>,
 {
     let mut out = BTreeMap::new();
     for (id, row) in removed {
-        let reason = removed_reasons.remove(&id).ok_or_else(|| {
+        let reason = inactive_metadata.remove(&id).ok_or_else(|| {
             ParseError::new(crate::error!(
-                "Removed constraint ID {:?} has no removed reason",
+                "Inactive constraint ID {:?} has no inactive metadata",
                 ID::from(id)
             ))
-            .context(message, "removed_reasons")
+            .context(message, "inactive_metadata")
         })?;
         out.insert(
             ID::from(id),
-            (row.parse_as(&(), message, "removed")?, reason.into()),
+            (row.parse_as(&(), message, "inactive")?, reason.into()),
         );
     }
-    if let Some(id) = removed_reasons.keys().next().copied() {
+    if let Some(id) = inactive_metadata.keys().next().copied() {
         return Err(ParseError::new(crate::error!(
-            "Removed reason references unknown constraint ID {:?}",
+            "Inactive metadata references unknown constraint ID {:?}",
             ID::from(id)
         ))
-        .context(message, "removed_reasons"));
+        .context(message, "inactive_metadata"));
     }
     Ok(out)
 }
 
-fn removed_reasons_to_v2_map<ID: IDType>(
-    removed_reasons: BTreeMap<ID, RemovedReason>,
-) -> BTreeMap<u64, crate::v2::RemovedReason> {
-    removed_reasons
+fn inactive_metadata_to_v2_map<ID: IDType>(
+    inactive_metadata: BTreeMap<ID, InactiveConstraintMetadata>,
+) -> BTreeMap<u64, crate::v2::InactiveConstraintMetadata> {
+    inactive_metadata
         .into_iter()
         .map(|(id, reason)| (id.into(), reason.into()))
         .collect()
 }
 
-fn parse_v2_removed_reasons<ID: IDType>(
-    removed_reasons: BTreeMap<u64, crate::v2::RemovedReason>,
+fn parse_v2_inactive_metadata<ID: IDType>(
+    inactive_metadata: BTreeMap<u64, crate::v2::InactiveConstraintMetadata>,
     _message: &'static str,
     _field: &'static str,
-) -> std::result::Result<BTreeMap<ID, RemovedReason>, ParseError> {
-    Ok(removed_reasons
+) -> std::result::Result<BTreeMap<ID, InactiveConstraintMetadata>, ParseError> {
+    Ok(inactive_metadata
         .into_iter()
         .map(|(id, reason)| (ID::from(id), reason.into()))
         .collect())
@@ -1300,7 +1316,7 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
 
     fn evaluate(&self, state: &v1::State, atol: ATol) -> Result<Self::Output> {
         let mut results = BTreeMap::new();
-        let mut removed_reasons = BTreeMap::new();
+        let mut inactive_metadata = BTreeMap::new();
         for (id, constraint) in &self.active {
             let evaluated = constraint.evaluate(state, atol).inspect_err(|e| {
                 tracing::error!(?id, error = %e, "failed to evaluate active constraint");
@@ -1312,9 +1328,9 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
                 tracing::error!(?id, error = %e, "failed to evaluate removed constraint");
             })?;
             results.insert(*id, evaluated);
-            removed_reasons.insert(*id, reason.clone());
+            inactive_metadata.insert(*id, reason.clone());
         }
-        EvaluatedCollection::with_context(results, removed_reasons, self.context.clone())
+        EvaluatedCollection::with_context(results, inactive_metadata, self.context.clone())
     }
 
     fn evaluate_samples(
@@ -1323,7 +1339,7 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
         atol: ATol,
     ) -> Result<Self::SampledOutput> {
         let mut results = BTreeMap::new();
-        let mut removed_reasons = BTreeMap::new();
+        let mut inactive_metadata = BTreeMap::new();
         for (id, constraint) in &self.active {
             let evaluated = constraint.evaluate_samples(samples, atol).inspect_err(|e| {
                 tracing::error!(?id, error = %e, "failed to evaluate_samples active constraint");
@@ -1335,9 +1351,9 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
                 tracing::error!(?id, error = %e, "failed to evaluate_samples removed constraint");
             })?;
             results.insert(*id, evaluated);
-            removed_reasons.insert(*id, reason.clone());
+            inactive_metadata.insert(*id, reason.clone());
         }
-        SampledCollection::with_context(results, removed_reasons, self.context.clone())
+        SampledCollection::with_context(results, inactive_metadata, self.context.clone())
     }
 
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
@@ -1373,7 +1389,7 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvaluatedCollection<T: ConstraintType> {
     constraints: BTreeMap<T::ID, T::Evaluated>,
-    removed_reasons: BTreeMap<T::ID, RemovedReason>,
+    inactive_metadata: BTreeMap<T::ID, InactiveConstraintMetadata>,
     context: ConstraintContextStore<T::ID>,
 }
 
@@ -1388,7 +1404,7 @@ impl<T: ConstraintType> Default for EvaluatedCollection<T> {
     fn default() -> Self {
         Self {
             constraints: BTreeMap::new(),
-            removed_reasons: BTreeMap::new(),
+            inactive_metadata: BTreeMap::new(),
             context: ConstraintContextStore::default(),
         }
     }
@@ -1399,16 +1415,16 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
     ///
     /// # Errors
     ///
-    /// Returns an error if `removed_reasons` contains an ID that is not present in
+    /// Returns an error if `inactive_metadata` contains an ID that is not present in
     /// `constraints`.
     pub fn new(
         constraints: BTreeMap<T::ID, T::Evaluated>,
-        removed_reasons: BTreeMap<T::ID, RemovedReason>,
+        inactive_metadata: BTreeMap<T::ID, InactiveConstraintMetadata>,
     ) -> crate::Result<Self> {
-        validate_removed_reasons_reference_entries(&constraints, &removed_reasons)?;
+        validate_inactive_metadata_reference_entries(&constraints, &inactive_metadata)?;
         Ok(Self {
             constraints,
-            removed_reasons,
+            inactive_metadata,
             context: ConstraintContextStore::default(),
         })
     }
@@ -1419,19 +1435,19 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
     ///
     /// # Errors
     ///
-    /// Returns an error if `removed_reasons` contains an ID that is not present in
+    /// Returns an error if `inactive_metadata` contains an ID that is not present in
     /// `constraints`.
     pub fn with_context(
         constraints: BTreeMap<T::ID, T::Evaluated>,
-        removed_reasons: BTreeMap<T::ID, RemovedReason>,
+        inactive_metadata: BTreeMap<T::ID, InactiveConstraintMetadata>,
         context: ConstraintContextStore<T::ID>,
     ) -> crate::Result<Self> {
-        validate_removed_reasons_reference_entries(&constraints, &removed_reasons)?;
+        validate_inactive_metadata_reference_entries(&constraints, &inactive_metadata)?;
         let owned_ids = constraints.keys().copied().collect::<BTreeSet<_>>();
         validate_context_reference_ids(&context, &owned_ids)?;
         Ok(Self {
             constraints,
-            removed_reasons,
+            inactive_metadata,
             context,
         })
     }
@@ -1455,8 +1471,8 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
     }
 
     /// Access the removed reasons map.
-    pub fn removed_reasons(&self) -> &BTreeMap<T::ID, RemovedReason> {
-        &self.removed_reasons
+    pub fn inactive_metadata(&self) -> &BTreeMap<T::ID, InactiveConstraintMetadata> {
+        &self.inactive_metadata
     }
 
     /// Access the per-constraint label/provenance store.
@@ -1471,8 +1487,8 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
     }
 
     /// Check if a constraint was removed.
-    pub fn is_removed(&self, id: &T::ID) -> bool {
-        self.removed_reasons.contains_key(id)
+    pub fn is_inactive(&self, id: &T::ID) -> bool {
+        self.inactive_metadata.contains_key(id)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -1484,11 +1500,11 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
         self.constraints.values().all(|c| c.is_feasible(atol))
     }
 
-    /// Check if all non-removed constraints are feasible.
+    /// Check if all non-inactive constraints are feasible.
     pub fn is_feasible_relaxed(&self, atol: ATol) -> bool {
         self.constraints
             .iter()
-            .filter(|(id, _)| !self.removed_reasons.contains_key(id))
+            .filter(|(id, _)| !self.inactive_metadata.contains_key(id))
             .all(|(_, c)| c.is_feasible(atol))
     }
 }
@@ -1497,14 +1513,14 @@ impl From<EvaluatedCollection<Constraint>> for Vec<v1::EvaluatedConstraint> {
     fn from(value: EvaluatedCollection<Constraint>) -> Self {
         let EvaluatedCollection {
             constraints,
-            mut removed_reasons,
+            mut inactive_metadata,
             mut context,
         } = value;
         constraints
             .into_iter()
             .map(|(id, constraint)| {
                 let context = context.remove(id);
-                match removed_reasons.remove(&id) {
+                match inactive_metadata.remove(&id) {
                     Some(reason) => evaluated_constraint_to_v1(id, constraint, context, reason),
                     None => evaluated_constraint_to_v1_unremoved(id, constraint, context),
                 }
@@ -1543,7 +1559,7 @@ fn evaluated_constraint_to_v1(
     id: ConstraintID,
     constraint: EvaluatedConstraint,
     context: ConstraintContext,
-    removed_reason: RemovedReason,
+    removed_reason: InactiveConstraintMetadata,
 ) -> v1::EvaluatedConstraint {
     let mut value = evaluated_constraint_to_v1_unremoved(id, constraint, context);
     value.removed_reason = Some(removed_reason.reason);
@@ -1570,7 +1586,7 @@ fn evaluated_constraint_to_v1(
 #[derive(Debug, Clone)]
 pub struct SampledCollection<T: ConstraintType> {
     constraints: BTreeMap<T::ID, T::Sampled>,
-    removed_reasons: BTreeMap<T::ID, RemovedReason>,
+    inactive_metadata: BTreeMap<T::ID, InactiveConstraintMetadata>,
     context: ConstraintContextStore<T::ID>,
 }
 
@@ -1585,7 +1601,7 @@ impl<T: ConstraintType> Default for SampledCollection<T> {
     fn default() -> Self {
         Self {
             constraints: BTreeMap::new(),
-            removed_reasons: BTreeMap::new(),
+            inactive_metadata: BTreeMap::new(),
             context: ConstraintContextStore::default(),
         }
     }
@@ -1596,16 +1612,16 @@ impl<T: ConstraintType> SampledCollection<T> {
     ///
     /// # Errors
     ///
-    /// Returns an error if `removed_reasons` contains an ID that is not present in
+    /// Returns an error if `inactive_metadata` contains an ID that is not present in
     /// `constraints`.
     pub fn new(
         constraints: BTreeMap<T::ID, T::Sampled>,
-        removed_reasons: BTreeMap<T::ID, RemovedReason>,
+        inactive_metadata: BTreeMap<T::ID, InactiveConstraintMetadata>,
     ) -> crate::Result<Self> {
-        validate_removed_reasons_reference_entries(&constraints, &removed_reasons)?;
+        validate_inactive_metadata_reference_entries(&constraints, &inactive_metadata)?;
         Ok(Self {
             constraints,
-            removed_reasons,
+            inactive_metadata,
             context: ConstraintContextStore::default(),
         })
     }
@@ -1616,19 +1632,19 @@ impl<T: ConstraintType> SampledCollection<T> {
     ///
     /// # Errors
     ///
-    /// Returns an error if `removed_reasons` contains an ID that is not present in
+    /// Returns an error if `inactive_metadata` contains an ID that is not present in
     /// `constraints`.
     pub fn with_context(
         constraints: BTreeMap<T::ID, T::Sampled>,
-        removed_reasons: BTreeMap<T::ID, RemovedReason>,
+        inactive_metadata: BTreeMap<T::ID, InactiveConstraintMetadata>,
         context: ConstraintContextStore<T::ID>,
     ) -> crate::Result<Self> {
-        validate_removed_reasons_reference_entries(&constraints, &removed_reasons)?;
+        validate_inactive_metadata_reference_entries(&constraints, &inactive_metadata)?;
         let owned_ids = constraints.keys().copied().collect::<BTreeSet<_>>();
         validate_context_reference_ids(&context, &owned_ids)?;
         Ok(Self {
             constraints,
-            removed_reasons,
+            inactive_metadata,
             context,
         })
     }
@@ -1665,8 +1681,8 @@ impl<T: ConstraintType> SampledCollection<T> {
     }
 
     /// Access the removed reasons map.
-    pub fn removed_reasons(&self) -> &BTreeMap<T::ID, RemovedReason> {
-        &self.removed_reasons
+    pub fn inactive_metadata(&self) -> &BTreeMap<T::ID, InactiveConstraintMetadata> {
+        &self.inactive_metadata
     }
 
     /// Access the per-constraint label/provenance store.
@@ -1681,8 +1697,8 @@ impl<T: ConstraintType> SampledCollection<T> {
     }
 
     /// Check if a constraint was removed.
-    pub fn is_removed(&self, id: &T::ID) -> bool {
-        self.removed_reasons.contains_key(id)
+    pub fn is_inactive(&self, id: &T::ID) -> bool {
+        self.inactive_metadata.contains_key(id)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -1696,11 +1712,11 @@ impl<T: ConstraintType> SampledCollection<T> {
             .all(|c| c.is_feasible_for(sample_id, atol).unwrap_or(false))
     }
 
-    /// Check if all non-removed constraints are feasible for a given sample.
+    /// Check if all non-inactive constraints are feasible for a given sample.
     pub fn is_feasible_relaxed_for(&self, sample_id: SampleID, atol: ATol) -> bool {
         self.constraints
             .iter()
-            .filter(|(id, _)| !self.removed_reasons.contains_key(id))
+            .filter(|(id, _)| !self.inactive_metadata.contains_key(id))
             .all(|(_, c)| c.is_feasible_for(sample_id, atol).unwrap_or(false))
     }
 }
@@ -1712,14 +1728,14 @@ impl SampledCollection<Constraint> {
         let value = self;
         let SampledCollection {
             constraints,
-            mut removed_reasons,
+            mut inactive_metadata,
             mut context,
         } = value;
         constraints
             .into_iter()
             .map(|(id, constraint)| {
                 let context = context.remove(id);
-                match removed_reasons.remove(&id) {
+                match inactive_metadata.remove(&id) {
                     Some(reason) => sampled_constraint_to_v1(id, constraint, context, reason, atol),
                     None => sampled_constraint_to_v1_unremoved(id, constraint, context, atol),
                 }
@@ -1774,7 +1790,7 @@ fn sampled_constraint_to_v1(
     id: ConstraintID,
     constraint: SampledConstraint,
     context: ConstraintContext,
-    removed_reason: RemovedReason,
+    removed_reason: InactiveConstraintMetadata,
     atol: ATol,
 ) -> v1::SampledConstraint {
     let mut value = sampled_constraint_to_v1_unremoved(id, constraint, context, atol);
@@ -1811,8 +1827,8 @@ mod tests {
             .contains(&format!("{expected_message}[{expected_field}]")));
     }
 
-    fn removed_reason() -> RemovedReason {
-        RemovedReason {
+    fn removed_reason() -> InactiveConstraintMetadata {
+        InactiveConstraintMetadata {
             reason: "test".to_string(),
             parameters: Default::default(),
         }
@@ -1828,7 +1844,7 @@ mod tests {
     fn empty_collection() {
         let collection = ConstraintCollection::<Constraint>::default();
         assert!(collection.active().is_empty());
-        assert!(collection.removed().is_empty());
+        assert!(collection.inactive().is_empty());
     }
 
     #[test]
@@ -1853,7 +1869,7 @@ mod tests {
         assert_eq!(results.len(), 2);
         assert!(!results[&ConstraintID::from(1)].is_feasible(crate::ATol::default()));
         assert!(!results[&ConstraintID::from(2)].is_feasible(crate::ATol::default()));
-        assert!(results.removed_reasons().is_empty());
+        assert!(results.inactive_metadata().is_empty());
     }
 
     #[test]
@@ -1866,7 +1882,7 @@ mod tests {
 
         let collection = ConstraintCollection::<Constraint>::new(active, BTreeMap::new()).unwrap();
         assert_eq!(collection.active().len(), 1);
-        assert_eq!(collection.removed().len(), 0);
+        assert_eq!(collection.inactive().len(), 0);
     }
 
     #[test]
@@ -1881,7 +1897,7 @@ mod tests {
         let err = ConstraintCollection::<Constraint>::new(active, removed).unwrap_err();
         assert!(err
             .to_string()
-            .contains("appears in both active constraints and removed constraints"));
+            .contains("appears in both active constraints and inactive constraints"));
     }
 
     #[test]
@@ -1958,7 +1974,7 @@ mod tests {
 
         assert!(!collection.active().contains_key(&removed_id));
         assert!(collection.active().contains_key(&active_id));
-        assert!(collection.removed().contains_key(&removed_id));
+        assert!(collection.inactive().contains_key(&removed_id));
         assert_eq!(collection.context().name(removed_id), Some("original"));
         collection.validate_context_ids().unwrap();
     }
@@ -2004,8 +2020,8 @@ mod tests {
 
         assert!(!collection.active().contains_key(&removed_id));
         assert!(collection.active().contains_key(&active_id));
-        assert!(collection.removed().contains_key(&removed_id));
-        assert!(collection.removed().contains_key(&previously_removed_id));
+        assert!(collection.inactive().contains_key(&removed_id));
+        assert!(collection.inactive().contains_key(&previously_removed_id));
         assert_eq!(collection.context().name(removed_id), Some("moved"));
         assert_eq!(collection.context().name(active_id), Some("active"));
         assert_eq!(
@@ -2092,7 +2108,7 @@ mod tests {
             .unwrap();
 
         let Function::Expression(expression) =
-            collection.removed().get(&removed_id).unwrap().0.function()
+            collection.inactive().get(&removed_id).unwrap().0.function()
         else {
             panic!("moved constraint must preserve expression storage")
         };
@@ -2129,7 +2145,7 @@ mod tests {
             "unexpected error: {err}"
         );
         assert_eq!(collection.active().get(&id), Some(&original));
-        assert!(collection.removed().is_empty());
+        assert!(collection.inactive().is_empty());
         collection.validate_context_ids().unwrap();
     }
 
@@ -2170,13 +2186,13 @@ mod tests {
         );
         assert_eq!(
             collection
-                .removed()
+                .inactive()
                 .get(&removed_id)
                 .map(|(c, _)| c.equality),
             Some(Equality::EqualToZero)
         );
         assert_eq!(
-            collection.removed().get(&removed_id).map(|(_, r)| r),
+            collection.inactive().get(&removed_id).map(|(_, r)| r),
             Some(&reason)
         );
         assert_eq!(collection.context().name(active_id), Some("active"));
@@ -2209,20 +2225,20 @@ mod tests {
             .unwrap_err();
 
         assert!(
-            err.to_string().contains("Removed constraint with ID")
+            err.to_string().contains("Inactive constraint with ID")
                 && err.to_string().contains("ConstraintID(99)"),
             "unexpected error: {err}"
         );
         assert_eq!(collection.active().get(&active_id), Some(&original_active));
         assert_eq!(
-            collection.removed().get(&removed_id),
+            collection.inactive().get(&removed_id),
             Some(&(original_removed, reason))
         );
         collection.validate_context_ids().unwrap();
     }
 
     #[test]
-    fn restore_removed_row_preserves_context() {
+    fn activate_row_preserves_context() {
         let id = ConstraintID::from(1);
         let removed = Constraint::less_than_or_equal_to_zero(Function::Zero);
         let mut context = ConstraintContextStore::default();
@@ -2236,13 +2252,13 @@ mod tests {
 
         let mut restored = removed.clone();
         restored.equality = Equality::EqualToZero;
-        let reason = collection.restore_removed_row(id, restored).unwrap();
+        let reason = collection.activate_row(id, restored).unwrap();
         assert_eq!(reason.reason, "test");
         assert!(collection
             .active()
             .get(&id)
             .is_some_and(|c| c.equality == Equality::EqualToZero));
-        assert!(!collection.removed().contains_key(&id));
+        assert!(!collection.inactive().contains_key(&id));
         assert_eq!(collection.context().name(id), Some("restored"));
         collection.validate_context_ids().unwrap();
     }
@@ -2288,23 +2304,24 @@ mod tests {
     #[test]
     fn evaluated_collection_rejects_removed_reason_without_constraint() {
         let constraints: BTreeMap<ConstraintID, EvaluatedConstraint> = BTreeMap::new();
-        let removed_reasons = BTreeMap::from([(ConstraintID::from(1), removed_reason())]);
+        let inactive_metadata = BTreeMap::from([(ConstraintID::from(1), removed_reason())]);
 
-        let err = EvaluatedCollection::<Constraint>::new(constraints, removed_reasons).unwrap_err();
+        let err =
+            EvaluatedCollection::<Constraint>::new(constraints, inactive_metadata).unwrap_err();
         assert!(err
             .to_string()
-            .contains("Removed reason references unknown constraint ID"));
+            .contains("Inactive metadata references unknown constraint ID"));
     }
 
     #[test]
     fn sampled_collection_rejects_removed_reason_without_constraint() {
         let constraints: BTreeMap<ConstraintID, SampledConstraint> = BTreeMap::new();
-        let removed_reasons = BTreeMap::from([(ConstraintID::from(1), removed_reason())]);
+        let inactive_metadata = BTreeMap::from([(ConstraintID::from(1), removed_reason())]);
 
-        let err = SampledCollection::<Constraint>::new(constraints, removed_reasons).unwrap_err();
+        let err = SampledCollection::<Constraint>::new(constraints, inactive_metadata).unwrap_err();
         assert!(err
             .to_string()
-            .contains("Removed reason references unknown constraint ID"));
+            .contains("Inactive metadata references unknown constraint ID"));
     }
 
     #[test]
@@ -2393,9 +2410,9 @@ mod tests {
     #[test]
     fn parse_v2_evaluated_collection_reports_invalid_removed_reason_as_ordinary_error() {
         let err = crate::v2::EvaluatedRegularConstraintCollection {
-            removed_reasons: BTreeMap::from([(
+            inactive_metadata: BTreeMap::from([(
                 1,
-                crate::v2::RemovedReason {
+                crate::v2::InactiveConstraintMetadata {
                     reason: "test".to_string(),
                     parameters: Default::default(),
                 },
@@ -2408,16 +2425,16 @@ mod tests {
         assert_ordinary_collection_sidecar_error(
             &err,
             "crate::v2::EvaluatedRegularConstraintCollection",
-            "removed_reasons",
+            "inactive_metadata",
         );
     }
 
     #[test]
     fn parse_v2_sampled_collection_reports_invalid_removed_reason_as_ordinary_error() {
         let err = crate::v2::SampledRegularConstraintCollection {
-            removed_reasons: BTreeMap::from([(
+            inactive_metadata: BTreeMap::from([(
                 1,
-                crate::v2::RemovedReason {
+                crate::v2::InactiveConstraintMetadata {
                     reason: "test".to_string(),
                     parameters: Default::default(),
                 },
@@ -2430,7 +2447,7 @@ mod tests {
         assert_ordinary_collection_sidecar_error(
             &err,
             "crate::v2::SampledRegularConstraintCollection",
-            "removed_reasons",
+            "inactive_metadata",
         );
     }
 }

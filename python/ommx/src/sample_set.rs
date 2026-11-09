@@ -65,7 +65,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// {attr}`~ommx.SampleSet.summary` shows each sample's objective and feasibility.
 /// Feasible candidates appear first, ordered by the objective according to
 /// {attr}`~ommx.SampleSet.sense`. Feasibility checks variable kinds and bounds
-/// and all retained constraints, including removed constraints.
+/// and all retained constraints, including inactive constraints.
 /// Retrieve an individual sample as a Solution using its ID:
 ///
 /// >>> solution = sample_set.get(sample_id=0)
@@ -102,7 +102,7 @@ use std::collections::{BTreeMap, BTreeSet};
 ///
 /// Evaluate candidates with the transformed Instance supplied to the sampler.
 /// It retains the fixed values and dependencies needed to restore variables,
-/// removed constraints to inspect, and any preserved output objective.
+/// inactive constraints to inspect, and any preserved output objective.
 /// Evaluation reports that output objective and sense, which may differ from
 /// the active solver-facing objective.
 ///
@@ -141,7 +141,7 @@ impl_solution_annotations!(SampleSet);
 impl SampleSet {
     /// Unique names across all constraint families, as a set of strings.
     ///
-    /// Retained removed constraints are included; no sample ID is needed.
+    /// Retained inactive constraints are included; no sample ID is needed.
     /// The scope matches `extract_constraints`. Unnamed constraints are excluded;
     /// an explicitly empty name is included. Duplicate names appear once, even
     /// when extraction would reject duplicate subscripts.
@@ -181,7 +181,7 @@ impl SampleSet {
     ///
     /// ``sample_id`` is the candidate's ID, not its row position in
     /// {attr}`~ommx.SampleSet.summary`. The independent result contains evaluated
-    /// values, variable and constraint labels, retained removed constraints,
+    /// values, variable and constraint labels, retained inactive constraints,
     /// named functions, reported objective and sense, and the stored tolerance.
     /// Changing the extracted Solution does not update the SampleSet.
     /// Raises KeyError if the sample ID does not exist.
@@ -272,7 +272,7 @@ impl SampleSet {
     /// The best feasible candidate as an independent Solution.
     ///
     /// Selects only candidates satisfying {attr}`~ommx.SampleSet.feasible`,
-    /// including variable domains and retained removed constraints. Minimization
+    /// including variable domains and retained inactive constraints. Minimization
     /// selects the smallest reported objective; maximization selects the largest.
     /// Selection does not prove global optimality or change the extracted
     /// Solution's optimality status.
@@ -304,7 +304,7 @@ impl SampleSet {
     #[getter]
     /// The best candidate satisfying relaxed feasibility as an independent Solution.
     ///
-    /// Uses {attr}`~ommx.SampleSet.feasible_relaxed`: removed constraints are
+    /// Uses {attr}`~ommx.SampleSet.feasible_relaxed`: inactive constraints are
     /// excluded, while all variable kinds and bounds still apply. The selected
     /// candidate can therefore fail {attr}`~ommx.Solution.feasible`.
     /// Comparison still uses the reported objective and sense; it does not switch
@@ -317,7 +317,7 @@ impl SampleSet {
     }
 
     #[getter]
-    /// Alias for {attr}`~ommx.SampleSet.best_feasible`, including removed constraints.
+    /// Alias for {attr}`~ommx.SampleSet.best_feasible`, including inactive constraints.
     /// Raises ValueError if there is no feasible sample.
     pub fn best_feasible_unrelaxed(&self) -> OmmxPyResult<Solution> {
         // Exactly the same as best_feasible
@@ -354,7 +354,7 @@ impl SampleSet {
 
     /// Get relaxed feasibility status for all samples.
     ///
-    /// Removed constraints are excluded; variable bounds and kinds still apply.
+    /// Inactive constraints are excluded; variable bounds and kinds still apply.
     #[getter]
     pub fn feasible_relaxed(&self) -> BTreeMap<u64, bool> {
         self.inner
@@ -556,7 +556,7 @@ impl SampleSet {
     ///
     /// Raises KeyError if the name or sample ID does not exist. Raises
     /// ValueError if matching constraints share subscripts, including across families.
-    /// Parameters and descriptions are ignored. Retained removed constraints are
+    /// Parameters and descriptions are ignored. Retained inactive constraints are
     /// included. Regular constraints return violations, not signed function values.
     fn extract_constraints(
         &self,
@@ -777,7 +777,7 @@ impl SampleSet {
     ///
     /// `SampleSet` has no `removed=` parameter (no active/removed
     /// distinction at the sampled stage); reason data is gated by
-    /// `"removed_reason"` in `include=`.
+    /// `"inactive_reason"` in `include=`.
     #[pyo3(signature = (*, kind, include = None))]
     pub fn constraints_df<'py>(
         &self,
@@ -799,7 +799,7 @@ impl SampleSet {
             ],
             |coll| {
                 let meta = coll.context().clone();
-                let removed_reasons = coll.removed_reasons();
+                let inactive_metadata = coll.inactive_metadata();
                 let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
                 for (id, c) in coll.inner().iter() {
                     let m = meta.collect_for(*id);
@@ -811,11 +811,11 @@ impl SampleSet {
                         &m,
                     )
                     .to_pandas_entry(py)?;
-                    if flags.removed_reason {
-                        if let Some(reason) = removed_reasons.get(id) {
-                            crate::pandas::set_removed_reason_columns(&dict, reason)?;
+                    if flags.inactive_reason {
+                        if let Some(reason) = inactive_metadata.get(id) {
+                            crate::pandas::set_inactive_reason_columns(&dict, reason)?;
                         } else {
-                            crate::pandas::set_removed_reason_na(&dict)?;
+                            crate::pandas::set_inactive_reason_na(&dict)?;
                         }
                     }
                     crate::pandas::apply_include_filter(&dict, flags)?;
@@ -953,7 +953,7 @@ impl SampleSet {
 
     /// Removed-constraint reasons DataFrame (long format).
     #[pyo3(signature = (*, kind))]
-    pub fn constraint_removed_reasons_df<'py>(
+    pub fn constraint_inactive_metadata_df<'py>(
         &self,
         py: Python<'py>,
         kind: ConstraintFamilyInput,
@@ -969,9 +969,9 @@ impl SampleSet {
                 sos1_constraints
             ],
             |coll| {
-                crate::pandas::constraint_removed_reasons_dataframe(
+                crate::pandas::constraint_inactive_metadata_dataframe(
                     py,
-                    coll.removed_reasons().iter().map(|(id, r)| (*id, r)),
+                    coll.inactive_metadata().iter().map(|(id, r)| (*id, r)),
                     id_col,
                 )
             }

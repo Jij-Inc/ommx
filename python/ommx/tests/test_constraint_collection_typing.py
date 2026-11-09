@@ -14,10 +14,10 @@ from ommx import (
     AttachedIndicatorConstraint,
     AttachedOneHotConstraint,
     AttachedSos1Constraint,
-    RemovedConstraint,
-    RemovedIndicatorConstraint,
-    RemovedOneHotConstraint,
-    RemovedSos1Constraint,
+    InactiveConstraint,
+    InactiveIndicatorConstraint,
+    InactiveOneHotConstraint,
+    InactiveSos1Constraint,
     EvaluatedConstraint,
     EvaluatedIndicatorConstraint,
     EvaluatedOneHotConstraint,
@@ -81,31 +81,31 @@ def test_get_types():
     assert_type(
         active.get(Sos1ConstraintID(999), Missing()), AttachedSos1Constraint | Missing
     )
-    assert_type(removed.get(ConstraintID(5)), RemovedConstraint | None)
-    assert_type(removed.get(ConstraintID(5), None), RemovedConstraint | None)
-    assert_type(removed.get(ConstraintID(999), Missing()), RemovedConstraint | Missing)
+    assert_type(removed.get(ConstraintID(5)), InactiveConstraint | None)
+    assert_type(removed.get(ConstraintID(5), None), InactiveConstraint | None)
+    assert_type(removed.get(ConstraintID(999), Missing()), InactiveConstraint | Missing)
     assert_type(
-        removed.get(IndicatorConstraintID(6)), RemovedIndicatorConstraint | None
+        removed.get(IndicatorConstraintID(6)), InactiveIndicatorConstraint | None
     )
     assert_type(
-        removed.get(IndicatorConstraintID(6), None), RemovedIndicatorConstraint | None
+        removed.get(IndicatorConstraintID(6), None), InactiveIndicatorConstraint | None
     )
     assert_type(
         removed.get(IndicatorConstraintID(999), Missing()),
-        RemovedIndicatorConstraint | Missing,
+        InactiveIndicatorConstraint | Missing,
     )
-    assert_type(removed.get(OneHotConstraintID(7)), RemovedOneHotConstraint | None)
+    assert_type(removed.get(OneHotConstraintID(7)), InactiveOneHotConstraint | None)
     assert_type(
-        removed.get(OneHotConstraintID(7), None), RemovedOneHotConstraint | None
+        removed.get(OneHotConstraintID(7), None), InactiveOneHotConstraint | None
     )
     assert_type(
         removed.get(OneHotConstraintID(999), Missing()),
-        RemovedOneHotConstraint | Missing,
+        InactiveOneHotConstraint | Missing,
     )
-    assert_type(removed.get(Sos1ConstraintID(8)), RemovedSos1Constraint | None)
-    assert_type(removed.get(Sos1ConstraintID(8), None), RemovedSos1Constraint | None)
+    assert_type(removed.get(Sos1ConstraintID(8)), InactiveSos1Constraint | None)
+    assert_type(removed.get(Sos1ConstraintID(8), None), InactiveSos1Constraint | None)
     assert_type(
-        removed.get(Sos1ConstraintID(999), Missing()), RemovedSos1Constraint | Missing
+        removed.get(Sos1ConstraintID(999), Missing()), InactiveSos1Constraint | Missing
     )
     assert_type(evaluated.get(ConstraintID(5)), EvaluatedConstraint | None)
     assert_type(evaluated.get(ConstraintID(5), None), EvaluatedConstraint | None)

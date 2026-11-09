@@ -1,7 +1,7 @@
 use super::Instance;
 use crate::{
     coeff,
-    constraint::{ConstraintContext, ConstraintID, Provenance, RemovedReason},
+    constraint::{ConstraintContext, ConstraintID, InactiveConstraintMetadata, Provenance},
     linear,
     sos1_constraint::Sos1ConstraintID,
     Bound, Coefficient, Constraint, Function, Kind, Linear, LinearMonomial, VariableID,
@@ -61,7 +61,7 @@ impl Instance {
     /// All validation happens before any mutation, so a failed call leaves the instance
     /// unchanged.
     ///
-    /// The original SOS1 constraint is moved to [`Instance::removed_sos1_constraints`]
+    /// The original SOS1 constraint is moved to [`Instance::inactive_sos1_constraints`]
     /// with `reason = "ommx.Instance.convert_sos1_to_constraints"` and a
     /// `constraint_ids` parameter listing the new regular constraint IDs
     /// (comma-separated in insertion order).
@@ -288,9 +288,9 @@ impl Instance {
             .join(",");
         parameters.insert("constraint_ids".to_string(), constraint_ids_str);
         self.sos1_constraint_collection
-            .relax(
+            .deactivate(
                 id,
-                RemovedReason {
+                InactiveConstraintMetadata {
                     reason: "ommx.Instance.convert_sos1_to_constraints".to_string(),
                     parameters,
                 },
@@ -401,7 +401,7 @@ mod tests {
         // Original SOS1 is recorded as removed with the new constraint ID.
         assert!(instance.sos1_constraints().is_empty());
         let (_, reason) = instance
-            .removed_sos1_constraints()
+            .inactive_sos1_constraints()
             .get(&Sos1ConstraintID::from(5))
             .expect("SOS1 should be retained as removed");
         assert_eq!(reason.reason, "ommx.Instance.convert_sos1_to_constraints");
@@ -460,7 +460,7 @@ mod tests {
 
         // `constraint_ids` parameter on removed reason lists all three in insertion order.
         let (_, reason) = instance
-            .removed_sos1_constraints()
+            .inactive_sos1_constraints()
             .get(&Sos1ConstraintID::from(9))
             .unwrap();
         let expected_ids = new_ids
@@ -620,7 +620,7 @@ mod tests {
             assert!(instance.constraints().contains_key(&new_ids[0]));
         }
         assert!(instance.sos1_constraints().is_empty());
-        assert_eq!(instance.removed_sos1_constraints().len(), 2);
+        assert_eq!(instance.inactive_sos1_constraints().len(), 2);
     }
 
     #[test]
@@ -693,7 +693,7 @@ mod tests {
         assert_eq!(instance.sos1_constraints(), &before_sos1);
         assert_eq!(instance.decision_variables, before_vars);
         assert_eq!(instance.constraints(), &before_constraints);
-        assert!(instance.removed_sos1_constraints().is_empty());
+        assert!(instance.inactive_sos1_constraints().is_empty());
     }
 
     #[test]

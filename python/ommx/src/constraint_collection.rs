@@ -455,29 +455,29 @@ class ConstraintCollection:
 }
 
 #[derive(IntoPyObject)]
-enum RemovedConstraintCollectionValue {
-    Regular(crate::RemovedConstraint),
-    Indicator(crate::RemovedIndicatorConstraint),
-    OneHot(crate::RemovedOneHotConstraint),
-    Sos1(crate::RemovedSos1Constraint),
+enum InactiveConstraintCollectionValue {
+    Regular(crate::InactiveConstraint),
+    Indicator(crate::InactiveIndicatorConstraint),
+    OneHot(crate::InactiveOneHotConstraint),
+    Sos1(crate::InactiveSos1Constraint),
 }
-impl PyStubType for RemovedConstraintCollectionValue {
+impl PyStubType for InactiveConstraintCollectionValue {
     fn type_output() -> TypeInfo {
         crate::constraint_base::ConstraintView::type_output()
     }
 }
 
-#[doc = include_str!("docstrings/ommx/RemovedConstraintCollection.md")]
+#[doc = include_str!("docstrings/ommx/InactiveConstraintCollection.md")]
 #[pyclass(frozen)]
-pub struct RemovedConstraintCollection {
+pub struct InactiveConstraintCollection {
     owner: ConstraintHost,
 }
 collection_stub!(
-    RemovedConstraintCollection,
-    RemovedConstraintCollectionValue,
-    include_str!("docstrings/ommx/RemovedConstraintCollection.md")
+    InactiveConstraintCollection,
+    InactiveConstraintCollectionValue,
+    include_str!("docstrings/ommx/InactiveConstraintCollection.md")
 );
-impl RemovedConstraintCollection {
+impl InactiveConstraintCollection {
     /// Constructed only by the owning root property; no rows are copied.
     pub(crate) fn new(owner: ConstraintHost) -> Self {
         Self { owner }
@@ -486,25 +486,25 @@ impl RemovedConstraintCollection {
         with_model!(&self.owner, py, |root| {
             let mut ids = Vec::new();
             ids.extend(
-                root.removed_constraints()
+                root.inactive_constraints()
                     .keys()
                     .copied()
                     .map(AnyConstraintID::from),
             );
             ids.extend(
-                root.removed_indicator_constraints()
+                root.inactive_indicator_constraints()
                     .keys()
                     .copied()
                     .map(AnyConstraintID::from),
             );
             ids.extend(
-                root.removed_one_hot_constraints()
+                root.inactive_one_hot_constraints()
                     .keys()
                     .copied()
                     .map(AnyConstraintID::from),
             );
             ids.extend(
-                root.removed_sos1_constraints()
+                root.inactive_sos1_constraints()
                     .keys()
                     .copied()
                     .map(AnyConstraintID::from),
@@ -515,13 +515,13 @@ impl RemovedConstraintCollection {
 }
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
-impl RemovedConstraintCollection {
+impl InactiveConstraintCollection {
     fn __len__(&self, py: Python<'_>) -> usize {
         with_model!(&self.owner, py, |root| {
-            root.removed_constraints().len()
-                + root.removed_indicator_constraints().len()
-                + root.removed_one_hot_constraints().len()
-                + root.removed_sos1_constraints().len()
+            root.inactive_constraints().len()
+                + root.inactive_indicator_constraints().len()
+                + root.inactive_one_hot_constraints().len()
+                + root.inactive_sos1_constraints().len()
         })
     }
     // Mapping accepts object for membership checks; extraction still rejects
@@ -533,15 +533,17 @@ impl RemovedConstraintCollection {
     ) -> bool {
         with_model!(&self.owner, py, |root| {
             match key {
-                AnyConstraintID::Regular(id) => root.removed_constraints().contains_key(&id.into()),
+                AnyConstraintID::Regular(id) => {
+                    root.inactive_constraints().contains_key(&id.into())
+                }
                 AnyConstraintID::Indicator(id) => root
-                    .removed_indicator_constraints()
+                    .inactive_indicator_constraints()
                     .contains_key(&id.into()),
                 AnyConstraintID::OneHot(id) => {
-                    root.removed_one_hot_constraints().contains_key(&id.into())
+                    root.inactive_one_hot_constraints().contains_key(&id.into())
                 }
                 AnyConstraintID::Sos1(id) => {
-                    root.removed_sos1_constraints().contains_key(&id.into())
+                    root.inactive_sos1_constraints().contains_key(&id.into())
                 }
             }
         })
@@ -551,17 +553,17 @@ impl RemovedConstraintCollection {
         &self,
         py: Python<'_>,
         key: AnyConstraintID,
-    ) -> PyResult<RemovedConstraintCollectionValue> {
+    ) -> PyResult<InactiveConstraintCollectionValue> {
         with_model!(&self.owner, py, |root| {
             match key {
                 AnyConstraintID::Regular(id) => {
                     let id = id.into();
                     let (row, reason) = root
-                        .removed_constraints()
+                        .inactive_constraints()
                         .get(&id)
                         .ok_or_else(|| missing(key, py))?;
-                    Ok(RemovedConstraintCollectionValue::Regular(
-                        crate::RemovedConstraint::from_parts(
+                    Ok(InactiveConstraintCollectionValue::Regular(
+                        crate::InactiveConstraint::from_parts(
                             row.clone(),
                             root.constraint_collection().context().collect_for(id),
                             reason.clone(),
@@ -571,11 +573,11 @@ impl RemovedConstraintCollection {
                 AnyConstraintID::Indicator(id) => {
                     let id = id.into();
                     let (row, reason) = root
-                        .removed_indicator_constraints()
+                        .inactive_indicator_constraints()
                         .get(&id)
                         .ok_or_else(|| missing(key, py))?;
-                    Ok(RemovedConstraintCollectionValue::Indicator(
-                        crate::RemovedIndicatorConstraint::from_parts(
+                    Ok(InactiveConstraintCollectionValue::Indicator(
+                        crate::InactiveIndicatorConstraint::from_parts(
                             row.clone(),
                             root.indicator_constraint_collection()
                                 .context()
@@ -587,11 +589,11 @@ impl RemovedConstraintCollection {
                 AnyConstraintID::OneHot(id) => {
                     let id = id.into();
                     let (row, reason) = root
-                        .removed_one_hot_constraints()
+                        .inactive_one_hot_constraints()
                         .get(&id)
                         .ok_or_else(|| missing(key, py))?;
-                    Ok(RemovedConstraintCollectionValue::OneHot(
-                        crate::RemovedOneHotConstraint::from_parts(
+                    Ok(InactiveConstraintCollectionValue::OneHot(
+                        crate::InactiveOneHotConstraint::from_parts(
                             row.clone(),
                             root.one_hot_constraint_collection()
                                 .context()
@@ -603,11 +605,11 @@ impl RemovedConstraintCollection {
                 AnyConstraintID::Sos1(id) => {
                     let id = id.into();
                     let (row, reason) = root
-                        .removed_sos1_constraints()
+                        .inactive_sos1_constraints()
                         .get(&id)
                         .ok_or_else(|| missing(key, py))?;
-                    Ok(RemovedConstraintCollectionValue::Sos1(
-                        crate::RemovedSos1Constraint::from_parts(
+                    Ok(InactiveConstraintCollectionValue::Sos1(
+                        crate::InactiveSos1Constraint::from_parts(
                             row.clone(),
                             root.sos1_constraint_collection().context().collect_for(id),
                             reason.clone(),
@@ -619,26 +621,26 @@ impl RemovedConstraintCollection {
     }
 }
 mapping_methods!(
-    RemovedConstraintCollection,
-    RemovedConstraintCollectionValue
+    InactiveConstraintCollection,
+    InactiveConstraintCollectionValue
 );
 pyo3_stub_gen::inventory::submit! {
  pyo3_stub_gen::derive::gen_methods_from_python! { r#"
-class RemovedConstraintCollection:
+class InactiveConstraintCollection:
     @overload
-    def __getitem__(self, key: ConstraintID) -> RemovedConstraint:
+    def __getitem__(self, key: ConstraintID) -> InactiveConstraint:
         """Fetch the constraint identified by a typed ID from the current owner."""
         ...
     @overload
-    def __getitem__(self, key: IndicatorConstraintID) -> RemovedIndicatorConstraint:
+    def __getitem__(self, key: IndicatorConstraintID) -> InactiveIndicatorConstraint:
         """Fetch the constraint identified by a typed ID from the current owner."""
         ...
     @overload
-    def __getitem__(self, key: OneHotConstraintID) -> RemovedOneHotConstraint:
+    def __getitem__(self, key: OneHotConstraintID) -> InactiveOneHotConstraint:
         """Fetch the constraint identified by a typed ID from the current owner."""
         ...
     @overload
-    def __getitem__(self, key: Sos1ConstraintID) -> RemovedSos1Constraint:
+    def __getitem__(self, key: Sos1ConstraintID) -> InactiveSos1Constraint:
         """Fetch the constraint identified by a typed ID from the current owner."""
         ...
     @overload
@@ -646,28 +648,28 @@ class RemovedConstraintCollection:
         ...
 
     @overload
-    def get(self, key: ConstraintID, default: None = None) -> RemovedConstraint | None:
+    def get(self, key: ConstraintID, default: None = None) -> InactiveConstraint | None:
         ...
     @overload
-    def get(self, key: ConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> RemovedConstraint | pyo3_stub_gen.RustType["GetDefault"]:
+    def get(self, key: ConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> InactiveConstraint | pyo3_stub_gen.RustType["GetDefault"]:
         ...
     @overload
-    def get(self, key: IndicatorConstraintID, default: None = None) -> RemovedIndicatorConstraint | None:
+    def get(self, key: IndicatorConstraintID, default: None = None) -> InactiveIndicatorConstraint | None:
         ...
     @overload
-    def get(self, key: IndicatorConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> RemovedIndicatorConstraint | pyo3_stub_gen.RustType["GetDefault"]:
+    def get(self, key: IndicatorConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> InactiveIndicatorConstraint | pyo3_stub_gen.RustType["GetDefault"]:
         ...
     @overload
-    def get(self, key: OneHotConstraintID, default: None = None) -> RemovedOneHotConstraint | None:
+    def get(self, key: OneHotConstraintID, default: None = None) -> InactiveOneHotConstraint | None:
         ...
     @overload
-    def get(self, key: OneHotConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> RemovedOneHotConstraint | pyo3_stub_gen.RustType["GetDefault"]:
+    def get(self, key: OneHotConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> InactiveOneHotConstraint | pyo3_stub_gen.RustType["GetDefault"]:
         ...
     @overload
-    def get(self, key: Sos1ConstraintID, default: None = None) -> RemovedSos1Constraint | None:
+    def get(self, key: Sos1ConstraintID, default: None = None) -> InactiveSos1Constraint | None:
         ...
     @overload
-    def get(self, key: Sos1ConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> RemovedSos1Constraint | pyo3_stub_gen.RustType["GetDefault"]:
+    def get(self, key: Sos1ConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> InactiveSos1Constraint | pyo3_stub_gen.RustType["GetDefault"]:
         ...
     @overload
     def get(self, key: ConstraintIDBase, default: None = None) -> ConstraintView | None:
@@ -786,7 +788,7 @@ impl EvaluatedConstraintCollection {
                         row.clone(),
                         collection.context().collect_for(id),
                     )
-                    .with_removed_reason(collection.removed_reasons().get(&id).cloned()),
+                    .with_inactive_reason(collection.inactive_metadata().get(&id).cloned()),
                 ))
             }
             AnyConstraintID::Indicator(id) => {
@@ -798,7 +800,7 @@ impl EvaluatedConstraintCollection {
                         row.clone(),
                         collection.context().collect_for(id),
                     )
-                    .with_removed_reason(collection.removed_reasons().get(&id).cloned()),
+                    .with_inactive_reason(collection.inactive_metadata().get(&id).cloned()),
                 ))
             }
             AnyConstraintID::OneHot(id) => {
@@ -810,7 +812,7 @@ impl EvaluatedConstraintCollection {
                         row.clone(),
                         collection.context().collect_for(id),
                     )
-                    .with_removed_reason(collection.removed_reasons().get(&id).cloned()),
+                    .with_inactive_reason(collection.inactive_metadata().get(&id).cloned()),
                 ))
             }
             AnyConstraintID::Sos1(id) => {
@@ -822,7 +824,7 @@ impl EvaluatedConstraintCollection {
                         row.clone(),
                         collection.context().collect_for(id),
                     )
-                    .with_removed_reason(collection.removed_reasons().get(&id).cloned()),
+                    .with_inactive_reason(collection.inactive_metadata().get(&id).cloned()),
                 ))
             }
         }
@@ -992,7 +994,7 @@ impl SampledConstraintCollection {
                         row.clone(),
                         collection.context().collect_for(id),
                     )
-                    .with_removed_reason(collection.removed_reasons().get(&id).cloned()),
+                    .with_inactive_reason(collection.inactive_metadata().get(&id).cloned()),
                 ))
             }
             AnyConstraintID::Indicator(id) => {
@@ -1004,7 +1006,7 @@ impl SampledConstraintCollection {
                         row.clone(),
                         collection.context().collect_for(id),
                     )
-                    .with_removed_reason(collection.removed_reasons().get(&id).cloned()),
+                    .with_inactive_reason(collection.inactive_metadata().get(&id).cloned()),
                 ))
             }
             AnyConstraintID::OneHot(id) => {
@@ -1016,7 +1018,7 @@ impl SampledConstraintCollection {
                         row.clone(),
                         collection.context().collect_for(id),
                     )
-                    .with_removed_reason(collection.removed_reasons().get(&id).cloned()),
+                    .with_inactive_reason(collection.inactive_metadata().get(&id).cloned()),
                 ))
             }
             AnyConstraintID::Sos1(id) => {
@@ -1028,7 +1030,7 @@ impl SampledConstraintCollection {
                         row.clone(),
                         collection.context().collect_for(id),
                     )
-                    .with_removed_reason(collection.removed_reasons().get(&id).cloned()),
+                    .with_inactive_reason(collection.inactive_metadata().get(&id).cloned()),
                 ))
             }
         }
@@ -1106,10 +1108,10 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let mapping = m.py().import("collections.abc")?.getattr("Mapping")?;
     m.add_class::<ConstraintCollection>()?;
     mapping.call_method1("register", (m.py().get_type::<ConstraintCollection>(),))?;
-    m.add_class::<RemovedConstraintCollection>()?;
+    m.add_class::<InactiveConstraintCollection>()?;
     mapping.call_method1(
         "register",
-        (m.py().get_type::<RemovedConstraintCollection>(),),
+        (m.py().get_type::<InactiveConstraintCollection>(),),
     )?;
     m.add_class::<EvaluatedConstraintCollection>()?;
     mapping.call_method1(

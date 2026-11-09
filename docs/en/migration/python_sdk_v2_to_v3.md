@@ -41,6 +41,12 @@ If your v2 code imports `ommx.v1.*_pb2` or accesses `.raw`, identify what it nee
 (migration-build)=
 ## 2. Build and edit a model
 
+### Inactive constraint terminology
+
+The SDK now calls constraints outside the active formulation **inactive**. Rename `Removed*Constraint` wrappers to `Inactive*Constraint`, `removed_constraints` to `inactive_constraints`, and the existing `relax_constraint` / `restore_constraint` methods to `deactivate_constraint` / `activate_constraint` (likewise for indicator constraints). Reason accessors and table metadata use `inactive_reason` and `constraint_inactive_metadata_df`.
+
+This is a terminology change: `constraints` still returns active attached rows, `inactive_constraints` returns inactive snapshots, and both kinds still participate in ordinary feasibility. `feasible_relaxed` continues to check only active rows. The v1 schema is unchanged; v2 source names change without changing field numbers.
+
 (migration-automatic-ids)=
 ### Let the model allocate IDs, or preserve external IDs
 
@@ -222,7 +228,7 @@ report = rows.join(owners.rename(index=id_map))
 assert report.loc[limit.constraint_id, "owner"] == "planning"
 ```
 
-Use `include=["label", "parameters"]` for a wide table with metadata. For a join with one row per key/value, use `constraint_parameters_df(kind=...)`. Transformation history is in `constraint_provenance_df(kind=...)`, with one row per provenance step. For a model, `removed=True` includes active rows as well: filter the non-null `removed_reason` values if your old report contained only removed rows.
+Use `include=["label", "parameters"]` for a wide table with metadata. For a join with one row per key/value, use `constraint_parameters_df(kind=...)`. Transformation history is in `constraint_provenance_df(kind=...)`, with one row per provenance step. For a model, `removed=True` includes active rows as well: filter the non-null `inactive_reason` values if your old report contained only removed rows.
 
 ### Compare feasibility near the tolerance
 
@@ -313,7 +319,7 @@ The site-wide {ref}`general index <genindex>` also lists the detailed examples u
 | `DecisionVariable.substituted_value` | {meth}`model.fixed_decision_variables() <ommx.Instance.fixed_decision_variables>` | {ref}`2 <migration-build>` |
 | `evaluated.feasible` / `sampled.feasible` | {meth}`evaluated.is_feasible(atol=...) <ommx.EvaluatedConstraint.is_feasible>` / {meth}`sampled.feasible(atol=...) <ommx.SampledConstraint.feasible>` | {ref}`4 <migration-results>` |
 | `extract_constraints(name)` | {meth}`extract_constraints <ommx.Solution.extract_constraints>` for violations, {meth}`get_constraint_value <ommx.Solution.get_constraint_value>` for signed regular values | {ref}`4 <migration-results>` |
-| `get_constraint_by_id` / `get_removed_constraint_by_id` | {attr}`constraints[ConstraintID(n)] <ommx.Instance.constraints>` / {attr}`removed_constraints[ConstraintID(n)] <ommx.Instance.removed_constraints>` | {ref}`2 <migration-build>` |
+| `get_constraint_by_id` / `get_removed_constraint_by_id` | {attr}`constraints[ConstraintID(n)] <ommx.Instance.constraints>` / {attr}`removed_constraints[ConstraintID(n)] <ommx.Instance.inactive_constraints>` | {ref}`2 <migration-build>` |
 | `Linear.from_object` / `Linear.equals_to` | Arithmetic or {meth}`Linear.single_term <ommx.Linear.single_term>` / {meth}`almost_equal <ommx.Linear.almost_equal>` | {ref}`2 <migration-build>` |
 | `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` | {meth}`Linear.terms() <ommx.Linear.terms>` / {meth}`Quadratic.terms() <ommx.Quadratic.terms>` / {meth}`Polynomial.terms() <ommx.Polynomial.terms>` | {ref}`2 <migration-build>` |
 | `ommx.v1` / `ommx.v1.*_pb2` | {doc}`ommx </api/index>` | {ref}`1 <migration-imports>` |

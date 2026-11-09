@@ -287,7 +287,7 @@ def test_partial_evaluate():
     assert [var.value for var in solution.decision_variables] == [0, 0, 1]
 
 
-def test_relax_constraint():
+def test_deactivate_constraint():
     x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -297,7 +297,7 @@ def test_relax_constraint():
     )
 
     assert instance.used_decision_variables == x
-    instance.relax_constraint(1, "relax")
+    instance.deactivate_constraint(1, "relax")
     # id for x[2] is listed as irrelevant
     assert instance.irrelevant_decision_variable_ids() == {x[2].id}
 

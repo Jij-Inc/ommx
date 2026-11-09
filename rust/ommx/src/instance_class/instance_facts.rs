@@ -253,7 +253,7 @@ mod tests {
         let dependency_source = VariableID::from(4);
         let named_only = VariableID::from(5);
         let removed_only = VariableID::from(6);
-        let removed_reason = crate::constraint::RemovedReason {
+        let removed_reason = crate::constraint::InactiveConstraintMetadata {
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -270,7 +270,7 @@ mod tests {
             ]))
             .fixed_decision_variable_values(BTreeMap::from([(fixed, 0.0)]))
             .constraints(BTreeMap::new())
-            .removed_constraints(BTreeMap::from([(
+            .inactive_constraints(BTreeMap::from([(
                 ConstraintID::from(10),
                 (
                     Constraint::equal_to_zero(Function::from(linear!(removed_only))),

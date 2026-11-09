@@ -296,7 +296,7 @@ impl From<ommx::BinaryPowerPreparation> for BinaryPowerPreparation {
 /// one-sided penalty $\max(0, g_i(x))^2$.
 ///
 /// On success, every active regular constraint moves to
-/// {attr}`~ommx.Instance.removed_constraints`, while existing removed
+/// {attr}`~ommx.Instance.inactive_constraints`, while existing removed
 /// constraints are preserved. When at least one active regular constraint is
 /// converted, the entry output semantics are preserved in
 /// {attr}`~ommx.Instance.output_objective` for solution and sample evaluation
@@ -325,7 +325,7 @@ impl FixedPenaltyPreparation {
     /// ``atol`` is used by the owner operation to accept a penalty magnitude
     /// down to ``-atol`` and normalize a tolerated negative value to zero. Every
     /// weight must be finite.
-    /// Removed constraints record
+    /// Inactive constraints record
     /// ``reason="ommx.Instance.penalty_method_with_fixed_weights"`` with no
     /// reason parameters.
     #[staticmethod]

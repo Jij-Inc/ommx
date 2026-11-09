@@ -9,7 +9,7 @@ use pyo3::prelude::*;
 pub struct EvaluatedConstraint(
     pub ommx::EvaluatedConstraint,
     pub ommx::ConstraintContext,
-    pub Option<ommx::RemovedReason>,
+    pub Option<ommx::InactiveConstraintMetadata>,
 );
 crate::constraint_base::constraint_subclass!(
     EvaluatedConstraint,

@@ -122,7 +122,7 @@ pub enum SampleSetError {
 ///
 /// Invariants
 /// -----------
-/// - Constraint numbers are unique across all families, including removed rows.
+/// - Constraint numbers are unique across all families, including inactive rows.
 /// - [`Self::decision_variables`] owns a
 ///   [`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable);
 ///   table keys own [`VariableID`] and sampled decision-variable rows do not
@@ -148,7 +148,7 @@ pub enum SampleSetError {
 ///   variable to satisfy its bounds and kind, just as the extracted [`Solution`].
 ///   They also check all sampled constraint collections:
 ///   - `feasible`: all constraints must be satisfied for that sample.
-///   - `feasible_relaxed`: all non-removed constraints must be satisfied.
+///   - `feasible_relaxed`: all non-inactive constraints must be satisfied.
 /// - `feasibility_atol` is the absolute tolerance used to validate
 ///   serialized per-constraint feasibility columns and to interpret per-sample
 ///   [`Solution`] values extracted from this sample set.
@@ -357,7 +357,7 @@ impl SampleSet {
                 .evaluated_constraints_collection(
                     EvaluatedCollection::with_context(
                         evaluated_constraints,
-                        self.constraints.removed_reasons().clone(),
+                        self.constraints.inactive_metadata().clone(),
                         self.constraints.context().clone(),
                     )
                     .expect("SampleSet sidecars must reference constraints present in this sample"),
@@ -365,7 +365,7 @@ impl SampleSet {
                 .evaluated_indicator_constraints_collection(
                     EvaluatedCollection::with_context(
                         evaluated_indicator_constraints,
-                        self.indicator_constraints.removed_reasons().clone(),
+                        self.indicator_constraints.inactive_metadata().clone(),
                         self.indicator_constraints.context().clone(),
                     )
                     .expect("SampleSet sidecars must reference constraints present in this sample"),
@@ -373,7 +373,7 @@ impl SampleSet {
                 .evaluated_one_hot_constraints_collection(
                     EvaluatedCollection::with_context(
                         evaluated_one_hot_constraints,
-                        self.one_hot_constraints.removed_reasons().clone(),
+                        self.one_hot_constraints.inactive_metadata().clone(),
                         self.one_hot_constraints.context().clone(),
                     )
                     .expect("SampleSet sidecars must reference constraints present in this sample"),
@@ -381,7 +381,7 @@ impl SampleSet {
                 .evaluated_sos1_constraints_collection(
                     EvaluatedCollection::with_context(
                         evaluated_sos1_constraints,
-                        self.sos1_constraints.removed_reasons().clone(),
+                        self.sos1_constraints.inactive_metadata().clone(),
                         self.sos1_constraints.context().clone(),
                     )
                     .expect("SampleSet sidecars must reference constraints present in this sample"),
@@ -1120,7 +1120,7 @@ impl SampleSetBuilder {
     /// existing table rows are enforced. It does not revalidate host-level
     /// cross references or sample-ID consistency. The caller must ensure:
     /// - `decision_variables` is keyed by the intended [`VariableID`] for each row
-    /// - Constraint numbers are unique across all families, including removed rows
+    /// - Constraint numbers are unique across all families, including inactive rows
     /// - All `used_decision_variable_ids` in sampled constraints and sampled
     ///   named functions exist in `decision_variables`
     /// - Sample IDs are consistent across all components
@@ -1615,7 +1615,7 @@ mod tests {
         let mut constraint_context = crate::ConstraintContextStore::<ConstraintID>::default();
         constraint_context.set_name(cid, "balance");
         constraint_context.set_description(cid, "demand-balance row");
-        let removed_reason = crate::RemovedReason {
+        let removed_reason = crate::InactiveConstraintMetadata {
             reason: "relaxed for test".to_string(),
             parameters: Default::default(),
         };
@@ -1644,7 +1644,7 @@ mod tests {
         let solution = sample_set.get(sample_id).unwrap();
         assert!(!solution.feasible());
         assert!(solution.feasible_relaxed());
-        assert!(solution.evaluated_constraints().is_removed(&cid));
+        assert!(solution.evaluated_constraints().is_inactive(&cid));
         assert_eq!(solution.variable_labels().name(var_id), Some("x"));
         assert_eq!(solution.variable_labels().subscripts(var_id), &[0]);
         let constraint_meta = solution.evaluated_constraints().context();

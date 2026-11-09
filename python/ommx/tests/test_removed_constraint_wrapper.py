@@ -1,10 +1,10 @@
-"""Test RemovedConstraint PyO3 wrapper functionality."""
+"""Test InactiveConstraint PyO3 wrapper functionality."""
 
 import ommx._ommx_rust as rust
 
 
 def test_removed_constraint_creation():
-    """Test basic RemovedConstraint creation."""
+    """Test basic InactiveConstraint creation."""
     # Create a constraint first
     linear = rust.Linear.single_term(1, 1.0)
     function = rust.Function.from_linear(linear)
@@ -15,14 +15,14 @@ def test_removed_constraint_creation():
     )
 
     # Create removed constraint
-    removed_constraint = rust.RemovedConstraint(
+    removed_constraint = rust.InactiveConstraint(
         constraint=constraint,
-        removed_reason="Infeasible",
-        removed_reason_parameters={"method": "penalty", "weight": "1000"},
+        inactive_reason="Infeasible",
+        inactive_reason_parameters={"method": "penalty", "weight": "1000"},
     )
 
-    assert removed_constraint.removed_reason == "Infeasible"
-    assert removed_constraint.removed_reason_parameters == {
+    assert removed_constraint.inactive_reason == "Infeasible"
+    assert removed_constraint.inactive_reason_parameters == {
         "method": "penalty",
         "weight": "1000",
     }
@@ -30,7 +30,7 @@ def test_removed_constraint_creation():
 
 
 def test_removed_constraint_no_parameters():
-    """Test RemovedConstraint creation without parameters."""
+    """Test InactiveConstraint creation without parameters."""
     # Create a constraint
     linear = rust.Linear({2: 2.0}, -5.0)
     function = rust.Function.from_linear(linear)
@@ -41,17 +41,17 @@ def test_removed_constraint_no_parameters():
     )
 
     # Create removed constraint without parameters
-    removed_constraint = rust.RemovedConstraint(
-        constraint=constraint, removed_reason="Redundant"
+    removed_constraint = rust.InactiveConstraint(
+        constraint=constraint, inactive_reason="Redundant"
     )
 
-    assert removed_constraint.removed_reason == "Redundant"
-    assert removed_constraint.removed_reason_parameters == {}
+    assert removed_constraint.inactive_reason == "Redundant"
+    assert removed_constraint.inactive_reason_parameters == {}
     assert removed_constraint.name == "leq_constraint"
 
 
 def test_removed_constraint_access_original_constraint():
-    """Test accessing the original constraint from RemovedConstraint."""
+    """Test accessing the original constraint from InactiveConstraint."""
     # Create a polynomial constraint
     terms = {(1, 1): 1.0, (2,): 1.0}  # x1^2 + x2
     polynomial = rust.Polynomial(terms)
@@ -61,10 +61,10 @@ def test_removed_constraint_access_original_constraint():
     )
 
     # Create removed constraint
-    removed_constraint = rust.RemovedConstraint(
+    removed_constraint = rust.InactiveConstraint(
         constraint=original_constraint,
-        removed_reason="Timeout",
-        removed_reason_parameters={"timeout_seconds": "300"},
+        inactive_reason="Timeout",
+        inactive_reason_parameters={"timeout_seconds": "300"},
     )
 
     # Access the original constraint
@@ -75,42 +75,42 @@ def test_removed_constraint_access_original_constraint():
 
 
 def test_removed_constraint_repr():
-    """Test RemovedConstraint string representation."""
+    """Test InactiveConstraint string representation."""
     linear = rust.Linear.constant(5.0)
     function = rust.Function.from_linear(linear)
     constraint = rust.Constraint(
         function=function, equality=rust.Equality.EqualToZero, name="repr_test"
     )
 
-    removed_constraint = rust.RemovedConstraint(
-        constraint=constraint, removed_reason="Test reason"
+    removed_constraint = rust.InactiveConstraint(
+        constraint=constraint, inactive_reason="Test reason"
     )
 
     repr_str = repr(removed_constraint)
-    expected = "RemovedConstraint(5 == 0, reason=Test reason)"
+    expected = "InactiveConstraint(5 == 0, reason=Test reason)"
     assert repr_str == expected
 
 
 def test_removed_constraint_empty_name():
-    """Test RemovedConstraint with constraint that has no name."""
+    """Test InactiveConstraint with constraint that has no name."""
     linear = rust.Linear.single_term(1, 1.0)
     function = rust.Function.from_linear(linear)
     constraint = rust.Constraint(
         function=function, equality=rust.Equality.EqualToZero, name=None
     )
 
-    removed_constraint = rust.RemovedConstraint(
-        constraint=constraint, removed_reason="No name test"
+    removed_constraint = rust.InactiveConstraint(
+        constraint=constraint, inactive_reason="No name test"
     )
 
     assert removed_constraint.name is None  # Should return None for unset name
     repr_str = repr(removed_constraint)
-    expected = "RemovedConstraint(x1 == 0, reason=No name test)"
+    expected = "InactiveConstraint(x1 == 0, reason=No name test)"
     assert repr_str == expected
 
 
 def test_removed_constraint_complex_parameters():
-    """Test RemovedConstraint with complex parameter structure."""
+    """Test InactiveConstraint with complex parameter structure."""
     linear = rust.Linear({1: 1.0, 2: -1.0}, 0.0)
     function = rust.Function.from_linear(linear)
     constraint = rust.Constraint(
@@ -126,18 +126,18 @@ def test_removed_constraint_complex_parameters():
         "max_iterations": "10000",
     }
 
-    removed_constraint = rust.RemovedConstraint(
+    removed_constraint = rust.InactiveConstraint(
         constraint=constraint,
-        removed_reason="Solver specific",
-        removed_reason_parameters=complex_params,
+        inactive_reason="Solver specific",
+        inactive_reason_parameters=complex_params,
     )
 
-    assert removed_constraint.removed_reason_parameters == complex_params
-    assert len(removed_constraint.removed_reason_parameters) == 4
+    assert removed_constraint.inactive_reason_parameters == complex_params
+    assert len(removed_constraint.inactive_reason_parameters) == 4
 
 
 def test_removed_constraint_getter_properties():
-    """Test all getter properties of RemovedConstraint."""
+    """Test all getter properties of InactiveConstraint."""
     linear = rust.Linear({3: 0.5}, 2.0)
     function = rust.Function.from_linear(linear)
     constraint = rust.Constraint(
@@ -147,16 +147,16 @@ def test_removed_constraint_getter_properties():
         subscripts=[1, 2, 3],
     )
 
-    removed_constraint = rust.RemovedConstraint(
+    removed_constraint = rust.InactiveConstraint(
         constraint=constraint,
-        removed_reason="Property test",
-        removed_reason_parameters={"key": "value"},
+        inactive_reason="Property test",
+        inactive_reason_parameters={"key": "value"},
     )
 
     # Test all properties
     assert removed_constraint.name == "getter_test"
-    assert removed_constraint.removed_reason == "Property test"
-    assert removed_constraint.removed_reason_parameters == {"key": "value"}
+    assert removed_constraint.inactive_reason == "Property test"
+    assert removed_constraint.inactive_reason_parameters == {"key": "value"}
 
     # Test that the constraint property returns the right type and values
     retrieved_constraint = removed_constraint.constraint

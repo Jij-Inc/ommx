@@ -74,7 +74,7 @@ def _instance_all_kinds() -> Instance:
 def _instance_with_removed() -> Instance:
     """Instance whose regular constraint at id=10 has been relaxed."""
     inst = _instance_all_kinds()
-    inst.relax_constraint(10, "manual_relax", phase="warm-up")
+    inst.deactivate_constraint(10, "manual_relax", phase="warm-up")
     return inst
 
 
@@ -225,7 +225,7 @@ def test_instance_constraints_df_removed_default_excludes_removed(snapshot):
 
 
 def test_instance_constraints_df_removed_true_includes_both(snapshot):
-    """`removed=True` returns active + removed; auto-sets `removed_reason` columns."""
+    """`removed=True` returns active + removed; auto-sets `inactive_reason` columns."""
     assert (
         _df_snap(
             _instance_with_removed().constraints_df(
@@ -237,8 +237,8 @@ def test_instance_constraints_df_removed_true_includes_both(snapshot):
 
 
 def test_instance_constraints_df_removed_true_no_label(snapshot):
-    """`removed=True` together with `include=[]` keeps removed_reason columns
-    (the `removed=True` flag overrides include= for `removed_reason`)."""
+    """`removed=True` together with `include=[]` keeps inactive_reason columns
+    (the `removed=True` flag overrides include= for `inactive_reason`)."""
     assert (
         _df_snap(
             _instance_with_removed().constraints_df(
@@ -267,24 +267,24 @@ def test_instance_constraints_df_removed_true_id_sorted(snapshot):
         },
         sense=Sense.Maximize,
     )
-    inst.relax_constraint(20, "relax_middle")
+    inst.deactivate_constraint(20, "relax_middle")
     df = inst.constraints_df(kind=ConstraintKind.Regular, removed=True)
     assert list(df.index) == [ConstraintID(5), ConstraintID(20), ConstraintID(30)]
     assert _df_snap(df) == snapshot
 
 
-def test_instance_constraints_df_removed_reason_active_only_keeps_column(
+def test_instance_constraints_df_inactive_reason_active_only_keeps_column(
     snapshot,
 ):
-    """Edge case: `include=("removed_reason",)` on an active-only view
+    """Edge case: `include=("inactive_reason",)` on an active-only view
     (no `removed=True`, no actually-removed constraints) must still
-    surface the `removed_reason` column with NA values. Regression
+    surface the `inactive_reason` column with NA values. Regression
     guard against the column silently disappearing when no row in
     the view carries a reason."""
     df = _instance_all_kinds().constraints_df(
-        kind=ConstraintKind.Regular, include=["label", "removed_reason"]
+        kind=ConstraintKind.Regular, include=["label", "inactive_reason"]
     )
-    assert "removed_reason" in df.columns
+    assert "inactive_reason" in df.columns
     assert _df_snap(df) == snapshot
 
 
@@ -378,29 +378,29 @@ def test_solution_constraints_df_no_removed_parameter():
         _solution_basic().constraints_df(kind=ConstraintKind.Regular, removed=True)  # type: ignore[call-arg]
 
 
-def test_solution_constraints_df_removed_reason_include(snapshot):
-    """Constraints removed before evaluation get `removed_reason` /
-    `removed_reason.{key}` columns when the flag is in `include=`."""
+def test_solution_constraints_df_inactive_reason_include(snapshot):
+    """Constraints removed before evaluation get `inactive_reason` /
+    `inactive_reason.{key}` columns when the flag is in `include=`."""
     assert (
         _df_snap(
             _solution_with_removed().constraints_df(
-                kind=ConstraintKind.Regular, include=["label", "removed_reason"]
+                kind=ConstraintKind.Regular, include=["label", "inactive_reason"]
             )
         )
         == snapshot
     )
 
 
-def test_solution_constraints_df_removed_reason_no_removals_keeps_column(snapshot):
-    """`include=("removed_reason",)` on a Solution where no constraint
+def test_solution_constraints_df_inactive_reason_no_removals_keeps_column(snapshot):
+    """`include=("inactive_reason",)` on a Solution where no constraint
     was removed before evaluation must still surface the
-    `removed_reason` column with NA values. Regression guard for the
+    `inactive_reason` column with NA values. Regression guard for the
     column silently disappearing when no row in the view carries a
     reason."""
     df = _solution_basic().constraints_df(
-        kind=ConstraintKind.Regular, include=["label", "removed_reason"]
+        kind=ConstraintKind.Regular, include=["label", "inactive_reason"]
     )
-    assert "removed_reason" in df.columns
+    assert "inactive_reason" in df.columns
     assert _df_snap(df) == snapshot
 
 

@@ -15,11 +15,11 @@ You can apply the same check to a candidate from a solver or one supplied by han
 
 OMMX can retain a constraint after removing it from the conditions imposed on the solver. The imposed constraints are called **active**; the retained ones are called **removed**. Evaluation can therefore distinguish satisfying the active conditions from satisfying all retained conditions. Variable domains, such as integrality and bounds, matter in both cases.
 
-Removed constraints also arise when a special constraint is replaced by an equivalent expression using ordinary constraints, or when a constraint is converted into a penalty term in the objective. A removed constraint is a record of a change; its presence alone does not tell you whether that change preserves the original problem. In particular, a finite penalty weight can allow an infeasible candidate to be preferred.
+Inactive constraints also arise when a special constraint is replaced by an equivalent expression using ordinary constraints, or when a constraint is converted into a penalty term in the objective. A removed constraint is a record of a change; its presence alone does not tell you whether that change preserves the original problem. In particular, a finite penalty weight can allow an infeasible candidate to be preferred.
 
 Use the transformed Instance—OMMX's representation of the problem associated with the solve—to interpret the returned values and retained conditions. Check the transformations' guarantees before treating that evaluation as a claim about the original problem: retained information does not certify that every change preserved its feasible region or optima.
 
-The {class}`Solution Reference <ommx.Solution>` explains the feasibility results and how to inspect violations. The {attr}`removed-constraint Reference <ommx.Instance.removed_constraints>` covers the retained data and its relationship to active constraints.
+The {class}`Solution Reference <ommx.Solution>` explains the feasibility results and how to inspect violations. The {attr}`removed-constraint Reference <ommx.Instance.inactive_constraints>` covers the retained data and its relationship to active constraints.
 
 ## Distinguish reconstructed values from filled-in values
 

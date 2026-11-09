@@ -246,7 +246,7 @@ def test_total_violation_indicator(active, equality, removed, value):
         sense=Sense.Minimize,
     )
     if removed:
-        instance.relax_indicator_constraint(0, "test relaxation")
+        instance.deactivate_indicator_constraint(0, "test relaxation")
     solution = instance.evaluate({0: float(active), 1: value})
     violation = (abs(value) if equality else max(0, value)) if active else 0
     assert solution.constraint_violation(IndicatorConstraintID(0)) == pytest.approx(
@@ -388,7 +388,7 @@ def test_total_is_sum_of_individual_and_dataframe_violations():
         sos1_constraints={3: Sos1Constraint(variables=xs)},
         sense=Sense.Minimize,
     )
-    instance.relax_constraint(0, "test relaxation")
+    instance.deactivate_constraint(0, "test relaxation")
     one_hot_row = instance.convert_one_hot_to_constraint(2)
     sos1_rows = instance.convert_sos1_to_constraints(3)
     solution = instance.evaluate({0: 1, 1: 1, 2: 1})

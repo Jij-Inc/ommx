@@ -742,7 +742,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     >>> assert source.active_special_constraint_kinds == {
     ...     ConstraintKind.Indicator, ConstraintKind.Sos1,
     ... }
-    >>> assert not source.removed_constraints
+    >>> assert not source.inactive_constraints
 
     The selected values are ``enabled = option_a = option_c = 1`` and
     ``option_b = 0``. The :class:`ommx_highs_adapter.OMMXHighsAdapter`
@@ -765,7 +765,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     >>> assert solution.feasible
     >>> assert abs(solution.objective - 10.0) < 1e-6
     >>> assert choice_model.active_special_constraint_kinds == {ConstraintKind.OneHot}
-    >>> assert not choice_model.removed_constraints
+    >>> assert not choice_model.inactive_constraints
 
     **SOS1 with continuous variables**
 

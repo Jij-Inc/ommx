@@ -53,9 +53,9 @@ def test_convert_inequality_emits_only_upper_big_m():
     assert not any(
         isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
     )
-    removed = instance.removed_constraints[IndicatorConstraintID(7)]
-    assert removed.removed_reason == "ommx.Instance.convert_indicator_to_constraint"
-    assert removed.removed_reason_parameters["constraint_ids"] == "8"
+    removed = instance.inactive_constraints[IndicatorConstraintID(7)]
+    assert removed.inactive_reason == "ommx.Instance.convert_indicator_to_constraint"
+    assert removed.inactive_reason_parameters["constraint_ids"] == "8"
 
 
 def test_convert_equality_emits_both_sides():
@@ -73,8 +73,8 @@ def test_convert_equality_emits_both_sides():
     assert not any(
         isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
     )
-    removed = instance.removed_constraints[IndicatorConstraintID(7)]
-    assert removed.removed_reason_parameters["constraint_ids"] == "8,9"
+    removed = instance.inactive_constraints[IndicatorConstraintID(7)]
+    assert removed.inactive_reason_parameters["constraint_ids"] == "8,9"
 
 
 def test_convert_equality_uses_explicit_atol_for_composed_body():
@@ -109,8 +109,8 @@ def test_redundant_indicator_emits_no_constraint():
     new_ids = instance.convert_indicator_to_constraint(7)
     assert new_ids == []
     assert instance.constraints == {}
-    removed = instance.removed_constraints[IndicatorConstraintID(7)]
-    assert removed.removed_reason_parameters["constraint_ids"] == ""
+    removed = instance.inactive_constraints[IndicatorConstraintID(7)]
+    assert removed.inactive_reason_parameters["constraint_ids"] == ""
 
 
 def test_infinite_bound_is_rejected_without_mutation():
@@ -140,7 +140,7 @@ def test_infinite_bound_is_rejected_without_mutation():
     )
     assert set(instance.constraints) == {IndicatorConstraintID(7)}
     assert not any(
-        isinstance(cid, IndicatorConstraintID) for cid in instance.removed_constraints
+        isinstance(cid, IndicatorConstraintID) for cid in instance.inactive_constraints
     )
 
 
@@ -183,11 +183,11 @@ def test_convert_all_is_atomic_on_error():
         IndicatorConstraintID(2),
     }
     assert not any(
-        isinstance(cid, IndicatorConstraintID) for cid in instance.removed_constraints
+        isinstance(cid, IndicatorConstraintID) for cid in instance.inactive_constraints
     )
 
 
-def test_removed_indicator_constraints_df_surfaces_reason_and_ids(snapshot):
+def test_inactive_indicator_constraints_df_surfaces_reason_and_ids(snapshot):
     """`constraints_df(kind=ConstraintKind.Indicator, removed=True)` surfaces the
     reason and comma-joined new-constraint IDs on removed rows."""
     y = DecisionVariable.binary(1)

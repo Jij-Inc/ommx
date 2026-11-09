@@ -345,10 +345,10 @@ def test_convert_sos1_with_integer_variables_emits_bigm_pair():
     for v_id in new_var_ids:
         assert after_vars[v_id].name == "ommx.sos1_indicator"
     # Original SOS1 is retained on the removed side with our reason string.
-    removed = instance.removed_constraints[Sos1ConstraintID(10)]
-    assert removed.removed_reason == "ommx.Instance.convert_sos1_to_constraints"
+    removed = instance.inactive_constraints[Sos1ConstraintID(10)]
+    assert removed.inactive_reason == "ommx.Instance.convert_sos1_to_constraints"
     # `constraint_ids` parameter lists all 5 new IDs in insertion order.
-    assert removed.removed_reason_parameters["constraint_ids"] == "11,12,13,14,15"
+    assert removed.inactive_reason_parameters["constraint_ids"] == "11,12,13,14,15"
 
 
 def test_convert_sos1_rejects_domain_excluding_zero():
@@ -512,8 +512,8 @@ def test_solution_sos1_constraints_df_all_zero(snapshot, _solution_sos1_all_zero
     )
 
 
-def test_solution_one_hot_removed_reasons_df_after_conversion(snapshot):
-    """`Solution.constraints_df(kind=ConstraintKind.OneHot, include=(..., "removed_reason"))`
+def test_solution_one_hot_inactive_metadata_df_after_conversion(snapshot):
+    """`Solution.constraints_df(kind=ConstraintKind.OneHot, include=(..., "inactive_reason"))`
     after `convert_one_hot_to_constraint` carries the conversion reason."""
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
@@ -528,15 +528,15 @@ def test_solution_one_hot_removed_reasons_df_after_conversion(snapshot):
     assert (
         _df_snap(
             sol.constraints_df(
-                kind=ConstraintKind.OneHot, include=["label", "removed_reason"]
+                kind=ConstraintKind.OneHot, include=["label", "inactive_reason"]
             )
         )
         == snapshot
     )
 
 
-def test_solution_sos1_removed_reasons_df_after_conversion(snapshot):
-    """`Solution.constraints_df(kind=ConstraintKind.Sos1, include=(..., "removed_reason"))`
+def test_solution_sos1_inactive_metadata_df_after_conversion(snapshot):
+    """`Solution.constraints_df(kind=ConstraintKind.Sos1, include=(..., "inactive_reason"))`
     after `convert_sos1_to_constraints` carries the conversion reason and
     the comma-joined `constraint_ids` parameter."""
     x = [DecisionVariable.binary(i) for i in range(3)]
@@ -552,7 +552,7 @@ def test_solution_sos1_removed_reasons_df_after_conversion(snapshot):
     assert (
         _df_snap(
             sol.constraints_df(
-                kind=ConstraintKind.Sos1, include=["label", "removed_reason"]
+                kind=ConstraintKind.Sos1, include=["label", "inactive_reason"]
             )
         )
         == snapshot
@@ -617,8 +617,8 @@ def test_sample_set_sos1_constraints_df_dynamic_columns(snapshot, _sample_set_so
     )
 
 
-def test_sample_set_one_hot_removed_reasons_df_after_conversion(snapshot):
-    """`SampleSet.constraints_df(kind=ConstraintKind.OneHot, include=(..., "removed_reason"))`
+def test_sample_set_one_hot_inactive_metadata_df_after_conversion(snapshot):
+    """`SampleSet.constraints_df(kind=ConstraintKind.OneHot, include=(..., "inactive_reason"))`
     after `convert_one_hot_to_constraint` surfaces conversion reasons."""
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
@@ -633,7 +633,7 @@ def test_sample_set_one_hot_removed_reasons_df_after_conversion(snapshot):
     assert (
         _df_snap(
             ss.constraints_df(
-                kind=ConstraintKind.OneHot, include=["label", "removed_reason"]
+                kind=ConstraintKind.OneHot, include=["label", "inactive_reason"]
             )
         )
         == snapshot

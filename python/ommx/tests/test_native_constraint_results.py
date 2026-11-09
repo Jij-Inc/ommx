@@ -110,7 +110,7 @@ def test_reject_wrong_family_before_mutation_and_ambiguous_integer():
         with pytest.raises(TypeError):
             instance.constraints.of_kind(ConstraintKind.Regular)[wrong]
         with pytest.raises(TypeError):
-            instance.relax_constraint(wrong, "manual")
+            instance.deactivate_constraint(wrong, "manual")
         solution = instance.evaluate({0: 1, 1: 0})
         with pytest.raises(TypeError):
             solution.set_dual_variable(wrong, 1.0)
@@ -164,7 +164,7 @@ def test_all_families_native_dataframe_and_roundtrip(
 def test_removed_context_provenance_and_owned_snapshots():
     instance = model()
     generated = instance.convert_one_hot_to_constraint(OneHotConstraintID(9))
-    instance.relax_constraint(ConstraintID(7), "manual", phase="test")
+    instance.deactivate_constraint(ConstraintID(7), "manual", phase="test")
     samples = instance.evaluate_samples({3: {0: 1, 1: 0}})
     for root in [samples, samples.get(3)]:
         rows = root.constraints
@@ -175,10 +175,10 @@ def test_removed_context_provenance_and_owned_snapshots():
         removed = rows[ConstraintID(7)]
         assert removed.name == "balance"
         assert removed.parameters == {"group": "a"}
-        assert removed.removed_reason == "manual"
-        assert removed.removed_reason_parameters == {"phase": "test"}
+        assert removed.inactive_reason == "manual"
+        assert removed.inactive_reason_parameters == {"phase": "test"}
         assert rows[generated].provenance[0].original_id == OneHotConstraintID(9)
-        assert root.constraints[OneHotConstraintID(9)].removed_reason is not None
+        assert root.constraints[OneHotConstraintID(9)].inactive_reason is not None
         frame = root.constraint_provenance_df(kind=ConstraintKind.Regular)
         assert frame.iloc[0]["source_id"] == OneHotConstraintID(9)
         assert isinstance(frame.iloc[0]["regular_constraint_id"], ConstraintID)

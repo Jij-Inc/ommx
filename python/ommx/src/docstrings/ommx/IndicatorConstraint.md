@@ -55,9 +55,9 @@ IDs through the `indicator_constraints` mapping of
 {meth}`~ommx.Instance.from_components`. Constraint numbers must be distinct
 across all active and removed families, as described by {class}`~ommx.Instance`.
 
-{meth}`~ommx.Instance.relax_indicator_constraint` moves a condition out of the
+{meth}`~ommx.Instance.deactivate_indicator_constraint` moves a condition out of the
 active formulation while retaining it for evaluation.
-{meth}`~ommx.Instance.restore_indicator_constraint` makes it active again, subject
+{meth}`~ommx.Instance.activate_indicator_constraint` makes it active again, subject
 to the current variable dependencies and fixed values.
 
 A backend may receive this structure directly or require regular constraints.

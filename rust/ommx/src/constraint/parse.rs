@@ -78,7 +78,7 @@ impl Parse for v1::RemovedConstraint {
         ConstraintID,
         Constraint<Created>,
         ConstraintContext,
-        RemovedReason,
+        InactiveConstraintMetadata,
     );
     type Context = ();
 
@@ -91,7 +91,7 @@ impl Parse for v1::RemovedConstraint {
                 field: "constraint",
             })?
             .parse_as(&(), message, "constraint")?;
-        let removed_reason = RemovedReason {
+        let removed_reason = InactiveConstraintMetadata {
             reason: self.removed_reason,
             parameters: self.removed_reason_parameters.into_iter().collect(),
         };
@@ -123,10 +123,17 @@ impl Parse for Vec<v1::Constraint> {
 }
 
 impl Parse for Vec<v1::RemovedConstraint> {
-    type Output = BTreeMap<ConstraintID, (Constraint<Created>, ConstraintContext, RemovedReason)>;
+    type Output = BTreeMap<
+        ConstraintID,
+        (
+            Constraint<Created>,
+            ConstraintContext,
+            InactiveConstraintMetadata,
+        ),
+    >;
     type Context = BTreeMap<ConstraintID, Constraint<Created>>;
     fn parse(self, constraints: &Self::Context) -> Result<Self::Output, ParseError> {
-        let mut removed_constraints = BTreeMap::default();
+        let mut inactive_constraints = BTreeMap::default();
         for c in self {
             let (id, constraint, context, reason) = c.parse(&())?;
             if constraints.contains_key(&id) {
@@ -134,7 +141,7 @@ impl Parse for Vec<v1::RemovedConstraint> {
                     "Duplicated constraint ID is found in definition: {id:?}"
                 )));
             }
-            if removed_constraints
+            if inactive_constraints
                 .insert(id, (constraint, context, reason))
                 .is_some()
             {
@@ -143,7 +150,7 @@ impl Parse for Vec<v1::RemovedConstraint> {
                 )));
             }
         }
-        Ok(removed_constraints)
+        Ok(inactive_constraints)
     }
 }
 
@@ -152,7 +159,7 @@ impl Parse for v1::EvaluatedConstraint {
         ConstraintID,
         EvaluatedConstraint,
         ConstraintContext,
-        Option<RemovedReason>,
+        Option<InactiveConstraintMetadata>,
     );
     type Context = ();
 
@@ -171,10 +178,12 @@ impl Parse for v1::EvaluatedConstraint {
             provenance: Vec::new(),
         };
 
-        let removed_reason = self.removed_reason.map(|reason| RemovedReason {
-            reason,
-            parameters: self.removed_reason_parameters.into_iter().collect(),
-        });
+        let removed_reason = self
+            .removed_reason
+            .map(|reason| InactiveConstraintMetadata {
+                reason,
+                parameters: self.removed_reason_parameters.into_iter().collect(),
+            });
 
         Ok((
             ConstraintID(self.id),
@@ -201,7 +210,7 @@ impl Parse for v1::SampledConstraint {
         ConstraintID,
         SampledConstraint,
         ConstraintContext,
-        Option<RemovedReason>,
+        Option<InactiveConstraintMetadata>,
     );
     type Context = ();
 
@@ -246,10 +255,12 @@ impl Parse for v1::SampledConstraint {
             provenance: Vec::new(),
         };
 
-        let removed_reason = self.removed_reason.map(|reason| RemovedReason {
-            reason,
-            parameters: self.removed_reason_parameters.into_iter().collect(),
-        });
+        let removed_reason = self
+            .removed_reason
+            .map(|reason| InactiveConstraintMetadata {
+                reason,
+                parameters: self.removed_reason_parameters.into_iter().collect(),
+            });
 
         Ok((
             ConstraintID(self.id),
@@ -286,7 +297,7 @@ mod tests {
                 ConstraintID,
                 Constraint<Created>,
                 ConstraintContext,
-                RemovedReason,
+                InactiveConstraintMetadata,
             ),
             ParseError,
         > = v1::RemovedConstraint {

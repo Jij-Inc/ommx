@@ -30,12 +30,16 @@ pub struct ParametricInstanceBuilder {
     constraint_context: ConstraintContextStore<ConstraintID>,
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
     named_function_labels: crate::named_function::NamedFunctionLabelStore,
-    removed_constraints: BTreeMap<ConstraintID, (Constraint, crate::constraint::RemovedReason)>,
+    inactive_constraints:
+        BTreeMap<ConstraintID, (Constraint, crate::constraint::InactiveConstraintMetadata)>,
     indicator_constraints: BTreeMap<crate::IndicatorConstraintID, crate::IndicatorConstraint>,
     indicator_constraint_context: ConstraintContextStore<crate::IndicatorConstraintID>,
-    removed_indicator_constraints: BTreeMap<
+    inactive_indicator_constraints: BTreeMap<
         crate::IndicatorConstraintID,
-        (crate::IndicatorConstraint, crate::constraint::RemovedReason),
+        (
+            crate::IndicatorConstraint,
+            crate::constraint::InactiveConstraintMetadata,
+        ),
     >,
     one_hot_constraints: BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
     one_hot_constraint_context: ConstraintContextStore<crate::OneHotConstraintID>,
@@ -131,12 +135,15 @@ impl ParametricInstanceBuilder {
         self
     }
 
-    /// Sets the removed constraints.
-    pub fn removed_constraints(
+    /// Sets the inactive constraints.
+    pub fn inactive_constraints(
         mut self,
-        removed_constraints: BTreeMap<ConstraintID, (Constraint, crate::constraint::RemovedReason)>,
+        inactive_constraints: BTreeMap<
+            ConstraintID,
+            (Constraint, crate::constraint::InactiveConstraintMetadata),
+        >,
     ) -> Self {
-        self.removed_constraints = removed_constraints;
+        self.inactive_constraints = inactive_constraints;
         self
     }
 
@@ -159,14 +166,17 @@ impl ParametricInstanceBuilder {
     }
 
     /// Sets the removed indicator constraints.
-    pub fn removed_indicator_constraints(
+    pub fn inactive_indicator_constraints(
         mut self,
-        removed_indicator_constraints: BTreeMap<
+        inactive_indicator_constraints: BTreeMap<
             crate::IndicatorConstraintID,
-            (crate::IndicatorConstraint, crate::constraint::RemovedReason),
+            (
+                crate::IndicatorConstraint,
+                crate::constraint::InactiveConstraintMetadata,
+            ),
         >,
     ) -> Self {
-        self.removed_indicator_constraints = removed_indicator_constraints;
+        self.inactive_indicator_constraints = inactive_indicator_constraints;
         self
     }
 
@@ -229,7 +239,7 @@ impl ParametricInstanceBuilder {
     /// - Decision variable IDs and parameter IDs overlap (the error chain
     ///   contains [`crate::ParameterIDCollision`])
     /// - The objective function, constraints, or named functions reference undefined variable IDs
-    /// - The keys of `constraints` and `removed_constraints` are not disjoint
+    /// - The keys of `constraints` and `inactive_constraints` are not disjoint
     /// - Label/context stores contain IDs that are not owned by the
     ///   corresponding decision-variable, named-function, or constraint collection
     /// - The keys of `decision_variable_dependency` are not in `decision_variables`
@@ -292,9 +302,9 @@ impl ParametricInstanceBuilder {
                 }
             }
         }
-        // Validate that all variable IDs in removed_constraints are defined
-        // (removed_constraints may contain fixed or dependent variable IDs)
-        for (removed, _reason) in self.removed_constraints.values() {
+        // Validate that all variable IDs in inactive_constraints are defined
+        // (inactive_constraints may contain fixed or dependent variable IDs)
+        for (removed, _reason) in self.inactive_constraints.values() {
             for id in removed.required_ids() {
                 if !all_variable_ids.contains(&id) {
                     crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
@@ -348,15 +358,15 @@ impl ParametricInstanceBuilder {
         for value in self.indicator_constraints.values() {
             validate_indicator(value)?;
         }
-        for (ic, _reason) in self.removed_indicator_constraints.values() {
+        for (ic, _reason) in self.inactive_indicator_constraints.values() {
             validate_indicator(ic)?;
         }
-        // Validate disjointness of indicator active/removed.
-        for id in self.removed_indicator_constraints.keys() {
+        // Validate disjointness of indicator active/inactive.
+        for id in self.inactive_indicator_constraints.keys() {
             if self.indicator_constraints.contains_key(id) {
                 crate::bail!(
                     { ?id },
-                    "Indicator constraint ID {id:?} is in both indicator_constraints and removed_indicator_constraints, but they must be disjoint",
+                    "Indicator constraint ID {id:?} is in both indicator_constraints and inactive_indicator_constraints, but they must be disjoint",
                 );
             }
         }
@@ -419,12 +429,12 @@ impl ParametricInstanceBuilder {
             }
         }
 
-        // Validate that constraints and removed_constraints keys are disjoint
-        for id in self.removed_constraints.keys() {
+        // Validate that constraints and inactive_constraints keys are disjoint
+        for id in self.inactive_constraints.keys() {
             if constraints.contains_key(id) {
                 crate::bail!(
                     { ?id },
-                    "Constraint ID {id:?} is in both constraints and removed_constraints, but they must be disjoint",
+                    "Constraint ID {id:?} is in both constraints and inactive_constraints, but they must be disjoint",
                 );
             }
         }
@@ -500,12 +510,12 @@ impl ParametricInstanceBuilder {
             parameters,
             constraint_collection: ConstraintCollection::with_context(
                 constraints,
-                self.removed_constraints,
+                self.inactive_constraints,
                 self.constraint_context,
             )?,
             indicator_constraint_collection: ConstraintCollection::with_context(
                 self.indicator_constraints,
-                self.removed_indicator_constraints,
+                self.inactive_indicator_constraints,
                 self.indicator_constraint_context,
             )?,
             one_hot_constraint_collection: ConstraintCollection::with_context(

@@ -76,7 +76,7 @@ impl Instance {
         };
 
         // Removed constraints are intentionally not rewritten here; they are
-        // normalized through `restore_constraint` when reactivated.
+        // normalized through `activate_constraint` when reactivated.
         let mut constraint_replacements = BTreeMap::new();
         for (&constraint_id, constraint) in self.constraint_collection.active() {
             if !constraint
@@ -440,13 +440,13 @@ mod tests {
                 ConstraintID::from(4),
                 Constraint::less_than_or_equal_to_zero(Function::from(linear!(0) + coeff!(-1.0))),
             )]))
-            .removed_constraints(BTreeMap::from([(
+            .inactive_constraints(BTreeMap::from([(
                 ConstraintID::from(5),
                 (
                     Constraint::less_than_or_equal_to_zero(Function::from(
                         linear!(0) + coeff!(-1.0),
                     )),
-                    crate::constraint::RemovedReason {
+                    crate::constraint::InactiveConstraintMetadata {
                         reason: "retained source".into(),
                         ..Default::default()
                     },
@@ -507,8 +507,8 @@ mod tests {
             );
             assert_eq!(encoded.constraint_context(), original.constraint_context());
             assert_eq!(
-                encoded.removed_constraints(),
-                original.removed_constraints()
+                encoded.inactive_constraints(),
+                original.inactive_constraints()
             );
             assert_eq!(
                 encoded.output_objective().unwrap().function(),

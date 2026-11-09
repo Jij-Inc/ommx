@@ -240,18 +240,18 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<AttachedConstraint>()?;
     m.add_class::<IndicatorConstraint>()?;
     m.add_class::<AttachedIndicatorConstraint>()?;
-    m.add_class::<RemovedIndicatorConstraint>()?;
+    m.add_class::<InactiveIndicatorConstraint>()?;
     m.add_class::<OneHotConstraint>()?;
     m.add_class::<AttachedOneHotConstraint>()?;
-    m.add_class::<RemovedOneHotConstraint>()?;
+    m.add_class::<InactiveOneHotConstraint>()?;
     m.add_class::<Sos1Constraint>()?;
     m.add_class::<AttachedSos1Constraint>()?;
-    m.add_class::<RemovedSos1Constraint>()?;
+    m.add_class::<InactiveSos1Constraint>()?;
     m.add_class::<Sos1BigMSelectorClaim>()?;
     m.add_class::<Sos1BigMPromotionRequest>()?;
     m.add_class::<Sos1BigMPromotion>()?;
     m.add_class::<NamedFunction>()?;
-    m.add_class::<RemovedConstraint>()?;
+    m.add_class::<InactiveConstraint>()?;
     m.add_class::<Provenance>()?;
     m.add_class::<ProvenanceKind>()?;
     m.add_class::<ParametricInstance>()?;
@@ -364,7 +364,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     // Constraint and named function
     "ConstraintCollection",
     "ConstraintFamilyView",
-    "RemovedConstraintCollection",
+    "InactiveConstraintCollection",
     "EvaluatedConstraintCollection",
     "SampledConstraintCollection",
     "ConstraintIDBase",
@@ -377,17 +377,17 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "AttachedConstraint",
     "IndicatorConstraint",
     "AttachedIndicatorConstraint",
-    "RemovedIndicatorConstraint",
+    "InactiveIndicatorConstraint",
     "OneHotConstraint",
     "AttachedOneHotConstraint",
-    "RemovedOneHotConstraint",
+    "InactiveOneHotConstraint",
     "Sos1Constraint",
     "AttachedSos1Constraint",
-    "RemovedSos1Constraint",
+    "InactiveSos1Constraint",
     "Sos1BigMSelectorClaim",
     "Sos1BigMPromotionRequest",
     "Sos1BigMPromotion",
-    "RemovedConstraint",
+    "InactiveConstraint",
     "Provenance",
     "ProvenanceKind",
     "NamedFunction",

@@ -396,7 +396,7 @@ impl ParametricInstance {
     ///
     /// Specializes parameter-bearing expressions in both the **Active Formulation**
     /// and **Interpretation Context** defined on {class}`~ommx.Instance`, including
-    /// removed constraints, output objectives, named functions, and dependency
+    /// inactive constraints, output objectives, named functions, and dependency
     /// expressions. The returned Instance retains this specialized context.
     ///
     /// Provide a dict mapping every declared parameter ID to its numerical value,
@@ -545,7 +545,7 @@ impl ParametricInstance {
     /// expressions may only reference existing decision variable or parameter
     /// IDs; parameter IDs cannot be assignment targets.
     ///
-    /// Named functions, removed constraints, and existing output objectives
+    /// Named functions, inactive constraints, and existing output objectives
     /// retain their expressions as Interpretation Context. The recorded
     /// dependencies reconstruct substituted variables during evaluation after
     /// {meth}`with_parameters` specializes parameters throughout both the
@@ -711,7 +711,7 @@ impl ParametricInstance {
     ///
     /// Values are attached handles, just as in `constraints`: edits update this
     /// model. The returned dictionary snapshots the matching keys; it does not
-    /// track later label or membership changes. Removed constraints are excluded.
+    /// track later label or membership changes. Inactive constraints are excluded.
     /// Parameters and descriptions do not participate in matching.
     ///
     /// Raises KeyError if no active constraint has this name, and ValueError if
@@ -762,10 +762,10 @@ impl ParametricInstance {
     /// Live mapping of all removed constraint families, keyed by typed IDs.
     /// The view retains this owner and fetches each constraint on demand.
     #[getter]
-    pub fn removed_constraints(
+    pub fn inactive_constraints(
         slf: Bound<'_, Self>,
-    ) -> crate::constraint_collection::RemovedConstraintCollection {
-        crate::constraint_collection::RemovedConstraintCollection::new(
+    ) -> crate::constraint_collection::InactiveConstraintCollection {
+        crate::constraint_collection::InactiveConstraintCollection::new(
             crate::ConstraintHost::Parametric(slf.unbind()),
         )
     }
@@ -978,7 +978,7 @@ impl ParametricInstance {
         let id_col = constraint_id_col(kind);
         let mut flags = crate::pandas::IncludeFlags::from_optional(include)?;
         if removed {
-            flags.removed_reason = true;
+            flags.inactive_reason = true;
         }
         constraint_kind_collection!(
             self.inner,
@@ -992,7 +992,7 @@ impl ParametricInstance {
             |coll| {
                 let meta = coll.context().clone();
                 let active = coll.active();
-                let removed_map = coll.removed();
+                let removed_map = coll.inactive();
                 let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
                 if removed {
                     let mut ai = active.iter().peekable();
@@ -1009,7 +1009,7 @@ impl ParametricInstance {
                             let m = meta.collect_for(*id);
                             let dict = crate::pandas::WithModelingContext::new((*id, c), &m)
                                 .to_pandas_entry(py)?;
-                            crate::pandas::set_removed_reason_na(&dict)?;
+                            crate::pandas::set_inactive_reason_na(&dict)?;
                             crate::pandas::apply_include_filter(&dict, flags)?;
                             crate::pandas::rename_id_column(&dict, id_col)?;
                             entries.push(dict.into_any());
@@ -1028,8 +1028,8 @@ impl ParametricInstance {
                         let m = meta.collect_for(*id);
                         let dict = crate::pandas::WithModelingContext::new((*id, c), &m)
                             .to_pandas_entry(py)?;
-                        if flags.removed_reason {
-                            crate::pandas::set_removed_reason_na(&dict)?;
+                        if flags.inactive_reason {
+                            crate::pandas::set_inactive_reason_na(&dict)?;
                         }
                         crate::pandas::apply_include_filter(&dict, flags)?;
                         crate::pandas::rename_id_column(&dict, id_col)?;
@@ -1116,7 +1116,7 @@ impl ParametricInstance {
                 crate::pandas::constraint_context_dataframe(
                     py,
                     coll.context(),
-                    coll.active().keys().chain(coll.removed().keys()).copied(),
+                    coll.active().keys().chain(coll.inactive().keys()).copied(),
                     id_col,
                 )
             }
@@ -1144,7 +1144,7 @@ impl ParametricInstance {
                 crate::pandas::constraint_parameters_dataframe(
                     py,
                     coll.context(),
-                    coll.active().keys().chain(coll.removed().keys()).copied(),
+                    coll.active().keys().chain(coll.inactive().keys()).copied(),
                     id_col,
                 )
             }
@@ -1172,7 +1172,7 @@ impl ParametricInstance {
                 crate::pandas::constraint_provenance_dataframe(
                     py,
                     coll.context(),
-                    coll.active().keys().chain(coll.removed().keys()).copied(),
+                    coll.active().keys().chain(coll.inactive().keys()).copied(),
                     id_col,
                 )
             }
@@ -1181,7 +1181,7 @@ impl ParametricInstance {
 
     /// Removed-constraint reasons DataFrame (long format).
     #[pyo3(signature = (*, kind))]
-    pub fn constraint_removed_reasons_df<'py>(
+    pub fn constraint_inactive_metadata_df<'py>(
         &self,
         py: Python<'py>,
         kind: ConstraintFamilyInput,
@@ -1197,9 +1197,9 @@ impl ParametricInstance {
                 sos1_constraint_collection
             ],
             |coll| {
-                crate::pandas::constraint_removed_reasons_dataframe(
+                crate::pandas::constraint_inactive_metadata_dataframe(
                     py,
-                    coll.removed().iter().map(|(id, (_, r))| (*id, r)),
+                    coll.inactive().iter().map(|(id, (_, r))| (*id, r)),
                     id_col,
                 )
             }

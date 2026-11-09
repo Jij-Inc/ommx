@@ -679,7 +679,7 @@ mod tests {
         assert!(!output.preserves_optimality());
         // Encoding now precedes penalty removal. The removed row contains the
         // encoded function, whose value must still be the original constraint.
-        let removed = instance.removed_constraints()[&constraint_id].0.function();
+        let removed = instance.inactive_constraints()[&constraint_id].0.function();
         for low in [0.0, 1.0] {
             for high in [0.0, 1.0] {
                 let state = crate::v1::State::from_iter([(2, low), (3, high)]);
@@ -969,7 +969,7 @@ mod tests {
                 if *id == infeasible_id && *bound == Bound::new(1.0, 1.5).unwrap()
         ));
         assert_eq!(instance.sense(), Sense::Minimize);
-        assert_eq!(instance.removed_one_hot_constraints().len(), 1);
+        assert_eq!(instance.inactive_one_hot_constraints().len(), 1);
         assert_eq!(
             instance.constraints()[&converted_id].equality,
             Equality::EqualToZero

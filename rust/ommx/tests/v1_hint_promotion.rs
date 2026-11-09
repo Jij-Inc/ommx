@@ -208,16 +208,16 @@ fn public_loader_promotes_valid_hints_from_real_v1_bytes() {
     assert!(sos1_outcome.error().is_none());
     let sos1_promotion = sos1_outcome.sos1_constraint_id().unwrap();
     assert!(instance
-        .removed_constraints()
+        .inactive_constraints()
         .contains_key(&ConstraintID::from(SOS1_SOURCE_ID)));
     assert!(instance.sos1_constraints().contains_key(&sos1_promotion));
 
     assert!(instance.constraints().is_empty());
     assert!(instance
-        .removed_constraints()
+        .inactive_constraints()
         .contains_key(&ConstraintID::from(ONE_HOT_SOURCE_ID)));
     assert!(instance
-        .removed_constraints()
+        .inactive_constraints()
         .contains_key(&ConstraintID::from(SOS1_SOURCE_ID)));
 }
 
@@ -272,7 +272,7 @@ fn ordinary_v1_loader_still_ignores_valid_hints() {
     assert!(instance
         .constraints()
         .contains_key(&ConstraintID::from(SOS1_SOURCE_ID)));
-    assert!(instance.removed_constraints().is_empty());
+    assert!(instance.inactive_constraints().is_empty());
     assert!(instance.one_hot_constraints().is_empty());
     assert!(instance.sos1_constraints().is_empty());
 }
@@ -622,7 +622,7 @@ fn disjoint_one_hot_and_fresh_selector_sos1_effects_apply_together() {
     assert!(instance.constraints().is_empty());
     for id in [50, 100, 101, 102] {
         assert!(instance
-            .removed_constraints()
+            .inactive_constraints()
             .contains_key(&ConstraintID::from(id)));
     }
 }
@@ -695,7 +695,7 @@ fn equivalent_sos1_hints_share_one_promotion_without_losing_wire_order() {
         assert_eq!(outcome.sos1_constraint_id(), Some(target));
     }
     assert!(instance
-        .removed_constraints()
+        .inactive_constraints()
         .contains_key(&ConstraintID::from(SOS1_SOURCE_ID)));
     assert_eq!(instance.sos1_constraints().len(), 1);
     assert!(report.one_hot_outcomes()[0].is_promoted());
@@ -788,7 +788,7 @@ fn equivalent_fresh_claims_ignore_member_and_link_wire_order() {
     }
     assert_eq!(instance.sos1_constraints().len(), 1);
     assert_eq!(instance.decision_variable_dependency().len(), 1);
-    assert_eq!(instance.removed_constraints().len(), 3);
+    assert_eq!(instance.inactive_constraints().len(), 3);
 }
 
 #[test]

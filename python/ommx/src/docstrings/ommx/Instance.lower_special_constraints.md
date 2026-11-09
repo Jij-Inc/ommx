@@ -58,14 +58,14 @@ the active SOS1, retains the original OneHot for evaluation, and adds an equalit
 ... }
 >>> assert instance.active_special_constraint_kinds == {ConstraintKind.Sos1}
 >>> assert original.constraint_id not in instance.constraints
->>> removed = instance.removed_constraints[original.constraint_id]
->>> assert removed.removed_reason == "ommx.Instance.convert_one_hot_to_constraint"
->>> assert removed.removed_reason_parameters == {"constraint_id": "2"}
+>>> removed = instance.inactive_constraints[original.constraint_id]
+>>> assert removed.inactive_reason == "ommx.Instance.convert_one_hot_to_constraint"
+>>> assert removed.inactive_reason_parameters == {"constraint_id": "2"}
 >>> generated = instance.constraints[ConstraintID(2)]
 >>> assert generated.provenance[-1].kind == ProvenanceKind.OneHotConstraint
 >>> assert generated.provenance[-1].original_id == OneHotConstraintID(0)
 >>> rows = instance.constraints_df(kind=ConstraintKind.OneHot, removed=True)
->>> assert rows.loc[original.constraint_id, "removed_reason"] == removed.removed_reason
+>>> assert rows.loc[original.constraint_id, "inactive_reason"] == removed.inactive_reason
 >>> assert instance.evaluate(
 ...     {choices[0].id: 1, choices[1].id: 0, choices[2].id: 0}
 ... ).feasible
@@ -85,5 +85,5 @@ family-specific parameter names and ordering. See
 preconditions, complete examples, and per-operation mutation guarantees.
 
 After evaluation, {meth}`~ommx.Solution.constraints_df` accepts
-`include=("removed_reason",)` to show those reasons alongside violations. The
+`include=("inactive_reason",)` to show those reasons alongside violations. The
 same family selection is available for {class}`~ommx.SampleSet`.

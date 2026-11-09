@@ -89,8 +89,8 @@ impl From<Solution> for v2::Solution {
 mod tests {
     use super::*;
     use crate::{
-        Bound, Coefficient, Constraint, DecisionVariable, Evaluate, Function, Instance,
-        RemovedReason, SampleID, SampleSet, Sampled,
+        Bound, Coefficient, Constraint, DecisionVariable, Evaluate, Function,
+        InactiveConstraintMetadata, Instance, SampleID, SampleSet, Sampled,
     };
     use proptest::prelude::*;
 
@@ -213,11 +213,11 @@ mod tests {
                         builder = builder.constraints(BTreeMap::from([(0.into(), constraint)]));
                     }
                     "removed" => {
-                        builder = builder.removed_constraints(BTreeMap::from([(
+                        builder = builder.inactive_constraints(BTreeMap::from([(
                             0.into(),
                             (
                                 constraint,
-                                RemovedReason {
+                                InactiveConstraintMetadata {
                                     reason: "test relaxation".into(),
                                     parameters: Default::default(),
                                 },

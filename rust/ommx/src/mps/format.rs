@@ -28,7 +28,7 @@ pub(crate) const VAR_PREFIX: &str = "OMMX_VAR_";
 /// description fields, parameters, annotations, output objective, named
 /// functions, dependencies, fixed values, and modeling labels.
 ///
-/// **Removed Constraints**: All `removed_constraints` are completely ignored
+/// **Removed Constraints**: All `inactive_constraints` are completely ignored
 /// and not written to the MPS file. The MPS format cannot represent the
 /// concept of removed constraints, so this information is lost during export.
 ///

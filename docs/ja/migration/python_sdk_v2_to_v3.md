@@ -41,6 +41,12 @@ PyrightはOMMXに同梱された型情報を使い、スクリプトを実行せ
 (migration-build)=
 ## 2. モデルを組み立て、編集する
 
+### Inactive制約への名称変更
+
+SDKでは、現在の定式化から外れた制約を **inactive** と呼びます。`Removed*Constraint` は `Inactive*Constraint`、`removed_constraints` は `inactive_constraints`、既存の `relax_constraint` / `restore_constraint` は `deactivate_constraint` / `activate_constraint` に変更してください。indicator制約の操作も同様です。理由のアクセサーと表のメタデータには `inactive_reason` と `constraint_inactive_metadata_df` を使います。
+
+この変更は名称の整理です。`constraints` は引き続きactiveな接続済み行、`inactive_constraints` はinactiveなスナップショットを返し、通常の実行可能性判定は両方を検査します。`feasible_relaxed` はactiveのみを判定します。v1のschemaは変更せず、v2もfield番号を維持します。
+
 (migration-automatic-ids)=
 ### モデルに採番を任せるか、外部のIDを引き継ぐか
 
@@ -222,7 +228,7 @@ report = rows.join(owners.rename(index=id_map))
 assert report.loc[limit.constraint_id, "owner"] == "planning"
 ```
 
-ラベルとパラメータを列に含めるなら `include=["label", "parameters"]`、キーと値の組を1行ずつ結合するなら `constraint_parameters_df(kind=...)` を使います。変換履歴は `constraint_provenance_df(kind=...)` に由来のステップごとに記録されます。モデル側の `removed=True` は有効な行も含むので、削除済み制約だけの旧帳票を再現するには `removed_reason` が欠損していない行を選んでください。
+ラベルとパラメータを列に含めるなら `include=["label", "parameters"]`、キーと値の組を1行ずつ結合するなら `constraint_parameters_df(kind=...)` を使います。変換履歴は `constraint_provenance_df(kind=...)` に由来のステップごとに記録されます。モデル側の `removed=True` は有効な行も含むので、削除済み制約だけの旧帳票を再現するには `inactive_reason` が欠損していない行を選んでください。
 
 ### 許容誤差付近で実行可能性を照合する
 
@@ -313,7 +319,7 @@ Local Registryに書き込まずにアーカイブの内容を調べるには {m
 | `DecisionVariable.substituted_value` | {meth}`model.fixed_decision_variables() <ommx.Instance.fixed_decision_variables>` | {ref}`2 <migration-build>` |
 | `evaluated.feasible` / `sampled.feasible` | {meth}`evaluated.is_feasible(atol=...) <ommx.EvaluatedConstraint.is_feasible>` / {meth}`sampled.feasible(atol=...) <ommx.SampledConstraint.feasible>` | {ref}`4 <migration-results>` |
 | `extract_constraints(name)` | 違反量は {meth}`extract_constraints <ommx.Solution.extract_constraints>`、通常制約の式の値は {meth}`get_constraint_value <ommx.Solution.get_constraint_value>` | {ref}`4 <migration-results>` |
-| `get_constraint_by_id` / `get_removed_constraint_by_id` | {attr}`constraints[ConstraintID(n)] <ommx.Instance.constraints>` / {attr}`removed_constraints[ConstraintID(n)] <ommx.Instance.removed_constraints>` | {ref}`2 <migration-build>` |
+| `get_constraint_by_id` / `get_removed_constraint_by_id` | {attr}`constraints[ConstraintID(n)] <ommx.Instance.constraints>` / {attr}`removed_constraints[ConstraintID(n)] <ommx.Instance.inactive_constraints>` | {ref}`2 <migration-build>` |
 | `Linear.from_object` / `Linear.equals_to` | 式または {meth}`Linear.single_term <ommx.Linear.single_term>` / {meth}`almost_equal <ommx.Linear.almost_equal>` | {ref}`2 <migration-build>` |
 | `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` | {meth}`Linear.terms() <ommx.Linear.terms>` / {meth}`Quadratic.terms() <ommx.Quadratic.terms>` / {meth}`Polynomial.terms() <ommx.Polynomial.terms>` | {ref}`2 <migration-build>` |
 | `ommx.v1` / `ommx.v1.*_pb2` | {doc}`ommx </api/index>` | {ref}`1 <migration-imports>` |

@@ -120,13 +120,13 @@ def test_mapping_rejects_duplicate_ids_after_promotion(host, name, id_type):
 
 def test_regular_integer_lookup_mutation_and_solution_queries():
     instance = Instance.from_components(**components())
-    instance.relax_constraint(7, "manual")
-    assert set(instance.removed_constraints) == {ConstraintID(7)}
+    instance.deactivate_constraint(7, "manual")
+    assert set(instance.inactive_constraints) == {ConstraintID(7)}
     assert (
-        instance.removed_constraints.of_kind(ConstraintKind.Regular)[7].removed_reason
+        instance.inactive_constraints.of_kind(ConstraintKind.Regular)[7].inactive_reason
         == "manual"
     )
-    instance.restore_constraint(7)
+    instance.activate_constraint(7)
     assert {key for key in instance.constraints if isinstance(key, ConstraintID)} == {
         ConstraintID(7)
     }
@@ -144,9 +144,9 @@ def test_regular_integer_lookup_mutation_and_solution_queries():
 
 def test_special_integer_mutations_and_typed_transformation_results():
     instance = Instance.from_components(**components())
-    instance.relax_indicator_constraint(8, "manual")
-    assert set(instance.removed_constraints) == {IndicatorConstraintID(8)}
-    instance.restore_indicator_constraint(8)
+    instance.deactivate_indicator_constraint(8, "manual")
+    assert set(instance.inactive_constraints) == {IndicatorConstraintID(8)}
+    instance.activate_indicator_constraint(8)
     regular_id = instance.convert_one_hot_to_constraint(9)
     assert_type(regular_id, ConstraintID)
     assert type(regular_id) is ConstraintID
@@ -203,7 +203,7 @@ def test_input_promotion_requires_an_integer(value):
     instance = Instance.from_components(**components())
     before = instance.to_v2_bytes()
     with pytest.raises(TypeError, match="Expected int or ConstraintID"):
-        instance.relax_constraint(value, "manual")
+        instance.deactivate_constraint(value, "manual")
     assert instance.to_v2_bytes() == before
 
 
@@ -212,7 +212,7 @@ def test_input_promotion_checks_unsigned_64_bit_range(value):
     instance = Instance.from_components(**components())
     before = instance.to_v2_bytes()
     with pytest.raises(OverflowError):
-        instance.relax_constraint(value, "manual")
+        instance.deactivate_constraint(value, "manual")
     assert instance.to_v2_bytes() == before
 
 

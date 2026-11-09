@@ -128,33 +128,33 @@ impl OneHotConstraint {
 #[gen_stub_pyclass]
 #[pyclass(from_py_object, eq, extends = ConstraintView)]
 #[derive(Clone, PartialEq)]
-pub struct RemovedOneHotConstraint {
+pub struct InactiveOneHotConstraint {
     pub constraint: ommx::OneHotConstraint,
     pub context: ommx::ConstraintContext,
-    pub removed_reason: ommx::RemovedReason,
+    pub inactive_reason: ommx::InactiveConstraintMetadata,
 }
 crate::constraint_base::constraint_subclass!(
-    RemovedOneHotConstraint,
+    InactiveOneHotConstraint,
     crate::constraint_base::ConstraintView
 );
 
-impl RemovedOneHotConstraint {
+impl InactiveOneHotConstraint {
     pub fn from_parts(
         constraint: ommx::OneHotConstraint,
         context: ommx::ConstraintContext,
-        removed_reason: ommx::RemovedReason,
+        inactive_reason: ommx::InactiveConstraintMetadata,
     ) -> Self {
         Self {
             constraint,
             context,
-            removed_reason,
+            inactive_reason,
         }
     }
 }
 
 #[gen_stub_pymethods]
 #[pymethods]
-impl RemovedOneHotConstraint {
+impl InactiveOneHotConstraint {
     #[getter]
     pub fn constraint(&self) -> OneHotConstraint {
         OneHotConstraint(self.constraint.clone(), self.context.clone())
@@ -200,13 +200,13 @@ impl RemovedOneHotConstraint {
     }
 
     #[getter]
-    pub fn removed_reason(&self) -> String {
-        self.removed_reason.reason.clone()
+    pub fn inactive_reason(&self) -> String {
+        self.inactive_reason.reason.clone()
     }
 
     #[getter]
-    pub fn removed_reason_parameters(&self) -> HashMap<String, String> {
-        self.removed_reason
+    pub fn inactive_reason_parameters(&self) -> HashMap<String, String> {
+        self.inactive_reason
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -215,18 +215,21 @@ impl RemovedOneHotConstraint {
 
     fn __repr__(&self) -> String {
         let mut extras: Vec<String> = self
-            .removed_reason
+            .inactive_reason
             .parameters
             .iter()
             .map(|(k, v)| format!("{k}={v}"))
             .collect();
         extras.sort();
-        let mut head = format!("{}, reason={}", self.constraint, self.removed_reason.reason);
+        let mut head = format!(
+            "{}, reason={}",
+            self.constraint, self.inactive_reason.reason
+        );
         if !extras.is_empty() {
             head.push_str(", ");
             head.push_str(&extras.join(", "));
         }
-        format!("RemovedOneHotConstraint({head})")
+        format!("InactiveOneHotConstraint({head})")
     }
 }
 
@@ -272,7 +275,7 @@ fn lookup_one_hot(
 ) -> PyResult<&ommx::OneHotConstraint> {
     inst.one_hot_constraints()
         .get(&id)
-        .or_else(|| inst.removed_one_hot_constraints().get(&id).map(|(c, _)| c))
+        .or_else(|| inst.inactive_one_hot_constraints().get(&id).map(|(c, _)| c))
         .ok_or_else(|| {
             PyKeyError::new_err(format!(
                 "one-hot constraint id {} not found in instance",
@@ -287,7 +290,7 @@ fn lookup_one_hot_parametric(
 ) -> PyResult<&ommx::OneHotConstraint> {
     inst.one_hot_constraints()
         .get(&id)
-        .or_else(|| inst.removed_one_hot_constraints().get(&id).map(|(c, _)| c))
+        .or_else(|| inst.inactive_one_hot_constraints().get(&id).map(|(c, _)| c))
         .ok_or_else(|| {
             PyKeyError::new_err(format!(
                 "one-hot constraint id {} not found in parametric instance",

@@ -62,7 +62,7 @@ impl Parse for crate::v1::Solution {
 
         // Parse evaluated constraints and extract removed reasons + context
         let mut evaluated_constraints = std::collections::BTreeMap::default();
-        let mut removed_reasons = std::collections::BTreeMap::default();
+        let mut inactive_metadata = std::collections::BTreeMap::default();
         let mut constraint_context =
             crate::ConstraintContextStore::<crate::ConstraintID>::default();
         for ec in self.evaluated_constraints {
@@ -70,7 +70,7 @@ impl Parse for crate::v1::Solution {
                 crate::ConstraintID,
                 crate::EvaluatedConstraint,
                 crate::ConstraintContext,
-                Option<crate::RemovedReason>,
+                Option<crate::InactiveConstraintMetadata>,
             ) = ec.parse_as(&(), message, "evaluated_constraints")?;
             if evaluated_constraints.contains_key(&id) {
                 return Err(ParseError::new(SolutionError::InvalidConstraintStructure {
@@ -81,7 +81,7 @@ impl Parse for crate::v1::Solution {
                 .context(message, "evaluated_constraints"));
             }
             if let Some(reason) = removed_reason {
-                removed_reasons.insert(id, reason);
+                inactive_metadata.insert(id, reason);
             }
             constraint_context.insert(id, context);
             evaluated_constraints.insert(id, parsed_constraint);
@@ -185,7 +185,7 @@ impl Parse for crate::v1::Solution {
 
         let evaluated_constraints = crate::constraint_type::EvaluatedCollection::with_context(
             evaluated_constraints,
-            removed_reasons,
+            inactive_metadata,
             constraint_context,
         )
         .map_err(|e| invalid_solution_sidecar(e, message, "evaluated_constraints"))?;

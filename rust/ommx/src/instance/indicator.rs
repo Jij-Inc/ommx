@@ -1,6 +1,8 @@
 use super::Instance;
 use crate::{
-    constraint::{ConstraintContext, ConstraintID, Equality, Provenance, RemovedReason},
+    constraint::{
+        ConstraintContext, ConstraintID, Equality, InactiveConstraintMetadata, Provenance,
+    },
     indicator_constraint::IndicatorConstraintID,
     ATol, Bounds, Coefficient, Constraint, Evaluate, Kind, Linear, LinearMonomial,
 };
@@ -68,7 +70,7 @@ impl Instance {
     /// not canonicalize an approximate solver value near either endpoint.
     ///
     /// The original indicator constraint is moved to
-    /// [`Instance::removed_indicator_constraints`] with
+    /// [`Instance::inactive_indicator_constraints`] with
     /// `reason = "ommx.Instance.convert_indicator_to_constraint"` and a
     /// `constraint_ids` parameter listing the new regular constraint IDs
     /// (comma-separated in insertion order; empty when nothing is emitted).
@@ -257,9 +259,9 @@ impl Instance {
             .join(",");
         parameters.insert("constraint_ids".to_string(), constraint_ids_str);
         self.indicator_constraint_collection
-            .relax(
+            .deactivate(
                 id,
-                RemovedReason {
+                InactiveConstraintMetadata {
                     reason: "ommx.Instance.convert_indicator_to_constraint".to_string(),
                     parameters,
                 },
@@ -370,7 +372,7 @@ mod tests {
         // Original indicator moved to removed with expected reason + constraint_ids.
         assert!(instance.indicator_constraints().is_empty());
         let (_, reason) = instance
-            .removed_indicator_constraints()
+            .inactive_indicator_constraints()
             .get(&IndicatorConstraintID::from(7))
             .expect("indicator retained as removed");
         assert_eq!(
@@ -472,7 +474,7 @@ mod tests {
             "no new constraints added for redundant indicator"
         );
         let (_, reason) = instance
-            .removed_indicator_constraints()
+            .inactive_indicator_constraints()
             .get(&IndicatorConstraintID::from(7))
             .unwrap();
         assert_eq!(
@@ -542,7 +544,7 @@ mod tests {
 
         assert_eq!(instance.constraints(), &before_constraints);
         assert_eq!(instance.indicator_constraints(), &before_indicators);
-        assert!(instance.removed_indicator_constraints().is_empty());
+        assert!(instance.inactive_indicator_constraints().is_empty());
     }
 
     #[test]
@@ -658,7 +660,7 @@ mod tests {
         assert_eq!(result[&IndicatorConstraintID::from(1)].len(), 1);
         assert_eq!(result[&IndicatorConstraintID::from(2)].len(), 2);
         assert!(instance.indicator_constraints().is_empty());
-        assert_eq!(instance.removed_indicator_constraints().len(), 2);
+        assert_eq!(instance.inactive_indicator_constraints().len(), 2);
     }
 
     #[test]
@@ -710,7 +712,7 @@ mod tests {
 
         assert_eq!(instance.indicator_constraints(), &before_indicators);
         assert_eq!(instance.constraints(), &before_constraints);
-        assert!(instance.removed_indicator_constraints().is_empty());
+        assert!(instance.inactive_indicator_constraints().is_empty());
     }
 
     fn indicator_instance_with_constraint_id(
@@ -720,14 +722,14 @@ mod tests {
     ) -> Instance {
         let constraint_id = ConstraintID::from(regular_id);
         let constraint = Constraint::equal_to_zero(Function::Zero);
-        let (constraints, removed_constraints) = if regular_is_removed {
+        let (constraints, inactive_constraints) = if regular_is_removed {
             (
                 BTreeMap::new(),
                 BTreeMap::from([(
                     constraint_id,
                     (
                         constraint,
-                        RemovedReason {
+                        InactiveConstraintMetadata {
                             reason: "test".to_string(),
                             parameters: Default::default(),
                         },
@@ -752,7 +754,7 @@ mod tests {
                 VariableID::from(10) => DecisionVariable::binary(),
             })
             .constraints(constraints)
-            .removed_constraints(removed_constraints)
+            .inactive_constraints(inactive_constraints)
             .indicator_constraints(indicators)
             .build()
             .unwrap()
@@ -857,7 +859,7 @@ mod tests {
             ],
         );
         assert!(instance.indicator_constraints().is_empty());
-        assert!(instance.removed_indicator_constraints().contains_key(&id));
+        assert!(instance.inactive_indicator_constraints().contains_key(&id));
     }
 
     #[test]
@@ -879,7 +881,7 @@ mod tests {
         assert!(generated.is_empty());
         assert_eq!(instance.constraints(), &before_constraints);
         assert!(instance.indicator_constraints().is_empty());
-        assert!(instance.removed_indicator_constraints().contains_key(&id));
+        assert!(instance.inactive_indicator_constraints().contains_key(&id));
     }
 
     #[test]

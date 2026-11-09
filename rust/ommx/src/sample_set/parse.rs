@@ -175,7 +175,7 @@ impl Parse for crate::v1::SampleSet {
 
         // Parse constraints and extract removed reasons + context
         let mut constraints = std::collections::BTreeMap::new();
-        let mut constraint_removed_reasons = std::collections::BTreeMap::new();
+        let mut constraint_inactive_metadata = std::collections::BTreeMap::new();
         let mut constraint_context =
             crate::ConstraintContextStore::<crate::ConstraintID>::default();
         for v1_constraint in self.constraints {
@@ -183,7 +183,7 @@ impl Parse for crate::v1::SampleSet {
                 crate::ConstraintID,
                 crate::SampledConstraint,
                 crate::ConstraintContext,
-                Option<crate::RemovedReason>,
+                Option<crate::InactiveConstraintMetadata>,
             ) = v1_constraint.parse_as(&(), message, "constraints")?;
             if constraints.contains_key(&id) {
                 return Err(
@@ -196,7 +196,7 @@ impl Parse for crate::v1::SampleSet {
                 );
             }
             if let Some(reason) = removed_reason {
-                constraint_removed_reasons.insert(id, reason);
+                constraint_inactive_metadata.insert(id, reason);
             }
             constraint_context.insert(id, context);
             constraints.insert(id, parsed_constraint);
@@ -237,7 +237,7 @@ impl Parse for crate::v1::SampleSet {
             .constraints_collection(
                 crate::constraint_type::SampledCollection::with_context(
                     constraints,
-                    constraint_removed_reasons,
+                    constraint_inactive_metadata,
                     constraint_context,
                 )
                 .map_err(|error| invalid_sample_set_sidecar(error, message, "constraints"))?,

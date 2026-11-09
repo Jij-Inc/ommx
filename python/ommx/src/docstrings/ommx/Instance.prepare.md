@@ -59,7 +59,7 @@ necessary when it must be evaluated or reused separately after the mutation.
 >>> assert target.contains(instance)
 >>> assert len(instance.constraints) == 1
 >>> assert instance.active_special_constraint_kinds == set()
->>> assert set(instance.removed_constraints) == {OneHotConstraintID(0)}
+>>> assert set(instance.inactive_constraints) == {OneHotConstraintID(0)}
 >>> assert instance.constraints_df(kind=ConstraintKind.Regular).shape[0] == 1
 >>> after = instance.evaluate(state)
 >>> assert before.feasible and after.feasible
@@ -70,7 +70,7 @@ necessary when it must be evaluated or reused separately after the mutation.
 ```
 
 The active formulation now contains `x[0] + x[1] == 1`; the original OneHot is
-retained for evaluation in {attr}`~ommx.Instance.removed_constraints`. The exact
+retained for evaluation in {attr}`~ommx.Instance.inactive_constraints`. The exact
 lowering contract is {meth}`~ommx.Instance.convert_one_hot_to_constraint`.
 Agreement for the two candidates above illustrates this operation; checking a
 few candidates does not prove the guarantees of arbitrary transformations.

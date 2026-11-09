@@ -139,33 +139,33 @@ impl IndicatorConstraint {
 #[gen_stub_pyclass]
 #[pyclass(from_py_object, eq, extends = ConstraintView)]
 #[derive(Clone, PartialEq)]
-pub struct RemovedIndicatorConstraint {
+pub struct InactiveIndicatorConstraint {
     pub constraint: ommx::IndicatorConstraint,
     pub context: ommx::ConstraintContext,
-    pub removed_reason: ommx::RemovedReason,
+    pub inactive_reason: ommx::InactiveConstraintMetadata,
 }
 crate::constraint_base::constraint_subclass!(
-    RemovedIndicatorConstraint,
+    InactiveIndicatorConstraint,
     crate::constraint_base::ConstraintView
 );
 
-impl RemovedIndicatorConstraint {
+impl InactiveIndicatorConstraint {
     pub fn from_parts(
         constraint: ommx::IndicatorConstraint,
         context: ommx::ConstraintContext,
-        removed_reason: ommx::RemovedReason,
+        inactive_reason: ommx::InactiveConstraintMetadata,
     ) -> Self {
         Self {
             constraint,
             context,
-            removed_reason,
+            inactive_reason,
         }
     }
 }
 
 #[gen_stub_pymethods]
 #[pymethods]
-impl RemovedIndicatorConstraint {
+impl InactiveIndicatorConstraint {
     #[getter]
     pub fn name(&self) -> Option<String> {
         self.context.label.name.clone()
@@ -217,13 +217,13 @@ impl RemovedIndicatorConstraint {
     }
 
     #[getter]
-    pub fn removed_reason(&self) -> String {
-        self.removed_reason.reason.clone()
+    pub fn inactive_reason(&self) -> String {
+        self.inactive_reason.reason.clone()
     }
 
     #[getter]
-    pub fn removed_reason_parameters(&self) -> HashMap<String, String> {
-        self.removed_reason
+    pub fn inactive_reason_parameters(&self) -> HashMap<String, String> {
+        self.inactive_reason
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -232,18 +232,21 @@ impl RemovedIndicatorConstraint {
 
     fn __repr__(&self) -> String {
         let mut extras: Vec<String> = self
-            .removed_reason
+            .inactive_reason
             .parameters
             .iter()
             .map(|(k, v)| format!("{k}={v}"))
             .collect();
         extras.sort();
-        let mut head = format!("{}, reason={}", self.constraint, self.removed_reason.reason);
+        let mut head = format!(
+            "{}, reason={}",
+            self.constraint, self.inactive_reason.reason
+        );
         if !extras.is_empty() {
             head.push_str(", ");
             head.push_str(&extras.join(", "));
         }
-        format!("RemovedIndicatorConstraint({head})")
+        format!("InactiveIndicatorConstraint({head})")
     }
 }
 
@@ -291,7 +294,7 @@ fn lookup_indicator(
     inst.indicator_constraints()
         .get(&id)
         .or_else(|| {
-            inst.removed_indicator_constraints()
+            inst.inactive_indicator_constraints()
                 .get(&id)
                 .map(|(c, _)| c)
         })
@@ -310,7 +313,7 @@ fn lookup_indicator_parametric(
     inst.indicator_constraints()
         .get(&id)
         .or_else(|| {
-            inst.removed_indicator_constraints()
+            inst.inactive_indicator_constraints()
                 .get(&id)
                 .map(|(c, _)| c)
         })

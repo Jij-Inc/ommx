@@ -218,7 +218,7 @@ fn materialize_constraint_collection_parameters<T: ConstraintType>(
     }
 
     let mut removed_replacements = BTreeMap::new();
-    for (&id, (constraint, _reason)) in collection.removed() {
+    for (&id, (constraint, _reason)) in collection.inactive() {
         let mut constraint = constraint.clone();
         constraint.partial_evaluate(state, atol).inspect_err(|e| {
             tracing::error!(?id, error = %e, "failed to partial_evaluate removed constraint");
@@ -316,7 +316,7 @@ impl ParametricInstance {
 
         // Both active and removed regular constraint bodies need the parameter
         // substitution applied — otherwise the resulting `Instance` would
-        // carry dangling parameter IDs in `removed_constraints`, violating
+        // carry dangling parameter IDs in `inactive_constraints`, violating
         // its own invariants.
         let mut constraint_collection = self.constraint_collection;
         materialize_constraint_collection_parameters(&mut constraint_collection, &state, atol)?;
@@ -579,10 +579,10 @@ mod with_parameters_tests {
             .constraints(btreemap! {
                 ConstraintID::from(0) => c_active,
             })
-            .removed_constraints(btreemap! {
+            .inactive_constraints(btreemap! {
                 ConstraintID::from(1) => (
                     c_removed,
-                    crate::constraint::RemovedReason {
+                    crate::constraint::InactiveConstraintMetadata {
                         reason: "test".to_string(),
                         parameters: Default::default(),
                     },
@@ -597,7 +597,7 @@ mod with_parameters_tests {
         let instance = parametric.with_parameters(params).unwrap();
 
         let (rc, _r) = instance
-            .removed_constraints()
+            .inactive_constraints()
             .get(&ConstraintID::from(1))
             .unwrap();
         let body_required: VariableIDSet = rc.stage.function.required_ids();
@@ -632,10 +632,10 @@ mod with_parameters_tests {
             })
             .parameters(parameters([p]))
             .constraints(BTreeMap::new())
-            .removed_indicator_constraints(btreemap! {
+            .inactive_indicator_constraints(btreemap! {
                 crate::IndicatorConstraintID::from(0) => (
                     indicator,
-                    crate::constraint::RemovedReason {
+                    crate::constraint::InactiveConstraintMetadata {
                         reason: "test".to_string(),
                         parameters: Default::default(),
                     },
@@ -650,7 +650,7 @@ mod with_parameters_tests {
         let instance = parametric.with_parameters(params).unwrap();
 
         let (ic, _r) = instance
-            .removed_indicator_constraints()
+            .inactive_indicator_constraints()
             .get(&crate::IndicatorConstraintID::from(0))
             .expect("removed indicator survives materialization");
         let body_required: VariableIDSet = ic.stage.function.required_ids();

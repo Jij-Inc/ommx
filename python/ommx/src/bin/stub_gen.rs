@@ -25,7 +25,7 @@ fn annotate_constraint_get_overrides(stub: &mut pyo3_stub_gen::StubInfo) {
             if matches!(
                 class.name,
                 "ConstraintCollection"
-                    | "RemovedConstraintCollection"
+                    | "InactiveConstraintCollection"
                     | "EvaluatedConstraintCollection"
                     | "SampledConstraintCollection"
                     | "ConstraintFamilyView"

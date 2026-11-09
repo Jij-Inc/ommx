@@ -1,7 +1,7 @@
 use super::Instance;
 use crate::{
     coeff,
-    constraint::{ConstraintID, Provenance, RemovedReason},
+    constraint::{ConstraintID, InactiveConstraintMetadata, Provenance},
     linear,
     one_hot_constraint::OneHotConstraintID,
     Constraint, Function, Linear,
@@ -20,7 +20,7 @@ impl Instance {
     /// $$
     ///
     /// This method inserts that equality as a new [`Constraint`] and moves the
-    /// original one-hot constraint into `removed_one_hot_constraints` with
+    /// original one-hot constraint into `inactive_one_hot_constraints` with
     /// `reason = "ommx.Instance.convert_one_hot_to_constraint"` and a
     /// `constraint_id` parameter pointing to the new regular constraint.
     /// The generated constraint preserves the original one-hot context and
@@ -70,9 +70,9 @@ impl Instance {
 
         let mut parameters = fnv::FnvHashMap::default();
         parameters.insert("constraint_id".to_string(), new_id.into_inner().to_string());
-        self.one_hot_constraint_collection.relax(
+        self.one_hot_constraint_collection.deactivate(
             id,
-            RemovedReason {
+            InactiveConstraintMetadata {
                 reason: "ommx.Instance.convert_one_hot_to_constraint".to_string(),
                 parameters,
             },
@@ -146,7 +146,7 @@ mod tests {
         // Original one-hot moved to removed with the expected reason pointing at the new constraint.
         assert!(instance.one_hot_constraints().is_empty());
         let removed = instance
-            .removed_one_hot_constraints()
+            .inactive_one_hot_constraints()
             .get(&OneHotConstraintID::from(7))
             .expect("original one-hot should be retained as removed");
         assert_eq!(
@@ -255,7 +255,7 @@ mod tests {
         let new_ids = instance.convert_all_one_hots_to_constraints().unwrap();
         assert_eq!(new_ids.len(), 2);
         assert!(instance.one_hot_constraints().is_empty());
-        assert_eq!(instance.removed_one_hot_constraints().len(), 2);
+        assert_eq!(instance.inactive_one_hot_constraints().len(), 2);
         for id in new_ids {
             assert!(instance.constraints().contains_key(&id));
         }
@@ -271,7 +271,7 @@ mod tests {
                 .unwrap();
             if removed {
                 instance
-                    .relax_constraint(last_id, "test".to_owned(), [])
+                    .deactivate_constraint(last_id, "test".to_owned(), [])
                     .unwrap();
             }
             let before = instance.clone();
@@ -301,7 +301,7 @@ mod tests {
         assert_eq!(id, ConstraintID::from(u64::MAX));
         assert!(instance.constraints().contains_key(&id));
         assert!(instance.one_hot_constraints().is_empty());
-        assert_eq!(instance.removed_one_hot_constraints().len(), 1);
+        assert_eq!(instance.inactive_one_hot_constraints().len(), 1);
     }
 
     fn instance_with_two_one_hots() -> Instance {
@@ -358,7 +358,7 @@ mod tests {
             );
         }
         assert!(instance.one_hot_constraints().is_empty());
-        assert_eq!(instance.removed_one_hot_constraints().len(), 2);
+        assert_eq!(instance.inactive_one_hot_constraints().len(), 2);
     }
 
     #[test]

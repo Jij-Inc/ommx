@@ -472,7 +472,7 @@ def test_convert_inequality_to_equality_with_integer_slack_trivial():
         constraint_id=0, max_integer_range=32
     )
     assert instance.constraints == {}
-    assert ConstraintID(0) in instance.removed_constraints
+    assert ConstraintID(0) in instance.inactive_constraints
 
 
 def test_convert_inequality_to_equality_with_integer_slack_uses_atol():
@@ -534,7 +534,7 @@ def test_add_integer_slack_to_inequality_trivial():
 
     # Check that the constraint is removed
     assert instance.constraints == {}
-    assert ConstraintID(0) in instance.removed_constraints
+    assert ConstraintID(0) in instance.inactive_constraints
 
 
 def test_add_integer_slack_to_inequality_continuous():
@@ -759,7 +759,7 @@ def test_stats_empty_instance():
 
     assert stats["constraints"]["total"] == 0
     assert stats["constraints"]["active"] == 0
-    assert stats["constraints"]["removed"] == 0
+    assert stats["constraints"]["inactive"] == 0
 
 
 def test_stats_with_variables():
@@ -800,13 +800,13 @@ def test_stats_with_constraints():
     )
 
     # Remove one constraint
-    instance.relax_constraint(1, reason="test removal")
+    instance.deactivate_constraint(1, reason="test removal")
 
     stats = instance.stats()
 
     assert stats["constraints"]["total"] == 2
     assert stats["constraints"]["active"] == 1
-    assert stats["constraints"]["removed"] == 1
+    assert stats["constraints"]["inactive"] == 1
     # x[0] is used in objective, x[0] and x[1] are used in active constraint
     assert stats["decision_variables"]["by_usage"]["used_in_constraints"] == 2
 

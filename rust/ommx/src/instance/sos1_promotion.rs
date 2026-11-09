@@ -31,9 +31,9 @@
 
 use super::Instance;
 use crate::{
-    Bound, Bounds, Constraint, ConstraintContext, ConstraintID, Equality, Evaluate, Function, Kind,
-    Linear, LinearMonomial, RemovedReason, Sos1Constraint, Sos1ConstraintID, VariableID,
-    VariableIDSet,
+    Bound, Bounds, Constraint, ConstraintContext, ConstraintID, Equality, Evaluate, Function,
+    InactiveConstraintMetadata, Kind, Linear, LinearMonomial, Sos1Constraint, Sos1ConstraintID,
+    VariableID, VariableIDSet,
 };
 use num::ToPrimitive;
 use std::collections::{BTreeMap, BTreeSet};
@@ -638,7 +638,7 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
                     planned.candidate.relaxed_constraint_ids.iter().map(|&id| {
                         (
                             id,
-                            RemovedReason {
+                            InactiveConstraintMetadata {
                                 reason: "promoted validated SOS1 Big-M formulation".to_string(),
                                 parameters: [(
                                     "sos1_constraint_id".to_string(),
@@ -1533,8 +1533,8 @@ mod tests {
     use super::*;
     use crate::{
         coeff, linear, quadratic, ATol, AcyclicAssignments, DecisionVariable, DecisionVariableRole,
-        Evaluate, Function, IndicatorConstraint, ModelingLabel, NamedFunction, OneHotConstraint,
-        RemovedReason, Sense,
+        Evaluate, Function, InactiveConstraintMetadata, IndicatorConstraint, ModelingLabel,
+        NamedFunction, OneHotConstraint, Sense,
     };
     use crate::{EvaluatedConstraintBehavior, SampledConstraintBehavior};
 
@@ -1803,7 +1803,7 @@ mod tests {
         );
         assert_eq!(
             instance
-                .removed_constraints()
+                .inactive_constraints()
                 .keys()
                 .copied()
                 .collect::<BTreeSet<_>>(),
@@ -1815,9 +1815,9 @@ mod tests {
             Some(DecisionVariableRole::Dependent)
         );
         assert!(instance.constraints().is_empty());
-        assert_eq!(instance.removed_constraints().len(), 3);
+        assert_eq!(instance.inactive_constraints().len(), 3);
         assert!(instance
-            .removed_constraints()
+            .inactive_constraints()
             .values()
             .all(|(_, reason)| reason.reason == "promoted validated SOS1 Big-M formulation"));
         assert!(instance.decision_variables().contains_key(&unrelated_id()));
@@ -1865,7 +1865,7 @@ mod tests {
             .all(|promotion| instance.sos1_constraints()[promotion].variables
                 == VariableIDSet::from([member_integer_id()])));
         assert!(instance.constraints().is_empty());
-        assert_eq!(instance.removed_constraints().len(), 6);
+        assert_eq!(instance.inactive_constraints().len(), 6);
         assert_eq!(instance.sos1_constraints().len(), 2);
         assert_eq!(instance.decision_variable_dependency().len(), 2);
         assert!(instance
@@ -2018,7 +2018,7 @@ mod tests {
             requests.keys().collect::<Vec<_>>()
         );
         assert!(instance.constraints().is_empty());
-        assert_eq!(instance.removed_constraints().len(), 6);
+        assert_eq!(instance.inactive_constraints().len(), 6);
         assert_eq!(instance.sos1_constraints().len(), 2);
     }
 
@@ -2067,7 +2067,7 @@ mod tests {
             ConstraintID::from(201),
             ConstraintID::from(202),
         ] {
-            assert!(instance.removed_constraints().contains_key(&id));
+            assert!(instance.inactive_constraints().contains_key(&id));
         }
     }
 
@@ -2105,7 +2105,7 @@ mod tests {
             ConstraintID::from(201),
             ConstraintID::from(202),
         ] {
-            assert!(instance.removed_constraints().contains_key(&id));
+            assert!(instance.inactive_constraints().contains_key(&id));
         }
     }
 
@@ -2125,7 +2125,7 @@ mod tests {
             Sos1ConstraintID::from(103)
         );
         assert!(instance.constraints().is_empty());
-        assert_eq!(instance.removed_constraints().len(), 3);
+        assert_eq!(instance.inactive_constraints().len(), 3);
         assert_eq!(instance.sos1_constraints().len(), 1);
     }
 
@@ -2169,7 +2169,7 @@ mod tests {
                     .unwrap();
                 instance
                     .sos1_constraint_collection
-                    .relax(maximum, test_removed_reason())
+                    .deactivate(maximum, test_removed_reason())
                     .unwrap();
                 let before = instance.clone();
 
@@ -2202,8 +2202,8 @@ mod tests {
                             .collect::<Vec<_>>(),
                         vec![u64::MAX - 1, u64::MAX],
                     );
-                    assert!(instance.removed_sos1_constraints().contains_key(&maximum));
-                    assert_eq!(instance.removed_constraints().len(), 6);
+                    assert!(instance.inactive_sos1_constraints().contains_key(&maximum));
+                    assert_eq!(instance.inactive_constraints().len(), 6);
                 } else {
                     assert!(report.values().all(Result::is_err));
                     assert_eq!(instance, before);
@@ -2543,7 +2543,7 @@ mod tests {
         assert!(instance.decision_variable_dependency().is_empty());
         assert_eq!(instance.decision_variables().len(), 2);
         assert!(instance.constraints().is_empty());
-        assert!(instance.removed_constraints().contains_key(&cardinality));
+        assert!(instance.inactive_constraints().contains_key(&cardinality));
     }
 
     #[test]
@@ -2562,9 +2562,9 @@ mod tests {
 
         let _promotion = promote_one(&mut instance, &request).unwrap();
 
-        assert_eq!(instance.removed_constraints().len(), 3);
-        assert_eq!(instance.removed_constraints()[&upper_row_id()].0, upper);
-        assert_eq!(instance.removed_constraints()[&lower_row_id()].0, lower);
+        assert_eq!(instance.inactive_constraints().len(), 3);
+        assert_eq!(instance.inactive_constraints()[&upper_row_id()].0, upper);
+        assert_eq!(instance.inactive_constraints()[&lower_row_id()].0, lower);
     }
 
     #[test]
@@ -2904,7 +2904,7 @@ mod tests {
 
         let (mut removed, request) = mixed_instance();
         removed
-            .relax_constraint(upper_row_id(), "test".to_string(), [])
+            .deactivate_constraint(upper_row_id(), "test".to_string(), [])
             .unwrap();
         assert_atomic_rejection(removed, &request, "is not active");
     }
@@ -3094,7 +3094,9 @@ mod tests {
                 .as_ptr(),
             link_label_ptr
         );
-        assert!(instance.removed_constraints().contains_key(&upper_row_id()));
+        assert!(instance
+            .inactive_constraints()
+            .contains_key(&upper_row_id()));
     }
 
     #[test]
@@ -3169,7 +3171,7 @@ mod tests {
             )
             .unwrap();
         instance
-            .relax_constraint(regular_id, "test".to_string(), [])
+            .deactivate_constraint(regular_id, "test".to_string(), [])
             .unwrap();
 
         let indicator_id = instance
@@ -3184,7 +3186,7 @@ mod tests {
             .unwrap();
         instance
             .indicator_constraint_collection
-            .relax(indicator_id, test_removed_reason())
+            .deactivate(indicator_id, test_removed_reason())
             .unwrap();
 
         let one_hot_id = instance
@@ -3195,7 +3197,7 @@ mod tests {
             .unwrap();
         instance
             .one_hot_constraint_collection
-            .relax(one_hot_id, test_removed_reason())
+            .deactivate(one_hot_id, test_removed_reason())
             .unwrap();
 
         let removed_sos1_id = instance
@@ -3206,7 +3208,7 @@ mod tests {
             .unwrap();
         instance
             .sos1_constraint_collection
-            .relax(removed_sos1_id, test_removed_reason())
+            .deactivate(removed_sos1_id, test_removed_reason())
             .unwrap();
 
         instance
@@ -3240,15 +3242,15 @@ mod tests {
 
         let _ = promote_one(&mut instance, &request).unwrap();
 
-        assert!(instance.removed_constraints().contains_key(&regular_id));
+        assert!(instance.inactive_constraints().contains_key(&regular_id));
         assert!(instance
-            .removed_indicator_constraints()
+            .inactive_indicator_constraints()
             .contains_key(&indicator_id));
         assert!(instance
-            .removed_one_hot_constraints()
+            .inactive_one_hot_constraints()
             .contains_key(&one_hot_id));
         assert!(instance
-            .removed_sos1_constraints()
+            .inactive_sos1_constraints()
             .contains_key(&removed_sos1_id));
         assert!(instance
             .named_functions()
@@ -3348,7 +3350,7 @@ mod tests {
         assert_eq!(from_hint, direct);
         assert_eq!(
             &from_hint
-                .removed_constraints()
+                .inactive_constraints()
                 .keys()
                 .copied()
                 .collect::<BTreeSet<_>>(),
@@ -3392,7 +3394,7 @@ mod tests {
         assert!(instance.decision_variable_dependency().is_empty());
         assert_eq!(
             &instance
-                .removed_constraints()
+                .inactive_constraints()
                 .keys()
                 .copied()
                 .collect::<BTreeSet<_>>(),
@@ -3444,7 +3446,7 @@ mod tests {
         );
         assert_eq!(
             &instance
-                .removed_constraints()
+                .inactive_constraints()
                 .keys()
                 .copied()
                 .collect::<BTreeSet<_>>(),
@@ -3496,7 +3498,7 @@ mod tests {
 
         let (mut instance, _) = mixed_instance();
         instance
-            .relax_constraint(upper_row_id(), "test".to_string(), [])
+            .deactivate_constraint(upper_row_id(), "test".to_string(), [])
             .unwrap();
         assert_v1_hint_atomic_rejection(instance, &mixed_v1_hint(), "is not active");
     }
@@ -3940,8 +3942,8 @@ mod tests {
         }
     }
 
-    fn test_removed_reason() -> RemovedReason {
-        RemovedReason {
+    fn test_removed_reason() -> InactiveConstraintMetadata {
+        InactiveConstraintMetadata {
             reason: "test".to_string(),
             parameters: Default::default(),
         }

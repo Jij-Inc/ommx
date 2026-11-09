@@ -18,9 +18,9 @@ pub struct Created;
 
 // ===== Common types =====
 
-/// Reason why a constraint was removed/relaxed.
+/// Inactive membership metadata owned by a constraint collection.
 #[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
-pub struct RemovedReason {
+pub struct InactiveConstraintMetadata {
     /// Fully qualified, dot-separated path identifying the method, function,
     /// or application that removed the constraint.
     ///
@@ -39,8 +39,8 @@ pub struct RemovedReason {
     pub parameters: FnvHashMap<String, String>,
 }
 
-impl From<RemovedReason> for crate::v2::RemovedReason {
-    fn from(reason: RemovedReason) -> Self {
+impl From<InactiveConstraintMetadata> for crate::v2::InactiveConstraintMetadata {
+    fn from(reason: InactiveConstraintMetadata) -> Self {
         Self {
             reason: reason.reason,
             parameters: reason.parameters.into_iter().collect(),

@@ -312,8 +312,8 @@ fn next_constraint_id(constraints: &BTreeMap<ConstraintID, Constraint>) -> Const
         .unwrap_or_else(|| ConstraintID::from(0))
 }
 
-fn arbitrary_removed_reason() -> crate::constraint::RemovedReason {
-    crate::constraint::RemovedReason {
+fn arbitrary_removed_reason() -> crate::constraint::InactiveConstraintMetadata {
+    crate::constraint::InactiveConstraintMetadata {
         reason: "arbitrary".to_string(),
         parameters: Default::default(),
     }
@@ -385,12 +385,12 @@ impl Arbitrary for Instance {
                                     crate::named_function::NamedFunctionLabelStore::default();
                                 let mut constraint_context =
                                     ConstraintContextStore::<ConstraintID>::default();
-                                let mut removed_constraints = BTreeMap::new();
+                                let mut inactive_constraints = BTreeMap::new();
                                 let mut fixed_decision_variable_values = BTreeMap::new();
                                 let mut decision_variable_dependency =
                                     AcyclicAssignments::default();
                                 let mut indicator_constraints = BTreeMap::new();
-                                let mut removed_indicator_constraints = BTreeMap::new();
+                                let mut inactive_indicator_constraints = BTreeMap::new();
                                 let mut indicator_constraint_context =
                                     ConstraintContextStore::<IndicatorConstraintID>::default();
                                 let mut one_hot_constraints = BTreeMap::new();
@@ -456,7 +456,7 @@ impl Arbitrary for Instance {
                                     }
 
                                     let removed_id = ConstraintID::from(first_extra_id);
-                                    removed_constraints.insert(
+                                    inactive_constraints.insert(
                                         removed_id,
                                         (
                                             Constraint::equal_to_zero(Function::Zero),
@@ -483,7 +483,7 @@ impl Arbitrary for Instance {
 
                                     let removed_indicator_id =
                                         IndicatorConstraintID::from(first_extra_id + 2);
-                                    removed_indicator_constraints.insert(
+                                    inactive_indicator_constraints.insert(
                                         removed_indicator_id,
                                         (
                                             IndicatorConstraint::new(
@@ -564,10 +564,10 @@ impl Arbitrary for Instance {
                                     .fixed_decision_variable_values(fixed_decision_variable_values)
                                     .constraints(constraints)
                                     .constraint_context(constraint_context)
-                                    .removed_constraints(removed_constraints)
+                                    .inactive_constraints(inactive_constraints)
                                     .indicator_constraints(indicator_constraints)
                                     .indicator_constraint_context(indicator_constraint_context)
-                                    .removed_indicator_constraints(removed_indicator_constraints)
+                                    .inactive_indicator_constraints(inactive_indicator_constraints)
                                     .one_hot_constraints(one_hot_constraints)
                                     .one_hot_constraint_context(one_hot_constraint_context)
                                     .sos1_constraints(sos1_constraints)
@@ -652,7 +652,7 @@ mod tests {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for (c, _) in instance.removed_constraints().values() {
+            for (c, _) in instance.inactive_constraints().values() {
                 for id in c.required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
@@ -662,7 +662,7 @@ mod tests {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for (c, _) in instance.removed_indicator_constraints().values() {
+            for (c, _) in instance.inactive_indicator_constraints().values() {
                 for id in c.required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
@@ -672,7 +672,7 @@ mod tests {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for (c, _) in instance.removed_one_hot_constraints().values() {
+            for (c, _) in instance.inactive_one_hot_constraints().values() {
                 for id in c.required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
@@ -682,7 +682,7 @@ mod tests {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for (c, _) in instance.removed_sos1_constraints().values() {
+            for (c, _) in instance.inactive_sos1_constraints().values() {
                 for id in c.required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
@@ -707,13 +707,13 @@ mod tests {
         fn full_v3_space_exercises_v3_instance_state(instance in Instance::arbitrary()) {
             prop_assert!(!instance.fixed_decision_variable_values().is_empty());
             prop_assert!(!instance.decision_variable_dependency().is_empty());
-            prop_assert!(!instance.removed_constraints().is_empty());
+            prop_assert!(!instance.inactive_constraints().is_empty());
             prop_assert!(!instance.indicator_constraints().is_empty());
-            prop_assert!(!instance.removed_indicator_constraints().is_empty());
+            prop_assert!(!instance.inactive_indicator_constraints().is_empty());
             prop_assert!(!instance.one_hot_constraints().is_empty());
-            prop_assert!(!instance.removed_one_hot_constraints().is_empty());
+            prop_assert!(!instance.inactive_one_hot_constraints().is_empty());
             prop_assert!(!instance.sos1_constraints().is_empty());
-            prop_assert!(!instance.removed_sos1_constraints().is_empty());
+            prop_assert!(!instance.inactive_sos1_constraints().is_empty());
             prop_assert!(instance.parameters.is_some());
             prop_assert!(instance.description.is_some());
             prop_assert!(!instance.annotations.is_empty());
@@ -735,7 +735,7 @@ mod tests {
             );
             prop_assert!(
                 instance
-                    .removed_indicator_constraints()
+                    .inactive_indicator_constraints()
                     .values()
                     .any(|(constraint, _)| !constraint.function().required_ids().is_empty())
             );

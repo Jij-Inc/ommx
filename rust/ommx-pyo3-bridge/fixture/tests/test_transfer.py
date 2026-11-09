@@ -292,7 +292,7 @@ def test_compilation_uses_promotion_plans_and_explicit_wire_messages(monkeypatch
     value = fixture.compile_for_target()
     # Promotion allocates a fresh number and retains the source as removed.
     assert set(value.constraints) == {ommx.OneHotConstraintID(24)}
-    assert set(value.removed_constraints) == {ommx.ConstraintID(23)}
+    assert set(value.inactive_constraints) == {ommx.ConstraintID(23)}
 
     advertise(monkeypatch, [1])
     calls = spy_instance(monkeypatch)

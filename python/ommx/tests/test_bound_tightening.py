@@ -218,7 +218,7 @@ def test_explicit_all_constraints_matches_all_constraints_api() -> None:
 @pytest.mark.parametrize("invalid", [1, 999])
 def test_unknown_and_removed_selected_constraints_are_atomic(invalid: int) -> None:
     instance = bound_tightening_instance()
-    instance.relax_constraint(1, "test")
+    instance.deactivate_constraint(1, "test")
     before = instance.to_v2_bytes()
     with pytest.raises(RuntimeError, match="is not active"):
         instance.tighten_bounds_simultaneously_once_using_constraints({0, invalid})

@@ -58,7 +58,7 @@ Each constraint type implements the
 stages as associated types — a defunctionalization of `Stage → Type`
 since Rust lacks HKTs. "Removed" is **not** a stage: removal is
 collection-level state tracked as a
-[`RemovedReason`](crate::RemovedReason) paired with the original
+[`InactiveConstraintMetadata`](crate::InactiveConstraintMetadata) paired with the original
 `Created` constraint.
 
 ### Collections
@@ -67,7 +67,7 @@ Three generic collection wrappers handle constraints uniformly:
 
 - [`ConstraintCollection`](crate::ConstraintCollection) —
   active + removed, used in [`Instance`](crate::Instance). Removed
-  constraints are stored as `(T::Created, RemovedReason)` tuples.
+  constraints are stored as `(T::Created, InactiveConstraintMetadata)` tuples.
 - [`EvaluatedCollection`](crate::EvaluatedCollection) — evaluation
   results, used in [`Solution`](crate::Solution).
 - [`SampledCollection`](crate::SampledCollection) — sampled results,

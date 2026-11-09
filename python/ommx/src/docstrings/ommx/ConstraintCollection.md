@@ -35,13 +35,13 @@ iteration rules but have different row ownership:
 | Collection | Included constraints | Returned rows |
 | --- | --- | --- |
 | {class}`~ommx.ConstraintCollection` | Active model constraints | Attached handles |
-| {class}`~ommx.RemovedConstraintCollection` | Retained removed model constraints | Independent snapshots |
-| {class}`~ommx.EvaluatedConstraintCollection` | Active and retained removed constraints in a Solution | Independent evaluated snapshots |
-| {class}`~ommx.SampledConstraintCollection` | Active and retained removed constraints in a SampleSet | Independent sampled snapshots |
+| {class}`~ommx.InactiveConstraintCollection` | Retained inactive model constraints | Independent snapshots |
+| {class}`~ommx.EvaluatedConstraintCollection` | Active and retained inactive constraints in a Solution | Independent evaluated snapshots |
+| {class}`~ommx.SampledConstraintCollection` | Active and retained inactive constraints in a SampleSet | Independent sampled snapshots |
 
 Attached handles compare equal when they refer to the same owner object and
 typed ID. Handles from different owners are unequal even if the models contain
-identical data. Removed and result snapshots compare their stored data, including
+identical data. Inactive and result snapshots compare their stored data, including
 metadata and removal reasons. Mapping equality and membership in ``values()`` or
 ``items()`` use those row equality rules.
 
@@ -65,4 +65,4 @@ that access raises ``KeyError``.
 still attached handles. To inspect just one family, use ``of_kind`` and
 {class}`~ommx.ConstraintFamilyView`. To collect a table, use the owner's
 ``constraints_df(kind=...)``. Its typed index matches the selected family's keys;
-on models, ``removed=True`` includes both active and retained removed rows.
+on models, ``removed=True`` includes both active and retained inactive rows.

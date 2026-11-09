@@ -50,7 +50,7 @@ impl ConstraintIds {
         for id in collection.active().keys() {
             self.insert((*id).into(), family, false)?;
         }
-        for id in collection.removed().keys() {
+        for id in collection.inactive().keys() {
             self.insert((*id).into(), family, true)?;
         }
         Ok(())
@@ -65,7 +65,7 @@ impl ConstraintIds {
             self.insert(
                 (*id).into(),
                 family,
-                collection.removed_reasons().contains_key(id),
+                collection.inactive_metadata().contains_key(id),
             )?;
         }
         Ok(())
@@ -80,7 +80,7 @@ impl ConstraintIds {
             self.insert(
                 (*id).into(),
                 family,
-                collection.removed_reasons().contains_key(id),
+                collection.inactive_metadata().contains_key(id),
             )?;
         }
         Ok(())

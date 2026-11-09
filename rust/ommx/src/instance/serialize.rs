@@ -280,7 +280,7 @@ impl From<ParametricInstance> for v2::ParametricInstance {
 }
 
 fn created_collection_has_payload<T: ConstraintType>(collection: &ConstraintCollection<T>) -> bool {
-    !collection.active().is_empty() || !collection.removed().is_empty()
+    !collection.active().is_empty() || !collection.inactive().is_empty()
 }
 
 fn decision_variable_dependency_to_v2_map(

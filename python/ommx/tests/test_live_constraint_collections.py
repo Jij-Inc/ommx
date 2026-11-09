@@ -25,8 +25,8 @@ from ommx import (
     OneHotConstraint,
     OneHotConstraintID,
     ParametricInstance,
-    RemovedConstraint,
-    RemovedConstraintCollection,
+    InactiveConstraint,
+    InactiveConstraintCollection,
     SampledConstraintCollection,
     Sense,
     Sos1Constraint,
@@ -112,22 +112,22 @@ def test_retained_views_observe_additions_and_keep_owner_alive(host):
 
 def test_removal_restoration_and_lowering_update_retained_views():
     model = make_model(Instance)
-    active, removed = model.constraints, model.removed_constraints
+    active, removed = model.constraints, model.inactive_constraints
     assert_type(active, ConstraintCollection)
-    assert_type(removed, RemovedConstraintCollection)
+    assert_type(removed, InactiveConstraintCollection)
     assert_type(
         active.get(ConstraintID(5)),
         AttachedConstraint | None,
     )
-    model.relax_constraint(5, "manual")
+    model.deactivate_constraint(5, "manual")
     assert ConstraintID(5) not in active
     assert ConstraintID(5) in removed
-    assert_type(removed[ConstraintID(5)], RemovedConstraint)
-    assert removed[ConstraintID(5)].removed_reason == "manual"
+    assert_type(removed[ConstraintID(5)], InactiveConstraint)
+    assert removed[ConstraintID(5)].inactive_reason == "manual"
     with pytest.raises(KeyError) as error:
         active[ConstraintID(5)]
     assert error.value.args == (ConstraintID(5),)
-    model.restore_constraint(5)
+    model.activate_constraint(5)
     assert ConstraintID(5) in active
     assert ConstraintID(5) not in removed
     generated = model.convert_one_hot_to_constraint(7)
@@ -165,7 +165,7 @@ def test_value_iteration_reports_ids_removed_after_iteration_started():
     model = make_model(Instance)
     items = iter(model.constraints.items())
     assert next(items)[0] == ConstraintID(5)
-    model.relax_indicator_constraint(6, "manual")
+    model.deactivate_indicator_constraint(6, "manual")
     with pytest.raises(KeyError) as error:
         next(items)
     assert error.value.args == (IndicatorConstraintID(6),)
@@ -187,9 +187,9 @@ def test_all_collections_require_typed_keys_and_reject_structural_mutation():
     assert not hasattr(samples, "summary_with_constraints")
     collections: list[Mapping[ConstraintIDBase, ConstraintView]] = [
         model.constraints,
-        model.removed_constraints,
+        model.inactive_constraints,
         make_model(ParametricInstance).constraints,
-        make_model(ParametricInstance).removed_constraints,
+        make_model(ParametricInstance).inactive_constraints,
         samples.constraints,
         samples.get(9).constraints,
     ]
@@ -302,12 +302,12 @@ def test_result_equality_compares_snapshot_data_and_context():
         )
 
 
-def remove_all(model: Instance) -> RemovedConstraintCollection:
-    model.relax_constraint(5, "manual")
-    model.relax_indicator_constraint(6, "manual")
+def remove_all(model: Instance) -> InactiveConstraintCollection:
+    model.deactivate_constraint(5, "manual")
+    model.deactivate_indicator_constraint(6, "manual")
     model.convert_one_hot_to_constraint(7)
     model.convert_sos1_to_constraints(8)
-    return model.removed_constraints
+    return model.inactive_constraints
 
 
 def test_removed_equality_compares_snapshot_context_and_reason():
@@ -320,8 +320,8 @@ def test_removed_equality_compares_snapshot_context_and_reason():
         assert rows[key] in rows.values()
         assert (key, rows[key]) in rows.items()
     old = rows[ConstraintID(5)]
-    model.restore_constraint(5)
-    model.relax_constraint(5, "different reason")
+    model.activate_constraint(5)
+    model.deactivate_constraint(5, "different reason")
     assert old != rows[ConstraintID(5)]
     # Result snapshots must also include retained lifecycle metadata.
     state = {0: 1, 1: 0}
@@ -355,7 +355,7 @@ def test_mixed_lookup_errors_explain_typed_ids():
     model = make_model(Instance)
     for rows in [
         model.constraints,
-        model.removed_constraints,
+        model.inactive_constraints,
         model.evaluate({0: 1, 1: 0}).constraints,
         model.evaluate_samples({9: {0: 1, 1: 0}}).constraints,
     ]:
@@ -405,12 +405,12 @@ def test_removed_rows_share_the_open_metadata_interface():
     indicator.set_description("metadata survives removal")
     indicator.set_subscripts([2])
     indicator.set_parameters({"group": "test"})
-    model.relax_constraint(5, "manual")
-    model.relax_indicator_constraint(6, "manual")
+    model.deactivate_constraint(5, "manual")
+    model.deactivate_indicator_constraint(6, "manual")
     model.convert_one_hot_to_constraint(7)
     model.convert_sos1_to_constraints(8)
-    assert len(model.removed_constraints) == 4
-    for key, row in model.removed_constraints.items():
+    assert len(model.inactive_constraints) == 4
+    for key, row in model.inactive_constraints.items():
         assert_type(key, ConstraintIDBase)
         assert_type(row, ConstraintView)
         assert isinstance(row, ConstraintView)

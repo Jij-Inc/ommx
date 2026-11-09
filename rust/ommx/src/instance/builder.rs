@@ -30,12 +30,16 @@ pub struct InstanceBuilder {
     constraint_context: ConstraintContextStore<ConstraintID>,
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
     named_function_labels: crate::named_function::NamedFunctionLabelStore,
-    removed_constraints: BTreeMap<ConstraintID, (Constraint, crate::constraint::RemovedReason)>,
+    inactive_constraints:
+        BTreeMap<ConstraintID, (Constraint, crate::constraint::InactiveConstraintMetadata)>,
     indicator_constraints: BTreeMap<crate::IndicatorConstraintID, crate::IndicatorConstraint>,
     indicator_constraint_context: ConstraintContextStore<crate::IndicatorConstraintID>,
-    removed_indicator_constraints: BTreeMap<
+    inactive_indicator_constraints: BTreeMap<
         crate::IndicatorConstraintID,
-        (crate::IndicatorConstraint, crate::constraint::RemovedReason),
+        (
+            crate::IndicatorConstraint,
+            crate::constraint::InactiveConstraintMetadata,
+        ),
     >,
     one_hot_constraints: BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
     one_hot_constraint_context: ConstraintContextStore<crate::OneHotConstraintID>,
@@ -121,12 +125,15 @@ impl InstanceBuilder {
         self
     }
 
-    /// Sets the removed constraints.
-    pub fn removed_constraints(
+    /// Sets the inactive constraints.
+    pub fn inactive_constraints(
         mut self,
-        removed_constraints: BTreeMap<ConstraintID, (Constraint, crate::constraint::RemovedReason)>,
+        inactive_constraints: BTreeMap<
+            ConstraintID,
+            (Constraint, crate::constraint::InactiveConstraintMetadata),
+        >,
     ) -> Self {
-        self.removed_constraints = removed_constraints;
+        self.inactive_constraints = inactive_constraints;
         self
     }
 
@@ -149,14 +156,17 @@ impl InstanceBuilder {
     }
 
     /// Sets the removed indicator constraints.
-    pub fn removed_indicator_constraints(
+    pub fn inactive_indicator_constraints(
         mut self,
-        removed_indicator_constraints: BTreeMap<
+        inactive_indicator_constraints: BTreeMap<
             crate::IndicatorConstraintID,
-            (crate::IndicatorConstraint, crate::constraint::RemovedReason),
+            (
+                crate::IndicatorConstraint,
+                crate::constraint::InactiveConstraintMetadata,
+            ),
         >,
     ) -> Self {
-        self.removed_indicator_constraints = removed_indicator_constraints;
+        self.inactive_indicator_constraints = inactive_indicator_constraints;
         self
     }
 
@@ -224,7 +234,7 @@ impl InstanceBuilder {
     /// - Required fields (`sense`, `objective`, `decision_variables`, `constraints`) are not set
     /// - Named-function labels reference IDs not present in the named-function table
     /// - The objective function, constraints, or named functions reference undefined variable IDs
-    /// - The keys of `constraints` and `removed_constraints` are not disjoint
+    /// - The keys of `constraints` and `inactive_constraints` are not disjoint
     /// - Label/context stores contain IDs that are not owned by the
     ///   corresponding decision-variable, named-function, or constraint collection
     /// - The keys of `decision_variable_dependency` are not in `decision_variables`
@@ -266,9 +276,9 @@ impl InstanceBuilder {
                 }
             }
         }
-        // Validate that all variable IDs in removed_constraints are defined
-        // (removed_constraints may contain fixed or dependent variable IDs)
-        for (constraint, _reason) in self.removed_constraints.values() {
+        // Validate that all variable IDs in inactive_constraints are defined
+        // (inactive_constraints may contain fixed or dependent variable IDs)
+        for (constraint, _reason) in self.inactive_constraints.values() {
             for id in constraint.required_ids() {
                 if !variable_ids.contains(&id) {
                     crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
@@ -310,7 +320,7 @@ impl InstanceBuilder {
                 }
             }
         }
-        for (ic, _reason) in self.removed_indicator_constraints.values() {
+        for (ic, _reason) in self.inactive_indicator_constraints.values() {
             // Check that indicator_variable exists and is binary
             let indicator_id = ic.indicator_variable;
             let Some(dv) = decision_variables.get(&indicator_id) else {
@@ -331,12 +341,12 @@ impl InstanceBuilder {
                 }
             }
         }
-        // Validate disjointness of indicator active/removed
-        for id in self.removed_indicator_constraints.keys() {
+        // Validate disjointness of indicator active/inactive
+        for id in self.inactive_indicator_constraints.keys() {
             if self.indicator_constraints.contains_key(id) {
                 crate::bail!(
                     { ?id },
-                    "Indicator constraint ID {id:?} is in both indicator_constraints and removed_indicator_constraints, but they must be disjoint",
+                    "Indicator constraint ID {id:?} is in both indicator_constraints and inactive_indicator_constraints, but they must be disjoint",
                 );
             }
         }
@@ -384,12 +394,12 @@ impl InstanceBuilder {
             }
         }
 
-        // Validate that constraints and removed_constraints keys are disjoint
-        for id in self.removed_constraints.keys() {
+        // Validate that constraints and inactive_constraints keys are disjoint
+        for id in self.inactive_constraints.keys() {
             if constraints.contains_key(id) {
                 crate::bail!(
                     { ?id },
-                    "Constraint ID {id:?} is in both constraints and removed_constraints, but they must be disjoint",
+                    "Constraint ID {id:?} is in both constraints and inactive_constraints, but they must be disjoint",
                 );
             }
         }
@@ -456,12 +466,12 @@ impl InstanceBuilder {
             decision_variables,
             constraint_collection: ConstraintCollection::with_context(
                 constraints,
-                self.removed_constraints,
+                self.inactive_constraints,
                 self.constraint_context,
             )?,
             indicator_constraint_collection: ConstraintCollection::with_context(
                 self.indicator_constraints,
-                self.removed_indicator_constraints,
+                self.inactive_indicator_constraints,
                 self.indicator_constraint_context,
             )?,
             one_hot_constraint_collection: ConstraintCollection::with_context(
@@ -818,7 +828,7 @@ mod tests {
         let constraint = Constraint::equal_to_zero(Function::Zero);
         let removed_constraint = Constraint::equal_to_zero(Function::Zero);
         let _ = constraint_id;
-        let removed_reason = crate::constraint::RemovedReason {
+        let removed_reason = crate::constraint::InactiveConstraintMetadata {
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -828,7 +838,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .constraints(btreemap! { constraint_id => constraint })
-            .removed_constraints(
+            .inactive_constraints(
                 btreemap! { constraint_id => (removed_constraint, removed_reason) },
             )
             .build()
@@ -836,7 +846,7 @@ mod tests {
 
         let msg = err.to_string();
         assert!(
-            msg.contains("both constraints and removed_constraints")
+            msg.contains("both constraints and inactive_constraints")
                 && msg.contains(&format!("{:?}", constraint_id)),
             "unexpected error: {msg}"
         );
@@ -1050,7 +1060,7 @@ mod tests {
         // Create a removed constraint that references undefined variable ID 999
         let removed_constraint =
             Constraint::equal_to_zero(Function::from(linear!(999) + coeff!(1.0)));
-        let removed_reason = crate::constraint::RemovedReason {
+        let removed_reason = crate::constraint::InactiveConstraintMetadata {
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -1060,7 +1070,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .constraints(BTreeMap::new())
-            .removed_constraints(
+            .inactive_constraints(
                 btreemap! { constraint_id => (removed_constraint, removed_reason) },
             )
             .build()

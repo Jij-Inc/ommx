@@ -174,7 +174,7 @@ impl AbsDiffEq for Instance {
         }
 
         // Compare constraints
-        // Note that `removed_constraints` are not considered in the comparison
+        // Note that `inactive_constraints` are not considered in the comparison
         for (id, c_self) in self.constraints() {
             match other.constraints().get(id) {
                 Some(c_other) => {

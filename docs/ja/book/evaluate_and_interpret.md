@@ -19,7 +19,7 @@ OMMXは、ソルバーに課す条件から外した制約も保持できます�
 
 返された値と保持された条件を解釈するには、その求解で使った問題を表す変換済みInstanceを使います。ただし、その評価を元の問題についての判定とみなす前に、変換の保証を確認してください。情報が保持されていること自体は、すべての変更が元の実行可能領域や最適解を保存した証明にはなりません。
 
-実行可能性の判定と違反の調べ方は{class}`SolutionのReference <ommx.Solution>`、保持するデータとactiveな制約との関係は{attr}`removed constraintsのReference <ommx.Instance.removed_constraints>`にまとめています。
+実行可能性の判定と違反の調べ方は{class}`SolutionのReference <ommx.Solution>`、保持するデータとactiveな制約との関係は{attr}`inactive constraintsのReference <ommx.Instance.inactive_constraints>`にまとめています。
 
 ## 復元した値と、補った値を区別する
 

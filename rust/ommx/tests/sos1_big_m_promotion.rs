@@ -76,7 +76,7 @@ fn public_api_promotes_a_checked_mixed_selector_formulation() {
         *outcomes[&cardinality_id].as_ref().unwrap(),
         Sos1ConstraintID::from(103)
     );
-    assert_eq!(instance.removed_constraints().len(), 3);
+    assert_eq!(instance.inactive_constraints().len(), 3);
 
     let restored = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
     assert_eq!(restored, instance);
@@ -184,6 +184,6 @@ fn public_api_promotes_independent_requests_with_a_shared_member() {
         vec![Sos1ConstraintID::from(203), Sos1ConstraintID::from(204)]
     );
     assert!(instance.constraints().is_empty());
-    assert_eq!(instance.removed_constraints().len(), 6);
+    assert_eq!(instance.inactive_constraints().len(), 6);
     assert_eq!(instance.sos1_constraints().len(), 2);
 }

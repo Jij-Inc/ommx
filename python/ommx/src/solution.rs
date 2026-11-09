@@ -93,7 +93,7 @@ use std::collections::BTreeSet;
 ///
 /// Evaluate a solver's returned State with the transformed Instance that was
 /// supplied to it. That Instance retains the fixed values, dependencies,
-/// removed constraints, and output objective needed to interpret the result.
+/// inactive constraints, and output objective needed to interpret the result.
 /// Passing the State directly to the original Instance may lose that context
 /// or leave required original variables unspecified.
 ///
@@ -115,7 +115,7 @@ use std::collections::BTreeSet;
 /// by the solver. Supply such a value when it matters to reported metrics.
 /// Distinguish successful reconstruction, feasibility including removed
 /// constraints, and transport of objective or optimality information.
-/// {attr}`~ommx.Solution.feasible_relaxed` excludes removed constraints but
+/// {attr}`~ommx.Solution.feasible_relaxed` excludes inactive constraints but
 /// still checks variable domains. Output objective and optimality transport
 /// follow {attr}`~ommx.Instance.output_objective` and
 /// {meth}`~ommx.Instance.map_active_optimality`, respectively.
@@ -138,7 +138,7 @@ impl_solution_annotations!(Solution);
 impl Solution {
     /// Unique names across all constraint families, as a set of strings.
     ///
-    /// Retained removed constraints are included; no sample ID is needed.
+    /// Retained inactive constraints are included; no sample ID is needed.
     /// The scope matches `extract_constraints`. Unnamed constraints are excluded;
     /// an explicitly empty name is included. Duplicate names appear once, even
     /// when extraction would reject duplicate subscripts.
@@ -219,7 +219,7 @@ impl Solution {
 
     /// Whether all retained constraints and variable domains are satisfied.
     ///
-    /// Checks all regular and special constraints, including removed constraints,
+    /// Checks all regular and special constraints, including inactive constraints,
     /// together with the kind and bounds of every retained variable, using
     /// {attr}`~ommx.Solution.feasibility_atol`. This is an alias for
     /// {attr}`~ommx.Solution.feasible_unrelaxed`; it does not establish optimality.
@@ -248,7 +248,7 @@ impl Solution {
     /// >>> x = instance.new_binary("x")
     /// >>> instance.objective = x
     /// >>> required = instance.add_constraint(x == 1, "required")
-    /// >>> instance.relax_constraint(required.constraint_id, "manual relaxation")
+    /// >>> instance.deactivate_constraint(required.constraint_id, "manual relaxation")
     /// >>> solution = instance.evaluate({x.id: 0})
     /// >>> assert solution.feasible_relaxed
     /// >>> assert not solution.feasible
@@ -258,7 +258,7 @@ impl Solution {
         self.inner.feasible_relaxed()
     }
 
-    /// Alias for {attr}`~ommx.Solution.feasible`, including removed constraints
+    /// Alias for {attr}`~ommx.Solution.feasible`, including inactive constraints
     /// and every retained variable's kind and bounds.
     #[getter]
     pub fn feasible_unrelaxed(&self) -> bool {
@@ -542,7 +542,7 @@ impl Solution {
     ///
     /// Raises KeyError if no constraint has the requested name. Raises
     /// ValueError if matching constraints share subscripts, including across families.
-    /// Parameters and descriptions are ignored. Retained removed constraints are
+    /// Parameters and descriptions are ignored. Retained inactive constraints are
     /// included. Regular constraints return violations, not signed function values.
     /// Indicator violations account for activation, while OneHot and SOS1 use
     /// their respective metrics; see {meth}`~ommx.Solution.total_violation`.
@@ -557,7 +557,7 @@ impl Solution {
     /// Related methods on {meth}`~ommx.Instance.extract_constraints` and
     /// {meth}`~ommx.ParametricInstance.extract_constraints` return attached
     /// handles for active constraints; {meth}`~ommx.SampleSet.extract_constraints`
-    /// returns violations for a selected sample, including removed constraints.
+    /// returns violations for a selected sample, including inactive constraints.
     ///
     /// # Examples
     ///
@@ -811,13 +811,13 @@ impl Solution {
     ///
     /// `Solution` has no `removed=` parameter (no active/removed
     /// distinction at the evaluated stage); reason data is gated by
-    /// `"removed_reason"` in `include=`. When the flag is on, rows for
-    /// constraints removed before evaluation get `removed_reason` /
-    /// `removed_reason.{key}` columns populated; other rows have NA.
+    /// `"inactive_reason"` in `include=`. When the flag is on, rows for
+    /// constraints removed before evaluation get `inactive_reason` /
+    /// `inactive_reason.{key}` columns populated; other rows have NA.
     /// The related metadata queries {meth}`~ommx.Solution.constraint_context_df`,
     /// {meth}`~ommx.Solution.constraint_parameters_df`,
     /// {meth}`~ommx.Solution.constraint_provenance_df`, and
-    /// {meth}`~ommx.Solution.constraint_removed_reasons_df` also require ``kind``.
+    /// {meth}`~ommx.Solution.constraint_inactive_metadata_df` also require ``kind``.
     ///
     /// >>> from ommx import ConstraintKind, Instance
     /// >>> instance = Instance.minimize()
@@ -848,7 +848,7 @@ impl Solution {
             ],
             |coll| {
                 let meta = coll.context().clone();
-                let removed_reasons = coll.removed_reasons();
+                let inactive_metadata = coll.inactive_metadata();
                 let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
                 for (id, c) in coll.inner().iter() {
                     let m = meta.collect_for(*id);
@@ -858,15 +858,15 @@ impl Solution {
                     )
                     .to_pandas_entry(py)?;
                     dict.set_item("violation", self.constraint_violation((*id).into())?)?;
-                    if flags.removed_reason {
-                        // Always emit the `removed_reason` column when
+                    if flags.inactive_reason {
+                        // Always emit the `inactive_reason` column when
                         // requested so its existence in the resulting
                         // DataFrame is a function of the flag, not of
                         // whether any row happens to carry a reason.
-                        if let Some(reason) = removed_reasons.get(id) {
-                            crate::pandas::set_removed_reason_columns(&dict, reason)?;
+                        if let Some(reason) = inactive_metadata.get(id) {
+                            crate::pandas::set_inactive_reason_columns(&dict, reason)?;
                         } else {
-                            crate::pandas::set_removed_reason_na(&dict)?;
+                            crate::pandas::set_inactive_reason_na(&dict)?;
                         }
                     }
                     crate::pandas::apply_include_filter(&dict, flags)?;
@@ -1000,7 +1000,7 @@ impl Solution {
 
     /// Removed-constraint reasons DataFrame (long format).
     #[pyo3(signature = (*, kind))]
-    pub fn constraint_removed_reasons_df<'py>(
+    pub fn constraint_inactive_metadata_df<'py>(
         &self,
         py: Python<'py>,
         kind: ConstraintFamilyInput,
@@ -1016,9 +1016,9 @@ impl Solution {
                 evaluated_sos1_constraints
             ],
             |coll| {
-                crate::pandas::constraint_removed_reasons_dataframe(
+                crate::pandas::constraint_inactive_metadata_dataframe(
                     py,
-                    coll.removed_reasons().iter().map(|(id, r)| (*id, r)),
+                    coll.inactive_metadata().iter().map(|(id, r)| (*id, r)),
                     id_col,
                 )
             }
@@ -1056,7 +1056,7 @@ impl Solution {
         self.clone()
     }
 
-    /// Sum the nonnegative scalar violation of every constraint, including removed constraints.
+    /// Sum the nonnegative scalar violation of every constraint, including inactive constraints.
     ///
     /// - Equality: `abs(f(x))`; inequality: `max(0, f(x))`.
     /// - Indicator: the inner violation when active, otherwise zero.

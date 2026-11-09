@@ -63,14 +63,14 @@ def test_model_extraction_returns_attached_rows_of_all_families(
 
 def test_model_extraction_excludes_removed_rows_on_both_roots():
     model = label_model(make_model(Instance))
-    model.relax_constraint(5, "manual")
+    model.deactivate_constraint(5, "manual")
     for root in [model, model.as_parametric_instance()]:
         assert set(root.extract_constraints("c")) == {(i, -1) for i in range(1, 4)}
-        assert ConstraintID(5) in root.removed_constraints
+        assert ConstraintID(5) in root.inactive_constraints
 
 
 @pytest.mark.parametrize("removed", [False, True])
-def test_results_extract_violations_including_retained_removed_constraints(removed):
+def test_results_extract_violations_including_retained_inactive_constraints(removed):
     model = label_model(make_model(Instance))
     if removed:
         remove_all(model)

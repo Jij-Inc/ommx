@@ -135,7 +135,7 @@ def test_promote_sos1_big_m_exposes_batch_report(mode: Mode) -> None:
     assert report.rejections == {}
     assert set(instance.constraints[Sos1ConstraintID(103)].variables) == {0, 1}
     assert set(instance.constraints) == {Sos1ConstraintID(103)}
-    assert set(instance.removed_constraints) == {
+    assert set(instance.inactive_constraints) == {
         ConstraintID(100),
         ConstraintID(101),
         ConstraintID(102),
@@ -206,7 +206,7 @@ def test_promote_sos1_big_m_keys_shared_member_formulations_by_cardinality(
     assert report.rejections == {}
     assert set(instance.constraints[Sos1ConstraintID(2**64 - 2)].variables) == {0}
     assert set(instance.constraints[Sos1ConstraintID(2**64 - 1)].variables) == {0, 1}
-    assert set(instance.removed_constraints) == {
+    assert set(instance.inactive_constraints) == {
         ConstraintID(0),
         ConstraintID(2**64 - 3),
     }
@@ -232,7 +232,7 @@ def test_promote_sos1_big_m_defaults_to_best_effort_and_retains_all_rejections()
     assert "is not active" in report.rejections[ConstraintID(999)]
     assert "at least one member" in report.rejections[ConstraintID(2**64 - 1)]
     assert set(instance.constraints) == {Sos1ConstraintID(103)}
-    assert set(instance.removed_constraints) == {
+    assert set(instance.inactive_constraints) == {
         ConstraintID(100),
         ConstraintID(101),
         ConstraintID(102),
@@ -293,7 +293,7 @@ def test_promote_sos1_big_m_rejects_overlapping_links(mode: Mode) -> None:
             ConstraintID(103),
             Sos1ConstraintID(203),
         }
-        assert set(instance.removed_constraints) == {ConstraintID(202)}
+        assert set(instance.inactive_constraints) == {ConstraintID(202)}
         assert set(
             (cid for cid in instance.constraints if isinstance(cid, Sos1ConstraintID))
         ) == {Sos1ConstraintID(203)}

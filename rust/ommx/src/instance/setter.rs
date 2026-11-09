@@ -251,7 +251,7 @@ impl Instance {
         constraint: Constraint,
     ) -> crate::Result<Option<Constraint>> {
         if self.constraint_collection.active().contains_key(&id)
-            || self.constraint_collection.removed().contains_key(&id)
+            || self.constraint_collection.inactive().contains_key(&id)
         {
             let old = self
                 .constraint_collection
@@ -1055,12 +1055,12 @@ mod tests {
         let mut instance =
             Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
         instance
-            .relax_constraint(ConstraintID::from(2), "test".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(2), "test".to_string(), [])
             .unwrap();
 
         // Verify initial state
         assert_eq!(instance.constraints().len(), 1);
-        assert_eq!(instance.removed_constraints().len(), 1);
+        assert_eq!(instance.inactive_constraints().len(), 1);
 
         // Insert a new constraint with the same ID as the removed constraint
         let new_constraint = Constraint::equal_to_zero(
@@ -1079,9 +1079,9 @@ mod tests {
         );
 
         assert_eq!(instance.constraints().len(), 1);
-        assert_eq!(instance.removed_constraints().len(), 1);
+        assert_eq!(instance.inactive_constraints().len(), 1);
         let (removed, _reason) = instance
-            .removed_constraints()
+            .inactive_constraints()
             .get(&ConstraintID::from(2))
             .unwrap();
         assert_eq!(removed.equality, new_constraint.equality);
@@ -1243,10 +1243,10 @@ mod tests {
 
         // Remove constraint 1
         instance
-            .relax_constraint(ConstraintID::from(1), "test".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(1), "test".to_string(), [])
             .unwrap();
         assert_eq!(instance.constraints().len(), 0);
-        assert_eq!(instance.removed_constraints().len(), 1);
+        assert_eq!(instance.inactive_constraints().len(), 1);
 
         // Replace the removed constraint
         let new_constraints = vec![(
@@ -1259,8 +1259,8 @@ mod tests {
         // Should have replaced the removed constraint
         assert_eq!(replaced.len(), 1);
         assert!(replaced.contains_key(&ConstraintID::from(1)));
-        // Constraint is still in removed_constraints (with updated content)
-        assert_eq!(instance.removed_constraints().len(), 1);
+        // Constraint is still in inactive_constraints (with updated content)
+        assert_eq!(instance.inactive_constraints().len(), 1);
     }
 
     #[test]
@@ -1339,7 +1339,7 @@ mod tests {
         let mut instance =
             Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
         instance
-            .relax_constraint(ConstraintID::from(15), "test".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(15), "test".to_string(), [])
             .unwrap();
 
         // Should return 16 (max(3, 15) + 1)

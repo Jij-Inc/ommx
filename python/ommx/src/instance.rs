@@ -1101,7 +1101,7 @@ impl Instance {
     ///
     /// Values are attached handles, just as in `constraints`: edits update this
     /// model. The returned dictionary snapshots the matching keys; it does not
-    /// track later label or membership changes. Removed constraints are excluded.
+    /// track later label or membership changes. Inactive constraints are excluded.
     /// Parameters and descriptions do not participate in matching.
     ///
     /// Raises KeyError if no active constraint has this name, and ValueError if
@@ -1233,7 +1233,7 @@ impl Instance {
     }
 
     /// All active constraint families, including {attr}`~ommx.ConstraintKind.Regular`.
-    /// Removed constraints are excluded. This is independent of adapter support.
+    /// Inactive constraints are excluded. This is independent of adapter support.
     #[getter]
     pub fn active_constraint_kinds(&self) -> std::collections::HashSet<crate::ConstraintKind> {
         self.inner
@@ -1280,12 +1280,12 @@ impl Instance {
         Ok(lowered.into_iter().map(|kind| kind.into()).collect())
     }
 
-    #[doc = include_str!("docstrings/ommx/Instance.removed_constraints.md")]
+    #[doc = include_str!("docstrings/ommx/Instance.inactive_constraints.md")]
     #[getter]
-    pub fn removed_constraints(
+    pub fn inactive_constraints(
         slf: Bound<'_, Self>,
-    ) -> crate::constraint_collection::RemovedConstraintCollection {
-        crate::constraint_collection::RemovedConstraintCollection::new(
+    ) -> crate::constraint_collection::InactiveConstraintCollection {
+        crate::constraint_collection::InactiveConstraintCollection::new(
             crate::ConstraintHost::Instance(slf.unbind()),
         )
     }
@@ -1511,7 +1511,7 @@ impl Instance {
     ///
     /// - The active sense is {attr}`~ommx.Sense.Minimize`.
     /// - There are no active regular, Indicator, OneHot, or SOS1 constraints.
-    ///   Removed constraints do not prevent formatting and are not exported.
+    ///   Inactive constraints do not prevent formatting and are not exported.
     /// - Every variable referenced by the active objective has Binary kind.
     ///   Other variables retained by the instance do not prevent formatting.
     /// - The active objective is stored as an expanded polynomial. Composed
@@ -1547,7 +1547,7 @@ impl Instance {
     ///
     /// The coefficients describe the active objective. They do not carry
     /// {attr}`~ommx.Instance.output_objective`,
-    /// removed constraints, or value-recovery rules. Keep the instance and use
+    /// inactive constraints, or value-recovery rules. Keep the instance and use
     /// {meth}`~ommx.Instance.evaluate` or {meth}`~ommx.Instance.evaluate_samples`
     /// to interpret candidates with its output semantics. Backend energy can
     /// differ from the objective reported by those methods.
@@ -1754,7 +1754,7 @@ impl Instance {
     /// where $\lambda_i$ and $\rho_j$ are the penalty weight parameters for each constraint.
     /// If you want to use single weight parameter, use {meth}`~ommx.Instance.uniform_penalty_method` instead.
     ///
-    /// The removed constraints are stored in {attr}`~ommx.ParametricInstance.removed_constraints`.
+    /// The inactive constraints are stored in {attr}`~ommx.ParametricInstance.inactive_constraints`.
     ///
     /// > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
     /// > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
@@ -1774,7 +1774,7 @@ impl Instance {
     /// >>> parameters = {parameter.id: 2.0 for parameter in parametric.parameters}
     /// >>> prepared = parametric.with_parameters(parameters)
     /// >>> assert parametric.constraints == {}
-    /// >>> assert ConstraintID(7) in parametric.removed_constraints
+    /// >>> assert ConstraintID(7) in parametric.inactive_constraints
     /// >>> assert prepared.objective.evaluate({0: 0}) == 2.0
     /// >>> solution = prepared.evaluate({0: 0})
     /// >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
@@ -1799,7 +1799,7 @@ impl Instance {
     ///
     /// where $\lambda$ is the uniform penalty weight parameter for all constraints.
     ///
-    /// The removed constraints are stored in {attr}`~ommx.ParametricInstance.removed_constraints`.
+    /// The inactive constraints are stored in {attr}`~ommx.ParametricInstance.inactive_constraints`.
     ///
     /// > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
     /// > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
@@ -1819,7 +1819,7 @@ impl Instance {
     /// >>> parameter_id = parametric.parameters[0].id
     /// >>> prepared = parametric.with_parameters({parameter_id: 2.0})
     /// >>> assert parametric.constraints == {}
-    /// >>> assert ConstraintID(7) in parametric.removed_constraints
+    /// >>> assert ConstraintID(7) in parametric.inactive_constraints
     /// >>> assert prepared.objective.evaluate({0: 0}) == 2.0
     /// >>> solution = prepared.evaluate({0: 0})
     /// >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
@@ -1844,7 +1844,7 @@ impl Instance {
     /// candidate from a file and identifies violated constraints.
     ///
     /// Evaluate a solver's returned candidate with the transformed Instance
-    /// used for that solve. Its recorded dependencies, removed constraints,
+    /// used for that solve. Its recorded dependencies, inactive constraints,
     /// and output objective are needed to reconstruct and interpret the result.
     ///
     /// # Postconditions
@@ -2080,15 +2080,15 @@ impl Instance {
         Ok(crate::Samples(samples))
     }
 
-    #[doc = include_str!("docstrings/ommx/Instance.relax_constraint.md")]
+    #[doc = include_str!("docstrings/ommx/Instance.deactivate_constraint.md")]
     #[pyo3(signature = (constraint_id, reason, **parameters))]
-    pub(crate) fn relax_constraint(
+    pub(crate) fn deactivate_constraint(
         &mut self,
         constraint_id: ConstraintIDInput,
         reason: String,
         #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
     ) -> OmmxPyResult<()> {
-        self.inner.relax_constraint(
+        self.inner.deactivate_constraint(
             constraint_id.into(),
             reason,
             parameters.unwrap_or_default(),
@@ -2105,15 +2105,15 @@ impl Instance {
     ///
     /// This restores one condition, not the state before a transformation:
     /// generated variables or constraints and objective changes remain.
-    /// See {meth}`~ommx.Instance.relax_constraint` for a complete round trip.
+    /// See {meth}`~ommx.Instance.deactivate_constraint` for a complete round trip.
     /// Raises RuntimeError if the ID is not a removed regular constraint or
     /// its expression cannot be normalized for the current Instance. Failure
     /// leaves the row removed.
-    pub(crate) fn restore_constraint(
+    pub(crate) fn activate_constraint(
         &mut self,
         constraint_id: ConstraintIDInput,
     ) -> OmmxPyResult<()> {
-        self.inner.restore_constraint(constraint_id.into())?;
+        self.inner.activate_constraint(constraint_id.into())?;
         Ok(())
     }
 
@@ -2124,18 +2124,18 @@ impl Instance {
     /// preserving the constraint's ID, labels, and provenance. Raises
     /// RuntimeError if the ID does not identify an active Indicator constraint.
     /// Evaluation still checks the retained condition; see
-    /// {attr}`~ommx.Instance.removed_constraints` for feasibility semantics and
-    /// {meth}`~ommx.Instance.relax_constraint` for the equivalent regular-
+    /// {attr}`~ommx.Instance.inactive_constraints` for feasibility semantics and
+    /// {meth}`~ommx.Instance.deactivate_constraint` for the equivalent regular-
     /// constraint workflow. Restore with
-    /// {meth}`~ommx.Instance.restore_indicator_constraint`.
+    /// {meth}`~ommx.Instance.activate_indicator_constraint`.
     #[pyo3(signature = (constraint_id, reason, **parameters))]
-    pub(crate) fn relax_indicator_constraint(
+    pub(crate) fn deactivate_indicator_constraint(
         &mut self,
         constraint_id: IndicatorConstraintIDInput,
         reason: String,
         #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
     ) -> OmmxPyResult<()> {
-        self.inner.relax_indicator_constraint(
+        self.inner.deactivate_indicator_constraint(
             constraint_id.into(),
             reason,
             parameters.unwrap_or_default(),
@@ -2154,12 +2154,12 @@ impl Instance {
     /// Raises RuntimeError if the ID is not a removed Indicator constraint,
     /// its controlling variable has been fixed or substituted, or its body
     /// cannot be normalized. Failure leaves the row removed.
-    pub(crate) fn restore_indicator_constraint(
+    pub(crate) fn activate_indicator_constraint(
         &mut self,
         constraint_id: IndicatorConstraintIDInput,
     ) -> OmmxPyResult<()> {
         self.inner
-            .restore_indicator_constraint(constraint_id.into())?;
+            .activate_indicator_constraint(constraint_id.into())?;
         Ok(())
     }
 
@@ -2168,7 +2168,7 @@ impl Instance {
     /// A one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the
     /// linear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality
     /// as a new regular constraint and moves the one-hot constraint into
-    /// {attr}`~ommx.Instance.removed_constraints` with
+    /// {attr}`~ommx.Instance.inactive_constraints` with
     /// ``reason="ommx.Instance.convert_one_hot_to_constraint"`` and a
     /// ``constraint_id`` parameter pointing to the new regular constraint.
     /// The generated regular constraint preserves the original one-hot context
@@ -2195,8 +2195,8 @@ impl Instance {
     /// >>> new_id = instance.convert_one_hot_to_constraint(1)
     /// >>> instance.constraints
     /// {ConstraintID(2): Constraint(x0 + x1 + x2 - 1 == 0)}
-    /// >>> instance.removed_constraints
-    /// {OneHotConstraintID(1): RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=2)}
+    /// >>> instance.inactive_constraints
+    /// {OneHotConstraintID(1): InactiveOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=2)}
     pub(crate) fn convert_one_hot_to_constraint(
         &mut self,
         one_hot_id: OneHotConstraintIDInput,
@@ -2276,7 +2276,7 @@ impl Instance {
     /// mutation. Any error leaves the Instance unchanged.
     ///
     /// On success, the original SOS1 constraint is moved to
-    /// {attr}`~ommx.Instance.removed_constraints` with
+    /// {attr}`~ommx.Instance.inactive_constraints` with
     /// ``reason="ommx.Instance.convert_sos1_to_constraints"`` and a
     /// comma-separated ``constraint_ids`` parameter in returned order. Every
     /// generated regular constraint records a {class}`~ommx.Provenance` entry
@@ -2299,8 +2299,8 @@ impl Instance {
     /// [ConstraintID(2)]
     /// >>> instance.constraints
     /// {ConstraintID(2): Constraint(x0 + x1 + x2 - 1 <= 0)}
-    /// >>> instance.removed_constraints
-    /// {Sos1ConstraintID(1): RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=2)}
+    /// >>> instance.inactive_constraints
+    /// {Sos1ConstraintID(1): InactiveSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=2)}
     pub(crate) fn convert_sos1_to_constraints(
         &mut self,
         sos1_id: Sos1ConstraintIDInput,
@@ -2392,7 +2392,7 @@ impl Instance {
     /// approximate solver value near 0 or 1.
     ///
     /// On success, the original indicator constraint is moved to
-    /// {attr}`~ommx.Instance.removed_constraints` with
+    /// {attr}`~ommx.Instance.inactive_constraints` with
     /// ``reason="ommx.Instance.convert_indicator_to_constraint"`` and a
     /// comma-separated ``constraint_ids`` parameter in returned order (empty
     /// when no side is emitted). Every generated regular constraint records a
@@ -2490,7 +2490,7 @@ impl Instance {
     /// # Postconditions
     ///
     /// Encoding rewrites the Active Formulation and records variable reconstruction
-    /// rules. Named functions and removed constraints keep their original expressions.
+    /// rules. Named functions and inactive constraints keep their original expressions.
     /// Fixed and dependent variables cannot be encoded again.
     /// An existing output objective is preserved; if the active objective is affected
     /// and no output objective exists, its previous function and sense are retained.
@@ -2564,7 +2564,7 @@ impl Instance {
     /// # Postconditions
     ///
     /// Encoding rewrites the Active Formulation and records variable reconstruction
-    /// rules. Named functions and removed constraints keep their original expressions.
+    /// rules. Named functions and inactive constraints keep their original expressions.
     /// Fixed and dependent variables cannot be encoded again.
     /// An existing output objective is preserved; if the active objective is affected
     /// and no output objective exists, its previous function and sense are retained.
@@ -2620,7 +2620,7 @@ impl Instance {
     /// objective and all active constraints. This is the general substitution
     /// mechanism behind {meth}`~ommx.Instance.log_encode`, exposed so that
     /// users can implement their own variable representations. Named functions,
-    /// removed constraints, and an existing output objective retain their expressions
+    /// inactive constraints, and an existing output objective retain their expressions
     /// as Interpretation Context. The Instance records the assignments and composes
     /// existing dependencies; {meth}`~ommx.Instance.evaluate` and
     /// {meth}`~ommx.Instance.evaluate_samples` reconstruct values before evaluating
@@ -2744,7 +2744,7 @@ impl Instance {
     ///   - The bound is feasible everywhere at the selected tolerance, i.e.
     ///     $u \leq \text{atol}$:
     ///     this means this constraint is trivially satisfied,
-    ///     the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,
+    ///     the constraint is moved to {attr}`~ommx.Instance.inactive_constraints`,
     ///     and this method returns without introducing slack variable or raising an error.
     ///
     /// # Examples
@@ -2965,7 +2965,7 @@ impl Instance {
     ///     "constraints": {
     ///         "total": int,
     ///         "active": int,
-    ///         "removed": int
+    ///         "inactive": int
     ///     }
     /// }
     /// ```
@@ -3024,14 +3024,14 @@ impl Instance {
     ///
     /// `include` selects which optional column families to fold in. It
     /// accepts a sequence of `"label"` / `"parameters"` /
-    /// `"removed_reason"`; passing `None` (the default) yields the
-    /// v2-equivalent shape (`label` + `parameters`). `"removed_reason"`
-    /// is a unit flag that gates both the `removed_reason` column and the
-    /// `removed_reason.{key}` parameter columns together.
+    /// `"inactive_reason"`; passing `None` (the default) yields the
+    /// v2-equivalent shape (`label` + `parameters`). `"inactive_reason"`
+    /// is a unit flag that gates both the `inactive_reason` column and the
+    /// `inactive_reason.{key}` parameter columns together.
     ///
     /// `removed=False` (default) returns active constraints only.
     /// `removed=True` returns active + removed rows in the same DataFrame
-    /// and auto-sets `"removed_reason"` so removed rows are
+    /// and auto-sets `"inactive_reason"` so removed rows are
     /// distinguishable (active rows have NA in the reason columns).
     #[pyo3(signature = (*, kind, include = None, removed = false))]
     pub fn constraints_df<'py>(
@@ -3044,7 +3044,7 @@ impl Instance {
         let id_col = constraint_id_col(kind);
         let mut flags = crate::pandas::IncludeFlags::from_optional(include)?;
         if removed {
-            flags.removed_reason = true;
+            flags.inactive_reason = true;
         }
         constraint_kind_collection!(
             self.inner,
@@ -3058,7 +3058,7 @@ impl Instance {
             |coll| {
                 let meta = coll.context().clone();
                 let active = coll.active();
-                let removed_map = coll.removed();
+                let removed_map = coll.inactive();
                 let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
                 if removed {
                     // Globally id-sorted merge of active and removed.
@@ -3079,8 +3079,8 @@ impl Instance {
                             let dict = crate::pandas::WithModelingContext::new((*id, c), &m)
                                 .to_pandas_entry(py)?;
                             // Active rows in a removed=True view get NA
-                            // in the (always-present) removed_reason column.
-                            crate::pandas::set_removed_reason_na(&dict)?;
+                            // in the (always-present) inactive_reason column.
+                            crate::pandas::set_inactive_reason_na(&dict)?;
                             crate::pandas::apply_include_filter(&dict, flags)?;
                             crate::pandas::rename_id_column(&dict, id_col)?;
                             entries.push(dict.into_any());
@@ -3099,11 +3099,11 @@ impl Instance {
                         let m = meta.collect_for(*id);
                         let dict = crate::pandas::WithModelingContext::new((*id, c), &m)
                             .to_pandas_entry(py)?;
-                        // User-requested removed_reason on an active-only
+                        // User-requested inactive_reason on an active-only
                         // view: ensure the column survives even when no
                         // row carries a reason.
-                        if flags.removed_reason {
-                            crate::pandas::set_removed_reason_na(&dict)?;
+                        if flags.inactive_reason {
+                            crate::pandas::set_inactive_reason_na(&dict)?;
                         }
                         crate::pandas::apply_include_filter(&dict, flags)?;
                         crate::pandas::rename_id_column(&dict, id_col)?;
@@ -3170,7 +3170,7 @@ impl Instance {
                 crate::pandas::constraint_context_dataframe(
                     py,
                     coll.context(),
-                    coll.active().keys().chain(coll.removed().keys()).copied(),
+                    coll.active().keys().chain(coll.inactive().keys()).copied(),
                     id_col,
                 )
             }
@@ -3201,7 +3201,7 @@ impl Instance {
                 crate::pandas::constraint_parameters_dataframe(
                     py,
                     coll.context(),
-                    coll.active().keys().chain(coll.removed().keys()).copied(),
+                    coll.active().keys().chain(coll.inactive().keys()).copied(),
                     id_col,
                 )
             }
@@ -3232,7 +3232,7 @@ impl Instance {
                 crate::pandas::constraint_provenance_dataframe(
                     py,
                     coll.context(),
-                    coll.active().keys().chain(coll.removed().keys()).copied(),
+                    coll.active().keys().chain(coll.inactive().keys()).copied(),
                     id_col,
                 )
             }
@@ -3245,7 +3245,7 @@ impl Instance {
     /// `key`/`value` set to NA when the reason has no parameters. Columns:
     /// `{kind}_constraint_id`, `reason`, `key`, `value`.
     #[pyo3(signature = (*, kind))]
-    pub fn constraint_removed_reasons_df<'py>(
+    pub fn constraint_inactive_metadata_df<'py>(
         &self,
         py: Python<'py>,
         kind: ConstraintFamilyInput,
@@ -3261,9 +3261,9 @@ impl Instance {
                 sos1_constraint_collection
             ],
             |coll| {
-                crate::pandas::constraint_removed_reasons_dataframe(
+                crate::pandas::constraint_inactive_metadata_dataframe(
                     py,
-                    coll.removed().iter().map(|(id, (_, r))| (*id, r)),
+                    coll.inactive().iter().map(|(id, (_, r))| (*id, r)),
                     id_col,
                 )
             }

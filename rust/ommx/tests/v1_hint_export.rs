@@ -779,7 +779,7 @@ fn best_effort_preserves_regular_rows_variables_dependencies_and_metadata() {
     assert_eq!(instance.decision_variable_dependency().len(), 1);
     assert!(instance.sos1_constraints().is_empty());
     assert!(instance.one_hot_constraints().is_empty());
-    assert!(instance.removed_constraints().is_empty());
+    assert!(instance.inactive_constraints().is_empty());
 }
 
 #[test]

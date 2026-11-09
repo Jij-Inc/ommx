@@ -411,26 +411,28 @@ mod tests {
             actual.feasible_constraints_relaxed()
         );
         prop_assert_eq!(
-            expected.evaluated_constraints().removed_reasons(),
-            actual.evaluated_constraints().removed_reasons()
+            expected.evaluated_constraints().inactive_metadata(),
+            actual.evaluated_constraints().inactive_metadata()
         );
         prop_assert_eq!(
-            expected.evaluated_indicator_constraints().removed_reasons(),
-            actual.evaluated_indicator_constraints().removed_reasons()
+            expected
+                .evaluated_indicator_constraints()
+                .inactive_metadata(),
+            actual.evaluated_indicator_constraints().inactive_metadata()
         );
         prop_assert_eq!(
-            expected.evaluated_one_hot_constraints().removed_reasons(),
-            actual.evaluated_one_hot_constraints().removed_reasons()
+            expected.evaluated_one_hot_constraints().inactive_metadata(),
+            actual.evaluated_one_hot_constraints().inactive_metadata()
         );
         prop_assert_eq!(
-            expected.evaluated_sos1_constraints().removed_reasons(),
-            actual.evaluated_sos1_constraints().removed_reasons()
+            expected.evaluated_sos1_constraints().inactive_metadata(),
+            actual.evaluated_sos1_constraints().inactive_metadata()
         );
 
         for (id, expected_constraint) in expected.evaluated_constraints().iter() {
             if expected
                 .evaluated_constraints()
-                .removed_reasons()
+                .inactive_metadata()
                 .contains_key(id)
             {
                 continue;
@@ -450,7 +452,7 @@ mod tests {
         for (id, expected_constraint) in expected.evaluated_indicator_constraints().iter() {
             if expected
                 .evaluated_indicator_constraints()
-                .removed_reasons()
+                .inactive_metadata()
                 .contains_key(id)
             {
                 continue;
@@ -474,7 +476,7 @@ mod tests {
         for (id, expected_constraint) in expected.evaluated_one_hot_constraints().iter() {
             if expected
                 .evaluated_one_hot_constraints()
-                .removed_reasons()
+                .inactive_metadata()
                 .contains_key(id)
             {
                 continue;
@@ -493,7 +495,7 @@ mod tests {
         for (id, expected_constraint) in expected.evaluated_sos1_constraints().iter() {
             if expected
                 .evaluated_sos1_constraints()
-                .removed_reasons()
+                .inactive_metadata()
                 .contains_key(id)
             {
                 continue;

@@ -130,9 +130,9 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_regular_constraints(
         &mut out,
         "Removed constraints",
-        instance.removed_constraints().len(),
+        instance.inactive_constraints().len(),
         instance
-            .removed_constraints()
+            .inactive_constraints()
             .iter()
             .map(|(id, (constraint, reason))| (*id, constraint, Some(reason))),
         instance.constraint_context(),
@@ -153,9 +153,9 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_indicator_constraints(
         &mut out,
         "Removed indicator constraints",
-        instance.removed_indicator_constraints().len(),
+        instance.inactive_indicator_constraints().len(),
         instance
-            .removed_indicator_constraints()
+            .inactive_indicator_constraints()
             .iter()
             .map(|(id, (constraint, reason))| (*id, constraint, Some(reason))),
         instance.indicator_constraint_context(),
@@ -176,9 +176,9 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_one_hot_constraints(
         &mut out,
         "Removed one-hot constraints",
-        instance.removed_one_hot_constraints().len(),
+        instance.inactive_one_hot_constraints().len(),
         instance
-            .removed_one_hot_constraints()
+            .inactive_one_hot_constraints()
             .iter()
             .map(|(id, (constraint, reason))| (*id, constraint, Some(reason))),
         instance.one_hot_constraint_context(),
@@ -198,9 +198,9 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_sos1_constraints(
         &mut out,
         "Removed SOS1 constraints",
-        instance.removed_sos1_constraints().len(),
+        instance.inactive_sos1_constraints().len(),
         instance
-            .removed_sos1_constraints()
+            .inactive_sos1_constraints()
             .iter()
             .map(|(id, (constraint, reason))| (*id, constraint, Some(reason))),
         instance.sos1_constraint_context(),
@@ -244,9 +244,9 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_regular_constraints(
         &mut out,
         "Removed constraints",
-        instance.removed_constraints().len(),
+        instance.inactive_constraints().len(),
         instance
-            .removed_constraints()
+            .inactive_constraints()
             .iter()
             .map(|(id, (constraint, reason))| (*id, constraint, Some(reason))),
         instance.constraint_context(),
@@ -267,9 +267,9 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_indicator_constraints(
         &mut out,
         "Removed indicator constraints",
-        instance.removed_indicator_constraints().len(),
+        instance.inactive_indicator_constraints().len(),
         instance
-            .removed_indicator_constraints()
+            .inactive_indicator_constraints()
             .iter()
             .map(|(id, (constraint, reason))| (*id, constraint, Some(reason))),
         instance.indicator_constraint_context(),
@@ -290,9 +290,9 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_one_hot_constraints(
         &mut out,
         "Removed one-hot constraints",
-        instance.removed_one_hot_constraints().len(),
+        instance.inactive_one_hot_constraints().len(),
         instance
-            .removed_one_hot_constraints()
+            .inactive_one_hot_constraints()
             .iter()
             .map(|(id, (constraint, reason))| (*id, constraint, Some(reason))),
         instance.one_hot_constraint_context(),
@@ -312,9 +312,9 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_sos1_constraints(
         &mut out,
         "Removed SOS1 constraints",
-        instance.removed_sos1_constraints().len(),
+        instance.inactive_sos1_constraints().len(),
         instance
-            .removed_sos1_constraints()
+            .inactive_sos1_constraints()
             .iter()
             .map(|(id, (constraint, reason))| (*id, constraint, Some(reason))),
         instance.sos1_constraint_context(),
@@ -356,7 +356,7 @@ fn write_instance_header<T>(
     }
     writeln!(
         out,
-        ", active_constraints={}, removed_constraints={}, named_functions={})",
+        ", active_constraints={}, inactive_constraints={}, named_functions={})",
         instance.active_constraint_count(),
         instance.removed_constraint_count(),
         instance.named_function_count(),
@@ -411,11 +411,11 @@ trait ConstraintFamilyCounts {
     fn regular_constraints_count(&self) -> usize;
     fn removed_regular_constraints_count(&self) -> usize;
     fn indicator_constraints_count(&self) -> usize;
-    fn removed_indicator_constraints_count(&self) -> usize;
+    fn inactive_indicator_constraints_count(&self) -> usize;
     fn one_hot_constraints_count(&self) -> usize;
-    fn removed_one_hot_constraints_count(&self) -> usize;
+    fn inactive_one_hot_constraints_count(&self) -> usize;
     fn sos1_constraints_count(&self) -> usize;
-    fn removed_sos1_constraints_count(&self) -> usize;
+    fn inactive_sos1_constraints_count(&self) -> usize;
 }
 
 impl ConstraintFamilyCounts for Instance {
@@ -424,31 +424,31 @@ impl ConstraintFamilyCounts for Instance {
     }
 
     fn removed_regular_constraints_count(&self) -> usize {
-        self.removed_constraints().len()
+        self.inactive_constraints().len()
     }
 
     fn indicator_constraints_count(&self) -> usize {
         self.indicator_constraints().len()
     }
 
-    fn removed_indicator_constraints_count(&self) -> usize {
-        self.removed_indicator_constraints().len()
+    fn inactive_indicator_constraints_count(&self) -> usize {
+        self.inactive_indicator_constraints().len()
     }
 
     fn one_hot_constraints_count(&self) -> usize {
         self.one_hot_constraints().len()
     }
 
-    fn removed_one_hot_constraints_count(&self) -> usize {
-        self.removed_one_hot_constraints().len()
+    fn inactive_one_hot_constraints_count(&self) -> usize {
+        self.inactive_one_hot_constraints().len()
     }
 
     fn sos1_constraints_count(&self) -> usize {
         self.sos1_constraints().len()
     }
 
-    fn removed_sos1_constraints_count(&self) -> usize {
-        self.removed_sos1_constraints().len()
+    fn inactive_sos1_constraints_count(&self) -> usize {
+        self.inactive_sos1_constraints().len()
     }
 }
 
@@ -458,31 +458,31 @@ impl ConstraintFamilyCounts for ParametricInstance {
     }
 
     fn removed_regular_constraints_count(&self) -> usize {
-        self.removed_constraints().len()
+        self.inactive_constraints().len()
     }
 
     fn indicator_constraints_count(&self) -> usize {
         self.indicator_constraints().len()
     }
 
-    fn removed_indicator_constraints_count(&self) -> usize {
-        self.removed_indicator_constraints().len()
+    fn inactive_indicator_constraints_count(&self) -> usize {
+        self.inactive_indicator_constraints().len()
     }
 
     fn one_hot_constraints_count(&self) -> usize {
         self.one_hot_constraints().len()
     }
 
-    fn removed_one_hot_constraints_count(&self) -> usize {
-        self.removed_one_hot_constraints().len()
+    fn inactive_one_hot_constraints_count(&self) -> usize {
+        self.inactive_one_hot_constraints().len()
     }
 
     fn sos1_constraints_count(&self) -> usize {
         self.sos1_constraints().len()
     }
 
-    fn removed_sos1_constraints_count(&self) -> usize {
-        self.removed_sos1_constraints().len()
+    fn inactive_sos1_constraints_count(&self) -> usize {
+        self.inactive_sos1_constraints().len()
     }
 }
 
@@ -495,9 +495,9 @@ fn active_constraint_count(instance: &impl ConstraintFamilyCounts) -> usize {
 
 fn removed_constraint_count(instance: &impl ConstraintFamilyCounts) -> usize {
     instance.removed_regular_constraints_count()
-        + instance.removed_indicator_constraints_count()
-        + instance.removed_one_hot_constraints_count()
-        + instance.removed_sos1_constraints_count()
+        + instance.inactive_indicator_constraints_count()
+        + instance.inactive_one_hot_constraints_count()
+        + instance.inactive_sos1_constraints_count()
 }
 
 fn write_regular_constraints<'a, I>(
@@ -509,7 +509,13 @@ fn write_regular_constraints<'a, I>(
     mut format_function: impl FnMut(&Function) -> crate::Result<String>,
 ) -> crate::Result<()>
 where
-    I: IntoIterator<Item = (ConstraintID, &'a Constraint, Option<&'a RemovedReason>)>,
+    I: IntoIterator<
+        Item = (
+            ConstraintID,
+            &'a Constraint,
+            Option<&'a InactiveConstraintMetadata>,
+        ),
+    >,
 {
     if row_count == 0 {
         return Ok(());
@@ -551,7 +557,7 @@ where
         Item = (
             crate::IndicatorConstraintID,
             &'a IndicatorConstraint,
-            Option<&'a RemovedReason>,
+            Option<&'a InactiveConstraintMetadata>,
         ),
     >,
 {
@@ -596,7 +602,7 @@ where
         Item = (
             crate::OneHotConstraintID,
             &'a OneHotConstraint,
-            Option<&'a RemovedReason>,
+            Option<&'a InactiveConstraintMetadata>,
         ),
     >,
 {
@@ -641,7 +647,7 @@ where
         Item = (
             crate::Sos1ConstraintID,
             &'a Sos1Constraint,
-            Option<&'a RemovedReason>,
+            Option<&'a InactiveConstraintMetadata>,
         ),
     >,
 {
@@ -716,7 +722,7 @@ fn write_optional_row_label(out: &mut String, label: Option<String>) {
     }
 }
 
-fn removed_suffix(reason: Option<&RemovedReason>) -> String {
+fn removed_suffix(reason: Option<&InactiveConstraintMetadata>) -> String {
     match reason {
         Some(reason) if reason.reason.is_empty() => " (removed)".to_string(),
         Some(reason) => format!(" (removed: {})", reason.reason),
@@ -856,7 +862,7 @@ fn collect_instance_summary_symbols(instance: &Instance) -> crate::Result<Summar
         collect_instance_function_ids(instance, constraint.function(), &mut ids)?;
     }
     for (_, (constraint, _)) in instance
-        .removed_constraints()
+        .inactive_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
@@ -870,7 +876,7 @@ fn collect_instance_summary_symbols(instance: &Instance) -> crate::Result<Summar
         collect_instance_indicator_ids(instance, constraint, &mut ids)?;
     }
     for (_, (constraint, _)) in instance
-        .removed_indicator_constraints()
+        .inactive_indicator_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
@@ -884,7 +890,7 @@ fn collect_instance_summary_symbols(instance: &Instance) -> crate::Result<Summar
         collect_instance_variable_ids(instance, constraint.variables.iter().copied(), &mut ids)?;
     }
     for (_, (constraint, _)) in instance
-        .removed_one_hot_constraints()
+        .inactive_one_hot_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
@@ -898,7 +904,7 @@ fn collect_instance_summary_symbols(instance: &Instance) -> crate::Result<Summar
         collect_instance_variable_ids(instance, constraint.variables.iter().copied(), &mut ids)?;
     }
     for (_, (constraint, _)) in instance
-        .removed_sos1_constraints()
+        .inactive_sos1_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
@@ -934,7 +940,7 @@ fn collect_parametric_instance_summary_symbols(
         collect_parametric_function_ids(instance, constraint.function(), &mut function_ids)?;
     }
     for (_, (constraint, _)) in instance
-        .removed_constraints()
+        .inactive_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
@@ -953,7 +959,7 @@ fn collect_parametric_instance_summary_symbols(
         )?;
     }
     for (_, (constraint, _)) in instance
-        .removed_indicator_constraints()
+        .inactive_indicator_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
@@ -976,7 +982,7 @@ fn collect_parametric_instance_summary_symbols(
         )?;
     }
     for (_, (constraint, _)) in instance
-        .removed_one_hot_constraints()
+        .inactive_one_hot_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
@@ -998,7 +1004,7 @@ fn collect_parametric_instance_summary_symbols(
         )?;
     }
     for (_, (constraint, _)) in instance
-        .removed_sos1_constraints()
+        .inactive_sos1_constraints()
         .iter()
         .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
@@ -1625,7 +1631,7 @@ mod tests {
             (
                 ConstraintID::from(id as u64),
                 constraint,
-                None::<&RemovedReason>,
+                None::<&InactiveConstraintMetadata>,
             )
         });
         let mut out = String::new();
@@ -1738,7 +1744,7 @@ mod tests {
         };
 
         insta::assert_snapshot!(instance.format_summary(), @r###"
-        Instance(sense=maximize, decision_variables=3, active_constraints=1, removed_constraints=0, named_functions=1)
+        Instance(sense=maximize, decision_variables=3, active_constraints=1, inactive_constraints=0, named_functions=1)
         Objective:
           x[0] + x[1]
         Constraints:
@@ -1805,7 +1811,7 @@ mod tests {
             .unwrap();
 
         insta::assert_snapshot!(instance.format_summary(), @r###"
-        Instance(sense=minimize, decision_variables=1, active_constraints=21, removed_constraints=0, named_functions=0)
+        Instance(sense=minimize, decision_variables=1, active_constraints=21, inactive_constraints=0, named_functions=0)
         Objective:
           0
         Constraints:
@@ -1863,7 +1869,7 @@ mod tests {
             .unwrap();
 
         insta::assert_snapshot!(instance.format_summary(), @r###"
-        ParametricInstance(sense=minimize, decision_variables=1, parameters=0, active_constraints=21, removed_constraints=0, named_functions=0)
+        ParametricInstance(sense=minimize, decision_variables=1, parameters=0, active_constraints=21, inactive_constraints=0, named_functions=0)
         Objective:
           0
         Constraints:
@@ -1918,7 +1924,7 @@ mod tests {
             .unwrap();
 
         insta::assert_snapshot!(instance.format_summary(), @r###"
-        Instance(sense=minimize, decision_variables=20, active_constraints=1, removed_constraints=0, named_functions=0)
+        Instance(sense=minimize, decision_variables=20, active_constraints=1, inactive_constraints=0, named_functions=0)
         Objective:
           0
         One-hot constraints:

@@ -120,11 +120,11 @@ def test_partial_evaluate_preserves_reporting_context(path):
         if path == "one_hot"
         else {},
     )
-    instance.relax_constraint(7, "retained source")
+    instance.deactivate_constraint(7, "retained source")
     if path == "dependent":
         instance.substitute({2: 2 * x})
     before = instance.to_v2_bytes()
-    removed = instance.removed_constraints[ConstraintID(7)].function
+    removed = instance.inactive_constraints[ConstraintID(7)].function
     fixed = instance.partial_evaluate({0: 1.0000005}, atol=1e-6)
     assert instance.to_v2_bytes() == before
     for result in (fixed, Instance.from_v2_bytes(fixed.to_v2_bytes())):
@@ -132,7 +132,7 @@ def test_partial_evaluate_preserves_reporting_context(path):
         assert nf.function == metric
         assert nf.name == "metric"
         assert nf.subscripts == [4]
-        assert result.removed_constraints[ConstraintID(7)].function == removed
+        assert result.inactive_constraints[ConstraintID(7)].function == removed
         assert result.fixed_decision_variables()[0] == 1
         if path == "one_hot":
             assert result.fixed_decision_variables()[1] == 0

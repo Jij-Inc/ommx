@@ -118,7 +118,7 @@ def test_string_kind_is_rejected():
         "constraint_context_df",
         "constraint_parameters_df",
         "constraint_provenance_df",
-        "constraint_removed_reasons_df",
+        "constraint_inactive_metadata_df",
     ],
 )
 def test_constraint_sidecars_require_explicit_keyword_kind(owner, accessor):
@@ -224,21 +224,21 @@ def test_provenance_after_one_hot_conversion(snapshot):
 
 
 # ---------------------------------------------------------------------------
-# constraint_removed_reasons_df
+# constraint_inactive_metadata_df
 # ---------------------------------------------------------------------------
 
 
-def test_removed_reasons_df_after_relax(snapshot):
-    """relax_constraint with no extra parameters → 1 row, key/value = NA."""
+def test_inactive_metadata_df_after_relax(snapshot):
+    """deactivate_constraint with no extra parameters → 1 row, key/value = NA."""
     instance = _instance_with_context()
-    instance.relax_constraint(10, "test_reason")
+    instance.deactivate_constraint(10, "test_reason")
     assert (
-        _df_snap(instance.constraint_removed_reasons_df(kind=ConstraintKind.Regular))
+        _df_snap(instance.constraint_inactive_metadata_df(kind=ConstraintKind.Regular))
         == snapshot
     )
 
 
-def test_removed_reasons_df_with_parameters_after_one_hot_conversion(snapshot):
+def test_inactive_metadata_df_with_parameters_after_one_hot_conversion(snapshot):
     """`convert_one_hot_to_constraint` records the conversion reason with a
     `constraint_id` parameter — verifies the long-format expansion of the
     parameter map."""
@@ -252,7 +252,7 @@ def test_removed_reasons_df_with_parameters_after_one_hot_conversion(snapshot):
     )
     instance.convert_one_hot_to_constraint(7)
     assert (
-        _df_snap(instance.constraint_removed_reasons_df(kind=ConstraintKind.OneHot))
+        _df_snap(instance.constraint_inactive_metadata_df(kind=ConstraintKind.OneHot))
         == snapshot
     )
 
@@ -284,7 +284,7 @@ def test_sample_set_variable_label_df_matches_instance():
 # ---------------------------------------------------------------------------
 # Regression: Solution/SampleSet sidecars must NOT duplicate rows for
 # removed constraints. EvaluatedCollection.inner() / SampledCollection.inner()
-# already include removed ids, so chaining `.removed_reasons().keys()` would
+# already include removed ids, so chaining `.inactive_metadata().keys()` would
 # double-count them.
 # ---------------------------------------------------------------------------
 
@@ -301,12 +301,12 @@ def _instance_with_relaxed_constraint() -> Instance:
         },
         sense=Sense.Maximize,
     )
-    instance.relax_constraint(10, "test_reason")
+    instance.deactivate_constraint(10, "test_reason")
     return instance
 
 
 def test_solution_sidecar_no_duplicate_rows_for_removed():
-    """The relaxed id 10 lives in both inner() and removed_reasons() — the
+    """The relaxed id 10 lives in both inner() and inactive_metadata() — the
     sidecar must emit one row per id, not two."""
     instance = _instance_with_relaxed_constraint()
     sol = instance.evaluate({0: 1, 1: 0, 2: 0})

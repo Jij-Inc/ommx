@@ -1,9 +1,10 @@
 use super::*;
 use crate::Result;
 use crate::{
-    constraint::RemovedReason, constraint_type::ActiveRowRewrite, ATol, DecisionVariableError,
-    Evaluate, InconsistentDependentValue, Kind, MissingStateEntries, Propagate, PropagateOutcome,
-    UnknownStateEntries, UnverifiableDependentAssertion, VariableIDSet,
+    constraint::InactiveConstraintMetadata, constraint_type::ActiveRowRewrite, ATol,
+    DecisionVariableError, Evaluate, InconsistentDependentValue, Kind, MissingStateEntries,
+    Propagate, PropagateOutcome, UnknownStateEntries, UnverifiableDependentAssertion,
+    VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -946,7 +947,7 @@ impl Instance {
         let mut expanded = state.clone();
         let mut changed = true;
 
-        let propagation_reason = RemovedReason {
+        let propagation_reason = InactiveConstraintMetadata {
             reason: "ommx.Instance.partial_evaluate.unit_propagation".to_string(),
             parameters: Default::default(),
         };
@@ -1731,7 +1732,7 @@ mod tests {
 
     fn removed_only_instance(fixed_values: BTreeMap<VariableID, f64>) -> (Instance, ConstraintID) {
         let constraint_id = ConstraintID::from(1);
-        let removed_reason = RemovedReason {
+        let removed_reason = InactiveConstraintMetadata {
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -1744,7 +1745,7 @@ mod tests {
             ]))
             .fixed_decision_variable_values(fixed_values)
             .constraints(BTreeMap::new())
-            .removed_constraints(BTreeMap::from([(
+            .inactive_constraints(BTreeMap::from([(
                 constraint_id,
                 (
                     Constraint::equal_to_zero(Function::from(linear!(1) + linear!(2))),
@@ -1810,19 +1811,19 @@ mod tests {
     #[test]
     fn test_partial_evaluate_removed_only_fast_path_preserves_restore_semantics() {
         let (mut instance, constraint_id) = removed_only_instance(BTreeMap::new());
-        let removed_before = instance.removed_constraints().clone();
+        let removed_before = instance.inactive_constraints().clone();
 
         let state = v1::State::from(HashMap::from([(1, 3.0), (2, 4.0)]));
         instance.partial_evaluate(&state, ATol::default()).unwrap();
 
         assert!(instance.constraints().is_empty());
-        assert_eq!(instance.removed_constraints(), &removed_before);
+        assert_eq!(instance.inactive_constraints(), &removed_before);
         assert_eq!(
             instance.fixed_decision_variable_values(),
             &BTreeMap::from([(VariableID::from(1), 3.0), (VariableID::from(2), 4.0)])
         );
 
-        instance.restore_constraint(constraint_id).unwrap();
+        instance.activate_constraint(constraint_id).unwrap();
         let restored = instance.constraints().get(&constraint_id).unwrap();
         assert!(restored.required_ids().is_empty());
     }
@@ -1830,7 +1831,7 @@ mod tests {
     #[test]
     fn test_into_partial_evaluated_removed_only_fast_path_preserves_restore_semantics() {
         let (instance, constraint_id) = removed_only_instance(BTreeMap::new());
-        let removed_before = instance.removed_constraints().clone();
+        let removed_before = instance.inactive_constraints().clone();
 
         let state = v1::State::from(HashMap::from([(1, 3.0), (2, 4.0)]));
         let mut instance = instance
@@ -1838,13 +1839,13 @@ mod tests {
             .unwrap();
 
         assert!(instance.constraints().is_empty());
-        assert_eq!(instance.removed_constraints(), &removed_before);
+        assert_eq!(instance.inactive_constraints(), &removed_before);
         assert_eq!(
             instance.fixed_decision_variable_values(),
             &BTreeMap::from([(VariableID::from(1), 3.0), (VariableID::from(2), 4.0)])
         );
 
-        instance.restore_constraint(constraint_id).unwrap();
+        instance.activate_constraint(constraint_id).unwrap();
         let restored = instance.constraints().get(&constraint_id).unwrap();
         assert!(restored.required_ids().is_empty());
     }
@@ -1854,7 +1855,7 @@ mod tests {
         let (mut instance, _constraint_id) =
             removed_only_instance(BTreeMap::from([(VariableID::from(2), 0.0)]));
         let fixed_before = instance.fixed_decision_variable_values().clone();
-        let removed_before = instance.removed_constraints().clone();
+        let removed_before = instance.inactive_constraints().clone();
 
         let state = v1::State::from(HashMap::from([(1, 1.0), (2, 2.0)]));
         let err = instance
@@ -1873,7 +1874,7 @@ mod tests {
                 && *new_value == 2.0
         ));
         assert_eq!(instance.fixed_decision_variable_values(), &fixed_before);
-        assert_eq!(instance.removed_constraints(), &removed_before);
+        assert_eq!(instance.inactive_constraints(), &removed_before);
     }
 
     #[test]
@@ -1905,7 +1906,7 @@ mod tests {
             .partial_evaluate(&v1::State::from(HashMap::from([(2, 1.0)])), ATol::default())
             .unwrap();
 
-        let removed_before = instance.removed_one_hot_constraints().clone();
+        let removed_before = instance.inactive_one_hot_constraints().clone();
         let state = v1::State::from(HashMap::from([(4, 2.0)]));
         assert!(matches!(
             PartialEvaluatePlan::prepare(&instance, &state, ATol::default()).unwrap(),
@@ -1918,7 +1919,7 @@ mod tests {
             instance.fixed_decision_variable_value(VariableID::from(4)),
             Some(2.0)
         );
-        assert_eq!(instance.removed_one_hot_constraints(), &removed_before);
+        assert_eq!(instance.inactive_one_hot_constraints(), &removed_before);
     }
 
     #[test]
@@ -1953,7 +1954,7 @@ mod tests {
             .partial_evaluate(&v1::State::from(HashMap::from([(2, 1.0)])), ATol::default())
             .unwrap();
 
-        let removed_before = instance.removed_one_hot_constraints().clone();
+        let removed_before = instance.inactive_one_hot_constraints().clone();
         let state = v1::State::from(HashMap::from([(4, 2.0)]));
         assert!(matches!(
             PartialEvaluatePlan::prepare(&instance, &state, ATol::default()).unwrap(),
@@ -1962,7 +1963,7 @@ mod tests {
 
         instance.partial_evaluate(&state, ATol::default()).unwrap();
 
-        assert_eq!(instance.removed_one_hot_constraints(), &removed_before);
+        assert_eq!(instance.inactive_one_hot_constraints(), &removed_before);
         assert!(instance
             .constraints()
             .get(&ConstraintID::from(10))
@@ -1976,7 +1977,7 @@ mod tests {
         let constraint_id = ConstraintID::from(1);
         let remaining_constraint_id = ConstraintID::from(2);
         let removed_constraint_id = ConstraintID::from(10);
-        let removed_reason = RemovedReason {
+        let removed_reason = InactiveConstraintMetadata {
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -1999,7 +2000,7 @@ mod tests {
                     Constraint::equal_to_zero(Function::from(linear!(3))),
                 ),
             ]))
-            .removed_constraints(BTreeMap::from([(
+            .inactive_constraints(BTreeMap::from([(
                 removed_constraint_id,
                 (
                     Constraint::equal_to_zero(Function::from(linear!(2))),
@@ -2035,13 +2036,13 @@ mod tests {
                     (VariableID::from(3), DecisionVariable::continuous()),
                 ]))
                 .constraints(BTreeMap::new())
-                .removed_constraints(BTreeMap::from([(
+                .inactive_constraints(BTreeMap::from([(
                     ConstraintID::from(7),
                     (
                         Constraint::equal_to_zero(Function::from(
                             ((linear!(1) + linear!(2)).unwrap() + coeff!(-1.0)).unwrap(),
                         )),
-                        RemovedReason {
+                        InactiveConstraintMetadata {
                             reason: "source".into(),
                             ..Default::default()
                         },
@@ -2107,8 +2108,8 @@ mod tests {
                 instance.named_function_table()
             );
             assert_eq!(
-                borrowed.removed_constraints(),
-                instance.removed_constraints()
+                borrowed.inactive_constraints(),
+                instance.inactive_constraints()
             );
             assert_eq!(borrowed.constraint_context(), instance.constraint_context());
             if path == "one_hot" {
@@ -2236,7 +2237,7 @@ mod tests {
         let unchanged_constraint_id = ConstraintID::from(2);
         let overlapping_named_function_id = NamedFunctionID::from(1);
         let unchanged_named_function_id = NamedFunctionID::from(2);
-        let removed_reason = RemovedReason {
+        let removed_reason = InactiveConstraintMetadata {
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -2260,7 +2261,7 @@ mod tests {
                     Constraint::equal_to_zero(Function::from(linear!(3))),
                 ),
             ]))
-            .removed_constraints(BTreeMap::from([(
+            .inactive_constraints(BTreeMap::from([(
                 ConstraintID::from(10),
                 (
                     Constraint::equal_to_zero(Function::from(linear!(2))),
@@ -2331,7 +2332,7 @@ mod tests {
 
     #[test]
     fn test_partial_evaluate_regular_plan_error_leaves_original_unchanged() {
-        let removed_reason = RemovedReason {
+        let removed_reason = InactiveConstraintMetadata {
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -2343,7 +2344,7 @@ mod tests {
                 crate::DecisionVariable::continuous(),
             )]))
             .constraints(BTreeMap::new())
-            .removed_constraints(BTreeMap::from([(
+            .inactive_constraints(BTreeMap::from([(
                 ConstraintID::from(1),
                 (
                     Constraint::equal_to_zero(Function::from(linear!(1))),
@@ -2381,7 +2382,7 @@ mod tests {
     fn test_partial_evaluate_active_special_constraint_stays_on_fallback_path() {
         use crate::{DecisionVariable, OneHotConstraint, OneHotConstraintID};
 
-        let removed_reason = RemovedReason {
+        let removed_reason = InactiveConstraintMetadata {
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -2396,7 +2397,7 @@ mod tests {
                 (VariableID::from(3), DecisionVariable::binary()),
             ]))
             .constraints(BTreeMap::new())
-            .removed_constraints(BTreeMap::from([(
+            .inactive_constraints(BTreeMap::from([(
                 ConstraintID::from(10),
                 (
                     Constraint::equal_to_zero(Function::from(linear!(1))),
@@ -2438,7 +2439,7 @@ mod tests {
 
         assert_eq!(borrowed, consumed);
         assert!(borrowed.one_hot_constraint_collection.active().is_empty());
-        assert_eq!(borrowed.one_hot_constraint_collection.removed().len(), 1);
+        assert_eq!(borrowed.one_hot_constraint_collection.inactive().len(), 1);
         assert_eq!(
             borrowed.fixed_decision_variable_values(),
             &BTreeMap::from([
@@ -2514,7 +2515,7 @@ mod tests {
             (VariableID::from(1), crate::DecisionVariable::continuous()),
             (VariableID::from(10), crate::DecisionVariable::continuous()),
         ]);
-        let removed_reason = RemovedReason {
+        let removed_reason = InactiveConstraintMetadata {
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -2523,7 +2524,7 @@ mod tests {
             .objective(Function::from(linear!(1)))
             .decision_variables(decision_variables)
             .constraints(BTreeMap::new())
-            .removed_constraints(BTreeMap::from([(
+            .inactive_constraints(BTreeMap::from([(
                 ConstraintID::from(1),
                 (
                     Constraint::equal_to_zero(Function::from(linear!(1))),
@@ -3101,7 +3102,7 @@ mod tests {
 
         // OneHot constraint should be consumed (moved to removed)
         assert!(instance.one_hot_constraint_collection.active().is_empty());
-        assert_eq!(instance.one_hot_constraint_collection.removed().len(), 1);
+        assert_eq!(instance.one_hot_constraint_collection.inactive().len(), 1);
     }
 
     #[test]
@@ -3249,7 +3250,7 @@ mod tests {
 
         // Indicator constraint should be removed
         assert!(instance.indicator_constraint_collection.active().is_empty());
-        assert_eq!(instance.indicator_constraint_collection.removed().len(), 1);
+        assert_eq!(instance.indicator_constraint_collection.inactive().len(), 1);
 
         // A new regular constraint should be added, and its provenance
         // should reference the original IndicatorConstraintID so that the
@@ -3372,7 +3373,7 @@ mod tests {
         instance.partial_evaluate(&state, ATol::default()).unwrap();
 
         assert!(instance.indicator_constraint_collection.active().is_empty());
-        assert_eq!(instance.indicator_constraint_collection.removed().len(), 1);
+        assert_eq!(instance.indicator_constraint_collection.inactive().len(), 1);
         // No new regular constraint should be added
         assert!(instance.constraint_collection.active().is_empty());
     }

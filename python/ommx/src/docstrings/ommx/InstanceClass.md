@@ -104,8 +104,8 @@ Alternatively, add a clause that accepts the dedicated OneHot representation:
 Variable-kind checks use {attr}`~ommx.Instance.used_decision_variables`: variables
 referenced by the active objective and active constraints, including special
 constraints. Fixed, dependent, and irrelevant variables are excluded, as are
-variables referenced only by removed constraints, named functions, or the output
-objective. Removed constraints do not contribute their relations, degrees, or
+variables referenced only by inactive constraints, named functions, or the output
+objective. Inactive constraints do not contribute their relations, degrees, or
 special-constraint kinds. A lowered Instance can therefore retain the original
 special constraints for evaluation while matching a class that disallows them
 as active constraints.

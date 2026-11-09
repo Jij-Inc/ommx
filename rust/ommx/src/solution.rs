@@ -115,7 +115,7 @@ pub enum SolutionError {
 ///   IDs.
 /// - The keys of the evaluated constraint collections are the table-owned
 ///   constraint IDs for each constraint family. Their numeric values are unique
-///   across all families, including removed constraints.
+///   across all families, including inactive constraints.
 /// - [`Self::evaluated_named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; evaluated named-function rows do not carry IDs.
 /// - [`Self::decision_variables`] contains all variable IDs referenced in
@@ -261,7 +261,7 @@ fn validate_all_solution_constraint_used_ids(
 }
 
 impl Solution {
-    /// Unique constraint names across every family, including retained removed rows.
+    /// Unique constraint names across every family, including retained inactive rows.
     ///
     /// Searches the same rows as `extract_constraints`. Unnamed constraints are
     /// excluded; explicitly empty names are included. Duplicate names are
@@ -403,7 +403,7 @@ impl Solution {
 
     /// Sum the nonnegative scalar violation of every constraint.
     ///
-    /// Includes all regular and special constraints, including removed constraints:
+    /// Includes all regular and special constraints, including inactive constraints:
     /// - Equality: `|f(x)|`; inequality: `max(0, f(x))`.
     /// - Indicator: the inner constraint's violation when active, otherwise zero.
     /// - One-hot: `min_i (|x_i - 1| + Σ_{j != i} |x_j|)`.
@@ -415,21 +415,21 @@ impl Solution {
     /// positive violation within tolerance. Values are computed from the evaluated
     /// decision variables, including any discrete-value canonicalization.
     ///
-    /// Lowering need not preserve this metric. When both a removed original and
+    /// Lowering need not preserve this metric. When both a inactive original and
     /// its generated regular constraints are retained, all of them contribute.
     pub fn total_violation(&self) -> f64 {
         self.constraint_violations().sum()
     }
 
     /// Get a regular constraint's scalar violation, or `None` for an unknown ID.
-    /// Includes removed constraints; see [`Self::total_violation`] for semantics.
+    /// Includes inactive constraints; see [`Self::total_violation`] for semantics.
     pub fn constraint_violation(&self, id: ConstraintID) -> Option<f64> {
         self.evaluated_constraints.get(&id).map(|c| c.violation())
     }
 
     /// Get an indicator constraint's violation, or `None` for an unknown ID.
     /// The value is zero when inactive and the inner residual's violation otherwise.
-    /// Includes removed constraints.
+    /// Includes inactive constraints.
     pub fn indicator_constraint_violation(&self, id: crate::IndicatorConstraintID) -> Option<f64> {
         self.evaluated_indicator_constraints
             .get(&id)
@@ -440,7 +440,7 @@ impl Solution {
     ///
     /// This is `min_i (|x_i - 1| + Σ_{j != i} |x_j|)`, the minimum sum of
     /// absolute changes needed to make the member values one-hot. Includes
-    /// removed constraints. A positive value can be feasible within tolerance.
+    /// inactive constraints. A positive value can be feasible within tolerance.
     pub fn one_hot_constraint_violation(&self, id: crate::OneHotConstraintID) -> Option<f64> {
         self.evaluated_one_hot_constraints
             .get(&id)
@@ -450,7 +450,7 @@ impl Solution {
     /// Get an SOS1 constraint's violation, or `None` for an unknown ID.
     ///
     /// This is `min_i Σ_{j != i} |x_j|`, the minimum sum of absolute changes
-    /// needed to leave at most one nonzero member. Includes removed constraints.
+    /// needed to leave at most one nonzero member. Includes inactive constraints.
     /// A positive value can be feasible within tolerance.
     pub fn sos1_constraint_violation(&self, id: crate::Sos1ConstraintID) -> Option<f64> {
         self.evaluated_sos1_constraints
@@ -580,7 +580,7 @@ impl Solution {
 
     /// Extract nonnegative constraint violations by name, keyed by subscripts.
     ///
-    /// Searches every constraint family, including retained removed constraints.
+    /// Searches every constraint family, including retained inactive constraints.
     /// Parameters and descriptions are ignored, as in decision-variable extraction.
     /// For a regular constraint this returns its violation, not its signed function
     /// value; use [`Self::get_constraint_value`] when the latter is needed.
@@ -1339,7 +1339,7 @@ impl SolutionBuilder {
     /// existing table rows are enforced. It does not revalidate host-level
     /// cross references. The caller must ensure:
     /// - `decision_variables` is keyed by the intended [`VariableID`] for each row
-    /// - Constraint numbers are unique across all families, including removed rows
+    /// - Constraint numbers are unique across all families, including inactive rows
     /// - All `used_decision_variable_ids` in constraints and evaluated named
     ///   functions exist in `decision_variables`
     /// - Special-constraint violations and activation decisions are consistent
@@ -1659,7 +1659,7 @@ mod tests {
                         .map(|&id| {
                             (
                                 id,
-                                crate::RemovedReason {
+                                crate::InactiveConstraintMetadata {
                                     reason: "test relaxation".into(),
                                     parameters: Default::default(),
                                 },

@@ -588,7 +588,7 @@ mod tests {
             ],
         );
         problem
-            .relax_constraint(1.into(), "test".to_string(), [])
+            .deactivate_constraint(1.into(), "test".to_string(), [])
             .unwrap();
         let original = problem.clone();
         for invalid in [1_u64, 999] {
@@ -764,7 +764,7 @@ mod tests {
             ],
         );
         problem
-            .relax_constraint(1.into(), "test".to_string(), [])
+            .deactivate_constraint(1.into(), "test".to_string(), [])
             .unwrap();
         let original = problem.clone();
         let atol = ATol::default();

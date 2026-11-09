@@ -22,10 +22,10 @@ from ommx import (
     EvaluatedSos1Constraint,
     Instance,
     ParametricInstance,
-    RemovedConstraint,
-    RemovedIndicatorConstraint,
-    RemovedOneHotConstraint,
-    RemovedSos1Constraint,
+    InactiveConstraint,
+    InactiveIndicatorConstraint,
+    InactiveOneHotConstraint,
+    InactiveSos1Constraint,
     SampledConstraint,
     SampledIndicatorConstraint,
     SampledOneHotConstraint,
@@ -77,7 +77,7 @@ def test_every_lifecycle_uses_same_key_rules(kind, id_type, _):
         make_model(Instance).constraints,
         make_model(ParametricInstance).constraints,
         removed,
-        model.as_parametric_instance().removed_constraints,
+        model.as_parametric_instance().inactive_constraints,
         solution.constraints,
         samples.constraints,
     ]
@@ -138,18 +138,18 @@ def test_live_views_and_iteration_timing(host):
 def test_removal_and_restoration_update_family_views():
     model = make_model(Instance)
     active = model.constraints.of_kind(ConstraintKind.Regular)
-    removed = model.removed_constraints.of_kind(ConstraintKind.Regular)
+    removed = model.inactive_constraints.of_kind(ConstraintKind.Regular)
     assert not removed
-    model.relax_constraint(5, "manual")
+    model.deactivate_constraint(5, "manual")
     assert not active
     snapshot = removed[5]
-    assert snapshot.removed_reason == "manual"
-    model.restore_constraint(5)
+    assert snapshot.inactive_reason == "manual"
+    model.activate_constraint(5)
     assert not removed
     assert 5 in active
-    assert snapshot.removed_reason == "manual"
+    assert snapshot.inactive_reason == "manual"
     sos1 = model.constraints.of_kind(ConstraintKind.Sos1)
-    removed_sos1 = model.removed_constraints.of_kind(ConstraintKind.Sos1)
+    removed_sos1 = model.inactive_constraints.of_kind(ConstraintKind.Sos1)
     model.convert_sos1_to_constraints(8)
     assert not sos1
     assert 8 in removed_sos1
@@ -228,9 +228,9 @@ def test_precise_types_and_runtime_generic_alias():
         samples.constraints.of_kind(ConstraintKind.Sos1)[8], SampledSos1Constraint
     )
     removed = remove_all(model)
-    assert_type(removed.of_kind(ConstraintKind.Regular)[5], RemovedConstraint)
+    assert_type(removed.of_kind(ConstraintKind.Regular)[5], InactiveConstraint)
     assert_type(
-        removed.of_kind(ConstraintKind.Indicator)[6], RemovedIndicatorConstraint
+        removed.of_kind(ConstraintKind.Indicator)[6], InactiveIndicatorConstraint
     )
-    assert_type(removed.of_kind(ConstraintKind.OneHot)[7], RemovedOneHotConstraint)
-    assert_type(removed.of_kind(ConstraintKind.Sos1)[8], RemovedSos1Constraint)
+    assert_type(removed.of_kind(ConstraintKind.OneHot)[7], InactiveOneHotConstraint)
+    assert_type(removed.of_kind(ConstraintKind.Sos1)[8], InactiveSos1Constraint)

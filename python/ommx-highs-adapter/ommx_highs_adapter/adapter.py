@@ -599,7 +599,7 @@ class OMMXHighsAdapter(SolverAdapter):
     >>> assert source.active_special_constraint_kinds == {
     ...     ConstraintKind.Indicator, ConstraintKind.Sos1,
     ... }
-    >>> assert not source.removed_constraints
+    >>> assert not source.inactive_constraints
 
     All variables here are Binary with finite bounds, so the recommended
     lowering can construct the required linear rows. An arbitrary model need
