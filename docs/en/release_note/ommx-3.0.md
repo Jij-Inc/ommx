@@ -6,7 +6,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-### ⚠ Inspect and construct active and inactive constraints ([#1372](https://github.com/Jij-Inc/ommx/issues/1372))
+### ⚠ Inspect and construct active and inactive constraints ([#1376](https://github.com/Jij-Inc/ommx/pull/1376))
 
 Model `constraints` now contains active and inactive rows. Use `active_constraints` for active attached handles and `inactive_constraints` for retained inactive rows. `from_components` takes explicit `active_*` / `inactive_*` inputs for all four constraint families. Both model roots support activation and deactivation, and attached handles reject mutations after their row becomes inactive. Solver adapters consume the active formulation.
 

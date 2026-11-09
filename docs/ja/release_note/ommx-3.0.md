@@ -6,7 +6,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-### ⚠ Active / inactive制約の参照と構築 ([#1372](https://github.com/Jij-Inc/ommx/issues/1372))
+### ⚠ Active / inactive制約の参照と構築 ([#1376](https://github.com/Jij-Inc/ommx/pull/1376))
 
 モデルの `constraints` はactiveとinactiveの両方の行を含むようになります。activeな接続済みハンドルには `active_constraints`、保持したinactive行には `inactive_constraints` を使います。`from_components` は4種類すべての制約に対して `active_*` / `inactive_*` 入力を受け取ります。両方のモデル型でactivate/deactivateでき、接続済みハンドルは対象の行がinactiveになった後の変更を拒否します。ソルバーのAdapterはactiveな定式化を使います。
 
