@@ -1,4 +1,4 @@
-Live mapping of a SampleSet's constraint results, including retained removed rows.
+Live mapping of a SampleSet's constraint results, including retained inactive rows.
 
 Obtained from {attr}`~ommx.SampleSet.constraints`. Each access returns an
 independent snapshot with labels, provenance, removal reasons, and sampled
@@ -13,4 +13,4 @@ table, and {class}`~ommx.ConstraintFamilyView` for ``of_kind`` filtering.
 Sampled rows expose ``violations`` and ``feasible(atol=...)`` keyed by sample ID.
 Use {attr}`~ommx.SampleSet.summary` for per-sample objectives and overall
 feasibility, or {meth}`~ommx.SampleSet.constraints_df` with an explicit ``kind``
-for a table of one constraint family, including retained removed rows.
+for a table of one constraint family, including retained inactive rows.

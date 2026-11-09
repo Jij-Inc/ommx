@@ -54,7 +54,7 @@ on the same Instance, or on the returned transformed Instance. For example:
   the expressions needed to reconstruct the encoded values. Named functions
   keep their original expressions and use those reconstructed values.
 - {meth}`~ommx.Instance.partial_evaluate` fixes variables and simplifies active
-  expressions. Named functions and existing removed constraints retain their
+  expressions. Named functions and existing inactive constraints retain their
   expressions and use the saved fixed values during evaluation.
 - {meth}`~ommx.Instance.lower_special_constraints` retains source constraints
   and records the provenance of generated constraints.
@@ -67,7 +67,7 @@ on the same Instance, or on the returned transformed Instance. For example:
 An expression being evaluable by OMMX does not by itself make it a target of an
 Active Formulation rewrite. Interpretation Context can nevertheless require
 updates: {meth}`~ommx.ParametricInstance.with_parameters` specializes
-parameter-bearing expressions in both roles, including removed constraints,
+parameter-bearing expressions in both roles, including inactive constraints,
 output objectives, named functions, and dependency expressions.
 
 Operations that explicitly change the user's problem or output semantics have
@@ -181,7 +181,7 @@ names and subscripts to retrieve values for application-level analysis.
 **Constraint identity and access**
 
 Constraint numbers are unique across all families in one Instance,
-including removed constraints. Their numbering is separate from variable
+including inactive constraints. Their numbering is separate from variable
 IDs. Supply distinct numbers across the regular and special-constraint
 mappings passed to {meth}`~ommx.Instance.from_components`.
 The Instance allocates new constraint numbers above the maximum across all

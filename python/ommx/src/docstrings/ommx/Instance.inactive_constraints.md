@@ -46,7 +46,7 @@ formulation. If omitted, its default is used for evaluation. Supply its actual
 value when checking a particular candidate; the default is not a recovered
 solver choice.
 
-For a table of active and removed rows, use
+For a table of active and inactive rows, use
 {meth}`~ommx.Instance.constraints_df` with `min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK` and an explicit
 `kind`. On a Solution, use {meth}`~ommx.Solution.constraints_df` with
 `include=("inactive_reason",)` to inspect inactivity reasons alongside evaluated

@@ -35,13 +35,13 @@ iteration rules but have different row ownership:
 | Collection | Included constraints | Returned rows |
 | --- | --- | --- |
 | {class}`~ommx.ActiveConstraintCollection` | Active model constraints | Attached handles |
-| {class}`~ommx.InactiveConstraintCollection` | Retained removed model constraints | Independent snapshots |
+| {class}`~ommx.InactiveConstraintCollection` | Retained inactive model constraints | Independent snapshots |
 | {class}`~ommx.EvaluatedConstraintCollection` | Active and retained inactive constraints in a Solution | Independent evaluated snapshots |
 | {class}`~ommx.SampledConstraintCollection` | Active and retained inactive constraints in a SampleSet | Independent sampled snapshots |
 
 Attached handles compare equal when they refer to the same owner object and
 typed ID. Handles from different owners are unequal even if the models contain
-identical data. Removed and result snapshots compare their stored data, including
+identical data. Inactive and result snapshots compare their stored data, including
 metadata and inactivity reasons. Mapping equality and membership in ``values()`` or
 ``items()`` use those row equality rules.
 

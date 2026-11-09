@@ -86,7 +86,7 @@ def assert_component_solution(value: ommx.Solution) -> None:
     assert type(value.decision_variables[0].kind) is ommx.Kind
     assert value.objective == 1.0
     assert value.state.entries == {7: 4.0}
-    assert value.feasible
+    assert value.feasible()
 
 
 def assert_component_sample_set(value: ommx.SampleSet) -> None:

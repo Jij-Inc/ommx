@@ -239,13 +239,13 @@ class ActiveConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView
     | Collection | Included constraints | Returned rows |
     | --- | --- | --- |
     | {class}`~ommx.ActiveConstraintCollection` | Active model constraints | Attached handles |
-    | {class}`~ommx.InactiveConstraintCollection` | Retained removed model constraints | Independent snapshots |
+    | {class}`~ommx.InactiveConstraintCollection` | Retained inactive model constraints | Independent snapshots |
     | {class}`~ommx.EvaluatedConstraintCollection` | Active and retained inactive constraints in a Solution | Independent evaluated snapshots |
     | {class}`~ommx.SampledConstraintCollection` | Active and retained inactive constraints in a SampleSet | Independent sampled snapshots |
 
     Attached handles compare equal when they refer to the same owner object and
     typed ID. Handles from different owners are unequal even if the models contain
-    identical data. Removed and result snapshots compare their stored data, including
+    identical data. Inactive and result snapshots compare their stored data, including
     metadata and inactivity reasons. Mapping equality and membership in ``values()`` or
     ``items()`` use those row equality rules.
 
@@ -2687,7 +2687,7 @@ class EvaluatedConstraint(ConstraintView):
 @typing.final
 class EvaluatedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
     r"""
-    Live mapping of a Solution's constraint results, including retained removed rows.
+    Live mapping of a Solution's constraint results, including retained inactive rows.
 
     Obtained from {attr}`~ommx.Solution.constraints`. The collection keeps its
     Solution alive and fetches each row on access. Each row is an independent
@@ -2731,7 +2731,7 @@ class EvaluatedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintV
     and snapshot equality, see {class}`~ommx.ActiveConstraintCollection`. Filter without
     collecting rows using ``of_kind`` and {class}`~ommx.ConstraintFamilyView`.
     {meth}`~ommx.Solution.constraints_df` collects one family as a DataFrame;
-    retained removed constraints remain included. Its ``kind`` argument is required,
+    retained inactive constraints remain included. Its ``kind`` argument is required,
     as it is for ``constraint_context_df``, ``constraint_parameters_df``,
     ``constraint_provenance_df``, and ``constraint_inactive_reasons_df`` on all owners.
 
@@ -4077,7 +4077,7 @@ class FixedPenaltyPreparation:
         ``atol`` is used by the owner operation to accept a penalty magnitude
         down to ``-atol`` and normalize a tolerated negative value to zero. Every
         weight must be finite.
-        Removed constraints record
+        Inactive constraints record
         ``reason="ommx.Instance.penalty_method_with_fixed_weights"`` with no
         reason parameters.
         """
@@ -4099,7 +4099,7 @@ class FixedPenaltyPreparation:
         `-atol` and normalize a tolerated negative value to zero. When at least one active
         regular constraint is converted, the weight must be finite. With no active
         constraint of any family, the owner operation is an identity and does not inspect
-        the weight. Removed constraints record
+        the weight. Inactive constraints record
         `reason="ommx.Instance.uniform_penalty_method_with_fixed_weight"` with no reason
         parameters. The class documentation defines atomicity, retained output semantics,
         and rejection of active special constraints.
@@ -4898,7 +4898,7 @@ class InactiveConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintVi
     iteration, and snapshot equality rules are documented in
     {class}`~ommx.ActiveConstraintCollection`. Use ``of_kind`` and
     {class}`~ommx.ConstraintFamilyView` to inspect one family. A model's
-    ``constraints_df(kind=..., min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK)`` includes both active and removed rows.
+    ``constraints_df(kind=..., min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK)`` includes both active and inactive rows.
     """
     def __len__(self) -> builtins.int: ...
     def __contains__(self, key: builtins.object) -> builtins.bool: ...
@@ -5388,7 +5388,7 @@ class Instance:
       the expressions needed to reconstruct the encoded values. Named functions
       keep their original expressions and use those reconstructed values.
     - {meth}`~ommx.Instance.partial_evaluate` fixes variables and simplifies active
-      expressions. Named functions and existing removed constraints retain their
+      expressions. Named functions and existing inactive constraints retain their
       expressions and use the saved fixed values during evaluation.
     - {meth}`~ommx.Instance.lower_special_constraints` retains source constraints
       and records the provenance of generated constraints.
@@ -5401,7 +5401,7 @@ class Instance:
     An expression being evaluable by OMMX does not by itself make it a target of an
     Active Formulation rewrite. Interpretation Context can nevertheless require
     updates: {meth}`~ommx.ParametricInstance.with_parameters` specializes
-    parameter-bearing expressions in both roles, including removed constraints,
+    parameter-bearing expressions in both roles, including inactive constraints,
     output objectives, named functions, and dependency expressions.
 
     Operations that explicitly change the user's problem or output semantics have
@@ -5515,7 +5515,7 @@ class Instance:
     **Constraint identity and access**
 
     Constraint numbers are unique across all families in one Instance,
-    including removed constraints. Their numbering is separate from variable
+    including inactive constraints. Their numbering is separate from variable
     IDs. Supply distinct numbers across the regular and special-constraint
     mappings passed to {meth}`~ommx.Instance.from_components`.
     The Instance allocates new constraint numbers above the maximum across all
@@ -5812,7 +5812,7 @@ class Instance:
     @property
     def constraints(self) -> ConstraintCollection:
         r"""
-        Live lookup of every retained constraint, including both inactive states.
+        Live lookup of every retained constraint, including active and inactive rows.
 
         IDs determine the constraint family, not its activeness. Active rows are
         attached handles; inactive rows are independent snapshots. Inspect the
@@ -5827,7 +5827,7 @@ class Instance:
     def active_constraint_kinds(self) -> builtins.set[ConstraintKind[ConstraintIDBase]]:
         r"""
         All active constraint families, including {attr}`~ommx.ConstraintKind.Regular`.
-        Removed constraints are excluded. This is independent of adapter support.
+        Inactive constraints are excluded. This is independent of adapter support.
         """
     @property
     def active_special_constraint_kinds(
@@ -5891,7 +5891,7 @@ class Instance:
         value when checking a particular candidate; the default is not a recovered
         solver choice.
 
-        For a table of active and removed rows, use
+        For a table of active and inactive rows, use
         {meth}`~ommx.Instance.constraints_df` with `min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK` and an explicit
         `kind`. On a Solution, use {meth}`~ommx.Solution.constraints_df` with
         `include=("inactive_reason",)` to inspect inactivity reasons alongside evaluated
@@ -6456,9 +6456,9 @@ class Instance:
         r"""
         Extract active constraints of every family by name, keyed by subscript tuples.
 
-        Values are attached handles, just as in `constraints`: edits update this
+        Values are attached handles, just as in `active_constraints`: edits update this
         model. The returned dictionary snapshots the matching keys; it does not
-        track later label or membership changes. Removed constraints are excluded.
+        track later label or membership changes. Inactive constraints are excluded.
         Parameters and descriptions do not participate in matching.
 
         Raises KeyError if no active constraint has this name, and ValueError if
@@ -6763,7 +6763,7 @@ class Instance:
 
         - The active sense is {attr}`~ommx.Sense.Minimize`.
         - There are no active regular, Indicator, OneHot, or SOS1 constraints.
-          Removed constraints do not prevent formatting and are not exported.
+          Inactive constraints do not prevent formatting and are not exported.
         - Every variable referenced by the active objective has Binary kind.
           Other variables retained by the instance do not prevent formatting.
         - The active objective is stored as an expanded polynomial. Composed
@@ -6799,7 +6799,7 @@ class Instance:
 
         The coefficients describe the active objective. They do not carry
         {attr}`~ommx.Instance.output_objective`,
-        removed constraints, or value-recovery rules. Keep the instance and use
+        inactive constraints, or value-recovery rules. Keep the instance and use
         {meth}`~ommx.Instance.evaluate` or {meth}`~ommx.Instance.evaluate_samples`
         to interpret candidates with its output semantics. Backend energy can
         differ from the objective reported by those methods.
@@ -7027,7 +7027,7 @@ class Instance:
 
         where $\lambda$ is the uniform penalty weight parameter for all constraints.
 
-        The removed constraints are stored in {attr}`~ommx.ParametricInstance.inactive_constraints`.
+        The inactive constraints are stored in {attr}`~ommx.ParametricInstance.inactive_constraints`.
 
         > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
         > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
@@ -7071,7 +7071,7 @@ class Instance:
         candidate from a file and identifies violated constraints.
 
         Evaluate a solver's returned candidate with the transformed Instance
-        used for that solve. Its recorded dependencies, removed constraints,
+        used for that solve. Its recorded dependencies, inactive constraints,
         and output objective are needed to reconstruct and interpret the result.
 
         # Postconditions
@@ -7290,7 +7290,7 @@ class Instance:
         them into active expressions. Use this to study a configuration or optimize
         the remaining variables under chosen conditions.
 
-        Named functions and existing removed constraints retain their original
+        Named functions and existing inactive constraints retain their original
         expressions as Interpretation Context. The new Instance stores fixed values
         and normalizes dependencies; {meth}`~ommx.Instance.evaluate` and
         {meth}`~ommx.Instance.evaluate_samples` populate those values before evaluating
@@ -7488,7 +7488,7 @@ class Instance:
         Move an active regular constraint to the inactive collection.
 
         The Instance is changed in place. `constraint_id` accepts a {class}`~ommx.ConstraintID`
-        or its integer value. `reason` records why the condition was removed, and
+        or its integer value. `reason` records why the condition was deactivated, and
         additional keyword arguments record string-valued reason parameters. The
         constraint keeps its ID, labels, and provenance.
 
@@ -7509,9 +7509,9 @@ class Instance:
         >>> limit_id = limit.constraint_id
         >>> instance.deactivate_constraint(limit_id, "example.relax_limit", purpose="inspection")
         >>> assert limit_id not in instance.active_constraints
-        >>> removed = instance.inactive_constraints[limit_id]
-        >>> assert removed.inactive_reason == "example.relax_limit"
-        >>> assert removed.inactive_reason_parameters == {"purpose": "inspection"}
+        >>> inactive = instance.inactive_constraints[limit_id]
+        >>> assert inactive.inactive_reason == "example.relax_limit"
+        >>> assert inactive.inactive_reason_parameters == {"purpose": "inspection"}
         >>> solution = instance.evaluate({x.id: 1})
         >>> assert solution.feasible_relaxed
         >>> assert not solution.feasible()
@@ -7913,7 +7913,7 @@ class Instance:
         # Postconditions
 
         Encoding rewrites the Active Formulation and records variable reconstruction
-        rules. Named functions and removed constraints keep their original expressions.
+        rules. Named functions and inactive constraints keep their original expressions.
         Fixed and dependent variables cannot be encoded again.
         An existing output objective is preserved; if the active objective is affected
         and no output objective exists, its previous function and sense are retained.
@@ -7964,7 +7964,7 @@ class Instance:
         # Postconditions
 
         Encoding rewrites the Active Formulation and records variable reconstruction
-        rules. Named functions and removed constraints keep their original expressions.
+        rules. Named functions and inactive constraints keep their original expressions.
         Fixed and dependent variables cannot be encoded again.
         An existing output objective is preserved; if the active objective is affected
         and no output objective exists, its previous function and sense are retained.
@@ -7991,7 +7991,7 @@ class Instance:
         objective and all active constraints. This is the general substitution
         mechanism behind {meth}`~ommx.Instance.log_encode`, exposed so that
         users can implement their own variable representations. Named functions,
-        removed constraints, and an existing output objective retain their expressions
+        inactive constraints, and an existing output objective retain their expressions
         as Interpretation Context. The Instance records the assignments and composes
         existing dependencies; {meth}`~ommx.Instance.evaluate` and
         {meth}`~ommx.Instance.evaluate_samples` reconstruct values before evaluating
@@ -8690,14 +8690,14 @@ class Instance:
         constraints, and the kinds and bounds of variables used by that model.
         Quadratic coefficients follow the convention above.
         Unused variables, including those referenced only by output semantics,
-        named functions, or removed constraints, are omitted. Unused variables
+        named functions, or inactive constraints, are omitted. Unused variables
         of unsupported kinds do not prevent export.
 
         ``description.name`` supplies the problem name. Variables and constraints
         use generated names ``OMMX_VAR_<id>`` and ``OMMX_CONSTR_<id>``; their
         modeling names, subscripts, and other labels are not preserved. Other
         Instance information is not exported, including remaining description
-        fields, annotations, parameters, named functions, removed constraints,
+        fields, annotations, parameters, named functions, inactive constraints,
         dependencies, fixed-value recovery, and {attr}`~ommx.Instance.output_objective`.
         MPS is therefore not a round-trip storage format for an OMMX Instance.
         Retain the OMMX instance when its recovery and output semantics are needed
@@ -8870,7 +8870,10 @@ class Instance:
         >>> assert target.contains(instance)
         >>> assert set(instance.active_constraints) == {ConstraintID(1)}
         >>> assert set(instance.constraints) == {ConstraintID(1), OneHotConstraintID(0)}
-        >>> assert instance.constraints[OneHotConstraintID(0)].activeness == ConstraintActiveness.INACTIVE
+        >>> assert (
+        ...     instance.constraints[OneHotConstraintID(0)].activeness
+        ...     == ConstraintActiveness.INACTIVE
+        ... )
         >>> assert instance.active_special_constraint_kinds == set()
         >>> assert set(instance.inactive_constraints) == {OneHotConstraintID(0)}
         >>> assert instance.constraints_df(kind=ConstraintKind.Regular).shape[0] == 1
@@ -9260,8 +9263,8 @@ class InstanceClass:
     Variable-kind checks use {attr}`~ommx.Instance.used_decision_variables`: variables
     referenced by the active objective and active constraints, including special
     constraints. Fixed, dependent, and irrelevant variables are excluded, as are
-    variables referenced only by removed constraints, named functions, or the output
-    objective. Removed constraints do not contribute their relations, degrees, or
+    variables referenced only by inactive constraints, named functions, or the output
+    objective. Inactive constraints do not contribute their relations, degrees, or
     special-constraint kinds. A lowered Instance can therefore retain the original
     special constraints for evaluation while matching a class that disallows them
     as active constraints.
@@ -10842,7 +10845,7 @@ class ParametricInstance:
     @property
     def constraints(self) -> ConstraintCollection:
         r"""
-        Live lookup of every retained constraint, including both inactive states.
+        Live lookup of every retained constraint, including active and inactive rows.
 
         IDs determine the constraint family, not its activeness. Active rows are
         attached handles; inactive rows are independent snapshots. Inspect the
@@ -11071,7 +11074,7 @@ class ParametricInstance:
 
         Specializes parameter-bearing expressions in both the **Active Formulation**
         and **Interpretation Context** defined on {class}`~ommx.Instance`, including
-        removed constraints, output objectives, named functions, and dependency
+        inactive constraints, output objectives, named functions, and dependency
         expressions. The returned Instance retains this specialized context.
 
         Provide a dict mapping every declared parameter ID to its numerical value,
@@ -11197,7 +11200,7 @@ class ParametricInstance:
         expressions may only reference existing decision variable or parameter
         IDs; parameter IDs cannot be assignment targets.
 
-        Named functions, removed constraints, and existing output objectives
+        Named functions, inactive constraints, and existing output objectives
         retain their expressions as Interpretation Context. The recorded
         dependencies reconstruct substituted variables during evaluation after
         {meth}`with_parameters` specializes parameters throughout both the
@@ -11272,9 +11275,9 @@ class ParametricInstance:
         r"""
         Extract active constraints of every family by name, keyed by subscript tuples.
 
-        Values are attached handles, just as in `constraints`: edits update this
+        Values are attached handles, just as in `active_constraints`: edits update this
         model. The returned dictionary snapshots the matching keys; it does not
-        track later label or membership changes. Removed constraints are excluded.
+        track later label or membership changes. Inactive constraints are excluded.
         Parameters and descriptions do not participate in matching.
 
         Raises KeyError if no active constraint has this name, and ValueError if
@@ -13105,7 +13108,7 @@ class SampledConstraint(ConstraintView):
 @typing.final
 class SampledConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
     r"""
-    Live mapping of a SampleSet's constraint results, including retained removed rows.
+    Live mapping of a SampleSet's constraint results, including retained inactive rows.
 
     Obtained from {attr}`~ommx.SampleSet.constraints`. Each access returns an
     independent snapshot with labels, provenance, removal reasons, and sampled
@@ -13120,7 +13123,7 @@ class SampledConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintVie
     Sampled rows expose ``violations`` and ``feasible(atol=...)`` keyed by sample ID.
     Use {attr}`~ommx.SampleSet.summary` for per-sample objectives and overall
     feasibility, or {meth}`~ommx.SampleSet.constraints_df` with an explicit ``kind``
-    for a table of one constraint family, including retained removed rows.
+    for a table of one constraint family, including retained inactive rows.
     """
     def __len__(self) -> builtins.int: ...
     def __contains__(self, key: builtins.object) -> builtins.bool: ...
@@ -15052,7 +15055,7 @@ class DecisionVariableRole(enum.Enum):
 
     Active constraints include regular and special constraints, including an
     Indicator's controlling Binary variable. References only from named functions,
-    removed constraints, output objectives, or dependency right-hand sides do not
+    inactive constraints, output objectives, or dependency right-hand sides do not
     make a variable used. Being irrelevant to solver input does not mean its value
     cannot affect reporting.
 

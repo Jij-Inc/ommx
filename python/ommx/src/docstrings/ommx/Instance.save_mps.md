@@ -90,14 +90,14 @@ The writer exports the active objective and sense, active regular
 constraints, and the kinds and bounds of variables used by that model.
 Quadratic coefficients follow the convention above.
 Unused variables, including those referenced only by output semantics,
-named functions, or removed constraints, are omitted. Unused variables
+named functions, or inactive constraints, are omitted. Unused variables
 of unsupported kinds do not prevent export.
 
 ``description.name`` supplies the problem name. Variables and constraints
 use generated names ``OMMX_VAR_<id>`` and ``OMMX_CONSTR_<id>``; their
 modeling names, subscripts, and other labels are not preserved. Other
 Instance information is not exported, including remaining description
-fields, annotations, parameters, named functions, removed constraints,
+fields, annotations, parameters, named functions, inactive constraints,
 dependencies, fixed-value recovery, and {attr}`~ommx.Instance.output_objective`.
 MPS is therefore not a round-trip storage format for an OMMX Instance.
 Retain the OMMX instance when its recovery and output semantics are needed

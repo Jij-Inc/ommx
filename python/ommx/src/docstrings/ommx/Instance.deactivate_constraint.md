@@ -1,7 +1,7 @@
 Move an active regular constraint to the inactive collection.
 
 The Instance is changed in place. `constraint_id` accepts a {class}`~ommx.ConstraintID`
-or its integer value. `reason` records why the condition was removed, and
+or its integer value. `reason` records why the condition was deactivated, and
 additional keyword arguments record string-valued reason parameters. The
 constraint keeps its ID, labels, and provenance.
 
@@ -22,9 +22,9 @@ allows `x=1`, while the retained `x <= 0` condition rejects it:
 >>> limit_id = limit.constraint_id
 >>> instance.deactivate_constraint(limit_id, "example.relax_limit", purpose="inspection")
 >>> assert limit_id not in instance.active_constraints
->>> removed = instance.inactive_constraints[limit_id]
->>> assert removed.inactive_reason == "example.relax_limit"
->>> assert removed.inactive_reason_parameters == {"purpose": "inspection"}
+>>> inactive = instance.inactive_constraints[limit_id]
+>>> assert inactive.inactive_reason == "example.relax_limit"
+>>> assert inactive.inactive_reason_parameters == {"purpose": "inspection"}
 >>> solution = instance.evaluate({x.id: 1})
 >>> assert solution.feasible_relaxed
 >>> assert not solution.feasible()

@@ -5,7 +5,7 @@ canonicalizes supplied values, fixes the specified variables, and substitutes
 them into active expressions. Use this to study a configuration or optimize
 the remaining variables under chosen conditions.
 
-Named functions and existing removed constraints retain their original
+Named functions and existing inactive constraints retain their original
 expressions as Interpretation Context. The new Instance stores fixed values
 and normalizes dependencies; {meth}`~ommx.Instance.evaluate` and
 {meth}`~ommx.Instance.evaluate_samples` populate those values before evaluating

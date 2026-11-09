@@ -1293,7 +1293,7 @@ impl ParametricInstance {
         self.constraint_collection.active()
     }
 
-    /// Removed constraints.
+    /// Inactive constraints.
     pub fn inactive_constraints(
         &self,
     ) -> &BTreeMap<ConstraintID, (Constraint, InactiveConstraintMetadata)> {

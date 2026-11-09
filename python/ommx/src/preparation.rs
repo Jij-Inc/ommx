@@ -325,7 +325,7 @@ impl FixedPenaltyPreparation {
     /// ``atol`` is used by the owner operation to accept a penalty magnitude
     /// down to ``-atol`` and normalize a tolerated negative value to zero. Every
     /// weight must be finite.
-    /// Removed constraints record
+    /// Inactive constraints record
     /// ``reason="ommx.Instance.penalty_method_with_fixed_weights"`` with no
     /// reason parameters.
     #[staticmethod]

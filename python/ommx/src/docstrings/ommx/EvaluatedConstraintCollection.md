@@ -1,4 +1,4 @@
-Live mapping of a Solution's constraint results, including retained removed rows.
+Live mapping of a Solution's constraint results, including retained inactive rows.
 
 Obtained from {attr}`~ommx.Solution.constraints`. The collection keeps its
 Solution alive and fetches each row on access. Each row is an independent
@@ -42,7 +42,7 @@ For the mixed-family typed-key contract, ``get``, live views, iteration timing,
 and snapshot equality, see {class}`~ommx.ActiveConstraintCollection`. Filter without
 collecting rows using ``of_kind`` and {class}`~ommx.ConstraintFamilyView`.
 {meth}`~ommx.Solution.constraints_df` collects one family as a DataFrame;
-retained removed constraints remain included. Its ``kind`` argument is required,
+retained inactive constraints remain included. Its ``kind`` argument is required,
 as it is for ``constraint_context_df``, ``constraint_parameters_df``,
 ``constraint_provenance_df``, and ``constraint_inactive_reasons_df`` on all owners.
 

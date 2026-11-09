@@ -1161,9 +1161,9 @@ impl Instance {
 
     /// Extract active constraints of every family by name, keyed by subscript tuples.
     ///
-    /// Values are attached handles, just as in `constraints`: edits update this
+    /// Values are attached handles, just as in `active_constraints`: edits update this
     /// model. The returned dictionary snapshots the matching keys; it does not
-    /// track later label or membership changes. Removed constraints are excluded.
+    /// track later label or membership changes. Inactive constraints are excluded.
     /// Parameters and descriptions do not participate in matching.
     ///
     /// Raises KeyError if no active constraint has this name, and ValueError if
@@ -1181,7 +1181,7 @@ impl Instance {
         Self::active_constraints(slf).extract_by_name(py, name)
     }
 
-    /// Live lookup of every retained constraint, including both inactive states.
+    /// Live lookup of every retained constraint, including active and inactive rows.
     ///
     /// IDs determine the constraint family, not its activeness. Active rows are
     /// attached handles; inactive rows are independent snapshots. Inspect the
@@ -1310,7 +1310,7 @@ impl Instance {
     }
 
     /// All active constraint families, including {attr}`~ommx.ConstraintKind.Regular`.
-    /// Removed constraints are excluded. This is independent of adapter support.
+    /// Inactive constraints are excluded. This is independent of adapter support.
     #[getter]
     pub fn active_constraint_kinds(&self) -> std::collections::HashSet<crate::ConstraintKind> {
         self.inner
@@ -1588,7 +1588,7 @@ impl Instance {
     ///
     /// - The active sense is {attr}`~ommx.Sense.Minimize`.
     /// - There are no active regular, Indicator, OneHot, or SOS1 constraints.
-    ///   Removed constraints do not prevent formatting and are not exported.
+    ///   Inactive constraints do not prevent formatting and are not exported.
     /// - Every variable referenced by the active objective has Binary kind.
     ///   Other variables retained by the instance do not prevent formatting.
     /// - The active objective is stored as an expanded polynomial. Composed
@@ -1624,7 +1624,7 @@ impl Instance {
     ///
     /// The coefficients describe the active objective. They do not carry
     /// {attr}`~ommx.Instance.output_objective`,
-    /// removed constraints, or value-recovery rules. Keep the instance and use
+    /// inactive constraints, or value-recovery rules. Keep the instance and use
     /// {meth}`~ommx.Instance.evaluate` or {meth}`~ommx.Instance.evaluate_samples`
     /// to interpret candidates with its output semantics. Backend energy can
     /// differ from the objective reported by those methods.
@@ -1880,7 +1880,7 @@ impl Instance {
     ///
     /// where $\lambda$ is the uniform penalty weight parameter for all constraints.
     ///
-    /// The removed constraints are stored in {attr}`~ommx.ParametricInstance.inactive_constraints`.
+    /// The inactive constraints are stored in {attr}`~ommx.ParametricInstance.inactive_constraints`.
     ///
     /// > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
     /// > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
@@ -1927,7 +1927,7 @@ impl Instance {
     /// candidate from a file and identifies violated constraints.
     ///
     /// Evaluate a solver's returned candidate with the transformed Instance
-    /// used for that solve. Its recorded dependencies, removed constraints,
+    /// used for that solve. Its recorded dependencies, inactive constraints,
     /// and output objective are needed to reconstruct and interpret the result.
     ///
     /// # Postconditions
@@ -2587,7 +2587,7 @@ impl Instance {
     /// # Postconditions
     ///
     /// Encoding rewrites the Active Formulation and records variable reconstruction
-    /// rules. Named functions and removed constraints keep their original expressions.
+    /// rules. Named functions and inactive constraints keep their original expressions.
     /// Fixed and dependent variables cannot be encoded again.
     /// An existing output objective is preserved; if the active objective is affected
     /// and no output objective exists, its previous function and sense are retained.
@@ -2661,7 +2661,7 @@ impl Instance {
     /// # Postconditions
     ///
     /// Encoding rewrites the Active Formulation and records variable reconstruction
-    /// rules. Named functions and removed constraints keep their original expressions.
+    /// rules. Named functions and inactive constraints keep their original expressions.
     /// Fixed and dependent variables cannot be encoded again.
     /// An existing output objective is preserved; if the active objective is affected
     /// and no output objective exists, its previous function and sense are retained.
@@ -2717,7 +2717,7 @@ impl Instance {
     /// objective and all active constraints. This is the general substitution
     /// mechanism behind {meth}`~ommx.Instance.log_encode`, exposed so that
     /// users can implement their own variable representations. Named functions,
-    /// removed constraints, and an existing output objective retain their expressions
+    /// inactive constraints, and an existing output objective retain their expressions
     /// as Interpretation Context. The Instance records the assignments and composes
     /// existing dependencies; {meth}`~ommx.Instance.evaluate` and
     /// {meth}`~ommx.Instance.evaluate_samples` reconstruct values before evaluating

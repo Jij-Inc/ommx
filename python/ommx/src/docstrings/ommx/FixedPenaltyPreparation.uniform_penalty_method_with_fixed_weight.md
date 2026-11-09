@@ -11,7 +11,7 @@ Creating this setting does not apply it; select it in a
 `-atol` and normalize a tolerated negative value to zero. When at least one active
 regular constraint is converted, the weight must be finite. With no active
 constraint of any family, the owner operation is an identity and does not inspect
-the weight. Removed constraints record
+the weight. Inactive constraints record
 `reason="ommx.Instance.uniform_penalty_method_with_fixed_weight"` with no reason
 parameters. The class documentation defines atomicity, retained output semantics,
 and rejection of active special constraints.

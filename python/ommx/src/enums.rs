@@ -113,7 +113,7 @@ class Kind:
 ///
 /// Active constraints include regular and special constraints, including an
 /// Indicator's controlling Binary variable. References only from named functions,
-/// removed constraints, output objectives, or dependency right-hand sides do not
+/// inactive constraints, output objectives, or dependency right-hand sides do not
 /// make a variable used. Being irrelevant to solver input does not mean its value
 /// cannot affect reporting.
 ///

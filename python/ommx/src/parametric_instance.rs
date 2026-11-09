@@ -458,7 +458,7 @@ impl ParametricInstance {
     ///
     /// Specializes parameter-bearing expressions in both the **Active Formulation**
     /// and **Interpretation Context** defined on {class}`~ommx.Instance`, including
-    /// removed constraints, output objectives, named functions, and dependency
+    /// inactive constraints, output objectives, named functions, and dependency
     /// expressions. The returned Instance retains this specialized context.
     ///
     /// Provide a dict mapping every declared parameter ID to its numerical value,
@@ -607,7 +607,7 @@ impl ParametricInstance {
     /// expressions may only reference existing decision variable or parameter
     /// IDs; parameter IDs cannot be assignment targets.
     ///
-    /// Named functions, removed constraints, and existing output objectives
+    /// Named functions, inactive constraints, and existing output objectives
     /// retain their expressions as Interpretation Context. The recorded
     /// dependencies reconstruct substituted variables during evaluation after
     /// {meth}`with_parameters` specializes parameters throughout both the
@@ -771,9 +771,9 @@ impl ParametricInstance {
 
     /// Extract active constraints of every family by name, keyed by subscript tuples.
     ///
-    /// Values are attached handles, just as in `constraints`: edits update this
+    /// Values are attached handles, just as in `active_constraints`: edits update this
     /// model. The returned dictionary snapshots the matching keys; it does not
-    /// track later label or membership changes. Removed constraints are excluded.
+    /// track later label or membership changes. Inactive constraints are excluded.
     /// Parameters and descriptions do not participate in matching.
     ///
     /// Raises KeyError if no active constraint has this name, and ValueError if
@@ -791,7 +791,7 @@ impl ParametricInstance {
         Self::active_constraints(slf).extract_by_name(py, name)
     }
 
-    /// Live lookup of every retained constraint, including both inactive states.
+    /// Live lookup of every retained constraint, including active and inactive rows.
     ///
     /// IDs determine the constraint family, not its activeness. Active rows are
     /// attached handles; inactive rows are independent snapshots. Inspect the
