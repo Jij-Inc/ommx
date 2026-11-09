@@ -8,18 +8,18 @@
 # ---
 # name: test_instance_constraints_df_all_states_id_sorted
   '''
-                        equality    type used_ids  name subscripts description                     activeness inactive_reason
-  regular_constraint_id                                                                                                      
-  ConstraintID(5)             =0  Linear   {0, 1}  <NA>         []        <NA>    ConstraintActiveness.ACTIVE            <NA>
-  ConstraintID(20)            =0  Linear   {0, 2}  <NA>         []        <NA>  ConstraintActiveness.INACTIVE    relax_middle
-  ConstraintID(30)            =0  Linear   {1, 2}  <NA>         []        <NA>    ConstraintActiveness.ACTIVE            <NA>
+                        equality    type used_ids  name subscripts description                             activeness inactive_reason
+  regular_constraint_id                                                                                                              
+  ConstraintID(5)             =0  Linear   {0, 1}  <NA>         []        <NA>            ConstraintActiveness.ACTIVE            <NA>
+  ConstraintID(20)            =0  Linear   {0, 2}  <NA>         []        <NA>  ConstraintActiveness.INACTIVE_CHECKED    relax_middle
+  ConstraintID(30)            =0  Linear   {1, 2}  <NA>         []        <NA>            ConstraintActiveness.ACTIVE            <NA>
   '''
 # ---
 # name: test_instance_constraints_df_default_includes_inactive
   '''
-                        equality    type   used_ids     name subscripts description parameters.region inactive_reason inactive_reason.phase                     activeness
-  regular_constraint_id                                                                                                                                                   
-  ConstraintID(10)            =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row           us-east    manual_relax               warm-up  ConstraintActiveness.INACTIVE
+                        equality    type   used_ids     name subscripts description parameters.region inactive_reason inactive_reason.phase                             activeness
+  regular_constraint_id                                                                                                                                                           
+  ConstraintID(10)            =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row           us-east    manual_relax               warm-up  ConstraintActiveness.INACTIVE_CHECKED
   '''
 # ---
 # name: test_instance_constraints_df_inactive_reason_active_only_keeps_column
@@ -31,9 +31,9 @@
 # ---
 # name: test_instance_constraints_df_inactive_reason_without_label
   '''
-                        equality    type   used_ids inactive_reason inactive_reason.phase                     activeness
-  regular_constraint_id                                                                                                 
-  ConstraintID(10)            =0  Linear  {0, 1, 2}    manual_relax               warm-up  ConstraintActiveness.INACTIVE
+                        equality    type   used_ids inactive_reason inactive_reason.phase                             activeness
+  regular_constraint_id                                                                                                         
+  ConstraintID(10)            =0  Linear  {0, 1, 2}    manual_relax               warm-up  ConstraintActiveness.INACTIVE_CHECKED
   '''
 # ---
 # name: test_instance_constraints_df_include_empty
@@ -87,10 +87,10 @@
 # ---
 # name: test_instance_constraints_df_one_hot_includes_inactive
   '''
-                        variables  num_variables used_ids  name subscripts description                     activeness                              inactive_reason inactive_reason.constraint_id
-  one_hot_constraint_id                                                                                                                                                                         
-  OneHotConstraintID(5)    {0, 1}              2   {0, 1}  <NA>         []        <NA>    ConstraintActiveness.ACTIVE                                         <NA>                          <NA>
-  OneHotConstraintID(7)    {1, 2}              2   {1, 2}  <NA>         []        <NA>  ConstraintActiveness.INACTIVE  ommx.Instance.convert_one_hot_to_constraint                             8
+                        variables  num_variables used_ids  name subscripts description                             activeness                              inactive_reason inactive_reason.constraint_id
+  one_hot_constraint_id                                                                                                                                                                                 
+  OneHotConstraintID(5)    {0, 1}              2   {0, 1}  <NA>         []        <NA>            ConstraintActiveness.ACTIVE                                         <NA>                          <NA>
+  OneHotConstraintID(7)    {1, 2}              2   {1, 2}  <NA>         []        <NA>  ConstraintActiveness.INACTIVE_CHECKED  ommx.Instance.convert_one_hot_to_constraint                             8
   '''
 # ---
 # name: test_parametric_instance_constraints_df_default
@@ -151,9 +151,9 @@
 # ---
 # name: test_solution_constraints_df_inactive_reason_include
   '''
-                        equality  value  feasible   used_ids     name subscripts description dual_variable  violation                     activeness inactive_reason inactive_reason.phase
-  regular_constraint_id                                                                                                                                                                   
-  ConstraintID(10)            =0    0.0      True  {0, 1, 2}  balance     [0, 1]  demand row          <NA>        0.0  ConstraintActiveness.INACTIVE    manual_relax               warm-up
+                        equality  value  feasible   used_ids     name subscripts description dual_variable  violation                             activeness inactive_reason inactive_reason.phase
+  regular_constraint_id                                                                                                                                                                           
+  ConstraintID(10)            =0    0.0      True  {0, 1, 2}  balance     [0, 1]  demand row          <NA>        0.0  ConstraintActiveness.INACTIVE_CHECKED    manual_relax               warm-up
   '''
 # ---
 # name: test_solution_constraints_df_inactive_reason_without_inactive_rows_keeps_column

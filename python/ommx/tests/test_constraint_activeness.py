@@ -1,5 +1,6 @@
 """Ordered activeness selects one coherent constraint set across query APIs."""
 
+import pickle
 from typing import Any
 
 import pytest
@@ -26,8 +27,28 @@ from ommx import (
 )
 
 
+@pytest.mark.parametrize(
+    ("member", "name", "code"),
+    [
+        (Activeness.INACTIVE_SKIPPED, "INACTIVE_SKIPPED", 0),
+        (Activeness.INACTIVE_CHECKED, "INACTIVE_CHECKED", 1),
+        (Activeness.ACTIVE, "ACTIVE", 2),
+    ],
+)
+def test_activeness_member_names_and_pickle(member, name, code):
+    assert repr(member) == f"ConstraintActiveness.{name}"
+    assert str(member) == f"ConstraintActiveness.{name}"
+    assert int(member) == code
+    assert pickle.loads(pickle.dumps(member)) == getattr(Activeness, name)
+
+
+def test_activeness_old_member_names_are_absent():
+    assert not hasattr(Activeness, "INACTIVE")
+    assert not hasattr(Activeness, "SKIP_FEASIBILITY_CHECK")
+
+
 def test_ordered_selection_and_evaluated_skipped_rows():
-    assert Activeness.SKIP_FEASIBILITY_CHECK < Activeness.INACTIVE < Activeness.ACTIVE
+    assert Activeness.INACTIVE_SKIPPED < Activeness.INACTIVE_CHECKED < Activeness.ACTIVE
     model = Instance.minimize()
     x = model.new_binary("x")
     active = model.add_constraint(x <= 1)
@@ -37,20 +58,37 @@ def test_ordered_selection_and_evaluated_skipped_rows():
     model.deactivate_constraint(
         skipped.constraint_id, "diagnostic", skip_feasibility_check=True
     )
+    for host in (model, model.as_parametric_instance()):
+        assert set(host.inactive_constraints) == {
+            checked.constraint_id,
+            skipped.constraint_id,
+        }
+        assert host.inactive_constraints[checked.constraint_id].activeness == (
+            Activeness.INACTIVE_CHECKED
+        )
+        assert host.inactive_constraints[skipped.constraint_id].activeness == (
+            Activeness.INACTIVE_SKIPPED
+        )
     solution = model.evaluate({x.id: 0})
     assert solution.feasible(min_activeness=Activeness.ACTIVE)
     assert solution.feasible_relaxed
     assert not solution.feasible()
     assert solution.total_violation(min_activeness=Activeness.ACTIVE) == 0
     assert solution.total_violation() == 1
-    assert (
-        solution.total_violation(min_activeness=Activeness.SKIP_FEASIBILITY_CHECK) == 3
-    )
+    assert solution.total_violation(min_activeness=Activeness.INACTIVE_SKIPPED) == 3
     assert solution.constraints[skipped.constraint_id].violation() == 2
     assert (
         solution.constraints[skipped.constraint_id].activeness
-        == Activeness.SKIP_FEASIBILITY_CHECK
+        == Activeness.INACTIVE_SKIPPED
     )
+    checked_feasible = model.evaluate({x.id: 1})
+    assert checked_feasible.feasible()
+    assert not checked_feasible.feasible(min_activeness=Activeness.INACTIVE_SKIPPED)
+    samples = model.evaluate_samples({0: {x.id: 0}, 1: {x.id: 1}})
+    assert samples.feasible() == {0: False, 1: True}
+    assert samples.feasible_ids() == {1}
+    assert samples.best_feasible_id() == 1
+    assert samples.best_feasible().state.entries == {x.id: 1.0}
     for owner in (model, solution, model.evaluate_samples([{x.id: 0}])):
         table = owner.constraints_df(kind=ConstraintKind.Regular)
         assert set(table.index) == {
@@ -58,9 +96,14 @@ def test_ordered_selection_and_evaluated_skipped_rows():
             checked.constraint_id,
             skipped.constraint_id,
         }
+        assert table["activeness"].to_dict() == {
+            active.constraint_id: Activeness.ACTIVE,
+            checked.constraint_id: Activeness.INACTIVE_CHECKED,
+            skipped.constraint_id: Activeness.INACTIVE_SKIPPED,
+        }
         assert set(
             owner.constraints_df(
-                kind=ConstraintKind.Regular, min_activeness=Activeness.INACTIVE
+                kind=ConstraintKind.Regular, min_activeness=Activeness.INACTIVE_CHECKED
             ).index
         ) == {active.constraint_id, checked.constraint_id}
         assert list(
@@ -83,16 +126,16 @@ def test_all_state_mapping_and_stale_attached_handle():
     assert isinstance(rows[cid], AttachedConstraint)
     model.deactivate_constraint(cid, "report", source="test")
     assert isinstance(rows[cid], InactiveConstraint)
-    assert attached.activeness == Activeness.INACTIVE
+    assert attached.activeness == Activeness.INACTIVE_CHECKED
     with pytest.raises(KeyError):
         model.active_constraints[cid]
     with pytest.raises(RuntimeError, match="no longer active"):
         attached.set_name("stale")
     snapshot = model.inactive_constraints[cid]
     model.set_constraint_skip_feasibility_check(cid, True)
-    assert rows[cid].activeness == Activeness.SKIP_FEASIBILITY_CHECK
-    assert attached.evaluate({x.id: 0}).activeness == Activeness.SKIP_FEASIBILITY_CHECK
-    assert snapshot.activeness == Activeness.INACTIVE
+    assert rows[cid].activeness == Activeness.INACTIVE_SKIPPED
+    assert attached.evaluate({x.id: 0}).activeness == Activeness.INACTIVE_SKIPPED
+    assert snapshot.activeness == Activeness.INACTIVE_CHECKED
     model.activate_constraint(cid)
     assert isinstance(rows[cid], AttachedConstraint)
     assert attached.activeness == Activeness.ACTIVE
@@ -141,12 +184,12 @@ def test_initial_inactive_components_and_all_family_transitions(host):
             cid, "again", skip_feasibility_check=True
         )
     assert all(
-        row.activeness == Activeness.SKIP_FEASIBILITY_CHECK
+        row.activeness == Activeness.INACTIVE_SKIPPED
         for row in model.constraints.values()
     )
     restored = host.from_v2_bytes(model.to_v2_bytes())
     assert all(
-        row.activeness == Activeness.SKIP_FEASIBILITY_CHECK
+        row.activeness == Activeness.INACTIVE_SKIPPED
         for row in restored.constraints.values()
     )
     instance = (
@@ -154,11 +197,9 @@ def test_initial_inactive_components_and_all_family_transitions(host):
     )
     evaluated = instance.evaluate({x.id: 1, y.id: 1})
     assert evaluated.feasible()
-    assert not evaluated.feasible(min_activeness=Activeness.SKIP_FEASIBILITY_CHECK)
+    assert not evaluated.feasible(min_activeness=Activeness.INACTIVE_SKIPPED)
     assert evaluated.total_violation() == 0
-    assert (
-        evaluated.total_violation(min_activeness=Activeness.SKIP_FEASIBILITY_CHECK) == 2
-    )
+    assert evaluated.total_violation(min_activeness=Activeness.INACTIVE_SKIPPED) == 2
     with pytest.raises(RuntimeError, match="skip_feasibility_check"):
         model.to_v1_bytes()
 
@@ -185,7 +226,7 @@ def test_sample_selection_and_wire_round_trip():
         restored = cls.from_v2_bytes(result.to_v2_bytes())
         assert (
             restored.constraints[row.constraint_id].activeness
-            == Activeness.SKIP_FEASIBILITY_CHECK
+            == Activeness.INACTIVE_SKIPPED
         )
         with pytest.raises(RuntimeError, match="skip_feasibility_check"):
             result.to_v1_bytes()

@@ -1854,7 +1854,7 @@ impl Instance {
     /// >>> prepared = parametric.with_parameters(parameters)
     /// >>> assert parametric.active_constraints == {}
     /// >>> assert set(parametric.constraints) == {ConstraintID(7)}
-    /// >>> assert parametric.constraints[ConstraintID(7)].activeness == ConstraintActiveness.INACTIVE
+    /// >>> assert parametric.constraints[ConstraintID(7)].activeness == ConstraintActiveness.INACTIVE_CHECKED
     /// >>> assert ConstraintID(7) in parametric.inactive_constraints
     /// >>> assert prepared.objective.evaluate({0: 0}) == 2.0
     /// >>> solution = prepared.evaluate({0: 0})
@@ -1901,7 +1901,7 @@ impl Instance {
     /// >>> prepared = parametric.with_parameters({parameter_id: 2.0})
     /// >>> assert parametric.active_constraints == {}
     /// >>> assert set(parametric.constraints) == {ConstraintID(7)}
-    /// >>> assert parametric.constraints[ConstraintID(7)].activeness == ConstraintActiveness.INACTIVE
+    /// >>> assert parametric.constraints[ConstraintID(7)].activeness == ConstraintActiveness.INACTIVE_CHECKED
     /// >>> assert ConstraintID(7) in parametric.inactive_constraints
     /// >>> assert prepared.objective.evaluate({0: 0}) == 2.0
     /// >>> solution = prepared.evaluate({0: 0})
@@ -3127,9 +3127,9 @@ impl Instance {
     /// `inactive_reason.{key}` parameter columns together.
     ///
     /// Includes every retained constraint by default. Set min_activeness to
-    /// INACTIVE to exclude skipped rows or ACTIVE to select the active formulation.
+    /// INACTIVE_CHECKED to exclude skipped rows or ACTIVE to select the active formulation.
     /// The activeness column is always present. Reason columns are opt-in.
-    #[pyo3(signature = (*, kind, include=None, min_activeness=crate::ConstraintActiveness::SKIP_FEASIBILITY_CHECK))]
+    #[pyo3(signature = (*, kind, include=None, min_activeness=crate::ConstraintActiveness::INACTIVE_SKIPPED))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,

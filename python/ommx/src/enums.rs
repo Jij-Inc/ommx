@@ -480,11 +480,13 @@ impl From<Relaxation> for ommx::v1::Relaxation {
 open_kind!(
     /// Ordered participation in constraint queries.
     ///
-    /// SKIP_FEASIBILITY_CHECK < INACTIVE < ACTIVE. A min_activeness query
+    /// INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE. A min_activeness query
     /// includes rows whose activeness is at least the requested value.
+    /// Inactive collections contain both inactive states; skip_feasibility_check
+    /// selects whether an inactive row is checked by default feasibility queries.
     ConstraintActiveness, ommx::ConstraintActiveness, |value| value as i32, module="ommx";
-    SKIP_FEASIBILITY_CHECK => SkipFeasibilityCheck,
-    INACTIVE => Inactive,
+    INACTIVE_SKIPPED => InactiveSkipped,
+    INACTIVE_CHECKED => InactiveChecked,
     ACTIVE => Active,
     ;
     fn __lt__(&self, other: Self) -> bool { self.0 < other.0 }
@@ -505,8 +507,8 @@ impl ConstraintActiveness {
     fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<NamedConstantPickle<'py>> {
         let name = match self.0 {
             ommx::ConstraintActiveness::Active => "ACTIVE",
-            ommx::ConstraintActiveness::Inactive => "INACTIVE",
-            ommx::ConstraintActiveness::SkipFeasibilityCheck => "SKIP_FEASIBILITY_CHECK",
+            ommx::ConstraintActiveness::InactiveChecked => "INACTIVE_CHECKED",
+            ommx::ConstraintActiveness::InactiveSkipped => "INACTIVE_SKIPPED",
         };
         Ok((
             py.import("builtins")?.getattr("getattr")?,

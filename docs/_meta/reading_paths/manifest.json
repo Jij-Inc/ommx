@@ -919,7 +919,7 @@
     },
     {
       "id": "constraints.lifecycle",
-      "label": "activeとinactiveおよびskip指定の制約を区別する",
+      "label": "activeとchecked・skippedのinactive制約を区別する",
       "owner": "R_API.instance.retained_results",
       "requires": [
         "instance.model",
@@ -931,9 +931,11 @@
         "active_constraints",
         "deactivate_constraint",
         "activate_constraint",
+        "INACTIVE_CHECKED",
+        "INACTIVE_SKIPPED",
         "skip_feasibility_check"
       ],
-      "scope": "Inactive constraints are retained and evaluated; the skip flag excludes them from default feasibility."
+      "scope": "Each row is ACTIVE, INACTIVE_CHECKED, or INACTIVE_SKIPPED. Inactive is the umbrella for the checked and skipped states; both are retained and evaluated, while skipped rows are excluded from default feasibility."
     },
     {
       "id": "objective.views",
@@ -966,7 +968,7 @@
         "feasible",
         "min_activeness"
       ],
-      "scope": "Ordered minimum selects active only, checked inactive plus active, or every retained row."
+      "scope": "The order INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE makes the inclusive minimum select active only, checked inactive plus active, or every retained row."
     },
     {
       "id": "evaluation.snapshot",

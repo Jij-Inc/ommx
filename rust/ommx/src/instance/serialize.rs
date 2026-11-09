@@ -1139,11 +1139,11 @@ mod activeness_wire_tests {
                         crate::ATol::default(),
                     )
                     .unwrap();
-                assert_eq!(solution.feasible(A::Inactive), skip);
-                assert!(!solution.feasible(A::SkipFeasibilityCheck));
+                assert_eq!(solution.feasible(A::InactiveChecked), skip);
+                assert!(!solution.feasible(A::InactiveSkipped));
                 assert!(solution.feasible_relaxed());
-                assert_eq!(samples.feasible(A::Inactive)[&7.into()], skip);
-                assert!(!samples.feasible(A::SkipFeasibilityCheck)[&7.into()]);
+                assert_eq!(samples.feasible(A::InactiveChecked)[&7.into()], skip);
+                assert!(!samples.feasible(A::InactiveSkipped)[&7.into()]);
 
                 let instance_wire = v2::Instance::from(instance.clone());
                 let parametric_wire = v2::ParametricInstance::from(parametric.clone());
@@ -1293,7 +1293,7 @@ mod activeness_wire_tests {
         let (_, metadata) = &collection.inactive()[&10.into()];
         assert_eq!(metadata.reason, "preprocess");
         assert_eq!(metadata.parameters["rule"], "redundant");
-        assert_eq!(metadata.activeness(), A::Inactive);
+        assert_eq!(metadata.activeness(), A::InactiveChecked);
         assert_eq!(
             collection.context().name(10.into()),
             Some("legacy_constraint")

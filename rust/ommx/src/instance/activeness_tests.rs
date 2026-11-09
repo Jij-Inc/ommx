@@ -82,7 +82,14 @@ fn all_families() -> Instance {
 
 #[test]
 fn ordered_selection_counts_the_same_rows_across_families() {
-    assert!(A::SkipFeasibilityCheck < A::Inactive && A::Inactive < A::Active);
+    assert!(A::InactiveSkipped < A::InactiveChecked && A::InactiveChecked < A::Active);
+    assert_eq!(A::default(), A::InactiveChecked);
+    assert_eq!(
+        InactiveConstraintMetadata::default().activeness(),
+        A::InactiveChecked
+    );
+    assert_eq!(metadata(false).activeness(), A::InactiveChecked);
+    assert_eq!(metadata(true).activeness(), A::InactiveSkipped);
     let instance = all_families();
     assert_eq!(instance.constraints().len(), 3);
     assert!(instance.constraints().get(&2.into()).is_some());
@@ -93,11 +100,44 @@ fn ordered_selection_counts_the_same_rows_across_families() {
     let samples = instance
         .evaluate_samples(&Sampled::from((0.into(), state)), ATol::default())
         .unwrap();
-    for (minimum, count) in [
-        (A::Active, 1),
-        (A::Inactive, 2),
-        (A::SkipFeasibilityCheck, 3),
+    for (minimum, offsets) in [
+        (A::Active, &[0_u64][..]),
+        (A::InactiveChecked, &[0, 1][..]),
+        (A::InactiveSkipped, &[0, 1, 2][..]),
     ] {
+        let count = offsets.len();
+        assert_eq!(
+            solution
+                .evaluated_constraints()
+                .selected(minimum)
+                .map(|(id, _)| id.into_inner())
+                .collect::<Vec<_>>(),
+            offsets,
+        );
+        assert_eq!(
+            solution
+                .evaluated_indicator_constraints()
+                .selected(minimum)
+                .map(|(id, _)| id.into_inner())
+                .collect::<Vec<_>>(),
+            offsets.iter().map(|id| id + 3).collect::<Vec<_>>(),
+        );
+        assert_eq!(
+            solution
+                .evaluated_one_hot_constraints()
+                .selected(minimum)
+                .map(|(id, _)| id.into_inner())
+                .collect::<Vec<_>>(),
+            offsets.iter().map(|id| id + 6).collect::<Vec<_>>(),
+        );
+        assert_eq!(
+            solution
+                .evaluated_sos1_constraints()
+                .selected(minimum)
+                .map(|(id, _)| id.into_inner())
+                .collect::<Vec<_>>(),
+            offsets.iter().map(|id| id + 9).collect::<Vec<_>>(),
+        );
         assert_eq!(solution.total_violation(minimum), 4.0 * count as f64);
         assert_eq!(samples.constraints().selected(minimum).count(), count);
         assert_eq!(
@@ -150,8 +190,8 @@ fn sample_selection_and_best_solution_follow_the_requested_minimum() {
     let samples = instance.evaluate_samples(&states, ATol::default()).unwrap();
     for (minimum, best, expected) in [
         (A::Active, 0, [true, true, true]),
-        (A::Inactive, 1, [false, true, true]),
-        (A::SkipFeasibilityCheck, 2, [false, false, true]),
+        (A::InactiveChecked, 1, [false, true, true]),
+        (A::InactiveSkipped, 2, [false, false, true]),
     ] {
         assert_eq!(samples.best_feasible_id(minimum).unwrap(), best.into());
         let feasible = samples.feasible(minimum);
@@ -165,6 +205,11 @@ fn sample_selection_and_best_solution_follow_the_requested_minimum() {
     }
     assert_eq!(samples.feasible_relaxed(), &samples.feasible(A::Active));
     assert_eq!(samples.best_feasible_relaxed_id().unwrap(), 0.into());
+    assert_eq!(samples.best_feasible_id(A::default()).unwrap(), 1.into());
+    assert_eq!(
+        samples.feasible(A::default()),
+        samples.feasible(A::InactiveChecked)
+    );
 }
 
 #[test]
@@ -258,7 +303,7 @@ fn parametric_transitions_preserve_ids_context_and_inactive_policy() {
         .unwrap();
     assert_eq!(
         instance.constraints().activeness(&2.into()),
-        Some(A::SkipFeasibilityCheck)
+        Some(A::InactiveSkipped)
     );
     assert_eq!(instance.constraint_context().collect_for(2.into()), context);
 }
@@ -368,8 +413,8 @@ fn specialization_and_partial_evaluation_preserve_inactive_policy() {
     let solution = instance
         .evaluate(&v1::State::default(), ATol::default())
         .unwrap();
-    assert!(solution.feasible(A::Inactive));
-    assert!(!solution.feasible(A::SkipFeasibilityCheck));
+    assert!(solution.feasible(A::InactiveChecked));
+    assert!(!solution.feasible(A::InactiveSkipped));
     assert_eq!(solution.constraint_violation(0.into()), Some(3.0));
     assert_eq!(solution.indicator_constraint_violation(1.into()), Some(3.0));
 }

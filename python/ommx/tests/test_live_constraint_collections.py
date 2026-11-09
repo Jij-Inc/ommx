@@ -144,7 +144,7 @@ def test_deactivation_activation_and_lowering_update_retained_views():
             set(
                 model.constraints_df(
                     kind=kind,
-                    min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK,
+                    min_activeness=ConstraintActiveness.INACTIVE_SKIPPED,
                 ).index
             )
             == expected

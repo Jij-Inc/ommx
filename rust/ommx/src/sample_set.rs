@@ -296,7 +296,7 @@ impl SampleSet {
     }
 
     pub fn feasible_unrelaxed_ids(&self) -> SampleIDSet {
-        self.feasible_ids(crate::ConstraintActiveness::Inactive)
+        self.feasible_ids(crate::ConstraintActiveness::InactiveChecked)
     }
 
     /// Check if a specific sample is feasible.
@@ -1261,22 +1261,22 @@ impl SampleSetBuilder {
                 && constraints.is_feasible_for(
                     *sample_id,
                     atol,
-                    crate::ConstraintActiveness::Inactive,
+                    crate::ConstraintActiveness::InactiveChecked,
                 )
                 && indicator_constraints.is_feasible_for(
                     *sample_id,
                     atol,
-                    crate::ConstraintActiveness::Inactive,
+                    crate::ConstraintActiveness::InactiveChecked,
                 )
                 && one_hot_constraints.is_feasible_for(
                     *sample_id,
                     atol,
-                    crate::ConstraintActiveness::Inactive,
+                    crate::ConstraintActiveness::InactiveChecked,
                 )
                 && sos1_constraints.is_feasible_for(
                     *sample_id,
                     atol,
-                    crate::ConstraintActiveness::Inactive,
+                    crate::ConstraintActiveness::InactiveChecked,
                 );
             let fr = variables_feasible
                 && constraints.is_feasible_relaxed_for(*sample_id, atol)

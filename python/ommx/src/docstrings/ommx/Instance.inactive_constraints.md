@@ -34,8 +34,8 @@ inactive constraints.
 {meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Instance.evaluate_samples`
 evaluate both active and inactive constraints after restoring and completing
 variable values through {meth}`~ommx.Instance.populate_state`.
-{meth}`~ommx.Solution.feasible` checks active and ordinary inactive constraints by default; skipped constraints require
-`min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK`.
+{meth}`~ommx.Solution.feasible` checks active and checked inactive constraints by default; skipped inactive constraints require
+`min_activeness=ConstraintActiveness.INACTIVE_SKIPPED`.
 {attr}`~ommx.Solution.feasible_relaxed` excludes inactive constraints. Both also
 check every retained variable's kind and bounds. The corresponding
 {meth}`~ommx.SampleSet.feasible` and {attr}`~ommx.SampleSet.feasible_relaxed`
@@ -47,7 +47,7 @@ value when checking a particular candidate; the default is not a recovered
 solver choice.
 
 For a table of active and inactive rows, use
-{meth}`~ommx.Instance.constraints_df` with `min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK` and an explicit
+{meth}`~ommx.Instance.constraints_df` with `min_activeness=ConstraintActiveness.INACTIVE_SKIPPED` and an explicit
 `kind`. On a Solution, use {meth}`~ommx.Solution.constraints_df` with
 `include=("inactive_reason",)` to inspect inactivity reasons alongside evaluated
 values and violations. The complete relax, evaluate, inspect, and restore

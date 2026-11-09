@@ -221,11 +221,11 @@ impl Solution {
     /// Whether selected constraints and every variable domain are satisfied.
     ///
     /// min_activeness selects rows at or above the given ordered state:
-    /// SKIP_FEASIBILITY_CHECK < INACTIVE < ACTIVE. The default INACTIVE checks
-    /// active and ordinary inactive constraints; skipped rows are still evaluated
+    /// INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE. The default INACTIVE_CHECKED checks
+    /// active and checked inactive constraints; skipped rows are still evaluated
     /// and remain inspectable. ACTIVE matches feasible_relaxed.
     /// Uses feasibility_atol independently for each constraint and variable.
-    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE))]
+    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE_CHECKED))]
     pub fn feasible(&self, min_activeness: crate::ConstraintActiveness) -> bool {
         // The `feasible` means feasible in the unrelaxed problem
         self.inner.feasible(min_activeness.into())
@@ -258,7 +258,8 @@ impl Solution {
     /// and every retained variable's kind and bounds.
     #[getter]
     pub fn feasible_unrelaxed(&self) -> bool {
-        self.inner.feasible(ommx::ConstraintActiveness::Inactive)
+        self.inner
+            .feasible(ommx::ConstraintActiveness::InactiveChecked)
     }
 
     /// Absolute tolerance associated with the stored evaluation and feasibility results.
@@ -824,7 +825,7 @@ impl Solution {
     /// >>> assert table.loc[capacity.constraint_id, "value"] == -2.0
     /// >>> assert table.loc[capacity.constraint_id, "violation"] == 0.0
     /// >>> assert table.loc[capacity.constraint_id, "feasible"]
-    #[pyo3(signature = (*, kind, include = None, min_activeness=crate::ConstraintActiveness::SKIP_FEASIBILITY_CHECK))]
+    #[pyo3(signature = (*, kind, include = None, min_activeness=crate::ConstraintActiveness::INACTIVE_SKIPPED))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
@@ -1075,7 +1076,7 @@ impl Solution {
     ///
     /// Use {meth}`constraint_violation` for individual values, also available in
     /// the `violation` column of {meth}`constraints_df` for every constraint kind.
-    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE))]
+    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE_CHECKED))]
     pub fn total_violation(&self, min_activeness: crate::ConstraintActiveness) -> f64 {
         self.inner.total_violation(min_activeness.into())
     }

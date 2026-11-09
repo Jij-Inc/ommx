@@ -1044,7 +1044,7 @@ impl ParametricInstance {
     /// DataFrame of constraints, dispatched on `kind=`. See
     /// {meth}`ommx.Instance.constraints_df` for column / `kind=` /
     /// `include=` / `min_activeness=` semantics.
-    #[pyo3(signature = (*, kind, include=None, min_activeness=crate::ConstraintActiveness::SKIP_FEASIBILITY_CHECK))]
+    #[pyo3(signature = (*, kind, include=None, min_activeness=crate::ConstraintActiveness::INACTIVE_SKIPPED))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,

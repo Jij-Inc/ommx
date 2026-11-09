@@ -63,7 +63,7 @@ necessary when it must be evaluated or reused separately after the mutation.
 >>> assert set(instance.constraints) == {ConstraintID(1), OneHotConstraintID(0)}
 >>> assert (
 ...     instance.constraints[OneHotConstraintID(0)].activeness
-...     == ConstraintActiveness.INACTIVE
+...     == ConstraintActiveness.INACTIVE_CHECKED
 ... )
 >>> assert instance.active_special_constraint_kinds == set()
 >>> assert set(instance.inactive_constraints) == {OneHotConstraintID(0)}

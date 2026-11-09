@@ -65,4 +65,4 @@ that access raises ``KeyError``.
 still attached handles. To inspect just one family, use ``of_kind`` and
 {class}`~ommx.ConstraintFamilyView`. To collect a table, use the owner's
 ``constraints_df(kind=...)``. Its typed index matches the selected family's keys;
-on models, ``min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK`` includes both active and inactive rows.
+on models, ``min_activeness=ConstraintActiveness.INACTIVE_SKIPPED`` includes both active and inactive rows.

@@ -269,7 +269,7 @@ class ActiveConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView
     still attached handles. To inspect just one family, use ``of_kind`` and
     {class}`~ommx.ConstraintFamilyView`. To collect a table, use the owner's
     ``constraints_df(kind=...)``. Its typed index matches the selected family's keys;
-    on models, ``min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK`` includes both active and inactive rows.
+    on models, ``min_activeness=ConstraintActiveness.INACTIVE_SKIPPED`` includes both active and inactive rows.
     """
     def __len__(self) -> builtins.int: ...
     def __contains__(self, key: builtins.object) -> builtins.bool: ...
@@ -2017,12 +2017,14 @@ class ConstraintActiveness:
     r"""
     Ordered participation in constraint queries.
 
-    SKIP_FEASIBILITY_CHECK < INACTIVE < ACTIVE. A min_activeness query
+    INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE. A min_activeness query
     includes rows whose activeness is at least the requested value.
+    Inactive collections contain both inactive states; skip_feasibility_check
+    selects whether an inactive row is checked by default feasibility queries.
     """
 
-    SKIP_FEASIBILITY_CHECK: ConstraintActiveness
-    INACTIVE: ConstraintActiveness
+    INACTIVE_SKIPPED: ConstraintActiveness
+    INACTIVE_CHECKED: ConstraintActiveness
     ACTIVE: ConstraintActiveness
     def __lt__(self, other: ConstraintActiveness) -> builtins.bool: ...
     def __le__(self, other: ConstraintActiveness) -> builtins.bool: ...
@@ -4887,8 +4889,10 @@ class InactiveConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintVi
     Changing that snapshot does not update its owner; a later lookup reads the
     owner's current state.
 
-    Inactive constraints are excluded from the active formulation but still checked
-    when candidates are evaluated. Deactivation can follow relaxation, an equivalent
+    Both `ConstraintActiveness.INACTIVE_CHECKED` and
+    `ConstraintActiveness.INACTIVE_SKIPPED` belong to this collection. Both are
+    excluded from the active formulation and still evaluated numerically.
+    Deactivation can follow relaxation, an equivalent
     lowering, or another transformation; the collection's presence does not identify
     which guarantee holds. See {attr}`~ommx.Instance.inactive_constraints` for their
     evaluation semantics and {meth}`~ommx.Instance.deactivate_constraint` for a complete
@@ -4898,7 +4902,7 @@ class InactiveConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintVi
     iteration, and snapshot equality rules are documented in
     {class}`~ommx.ActiveConstraintCollection`. Use ``of_kind`` and
     {class}`~ommx.ConstraintFamilyView` to inspect one family. A model's
-    ``constraints_df(kind=..., min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK)`` includes both active and inactive rows.
+    ``constraints_df(kind=..., min_activeness=ConstraintActiveness.INACTIVE_SKIPPED)`` includes both active and inactive rows.
     """
     def __len__(self) -> builtins.int: ...
     def __contains__(self, key: builtins.object) -> builtins.bool: ...
@@ -5879,8 +5883,8 @@ class Instance:
         {meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Instance.evaluate_samples`
         evaluate both active and inactive constraints after restoring and completing
         variable values through {meth}`~ommx.Instance.populate_state`.
-        {meth}`~ommx.Solution.feasible` checks active and ordinary inactive constraints by default; skipped constraints require
-        `min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK`.
+        {meth}`~ommx.Solution.feasible` checks active and checked inactive constraints by default; skipped inactive constraints require
+        `min_activeness=ConstraintActiveness.INACTIVE_SKIPPED`.
         {attr}`~ommx.Solution.feasible_relaxed` excludes inactive constraints. Both also
         check every retained variable's kind and bounds. The corresponding
         {meth}`~ommx.SampleSet.feasible` and {attr}`~ommx.SampleSet.feasible_relaxed`
@@ -5892,7 +5896,7 @@ class Instance:
         solver choice.
 
         For a table of active and inactive rows, use
-        {meth}`~ommx.Instance.constraints_df` with `min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK` and an explicit
+        {meth}`~ommx.Instance.constraints_df` with `min_activeness=ConstraintActiveness.INACTIVE_SKIPPED` and an explicit
         `kind`. On a Solution, use {meth}`~ommx.Solution.constraints_df` with
         `include=("inactive_reason",)` to inspect inactivity reasons alongside evaluated
         values and violations. The complete relax, evaluate, inspect, and restore
@@ -7006,7 +7010,7 @@ class Instance:
         >>> prepared = parametric.with_parameters(parameters)
         >>> assert parametric.active_constraints == {}
         >>> assert set(parametric.constraints) == {ConstraintID(7)}
-        >>> assert parametric.constraints[ConstraintID(7)].activeness == ConstraintActiveness.INACTIVE
+        >>> assert parametric.constraints[ConstraintID(7)].activeness == ConstraintActiveness.INACTIVE_CHECKED
         >>> assert ConstraintID(7) in parametric.inactive_constraints
         >>> assert prepared.objective.evaluate({0: 0}) == 2.0
         >>> solution = prepared.evaluate({0: 0})
@@ -7048,7 +7052,7 @@ class Instance:
         >>> prepared = parametric.with_parameters({parameter_id: 2.0})
         >>> assert parametric.active_constraints == {}
         >>> assert set(parametric.constraints) == {ConstraintID(7)}
-        >>> assert parametric.constraints[ConstraintID(7)].activeness == ConstraintActiveness.INACTIVE
+        >>> assert parametric.constraints[ConstraintID(7)].activeness == ConstraintActiveness.INACTIVE_CHECKED
         >>> assert ConstraintID(7) in parametric.inactive_constraints
         >>> assert prepared.objective.evaluate({0: 0}) == 2.0
         >>> solution = prepared.evaluate({0: 0})
@@ -7494,7 +7498,7 @@ class Instance:
 
         Set `skip_feasibility_check=True` to exclude it from default aggregate
         feasibility and total-violation queries. The row is still evaluated; explicit
-        queries with the minimum `SKIP_FEASIBILITY_CHECK` include it.
+        queries with the minimum `INACTIVE_SKIPPED` include it.
 
         Inactive constraints no longer restrict the active formulation, but
         {meth}`~ommx.Instance.evaluate` still checks them. Here the relaxed formulation
@@ -8311,7 +8315,7 @@ class Instance:
         *,
         kind: ConstraintKind[ConstraintIDBase],
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
-        min_activeness: ConstraintActiveness = ConstraintActiveness.SKIP_FEASIBILITY_CHECK,
+        min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE_SKIPPED,
     ) -> pandas.DataFrame:
         r"""
         DataFrame of constraints, dispatched on `kind=`.
@@ -8328,7 +8332,7 @@ class Instance:
         `inactive_reason.{key}` parameter columns together.
 
         Includes every retained constraint by default. Set min_activeness to
-        INACTIVE to exclude skipped rows or ACTIVE to select the active formulation.
+        INACTIVE_CHECKED to exclude skipped rows or ACTIVE to select the active formulation.
         The activeness column is always present. Reason columns are opt-in.
         """
     def named_functions_df(
@@ -8872,7 +8876,7 @@ class Instance:
         >>> assert set(instance.constraints) == {ConstraintID(1), OneHotConstraintID(0)}
         >>> assert (
         ...     instance.constraints[OneHotConstraintID(0)].activeness
-        ...     == ConstraintActiveness.INACTIVE
+        ...     == ConstraintActiveness.INACTIVE_CHECKED
         ... )
         >>> assert instance.active_special_constraint_kinds == set()
         >>> assert set(instance.inactive_constraints) == {OneHotConstraintID(0)}
@@ -11352,7 +11356,7 @@ class ParametricInstance:
         *,
         kind: ConstraintKind[ConstraintIDBase],
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
-        min_activeness: ConstraintActiveness = ConstraintActiveness.SKIP_FEASIBILITY_CHECK,
+        min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE_SKIPPED,
     ) -> pandas.DataFrame:
         r"""
         DataFrame of constraints, dispatched on `kind=`. See
@@ -12793,12 +12797,16 @@ class SampleSet:
         All candidate IDs as an independent set of integers.
         """
     def feasible_ids(
-        self, *, min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE
+        self,
+        *,
+        min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE_CHECKED,
     ) -> builtins.set[builtins.int]: ...
     def feasible_relaxed_ids(self) -> builtins.set[builtins.int]: ...
     def feasible_unrelaxed_ids(self) -> builtins.set[builtins.int]: ...
     def best_feasible_id(
-        self, *, min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE
+        self,
+        *,
+        min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE_CHECKED,
     ) -> builtins.int:
         r"""
         ID of the best feasible candidate, using the same selection as
@@ -12807,7 +12815,9 @@ class SampleSet:
         Raises ValueError if there is no feasible sample, including when empty.
         """
     def best_feasible(
-        self, *, min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE
+        self,
+        *,
+        min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE_CHECKED,
     ) -> Solution:
         r"""
         The best feasible candidate as an independent Solution.
@@ -12838,13 +12848,15 @@ class SampleSet:
         ValueError: No feasible solution found
         """
     def feasible(
-        self, *, min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE
+        self,
+        *,
+        min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE_CHECKED,
     ) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
         Get feasibility status for all samples, including variable bounds and kinds.
 
         Checks rows at or above min_activeness across every constraint family.
-        The default INACTIVE excludes skipped rows; ACTIVE matches feasible_relaxed.
+        The default INACTIVE_CHECKED excludes skipped rows; ACTIVE matches feasible_relaxed.
         Each value matches {meth}`~ommx.Solution.feasible` on the corresponding
         extracted Solution and uses {attr}`~ommx.SampleSet.feasibility_atol`.
         """
@@ -12980,7 +12992,7 @@ class SampleSet:
         *,
         kind: ConstraintKind[ConstraintIDBase],
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
-        min_activeness: ConstraintActiveness = ConstraintActiveness.SKIP_FEASIBILITY_CHECK,
+        min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE_SKIPPED,
     ) -> pandas.DataFrame:
         r"""
         DataFrame of sampled constraints, dispatched on `kind=`. See
@@ -14213,14 +14225,16 @@ class Solution:
         """
     def to_v2_bytes(self) -> bytes: ...
     def feasible(
-        self, *, min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE
+        self,
+        *,
+        min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE_CHECKED,
     ) -> builtins.bool:
         r"""
         Whether selected constraints and every variable domain are satisfied.
 
         min_activeness selects rows at or above the given ordered state:
-        SKIP_FEASIBILITY_CHECK < INACTIVE < ACTIVE. The default INACTIVE checks
-        active and ordinary inactive constraints; skipped rows are still evaluated
+        INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE. The default INACTIVE_CHECKED checks
+        active and checked inactive constraints; skipped rows are still evaluated
         and remain inspectable. ACTIVE matches feasible_relaxed.
         Uses feasibility_atol independently for each constraint and variable.
         """
@@ -14469,7 +14483,7 @@ class Solution:
         *,
         kind: ConstraintKind[ConstraintIDBase],
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
-        min_activeness: ConstraintActiveness = ConstraintActiveness.SKIP_FEASIBILITY_CHECK,
+        min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE_SKIPPED,
     ) -> pandas.DataFrame:
         r"""
         DataFrame of evaluated constraints, including `feasible` and `violation` for every kind.
@@ -14556,7 +14570,9 @@ class Solution:
     def __copy__(self) -> Solution: ...
     def __deepcopy__(self, _memo: typing.Any) -> Solution: ...
     def total_violation(
-        self, *, min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE
+        self,
+        *,
+        min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE_CHECKED,
     ) -> builtins.float:
         r"""
         Sum the nonnegative scalar violations selected by min_activeness.

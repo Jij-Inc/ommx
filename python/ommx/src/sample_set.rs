@@ -229,7 +229,7 @@ impl SampleSet {
             .collect()
     }
 
-    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE))]
+    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE_CHECKED))]
     pub fn feasible_ids(&self, min_activeness: crate::ConstraintActiveness) -> BTreeSet<u64> {
         self.inner
             .feasible_ids(min_activeness.into())
@@ -248,14 +248,14 @@ impl SampleSet {
 
     pub fn feasible_unrelaxed_ids(&self) -> BTreeSet<u64> {
         // For now, this is the same as feasible_ids since ommx::SampleSet doesn't distinguish
-        self.feasible_ids(crate::ConstraintActiveness::INACTIVE)
+        self.feasible_ids(crate::ConstraintActiveness::INACTIVE_CHECKED)
     }
 
     /// ID of the best feasible candidate, using the same selection as
     /// {meth}`~ommx.SampleSet.best_feasible`.
     ///
     /// Raises ValueError if there is no feasible sample, including when empty.
-    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE))]
+    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE_CHECKED))]
     pub fn best_feasible_id(
         &self,
         min_activeness: crate::ConstraintActiveness,
@@ -302,7 +302,7 @@ impl SampleSet {
     /// Traceback (most recent call last):
     /// ...
     /// ValueError: No feasible solution found
-    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE))]
+    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE_CHECKED))]
     pub fn best_feasible(
         &self,
         min_activeness: crate::ConstraintActiveness,
@@ -332,7 +332,7 @@ impl SampleSet {
     /// Raises ValueError if there is no feasible sample.
     pub fn best_feasible_unrelaxed(&self) -> OmmxPyResult<Solution> {
         // Exactly the same as best_feasible
-        self.best_feasible(crate::ConstraintActiveness::INACTIVE)
+        self.best_feasible(crate::ConstraintActiveness::INACTIVE_CHECKED)
     }
 
     /// Reported objective values keyed by sample ID.
@@ -352,10 +352,10 @@ impl SampleSet {
     /// Get feasibility status for all samples, including variable bounds and kinds.
     ///
     /// Checks rows at or above min_activeness across every constraint family.
-    /// The default INACTIVE excludes skipped rows; ACTIVE matches feasible_relaxed.
+    /// The default INACTIVE_CHECKED excludes skipped rows; ACTIVE matches feasible_relaxed.
     /// Each value matches {meth}`~ommx.Solution.feasible` on the corresponding
     /// extracted Solution and uses {attr}`~ommx.SampleSet.feasibility_atol`.
-    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE))]
+    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE_CHECKED))]
     pub fn feasible(&self, min_activeness: crate::ConstraintActiveness) -> BTreeMap<u64, bool> {
         self.inner
             .feasible(min_activeness.into())
@@ -379,7 +379,7 @@ impl SampleSet {
     /// Alias for {meth}`~ommx.SampleSet.feasible`, keyed by sample ID.
     #[getter]
     pub fn feasible_unrelaxed(&self) -> BTreeMap<u64, bool> {
-        self.feasible(crate::ConstraintActiveness::INACTIVE)
+        self.feasible(crate::ConstraintActiveness::INACTIVE_CHECKED)
     }
 
     /// Absolute tolerance associated with the stored evaluation and feasibility results.
@@ -717,7 +717,9 @@ impl SampleSet {
     /// the SampleSet. See the {class}`~ommx.SampleSet` example for the table layout.
     #[getter]
     pub fn summary<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        let feasible_map = self.inner.feasible(ommx::ConstraintActiveness::Inactive);
+        let feasible_map = self
+            .inner
+            .feasible(ommx::ConstraintActiveness::InactiveChecked);
         let ascending = matches!(self.inner.sense(), ommx::Sense::Minimize);
         let entries: Vec<_> = self
             .inner
@@ -790,7 +792,7 @@ impl SampleSet {
     /// min_activeness selects the same ordered states as feasibility queries,
     /// defaulting to all rows. Reason data is gated by
     /// `"inactive_reason"` in `include=`.
-    #[pyo3(signature = (*, kind, include = None, min_activeness=crate::ConstraintActiveness::SKIP_FEASIBILITY_CHECK))]
+    #[pyo3(signature = (*, kind, include = None, min_activeness=crate::ConstraintActiveness::INACTIVE_SKIPPED))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,

@@ -61,15 +61,17 @@ Constraint membership is now explicit: `active_constraints()` returns the solver
 
 Replace `relax_*` / `restore_*` with `deactivate_*` / `activate_*`. Inactive membership uses `InactiveConstraintMetadata { reason, parameters, skip_feasibility_check }`. Pass `false` as the final argument to `deactivate_constraint(id, reason, parameters, false)` to retain the previous feasibility behavior. A row with `skip_feasibility_check: true` is still numerically evaluated; only its participation in aggregate queries changes.
 
-`ConstraintActiveness` is ordered as follows:
+Each row has exactly one `ConstraintActiveness` state: `Active`, `InactiveChecked` (`skip_feasibility_check: false`), or `InactiveSkipped` (`skip_feasibility_check: true`). Inactive membership includes both `InactiveChecked` and `InactiveSkipped`; `inactive_constraints()` returns both.
+
+The query minimum includes every state at or above its value:
 
 | Minimum | Included constraints |
 | --- | --- |
 | `Active` | Active only |
-| `Inactive` (default) | Active and inactive without the skip flag |
-| `SkipFeasibilityCheck` | Every retained row |
+| `InactiveChecked` (default) | Active and inactive without the skip flag |
+| `InactiveSkipped` | Every retained row |
 
-Thus `SkipFeasibilityCheck < Inactive < Active`, and a minimum includes every row at or above that level. `Solution::feasible`, `feasible_constraints`, and `total_violation` now take this minimum. SampleSet feasibility and feasible-sample selection take it too. Pass `Default::default()` to retain the usual checked set. `feasible_relaxed()` retains its active-only meaning. Feasibility and total violation select the same constraints for the same minimum; feasibility applies the tolerance to each row and checks variable domains separately. No exact-zero implication is part of the total-violation contract.
+Thus `InactiveSkipped < InactiveChecked < Active`, and a minimum includes every row at or above that level. `Solution::feasible`, `feasible_constraints`, and `total_violation` now take this minimum. SampleSet feasibility and feasible-sample selection take it too. Pass `Default::default()`, which is `InactiveChecked`, to retain the usual checked set. `feasible_relaxed()` retains its active-only meaning. Feasibility and total violation select the same constraints for the same minimum; feasibility applies the tolerance to each row and checks variable domains separately. No exact-zero implication is part of the total-violation contract.
 
 The v1 wire schema is unchanged. Export fails if any retained constraint has `skip_feasibility_check: true`; v2 preserves the flag with a required feature. Existing v1 export restrictions still apply.
 

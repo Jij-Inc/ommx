@@ -21,17 +21,18 @@ pub struct Created;
 /// Ordered participation of a constraint in the current formulation and queries.
 ///
 /// Queries include a row when its activeness is at least the requested minimum.
-/// The default includes active and checked inactive rows; selecting
-/// [`Self::SkipFeasibilityCheck`] includes every retained row.
+/// The order is [`Self::InactiveSkipped`] < [`Self::InactiveChecked`] < [`Self::Active`].
+/// The default, [`Self::InactiveChecked`], includes active and checked inactive rows;
+/// selecting [`Self::InactiveSkipped`] includes every retained row.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, LogicalMemoryProfile,
 )]
 pub enum ConstraintActiveness {
     /// Retained and evaluated, but excluded from default feasibility judgments.
-    SkipFeasibilityCheck,
+    InactiveSkipped,
     /// Not imposed on the solver, but included in default feasibility judgments.
     #[default]
-    Inactive,
+    InactiveChecked,
     /// Imposed on the solver as part of the active formulation.
     Active,
 }
@@ -66,9 +67,9 @@ impl InactiveConstraintMetadata {
     /// The activeness represented by this inactive membership record.
     pub fn activeness(&self) -> ConstraintActiveness {
         if self.skip_feasibility_check {
-            ConstraintActiveness::SkipFeasibilityCheck
+            ConstraintActiveness::InactiveSkipped
         } else {
-            ConstraintActiveness::Inactive
+            ConstraintActiveness::InactiveChecked
         }
     }
 }

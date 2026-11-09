@@ -7,7 +7,7 @@ constraint keeps its ID, labels, and provenance.
 
 Set `skip_feasibility_check=True` to exclude it from default aggregate
 feasibility and total-violation queries. The row is still evaluated; explicit
-queries with the minimum `SKIP_FEASIBILITY_CHECK` include it.
+queries with the minimum `INACTIVE_SKIPPED` include it.
 
 Inactive constraints no longer restrict the active formulation, but
 {meth}`~ommx.Instance.evaluate` still checks them. Here the relaxed formulation

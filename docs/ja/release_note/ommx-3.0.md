@@ -10,7 +10,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 モデルの `constraints` は全状態を含むようになります。activeな接続済みハンドルには `active_constraints`、保持したinactive行には `inactive_constraints` を使います。`Removed*Constraint` は `Inactive*Constraint`、`relax_*` / `restore_*` は `deactivate_*` / `activate_*` に変更します。`from_components` の入力も `active_*` / `inactive_*` に揃えます。
 
-Inactive行に `skip_feasibility_check=True` を指定すると、数値評価は行いますが、既定の実行可能性判定から除外します。`ConstraintActiveness` の順序は `SKIP_FEASIBILITY_CHECK < INACTIVE < ACTIVE` で、`min_activeness` 以上の行を対象とします。`feasible()` とSampleSetの実行可能サンプル選択はメソッドとして呼びます。これらと `total_violation()` の既定値は `INACTIVE` です。`feasible_relaxed` は従来どおりactiveのみを判定します。`constraints_df` は `removed=` を同じ下限引数に置き換え、既定で全行を返し、常に `activeness` 列を含みます。理由には `include=["inactive_reason"]` を指定します。
+inactive行は既定で `INACTIVE_CHECKED`、`skip_feasibility_check=True` を指定すると `INACTIVE_SKIPPED` になります。どちらも数値評価は行いますが、skippedの行は既定の実行可能性判定から除外します。これらと `ACTIVE` は重複しない3状態で、inactiveはcheckedとskippedの総称です。`ConstraintActiveness` の順序は `INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE` で、`min_activeness` 以上の行を対象とします。`feasible()` とSampleSetの実行可能サンプル選択はメソッドとして呼びます。これらと `total_violation()` の既定値は `INACTIVE_CHECKED` です。`feasible_relaxed` は従来どおりactiveのみを判定します。`constraints_df` は `removed=` を同じ下限引数に置き換え、既定値の `INACTIVE_SKIPPED` では全行を返し、常に `activeness` 列を含みます。理由には `include=["inactive_reason"]` を指定します。
 
 v1のschemaは拡張せず、skipがtrueのデータのv1出力は失敗します。この状態を保存するにはv2を使ってください。APIの対応表は[移行ガイド](../migration/python_sdk_v2_to_v3.md)にあります。
 

@@ -397,7 +397,7 @@ def test_convert_sos1_rejects_domain_excluding_zero():
 
 
 def test_sos1_constraints_df_roundtrips_inactive_context(snapshot):
-    """`constraints_df(kind=ConstraintKind.Sos1, min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK)` surfaces reason + constraint_ids
+    """`constraints_df(kind=ConstraintKind.Sos1, min_activeness=ConstraintActiveness.INACTIVE_SKIPPED)` surfaces reason + constraint_ids
     parameter as columns on inactive rows. Active is empty after conversion."""
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
@@ -416,7 +416,7 @@ def test_sos1_constraints_df_roundtrips_inactive_context(snapshot):
         _df_snap(
             instance.constraints_df(
                 kind=ConstraintKind.Sos1,
-                min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK,
+                min_activeness=ConstraintActiveness.INACTIVE_SKIPPED,
                 include=["label", "parameters", "inactive_reason"],
             )
         )

@@ -8,9 +8,9 @@
 # ---
 # name: test_sample_set_one_hot_inactive_reasons_df_after_conversion
   '''
-                          used_ids  name subscripts description  feasible.0  active_variable.0                     activeness                              inactive_reason inactive_reason.constraint_id
-  one_hot_constraint_id                                                                                                                                                                                 
-  OneHotConstraintID(7)  {0, 1, 2}  <NA>         []        <NA>        True                  0  ConstraintActiveness.INACTIVE  ommx.Instance.convert_one_hot_to_constraint                             8
+                          used_ids  name subscripts description  feasible.0  active_variable.0                             activeness                              inactive_reason inactive_reason.constraint_id
+  one_hot_constraint_id                                                                                                                                                                                         
+  OneHotConstraintID(7)  {0, 1, 2}  <NA>         []        <NA>        True                  0  ConstraintActiveness.INACTIVE_CHECKED  ommx.Instance.convert_one_hot_to_constraint                             8
   '''
 # ---
 # name: test_sample_set_sos1_constraints_df_dynamic_columns
@@ -36,9 +36,9 @@
 # ---
 # name: test_solution_one_hot_inactive_reasons_df_after_conversion
   '''
-                         feasible  active_variable   used_ids  name subscripts description  violation                     activeness                              inactive_reason inactive_reason.constraint_id
-  one_hot_constraint_id                                                                                                                                                                                        
-  OneHotConstraintID(7)      True                0  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintActiveness.INACTIVE  ommx.Instance.convert_one_hot_to_constraint                             8
+                         feasible  active_variable   used_ids  name subscripts description  violation                             activeness                              inactive_reason inactive_reason.constraint_id
+  one_hot_constraint_id                                                                                                                                                                                                
+  OneHotConstraintID(7)      True                0  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintActiveness.INACTIVE_CHECKED  ommx.Instance.convert_one_hot_to_constraint                             8
   '''
 # ---
 # name: test_solution_sos1_constraints_df_all_zero
@@ -57,15 +57,15 @@
 # ---
 # name: test_solution_sos1_inactive_reasons_df_after_conversion
   '''
-                       feasible  active_variable   used_ids  name subscripts description  violation                     activeness                            inactive_reason inactive_reason.constraint_ids
-  sos1_constraint_id                                                                                                                                                                                        
-  Sos1ConstraintID(7)      True                0  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintActiveness.INACTIVE  ommx.Instance.convert_sos1_to_constraints                              8
+                       feasible  active_variable   used_ids  name subscripts description  violation                             activeness                            inactive_reason inactive_reason.constraint_ids
+  sos1_constraint_id                                                                                                                                                                                                
+  Sos1ConstraintID(7)      True                0  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintActiveness.INACTIVE_CHECKED  ommx.Instance.convert_sos1_to_constraints                              8
   '''
 # ---
 # name: test_sos1_constraints_df_roundtrips_inactive_context
   '''
-                       variables  num_variables   used_ids  name subscripts description                            inactive_reason inactive_reason.constraint_ids                     activeness
-  sos1_constraint_id                                                                                                                                                                            
-  Sos1ConstraintID(7)  {0, 1, 2}              3  {0, 1, 2}  <NA>         []        <NA>  ommx.Instance.convert_sos1_to_constraints                              8  ConstraintActiveness.INACTIVE
+                       variables  num_variables   used_ids  name subscripts description                            inactive_reason inactive_reason.constraint_ids                             activeness
+  sos1_constraint_id                                                                                                                                                                                    
+  Sos1ConstraintID(7)  {0, 1, 2}              3  {0, 1, 2}  <NA>         []        <NA>  ommx.Instance.convert_sos1_to_constraints                              8  ConstraintActiveness.INACTIVE_CHECKED
   '''
 # ---

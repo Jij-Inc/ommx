@@ -162,17 +162,19 @@ Replace `relax_constraint` / `restore_constraint` with `deactivate_constraint` /
 
 For `from_components`, rename `constraints=` to `active_constraints=`, and similarly use `active_indicator_constraints=`, `active_one_hot_constraints=`, and `active_sos1_constraints=`. Initial inactive rows use the corresponding `inactive_*` arguments and `Inactive*Constraint` wrappers.
 
-The selector is an ordered minimum:
+Each row has exactly one `ConstraintActiveness` state: `ACTIVE`, `INACTIVE_CHECKED` (inactive with `skip_feasibility_check=False`), or `INACTIVE_SKIPPED` (inactive with `skip_feasibility_check=True`). **Inactive** is the umbrella term for the last two states; `inactive_constraints` contains both.
+
+The query selector is an ordered minimum, so it can include more than one state:
 
 | `min_activeness` | Included constraints |
 | --- | --- |
 | `ConstraintActiveness.ACTIVE` | Active only |
-| `ConstraintActiveness.INACTIVE` | Active and inactive with `skip_feasibility_check=False` |
-| `ConstraintActiveness.SKIP_FEASIBILITY_CHECK` | Every retained constraint |
+| `ConstraintActiveness.INACTIVE_CHECKED` | Active and inactive with `skip_feasibility_check=False` |
+| `ConstraintActiveness.INACTIVE_SKIPPED` | Every retained constraint |
 
-The order is `SKIP_FEASIBILITY_CHECK < INACTIVE < ACTIVE`; a query includes rows whose activeness is at least the minimum. It cannot include skipped rows while excluding checked inactive rows.
+The order is `INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE`; a query includes rows whose activeness is at least the minimum. It cannot include skipped rows while excluding checked inactive rows.
 
-Call `solution.feasible()` and `samples.feasible()` as methods. Feasibility, `total_violation()`, and SampleSet feasible-sample selection default to `INACTIVE`; `constraints_df` defaults to `SKIP_FEASIBILITY_CHECK`. Pass the same minimum to compare the same constraint set. `feasible_relaxed` keeps its active-only meaning. Feasibility applies each row's tolerance and checks variable domains; do not infer it from an exact-zero test of the total.
+Call `solution.feasible()` and `samples.feasible()` as methods. Feasibility, `total_violation()`, and SampleSet feasible-sample selection default to `INACTIVE_CHECKED`; `constraints_df` defaults to `INACTIVE_SKIPPED`. Pass the same minimum to compare the same constraint set. `feasible_relaxed` keeps its active-only meaning. Feasibility applies each row's tolerance and checks variable domains; do not infer it from an exact-zero test of the total.
 
 The v1 wire schema is unchanged. Export to v1 fails if any retained row has `skip_feasibility_check=True`; use v2 to preserve this state. Existing restrictions on v1 exports still apply.
 

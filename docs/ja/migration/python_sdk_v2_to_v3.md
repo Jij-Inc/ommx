@@ -162,17 +162,19 @@ v2の `sample_qubo_sa` が返したのは生のサンプルです。v3のAdapter
 
 `from_components` の `constraints=` は `active_constraints=` に変更します。同様に `active_indicator_constraints=`、`active_one_hot_constraints=`、`active_sos1_constraints=` を使います。初期状態からinactiveにする行には、対応する `inactive_*` 引数と `Inactive*Constraint` ラッパーを使います。
 
-`min_activeness` は次の順序における下限です。
+各行の `ConstraintActiveness` は、`ACTIVE`、`INACTIVE_CHECKED`（`skip_feasibility_check=False` のinactive）、`INACTIVE_SKIPPED`（`skip_feasibility_check=True` のinactive）のいずれか1つです。**inactive** は後ろの2状態の総称で、`inactive_constraints` は両方を含みます。
+
+取得時の `min_activeness` は次の順序における下限なので、複数の状態を含められます。
 
 | `min_activeness` | 含む制約 |
 | --- | --- |
 | `ConstraintActiveness.ACTIVE` | activeのみ |
-| `ConstraintActiveness.INACTIVE` | activeと、`skip_feasibility_check=False` のinactive |
-| `ConstraintActiveness.SKIP_FEASIBILITY_CHECK` | 保持したすべての制約 |
+| `ConstraintActiveness.INACTIVE_CHECKED` | activeと、`skip_feasibility_check=False` のinactive |
+| `ConstraintActiveness.INACTIVE_SKIPPED` | 保持したすべての制約 |
 
-順序は `SKIP_FEASIBILITY_CHECK < INACTIVE < ACTIVE` です。指定した下限以上の行を含むため、検査するinactiveを除外してskipの行だけを含める指定はありません。
+順序は `INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE` です。指定した下限以上の行を含むため、検査するinactiveを除外してskipの行だけを含める指定はありません。
 
-`solution.feasible()` と `samples.feasible()` はメソッドとして呼びます。実行可能性、`total_violation()`、SampleSetの実行可能サンプル選択は `INACTIVE`、`constraints_df` は `SKIP_FEASIBILITY_CHECK` が既定値です。同じ制約集合を比較するには同じ下限を渡します。`feasible_relaxed` はactiveのみを検査する従来の意味を保ちます。実行可能性は各行の許容誤差と変数の定義域を検査するため、合計が厳密にゼロかどうかから判定しないでください。
+`solution.feasible()` と `samples.feasible()` はメソッドとして呼びます。実行可能性、`total_violation()`、SampleSetの実行可能サンプル選択は `INACTIVE_CHECKED`、`constraints_df` は `INACTIVE_SKIPPED` が既定値です。同じ制約集合を比較するには同じ下限を渡します。`feasible_relaxed` はactiveのみを検査する従来の意味を保ちます。実行可能性は各行の許容誤差と変数の定義域を検査するため、合計が厳密にゼロかどうかから判定しないでください。
 
 v1のwire schemaは拡張しません。保持する行のどれかが `skip_feasibility_check=True` の場合、v1への書き出しは失敗します。この状態を保存するにはv2を使ってください。既存のv1出力制限も引き続き適用されます。
 

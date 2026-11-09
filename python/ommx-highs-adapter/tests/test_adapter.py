@@ -324,6 +324,4 @@ def test_inactive_constraints_are_evaluated_but_not_imposed(skip_feasibility_che
     assert solution.constraint_violation(row.constraint_id) == pytest.approx(1)
     assert solution.feasible_relaxed
     assert solution.feasible() is skip_feasibility_check
-    assert not solution.feasible(
-        min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK
-    )
+    assert not solution.feasible(min_activeness=ConstraintActiveness.INACTIVE_SKIPPED)
