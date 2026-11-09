@@ -58,7 +58,7 @@ def test_default_atol_constraint_evaluation():
     solution = instance.evaluate(state)
 
     # The constraint should be infeasible because violation (1e-5) > ATol (1e-6)
-    assert not solution.feasible
+    assert not solution.feasible()
 
     # Set ATol to 1e-4 (larger than the violation)
     ommx.set_default_atol(1e-4)
@@ -71,7 +71,7 @@ def test_default_atol_constraint_evaluation():
     solution_with_larger_atol = instance.evaluate(state)
 
     # The constraint should now be feasible because violation (1e-5) <= ATol (1e-4)
-    assert solution_with_larger_atol.feasible
+    assert solution_with_larger_atol.feasible()
 
     # Reset ATol back to original value for other tests
     ommx.set_default_atol(initial_atol)
@@ -225,11 +225,11 @@ def test_instance_evaluate_with_custom_atol():
     # Test with large atol (1e-3): violation (1e-6) is within tolerance
     solution_large_atol = instance.evaluate(state, atol=1e-3)
     # With atol=1e-3, violation of 1e-6 should be considered feasible
-    assert solution_large_atol.feasible, "Solution should be feasible with large atol"
+    assert solution_large_atol.feasible(), "Solution should be feasible with large atol"
 
     # Test with small atol (1e-9): violation (1e-6) exceeds tolerance
     solution_small_atol = instance.evaluate(state, atol=1e-9)
     # With atol=1e-9, violation of 1e-6 should be considered infeasible
-    assert not solution_small_atol.feasible, (
+    assert not solution_small_atol.feasible(), (
         "Solution should be infeasible with small atol"
     )

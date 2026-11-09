@@ -15,7 +15,7 @@ necessary when it must be evaluated or reused separately after the mutation.
 
 ```pycon
 >>> from ommx import (
-...     InactiveOneHotConstraint,
+...     ConstraintActiveness,
 ...     ConstraintID,
 ...     Equality,
 ...     Instance,
@@ -61,15 +61,18 @@ necessary when it must be evaluated or reused separately after the mutation.
 >>> assert target.contains(instance)
 >>> assert set(instance.active_constraints) == {ConstraintID(1)}
 >>> assert set(instance.constraints) == {ConstraintID(1), OneHotConstraintID(0)}
->>> assert isinstance(instance.constraints[OneHotConstraintID(0)], InactiveOneHotConstraint)
+>>> assert (
+...     instance.constraints[OneHotConstraintID(0)].activeness
+...     == ConstraintActiveness.INACTIVE
+... )
 >>> assert instance.active_special_constraint_kinds == set()
 >>> assert set(instance.inactive_constraints) == {OneHotConstraintID(0)}
 >>> assert instance.constraints_df(kind=ConstraintKind.Regular).shape[0] == 1
 >>> after = instance.evaluate(state)
->>> assert before.feasible and after.feasible
+>>> assert before.feasible() and after.feasible()
 >>> assert before.objective == after.objective == 3.0
->>> assert not before_both.feasible
->>> assert not instance.evaluate(both).feasible
+>>> assert not before_both.feasible()
+>>> assert not instance.evaluate(both).feasible()
 
 ```
 
@@ -137,7 +140,7 @@ this example; the factory's default weight is not a sufficiency guarantee.
 >>> assert instance.objective.evaluate({0: 0}) == 2.0
 >>> solution = instance.evaluate({0: 0})
 >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)
->>> assert not solution.feasible
+>>> assert not solution.feasible()
 >>> assert instance.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified
 >>> coefficients, offset = instance.as_qubo_format()
 >>> assert coefficients == {(0, 0): -3.0}

@@ -195,7 +195,7 @@ fn wire_consumers_can_read_feasibility_and_its_tolerance_without_sdk_evaluation(
         assert_eq!(row.feasible, expected);
         let restored = crate::Solution::from_v2_bytes(&solution_bytes).unwrap();
         assert_eq!(restored.sos1_constraint_violation(0.into()), Some(0.00012));
-        assert_eq!(restored.feasible(), expected);
+        assert_eq!(restored.feasible(Default::default()), expected);
 
         let sample_bytes = instance
             .evaluate_samples(&samples, atol)
@@ -212,7 +212,7 @@ fn wire_consumers_can_read_feasibility_and_its_tolerance_without_sdk_evaluation(
             .get(7.into())
             .unwrap();
         assert_eq!(restored.sos1_constraint_violation(0.into()), Some(0.00012));
-        assert_eq!(restored.feasible(), expected);
+        assert_eq!(restored.feasible(Default::default()), expected);
     }
 }
 
@@ -244,7 +244,7 @@ fn partial_evaluation_preserves_instance_invariants_and_failure_is_atomic() {
             atol
         )
         .unwrap()
-        .feasible());
+        .feasible(Default::default()));
     let error = instance.partial_evaluate(&fixed, atol).unwrap_err();
     assert!(error
         .to_string()
@@ -260,8 +260,8 @@ fn partial_evaluation_preserves_instance_invariants_and_failure_is_atomic() {
     let restored = crate::Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
     let state = State::from_iter([(0, 1.0), (1, 0.09375)]);
     let result = restored.evaluate(&state, atol).unwrap();
-    assert_eq!(result.total_violation(), 0.09375);
-    assert!(result.feasible());
+    assert_eq!(result.total_violation(Default::default()), 0.09375);
+    assert!(result.feasible(Default::default()));
 }
 
 #[test]
@@ -445,15 +445,21 @@ fn sample_feasibility_matches_extracted_solutions_including_variable_domains() {
             for (id, state, feasible) in [(0, &invalid_state, false), (1, &valid_state, true)] {
                 let single = instance.evaluate(state, atol).unwrap();
                 let extracted = result.get(id.into()).unwrap();
-                assert_eq!(single.total_violation(), 0.0);
-                assert_eq!(extracted.total_violation(), 0.0);
-                assert_eq!(single.feasible(), feasible);
-                assert_eq!(extracted.feasible(), feasible);
-                assert_eq!(result.is_sample_feasible(id.into()), Some(feasible));
+                assert_eq!(single.total_violation(Default::default()), 0.0);
+                assert_eq!(extracted.total_violation(Default::default()), 0.0);
+                assert_eq!(single.feasible(Default::default()), feasible);
+                assert_eq!(extracted.feasible(Default::default()), feasible);
+                assert_eq!(
+                    result.is_sample_feasible(id.into(), Default::default()),
+                    Some(feasible)
+                );
                 assert_eq!(result.is_sample_feasible_relaxed(id.into()), Some(feasible));
             }
             // The invalid state has a better objective and must still be excluded.
-            assert_eq!(result.best_feasible_id().unwrap(), 1.into());
+            assert_eq!(
+                result.best_feasible_id(Default::default()).unwrap(),
+                1.into()
+            );
             assert_eq!(result.best_feasible_relaxed_id().unwrap(), 1.into());
             let mut wire: crate::v2::SampleSet = result.into();
             wire.feasible.insert(0, true);

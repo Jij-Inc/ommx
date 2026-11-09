@@ -1,10 +1,11 @@
 use super::*;
-use crate::{coeff, linear, ATol, Equality, Sense};
+use crate::{coeff, linear, ATol, ConstraintActiveness as A, Equality, Sampled, Sense};
 
-fn metadata() -> InactiveConstraintMetadata {
+fn metadata(skip: bool) -> InactiveConstraintMetadata {
     InactiveConstraintMetadata {
         reason: "test.condition".into(),
         parameters: [("condition".into(), "false".into())].into_iter().collect(),
+        skip_feasibility_check: skip,
     }
 }
 
@@ -62,37 +63,108 @@ fn all_families() -> Instance {
         )
         .build()
         .unwrap();
-    for offset in [1, 2] {
+    for (offset, skip) in [(1, false), (2, true)] {
         instance
-            .deactivate_constraint(offset.into(), "test".into(), [])
+            .deactivate_constraint(offset.into(), "test".into(), [], skip)
             .unwrap();
         instance
-            .deactivate_indicator_constraint((3 + offset).into(), "test".into(), [])
+            .deactivate_indicator_constraint((3 + offset).into(), "test".into(), [], skip)
             .unwrap();
         instance
-            .deactivate_one_hot_constraint((6 + offset).into(), "test".into(), [])
+            .deactivate_one_hot_constraint((6 + offset).into(), "test".into(), [], skip)
             .unwrap();
         instance
-            .deactivate_sos1_constraint((9 + offset).into(), "test".into(), [])
+            .deactivate_sos1_constraint((9 + offset).into(), "test".into(), [], skip)
             .unwrap();
     }
     instance
 }
 
 #[test]
-fn all_state_lookups_include_inactive_rows_in_each_family() {
+fn ordered_selection_counts_the_same_rows_across_families() {
+    assert!(A::SkipFeasibilityCheck < A::Inactive && A::Inactive < A::Active);
     let instance = all_families();
     assert_eq!(instance.constraints().len(), 3);
     assert!(instance.constraints().get(&2.into()).is_some());
     assert_eq!(instance.active_constraints().len(), 1);
     assert_eq!(instance.inactive_constraints().len(), 2);
-    assert_eq!(instance.indicator_constraints().len(), 3);
-    assert_eq!(instance.one_hot_constraints().len(), 3);
-    assert_eq!(instance.sos1_constraints().len(), 3);
     let state = v1::State::from_iter([(0, 1.0), (1, 1.0)]);
     let solution = instance.evaluate(&state, ATol::default()).unwrap();
-    assert_eq!(solution.total_violation(), 12.0);
-    assert!(!solution.feasible());
+    let samples = instance
+        .evaluate_samples(&Sampled::from((0.into(), state)), ATol::default())
+        .unwrap();
+    for (minimum, count) in [
+        (A::Active, 1),
+        (A::Inactive, 2),
+        (A::SkipFeasibilityCheck, 3),
+    ] {
+        assert_eq!(solution.total_violation(minimum), 4.0 * count as f64);
+        assert_eq!(samples.constraints().selected(minimum).count(), count);
+        assert_eq!(
+            samples.indicator_constraints().selected(minimum).count(),
+            count
+        );
+        assert_eq!(
+            samples.one_hot_constraints().selected(minimum).count(),
+            count
+        );
+        assert_eq!(samples.sos1_constraints().selected(minimum).count(), count);
+        assert_eq!(
+            samples.get(0.into()).unwrap().total_violation(minimum),
+            solution.total_violation(minimum)
+        );
+    }
+}
+
+#[test]
+fn sample_selection_and_best_solution_follow_the_requested_minimum() {
+    let x = Function::from(linear!(0));
+    let instance = Instance::builder()
+        .sense(Sense::Minimize)
+        .objective(Function::from(-linear!(0)))
+        .decision_variables([(0.into(), DecisionVariable::continuous())].into())
+        .active_constraints(BTreeMap::new())
+        .inactive_constraints(
+            [
+                (
+                    0.into(),
+                    (
+                        Constraint::less_than_or_equal_to_zero((x.clone() - coeff!(1.0)).unwrap()),
+                        metadata(false),
+                    ),
+                ),
+                (
+                    1.into(),
+                    (Constraint::less_than_or_equal_to_zero(x), metadata(true)),
+                ),
+            ]
+            .into(),
+        )
+        .build()
+        .unwrap();
+    let states = Sampled::new(
+        [vec![0.into()], vec![1.into()], vec![2.into()]],
+        [2.0, 1.0, 0.0].map(|x| v1::State::from_iter([(0, x)])),
+    )
+    .unwrap();
+    let samples = instance.evaluate_samples(&states, ATol::default()).unwrap();
+    for (minimum, best, expected) in [
+        (A::Active, 0, [true, true, true]),
+        (A::Inactive, 1, [false, true, true]),
+        (A::SkipFeasibilityCheck, 2, [false, false, true]),
+    ] {
+        assert_eq!(samples.best_feasible_id(minimum).unwrap(), best.into());
+        let feasible = samples.feasible(minimum);
+        for (id, expected) in expected.into_iter().enumerate() {
+            let id = (id as u64).into();
+            assert_eq!(feasible[&id], expected);
+            assert_eq!(samples.feasible_ids(minimum).contains(&id), expected);
+            assert_eq!(samples.get(id).unwrap().feasible(minimum), expected);
+        }
+        assert!(samples.best_feasible(minimum).unwrap().feasible(minimum));
+    }
+    assert_eq!(samples.feasible_relaxed(), &samples.feasible(A::Active));
+    assert_eq!(samples.best_feasible_relaxed_id().unwrap(), 0.into());
 }
 
 #[test]
@@ -113,7 +185,7 @@ fn structural_activation_failure_is_atomic_and_preserves_metadata() {
                 10.into(),
                 (
                     OneHotConstraint::new([0.into(), 1.into()].into()).unwrap(),
-                    metadata(),
+                    metadata(true),
                 ),
             )]
             .into(),
@@ -123,7 +195,7 @@ fn structural_activation_failure_is_atomic_and_preserves_metadata() {
                 11.into(),
                 (
                     Sos1Constraint::new([0.into(), 1.into()].into()).unwrap(),
-                    metadata(),
+                    metadata(false),
                 ),
             )]
             .into(),
@@ -146,9 +218,12 @@ fn structural_activation_failure_is_atomic_and_preserves_metadata() {
     );
     assert!(instance.active_one_hot_constraints().is_empty());
     assert!(instance.active_sos1_constraints().is_empty());
+    instance
+        .set_one_hot_constraint_skip_feasibility_check(10.into(), false)
+        .unwrap();
     assert_eq!(
         instance.inactive_one_hot_constraints()[&10.into()].1,
-        metadata()
+        metadata(false)
     );
 }
 
@@ -166,7 +241,10 @@ fn parametric_transitions_preserve_ids_context_and_inactive_policy() {
         .set_constraint_context(2.into(), context.clone())
         .unwrap();
     assert!(instance
-        .deactivate_constraint(2.into(), "duplicate".into(), [])
+        .deactivate_constraint(2.into(), "duplicate".into(), [], false)
+        .is_err());
+    assert!(instance
+        .set_constraint_skip_feasibility_check(0.into(), true)
         .is_err());
     instance.activate_constraint(2.into()).unwrap();
     instance.activate_indicator_constraint(5.into()).unwrap();
@@ -176,14 +254,47 @@ fn parametric_transitions_preserve_ids_context_and_inactive_policy() {
     assert_eq!(instance.active_constraints().len(), 2);
     assert_eq!(instance.constraint_context().collect_for(2.into()), context);
     instance
-        .deactivate_constraint(2.into(), "again".into(), [])
+        .deactivate_constraint(2.into(), "again".into(), [], true)
         .unwrap();
-    assert!(instance.inactive_constraints().contains_key(&2.into()));
+    assert_eq!(
+        instance.constraints().activeness(&2.into()),
+        Some(A::SkipFeasibilityCheck)
+    );
     assert_eq!(instance.constraint_context().collect_for(2.into()), context);
 }
 
 #[test]
-fn specialization_and_partial_evaluation_preserve_inactive_metadata() {
+fn skipped_constraints_still_propagate_numeric_evaluation_errors() {
+    let function = crate::function::operation::unary_expression(
+        crate::function::operation::UnaryOperator::Powi(-1),
+        Function::from(linear!(0)),
+    );
+    let instance = Instance::builder()
+        .sense(Sense::Minimize)
+        .objective(Function::Zero)
+        .decision_variables([(0.into(), DecisionVariable::continuous())].into())
+        .active_constraints(BTreeMap::new())
+        .inactive_constraints(
+            [(
+                0.into(),
+                (
+                    Constraint::less_than_or_equal_to_zero(function),
+                    metadata(true),
+                ),
+            )]
+            .into(),
+        )
+        .build()
+        .unwrap();
+    let state = v1::State::from_iter([(0, 0.0)]);
+    assert!(instance.evaluate(&state, ATol::default()).is_err());
+    assert!(instance
+        .evaluate_samples(&Sampled::from((0.into(), state)), ATol::default())
+        .is_err());
+}
+
+#[test]
+fn specialization_and_partial_evaluation_preserve_inactive_policy() {
     let function = Function::from(linear!(0) + linear!(100));
     let parametric = ParametricInstance::builder()
         .sense(Sense::Minimize)
@@ -196,7 +307,7 @@ fn specialization_and_partial_evaluation_preserve_inactive_metadata() {
                 0.into(),
                 (
                     Constraint::less_than_or_equal_to_zero(function.clone()),
-                    metadata(),
+                    metadata(true),
                 ),
             )]
             .into(),
@@ -206,7 +317,7 @@ fn specialization_and_partial_evaluation_preserve_inactive_metadata() {
                 1.into(),
                 (
                     IndicatorConstraint::new(0.into(), Equality::LessThanOrEqualToZero, function),
-                    metadata(),
+                    metadata(true),
                 ),
             )]
             .into(),
@@ -216,7 +327,7 @@ fn specialization_and_partial_evaluation_preserve_inactive_metadata() {
                 2.into(),
                 (
                     OneHotConstraint::new([0.into()].into()).unwrap(),
-                    metadata(),
+                    metadata(true),
                 ),
             )]
             .into(),
@@ -224,7 +335,10 @@ fn specialization_and_partial_evaluation_preserve_inactive_metadata() {
         .inactive_sos1_constraints(
             [(
                 3.into(),
-                (Sos1Constraint::new([0.into()].into()).unwrap(), metadata()),
+                (
+                    Sos1Constraint::new([0.into()].into()).unwrap(),
+                    metadata(true),
+                ),
             )]
             .into(),
         )
@@ -238,23 +352,24 @@ fn specialization_and_partial_evaluation_preserve_inactive_metadata() {
     instance
         .partial_evaluate(&v1::State::from_iter([(0, 1.0)]), ATol::default())
         .unwrap();
-    assert_eq!(instance.inactive_constraints()[&0.into()].1, metadata());
+    assert_eq!(instance.inactive_constraints()[&0.into()].1, metadata(true));
     assert_eq!(
         instance.inactive_indicator_constraints()[&1.into()].1,
-        metadata()
+        metadata(true)
     );
     assert_eq!(
         instance.inactive_one_hot_constraints()[&2.into()].1,
-        metadata()
+        metadata(true)
     );
     assert_eq!(
         instance.inactive_sos1_constraints()[&3.into()].1,
-        metadata()
+        metadata(true)
     );
     let solution = instance
         .evaluate(&v1::State::default(), ATol::default())
         .unwrap();
-    assert!(!solution.feasible());
+    assert!(solution.feasible(A::Inactive));
+    assert!(!solution.feasible(A::SkipFeasibilityCheck));
     assert_eq!(solution.constraint_violation(0.into()), Some(3.0));
     assert_eq!(solution.indicator_constraint_violation(1.into()), Some(3.0));
 }

@@ -50,7 +50,7 @@ fn corrected_distribution_takes_precedence_over_legacy_cache() -> ommx::Result<(
         -6.386_014_981_598_35,
         epsilon = 1e-10
     );
-    assert!(solution.feasible());
+    assert!(solution.feasible(Default::default()));
 
     let legacy = LocalArtifact::open(legacy_ref)?;
     assert_eq!(legacy.get_blob(&legacy.layers()?[0])?, empty_bytes);

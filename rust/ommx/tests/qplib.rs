@@ -72,7 +72,7 @@ fn published_solutions_preserve_objectives_and_feasibility() -> ommx::Result<()>
         let state = qplib::parse_solution(solution, instance.decision_variables().len())?;
         let solution = instance.evaluate(&state, ATol::new(1e-8)?)?;
         approx::assert_abs_diff_eq!(*solution.objective(), expected, epsilon = 1e-10);
-        assert!(solution.feasible());
+        assert!(solution.feasible(Default::default()));
     }
     Ok(())
 }

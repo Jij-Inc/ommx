@@ -189,7 +189,10 @@ def test_missing_feasible_sample_raises_value_error_for_all_aliases() -> None:
         "best_feasible_unrelaxed",
     ):
         with pytest.raises(ValueError, match="No feasible solution"):
-            getattr(sample_set, attribute)
+            if attribute in {"best_feasible_id", "best_feasible"}:
+                getattr(sample_set, attribute)()
+            else:
+                getattr(sample_set, attribute)
 
 
 def test_all_extractors_validate_sample_id_before_skipping_unnamed_entries() -> None:

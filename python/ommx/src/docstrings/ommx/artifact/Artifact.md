@@ -49,7 +49,7 @@ archive; committing locally and exporting a transferable file are separate steps
 ... instance.objective = 3 * x + 2 * y
 ... instance.add_constraint(x + y <= 1)
 ... solution = instance.evaluate({x.id: 1, y.id: 0})
-... assert solution.feasible and solution.objective == 3
+... assert solution.feasible() and solution.objective == 3
 ...
 ... draft = ArtifactDraft.new_anonymous()
 ... instance_layer = draft.add_instance(instance)
@@ -92,10 +92,10 @@ Registry; it does not keep reading the sender's registry or Python objects.
 ...     received.get_layer_descriptor(analysis["solution_digest"])
 ... )
 ... checked = instance.evaluate(solution.state)
-... assert checked.feasible == solution.feasible
+... assert checked.feasible() == solution.feasible()
 ... assert checked.objective == solution.objective
 ... selection = received.get_dataframe(by_title["selection"])
-... print(solution.feasible, solution.objective)
+... print(solution.feasible(), solution.objective)
 ... print(selection.loc[selection["selected"], "item"].tolist())
 ... """
 

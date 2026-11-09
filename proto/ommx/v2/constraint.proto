@@ -25,10 +25,13 @@ message ConstraintContext {
   repeated Provenance provenance = 2;
 }
 
-// Why a constraint row is inactive.
+// Why a constraint row is inactive and whether it participates in default feasibility checks.
 message InactiveConstraintMetadata {
   string reason = 1;
   map<string, string> parameters = 2;
+  // Exclude this inactive row from the default feasibility judgment.
+  // The row remains evaluable and can be selected explicitly for diagnostics.
+  bool skip_feasibility_check = 3;
 }
 
 // Regular scalar constraint row.

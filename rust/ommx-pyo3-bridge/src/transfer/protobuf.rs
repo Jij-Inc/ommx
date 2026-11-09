@@ -89,8 +89,8 @@ root!(
     protocol::V2_SAMPLE_SET
 );
 
-// Only use checked v1 domain conversions. Solution/SampleSet's legacy `From`
-// conversions intentionally discard special-constraint results; those roots
+// Only allow domain roots that reject unsupported special constraints.
+// Solution/SampleSet's legacy `TryFrom` conversions still discard those results; they
 // require an explicitly constructed v1 source when selecting ProtobufV1.
 macro_rules! checked_v1_root {
     ($wrapper:ident, $domain:ident) => {

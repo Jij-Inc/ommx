@@ -18,8 +18,8 @@ pub use arbitrary::*;
 use derive_more::{Deref, From};
 use fnv::FnvHashSet;
 pub use stage::{
-    Created, CreatedData, Evaluated, EvaluatedData, InactiveConstraintMetadata,
-    Sampled as SampledStage, SampledData, Stage,
+    ConstraintActiveness, Created, CreatedData, Evaluated, EvaluatedData,
+    InactiveConstraintMetadata, Sampled as SampledStage, SampledData, Stage,
 };
 // The sampled lifecycle marker is re-exported as `SampledStage` to avoid a
 // name collision with `crate::Sampled<T>` (the sampled-values container).
@@ -259,6 +259,7 @@ impl From<crate::v2::InactiveConstraintMetadata> for InactiveConstraintMetadata 
         Self {
             reason: reason.reason,
             parameters: reason.parameters.into_iter().collect(),
+            skip_feasibility_check: reason.skip_feasibility_check,
         }
     }
 }

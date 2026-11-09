@@ -1055,7 +1055,7 @@ mod tests {
         let mut instance =
             Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
         instance
-            .deactivate_constraint(ConstraintID::from(2), "test".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(2), "test".to_string(), [], false)
             .unwrap();
 
         // Verify initial state
@@ -1243,7 +1243,7 @@ mod tests {
 
         // Remove constraint 1
         instance
-            .deactivate_constraint(ConstraintID::from(1), "test".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(1), "test".to_string(), [], false)
             .unwrap();
         assert_eq!(instance.active_constraints().len(), 0);
         assert_eq!(instance.inactive_constraints().len(), 1);
@@ -1339,7 +1339,7 @@ mod tests {
         let mut instance =
             Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
         instance
-            .deactivate_constraint(ConstraintID::from(15), "test".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(15), "test".to_string(), [], false)
             .unwrap();
 
         // Should return 16 (max(3, 15) + 1)

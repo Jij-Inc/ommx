@@ -167,11 +167,12 @@ impl InactiveIndicatorConstraint {
 #[pymethods]
 impl InactiveIndicatorConstraint {
     #[new]
-    #[pyo3(signature = (constraint, inactive_reason, inactive_reason_parameters=None))]
+    #[pyo3(signature = (constraint, inactive_reason, inactive_reason_parameters=None, *, skip_feasibility_check=false))]
     pub fn new(
         constraint: IndicatorConstraint,
         inactive_reason: String,
         inactive_reason_parameters: Option<HashMap<String, String>>,
+        skip_feasibility_check: bool,
     ) -> Self {
         Self::from_parts(
             constraint.0,
@@ -182,6 +183,7 @@ impl InactiveIndicatorConstraint {
                     .unwrap_or_default()
                     .into_iter()
                     .collect(),
+                skip_feasibility_check,
             },
         )
     }
@@ -234,6 +236,16 @@ impl InactiveIndicatorConstraint {
     #[getter]
     pub fn function(&self) -> Function {
         Function(self.constraint.function().clone())
+    }
+
+    #[getter]
+    pub fn activeness(&self) -> crate::ConstraintActiveness {
+        self.inactive_reason.activeness().into()
+    }
+
+    #[getter]
+    pub fn skip_feasibility_check(&self) -> bool {
+        self.inactive_reason.skip_feasibility_check
     }
 
     #[getter]

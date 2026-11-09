@@ -94,6 +94,7 @@ impl Parse for v1::RemovedConstraint {
         let removed_reason = InactiveConstraintMetadata {
             reason: self.removed_reason,
             parameters: self.removed_reason_parameters.into_iter().collect(),
+            skip_feasibility_check: false,
         };
         Ok((id, constraint, context, removed_reason))
     }
@@ -183,6 +184,7 @@ impl Parse for v1::EvaluatedConstraint {
             .map(|reason| InactiveConstraintMetadata {
                 reason,
                 parameters: self.removed_reason_parameters.into_iter().collect(),
+                skip_feasibility_check: false,
             });
 
         Ok((
@@ -260,6 +262,7 @@ impl Parse for v1::SampledConstraint {
             .map(|reason| InactiveConstraintMetadata {
                 reason,
                 parameters: self.removed_reason_parameters.into_iter().collect(),
+                skip_feasibility_check: false,
             });
 
         Ok((

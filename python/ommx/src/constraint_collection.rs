@@ -712,7 +712,7 @@ impl PyStubType for ConstraintCollectionValue {
 /// Live mapping of every retained constraint, independent of activeness.
 ///
 /// IDs identify the family, not the state. Lookups return an attached active
-/// row or an independent inactive snapshot; inspect the concrete row type at runtime.
+/// row or an independent inactive snapshot; inspect activeness at runtime.
 #[pyclass(frozen)]
 pub struct ConstraintCollection {
     owner: ConstraintHost,

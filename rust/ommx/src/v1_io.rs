@@ -12,6 +12,20 @@ use crate::{v1::State, ATol};
 use approx::AbsDiffEq;
 use std::collections::HashMap;
 
+/// Shared by the owning roots and collection conversion boundaries: v1 has no
+/// feature gate and cannot preserve a non-default feasibility participation rule.
+pub fn validate_inactive_metadata<'a>(
+    metadata: impl IntoIterator<Item = &'a crate::InactiveConstraintMetadata>,
+) -> crate::Result<()> {
+    if metadata
+        .into_iter()
+        .any(|entry| entry.skip_feasibility_check)
+    {
+        crate::bail!("ommx.v1 cannot represent skip_feasibility_check=True; use v2 serialization");
+    }
+    Ok(())
+}
+
 impl From<HashMap<u64, f64>> for State {
     fn from(entries: HashMap<u64, f64>) -> Self {
         Self { entries }

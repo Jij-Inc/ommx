@@ -290,7 +290,7 @@ def test_completed_output_returns_the_received_python_object(monkeypatch):
 
 def test_compilation_uses_promotion_plans_and_explicit_wire_messages(monkeypatch):
     value = fixture.compile_for_target()
-    # Promotion allocates a fresh number and retains the source as removed.
+    # Promotion allocates a fresh number and retains the source as inactive.
     assert set(value.active_constraints) == {ommx.OneHotConstraintID(24)}
     assert set(value.inactive_constraints) == {ommx.ConstraintID(23)}
 
@@ -303,7 +303,7 @@ def test_compilation_uses_promotion_plans_and_explicit_wire_messages(monkeypatch
     restored = INSTANCE.from_v1_bytes(calls[0][1])
     assert set(restored.constraints) == {ommx.ConstraintID(23)}
     for state in ({7: 0.0}, {7: 1.0}):
-        assert legacy.evaluate(state).feasible == value.evaluate(state).feasible
+        assert legacy.evaluate(state).feasible() == value.evaluate(state).feasible()
         assert legacy.evaluate(state).objective == value.evaluate(state).objective
 
 

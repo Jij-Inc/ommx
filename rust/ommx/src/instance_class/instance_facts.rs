@@ -258,6 +258,7 @@ mod tests {
         let named_only = VariableID::from(5);
         let removed_only = VariableID::from(6);
         let removed_reason = crate::constraint::InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         };

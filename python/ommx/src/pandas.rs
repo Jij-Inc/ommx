@@ -250,9 +250,9 @@ where
     long_format_dataframe(py, entries, &[id_col, "step", "source_kind", "source_id"])
 }
 
-/// Long-format inactive-reasons DataFrame for constraints.
+/// Long-format removed-reasons DataFrame for constraints.
 ///
-/// One row per (id, parameter_key) pair when the inactive reason has
+/// One row per (id, parameter_key) pair when the removed reason has
 /// parameters; ids without parameters get one row with `key`/`value` set to
 /// `pandas.NA`. Rows are sorted by `(id, key)` (NA-keyed rows sort first
 /// for ids with no parameters). Columns: `id_col`, `reason`, `key`,
@@ -488,7 +488,7 @@ pub(crate) fn rename_id_column(dict: &Bound<PyDict>, id_col: &str) -> PyResult<(
 /// columns carry the reason parameters. Keys are emitted in lexicographic
 /// order so column ordering is deterministic across runs (the underlying
 /// `HashMap` iteration order is not). Used by call sites that fold
-/// inactive-reason columns into a wide constraints DataFrame.
+/// removed-reason columns into a wide constraints DataFrame.
 pub(crate) fn set_inactive_reason_columns(
     dict: &Bound<PyDict>,
     reason: &InactiveConstraintMetadata,
@@ -504,7 +504,7 @@ pub(crate) fn set_inactive_reason_columns(
 }
 
 /// Emit a placeholder NA `inactive_reason` column on a row with no
-/// inactive reason. Without this, a wide `*_df` requested with
+/// removed reason. Without this, a wide `*_df` requested with
 /// `include=("inactive_reason",)` would silently drop the column when
 /// no row in the view actually carries a reason — pandas keys columns
 /// off whatever appears in any row dict. Calling this on the
@@ -1460,4 +1460,24 @@ fn typed_constraint_id(
             "Unknown constraint ID column: {id_col}"
         ))),
     }
+}
+
+/// Materialize a constraint table with stable mandatory columns when empty.
+pub(crate) fn constraint_entries_to_dataframe<'py>(
+    py: Python<'py>,
+    entries: Vec<Bound<'py, PyAny>>,
+    index_col: &str,
+    flags: IncludeFlags,
+) -> PyResult<Bound<'py, PyDataFrame>> {
+    let empty = entries.is_empty();
+    let df = raw_entries_to_dataframe(py, entries, index_col)?;
+    if empty {
+        df.as_any()
+            .call_method1("__setitem__", ("activeness", PyList::empty(py)))?;
+        if flags.inactive_reason {
+            df.as_any()
+                .call_method1("__setitem__", ("inactive_reason", PyList::empty(py)))?;
+        }
+    }
+    Ok(df)
 }

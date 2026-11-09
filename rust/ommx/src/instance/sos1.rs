@@ -291,6 +291,7 @@ impl Instance {
             .deactivate(
                 id,
                 InactiveConstraintMetadata {
+                    skip_feasibility_check: false,
                     reason: "ommx.Instance.convert_sos1_to_constraints".to_string(),
                     parameters,
                 },

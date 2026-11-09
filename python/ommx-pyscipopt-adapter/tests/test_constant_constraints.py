@@ -57,7 +57,7 @@ def test_constant_constraint_solver_lifecycle(
         state = adapter.decode_to_state(model)
         assert state.entries == ({11: 0.0} if variable_mode == "active" else {})
         solution = adapter.decode(model)
-        assert solution.feasible
+        assert solution.feasible()
         assert solution.objective == 7
     else:
         assert model.getStatus() == "infeasible"
@@ -70,7 +70,7 @@ def test_constant_constraint_solver_lifecycle(
     ):
         if feasible:
             solution = solve(instance)
-            assert solution.feasible
+            assert solution.feasible()
             assert solution.objective == 7
         else:
             with pytest.raises(InfeasibleDetected):

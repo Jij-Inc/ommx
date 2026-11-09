@@ -17,4 +17,4 @@ The collection keeps its owner alive. The typed-key, ``get``, live-view,
 iteration, and snapshot equality rules are documented in
 {class}`~ommx.ActiveConstraintCollection`. Use ``of_kind`` and
 {class}`~ommx.ConstraintFamilyView` to inspect one family. A model's
-``constraints_df(kind=..., removed=True)`` includes both active and inactive rows.
+``constraints_df(kind=..., min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK)`` includes both active and inactive rows.

@@ -120,6 +120,7 @@ impl Instance {
                 constraint_id,
                 "ommx.Instance.convert_inequality_to_equality_with_integer_slack".to_string(),
                 [],
+                false,
             )?;
             return Ok(());
         }
@@ -240,6 +241,7 @@ impl Instance {
                 constraint_id,
                 "add_integer_slack_to_inequality".to_string(),
                 [],
+                false,
             )?;
             return Ok(None);
         }

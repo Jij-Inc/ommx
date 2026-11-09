@@ -59,7 +59,7 @@ def test_solution_v2_bytes_roundtrip_special_constraints():
 
     restored = type(solution).from_v2_bytes(solution.to_v2_bytes())
 
-    assert restored.feasible
+    assert restored.feasible()
     assert len(restored.constraints_df(kind=ConstraintKind.OneHot)) == 1
     assert restored.to_v2_bytes() == solution.to_v2_bytes()
 

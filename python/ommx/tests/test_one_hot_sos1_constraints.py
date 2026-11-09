@@ -1,5 +1,6 @@
 """Tests for OneHotConstraint and Sos1Constraint as first-class constraint types."""
 
+from ommx import ConstraintActiveness
 from ommx import ConstraintKind
 
 from ommx import OneHotConstraintID, Sos1ConstraintID
@@ -290,7 +291,7 @@ def test_evaluate_with_one_hot_feasible():
     # x1=0, x2=1, x3=0 → feasible (exactly one is 1)
     state = State({1: 0.0, 2: 1.0, 3: 0.0})
     solution = instance.evaluate(state)
-    assert solution.feasible
+    assert solution.feasible()
 
 
 def test_evaluate_with_one_hot_infeasible():
@@ -313,7 +314,7 @@ def test_evaluate_with_one_hot_infeasible():
     # x1=1, x2=1, x3=0 → infeasible (two are 1)
     state = State({1: 1.0, 2: 1.0, 3: 0.0})
     solution = instance.evaluate(state)
-    assert not solution.feasible
+    assert not solution.feasible()
 
 
 def test_evaluate_with_sos1_feasible():
@@ -336,12 +337,12 @@ def test_evaluate_with_sos1_feasible():
     # x1=0, x2=5, x3=0 → feasible (at most one non-zero)
     state = State({1: 0.0, 2: 5.0, 3: 0.0})
     solution = instance.evaluate(state)
-    assert solution.feasible
+    assert solution.feasible()
 
     # All zeros → also feasible for SOS1
     state_zeros = State({1: 0.0, 2: 0.0, 3: 0.0})
     solution_zeros = instance.evaluate(state_zeros)
-    assert solution_zeros.feasible
+    assert solution_zeros.feasible()
 
 
 def test_convert_sos1_with_integer_variables_emits_bigm_pair():
@@ -396,7 +397,7 @@ def test_convert_sos1_rejects_domain_excluding_zero():
 
 
 def test_sos1_constraints_df_roundtrips_removed_context(snapshot):
-    """`constraints_df(kind=ConstraintKind.Sos1, removed=True)` surfaces reason + constraint_ids
+    """`constraints_df(kind=ConstraintKind.Sos1, min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK)` surfaces reason + constraint_ids
     parameter as columns on removed rows. Active is empty after conversion."""
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
@@ -408,12 +409,14 @@ def test_sos1_constraints_df_roundtrips_removed_context(snapshot):
     )
     instance.convert_sos1_to_constraints(7)
 
-    assert instance.constraints_df(kind=ConstraintKind.Sos1, removed=False).empty
+    assert instance.constraints_df(
+        kind=ConstraintKind.Sos1, min_activeness=ConstraintActiveness.ACTIVE
+    ).empty
     assert (
         _df_snap(
             instance.constraints_df(
                 kind=ConstraintKind.Sos1,
-                removed=True,
+                min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK,
                 include=["label", "parameters", "inactive_reason"],
             )
         )
@@ -441,7 +444,7 @@ def test_evaluate_with_sos1_infeasible():
     # x1=1, x2=2, x3=0 → infeasible (two non-zero)
     state = State({1: 1.0, 2: 2.0, 3: 0.0})
     solution = instance.evaluate(state)
-    assert not solution.feasible
+    assert not solution.feasible()
 
 
 @pytest.fixture

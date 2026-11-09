@@ -42,7 +42,7 @@ def test_all_formulations_match(small_input: Input) -> None:
     objectives = {}
     for name, builder in builders.items():
         sol = OMMXPySCIPOptAdapter.solve(builder(small_input))
-        assert sol.feasible, f"{name} should be feasible"
+        assert sol.feasible(), f"{name} should be feasible"
         objectives[name] = sol.objective
 
     base = objectives["sos1"]

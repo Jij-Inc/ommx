@@ -919,7 +919,7 @@
     },
     {
       "id": "constraints.lifecycle",
-      "label": "activeとinactiveの制約を区別する",
+      "label": "activeとinactiveおよびskip指定の制約を区別する",
       "owner": "R_API.instance.retained_results",
       "requires": [
         "instance.model",
@@ -929,9 +929,9 @@
       "aliases": [
         "inactive_constraints",
         "active_constraints",
-        "inactive constraint"
+        "skip_feasibility_check"
       ],
-      "scope": ""
+      "scope": "Inactive constraints are retained and evaluated; the skip flag excludes them from default feasibility."
     },
     {
       "id": "objective.views",
@@ -952,7 +952,7 @@
     },
     {
       "id": "feasibility.views",
-      "label": "activeのみとinactiveを含む実行可能性を区別する",
+      "label": "min_activenessで実行可能性の検査対象を選ぶ",
       "owner": "R_API.instance.retained_results",
       "requires": [
         "constraints.lifecycle",
@@ -961,9 +961,10 @@
       "external": false,
       "aliases": [
         "feasible_relaxed",
-        "feasible"
+        "feasible",
+        "min_activeness"
       ],
-      "scope": ""
+      "scope": "Ordered minimum selects active only, checked inactive plus active, or every retained row."
     },
     {
       "id": "evaluation.snapshot",

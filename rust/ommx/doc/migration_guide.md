@@ -59,7 +59,19 @@ rule: the row data no longer stores its own ID.
 
 Constraint membership is now explicit: `active_constraints()` returns the solver-facing rows, `inactive_constraints()` returns retained rows, and `constraints()` returns the complete regular-constraint collection. The corresponding special-family accessors use the same prefixes. Builders take `active_constraints(...)` and `inactive_constraints(...)`, with equivalent methods for each family.
 
-Replace `relax_*` / `restore_*` with `deactivate_*` / `activate_*`. Inactive membership uses `InactiveConstraintMetadata { reason, parameters }`. Both model roots support activation and deactivation for all four families; structural activation rejects fixed or substituted members atomically. Inactive rows still contribute to `feasible()` and `total_violation()`; `feasible_relaxed()` checks active rows. The v1 wire schema and existing export restrictions are unchanged.
+Replace `relax_*` / `restore_*` with `deactivate_*` / `activate_*`. Inactive membership uses `InactiveConstraintMetadata { reason, parameters, skip_feasibility_check }`. Pass `false` as the final argument to `deactivate_constraint(id, reason, parameters, false)` to retain the previous feasibility behavior. A row with `skip_feasibility_check: true` is still numerically evaluated; only its participation in aggregate queries changes.
+
+`ConstraintActiveness` is ordered as follows:
+
+| Minimum | Included constraints |
+| --- | --- |
+| `Active` | Active only |
+| `Inactive` (default) | Active and inactive without the skip flag |
+| `SkipFeasibilityCheck` | Every retained row |
+
+Thus `SkipFeasibilityCheck < Inactive < Active`, and a minimum includes every row at or above that level. `Solution::feasible`, `feasible_constraints`, and `total_violation` now take this minimum. SampleSet feasibility and feasible-sample selection take it too. Pass `Default::default()` to retain the usual checked set. `feasible_relaxed()` retains its active-only meaning. Feasibility and total violation select the same constraints for the same minimum; feasibility applies the tolerance to each row and checks variable domains separately. No exact-zero implication is part of the total-violation contract.
+
+The v1 wire schema is unchanged. Export fails if any retained constraint has `skip_feasibility_check: true`; v2 preserves the flag with a required feature. Existing v1 export restrictions still apply.
 
 ## Bounds collections
 
@@ -107,7 +119,7 @@ assert_eq!(bounds[&id], Bound::new(2.0, 8.0)?);
 `Solution::total_violation_l1()` is renamed to
 [`Solution::total_violation`](crate::Solution::total_violation), and
 `Solution::total_violation_l2()` is removed. The total sums one nonnegative
-scalar per constraint across all families, including inactive rows.
+scalar per selected constraint across all families. Pass the same `min_activeness` as for feasibility to select the same rows.
 Regular equality and inequality definitions are unchanged.
 
 Query individual values with [`Solution::constraint_violation`](crate::Solution::constraint_violation),
@@ -328,7 +340,7 @@ let removed = RemovedConstraint {
 };
 
 // ✅ After — use Instance::deactivate_constraint() or store tuples directly
-instance.deactivate_constraint(id, "reason".to_string(), [])?;
+instance.deactivate_constraint(id, "reason".to_string(), [], false)?;
 
 // Or if constructing directly:
 let removed: (Constraint, InactiveConstraintMetadata) = (
@@ -336,6 +348,7 @@ let removed: (Constraint, InactiveConstraintMetadata) = (
     InactiveConstraintMetadata {
         reason: "reason".to_string(),
         parameters: Default::default(),
+        skip_feasibility_check: false,
     },
 );
 ```
@@ -395,6 +408,7 @@ reason.parameters
 pub struct InactiveConstraintMetadata {
     pub reason: String,
     pub parameters: FnvHashMap<String, String>,
+    pub skip_feasibility_check: bool,
 }
 ```
 
@@ -635,7 +649,7 @@ pub struct SampledCollection<T: ConstraintType> {
 
 // Both Deref to BTreeMap<T::ID, T::Evaluated/Sampled> for backward-compatible access
 // and provide feasibility / removal / context accessors:
-collection.is_feasible(atol) // all constraints feasible
+collection.is_feasible(atol, min_activeness) // selected constraints feasible
 collection.is_feasible_relaxed(atol)       // all non-inactive constraints feasible
 collection.is_inactive(&id)             // check if a constraint was removed
 collection.inactive_metadata()           // &BTreeMap<T::ID, InactiveConstraintMetadata>
@@ -1073,7 +1087,7 @@ let air05_annotations = annotations.get("air05");
 - [ ] Update `evaluated.evaluated_value()` → `evaluated.stage.evaluated_value` (and other getset methods)
 - [ ] Update `RemovedConstraint` construction → `(Constraint, InactiveConstraintMetadata)` tuple
 - [ ] Update `removed.constraint.xxx` → `removed.0.xxx` (tuple access)
-- [ ] Update `removed_reason` / `removed_reason_parameters` → `InactiveConstraintMetadata { reason, parameters }`
+- [ ] Update `removed_reason` / `removed_reason_parameters` → `InactiveConstraintMetadata { reason, parameters, skip_feasibility_check }`
 - [ ] Update `evaluated.removed_reason()` → `collection.inactive_metadata().get(&id)`
 - [ ] Update struct literals to use `stage: CreatedData { ... }` / `EvaluatedData { ... }` / etc.
 - [ ] Update `self.constraints` / `self.removed_constraints` → `self.constraint_collection.active()` / `.inactive()`

@@ -6,6 +6,12 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### ⚠ Select constraints by activeness and skip default feasibility ([#1372](https://github.com/Jij-Inc/ommx/issues/1372))
+
+Inactive rows can set `skip_feasibility_check=True`. They remain numerically evaluated, but default feasibility excludes them. `ConstraintActiveness` orders `SKIP_FEASIBILITY_CHECK < INACTIVE < ACTIVE`; `min_activeness` includes rows at or above the minimum. Call `feasible()` and SampleSet feasible-sample selection as methods. These queries and `total_violation()` default to `INACTIVE`; `feasible_relaxed` retains its active-only meaning. `total_violation()` uses the same selected rows without promising an exact-zero feasibility implication.
+
+`constraints_df` replaces `removed=` with `min_activeness`, defaults to all rows, and always includes `activeness`. Request `include=["inactive_reason"]` for reasons. The v1 schema is unchanged and v1 export rejects a true skip flag; v2 preserves it with a required feature. See the [migration guide](../migration/python_sdk_v2_to_v3.md).
+
 ### ⚠ Inspect and construct active and inactive constraints ([#1376](https://github.com/Jij-Inc/ommx/pull/1376))
 
 Model `constraints` now contains active and inactive rows. Use `active_constraints` for active attached handles and `inactive_constraints` for retained inactive rows. `from_components` takes explicit `active_*` / `inactive_*` inputs for all four constraint families. Both model roots support activation and deactivation, and attached handles reject mutations after their row becomes inactive. Solver adapters consume the active formulation.
@@ -1536,6 +1542,7 @@ See {meth}`~ommx.experiment.Experiment.log_with_codec` for a complete custom-cod
 ```python
 from ommx.experiment import Experiment
 
+
 class TextCodec:
     media_type = "text/plain"
 
@@ -1546,6 +1553,7 @@ class TextCodec:
     @staticmethod
     def decode(data: bytes) -> str:
         return data.decode()
+
 
 with Experiment.with_temp_local_registry() as experiment:
     experiment.log_with_codec(TextCodec, "note", "created outside OMMX")

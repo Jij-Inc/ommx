@@ -44,8 +44,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 /// >>> one_item = family.with_parameters({capacity.id: 1})
 /// >>> two_items = family.with_parameters({capacity.id: 2})
 /// >>> candidate = {xs[0].id: 1, xs[1].id: 1}
-/// >>> assert not one_item.evaluate(candidate).feasible
-/// >>> assert two_items.evaluate(candidate).feasible
+/// >>> assert not one_item.evaluate(candidate).feasible()
+/// >>> assert two_items.evaluate(candidate).feasible()
 /// >>> assert two_items.evaluate(candidate).objective == 5.0
 /// >>> assert {v.id for v in one_item.decision_variables} == {v.id for v in two_items.decision_variables}
 /// >>> assert set(one_item.constraints) == set(two_items.constraints) == {ConstraintID(0)}
@@ -236,8 +236,8 @@ impl ParametricInstance {
     /// >>> values[capacity.id] = 2
     /// >>> instance = family.with_parameters(values)
     /// >>> solution = instance.evaluate({xs[0].id: 1, xs[1].id: 0})
-    /// >>> assert solution.feasible and solution.objective == 3.0
-    /// >>> assert not instance.evaluate({xs[0].id: 1, xs[1].id: 1}).feasible
+    /// >>> assert solution.feasible() and solution.objective == 3.0
+    /// >>> assert not instance.evaluate({xs[0].id: 1, xs[1].id: 1}).feasible()
     #[staticmethod]
     #[pyo3(signature = (*, sense, objective, decision_variables, active_constraints, parameters, active_indicator_constraints=None, active_one_hot_constraints=None, active_sos1_constraints=None, named_functions=None, description=None, inactive_constraints=None, inactive_indicator_constraints=None, inactive_one_hot_constraints=None, inactive_sos1_constraints=None))]
     pub(crate) fn from_components(
@@ -510,7 +510,7 @@ impl ParametricInstance {
     /// >>> materialized = parametric.with_parameters({parameter_id: 2.0})
     /// >>> assert materialized.objective.evaluate({0: 0}) == 2.0
     /// >>> solution = materialized.evaluate({0: 0})
-    /// >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
+    /// >>> assert (solution.sense, solution.objective, solution.feasible()) == (Sense.Minimize, 0.0, False)
     pub fn with_parameters(&self, parameters: HashMap<u64, f64>) -> OmmxPyResult<Instance> {
         let mut v1_params = ommx::v1::Parameters::default();
         v1_params.entries = parameters;
@@ -795,7 +795,7 @@ impl ParametricInstance {
     ///
     /// IDs determine the constraint family, not its activeness. Active rows are
     /// attached handles; inactive rows are independent snapshots. Inspect the
-    /// returned row's concrete type, or use active_constraints for attached rows.
+    /// returned row's activeness, or use active_constraints for attached rows.
     #[getter]
     pub fn constraints(slf: Bound<'_, Self>) -> crate::constraint_collection::ConstraintCollection {
         crate::constraint_collection::ConstraintCollection::new(crate::ConstraintHost::Parametric(
@@ -1044,19 +1044,16 @@ impl ParametricInstance {
     /// DataFrame of constraints, dispatched on `kind=`. See
     /// {meth}`ommx.Instance.constraints_df` for column / `kind=` /
     /// `include=` / `removed=` semantics.
-    #[pyo3(signature = (*, kind, include = None, removed = false))]
+    #[pyo3(signature = (*, kind, include=None, min_activeness=crate::ConstraintActiveness::SKIP_FEASIBILITY_CHECK))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
         kind: ConstraintFamilyInput,
         include: Option<Vec<String>>,
-        removed: bool,
+        min_activeness: crate::ConstraintActiveness,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
-        let mut flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        if removed {
-            flags.inactive_reason = true;
-        }
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         constraint_kind_collection!(
             self.inner,
             kind,
@@ -1067,53 +1064,40 @@ impl ParametricInstance {
                 sos1_constraint_collection
             ],
             |coll| {
-                let meta = coll.context().clone();
-                let active = coll.active();
-                let removed_map = coll.inactive();
-                let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
-                if removed {
-                    let mut ai = active.iter().peekable();
-                    let mut ri = removed_map.iter().peekable();
-                    loop {
-                        let pick_active = match (ai.peek(), ri.peek()) {
-                            (Some((aid, _)), Some((rid, _))) => aid <= rid,
-                            (Some(_), None) => true,
-                            (None, Some(_)) => false,
-                            (None, None) => break,
-                        };
-                        if pick_active {
-                            let (id, c) = ai.next().unwrap();
-                            let m = meta.collect_for(*id);
-                            let dict = crate::pandas::WithModelingContext::new((*id, c), &m)
-                                .to_pandas_entry(py)?;
-                            crate::pandas::set_inactive_reason_na(&dict)?;
-                            crate::pandas::apply_include_filter(&dict, flags)?;
-                            crate::pandas::rename_id_column(&dict, id_col)?;
-                            entries.push(dict.into_any());
-                        } else {
-                            let (id, pair) = ri.next().unwrap();
-                            let m = meta.collect_for(*id);
-                            let dict = crate::pandas::WithModelingContext::new((*id, pair), &m)
-                                .to_pandas_entry(py)?;
-                            crate::pandas::apply_include_filter(&dict, flags)?;
-                            crate::pandas::rename_id_column(&dict, id_col)?;
-                            entries.push(dict.into_any());
-                        }
+                let mut entries = BTreeMap::new();
+                for (id, row) in coll.active() {
+                    let context = coll.context().collect_for(*id);
+                    let dict = crate::pandas::WithModelingContext::new((*id, row), &context)
+                        .to_pandas_entry(py)?;
+                    dict.set_item("activeness", crate::ConstraintActiveness::ACTIVE)?;
+                    if flags.inactive_reason {
+                        crate::pandas::set_inactive_reason_na(&dict)?;
                     }
-                } else {
-                    for (id, c) in active.iter() {
-                        let m = meta.collect_for(*id);
-                        let dict = crate::pandas::WithModelingContext::new((*id, c), &m)
-                            .to_pandas_entry(py)?;
-                        if flags.inactive_reason {
-                            crate::pandas::set_inactive_reason_na(&dict)?;
-                        }
-                        crate::pandas::apply_include_filter(&dict, flags)?;
-                        crate::pandas::rename_id_column(&dict, id_col)?;
-                        entries.push(dict.into_any());
-                    }
+                    crate::pandas::apply_include_filter(&dict, flags)?;
+                    crate::pandas::rename_id_column(&dict, id_col)?;
+                    entries.insert(*id, dict.into_any());
                 }
-                crate::pandas::raw_entries_to_dataframe(py, entries, id_col)
+                for (id, pair) in coll.inactive() {
+                    if pair.1.activeness() < min_activeness.into() {
+                        continue;
+                    }
+                    let context = coll.context().collect_for(*id);
+                    let dict = crate::pandas::WithModelingContext::new((*id, pair), &context)
+                        .to_pandas_entry(py)?;
+                    dict.set_item(
+                        "activeness",
+                        crate::ConstraintActiveness::from(pair.1.activeness()),
+                    )?;
+                    crate::pandas::apply_include_filter(&dict, flags)?;
+                    crate::pandas::rename_id_column(&dict, id_col)?;
+                    entries.insert(*id, dict.into_any());
+                }
+                crate::pandas::constraint_entries_to_dataframe(
+                    py,
+                    entries.into_values().collect(),
+                    id_col,
+                    flags,
+                )
             }
         )
     }
@@ -1319,17 +1303,19 @@ impl ParametricInstance {
 #[pymethods]
 impl ParametricInstance {
     /// Move an active constraint to inactive, preserving its identity and context.
-    #[pyo3(signature=(constraint_id, reason, **parameters))]
+    #[pyo3(signature=(constraint_id, reason, *, skip_feasibility_check=false, **parameters))]
     pub(crate) fn deactivate_constraint(
         &mut self,
         constraint_id: ConstraintIDInput,
         reason: String,
+        skip_feasibility_check: bool,
         #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
     ) -> OmmxPyResult<()> {
         self.inner.deactivate_constraint(
             constraint_id.into(),
             reason,
             parameters.unwrap_or_default(),
+            skip_feasibility_check,
         )?;
         Ok(())
     }
@@ -1341,19 +1327,30 @@ impl ParametricInstance {
         self.inner.activate_constraint(constraint_id.into())?;
         Ok(())
     }
-
+    /// Set whether an inactive constraint participates in default feasibility checks.
+    pub(crate) fn set_constraint_skip_feasibility_check(
+        &mut self,
+        constraint_id: ConstraintIDInput,
+        skip_feasibility_check: bool,
+    ) -> OmmxPyResult<()> {
+        self.inner
+            .set_constraint_skip_feasibility_check(constraint_id.into(), skip_feasibility_check)?;
+        Ok(())
+    }
     /// Move an active constraint to inactive, preserving its identity and context.
-    #[pyo3(signature=(constraint_id, reason, **parameters))]
+    #[pyo3(signature=(constraint_id, reason, *, skip_feasibility_check=false, **parameters))]
     pub(crate) fn deactivate_indicator_constraint(
         &mut self,
         constraint_id: IndicatorConstraintIDInput,
         reason: String,
+        skip_feasibility_check: bool,
         #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
     ) -> OmmxPyResult<()> {
         self.inner.deactivate_indicator_constraint(
             constraint_id.into(),
             reason,
             parameters.unwrap_or_default(),
+            skip_feasibility_check,
         )?;
         Ok(())
     }
@@ -1366,19 +1363,32 @@ impl ParametricInstance {
             .activate_indicator_constraint(constraint_id.into())?;
         Ok(())
     }
-
+    /// Set whether an inactive constraint participates in default feasibility checks.
+    pub(crate) fn set_indicator_constraint_skip_feasibility_check(
+        &mut self,
+        constraint_id: IndicatorConstraintIDInput,
+        skip_feasibility_check: bool,
+    ) -> OmmxPyResult<()> {
+        self.inner.set_indicator_constraint_skip_feasibility_check(
+            constraint_id.into(),
+            skip_feasibility_check,
+        )?;
+        Ok(())
+    }
     /// Move an active constraint to inactive, preserving its identity and context.
-    #[pyo3(signature=(constraint_id, reason, **parameters))]
+    #[pyo3(signature=(constraint_id, reason, *, skip_feasibility_check=false, **parameters))]
     pub(crate) fn deactivate_one_hot_constraint(
         &mut self,
         constraint_id: OneHotConstraintIDInput,
         reason: String,
+        skip_feasibility_check: bool,
         #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
     ) -> OmmxPyResult<()> {
         self.inner.deactivate_one_hot_constraint(
             constraint_id.into(),
             reason,
             parameters.unwrap_or_default(),
+            skip_feasibility_check,
         )?;
         Ok(())
     }
@@ -1391,19 +1401,32 @@ impl ParametricInstance {
             .activate_one_hot_constraint(constraint_id.into())?;
         Ok(())
     }
-
+    /// Set whether an inactive constraint participates in default feasibility checks.
+    pub(crate) fn set_one_hot_constraint_skip_feasibility_check(
+        &mut self,
+        constraint_id: OneHotConstraintIDInput,
+        skip_feasibility_check: bool,
+    ) -> OmmxPyResult<()> {
+        self.inner.set_one_hot_constraint_skip_feasibility_check(
+            constraint_id.into(),
+            skip_feasibility_check,
+        )?;
+        Ok(())
+    }
     /// Move an active constraint to inactive, preserving its identity and context.
-    #[pyo3(signature=(constraint_id, reason, **parameters))]
+    #[pyo3(signature=(constraint_id, reason, *, skip_feasibility_check=false, **parameters))]
     pub(crate) fn deactivate_sos1_constraint(
         &mut self,
         constraint_id: Sos1ConstraintIDInput,
         reason: String,
+        skip_feasibility_check: bool,
         #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
     ) -> OmmxPyResult<()> {
         self.inner.deactivate_sos1_constraint(
             constraint_id.into(),
             reason,
             parameters.unwrap_or_default(),
+            skip_feasibility_check,
         )?;
         Ok(())
     }
@@ -1413,6 +1436,18 @@ impl ParametricInstance {
         constraint_id: Sos1ConstraintIDInput,
     ) -> OmmxPyResult<()> {
         self.inner.activate_sos1_constraint(constraint_id.into())?;
+        Ok(())
+    }
+    /// Set whether an inactive constraint participates in default feasibility checks.
+    pub(crate) fn set_sos1_constraint_skip_feasibility_check(
+        &mut self,
+        constraint_id: Sos1ConstraintIDInput,
+        skip_feasibility_check: bool,
+    ) -> OmmxPyResult<()> {
+        self.inner.set_sos1_constraint_skip_feasibility_check(
+            constraint_id.into(),
+            skip_feasibility_check,
+        )?;
         Ok(())
     }
 }

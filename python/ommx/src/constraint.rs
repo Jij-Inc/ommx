@@ -305,17 +305,19 @@ impl InactiveConstraint {
 #[pymethods]
 impl InactiveConstraint {
     #[new]
-    #[pyo3(signature = (constraint, inactive_reason, inactive_reason_parameters=None))]
+    #[pyo3(signature = (constraint, inactive_reason, inactive_reason_parameters=None, *, skip_feasibility_check=false))]
     pub fn new(
         constraint: Constraint,
         inactive_reason: String,
         inactive_reason_parameters: Option<HashMap<String, String>>,
+        skip_feasibility_check: bool,
     ) -> Self {
         Self {
             constraint: constraint.0,
             context: constraint.1,
             inactive_reason: ommx::InactiveConstraintMetadata {
                 reason: inactive_reason,
+                skip_feasibility_check,
                 parameters: inactive_reason_parameters
                     .map(|params| params.into_iter().collect::<FnvHashMap<_, _>>())
                     .unwrap_or_default(),
@@ -326,6 +328,16 @@ impl InactiveConstraint {
     #[getter]
     pub fn constraint(&self) -> Constraint {
         Constraint::from_parts(self.constraint.clone(), self.context.clone())
+    }
+
+    #[getter]
+    pub fn activeness(&self) -> crate::ConstraintActiveness {
+        self.inactive_reason.activeness().into()
+    }
+
+    #[getter]
+    pub fn skip_feasibility_check(&self) -> bool {
+        self.inactive_reason.skip_feasibility_check
     }
 
     #[getter]

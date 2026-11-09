@@ -1,193 +1,193 @@
 # serializer version: 1
-# name: test_instance_constraints_df_inactive_reason_active_only_keeps_column
+# name: test_instance_constraints_df_active_only_excludes_inactive
   '''
-                        equality    type   used_ids     name subscripts description inactive_reason
-  regular_constraint_id                                                                            
-  ConstraintID(10)            =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row            <NA>
+  Empty DataFrame
+  Columns: [activeness]
+  Index: []
+  '''
+# ---
+# name: test_instance_constraints_df_default_includes_inactive
+  '''
+                        equality    type   used_ids     name subscripts description parameters.region inactive_reason inactive_reason.phase                     activeness
+  regular_constraint_id                                                                                                                                                   
+  ConstraintID(10)            =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row           us-east    manual_relax               warm-up  ConstraintActiveness.INACTIVE
   '''
 # ---
 # name: test_instance_constraints_df_include_empty
   '''
-                        equality    type   used_ids
-  regular_constraint_id                            
-  ConstraintID(10)            =0  Linear  {0, 1, 2}
+                        equality    type   used_ids                   activeness
+  regular_constraint_id                                                         
+  ConstraintID(10)            =0  Linear  {0, 1, 2}  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_instance_constraints_df_include_label_only
   '''
-                        equality    type   used_ids     name subscripts description
-  regular_constraint_id                                                            
-  ConstraintID(10)            =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row
+                        equality    type   used_ids     name subscripts description                   activeness
+  regular_constraint_id                                                                                         
+  ConstraintID(10)            =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_instance_constraints_df_include_parameters_only
   '''
-                        equality    type   used_ids parameters.region
-  regular_constraint_id                                              
-  ConstraintID(10)            =0  Linear  {0, 1, 2}           us-east
+                        equality    type   used_ids parameters.region                   activeness
+  regular_constraint_id                                                                           
+  ConstraintID(10)            =0  Linear  {0, 1, 2}           us-east  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_instance_constraints_df_kind[indicator]
   '''
-                             indicator_variable_id equality    type   used_ids  name subscripts description
-  indicator_constraint_id                                                                                  
-  IndicatorConstraintID(20)                      0       =0  Linear  {0, 1, 2}  <NA>         []        <NA>
+                             indicator_variable_id equality    type   used_ids  name subscripts description                   activeness
+  indicator_constraint_id                                                                                                               
+  IndicatorConstraintID(20)                      0       =0  Linear  {0, 1, 2}  <NA>         []        <NA>  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_instance_constraints_df_kind[one_hot]
   '''
-                          variables  num_variables   used_ids  name subscripts description
-  one_hot_constraint_id                                                                   
-  OneHotConstraintID(30)  {0, 1, 2}              3  {0, 1, 2}  <NA>         []        <NA>
+                          variables  num_variables   used_ids  name subscripts description                   activeness
+  one_hot_constraint_id                                                                                                
+  OneHotConstraintID(30)  {0, 1, 2}              3  {0, 1, 2}  <NA>         []        <NA>  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_instance_constraints_df_kind[regular]
   '''
-                        equality    type   used_ids     name subscripts description parameters.region
-  regular_constraint_id                                                                              
-  ConstraintID(10)            =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row           us-east
+                        equality    type   used_ids     name subscripts description parameters.region                   activeness
+  regular_constraint_id                                                                                                           
+  ConstraintID(10)            =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row           us-east  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_instance_constraints_df_kind[sos1]
   '''
-                        variables  num_variables   used_ids  name subscripts description
-  sos1_constraint_id                                                                    
-  Sos1ConstraintID(40)  {0, 1, 2}              3  {0, 1, 2}  <NA>         []        <NA>
+                        variables  num_variables   used_ids  name subscripts description                   activeness
+  sos1_constraint_id                                                                                                 
+  Sos1ConstraintID(40)  {0, 1, 2}              3  {0, 1, 2}  <NA>         []        <NA>  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_instance_constraints_df_one_hot_removed_true
   '''
-                        variables  num_variables used_ids  name subscripts description                              inactive_reason inactive_reason.constraint_id
-  one_hot_constraint_id                                                                                                                                          
-  OneHotConstraintID(5)    {0, 1}              2   {0, 1}  <NA>         []        <NA>                                         <NA>                          <NA>
-  OneHotConstraintID(7)    {1, 2}              2   {1, 2}  <NA>         []        <NA>  ommx.Instance.convert_one_hot_to_constraint                             8
+                        variables  num_variables used_ids  name subscripts description                     activeness                              inactive_reason inactive_reason.constraint_id
+  one_hot_constraint_id                                                                                                                                                                         
+  OneHotConstraintID(5)    {0, 1}              2   {0, 1}  <NA>         []        <NA>    ConstraintActiveness.ACTIVE                                         <NA>                          <NA>
+  OneHotConstraintID(7)    {1, 2}              2   {1, 2}  <NA>         []        <NA>  ConstraintActiveness.INACTIVE  ommx.Instance.convert_one_hot_to_constraint                             8
   '''
 # ---
-# name: test_instance_constraints_df_removed_default_excludes_removed
+# name: test_instance_constraints_df_removed_reason_active_only_keeps_column
   '''
-  Empty DataFrame
-  Columns: []
-  Index: []
+                        equality    type   used_ids     name subscripts description                   activeness inactive_reason
+  regular_constraint_id                                                                                                         
+  ConstraintID(10)            =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row  ConstraintActiveness.ACTIVE            <NA>
   '''
 # ---
 # name: test_instance_constraints_df_removed_true_id_sorted
   '''
-                        equality    type used_ids  name subscripts description inactive_reason
-  regular_constraint_id                                                                       
-  ConstraintID(5)             =0  Linear   {0, 1}  <NA>         []        <NA>            <NA>
-  ConstraintID(20)            =0  Linear   {0, 2}  <NA>         []        <NA>    relax_middle
-  ConstraintID(30)            =0  Linear   {1, 2}  <NA>         []        <NA>            <NA>
-  '''
-# ---
-# name: test_instance_constraints_df_removed_true_includes_both
-  '''
-                        equality    type   used_ids     name subscripts description parameters.region inactive_reason inactive_reason.phase
-  regular_constraint_id                                                                                                                    
-  ConstraintID(10)            =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row           us-east    manual_relax               warm-up
+                        equality    type used_ids  name subscripts description                     activeness inactive_reason
+  regular_constraint_id                                                                                                      
+  ConstraintID(5)             =0  Linear   {0, 1}  <NA>         []        <NA>    ConstraintActiveness.ACTIVE            <NA>
+  ConstraintID(20)            =0  Linear   {0, 2}  <NA>         []        <NA>  ConstraintActiveness.INACTIVE    relax_middle
+  ConstraintID(30)            =0  Linear   {1, 2}  <NA>         []        <NA>    ConstraintActiveness.ACTIVE            <NA>
   '''
 # ---
 # name: test_instance_constraints_df_removed_true_no_label
   '''
-                        equality    type   used_ids inactive_reason inactive_reason.phase
-  regular_constraint_id                                                                  
-  ConstraintID(10)            =0  Linear  {0, 1, 2}    manual_relax               warm-up
+                        equality    type   used_ids inactive_reason inactive_reason.phase                     activeness
+  regular_constraint_id                                                                                                 
+  ConstraintID(10)            =0  Linear  {0, 1, 2}    manual_relax               warm-up  ConstraintActiveness.INACTIVE
   '''
 # ---
 # name: test_parametric_instance_constraints_df_default
   '''
-                        equality       type       used_ids  name subscripts description
-  regular_constraint_id                                                                
-  ConstraintID(10)            =0  Quadratic  {0, 1, 2, 99}  <NA>         []        <NA>
+                        equality       type       used_ids  name subscripts description                   activeness
+  regular_constraint_id                                                                                             
+  ConstraintID(10)            =0  Quadratic  {0, 1, 2, 99}  <NA>         []        <NA>  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_parametric_instance_constraints_df_special_kinds_empty[indicator-indicator_constraint_id]
   '''
   Empty DataFrame
-  Columns: []
+  Columns: [activeness]
   Index: []
   '''
 # ---
 # name: test_parametric_instance_constraints_df_special_kinds_empty[one_hot-one_hot_constraint_id]
   '''
   Empty DataFrame
-  Columns: []
+  Columns: [activeness]
   Index: []
   '''
 # ---
 # name: test_parametric_instance_constraints_df_special_kinds_empty[sos1-sos1_constraint_id]
   '''
   Empty DataFrame
-  Columns: []
+  Columns: [activeness]
   Index: []
   '''
 # ---
 # name: test_sample_set_constraints_df_kind[indicator]
   '''
-                             indicator_variable_id equality   used_ids  name subscripts description  value.0  feasible.0  indicator_active.0  value.1  feasible.1  indicator_active.1
-  indicator_constraint_id                                                                                                                                                            
-  IndicatorConstraintID(20)                      0       =0  {0, 1, 2}  <NA>         []        <NA>      0.0        True               False      0.0        True                True
+                             indicator_variable_id equality   used_ids  name subscripts description  value.0  feasible.0  indicator_active.0  value.1  feasible.1  indicator_active.1                   activeness
+  indicator_constraint_id                                                                                                                                                                                         
+  IndicatorConstraintID(20)                      0       =0  {0, 1, 2}  <NA>         []        <NA>      0.0        True               False      0.0        True                True  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_sample_set_constraints_df_kind[one_hot]
   '''
-                           used_ids  name subscripts description  feasible.0  active_variable.0  feasible.1 active_variable.1
-  one_hot_constraint_id                                                                                                      
-  OneHotConstraintID(30)  {0, 1, 2}  <NA>         []        <NA>        True                  1       False              <NA>
+                           used_ids  name subscripts description  feasible.0  active_variable.0  feasible.1 active_variable.1                   activeness
+  one_hot_constraint_id                                                                                                                                   
+  OneHotConstraintID(30)  {0, 1, 2}  <NA>         []        <NA>        True                  1       False              <NA>  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_sample_set_constraints_df_kind[regular]
   '''
-                        equality   used_ids     name subscripts description parameters.region  value.0  feasible.0  value.1  feasible.1
-  regular_constraint_id                                                                                                                
-  ConstraintID(10)            =0  {0, 1, 2}  balance     [0, 1]  demand row           us-east      0.0        True      1.0       False
+                        equality   used_ids     name subscripts description parameters.region  value.0  feasible.0  value.1  feasible.1                   activeness
+  regular_constraint_id                                                                                                                                             
+  ConstraintID(10)            =0  {0, 1, 2}  balance     [0, 1]  demand row           us-east      0.0        True      1.0       False  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_sample_set_constraints_df_kind[sos1]
   '''
-                         used_ids  name subscripts description  feasible.0  active_variable.0  feasible.1 active_variable.1
-  sos1_constraint_id                                                                                                       
-  Sos1ConstraintID(40)  {0, 1, 2}  <NA>         []        <NA>        True                  1       False              <NA>
-  '''
-# ---
-# name: test_solution_constraints_df_inactive_reason_include
-  '''
-                        equality  value  feasible   used_ids     name subscripts description dual_variable  violation inactive_reason inactive_reason.phase
-  regular_constraint_id                                                                                                                                    
-  ConstraintID(10)            =0    0.0      True  {0, 1, 2}  balance     [0, 1]  demand row          <NA>        0.0    manual_relax               warm-up
-  '''
-# ---
-# name: test_solution_constraints_df_inactive_reason_no_removals_keeps_column
-  '''
-                        equality  value  feasible   used_ids     name subscripts description dual_variable  violation inactive_reason
-  regular_constraint_id                                                                                                              
-  ConstraintID(10)            =0    0.0      True  {0, 1, 2}  balance     [0, 1]  demand row          <NA>        0.0            <NA>
+                         used_ids  name subscripts description  feasible.0  active_variable.0  feasible.1 active_variable.1                   activeness
+  sos1_constraint_id                                                                                                                                    
+  Sos1ConstraintID(40)  {0, 1, 2}  <NA>         []        <NA>        True                  1       False              <NA>  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_solution_constraints_df_kind[indicator]
   '''
-                             indicator_variable_id equality  value  feasible  indicator_active   used_ids  name subscripts description  violation
-  indicator_constraint_id                                                                                                                        
-  IndicatorConstraintID(20)                      0       =0    0.0      True             False  {0, 1, 2}  <NA>         []        <NA>        0.0
+                             indicator_variable_id equality  value  feasible  indicator_active   used_ids  name subscripts description  violation                   activeness
+  indicator_constraint_id                                                                                                                                                     
+  IndicatorConstraintID(20)                      0       =0    0.0      True             False  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_solution_constraints_df_kind[one_hot]
   '''
-                          feasible  active_variable   used_ids  name subscripts description  violation
-  one_hot_constraint_id                                                                               
-  OneHotConstraintID(30)      True                1  {0, 1, 2}  <NA>         []        <NA>        0.0
+                          feasible  active_variable   used_ids  name subscripts description  violation                   activeness
+  one_hot_constraint_id                                                                                                            
+  OneHotConstraintID(30)      True                1  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_solution_constraints_df_kind[regular]
   '''
-                        equality  value  feasible   used_ids     name subscripts description parameters.region dual_variable  violation
-  regular_constraint_id                                                                                                                
-  ConstraintID(10)            =0    0.0      True  {0, 1, 2}  balance     [0, 1]  demand row           us-east          <NA>        0.0
+                        equality  value  feasible   used_ids     name subscripts description parameters.region dual_variable  violation                   activeness
+  regular_constraint_id                                                                                                                                             
+  ConstraintID(10)            =0    0.0      True  {0, 1, 2}  balance     [0, 1]  demand row           us-east          <NA>        0.0  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_solution_constraints_df_kind[sos1]
   '''
-                        feasible  active_variable   used_ids  name subscripts description  violation
-  sos1_constraint_id                                                                                
-  Sos1ConstraintID(40)      True                1  {0, 1, 2}  <NA>         []        <NA>        0.0
+                        feasible  active_variable   used_ids  name subscripts description  violation                   activeness
+  sos1_constraint_id                                                                                                             
+  Sos1ConstraintID(40)      True                1  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintActiveness.ACTIVE
+  '''
+# ---
+# name: test_solution_constraints_df_removed_reason_include
+  '''
+                        equality  value  feasible   used_ids     name subscripts description dual_variable  violation                     activeness inactive_reason inactive_reason.phase
+  regular_constraint_id                                                                                                                                                                   
+  ConstraintID(10)            =0    0.0      True  {0, 1, 2}  balance     [0, 1]  demand row          <NA>        0.0  ConstraintActiveness.INACTIVE    manual_relax               warm-up
+  '''
+# ---
+# name: test_solution_constraints_df_removed_reason_no_removals_keeps_column
+  '''
+                        equality  value  feasible   used_ids     name subscripts description dual_variable  violation                   activeness inactive_reason
+  regular_constraint_id                                                                                                                                           
+  ConstraintID(10)            =0    0.0      True  {0, 1, 2}  balance     [0, 1]  demand row          <NA>        0.0  ConstraintActiveness.ACTIVE            <NA>
   '''
 # ---

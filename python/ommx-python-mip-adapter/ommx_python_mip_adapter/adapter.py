@@ -169,7 +169,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
             >>> sorted([(id, value) for id, value in solution.state.entries.items()])
             [(0, 1.0), (1, 0.0), (2, 0.0), (3, 1.0), (4, 0.0), (5, 0.0)]
-            >>> solution.feasible
+            >>> solution.feasible()
             True
             >>> assert solution.optimality == Solution.OPTIMAL
 

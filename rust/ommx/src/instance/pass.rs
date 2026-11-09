@@ -33,12 +33,14 @@ impl $host {
         id: ConstraintID,
         reason: String,
         parameters: impl IntoIterator<Item = (String, String)>,
+        skip_feasibility_check: bool,
     ) -> Result<()> {
         self.constraint_collection.deactivate(
             id,
             crate::constraint::InactiveConstraintMetadata {
                 reason,
                 parameters: parameters.into_iter().collect(),
+                skip_feasibility_check,
             },
         )?;
 
@@ -75,12 +77,14 @@ impl $host {
         id: crate::IndicatorConstraintID,
         reason: String,
         parameters: impl IntoIterator<Item = (String, String)>,
+        skip_feasibility_check: bool,
     ) -> Result<()> {
         self.indicator_constraint_collection.deactivate(
             id,
             crate::constraint::InactiveConstraintMetadata {
                 reason,
                 parameters: parameters.into_iter().collect(),
+                skip_feasibility_check,
             },
         )?;
         Ok(())
@@ -138,8 +142,8 @@ impl $host {
 
 
     /// Retain a structural constraint without imposing it on the solver.
-    pub fn deactivate_one_hot_constraint(&mut self, id: crate::OneHotConstraintID, reason: String, parameters: impl IntoIterator<Item=(String,String)>) -> Result<()> {
-        self.one_hot_constraint_collection.deactivate(id, crate::InactiveConstraintMetadata { reason, parameters: parameters.into_iter().collect() })
+    pub fn deactivate_one_hot_constraint(&mut self, id: crate::OneHotConstraintID, reason: String, parameters: impl IntoIterator<Item=(String,String)>, skip_feasibility_check: bool) -> Result<()> {
+        self.one_hot_constraint_collection.deactivate(id, crate::InactiveConstraintMetadata { reason, parameters: parameters.into_iter().collect(), skip_feasibility_check })
     }
 
     /// Activate a retained structural constraint against the current variables.
@@ -157,8 +161,8 @@ impl $host {
     }
 
     /// Retain a structural constraint without imposing it on the solver.
-    pub fn deactivate_sos1_constraint(&mut self, id: crate::Sos1ConstraintID, reason: String, parameters: impl IntoIterator<Item=(String,String)>) -> Result<()> {
-        self.sos1_constraint_collection.deactivate(id, crate::InactiveConstraintMetadata { reason, parameters: parameters.into_iter().collect() })
+    pub fn deactivate_sos1_constraint(&mut self, id: crate::Sos1ConstraintID, reason: String, parameters: impl IntoIterator<Item=(String,String)>, skip_feasibility_check: bool) -> Result<()> {
+        self.sos1_constraint_collection.deactivate(id, crate::InactiveConstraintMetadata { reason, parameters: parameters.into_iter().collect(), skip_feasibility_check })
     }
 
     /// Activate a retained structural constraint against the current variables.
@@ -173,6 +177,26 @@ impl $host {
         }
         self.sos1_constraint_collection.activate_row(id, row)?;
         Ok(())
+    }
+
+    /// Change the default check policy of an inactive constraint, preserving its reason and context.
+    pub fn set_constraint_skip_feasibility_check(&mut self, id: crate::ConstraintID, skip: bool) -> Result<()> {
+        self.constraint_collection.set_skip_feasibility_check(id, skip)
+    }
+
+    /// Change the default check policy of an inactive constraint, preserving its reason and context.
+    pub fn set_indicator_constraint_skip_feasibility_check(&mut self, id: crate::IndicatorConstraintID, skip: bool) -> Result<()> {
+        self.indicator_constraint_collection.set_skip_feasibility_check(id, skip)
+    }
+
+    /// Change the default check policy of an inactive constraint, preserving its reason and context.
+    pub fn set_one_hot_constraint_skip_feasibility_check(&mut self, id: crate::OneHotConstraintID, skip: bool) -> Result<()> {
+        self.one_hot_constraint_collection.set_skip_feasibility_check(id, skip)
+    }
+
+    /// Change the default check policy of an inactive constraint, preserving its reason and context.
+    pub fn set_sos1_constraint_skip_feasibility_check(&mut self, id: crate::Sos1ConstraintID, skip: bool) -> Result<()> {
+        self.sos1_constraint_collection.set_skip_feasibility_check(id, skip)
     }
 
     /// Build a State containing all table-owned fixed variable values.
@@ -220,7 +244,7 @@ mod tests {
             Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
 
         instance
-            .deactivate_constraint(ConstraintID::from(1), "test".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(1), "test".to_string(), [], false)
             .unwrap();
         assert!(instance.active_constraints().is_empty());
         assert_eq!(instance.inactive_constraints().len(), 1);
@@ -263,7 +287,7 @@ mod tests {
         .unwrap();
 
         instance
-            .deactivate_constraint(constraint_id, "test".to_string(), [])
+            .deactivate_constraint(constraint_id, "test".to_string(), [], false)
             .unwrap();
         instance
             .partial_evaluate(&v1::State::from_iter([(1, f64::MAX)]), ATol::default())
@@ -303,7 +327,7 @@ mod tests {
         .unwrap();
 
         instance
-            .deactivate_constraint(constraint_id, "test".to_string(), [])
+            .deactivate_constraint(constraint_id, "test".to_string(), [], false)
             .unwrap();
         instance = instance
             .substitute_one(
@@ -353,7 +377,7 @@ mod tests {
         .unwrap();
 
         instance
-            .deactivate_constraint(ConstraintID::from(1), "test".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(1), "test".to_string(), [], false)
             .unwrap();
 
         let substitution = Function::from(linear!(1) + linear!(2));
@@ -400,7 +424,7 @@ mod tests {
         .unwrap();
 
         instance
-            .deactivate_constraint(ConstraintID::from(1), "test".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(1), "test".to_string(), [], false)
             .unwrap();
 
         let fix_state = v1::State {
@@ -461,7 +485,12 @@ mod tests {
         assert!(instance.inactive_indicator_constraints().is_empty());
 
         instance
-            .deactivate_indicator_constraint(IndicatorConstraintID::from(1), "test".to_string(), [])
+            .deactivate_indicator_constraint(
+                IndicatorConstraintID::from(1),
+                "test".to_string(),
+                [],
+                false,
+            )
             .unwrap();
         assert!(instance.active_indicator_constraints().is_empty());
         assert_eq!(instance.inactive_indicator_constraints().len(), 1);
@@ -502,7 +531,7 @@ mod tests {
             .unwrap();
 
         instance
-            .deactivate_indicator_constraint(constraint_id, "test".to_string(), [])
+            .deactivate_indicator_constraint(constraint_id, "test".to_string(), [], false)
             .unwrap();
         instance
             .partial_evaluate(&v1::State::from_iter([(1, f64::MAX)]), ATol::default())
@@ -552,7 +581,12 @@ mod tests {
             .unwrap();
 
         instance
-            .deactivate_indicator_constraint(IndicatorConstraintID::from(1), "test".to_string(), [])
+            .deactivate_indicator_constraint(
+                IndicatorConstraintID::from(1),
+                "test".to_string(),
+                [],
+                false,
+            )
             .unwrap();
 
         // Fix the indicator variable
@@ -607,7 +641,12 @@ mod tests {
             .unwrap();
 
         instance
-            .deactivate_indicator_constraint(IndicatorConstraintID::from(1), "test".to_string(), [])
+            .deactivate_indicator_constraint(
+                IndicatorConstraintID::from(1),
+                "test".to_string(),
+                [],
+                false,
+            )
             .unwrap();
 
         // Fix x1 (function variable, not indicator)
@@ -676,7 +715,12 @@ mod tests {
 
         // Relax, then substitute indicator variable x10 = x20
         instance
-            .deactivate_indicator_constraint(IndicatorConstraintID::from(1), "test".to_string(), [])
+            .deactivate_indicator_constraint(
+                IndicatorConstraintID::from(1),
+                "test".to_string(),
+                [],
+                false,
+            )
             .unwrap();
         instance = instance
             .substitute_one(VariableID::from(10), &Function::from(linear!(20)))

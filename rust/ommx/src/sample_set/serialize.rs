@@ -9,9 +9,12 @@ impl SampleSet {
     /// retained regular constraints and variable values at [`ATol::default`],
     /// as on v1 import. Use the same default on write and read, or use
     /// [`Self::to_v2_bytes`] to preserve the original tolerance and constraints.
-    pub fn to_v1_bytes(&self) -> Vec<u8> {
-        let v1_sample_set = v1::SampleSet::from(self.clone());
-        v1_sample_set.encode_to_vec()
+    ///
+    /// Returns an error if any constraint skips the default feasibility
+    /// judgment, because v1 cannot represent that policy. Use v2 instead.
+    pub fn to_v1_bytes(&self) -> Result<Vec<u8>> {
+        let v1_sample_set = v1::SampleSet::try_from(self.clone())?;
+        Ok(v1_sample_set.encode_to_vec())
     }
 
     pub fn to_v2_bytes(&self) -> Vec<u8> {
@@ -40,6 +43,14 @@ impl From<SampleSet> for v2::SampleSet {
                 .decision_variables
                 .values()
                 .any(|variable| *variable.kind() == crate::Kind::FiniteDomain),
+            value
+                .constraints
+                .inactive_metadata()
+                .values()
+                .chain(value.indicator_constraints.inactive_metadata().values())
+                .chain(value.one_hot_constraints.inactive_metadata().values())
+                .chain(value.sos1_constraints.inactive_metadata().values())
+                .any(|metadata| metadata.skip_feasibility_check),
         );
 
         let SampleSet {

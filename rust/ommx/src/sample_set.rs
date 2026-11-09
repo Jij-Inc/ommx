@@ -147,8 +147,10 @@ pub enum SampleSetError {
 /// - [`Self::feasible`] and [`Self::feasible_relaxed`] require every sampled
 ///   variable to satisfy its bounds and kind, just as the extracted [`Solution`].
 ///   They also check all sampled constraint collections:
-///   - `feasible`: all constraints must be satisfied for that sample.
-///   - `feasible_relaxed`: all non-inactive constraints must be satisfied.
+///   - `feasible(min_activeness)`: every selected constraint must be satisfied.
+///   - `feasible_relaxed`: all active constraints must be satisfied.
+///
+///   Stored canonical judgments use `Inactive` and `Active`, respectively.
 /// - `feasibility_atol` is the absolute tolerance used to validate
 ///   serialized per-constraint feasibility columns and to interpret per-sample
 ///   [`Solution`] values extracted from this sample set.
@@ -170,7 +172,6 @@ pub struct SampleSet {
     named_functions: NamedFunctionTable<SampledNamedFunction>,
     #[getset(get = "pub")]
     sense: Sense,
-    #[getset(get = "pub")]
     feasible: BTreeMap<SampleID, bool>,
     #[getset(get = "pub")]
     feasible_relaxed: BTreeMap<SampleID, bool>,
@@ -262,10 +263,28 @@ impl SampleSet {
         self.objectives.ids()
     }
 
-    pub fn feasible_ids(&self) -> SampleIDSet {
-        self.feasible
-            .iter()
-            .filter_map(|(id, &is_feasible)| if is_feasible { Some(*id) } else { None })
+    /// Feasibility for each sample at the selected minimum activeness.
+    /// This query does not change the canonical stored judgments.
+    pub fn feasible(
+        &self,
+        min_activeness: crate::ConstraintActiveness,
+    ) -> BTreeMap<SampleID, bool> {
+        self.sample_ids()
+            .into_iter()
+            .map(|id| {
+                (
+                    id,
+                    self.is_sample_feasible(id, min_activeness)
+                        .expect("sample IDs belong to this SampleSet"),
+                )
+            })
+            .collect()
+    }
+
+    pub fn feasible_ids(&self, min_activeness: crate::ConstraintActiveness) -> SampleIDSet {
+        self.feasible(min_activeness)
+            .into_iter()
+            .filter_map(|(id, is_feasible)| if is_feasible { Some(id) } else { None })
             .collect()
     }
 
@@ -277,14 +296,36 @@ impl SampleSet {
     }
 
     pub fn feasible_unrelaxed_ids(&self) -> SampleIDSet {
-        self.feasible_ids()
+        self.feasible_ids(crate::ConstraintActiveness::Inactive)
     }
 
     /// Check if a specific sample is feasible.
     ///
     /// Returns [`None`] if `sample_id` is not in this sample set.
-    pub fn is_sample_feasible(&self, sample_id: SampleID) -> Option<bool> {
-        self.feasible.get(&sample_id).copied()
+    pub fn is_sample_feasible(
+        &self,
+        sample_id: SampleID,
+        min_activeness: crate::ConstraintActiveness,
+    ) -> Option<bool> {
+        self.objectives.get(sample_id)?;
+        let atol = self.feasibility_atol;
+        Some(
+            self.decision_variables
+                .iter()
+                .all(|(id, variable)| variable.is_valid_for(*id, sample_id, atol))
+                && self
+                    .constraints
+                    .is_feasible_for(sample_id, atol, min_activeness)
+                && self
+                    .indicator_constraints
+                    .is_feasible_for(sample_id, atol, min_activeness)
+                && self
+                    .one_hot_constraints
+                    .is_feasible_for(sample_id, atol, min_activeness)
+                && self
+                    .sos1_constraints
+                    .is_feasible_for(sample_id, atol, min_activeness),
+        )
     }
 
     /// Check if a specific sample is feasible in the relaxed problem.
@@ -398,12 +439,14 @@ impl SampleSet {
         })
     }
 
-    pub fn best_feasible_id(&self) -> Result<SampleID, SampleSetError> {
+    pub fn best_feasible_id(
+        &self,
+        min_activeness: crate::ConstraintActiveness,
+    ) -> Result<SampleID, SampleSetError> {
         let mut feasible_objectives: Vec<(SampleID, f64)> = self
-            .feasible
-            .iter()
-            .filter_map(|(k, v)| if *v { Some(k) } else { None })
-            .map(|id| (*id, *self.objectives.get(*id).unwrap())) // safe unwrap since the IDs are consistent
+            .feasible_ids(min_activeness)
+            .into_iter()
+            .map(|id| (id, *self.objectives.get(id).unwrap())) // safe unwrap since the IDs are consistent
             .collect();
         if feasible_objectives.is_empty() {
             return Err(SampleSetError::NoFeasibleSolution);
@@ -435,8 +478,11 @@ impl SampleSet {
     }
 
     /// Get the best feasible solution
-    pub fn best_feasible(&self) -> Result<Solution, SampleSetError> {
-        let id = self.best_feasible_id()?;
+    pub fn best_feasible(
+        &self,
+        min_activeness: crate::ConstraintActiveness,
+    ) -> Result<Solution, SampleSetError> {
+        let id = self.best_feasible_id(min_activeness)?;
         self.get(id).ok_or(SampleSetError::UnknownSampleID { id })
     }
 
@@ -1212,10 +1258,26 @@ impl SampleSetBuilder {
                 .iter()
                 .all(|(id, variable)| variable.is_valid_for(*id, *sample_id, atol));
             let f = variables_feasible
-                && constraints.is_feasible_for(*sample_id, atol)
-                && indicator_constraints.is_feasible_for(*sample_id, atol)
-                && one_hot_constraints.is_feasible_for(*sample_id, atol)
-                && sos1_constraints.is_feasible_for(*sample_id, atol);
+                && constraints.is_feasible_for(
+                    *sample_id,
+                    atol,
+                    crate::ConstraintActiveness::Inactive,
+                )
+                && indicator_constraints.is_feasible_for(
+                    *sample_id,
+                    atol,
+                    crate::ConstraintActiveness::Inactive,
+                )
+                && one_hot_constraints.is_feasible_for(
+                    *sample_id,
+                    atol,
+                    crate::ConstraintActiveness::Inactive,
+                )
+                && sos1_constraints.is_feasible_for(
+                    *sample_id,
+                    atol,
+                    crate::ConstraintActiveness::Inactive,
+                );
             let fr = variables_feasible
                 && constraints.is_feasible_relaxed_for(*sample_id, atol)
                 && indicator_constraints.is_feasible_relaxed_for(*sample_id, atol)
@@ -1271,7 +1333,10 @@ mod tests {
                 .unwrap();
             for (sample_id, expected) in expected.into_iter().enumerate() {
                 let sample_id = SampleID::from(sample_id as u64);
-                assert_eq!(result.is_sample_feasible(sample_id), Some(expected));
+                assert_eq!(
+                    result.is_sample_feasible(sample_id, Default::default()),
+                    Some(expected)
+                );
                 assert_eq!(result.is_sample_feasible_relaxed(sample_id), Some(expected));
             }
         }
@@ -1370,8 +1435,17 @@ mod tests {
                 .unwrap();
             let restored = SampleSet::from_v2_bytes(&result.to_v2_bytes()).unwrap();
             for result in [result, restored] {
-                assert_eq!(result.is_sample_feasible(sample_id), Some(expected));
-                assert_eq!(result.get(sample_id).unwrap().total_violation(), 0.0625);
+                assert_eq!(
+                    result.is_sample_feasible(sample_id, Default::default()),
+                    Some(expected)
+                );
+                assert_eq!(
+                    result
+                        .get(sample_id)
+                        .unwrap()
+                        .total_violation(Default::default()),
+                    0.0625
+                );
                 assert_eq!(result.feasibility_atol(), atol);
             }
         }
@@ -1616,6 +1690,7 @@ mod tests {
         constraint_context.set_name(cid, "balance");
         constraint_context.set_description(cid, "demand-balance row");
         let removed_reason = crate::InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "relaxed for test".to_string(),
             parameters: Default::default(),
         };
@@ -1638,11 +1713,14 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(sample_set.is_sample_feasible(sample_id), Some(false));
+        assert_eq!(
+            sample_set.is_sample_feasible(sample_id, Default::default()),
+            Some(false)
+        );
         assert_eq!(sample_set.is_sample_feasible_relaxed(sample_id), Some(true));
 
         let solution = sample_set.get(sample_id).unwrap();
-        assert!(!solution.feasible());
+        assert!(!solution.feasible(Default::default()));
         assert!(solution.feasible_relaxed());
         assert!(solution.evaluated_constraints().is_inactive(&cid));
         assert_eq!(solution.variable_labels().name(var_id), Some("x"));

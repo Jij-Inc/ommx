@@ -331,6 +331,7 @@ impl<'a> OneHotPromotionPlan<'a> {
                 Some((
                     source_constraint_id,
                     InactiveConstraintMetadata {
+                        skip_feasibility_check: false,
                         reason: PROMOTION_REASON.to_string(),
                         parameters: [(
                             TARGET_ID_PARAMETER.to_string(),

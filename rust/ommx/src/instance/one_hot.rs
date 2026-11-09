@@ -73,6 +73,7 @@ impl Instance {
         self.one_hot_constraint_collection.deactivate(
             id,
             InactiveConstraintMetadata {
+                skip_feasibility_check: false,
                 reason: "ommx.Instance.convert_one_hot_to_constraint".to_string(),
                 parameters,
             },
@@ -271,7 +272,7 @@ mod tests {
                 .unwrap();
             if removed {
                 instance
-                    .deactivate_constraint(last_id, "test".to_owned(), [])
+                    .deactivate_constraint(last_id, "test".to_owned(), [], false)
                     .unwrap();
             }
             let before = instance.clone();

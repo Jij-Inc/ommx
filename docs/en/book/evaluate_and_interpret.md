@@ -13,7 +13,7 @@ A production line can make up to 100 units per hour, but only 60 in reduced mode
 
 You can apply the same check to a candidate from a solver or one supplied by hand. Passing this one check still leaves the other constraints and variable domains to check. Even a plan that satisfies them all might have a worse objective value than another feasible plan.
 
-OMMX can keep a constraint after removing it from the conditions imposed on the solver. The imposed constraints are **active**; the kept ones are **inactive**. `feasible` checks both active and inactive conditions, while `feasible_relaxed` checks active conditions. Values and violations remain available for every evaluated row. Both judgments include variable domains, such as integrality and bounds.
+OMMX can retain a constraint after removing it from the conditions imposed on the solver. The imposed constraints are called **active**; the retained ones are called **inactive**. By default, feasibility checks both active and inactive conditions. An inactive constraint marked `skip_feasibility_check=True` is still evaluated, so its value and violation remain available, but it does not affect that default judgment. You can instead check only active conditions, or explicitly include every retained condition. Variable domains, such as integrality and bounds, matter in every case.
 
 Inactive constraints also arise when a special constraint is replaced by an equivalent expression using ordinary constraints, or when a constraint is converted into a penalty term in the objective. An inactive constraint is a record of a change; its presence alone does not tell you whether that change preserves the original problem. In particular, a finite penalty weight can allow an infeasible candidate to be preferred.
 

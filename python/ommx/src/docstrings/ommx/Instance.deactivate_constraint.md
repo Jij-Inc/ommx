@@ -5,6 +5,10 @@ or its integer value. `reason` records why the condition was deactivated, and
 additional keyword arguments record string-valued reason parameters. The
 constraint keeps its ID, labels, and provenance.
 
+Set `skip_feasibility_check=True` to exclude it from default aggregate
+feasibility and total-violation queries. The row is still evaluated; explicit
+queries with the minimum `SKIP_FEASIBILITY_CHECK` include it.
+
 Inactive constraints no longer restrict the active formulation, but
 {meth}`~ommx.Instance.evaluate` still checks them. Here the relaxed formulation
 allows `x=1`, while the retained `x <= 0` condition rejects it:
@@ -23,7 +27,7 @@ allows `x=1`, while the retained `x <= 0` condition rejects it:
 >>> assert inactive.inactive_reason_parameters == {"purpose": "inspection"}
 >>> solution = instance.evaluate({x.id: 1})
 >>> assert solution.feasible_relaxed
->>> assert not solution.feasible
+>>> assert not solution.feasible()
 
 ```
 
@@ -34,7 +38,7 @@ for the corresponding special families.
 
 ```pycon
 >>> model_rows = instance.constraints_df(
-...     kind=ConstraintKind.Regular, include=("inactive_reason",), removed=True
+...     kind=ConstraintKind.Regular, include=("inactive_reason",)
 ... )
 >>> assert model_rows.loc[limit_id, "inactive_reason"] == "example.relax_limit"
 >>> result_rows = solution.constraints_df(

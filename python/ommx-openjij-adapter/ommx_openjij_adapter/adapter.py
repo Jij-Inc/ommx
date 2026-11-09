@@ -321,7 +321,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             reinitialize_state=reinitialize_state,
             seed=seed,
             diagnostics=diagnostics,
-        ).best_feasible
+        ).best_feasible()
 
     def decode_to_sampleset(self, data: oj.Response) -> SampleSet:
         with _tracer.start_as_current_span("decode"):
@@ -348,7 +348,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     def decode(self, data: oj.Response) -> Solution:
         sample_set = self.decode_to_sampleset(data)
-        return sample_set.best_feasible
+        return sample_set.best_feasible()
 
     def _sample(self) -> oj.Response:
         sampler = oj.SASampler()

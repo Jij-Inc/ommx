@@ -154,15 +154,27 @@ Declare the accepted input as `INPUT_CLASS` and implement `solve_without_prepara
 (migration-results)=
 ## 4. Evaluate candidates and read results
 
-### Read active and inactive constraints
+### Select constraints by activeness
 
-Replace `relax_constraint` / `restore_constraint` with `deactivate_constraint` / `activate_constraint`, and `RemovedConstraint` with `InactiveConstraint`. The same naming applies to indicator, OneHot, and SOS1 families. Deactivation retains the row and its reason. Every inactive row remains numerically evaluated and contributes to full feasibility.
+Replace `relax_constraint` / `restore_constraint` with `deactivate_constraint` / `activate_constraint`, and `RemovedConstraint` with `InactiveConstraint`. The same naming applies to indicator, OneHot, and SOS1 families. Deactivation retains the row and its reason; `skip_feasibility_check=False` is the default. A skipped row is still numerically evaluated, and evaluation errors still propagate.
 
 `Instance.constraints` and `ParametricInstance.constraints` now include every state. A typed ID identifies the family, not activeness: lookup returns the common `ConstraintView`, whose concrete runtime type depends on the row's current state. Use `active_constraints` for typed attached handles and `inactive_constraints` for inactive snapshots. `Solution.constraints` and `SampleSet.constraints` continue to contain all evaluated rows.
 
 For `from_components`, rename `constraints=` to `active_constraints=`, and similarly use `active_indicator_constraints=`, `active_one_hot_constraints=`, and `active_sos1_constraints=`. Initial inactive rows use the corresponding `inactive_*` arguments and `Inactive*Constraint` wrappers.
 
-`feasible` still checks active and inactive constraints; `feasible_relaxed` checks only active constraints. Both include variable domains. The v1 wire schema and its existing export restrictions are unchanged.
+The selector is an ordered minimum:
+
+| `min_activeness` | Included constraints |
+| --- | --- |
+| `ConstraintActiveness.ACTIVE` | Active only |
+| `ConstraintActiveness.INACTIVE` | Active and inactive with `skip_feasibility_check=False` |
+| `ConstraintActiveness.SKIP_FEASIBILITY_CHECK` | Every retained constraint |
+
+The order is `SKIP_FEASIBILITY_CHECK < INACTIVE < ACTIVE`; a query includes rows whose activeness is at least the minimum. It cannot include skipped rows while excluding checked inactive rows.
+
+Call `solution.feasible()` and `samples.feasible()` as methods. Feasibility, `total_violation()`, and SampleSet feasible-sample selection default to `INACTIVE`; `constraints_df` defaults to `SKIP_FEASIBILITY_CHECK`. Pass the same minimum to compare the same constraint set. `feasible_relaxed` keeps its active-only meaning. Feasibility applies each row's tolerance and checks variable domains; do not infer it from an exact-zero test of the total.
+
+The v1 wire schema is unchanged. Export to v1 fails if any retained row has `skip_feasibility_check=True`; use v2 to preserve this state. Existing restrictions on v1 exports still apply.
 
 (migration-compare-model)=
 (constraint-violation-migration)=
@@ -200,11 +212,11 @@ assert result.get_constraint_value(limit.constraint_id) == -1.0
 
 {meth}`~ommx.Solution.extract_constraints` now searches all families and returns nonnegative violations keyed by subscript tuple. Duplicate subscripts for a name are ambiguous, even across families. If you relied on the sign or slack of a regular row, use `get_constraint_value` as above. For a violation by typed ID use `constraint_violation`. When reading a single evaluated row, use `row.is_feasible(atol=result.feasibility_atol)` to apply the result's tolerance. Overall feasibility also checks variable domains. A zero total constraint violation alone is insufficient.
 
-For a regular equality, the violation is the absolute residual. For an inequality it is the excess above the limit. Special constraints have family-specific metrics. `total_violation()` adds these values, including retained inactive rows. Adding rows during transformation can therefore change the total. See {meth}`~ommx.Solution.total_violation` for definitions and tolerances. Update error handling for a missing required variable in `evaluate()` to catch `ValueError`. Partial assignments remain valid inputs to `partial_evaluate()`.
+For a regular equality, the violation is the absolute residual. For an inequality it is the excess above the limit. Special constraints have family-specific metrics. `total_violation(min_activeness=...)` adds these values for the same constraint set selected by `feasible(min_activeness=...)`. Adding rows during transformation can therefore change the total. See {meth}`~ommx.Solution.total_violation` for definitions and tolerances. Update error handling for a missing required variable in `evaluate()` to catch `ValueError`. Partial assignments remain valid inputs to `partial_evaluate()`.
 
 ### Update tables and sample aggregation
 
-Call the `*_df` methods. In particular, replace `solution.constraints_df` with `solution.constraints_df(kind=ConstraintKind.Regular)`. Constraint indexes contain family-specific ID objects. Update joins that expected integers. For a model, `removed=True` includes both active and retained inactive rows. Results already include retained inactive constraints and return snapshots on lookup. The constraint metadata tables for context, parameters, provenance, and inactivation reasons also require `kind=`.
+Call the `*_df` methods. In particular, replace `solution.constraints_df` with `solution.constraints_df(kind=ConstraintKind.Regular)`. Constraint indexes contain family-specific ID objects. Update joins that expected integers. On models and results, `constraints_df(kind=...)` includes all activeness levels by default. Pass `min_activeness=ConstraintActiveness.ACTIVE` for active rows only. Result collections return snapshots on lookup. The constraint metadata tables for context, parameters, provenance, and inactivation reasons also require `kind=`.
 
 For multiple samples, use `samples.summary` for objectives and overall feasibility, and `samples.constraints_df(kind=...)` for per-constraint results. `samples.sample_ids()` returns a set. Use `samples.sample_ids_list` when the consumer needs a list. See {class}`~ommx.Solution` and {class}`~ommx.SampleSet` for complete examples.
 
@@ -232,7 +244,7 @@ report = rows.join(owners.rename(index=id_map))
 assert report.loc[limit.constraint_id, "owner"] == "planning"
 ```
 
-Use `include=["label", "parameters"]` for a wide table with metadata. For a join with one row per key/value, use `constraint_parameters_df(kind=...)`. Transformation history is in `constraint_provenance_df(kind=...)`, with one row per provenance step. For a model, `removed=True` includes active rows as well: filter the non-null `inactive_reason` values if your old report contained only removed rows.
+Use `include=["label", "parameters"]` for a wide table with metadata. For a join with one row per key/value, use `constraint_parameters_df(kind=...)`. Transformation history is in `constraint_provenance_df(kind=...)`, with one row per provenance step. The `activeness` column is always present. Filter out `ConstraintActiveness.ACTIVE` if your old report contained only removed rows. Request `include=["inactive_reason"]` to add the reason and its parameters, or use `constraint_inactive_reasons_df(kind=...)` for a long table.
 
 ### Compare feasibility near the tolerance
 
@@ -318,7 +330,7 @@ The site-wide {ref}`general index <genindex>` also lists the detailed examples u
 | `Artifact.load_archive` | {meth}`Artifact.import_archive <ommx.artifact.Artifact.import_archive>` / {meth}`Artifact.inspect_archive <ommx.artifact.Artifact.inspect_archive>` | {ref}`migration-artifact-archives` |
 | `Constraint.id` / `set_id` / `next_constraint_id` | {meth}`add_constraint <ommx.Instance.add_constraint>` or, to preserve external constraint numbers, {meth}`from_components <ommx.Instance.from_components>` | {ref}`2 <migration-build>` |
 | `constraint_hints` / `OneHot` / `Sos1` | {class}`OneHotConstraint <ommx.OneHotConstraint>` / {class}`Sos1Constraint <ommx.Sos1Constraint>` | {ref}`2 <migration-build>` |
-| `constraints_df` / `removed_constraints_df` | {meth}`constraints_df(kind=...) <ommx.Instance.constraints_df>` / {meth}`constraints_df(kind=..., removed=True) <ommx.Instance.constraints_df>` | {ref}`migration-constraint-tables` |
+| `constraints_df` / `removed_constraints_df` | {meth}`constraints_df(kind=..., min_activeness=...) <ommx.Instance.constraints_df>`; filter `activeness` for inactive-only reports | {ref}`migration-constraint-tables` |
 | `decision_variable_analysis()` | {meth}`decision_variable_roles() <ommx.Instance.decision_variable_roles>` / {meth}`fixed_decision_variables() <ommx.Instance.fixed_decision_variables>` | {ref}`migration-constraint-metadata` |
 | `DecisionVariable.substituted_value` | {meth}`model.fixed_decision_variables() <ommx.Instance.fixed_decision_variables>` | {ref}`2 <migration-build>` |
 | `evaluated.feasible` / `sampled.feasible` | {meth}`evaluated.is_feasible(atol=...) <ommx.EvaluatedConstraint.is_feasible>` / {meth}`sampled.feasible(atol=...) <ommx.SampledConstraint.feasible>` | {ref}`4 <migration-results>` |

@@ -36,8 +36,8 @@ def test_sample_set_sense_minimize():
     assert sample_set.sense == Sense.Minimize
 
     # Check that the sense is correct when creating a Solution
-    # from a SampleSet using `.best_feasible`.
-    solution = sample_set.best_feasible
+    # from a SampleSet using `.best_feasible()`.
+    solution = sample_set.best_feasible()
     assert solution.sense == Sense.Minimize
 
 

@@ -83,6 +83,7 @@ fn instance_with_inactive_constraints(num_removed: usize) -> Instance {
     ]);
 
     let removed_reason = InactiveConstraintMetadata {
+        skip_feasibility_check: false,
         reason: "ommx.bench.log_encode.removed_regular_constraints".to_string(),
         parameters: Default::default(),
     };

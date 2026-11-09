@@ -6,6 +6,12 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### ⚠ Activenessによる制約の選択と実行可能性判定のskip ([#1372](https://github.com/Jij-Inc/ommx/issues/1372))
+
+inactive行には `skip_feasibility_check=True` を設定できます。数値評価は行いますが、既定の実行可能性判定からは除外します。`ConstraintActiveness` の順序は `SKIP_FEASIBILITY_CHECK < INACTIVE < ACTIVE` で、`min_activeness` は指定値以上の行を含めます。`feasible()` とSampleSetの実行可能サンプル選択はメソッドとして呼び出します。これらと `total_violation()` の既定値は `INACTIVE` で、`feasible_relaxed` はactive行だけを判定する意味を維持します。`total_violation()` は同じ選択対象の行を使いますが、厳密な0と実行可能性を結び付ける契約は設けません。
+
+`constraints_df` は `removed=` を `min_activeness` に置き換え、既定では全行を含み、常に `activeness` 列を返します。理由を含めるには `include=["inactive_reason"]` を指定します。v1のschemaは変更せず、skipがtrueならv1への出力は失敗します。v2ではrequired featureとともに保持します。詳細は[移行ガイド](../migration/python_sdk_v2_to_v3.md)にあります。
+
 ### ⚠ Active / inactive制約の参照と構築 ([#1376](https://github.com/Jij-Inc/ommx/pull/1376))
 
 モデルの `constraints` はactiveとinactiveの両方の行を含むようになります。activeな接続済みハンドルには `active_constraints`、保持したinactive行には `inactive_constraints` を使います。`from_components` は4種類すべての制約に対して `active_*` / `inactive_*` 入力を受け取ります。両方のモデル型でactivate/deactivateでき、接続済みハンドルは対象の行がinactiveになった後の変更を拒否します。ソルバーのAdapterはactiveな定式化を使います。
@@ -1462,6 +1468,7 @@ registry を変更し、notebook や script で扱いやすい structured report
 ```python
 from ommx.experiment import Experiment
 
+
 class TextCodec:
     media_type = "text/plain"
 
@@ -1472,6 +1479,7 @@ class TextCodec:
     @staticmethod
     def decode(data: bytes) -> str:
         return data.decode()
+
 
 with Experiment.with_temp_local_registry() as experiment:
     experiment.log_with_codec(TextCodec, "note", "created outside OMMX")

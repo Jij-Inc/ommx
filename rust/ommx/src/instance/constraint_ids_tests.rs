@@ -41,6 +41,7 @@ fn change_wire_id(wire: &mut v2::Instance, family: usize, number: u64, removed: 
                 collection.inactive_metadata.insert(
                     number,
                     v2::InactiveConstraintMetadata {
+                        skip_feasibility_check: false,
                         reason: "test".into(),
                         ..Default::default()
                     },

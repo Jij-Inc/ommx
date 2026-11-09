@@ -37,7 +37,7 @@ use std::collections::BTreeSet;
 /// >>> state = State({x.id: 1, y.id: 0})
 /// >>> solution = instance.evaluate(state)
 /// >>> assert solution.state.entries == {x.id: 1.0, y.id: 0.0}
-/// >>> assert solution.feasible
+/// >>> assert solution.feasible()
 /// >>> assert solution.objective == 1.0
 /// >>> assert solution.optimality == Optimality.Unspecified
 ///
@@ -45,7 +45,7 @@ use std::collections::BTreeSet;
 ///
 /// | Property | Meaning | Does not establish |
 /// | --- | --- | --- |
-/// | {attr}`~ommx.Solution.feasible` | Variable domains and all retained constraints are satisfied | No better candidate exists |
+/// | {meth}`~ommx.Solution.feasible` | Variable domains and constraints selected by min_activeness are satisfied | No better candidate exists |
 /// | {attr}`~ommx.Solution.objective` | The candidate's reported objective value | Feasibility or optimality |
 /// | {attr}`~ommx.Solution.optimality` | Recorded optimality status, for example supplied by an adapter | A proof performed by ``evaluate`` |
 ///
@@ -55,7 +55,7 @@ use std::collections::BTreeSet;
 ///
 /// >>> infeasible = instance.evaluate({x.id: 1, y.id: 1})
 /// >>> assert infeasible.objective == 2.0
-/// >>> assert not infeasible.feasible
+/// >>> assert not infeasible.feasible()
 ///
 /// Feasibility includes variable ``kind`` and bounds, not only constraints.
 /// Floating-point checks use the tolerance supplied to ``evaluate(..., atol=...)``;
@@ -93,7 +93,7 @@ use std::collections::BTreeSet;
 ///
 /// Evaluate a solver's returned State with the transformed Instance that was
 /// supplied to it. That Instance retains the fixed values, dependencies,
-/// inactive constraints, and output objective needed to interpret the result.
+/// removed constraints, and output objective needed to interpret the result.
 /// Passing the State directly to the original Instance may lose that context
 /// or leave required original variables unspecified.
 ///
@@ -113,9 +113,9 @@ use std::collections::BTreeSet;
 /// Fixed and dependent values are reconstructed. Otherwise irrelevant variables
 /// omitted from the candidate receive defaults; a default is not a value found
 /// by the solver. Supply such a value when it matters to reported metrics.
-/// Distinguish successful reconstruction, feasibility including inactive
+/// Distinguish successful reconstruction, feasibility including removed
 /// constraints, and transport of objective or optimality information.
-/// {attr}`~ommx.Solution.feasible_relaxed` excludes inactive constraints but
+/// {attr}`~ommx.Solution.feasible_relaxed` excludes removed constraints but
 /// still checks variable domains. Output objective and optimality transport
 /// follow {attr}`~ommx.Instance.output_objective` and
 /// {meth}`~ommx.Instance.map_active_optimality`, respectively.
@@ -138,7 +138,7 @@ impl_solution_annotations!(Solution);
 impl Solution {
     /// Unique names across all constraint families, as a set of strings.
     ///
-    /// Retained inactive constraints are included; no sample ID is needed.
+    /// Retained removed constraints are included; no sample ID is needed.
     /// The scope matches `extract_constraints`. Unnamed constraints are excluded;
     /// an explicitly empty name is included. Duplicate names appear once, even
     /// when extraction would reject duplicate subscripts.
@@ -164,9 +164,10 @@ impl Solution {
         })
     }
 
-    pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+    /// Serialize to v1; fails if any inactive constraint skips feasibility checks.
+    pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        PyBytes::new(py, &self.inner.to_v1_bytes())
+        Ok(PyBytes::new(py, &self.inner.to_v1_bytes()?))
     }
 
     pub fn to_v2_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
@@ -199,7 +200,7 @@ impl Solution {
     ///
     /// Evaluation uses the Instance's preserved output objective when one is
     /// present; otherwise it uses the active objective. Read the value together
-    /// with {attr}`~ommx.Solution.sense` and {attr}`~ommx.Solution.feasible`.
+    /// with {attr}`~ommx.Solution.sense` and {meth}`~ommx.Solution.feasible`.
     /// An infeasible candidate can have an objective value, and the value alone
     /// establishes neither feasibility nor optimality.
     #[getter]
@@ -217,22 +218,17 @@ impl Solution {
         crate::State(self.inner.state())
     }
 
-    /// Whether all retained constraints and variable domains are satisfied.
+    /// Whether selected constraints and every variable domain are satisfied.
     ///
-    /// Checks all regular and special constraints, including inactive constraints,
-    /// together with the kind and bounds of every retained variable, using
-    /// {attr}`~ommx.Solution.feasibility_atol`. This is an alias for
-    /// {attr}`~ommx.Solution.feasible_unrelaxed`; it does not establish optimality.
-    ///
-    /// Compatibility: The meaning of this property has changed from Python SDK 1.7.0.
-    /// Previously, this property represents the feasibility of the remaining constraints only,
-    /// i.e. excluding relaxed constraints.
-    /// From Python SDK 1.7.0, this property represents the feasibility of all constraints,
-    /// including relaxed constraints.
-    #[getter]
-    pub fn feasible(&self) -> bool {
+    /// min_activeness selects rows at or above the given ordered state:
+    /// SKIP_FEASIBILITY_CHECK < INACTIVE < ACTIVE. The default INACTIVE checks
+    /// active and ordinary inactive constraints; skipped rows are still evaluated
+    /// and remain inspectable. ACTIVE matches feasible_relaxed.
+    /// Uses feasibility_atol independently for each constraint and variable.
+    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE))]
+    pub fn feasible(&self, min_activeness: crate::ConstraintActiveness) -> bool {
         // The `feasible` means feasible in the unrelaxed problem
-        self.inner.feasible()
+        self.inner.feasible(min_activeness.into())
     }
 
     /// Whether active constraints and all retained variable domains are satisfied.
@@ -240,7 +236,7 @@ impl Solution {
     /// Excludes constraints retained after removal, across all constraint families.
     /// Variable kind and bound checks are still applied with
     /// {attr}`~ommx.Solution.feasibility_atol`. A result can satisfy this property
-    /// while failing {attr}`~ommx.Solution.feasible` because a inactive constraint
+    /// while failing {meth}`~ommx.Solution.feasible` because a removed constraint
     /// is violated.
     ///
     /// >>> from ommx import ConstraintKind, Instance
@@ -251,18 +247,18 @@ impl Solution {
     /// >>> instance.deactivate_constraint(required.constraint_id, "manual relaxation")
     /// >>> solution = instance.evaluate({x.id: 0})
     /// >>> assert solution.feasible_relaxed
-    /// >>> assert not solution.feasible
+    /// >>> assert not solution.feasible()
     /// >>> assert solution.constraints[required.constraint_id].violation() == 1.0
     #[getter]
     pub fn feasible_relaxed(&self) -> bool {
         self.inner.feasible_relaxed()
     }
 
-    /// Alias for {attr}`~ommx.Solution.feasible`, including inactive constraints
+    /// Alias for {meth}`~ommx.Solution.feasible`, including removed constraints
     /// and every retained variable's kind and bounds.
     #[getter]
     pub fn feasible_unrelaxed(&self) -> bool {
-        self.inner.feasible()
+        self.inner.feasible(ommx::ConstraintActiveness::Inactive)
     }
 
     /// Absolute tolerance associated with the stored evaluation and feasibility results.
@@ -338,7 +334,7 @@ impl Solution {
             .collect()
     }
 
-    /// Live mapping of all constraint families, including inactive results.
+    /// Live mapping of all constraint families, including removed results.
     ///
     /// Typed IDs select the family. Rows are fetched only when indexed, as
     /// independent snapshots with labels, provenance, removal reasons, and
@@ -450,7 +446,7 @@ impl Solution {
     /// >>> instance.objective = 3 * x[0] + 5 * x[1] + y
     /// >>> _ = instance.add_constraint(x[0] + x[1] <= 1)
     /// >>> solution = instance.evaluate({x[0].id: 1, x[1].id: 0, y.id: 2})
-    /// >>> assert solution.feasible
+    /// >>> assert solution.feasible()
     /// >>> assert solution.extract_decision_variables("x") == {(0,): 1.0, (1,): 0.0}
     /// >>> assert solution.extract_decision_variables("y") == {(): 2.0}
     /// >>> named_values = solution.extract_all_decision_variables()
@@ -542,7 +538,7 @@ impl Solution {
     ///
     /// Raises KeyError if no constraint has the requested name. Raises
     /// ValueError if matching constraints share subscripts, including across families.
-    /// Parameters and descriptions are ignored. Retained inactive constraints are
+    /// Parameters and descriptions are ignored. Retained removed constraints are
     /// included. Regular constraints return violations, not signed function values.
     /// Indicator violations account for activation, while OneHot and SOS1 use
     /// their respective metrics; see {meth}`~ommx.Solution.total_violation`.
@@ -557,7 +553,7 @@ impl Solution {
     /// Related methods on {meth}`~ommx.Instance.extract_constraints` and
     /// {meth}`~ommx.ParametricInstance.extract_constraints` return attached
     /// handles for active constraints; {meth}`~ommx.SampleSet.extract_constraints`
-    /// returns violations for a selected sample, including inactive constraints.
+    /// returns violations for a selected sample, including removed constraints.
     ///
     /// # Examples
     ///
@@ -809,10 +805,10 @@ impl Solution {
     /// {meth}`ommx.Instance.constraints_df` for column / `kind=` /
     /// `include=` semantics.
     ///
-    /// `Solution` has no `removed=` parameter (no active/inactive
-    /// distinction at the evaluated stage); reason data is gated by
+    /// min_activeness selects the same ordered states as feasibility queries,
+    /// defaulting to all rows. Reason data is gated by
     /// `"inactive_reason"` in `include=`. When the flag is on, rows for
-    /// constraints inactive before evaluation get `inactive_reason` /
+    /// constraints removed before evaluation get `inactive_reason` /
     /// `inactive_reason.{key}` columns populated; other rows have NA.
     /// The related metadata queries {meth}`~ommx.Solution.constraint_context_df`,
     /// {meth}`~ommx.Solution.constraint_parameters_df`,
@@ -828,12 +824,13 @@ impl Solution {
     /// >>> assert table.loc[capacity.constraint_id, "value"] == -2.0
     /// >>> assert table.loc[capacity.constraint_id, "violation"] == 0.0
     /// >>> assert table.loc[capacity.constraint_id, "feasible"]
-    #[pyo3(signature = (*, kind, include = None))]
+    #[pyo3(signature = (*, kind, include = None, min_activeness=crate::ConstraintActiveness::SKIP_FEASIBILITY_CHECK))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
         kind: ConstraintFamilyInput,
         include: Option<Vec<String>>,
+        min_activeness: crate::ConstraintActiveness,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
@@ -850,7 +847,7 @@ impl Solution {
                 let meta = coll.context().clone();
                 let inactive_metadata = coll.inactive_metadata();
                 let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
-                for (id, c) in coll.inner().iter() {
+                for (id, c) in coll.selected(min_activeness.into()) {
                     let m = meta.collect_for(*id);
                     let dict = crate::pandas::WithModelingContext::new(
                         (*id, c, self.inner.feasibility_atol()),
@@ -858,6 +855,12 @@ impl Solution {
                     )
                     .to_pandas_entry(py)?;
                     dict.set_item("violation", self.constraint_violation((*id).into())?)?;
+                    dict.set_item(
+                        "activeness",
+                        crate::ConstraintActiveness::from(
+                            coll.activeness(id).expect("selected constraint exists"),
+                        ),
+                    )?;
                     if flags.inactive_reason {
                         // Always emit the `inactive_reason` column when
                         // requested so its existence in the resulting
@@ -873,7 +876,7 @@ impl Solution {
                     crate::pandas::rename_id_column(&dict, id_col)?;
                     entries.push(dict.into_any());
                 }
-                crate::pandas::raw_entries_to_dataframe(py, entries, id_col)
+                crate::pandas::constraint_entries_to_dataframe(py, entries, id_col, flags)
             }
         )
     }
@@ -998,7 +1001,7 @@ impl Solution {
         )
     }
 
-    /// Inactive-constraint reasons DataFrame (long format).
+    /// Removed-constraint reasons DataFrame (long format).
     #[pyo3(signature = (*, kind))]
     pub fn constraint_inactive_reasons_df<'py>(
         &self,
@@ -1056,16 +1059,15 @@ impl Solution {
         self.clone()
     }
 
-    /// Sum the nonnegative scalar violation of every constraint, including inactive constraints.
+    /// Sum the nonnegative scalar violations selected by min_activeness.
     ///
     /// - Equality: `abs(f(x))`; inequality: `max(0, f(x))`.
     /// - Indicator: the inner violation when active, otherwise zero.
     /// - OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.
     /// - SOS1: `min_i sum_{j != i} abs(x_j)`.
     ///
-    /// Each constraint is feasible exactly when its violation is at most the
-    /// evaluation tolerance. This threshold applies to each constraint separately,
-    /// not to the total. Zero therefore implies that all constraints are feasible.
+    /// The selected constraint set is the same as for feasible(min_activeness=...).
+    /// This sum is a diagnostic metric, not a feasibility predicate.
     /// Variable bound and kind violations
     /// are not added. Values use the evaluated state after discrete-value
     /// canonicalization. Lowering need not preserve the metric: a retained
@@ -1073,13 +1075,14 @@ impl Solution {
     ///
     /// Use {meth}`constraint_violation` for individual values, also available in
     /// the `violation` column of {meth}`constraints_df` for every constraint kind.
-    pub fn total_violation(&self) -> f64 {
-        self.inner.total_violation()
+    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE))]
+    pub fn total_violation(&self, min_activeness: crate::ConstraintActiveness) -> f64 {
+        self.inner.total_violation(min_activeness.into())
     }
 
     /// Get one constraint's nonnegative scalar violation.
     ///
-    /// Uses the definitions in {meth}`total_violation`, including for inactive
+    /// Uses the definitions in {meth}`total_violation`, including for removed
     /// constraints. The ID type selects its family. Raises `KeyError` when
     /// the ID is absent from that constraint family.
     pub fn constraint_violation(

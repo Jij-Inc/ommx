@@ -262,6 +262,7 @@ impl Instance {
             .deactivate(
                 id,
                 InactiveConstraintMetadata {
+                    skip_feasibility_check: false,
                     reason: "ommx.Instance.convert_indicator_to_constraint".to_string(),
                     parameters,
                 },
@@ -730,6 +731,7 @@ mod tests {
                     (
                         constraint,
                         InactiveConstraintMetadata {
+                            skip_feasibility_check: false,
                             reason: "test".to_string(),
                             parameters: Default::default(),
                         },

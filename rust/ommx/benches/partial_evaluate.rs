@@ -30,6 +30,7 @@ fn removed_constraint_instance(num_constraints: usize) -> (Instance, ommx::v1::S
         .map(|id| (VariableID::from(id), DecisionVariable::continuous()))
         .collect();
     let removed_reason = InactiveConstraintMetadata {
+        skip_feasibility_check: false,
         reason: "ommx.bench.partial_evaluate.removed_regular_constraints".to_string(),
         parameters: Default::default(),
     };
@@ -94,6 +95,7 @@ fn mixed_regular_instance(num_inactive_constraints: usize) -> (Instance, ommx::v
     decision_variables.insert(named_var, DecisionVariable::continuous());
 
     let removed_reason = InactiveConstraintMetadata {
+        skip_feasibility_check: false,
         reason: "ommx.bench.partial_evaluate.mixed_regular_inactive_constraints".to_string(),
         parameters: Default::default(),
     };

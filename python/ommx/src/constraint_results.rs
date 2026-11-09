@@ -25,6 +25,16 @@ macro_rules! constraint_result_context {
         #[pyo3_stub_gen::derive::gen_stub_pymethods]
         #[pymethods]
         impl $name {
+            #[getter]
+            pub fn activeness(&self) -> crate::ConstraintActiveness {
+                self.2
+                    .as_ref()
+                    .map_or(ommx::ConstraintActiveness::Active, |metadata| {
+                        metadata.activeness()
+                    })
+                    .into()
+            }
+
             /// Modeling name, if supplied.
             #[getter]
             pub fn name(&self) -> Option<String> {
@@ -60,7 +70,7 @@ macro_rules! constraint_result_context {
                 crate::provenance_list(&self.1)
             }
 
-            /// Reason this constraint was inactive before evaluation, or None.
+            /// Reason this constraint was removed before evaluation, or None.
             #[getter]
             pub fn inactive_reason(&self) -> Option<String> {
                 self.2.as_ref().map(|r| r.reason.clone())

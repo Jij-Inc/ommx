@@ -27,15 +27,15 @@ referenced variables exist when inserting the constraint.
 >>> attached = instance.add_sos1_constraint(condition)
 >>> cid = attached.constraint_id
 >>> assert isinstance(cid, Sos1ConstraintID)
->>> assert instance.evaluate({x.id: 0 for x in amounts}).feasible
+>>> assert instance.evaluate({x.id: 0 for x in amounts}).feasible()
 >>> one = instance.evaluate({amounts[0].id: 7, amounts[1].id: 0, amounts[2].id: 0})
->>> assert one.feasible
+>>> assert one.feasible()
 >>> assert instance.evaluate(
 ...     {amounts[0].id: -7, amounts[1].id: 0, amounts[2].id: 0}
-... ).feasible
+... ).feasible()
 >>> assert not instance.evaluate(
 ...     {amounts[0].id: 7, amounts[1].id: 1, amounts[2].id: 0}
-... ).feasible
+... ).feasible()
 >>> rows = one.constraints_df(kind=ConstraintKind.Sos1)
 >>> assert list(rows.index) == [cid]
 >>> assert rows.loc[cid, "violation"] == 0.0

@@ -170,7 +170,8 @@ impl InstanceParameters {
     /// (smoke coverage) rather
     /// than sampled. Every generated instance contains all V3 features;
     /// feature-absent combinations are covered by the narrower spaces such
-    /// as [`Self::regular_only`].
+    /// as [`Self::regular_only`]. The inactive skip policy is independently
+    /// sampled as a boolean for each of the four constraint families.
     pub fn full_v3() -> Self {
         Self {
             space: InstanceSpace::FullV3,
@@ -314,6 +315,7 @@ fn next_constraint_id(constraints: &BTreeMap<ConstraintID, Constraint>) -> Const
 
 fn arbitrary_removed_reason() -> crate::constraint::InactiveConstraintMetadata {
     crate::constraint::InactiveConstraintMetadata {
+        skip_feasibility_check: false,
         reason: "arbitrary".to_string(),
         parameters: Default::default(),
     }
@@ -369,6 +371,7 @@ impl Arbitrary for Instance {
                         Just(full_v3_ids),
                         arbitrary_decision_variables(unique_ids, kinds.clone()),
                         Sense::arbitrary(),
+                        any::<[bool; 4]>(),
                     )
                         .prop_map(
                             move |(
@@ -378,6 +381,7 @@ impl Arbitrary for Instance {
                                 full_v3_ids,
                                 decision_variables,
                                 sense,
+                                skip_checks,
                             )| {
                                 let mut decision_variables = decision_variables;
                                 let mut variable_labels = VariableLabelStore::default();
@@ -589,6 +593,59 @@ impl Arbitrary for Instance {
                                             first_extra_id + 6,
                                         ))
                                         .expect("arbitrary removed SOS1 conversion must work");
+                                    // Sample each family's check policy independently through the owner.
+                                    for id in instance
+                                        .inactive_constraints()
+                                        .keys()
+                                        .copied()
+                                        .collect::<Vec<_>>()
+                                    {
+                                        instance
+                                            .set_constraint_skip_feasibility_check(
+                                                id,
+                                                skip_checks[0],
+                                            )
+                                            .unwrap();
+                                    }
+                                    for id in instance
+                                        .inactive_indicator_constraints()
+                                        .keys()
+                                        .copied()
+                                        .collect::<Vec<_>>()
+                                    {
+                                        instance
+                                            .set_indicator_constraint_skip_feasibility_check(
+                                                id,
+                                                skip_checks[1],
+                                            )
+                                            .unwrap();
+                                    }
+                                    for id in instance
+                                        .inactive_one_hot_constraints()
+                                        .keys()
+                                        .copied()
+                                        .collect::<Vec<_>>()
+                                    {
+                                        instance
+                                            .set_one_hot_constraint_skip_feasibility_check(
+                                                id,
+                                                skip_checks[2],
+                                            )
+                                            .unwrap();
+                                    }
+                                    for id in instance
+                                        .inactive_sos1_constraints()
+                                        .keys()
+                                        .copied()
+                                        .collect::<Vec<_>>()
+                                    {
+                                        instance
+                                            .set_sos1_constraint_skip_feasibility_check(
+                                                id,
+                                                skip_checks[3],
+                                            )
+                                            .unwrap();
+                                    }
                                     let mut parameters = v1::Parameters {
                                         entries: HashMap::new(),
                                     };

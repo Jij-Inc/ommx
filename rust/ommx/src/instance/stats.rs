@@ -276,7 +276,7 @@ mod tests {
 
         // Remove one constraint
         instance
-            .deactivate_constraint(ConstraintID::from(2), "Test removal".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(2), "Test removal".to_string(), [], false)
             .unwrap();
 
         let stats = instance.stats();
@@ -374,7 +374,7 @@ mod tests {
 
         // Remove one constraint
         instance
-            .deactivate_constraint(ConstraintID::from(3), "Not needed".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(3), "Not needed".to_string(), [], false)
             .unwrap();
 
         let stats = instance.stats();

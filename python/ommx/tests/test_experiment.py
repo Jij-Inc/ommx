@@ -907,14 +907,14 @@ def test_log_solve_logs_input_solution_and_adapter_options():
             verbose=True,
             label="baseline",
         )
-        assert solution.feasible
+        assert solution.feasible()
         solution = run.log_solve(
             DummyAdapter,
             instance,
             time_limit=2.0,
             label="pricing",
         )
-        assert solution.feasible
+        assert solution.feasible()
 
     assert DummyAdapter.seen_kwargs == [
         {
@@ -941,7 +941,7 @@ def test_log_solve_logs_input_solution_and_adapter_options():
     first_output = first_solve.output
     assert isinstance(first_output, Solution)
     assert first_output.get_user_annotation("adapter") == "dummy"
-    assert first_output.feasible
+    assert first_output.feasible()
     assert str(first_solve.adapter).endswith("DummyAdapter")
     assert isinstance(first_solve.adapter_options, dict)
     assert first_solve.adapter_options == {
@@ -1086,7 +1086,7 @@ def test_log_solve_and_sample_omit_disabled_diagnostics_keyword():
     with experiment.run() as run:
         solution = run.log_solve(LegacySolver, instance)
         sample_set = run.log_sample(LegacySampler, instance)
-        assert solution.feasible
+        assert solution.feasible()
         assert sample_set.feasible_ids() == {0}
 
 
@@ -1278,7 +1278,7 @@ def test_open_solve_manual_accessors_are_context_scoped():
             assert solve.adapter is not None
             assert solve.diagnostics is not None
             solution = solve.decode(model)
-            assert solution.feasible
+            assert solution.feasible()
 
         assert solve.solve_id == 0
         terminal_state = solve.terminal_state
@@ -1638,7 +1638,7 @@ def test_log_solve_records_adapter_diagnostics():
             store_diagnostics=True,
             time_limit=1.5,
         )
-        assert solution.feasible
+        assert solution.feasible()
 
     assert DiagnosticAdapter.seen_kwargs == [{"time_limit": 1.5}]
 
@@ -1688,7 +1688,7 @@ def test_log_solve_records_solve_without_unserializable_diagnostics():
             store_diagnostics=True,
             label="unserializable-diagnostics",
         )
-        assert solution.feasible
+        assert solution.feasible()
 
     loaded = Experiment.from_artifact(experiment.commit())
     run = loaded.runs[0]
@@ -1772,7 +1772,7 @@ def test_failed_run_preserves_completed_solves_after_adapter_exception():
         "third",
     ]
     assert all(
-        solve.output is not None and solve.output.feasible for solve in run.solves[:2]
+        solve.output is not None and solve.output.feasible() for solve in run.solves[:2]
     )
     failed_solve = run.solves[2]
     assert isinstance(failed_solve.input, Instance)

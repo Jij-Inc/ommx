@@ -588,7 +588,7 @@ mod tests {
             ],
         );
         problem
-            .deactivate_constraint(1.into(), "test".to_string(), [])
+            .deactivate_constraint(1.into(), "test".to_string(), [], false)
             .unwrap();
         let original = problem.clone();
         for invalid in [1_u64, 999] {
@@ -640,8 +640,14 @@ mod tests {
             for z in [0.0, 1.0] {
                 let state = crate::v1::State::from_iter([(0, value), (1, z)]);
                 assert_eq!(
-                    original.evaluate(&state, atol).unwrap().feasible(),
-                    problem.evaluate(&state, atol).unwrap().feasible()
+                    original
+                        .evaluate(&state, atol)
+                        .unwrap()
+                        .feasible(Default::default()),
+                    problem
+                        .evaluate(&state, atol)
+                        .unwrap()
+                        .feasible(Default::default())
                 );
             }
         }
@@ -764,7 +770,7 @@ mod tests {
             ],
         );
         problem
-            .deactivate_constraint(1.into(), "test".to_string(), [])
+            .deactivate_constraint(1.into(), "test".to_string(), [], false)
             .unwrap();
         let original = problem.clone();
         let atol = ATol::default();
@@ -779,8 +785,14 @@ mod tests {
         for value in [-1e-308, 0.0, 1e-315, 1e-307] {
             let state = crate::v1::State::from_iter([(0, value)]);
             assert_eq!(
-                original.evaluate(&state, atol).unwrap().feasible(),
-                problem.evaluate(&state, atol).unwrap().feasible()
+                original
+                    .evaluate(&state, atol)
+                    .unwrap()
+                    .feasible(Default::default()),
+                problem
+                    .evaluate(&state, atol)
+                    .unwrap()
+                    .feasible(Default::default())
             );
         }
     }
@@ -813,8 +825,14 @@ mod tests {
                 for value in [-4.0, -3.0625, -3.0, 0.0, 3.0, 3.0625, 4.0] {
                     let state = crate::v1::State::from_iter([(0, value)]);
                     assert_eq!(
-                        original.evaluate(&state, atol).unwrap().feasible(),
-                        problem.evaluate(&state, atol).unwrap().feasible()
+                        original
+                            .evaluate(&state, atol)
+                            .unwrap()
+                            .feasible(Default::default()),
+                        problem
+                            .evaluate(&state, atol)
+                            .unwrap()
+                            .feasible(Default::default())
                     );
                 }
             }
@@ -891,8 +909,14 @@ mod tests {
                 assert_eq!(bounds, Bounds::from([(0.into(), expected)]));
                 for x in [-0.125, 0.0, 0.125] {
                     let state = crate::v1::State::from_iter([(0, x), (1, 0.0)]);
-                    assert!(original.evaluate(&state, atol).unwrap().feasible());
-                    assert!(problem.evaluate(&state, atol).unwrap().feasible());
+                    assert!(original
+                        .evaluate(&state, atol)
+                        .unwrap()
+                        .feasible(Default::default()));
+                    assert!(problem
+                        .evaluate(&state, atol)
+                        .unwrap()
+                        .feasible(Default::default()));
                 }
             }
         }

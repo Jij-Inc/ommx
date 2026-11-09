@@ -37,7 +37,7 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
     assert instance.to_v2_bytes() == before
 
     solution = OMMXPySCIPOptAdapter.solve(instance)
-    assert solution.feasible
+    assert solution.feasible()
     assert instance.to_v2_bytes() == before
 
     prepared = copy.copy(instance)

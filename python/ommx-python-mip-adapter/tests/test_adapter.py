@@ -191,7 +191,7 @@ def test_rejects_special_constraints_without_mutating_input() -> None:
     assert instance.to_v2_bytes() == before
 
     solution = OMMXPythonMIPAdapter.solve(instance)
-    assert solution.feasible
+    assert solution.feasible()
     assert instance.to_v2_bytes() == before
 
 
@@ -243,17 +243,24 @@ def test_dual_mapping_preserves_typed_sparse_constraint_ids():
     assert solution.get_dual_variable(42) == pytest.approx(1)
 
 
-def test_inactive_constraints_are_evaluated_but_not_imposed():
+@pytest.mark.parametrize("skip_feasibility_check", [False, True])
+def test_inactive_constraints_are_evaluated_but_not_imposed(skip_feasibility_check):
+    from ommx import ConstraintActiveness
 
     instance = Instance.minimize()
     x = instance.new_continuous("x", lower=0, upper=2)
     instance.objective = x
     row = instance.add_constraint(x >= 1, "retained_requirement")
-    instance.deactivate_constraint(row.constraint_id, "manual")
+    instance.deactivate_constraint(
+        row.constraint_id, "manual", skip_feasibility_check=skip_feasibility_check
+    )
 
     solution = OMMXPythonMIPAdapter.solve_without_preparation(instance)
 
     assert solution.state.entries[x.id] == pytest.approx(0)
     assert solution.constraint_violation(row.constraint_id) == pytest.approx(1)
     assert solution.feasible_relaxed
-    assert not solution.feasible
+    assert solution.feasible() is skip_feasibility_check
+    assert not solution.feasible(
+        min_activeness=ConstraintActiveness.SKIP_FEASIBILITY_CHECK
+    )

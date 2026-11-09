@@ -1358,7 +1358,7 @@ mod tests {
 
         let descriptor = registry.store_layer_blob(
             media_types::v1_solution(),
-            &solution.to_v1_bytes(),
+            &solution.to_v1_bytes()?,
             HashMap::from([
                 (
                     format!("{}.solver", crate::annotation_keys::SOLUTION_NAMESPACE),

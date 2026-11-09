@@ -209,7 +209,7 @@ impl Parse for crate::v1::Solution {
         };
 
         // Validate feasibility consistency
-        let computed_feasible = solution.feasible();
+        let computed_feasible = solution.feasible(Default::default());
         let computed_feasible_relaxed = solution.feasible_relaxed();
 
         if computed_feasible != provided_feasible {
@@ -410,7 +410,7 @@ impl Parse for v2::Solution {
             annotations,
         };
 
-        let computed_feasible = solution.feasible();
+        let computed_feasible = solution.feasible(Default::default());
         if computed_feasible != self.feasible {
             return Err(ParseError::new(SolutionError::InconsistentFeasibility {
                 provided_feasible: self.feasible,
@@ -453,8 +453,34 @@ impl TryFrom<v2::Solution> for Solution {
 /// Since v1 cannot store a tolerance, feasibility flags are recomputed from
 /// the retained constraints and variable values using [`ATol::default`],
 /// which the v1 parser also uses.
-impl From<Solution> for crate::v1::Solution {
-    fn from(solution: Solution) -> Self {
+impl TryFrom<Solution> for crate::v1::Solution {
+    type Error = crate::Error;
+
+    fn try_from(solution: Solution) -> crate::Result<Self> {
+        crate::v1_io::validate_inactive_metadata(
+            solution
+                .evaluated_constraints
+                .inactive_metadata()
+                .values()
+                .chain(
+                    solution
+                        .evaluated_indicator_constraints
+                        .inactive_metadata()
+                        .values(),
+                )
+                .chain(
+                    solution
+                        .evaluated_one_hot_constraints
+                        .inactive_metadata()
+                        .values(),
+                )
+                .chain(
+                    solution
+                        .evaluated_sos1_constraints
+                        .inactive_metadata()
+                        .values(),
+                ),
+        )?;
         let Solution {
             objective,
             evaluated_constraints,
@@ -472,7 +498,8 @@ impl From<Solution> for crate::v1::Solution {
         } = solution;
         let atol = ATol::default();
         let variables_feasible = decision_variables.values().all(|dv| dv.is_valid(atol));
-        let feasible = variables_feasible && evaluated_constraints.is_feasible(atol);
+        let feasible =
+            variables_feasible && evaluated_constraints.is_feasible(atol, Default::default());
         let feasible_relaxed =
             Some(variables_feasible && evaluated_constraints.is_feasible_relaxed(atol));
         let state = {
@@ -483,7 +510,7 @@ impl From<Solution> for crate::v1::Solution {
             crate::v1::State { entries }
         };
         let evaluated_constraints: Vec<crate::v1::EvaluatedConstraint> =
-            evaluated_constraints.into();
+            evaluated_constraints.try_into()?;
         let evaluated_named_functions: Vec<crate::v1::EvaluatedNamedFunction> =
             evaluated_named_functions.into();
         let decision_variables: Vec<crate::v1::DecisionVariable> = (&decision_variables).into();
@@ -498,7 +525,7 @@ impl From<Solution> for crate::v1::Solution {
         };
 
         #[allow(deprecated)]
-        crate::v1::Solution {
+        Ok(crate::v1::Solution {
             state: Some(state),
             objective,
             evaluated_constraints,
@@ -513,7 +540,7 @@ impl From<Solution> for crate::v1::Solution {
             format_version: crate::CURRENT_FORMAT_VERSION,
             metadata,
             annotations: crate::protobuf_extension_annotations(annotations),
-        }
+        })
     }
 }
 
@@ -933,7 +960,7 @@ mod tests {
             ("org.example.owner".to_string(), "domain".to_string()),
         ]);
 
-        let restored = Solution::from_v1_bytes(&solution.to_v1_bytes()).unwrap();
+        let restored = Solution::from_v1_bytes(&solution.to_v1_bytes().unwrap()).unwrap();
 
         assert!(!restored.annotations.contains_key(&reserved_key));
         assert_eq!(
@@ -977,7 +1004,7 @@ mod tests {
         let parsed: Solution = v1_solution.parse(&()).unwrap();
 
         assert_eq!(parsed.objective(), &42.5);
-        assert!(parsed.feasible());
+        assert!(parsed.feasible(Default::default()));
         assert!(parsed.feasible_relaxed());
         assert_eq!(parsed.optimality, v1::Optimality::Optimal);
         assert_eq!(parsed.relaxation, v1::Relaxation::Unspecified);
@@ -986,7 +1013,7 @@ mod tests {
         assert_eq!(parsed.sense().unwrap(), crate::Sense::Maximize);
 
         // Test round-trip conversion
-        let v1_converted: v1::Solution = parsed.into();
+        let v1_converted: v1::Solution = parsed.try_into().unwrap();
         assert_eq!(v1_converted.objective, 42.5);
         assert!(v1_converted.feasible);
         assert_eq!(v1_converted.feasible_relaxed, Some(true));
@@ -1543,7 +1570,7 @@ mod tests {
                 .unwrap()
         };
 
-        let bytes = solution.to_v1_bytes();
+        let bytes = solution.to_v1_bytes().unwrap();
         let recovered = Solution::from_v1_bytes(&bytes).unwrap();
 
         assert_eq!(recovered.variable_labels().name(var_id), Some("x"));

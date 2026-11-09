@@ -447,6 +447,7 @@ mod tests {
                         linear!(0) + coeff!(-1.0),
                     )),
                     crate::constraint::InactiveConstraintMetadata {
+                        skip_feasibility_check: false,
                         reason: "retained source".into(),
                         ..Default::default()
                     },

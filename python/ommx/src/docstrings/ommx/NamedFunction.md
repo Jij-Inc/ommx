@@ -22,7 +22,7 @@ an additional measurement of the same candidate.
 ...     named_functions=[distance],
 ... )
 >>> solution = instance.evaluate({x[0].id: 1, x[1].id: 0})
->>> assert solution.feasible
+>>> assert solution.feasible()
 >>> assert solution.objective == 1.0
 >>> assert solution.extract_named_functions("distance") == {(): 10.0}
 >>> metrics = solution.named_functions_df()
@@ -61,14 +61,14 @@ candidate. Select one using its sample ID when querying a
 ... )
 >>> assert results.extract_named_functions("distance", 7) == {(): 10.0}
 >>> assert results.extract_named_functions("distance", 9) == {(): 3.0}
->>> assert results.best_feasible.objective == 1.0
->>> assert results.best_feasible.extract_named_functions("distance") == {(): 10.0}
+>>> assert results.best_feasible().objective == 1.0
+>>> assert results.best_feasible().extract_named_functions("distance") == {(): 10.0}
 
 ```
 
 The cheapest candidate is not the one with the shortest distance. Registering
 metrics does not change the objective-based ordering or the selection made by
-{attr}`~ommx.SampleSet.best_feasible`.
+{meth}`~ommx.SampleSet.best_feasible`.
 
 **Supply values for variables used only in reporting**
 
@@ -91,7 +91,7 @@ function is evaluated. That default is not a recovered value of the candidate.
 >>> explicit = reporting.evaluate({recorded.id: 4})
 >>> assert omitted.extract_named_functions("recorded") == {(): 2.0}
 >>> assert explicit.extract_named_functions("recorded") == {(): 4.0}
->>> assert not reporting.evaluate({recorded.id: 6}).feasible
+>>> assert not reporting.evaluate({recorded.id: 6}).feasible()
 
 ```
 

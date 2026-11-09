@@ -631,6 +631,34 @@ impl TryFrom<Instance> for v1::Instance {
     type Error = crate::Error;
 
     fn try_from(value: Instance) -> crate::Result<Self> {
+        crate::v1_io::validate_inactive_metadata(
+            value
+                .constraint_collection
+                .inactive()
+                .values()
+                .map(|(_, metadata)| metadata)
+                .chain(
+                    value
+                        .indicator_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                )
+                .chain(
+                    value
+                        .one_hot_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                )
+                .chain(
+                    value
+                        .sos1_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                ),
+        )?;
         if value.output_objective.is_some() {
             crate::bail!(
                 "ommx.v1.Instance cannot represent Instance.output_objective; use the v2 format"
@@ -638,7 +666,7 @@ impl TryFrom<Instance> for v1::Instance {
         }
         let decision_variables: Vec<v1::DecisionVariable> = (&value.decision_variables).into();
         let (constraints, inactive_constraints): (Vec<v1::Constraint>, Vec<v1::RemovedConstraint>) =
-            value.constraint_collection.into();
+            value.constraint_collection.try_into()?;
         let named_functions: Vec<v1::NamedFunction> = value.named_functions.into();
         let decision_variable_dependency = value
             .decision_variable_dependency
@@ -1044,6 +1072,34 @@ impl TryFrom<ParametricInstance> for v1::ParametricInstance {
     type Error = crate::Error;
 
     fn try_from(value: ParametricInstance) -> crate::Result<Self> {
+        crate::v1_io::validate_inactive_metadata(
+            value
+                .constraint_collection
+                .inactive()
+                .values()
+                .map(|(_, metadata)| metadata)
+                .chain(
+                    value
+                        .indicator_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                )
+                .chain(
+                    value
+                        .one_hot_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                )
+                .chain(
+                    value
+                        .sos1_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                ),
+        )?;
         if value.output_objective.is_some() {
             crate::bail!(
                 "ommx.v1.ParametricInstance cannot represent ParametricInstance.output_objective; use the v2 format"
@@ -1090,7 +1146,7 @@ impl TryFrom<ParametricInstance> for v1::ParametricInstance {
         let (v1_constraints, v1_inactive_constraints): (
             Vec<v1::Constraint>,
             Vec<v1::RemovedConstraint>,
-        ) = constraint_collection.into();
+        ) = constraint_collection.try_into()?;
         let v1_named_functions: Vec<v1::NamedFunction> = named_functions.into();
         Ok(Self {
             description,
@@ -1319,6 +1375,7 @@ mod tests {
                 ..Default::default()
             },
             InactiveConstraintMetadata {
+                skip_feasibility_check: false,
                 reason: "test".to_string(),
                 parameters: Default::default(),
             },
@@ -1836,6 +1893,7 @@ mod tests {
         let cid = ConstraintID::from(1);
         let constraint = Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(1.0)));
         let removed_reason = crate::constraint::InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -1884,6 +1942,7 @@ mod tests {
         let cid = ConstraintID::from(1);
         let constraint = Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(1.0)));
         let removed_reason = crate::constraint::InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         };

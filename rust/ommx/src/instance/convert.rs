@@ -583,7 +583,7 @@ mod with_parameters_tests {
                 ConstraintID::from(1) => (
                     c_removed,
                     crate::constraint::InactiveConstraintMetadata {
-
+                skip_feasibility_check: false,
                         reason: "test".to_string(),
                         parameters: Default::default(),
                     },
@@ -637,7 +637,7 @@ mod with_parameters_tests {
                 crate::IndicatorConstraintID::from(0) => (
                     indicator,
                     crate::constraint::InactiveConstraintMetadata {
-
+                skip_feasibility_check: false,
                         reason: "test".to_string(),
                         parameters: Default::default(),
                     },

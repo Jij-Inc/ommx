@@ -81,7 +81,7 @@ where
         .keys()
         .find(|id| !constraints.contains_key(id))
     {
-        crate::bail!({ ?id }, "Inactive metadata references unknown constraint ID {id:?}");
+        crate::bail!({ ?id }, "Removed reason references unknown constraint ID {id:?}");
     }
     Ok(())
 }
@@ -513,6 +513,17 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         &self.removed
     }
 
+    /// Look up a constraint's participation independently of its family.
+    pub fn activeness(&self, id: &T::ID) -> Option<crate::ConstraintActiveness> {
+        if self.active.contains_key(id) {
+            Some(crate::ConstraintActiveness::Active)
+        } else {
+            self.removed
+                .get(id)
+                .map(|(_, metadata)| metadata.activeness())
+        }
+    }
+
     /// All retained rows, without their membership metadata.
     pub fn iter(&self) -> impl Iterator<Item = (&T::ID, &T::Created)> {
         self.active
@@ -545,6 +556,20 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     /// Whether this collection contains no retained rows.
     pub fn is_empty(&self) -> bool {
         self.active.is_empty() && self.removed.is_empty()
+    }
+
+    /// Change default feasibility participation for an existing inactive row.
+    pub(crate) fn set_skip_feasibility_check(
+        &mut self,
+        id: T::ID,
+        skip: bool,
+    ) -> crate::Result<()> {
+        let (_, metadata) = self
+            .removed
+            .get_mut(&id)
+            .ok_or_else(|| crate::error!("Inactive constraint with ID {id:?} not found"))?;
+        metadata.skip_feasibility_check = skip;
+        Ok(())
     }
 
     /// Return whether `id` belongs to either active or inactive constraints.
@@ -834,7 +859,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         T::ID::from(next)
     }
 
-    /// Move an active constraint to the inactive set with a reason.
+    /// Move an active constraint to the inactive set with its check policy and reason.
     pub fn deactivate(
         &mut self,
         id: T::ID,
@@ -881,8 +906,15 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     }
 }
 
-impl From<ConstraintCollection<Constraint>> for (Vec<v1::Constraint>, Vec<v1::RemovedConstraint>) {
-    fn from(value: ConstraintCollection<Constraint>) -> Self {
+impl TryFrom<ConstraintCollection<Constraint>>
+    for (Vec<v1::Constraint>, Vec<v1::RemovedConstraint>)
+{
+    type Error = crate::Error;
+
+    fn try_from(value: ConstraintCollection<Constraint>) -> crate::Result<Self> {
+        crate::v1_io::validate_inactive_metadata(
+            value.inactive().values().map(|(_, metadata)| metadata),
+        )?;
         let ConstraintCollection {
             active,
             removed,
@@ -898,7 +930,7 @@ impl From<ConstraintCollection<Constraint>> for (Vec<v1::Constraint>, Vec<v1::Re
                 removed_constraint_to_v1(id, constraint, context.remove(id), reason)
             })
             .collect();
-        (active, removed)
+        Ok((active, removed))
     }
 }
 
@@ -1529,28 +1561,49 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
         self.constraints.is_empty()
     }
 
-    /// Check if all constraints are feasible.
-    pub fn is_feasible(&self, atol: ATol) -> bool {
-        self.constraints.values().all(|c| c.is_feasible(atol))
+    /// Participation of an evaluated row, or `None` for an unknown ID.
+    pub fn activeness(&self, id: &T::ID) -> Option<crate::ConstraintActiveness> {
+        self.constraints.contains_key(id).then(|| {
+            self.inactive_metadata.get(id).map_or(
+                crate::ConstraintActiveness::Active,
+                InactiveConstraintMetadata::activeness,
+            )
+        })
+    }
+
+    /// Rows at or above the requested minimum activeness.
+    pub fn selected(
+        &self,
+        min_activeness: crate::ConstraintActiveness,
+    ) -> impl Iterator<Item = (&T::ID, &T::Evaluated)> {
+        self.constraints
+            .iter()
+            .filter(move |(id, _)| self.activeness(id).is_some_and(|a| a >= min_activeness))
+    }
+
+    /// Check the selected constraints using their individual violation metrics.
+    pub fn is_feasible(&self, atol: ATol, min_activeness: crate::ConstraintActiveness) -> bool {
+        self.selected(min_activeness)
+            .all(|(_, c)| c.is_feasible(atol))
     }
 
     /// Check if all non-inactive constraints are feasible.
     pub fn is_feasible_relaxed(&self, atol: ATol) -> bool {
-        self.constraints
-            .iter()
-            .filter(|(id, _)| !self.inactive_metadata.contains_key(id))
-            .all(|(_, c)| c.is_feasible(atol))
+        self.is_feasible(atol, crate::ConstraintActiveness::Active)
     }
 }
 
-impl From<EvaluatedCollection<Constraint>> for Vec<v1::EvaluatedConstraint> {
-    fn from(value: EvaluatedCollection<Constraint>) -> Self {
+impl TryFrom<EvaluatedCollection<Constraint>> for Vec<v1::EvaluatedConstraint> {
+    type Error = crate::Error;
+
+    fn try_from(value: EvaluatedCollection<Constraint>) -> crate::Result<Self> {
+        crate::v1_io::validate_inactive_metadata(value.inactive_metadata().values())?;
         let EvaluatedCollection {
             constraints,
             mut inactive_metadata,
             mut context,
         } = value;
-        constraints
+        Ok(constraints
             .into_iter()
             .map(|(id, constraint)| {
                 let context = context.remove(id);
@@ -1559,7 +1612,7 @@ impl From<EvaluatedCollection<Constraint>> for Vec<v1::EvaluatedConstraint> {
                     None => evaluated_constraint_to_v1_unremoved(id, constraint, context),
                 }
             })
-            .collect()
+            .collect())
     }
 }
 
@@ -1739,33 +1792,55 @@ impl<T: ConstraintType> SampledCollection<T> {
         self.constraints.is_empty()
     }
 
-    /// Check if all constraints are feasible for a given sample.
-    pub fn is_feasible_for(&self, sample_id: SampleID, atol: ATol) -> bool {
+    /// Participation of a sampled row, or `None` for an unknown ID.
+    pub fn activeness(&self, id: &T::ID) -> Option<crate::ConstraintActiveness> {
+        self.constraints.contains_key(id).then(|| {
+            self.inactive_metadata.get(id).map_or(
+                crate::ConstraintActiveness::Active,
+                InactiveConstraintMetadata::activeness,
+            )
+        })
+    }
+
+    /// Rows at or above the requested minimum activeness.
+    pub fn selected(
+        &self,
+        min_activeness: crate::ConstraintActiveness,
+    ) -> impl Iterator<Item = (&T::ID, &T::Sampled)> {
         self.constraints
-            .values()
-            .all(|c| c.is_feasible_for(sample_id, atol).unwrap_or(false))
+            .iter()
+            .filter(move |(id, _)| self.activeness(id).is_some_and(|a| a >= min_activeness))
+    }
+
+    /// Check selected constraints for a sample.
+    pub fn is_feasible_for(
+        &self,
+        sample_id: SampleID,
+        atol: ATol,
+        min_activeness: crate::ConstraintActiveness,
+    ) -> bool {
+        self.selected(min_activeness)
+            .all(|(_, c)| c.is_feasible_for(sample_id, atol).unwrap_or(false))
     }
 
     /// Check if all non-inactive constraints are feasible for a given sample.
     pub fn is_feasible_relaxed_for(&self, sample_id: SampleID, atol: ATol) -> bool {
-        self.constraints
-            .iter()
-            .filter(|(id, _)| !self.inactive_metadata.contains_key(id))
-            .all(|(_, c)| c.is_feasible_for(sample_id, atol).unwrap_or(false))
+        self.is_feasible_for(sample_id, atol, crate::ConstraintActiveness::Active)
     }
 }
 
 impl SampledCollection<Constraint> {
     /// SampleSet supplies the v1 parser's default tolerance so row feasibility
     /// maps use the same conditions as the serialized root maps.
-    pub(crate) fn into_v1(self, atol: ATol) -> Vec<v1::SampledConstraint> {
+    pub(crate) fn into_v1(self, atol: ATol) -> crate::Result<Vec<v1::SampledConstraint>> {
+        crate::v1_io::validate_inactive_metadata(self.inactive_metadata().values())?;
         let value = self;
         let SampledCollection {
             constraints,
             mut inactive_metadata,
             mut context,
         } = value;
-        constraints
+        Ok(constraints
             .into_iter()
             .map(|(id, constraint)| {
                 let context = context.remove(id);
@@ -1774,7 +1849,7 @@ impl SampledCollection<Constraint> {
                     None => sampled_constraint_to_v1_unremoved(id, constraint, context, atol),
                 }
             })
-            .collect()
+            .collect())
     }
 }
 
@@ -1865,6 +1940,7 @@ mod tests {
         InactiveConstraintMetadata {
             reason: "test".to_string(),
             parameters: Default::default(),
+            skip_feasibility_check: false,
         }
     }
 
@@ -2344,7 +2420,7 @@ mod tests {
             EvaluatedCollection::<Constraint>::new(constraints, inactive_metadata).unwrap_err();
         assert!(err
             .to_string()
-            .contains("Inactive metadata references unknown constraint ID"));
+            .contains("Removed reason references unknown constraint ID"));
     }
 
     #[test]
@@ -2355,7 +2431,7 @@ mod tests {
         let err = SampledCollection::<Constraint>::new(constraints, inactive_metadata).unwrap_err();
         assert!(err
             .to_string()
-            .contains("Inactive metadata references unknown constraint ID"));
+            .contains("Removed reason references unknown constraint ID"));
     }
 
     #[test]
@@ -2449,6 +2525,7 @@ mod tests {
                 crate::v2::InactiveConstraintMetadata {
                     reason: "test".to_string(),
                     parameters: Default::default(),
+                    skip_feasibility_check: false,
                 },
             )]),
             ..Default::default()
@@ -2471,6 +2548,7 @@ mod tests {
                 crate::v2::InactiveConstraintMetadata {
                     reason: "test".to_string(),
                     parameters: Default::default(),
+                    skip_feasibility_check: false,
                 },
             )]),
             ..Default::default()

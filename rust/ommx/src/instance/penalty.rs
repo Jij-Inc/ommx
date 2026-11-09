@@ -181,6 +181,7 @@ impl Instance {
             objective.try_add_assign_in_place(penalty_term)?;
 
             let removed_reason = crate::constraint::InactiveConstraintMetadata {
+                skip_feasibility_check: false,
                 reason: "ommx.Instance.penalty_method".to_string(),
                 parameters: {
                     let mut map = fnv::FnvHashMap::default();
@@ -430,6 +431,7 @@ impl Instance {
             quad_sum.try_add_assign_in_place(squared)?;
 
             let removed_reason = crate::constraint::InactiveConstraintMetadata {
+                skip_feasibility_check: false,
                 reason: "ommx.Instance.uniform_penalty_method".to_string(),
                 parameters: Default::default(),
             };
@@ -668,6 +670,7 @@ impl Instance {
                 (
                     id,
                     crate::constraint::InactiveConstraintMetadata {
+                        skip_feasibility_check: false,
                         reason: reason.clone(),
                         parameters: Default::default(),
                     },
@@ -1016,6 +1019,7 @@ mod tests {
                 ConstraintID::from(1),
                 "pre_existing".to_string(),
                 std::iter::empty::<(String, String)>(),
+                false,
             )
             .unwrap();
 
@@ -1092,6 +1096,7 @@ mod tests {
                 ConstraintID::from(1),
                 "pre_existing".to_string(),
                 std::iter::empty::<(String, String)>(),
+                false,
             )
             .unwrap();
 
@@ -1203,7 +1208,7 @@ mod tests {
                 active_objective,
             );
             let solution = instance.evaluate(&state, ATol::default()).unwrap();
-            assert!(solution.feasible());
+            assert!(solution.feasible(Default::default()));
             assert_eq!(*solution.objective(), value);
         }
     }
@@ -1544,7 +1549,7 @@ mod tests {
         ] {
             let mut instance = create_test_instance_with_special_constraints(&[kind]);
             instance
-                .deactivate_constraint(ConstraintID::from(1), "test".to_owned(), [])
+                .deactivate_constraint(ConstraintID::from(1), "test".to_owned(), [], false)
                 .unwrap();
             assert!(instance.active_constraints().is_empty());
             let before = instance.clone();
@@ -1599,6 +1604,7 @@ mod tests {
                 already_removed_regular_id,
                 "pre_existing".to_string(),
                 std::iter::empty::<(String, String)>(),
+                false,
             )
             .unwrap();
 

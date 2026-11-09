@@ -639,6 +639,7 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
                         (
                             id,
                             InactiveConstraintMetadata {
+                                skip_feasibility_check: false,
                                 reason: "promoted validated SOS1 Big-M formulation".to_string(),
                                 parameters: [(
                                     "sos1_constraint_id".to_string(),
@@ -2324,7 +2325,7 @@ mod tests {
                             atol,
                         )
                         .unwrap()
-                        .feasible()
+                        .feasible(Default::default())
                 });
                 let promoted_solution = promoted
                     .evaluate(
@@ -2339,7 +2340,7 @@ mod tests {
                     "projected feasibility differs at reused={reused_member}, fresh={fresh_member}"
                 );
                 assert_eq!(
-                    promoted_solution.feasible(),
+                    promoted_solution.feasible(Default::default()),
                     promoted_solution.feasible_relaxed(),
                     "canonical selector does not satisfy the claimed removed rows at reused={reused_member}, fresh={fresh_member}"
                 );
@@ -2397,7 +2398,7 @@ mod tests {
             .get(&upper_row_id())
             .unwrap()
             .is_feasible(atol));
-        assert!(on_boundary.feasible());
+        assert!(on_boundary.feasible(Default::default()));
         assert!(on_boundary.feasible_relaxed());
 
         let sample_id = crate::SampleID::from(0);
@@ -2416,7 +2417,10 @@ mod tests {
         let sampled = &sample_set.sos1_constraints()[&promotion];
         assert!(sampled.is_feasible_for(sample_id, atol).unwrap());
         assert_eq!(sampled.stage.active_variable[&sample_id], None);
-        assert_eq!(sample_set.is_sample_feasible(sample_id), Some(true));
+        assert_eq!(
+            sample_set.is_sample_feasible(sample_id, Default::default()),
+            Some(true)
+        );
         assert_eq!(sample_set.is_sample_feasible_relaxed(sample_id), Some(true));
 
         let negative_boundary = instance
@@ -2440,7 +2444,7 @@ mod tests {
             .get(&lower_row_id())
             .unwrap()
             .is_feasible(atol));
-        assert!(negative_boundary.feasible());
+        assert!(negative_boundary.feasible(Default::default()));
         assert!(negative_boundary.feasible_relaxed());
     }
 
@@ -2475,8 +2479,8 @@ mod tests {
                 )
                 .unwrap();
 
-            assert!(original_solution.feasible());
-            assert!(promoted_solution.feasible());
+            assert!(original_solution.feasible(Default::default()));
+            assert!(promoted_solution.feasible(Default::default()));
             assert!(promoted_solution.feasible_relaxed());
             assert_eq!(
                 promoted_solution.state().entries[&selector_id().into_inner()],
@@ -2603,8 +2607,8 @@ mod tests {
                     let after = instance
                         .evaluate(&crate::v1::State::from_iter([(1, value)]), ATol::default())
                         .unwrap();
-                    assert!(before.feasible());
-                    assert!(after.feasible());
+                    assert!(before.feasible(Default::default()));
+                    assert!(after.feasible(Default::default()));
                     assert_eq!(before.objective(), after.objective());
                 }
             }
@@ -2704,7 +2708,7 @@ mod tests {
         assert!(!before.feasible_relaxed());
         assert!(after.feasible_relaxed());
         // Retained removed rows still expose their own violations.
-        assert!(!after.feasible());
+        assert!(!after.feasible(Default::default()));
     }
 
     #[test]
@@ -2908,7 +2912,7 @@ mod tests {
 
         let (mut removed, request) = mixed_instance();
         removed
-            .deactivate_constraint(upper_row_id(), "test".to_string(), [])
+            .deactivate_constraint(upper_row_id(), "test".to_string(), [], false)
             .unwrap();
         assert_atomic_rejection(removed, &request, "is not active");
     }
@@ -3175,7 +3179,7 @@ mod tests {
             )
             .unwrap();
         instance
-            .deactivate_constraint(regular_id, "test".to_string(), [])
+            .deactivate_constraint(regular_id, "test".to_string(), [], false)
             .unwrap();
 
         let indicator_id = instance
@@ -3502,7 +3506,7 @@ mod tests {
 
         let (mut instance, _) = mixed_instance();
         instance
-            .deactivate_constraint(upper_row_id(), "test".to_string(), [])
+            .deactivate_constraint(upper_row_id(), "test".to_string(), [], false)
             .unwrap();
         assert_v1_hint_atomic_rejection(instance, &mixed_v1_hint(), "is not active");
     }
@@ -3790,12 +3794,12 @@ mod tests {
                                 ATol::default(),
                             )
                             .unwrap()
-                            .feasible()
+                            .feasible(Default::default())
                     });
                     let promoted = instance
                         .evaluate(&crate::v1::State::from_iter([(1, value)]), ATol::default())
                         .unwrap();
-                    assert_eq!(promoted.feasible(), original_feasible);
+                    assert_eq!(promoted.feasible(Default::default()), original_feasible);
                 }
             }
         }
@@ -3948,6 +3952,7 @@ mod tests {
 
     fn test_removed_reason() -> InactiveConstraintMetadata {
         InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         }

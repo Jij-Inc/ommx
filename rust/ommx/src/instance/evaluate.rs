@@ -948,6 +948,7 @@ impl Instance {
         let mut changed = true;
 
         let propagation_reason = InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "ommx.Instance.partial_evaluate.unit_propagation".to_string(),
             parameters: Default::default(),
         };
@@ -1733,6 +1734,7 @@ mod tests {
     fn removed_only_instance(fixed_values: BTreeMap<VariableID, f64>) -> (Instance, ConstraintID) {
         let constraint_id = ConstraintID::from(1);
         let removed_reason = InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -1978,6 +1980,7 @@ mod tests {
         let remaining_constraint_id = ConstraintID::from(2);
         let removed_constraint_id = ConstraintID::from(10);
         let removed_reason = InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -2043,6 +2046,7 @@ mod tests {
                             ((linear!(1) + linear!(2)).unwrap() + coeff!(-1.0)).unwrap(),
                         )),
                         InactiveConstraintMetadata {
+                            skip_feasibility_check: false,
                             reason: "source".into(),
                             ..Default::default()
                         },
@@ -2238,6 +2242,7 @@ mod tests {
         let overlapping_named_function_id = NamedFunctionID::from(1);
         let unchanged_named_function_id = NamedFunctionID::from(2);
         let removed_reason = InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -2333,6 +2338,7 @@ mod tests {
     #[test]
     fn test_partial_evaluate_regular_plan_error_leaves_original_unchanged() {
         let removed_reason = InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -2383,6 +2389,7 @@ mod tests {
         use crate::{DecisionVariable, OneHotConstraint, OneHotConstraintID};
 
         let removed_reason = InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -2516,6 +2523,7 @@ mod tests {
             (VariableID::from(10), crate::DecisionVariable::continuous()),
         ]);
         let removed_reason = InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -3312,7 +3320,7 @@ mod tests {
                 .evaluated_value,
             0.0
         );
-        assert!(direct.feasible_constraints());
+        assert!(direct.feasible_constraints(Default::default()));
 
         let mut rewritten = instance.clone();
         rewritten.partial_evaluate(&state, atol).unwrap();
@@ -3335,7 +3343,7 @@ mod tests {
                 .evaluated_value,
             0.0
         );
-        assert!(rewritten_solution.feasible_constraints());
+        assert!(rewritten_solution.feasible_constraints(Default::default()));
     }
 
     #[test]

@@ -26,7 +26,7 @@ This complete example requires the HiGHS Adapter:
 ...             solve.log_adapter_option("time_limit", 10.0)
 ...             _ = model.run()
 ...             solution = solve.decode(model)
-...             assert solution.feasible
+...             assert solution.feasible()
 >>> recorded = experiment.runs[0].solves[0]
 >>> recorded.output.objective
 0.0

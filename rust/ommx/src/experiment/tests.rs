@@ -489,7 +489,7 @@ fn no_feasible_sample_set() -> (Instance, crate::SampleSet) {
     let sample_set = instance
         .evaluate_samples(&samples, crate::ATol::default())
         .unwrap();
-    assert!(sample_set.best_feasible().is_err());
+    assert!(sample_set.best_feasible(Default::default()).is_err());
     (instance, sample_set)
 }
 
@@ -1731,7 +1731,7 @@ fn log_finished_sample_preserves_sample_set_without_feasible_samples() {
         assert_eq!(sampling.sampling_id(), 0);
         assert_eq!(sampling.status(), &SamplingStatus::Finished);
         let output = sampling.output_sample_set()?.unwrap();
-        assert!(output.best_feasible().is_err());
+        assert!(output.best_feasible(Default::default()).is_err());
         assert_eq!(output.to_v2_bytes(), sample_set.to_v2_bytes());
         Ok(())
     });

@@ -254,7 +254,9 @@ impl Parse for crate::v1::SampleSet {
         // Check the consistency of feasibility maps from the original v1 data
         for (sample_id_u64, provided_feasible) in self.feasible {
             let sample_id = crate::SampleID::from(sample_id_u64);
-            if let Some(computed_feasible) = sample_set.is_sample_feasible(sample_id) {
+            if let Some(computed_feasible) =
+                sample_set.is_sample_feasible(sample_id, Default::default())
+            {
                 if provided_feasible != computed_feasible {
                     return Err(
                         ParseError::new(crate::SampleSetError::InconsistentFeasibility {
@@ -614,8 +616,24 @@ impl TryFrom<v2::SampleSet> for SampleSet {
 /// Since v1 cannot store a tolerance, row and root feasibility maps are
 /// recomputed from the retained constraints and variable values using
 /// [`ATol::default`], which the v1 parser also uses.
-impl From<SampleSet> for crate::v1::SampleSet {
-    fn from(sample_set: SampleSet) -> Self {
+impl TryFrom<SampleSet> for crate::v1::SampleSet {
+    type Error = crate::Error;
+
+    fn try_from(sample_set: SampleSet) -> crate::Result<Self> {
+        crate::v1_io::validate_inactive_metadata(
+            sample_set
+                .constraints
+                .inactive_metadata()
+                .values()
+                .chain(
+                    sample_set
+                        .indicator_constraints
+                        .inactive_metadata()
+                        .values(),
+                )
+                .chain(sample_set.one_hot_constraints.inactive_metadata().values())
+                .chain(sample_set.sos1_constraints.inactive_metadata().values()),
+        )?;
         let SampleSet {
             decision_variables,
             objectives,
@@ -644,7 +662,7 @@ impl From<SampleSet> for crate::v1::SampleSet {
         let decision_variables: Vec<crate::v1::SampledDecisionVariable> =
             (&decision_variables).into();
         let objectives = Some(objectives.into());
-        let constraints: Vec<crate::v1::SampledConstraint> = constraints.into_v1(atol);
+        let constraints: Vec<crate::v1::SampledConstraint> = constraints.into_v1(atol)?;
         let named_functions: Vec<crate::v1::SampledNamedFunction> = named_functions.into();
         let sense = sense.into();
         let feasible = feasible
@@ -656,7 +674,7 @@ impl From<SampleSet> for crate::v1::SampleSet {
             .map(|(sample_id, value)| (sample_id.into_inner(), value))
             .collect();
 
-        crate::v1::SampleSet {
+        Ok(crate::v1::SampleSet {
             decision_variables,
             objectives,
             constraints,
@@ -668,7 +686,7 @@ impl From<SampleSet> for crate::v1::SampleSet {
             metadata,
             annotations: crate::protobuf_extension_annotations(annotations),
             ..Default::default()
-        }
+        })
     }
 }
 
@@ -1344,7 +1362,7 @@ mod tests {
             ("org.example.owner".to_string(), "domain".to_string()),
         ]);
 
-        let restored = SampleSet::from_v1_bytes(&sample_set.to_v1_bytes()).unwrap();
+        let restored = SampleSet::from_v1_bytes(&sample_set.to_v1_bytes().unwrap()).unwrap();
 
         assert!(!restored.annotations.contains_key(&reserved_key));
         assert_eq!(
@@ -1411,9 +1429,15 @@ mod tests {
         let sample_id_2 = crate::SampleID::from(2);
 
         // Since there are no constraints, all samples should be feasible
-        assert!(parsed.is_sample_feasible(sample_id_0).unwrap());
-        assert!(parsed.is_sample_feasible(sample_id_1).unwrap());
-        assert!(parsed.is_sample_feasible(sample_id_2).unwrap());
+        assert!(parsed
+            .is_sample_feasible(sample_id_0, Default::default())
+            .unwrap());
+        assert!(parsed
+            .is_sample_feasible(sample_id_1, Default::default())
+            .unwrap());
+        assert!(parsed
+            .is_sample_feasible(sample_id_2, Default::default())
+            .unwrap());
 
         assert!(parsed.is_sample_feasible_relaxed(sample_id_0).unwrap());
         assert!(parsed.is_sample_feasible_relaxed(sample_id_1).unwrap());
@@ -1421,13 +1445,15 @@ mod tests {
 
         // Test error handling for unknown sample IDs
         let unknown_sample_id = crate::SampleID::from(999);
-        assert!(parsed.is_sample_feasible(unknown_sample_id).is_none());
+        assert!(parsed
+            .is_sample_feasible(unknown_sample_id, Default::default())
+            .is_none());
         assert!(parsed
             .is_sample_feasible_relaxed(unknown_sample_id)
             .is_none());
 
         // Test round-trip conversion
-        let v1_converted: v1::SampleSet = parsed.into();
+        let v1_converted: v1::SampleSet = parsed.try_into().unwrap();
         assert_eq!(v1_converted.sense, v1::instance::Sense::Minimize as i32);
         assert_eq!(v1_converted.decision_variables.len(), 1);
     }
@@ -1749,7 +1775,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let bytes = sample_set.to_v1_bytes();
+        let bytes = sample_set.to_v1_bytes().unwrap();
         let recovered = SampleSet::from_v1_bytes(&bytes).unwrap();
 
         assert_eq!(recovered.variable_labels().name(var_id), Some("x"));

@@ -87,7 +87,12 @@ fn test_removed_constraint_variable_filtering() {
 
     // Relax the constraint to create a removed constraint
     instance
-        .deactivate_constraint(ConstraintID::from(100), "test_removal".to_string(), [])
+        .deactivate_constraint(
+            ConstraintID::from(100),
+            "test_removal".to_string(),
+            [],
+            false,
+        )
         .unwrap();
 
     // Write to MPS and read back
@@ -143,7 +148,7 @@ fn test_removed_constraint_information_loss() {
 
     // Relax one constraint to create a removed constraint
     instance
-        .deactivate_constraint(ConstraintID::from(1), "redundant".to_string(), [])
+        .deactivate_constraint(ConstraintID::from(1), "redundant".to_string(), [], false)
         .unwrap();
 
     // Write to MPS and read back

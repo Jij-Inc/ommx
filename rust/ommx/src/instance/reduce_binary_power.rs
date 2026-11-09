@@ -301,6 +301,7 @@ mod tests {
     fn instance_with_expression_owners(functions: [Function; 5]) -> Instance {
         let [objective, regular, indicator, named, dependency] = functions;
         let reason = crate::constraint::InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "retained for diagnostics".into(),
             ..Default::default()
         };

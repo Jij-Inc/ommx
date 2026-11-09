@@ -869,6 +869,7 @@ mod tests {
         let removed_constraint = Constraint::equal_to_zero(Function::Zero);
         let _ = constraint_id;
         let removed_reason = crate::constraint::InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -1101,6 +1102,7 @@ mod tests {
         let removed_constraint =
             Constraint::equal_to_zero(Function::from(linear!(999) + coeff!(1.0)));
         let removed_reason = crate::constraint::InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         };

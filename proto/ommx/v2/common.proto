@@ -33,6 +33,8 @@ enum Feature {
   FEATURE_OUTPUT_OBJECTIVE = 4;
   // The payload contains a decision variable with an explicitly enumerated finite domain.
   FEATURE_DECISION_VARIABLE_FINITE_DOMAIN = 5;
+  // The payload contains an inactive constraint excluded from default feasibility.
+  FEATURE_CONSTRAINT_SKIP_FEASIBILITY_CHECK = 6;
 }
 
 // Human-authored modeling notation for one table or collection row.
