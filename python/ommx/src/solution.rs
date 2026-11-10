@@ -551,8 +551,8 @@ impl Solution {
     /// subscripts, distinguish them through typed-ID lookup in
     /// {attr}`~ommx.Solution.constraints` instead of name extraction.
     ///
-    /// Related methods on {meth}`~ommx.Instance.extract_constraints` and
-    /// {meth}`~ommx.ParametricInstance.extract_constraints` return attached
+    /// Related methods on {meth}`~ommx.Instance.extract_active_constraints` and
+    /// {meth}`~ommx.ParametricInstance.extract_active_constraints` return attached
     /// handles for active constraints; {meth}`~ommx.SampleSet.extract_constraints`
     /// returns violations for a selected sample, including inactive constraints.
     ///
@@ -578,9 +578,9 @@ impl Solution {
     /// >>> named = Instance.minimize()
     /// >>> x = named.new_binary("x")
     /// >>> capacity = named.add_constraint(x <= 2, "capacity", subscripts=[0])
-    /// >>> assert named.constraint_names == {"capacity"}
-    /// >>> assert named.extract_constraints("capacity")[(0,)] == capacity
-    /// >>> assert named.as_parametric_instance().extract_constraints("capacity")[(0,)].name == "capacity"
+    /// >>> assert named.active_constraint_names == {"capacity"}
+    /// >>> assert named.extract_active_constraints("capacity")[(0,)] == capacity
+    /// >>> assert named.as_parametric_instance().extract_active_constraints("capacity")[(0,)].name == "capacity"
     /// >>> solution = named.evaluate({x.id: 0})
     /// >>> assert solution.extract_constraints("capacity") == {(0,): 0.0}
     /// >>> assert solution.get_constraint_value(capacity.constraint_id) == -2.0

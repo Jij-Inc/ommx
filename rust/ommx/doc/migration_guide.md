@@ -83,6 +83,8 @@ including references retained in inactive constraints and named functions.
 
 Constraint membership is now explicit: `active_constraints()` returns the solver-facing rows, `inactive_constraints()` returns retained rows, and `constraints()` returns the complete regular-constraint collection. The corresponding special-family accessors use the same prefixes. Builders take `active_constraints(...)` and `inactive_constraints(...)`, with equivalent methods for each family.
 
+On `Instance` and `ParametricInstance`, rename `constraint_names()` to `active_constraint_names()`. This query still selects only active constraints, and its return type is unchanged. `Solution` and `SampleSet` keep `constraint_names()`.
+
 Replace `relax_*` / `restore_*` with `deactivate_*` / `activate_*`. Inactive membership uses `InactiveConstraintMetadata { reason, parameters, skip_feasibility_check }`. Pass `false` as the final argument to `deactivate_constraint(id, reason, parameters, false)` to retain the previous feasibility behavior. A row with `skip_feasibility_check: true` is still numerically evaluated; only its participation in aggregate queries changes.
 
 Each row has exactly one `ConstraintActiveness` state: `Active`, `InactiveChecked` (`skip_feasibility_check: false`), or `InactiveSkipped` (`skip_feasibility_check: true`). Inactive membership includes both `InactiveChecked` and `InactiveSkipped`; `inactive_constraints()` returns both.

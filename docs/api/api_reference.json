@@ -18183,7 +18183,7 @@
               "deprecated": null
             },
             {
-              "name": "extract_constraints",
+              "name": "extract_active_constraints",
               "doc": "Extract active constraints of every family by name, keyed by subscript tuples.\n\nValues are attached handles, just as in `active_constraints`: edits update this\nmodel. The returned dictionary snapshots the matching keys; it does not\ntrack later label or membership changes. Inactive constraints are excluded.\nParameters and descriptions do not participate in matching.\n\nRaises KeyError if no active constraint has this name, and ValueError if\nmatching constraints share subscripts, including across different families.\nUse typed-ID lookup in `constraints` to distinguish ambiguous labels.",
               "signatures": [
                 {
@@ -21577,6 +21577,23 @@
               "is_readonly": true
             },
             {
+              "name": "active_constraint_names",
+              "doc": "Unique names across all constraint families, as a set of strings.\n\nOnly active constraints are included.\nThe scope matches `extract_active_constraints`. Unnamed constraints are excluded;\nan explicitly empty name is included. Duplicate names appear once, even\nwhen extraction would reject duplicate subscripts.\nEach access returns a fresh set; editing it does not change this owner.",
+              "type_": {
+                "display": "set[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "active_constraints",
               "doc": "Live mapping of active constraints, with attached rows for each family.",
               "type_": {
@@ -21674,23 +21691,6 @@
                 ]
               },
               "is_property": true
-            },
-            {
-              "name": "constraint_names",
-              "doc": "Unique names across all constraint families, as a set of strings.\n\nOnly active constraints are included.\nThe scope matches `extract_constraints`. Unnamed constraints are excluded;\nan explicitly empty name is included. Duplicate names appear once, even\nwhen extraction would reject duplicate subscripts.\nEach access returns a fresh set; editing it does not change this owner.",
-              "type_": {
-                "display": "set[str]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
             },
             {
               "name": "constraints",
@@ -28128,7 +28128,7 @@
               "deprecated": null
             },
             {
-              "name": "extract_constraints",
+              "name": "extract_active_constraints",
               "doc": "Extract active constraints of every family by name, keyed by subscript tuples.\n\nValues are attached handles, just as in `active_constraints`: edits update this\nmodel. The returned dictionary snapshots the matching keys; it does not\ntrack later label or membership changes. Inactive constraints are excluded.\nParameters and descriptions do not participate in matching.\n\nRaises KeyError if no active constraint has this name, and ValueError if\nmatching constraints share subscripts, including across different families.\nUse typed-ID lookup in `constraints` to distinguish ambiguous labels.",
               "signatures": [
                 {
@@ -29726,6 +29726,23 @@
           ],
           "attributes": [
             {
+              "name": "active_constraint_names",
+              "doc": "Unique names across all constraint families, as a set of strings.\n\nOnly active constraints are included.\nThe scope matches `extract_active_constraints`. Unnamed constraints are excluded;\nan explicitly empty name is included. Duplicate names appear once, even\nwhen extraction would reject duplicate subscripts.\nEach access returns a fresh set; editing it does not change this owner.",
+              "type_": {
+                "display": "set[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "active_constraints",
               "doc": "Live mapping of active constraints, with attached rows for each family.",
               "type_": {
@@ -29778,23 +29795,6 @@
                 ]
               },
               "is_property": true
-            },
-            {
-              "name": "constraint_names",
-              "doc": "Unique names across all constraint families, as a set of strings.\n\nOnly active constraints are included.\nThe scope matches `extract_constraints`. Unnamed constraints are excluded;\nan explicitly empty name is included. Duplicate names appear once, even\nwhen extraction would reject duplicate subscripts.\nEach access returns a fresh set; editing it does not change this owner.",
-              "type_": {
-                "display": "set[str]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
             },
             {
               "name": "constraints",
@@ -38193,7 +38193,7 @@
             },
             {
               "name": "extract_constraints",
-              "doc": "Extract nonnegative violations of all constraint families by name, keyed by subscript tuples.\n\nDiscover available names with {attr}`~ommx.Solution.constraint_names`.\nMatching uses the name and subscripts only; a scalar constraint has the\nkey ``()``. The returned dictionary captures values at extraction time.\n\nRaises KeyError if no constraint has the requested name. Raises\nValueError if matching constraints share subscripts, including across families.\nParameters and descriptions are ignored. Retained inactive constraints are\nincluded. Regular constraints return violations, not signed function values.\nIndicator violations account for activation, while OneHot and SOS1 use\ntheir respective metrics; see {meth}`~ommx.Solution.total_violation`.\nUse {meth}`~ommx.Solution.get_constraint_value` or the regular row's\n``evaluated_value`` when the signed value is needed.\n\nA transformation may copy a source constraint's labels onto generated\nconstraints. If both survive in the result with the same name and\nsubscripts, distinguish them through typed-ID lookup in\n{attr}`~ommx.Solution.constraints` instead of name extraction.\n\nRelated methods on {meth}`~ommx.Instance.extract_constraints` and\n{meth}`~ommx.ParametricInstance.extract_constraints` return attached\nhandles for active constraints; {meth}`~ommx.SampleSet.extract_constraints`\nreturns violations for a selected sample, including inactive constraints.\n\n# Examples\n\n>>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> c0 = (x[0] + x[1] == 1).set_name(\"c\").add_subscripts([0])\n>>> c1 = (x[1] + x[2] == 1).set_name(\"c\").add_subscripts([1])\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     active_constraints={0: c0, 1: c1},\n...     sense=Sense.Maximize,\n... )\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n>>> solution.extract_constraints(\"c\")\n{(0,): 0.0, (1,): 0.0}\n\nA feasible inequality can have a negative signed value and zero violation:\n\n>>> from ommx import ConstraintKind, Instance\n>>> named = Instance.minimize()\n>>> x = named.new_binary(\"x\")\n>>> capacity = named.add_constraint(x <= 2, \"capacity\", subscripts=[0])\n>>> assert named.constraint_names == {\"capacity\"}\n>>> assert named.extract_constraints(\"capacity\")[(0,)] == capacity\n>>> assert named.as_parametric_instance().extract_constraints(\"capacity\")[(0,)].name == \"capacity\"\n>>> solution = named.evaluate({x.id: 0})\n>>> assert solution.extract_constraints(\"capacity\") == {(0,): 0.0}\n>>> assert solution.get_constraint_value(capacity.constraint_id) == -2.0\n>>> samples = named.evaluate_samples({7: {x.id: 0}})\n>>> assert samples.extract_constraints(\"capacity\", 7) == {(0,): 0.0}",
+              "doc": "Extract nonnegative violations of all constraint families by name, keyed by subscript tuples.\n\nDiscover available names with {attr}`~ommx.Solution.constraint_names`.\nMatching uses the name and subscripts only; a scalar constraint has the\nkey ``()``. The returned dictionary captures values at extraction time.\n\nRaises KeyError if no constraint has the requested name. Raises\nValueError if matching constraints share subscripts, including across families.\nParameters and descriptions are ignored. Retained inactive constraints are\nincluded. Regular constraints return violations, not signed function values.\nIndicator violations account for activation, while OneHot and SOS1 use\ntheir respective metrics; see {meth}`~ommx.Solution.total_violation`.\nUse {meth}`~ommx.Solution.get_constraint_value` or the regular row's\n``evaluated_value`` when the signed value is needed.\n\nA transformation may copy a source constraint's labels onto generated\nconstraints. If both survive in the result with the same name and\nsubscripts, distinguish them through typed-ID lookup in\n{attr}`~ommx.Solution.constraints` instead of name extraction.\n\nRelated methods on {meth}`~ommx.Instance.extract_active_constraints` and\n{meth}`~ommx.ParametricInstance.extract_active_constraints` return attached\nhandles for active constraints; {meth}`~ommx.SampleSet.extract_constraints`\nreturns violations for a selected sample, including inactive constraints.\n\n# Examples\n\n>>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> c0 = (x[0] + x[1] == 1).set_name(\"c\").add_subscripts([0])\n>>> c1 = (x[1] + x[2] == 1).set_name(\"c\").add_subscripts([1])\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     active_constraints={0: c0, 1: c1},\n...     sense=Sense.Maximize,\n... )\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n>>> solution.extract_constraints(\"c\")\n{(0,): 0.0, (1,): 0.0}\n\nA feasible inequality can have a negative signed value and zero violation:\n\n>>> from ommx import ConstraintKind, Instance\n>>> named = Instance.minimize()\n>>> x = named.new_binary(\"x\")\n>>> capacity = named.add_constraint(x <= 2, \"capacity\", subscripts=[0])\n>>> assert named.active_constraint_names == {\"capacity\"}\n>>> assert named.extract_active_constraints(\"capacity\")[(0,)] == capacity\n>>> assert named.as_parametric_instance().extract_active_constraints(\"capacity\")[(0,)].name == \"capacity\"\n>>> solution = named.evaluate({x.id: 0})\n>>> assert solution.extract_constraints(\"capacity\") == {(0,): 0.0}\n>>> assert solution.get_constraint_value(capacity.constraint_id) == -2.0\n>>> samples = named.evaluate_samples({7: {x.id: 0}})\n>>> assert samples.extract_constraints(\"capacity\", 7) == {(0,): 0.0}",
               "signatures": [
                 {
                   "parameters": [

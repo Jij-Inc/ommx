@@ -10,6 +10,8 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Model `constraints` now contains every activeness state. Use `active_constraints` for active attached handles and `inactive_constraints` for retained inactive rows. Rename `Removed*Constraint` to `Inactive*Constraint`, `relax_*` / `restore_*` to `deactivate_*` / `activate_*`, and `from_components` inputs to `active_*` / `inactive_*`.
 
+On `Instance` and `ParametricInstance`, `constraint_names` becomes `active_constraint_names` and `extract_constraints(name)` becomes `extract_active_constraints(name)`. Their active-only scope and return types are unchanged. `Solution` and `SampleSet` keep their existing names.
+
 Inactive rows are `INACTIVE_CHECKED` by default and `INACTIVE_SKIPPED` when `skip_feasibility_check=True`. Both states remain numerically evaluated, but default feasibility excludes skipped rows. These and `ACTIVE` are three disjoint `ConstraintActiveness` states; inactive is the umbrella term for the checked and skipped states. The order is `INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE`; `min_activeness` includes rows at or above the minimum. Call `feasible()` and SampleSet feasible-sample selection as methods. These queries and `total_violation()` default to `INACTIVE_CHECKED`; `feasible_relaxed` retains its active-only meaning. `constraints_df` replaces `removed=` with the same selector, defaults to `INACTIVE_SKIPPED` to include all rows, and always includes `activeness`. Request `include=["inactive_reason"]` for reasons.
 
 The v1 schema is unchanged and v1 export rejects a true skip flag; use v2 to preserve it. See the [migration guide](../migration/python_sdk_v2_to_v3.md) for the full API mapping.
@@ -235,14 +237,17 @@ row equality. Typed IDs support `copy` and `deepcopy`, and `.get()` preserves
 both the concrete row type and the default value's type. Invalid lookup keys
 report the required typed-ID input without exposing internal enum extraction.
 
-`extract_constraints(name)` now searches every family. On `Instance` and
-`ParametricInstance` it returns attached objects keyed by subscript tuples; on
-`Solution` and `SampleSet` it returns nonnegative violations. **Regular constraints
+On `Instance` and `ParametricInstance`, `extract_active_constraints(name)` searches
+every family of active constraints and returns attached objects keyed by subscript
+tuples. On `Solution` and `SampleSet`, `extract_constraints(name)` searches every
+family and returns nonnegative violations. **Regular constraints
 now return violations instead of signed function values.** Parameters are ignored,
 as in variable extraction; duplicate subscripts across families raise `ValueError`.
 
-All four owners provide `constraint_names: set[str]` for the same scope as
-`extract_constraints`. `ParametricInstance.decision_variable_names` lists variable
+`Instance` and `ParametricInstance` provide `active_constraint_names: set[str]`;
+`Solution` and `SampleSet` provide `constraint_names: set[str]`. Each name query
+has the same scope as its corresponding extraction method.
+`ParametricInstance.decision_variable_names` lists variable
 names without including parameters. Unnamed rows are excluded and names are deduplicated.
 
 ### 🆕 Create states from variable names and subscripts ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))

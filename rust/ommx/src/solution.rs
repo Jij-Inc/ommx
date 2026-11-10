@@ -1519,9 +1519,9 @@ mod tests {
             .set_sos1_constraint_context(3.into(), context(3))
             .unwrap();
         let names = BTreeSet::from(["c".to_owned()]);
-        assert_eq!(instance.constraint_names(), names);
+        assert_eq!(instance.active_constraint_names(), names);
         let parametric: crate::ParametricInstance = instance.clone().into();
-        assert_eq!(parametric.constraint_names(), names);
+        assert_eq!(parametric.active_constraint_names(), names);
         assert_eq!(
             parametric.decision_variable_names(),
             instance.decision_variable_names()

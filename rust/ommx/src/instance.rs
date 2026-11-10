@@ -494,7 +494,7 @@ impl Instance {
     ///
     /// Unnamed and inactive constraints are excluded. An explicitly empty name
     /// is included. Names are deduplicated even when subscripts are ambiguous.
-    pub fn constraint_names(&self) -> BTreeSet<String> {
+    pub fn active_constraint_names(&self) -> BTreeSet<String> {
         let mut names = BTreeSet::new();
         macro_rules! collect {
             ($collection:expr) => {
@@ -1195,7 +1195,7 @@ impl ParametricInstance {
     ///
     /// Unnamed and inactive constraints are excluded. An explicitly empty name
     /// is included. Names are deduplicated even when subscripts are ambiguous.
-    pub fn constraint_names(&self) -> BTreeSet<String> {
+    pub fn active_constraint_names(&self) -> BTreeSet<String> {
         let mut names = BTreeSet::new();
         macro_rules! collect {
             ($collection:expr) => {

@@ -5709,12 +5709,12 @@ class Instance:
     @created.setter
     def created(self, value: datetime.datetime) -> None: ...
     @property
-    def constraint_names(self) -> builtins.set[builtins.str]:
+    def active_constraint_names(self) -> builtins.set[builtins.str]:
         r"""
         Unique names across all constraint families, as a set of strings.
 
         Only active constraints are included.
-        The scope matches `extract_constraints`. Unnamed constraints are excluded;
+        The scope matches `extract_active_constraints`. Unnamed constraints are excluded;
         an explicitly empty name is included. Duplicate names appear once, even
         when extraction would reject duplicate subscripts.
         Each access returns a fresh set; editing it does not change this owner.
@@ -6460,7 +6460,7 @@ class Instance:
 
         Raises {class}`KeyError` if no variable with `variable_id` exists.
         """
-    def extract_constraints(
+    def extract_active_constraints(
         self, name: builtins.str
     ) -> builtins.dict[builtins.tuple[builtins.int, ...], ConstraintView]:
         r"""
@@ -10804,12 +10804,12 @@ class ParametricInstance:
         Each access returns a fresh set; editing it does not change this owner.
         """
     @property
-    def constraint_names(self) -> builtins.set[builtins.str]:
+    def active_constraint_names(self) -> builtins.set[builtins.str]:
         r"""
         Unique names across all constraint families, as a set of strings.
 
         Only active constraints are included.
-        The scope matches `extract_constraints`. Unnamed constraints are excluded;
+        The scope matches `extract_active_constraints`. Unnamed constraints are excluded;
         an explicitly empty name is included. Duplicate names appear once, even
         when extraction would reject duplicate subscripts.
         Each access returns a fresh set; editing it does not change this owner.
@@ -11279,7 +11279,7 @@ class ParametricInstance:
         Look up the {class}`~ommx.AttachedDecisionVariable` for the given
         id — a write-through handle.
         """
-    def extract_constraints(
+    def extract_active_constraints(
         self, name: builtins.str
     ) -> builtins.dict[builtins.tuple[builtins.int, ...], ConstraintView]:
         r"""
@@ -14345,8 +14345,8 @@ class Solution:
         subscripts, distinguish them through typed-ID lookup in
         {attr}`~ommx.Solution.constraints` instead of name extraction.
 
-        Related methods on {meth}`~ommx.Instance.extract_constraints` and
-        {meth}`~ommx.ParametricInstance.extract_constraints` return attached
+        Related methods on {meth}`~ommx.Instance.extract_active_constraints` and
+        {meth}`~ommx.ParametricInstance.extract_active_constraints` return attached
         handles for active constraints; {meth}`~ommx.SampleSet.extract_constraints`
         returns violations for a selected sample, including inactive constraints.
 
@@ -14372,9 +14372,9 @@ class Solution:
         >>> named = Instance.minimize()
         >>> x = named.new_binary("x")
         >>> capacity = named.add_constraint(x <= 2, "capacity", subscripts=[0])
-        >>> assert named.constraint_names == {"capacity"}
-        >>> assert named.extract_constraints("capacity")[(0,)] == capacity
-        >>> assert named.as_parametric_instance().extract_constraints("capacity")[(0,)].name == "capacity"
+        >>> assert named.active_constraint_names == {"capacity"}
+        >>> assert named.extract_active_constraints("capacity")[(0,)] == capacity
+        >>> assert named.as_parametric_instance().extract_active_constraints("capacity")[(0,)].name == "capacity"
         >>> solution = named.evaluate({x.id: 0})
         >>> assert solution.extract_constraints("capacity") == {(0,): 0.0}
         >>> assert solution.get_constraint_value(capacity.constraint_id) == -2.0

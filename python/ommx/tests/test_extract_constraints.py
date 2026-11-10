@@ -43,7 +43,7 @@ def test_model_extraction_returns_attached_rows_of_all_families(
     host: type[Instance] | type[ParametricInstance],
 ):
     model = label_model(make_model(host))
-    extracted = model.extract_constraints("c")
+    extracted = model.extract_active_constraints("c")
     assert_type(extracted, dict[tuple[int, ...], ConstraintView])
     assert set(extracted) == {(index, -1) for index in range(4)}
     row: ConstraintView | None = None
@@ -57,9 +57,9 @@ def test_model_extraction_returns_attached_rows_of_all_families(
     regular.set_name("renamed")
     regular.set_subscripts([42])
     assert model.active_constraints[ConstraintID(5)].name == "renamed"
-    assert model.extract_constraints("renamed") == {(42,): regular}
+    assert model.extract_active_constraints("renamed") == {(42,): regular}
     assert (0, -1) in extracted  # Dictionary keys snapshot the original labels.
-    assert set(model.extract_constraints("c")) == {(i, -1) for i in range(1, 4)}
+    assert set(model.extract_active_constraints("c")) == {(i, -1) for i in range(1, 4)}
 
     indicator = extracted[1, -1]
     del extracted, regular, row, model
@@ -70,7 +70,9 @@ def test_model_extraction_excludes_inactive_rows_on_both_roots():
     model = label_model(make_model(Instance))
     model.deactivate_constraint(5, "manual")
     for root in [model, model.as_parametric_instance()]:
-        assert set(root.extract_constraints("c")) == {(i, -1) for i in range(1, 4)}
+        assert set(root.extract_active_constraints("c")) == {
+            (i, -1) for i in range(1, 4)
+        }
         assert ConstraintID(5) in root.inactive_constraints
 
 
@@ -122,7 +124,7 @@ def test_duplicate_subscripts_across_every_family_pair_are_rejected(host, left, 
     model = label_model(make_model(host))
     model.active_constraints[FAMILIES[right][1](5 + right)].set_subscripts([left, -1])
     with pytest.raises(ValueError, match="Duplicate subscript"):
-        model.extract_constraints("c")
+        model.extract_active_constraints("c")
     if isinstance(model, ParametricInstance):
         model = model.with_parameters({})
     with pytest.raises(ValueError, match="Duplicate subscript"):
@@ -135,11 +137,11 @@ def test_scalar_labels_missing_names_and_invalid_sample_ids():
     model = make_model(Instance)
     for index, (kind, id_type, _) in enumerate(FAMILIES):
         model.active_constraints[id_type(NUMBERS[id_type])].set_name(str(kind))
-        assert set(model.extract_constraints(str(kind))) == {()}
+        assert set(model.extract_active_constraints(str(kind))) == {()}
     with pytest.raises(KeyError):
-        model.extract_constraints("missing")
+        model.extract_active_constraints("missing")
     with pytest.raises(KeyError):
-        make_model(ParametricInstance).extract_constraints("missing")
+        make_model(ParametricInstance).extract_active_constraints("missing")
     solution = model.evaluate({0: 0, 1: 0})
     assert solution.extract_constraints("regular") == {(): 1.0}
     assert solution.extract_constraints("indicator") == {(): 0.0}
@@ -167,8 +169,8 @@ def test_feasible_regular_inequality_and_inactive_indicator_return_zero():
 
 def test_constraint_names_match_extraction_on_every_root():
     model = make_model(Instance)
-    assert model.constraint_names == set()  # All four rows are unnamed.
-    assert model.as_parametric_instance().constraint_names == set()
+    assert model.active_constraint_names == set()  # All four rows are unnamed.
+    assert model.as_parametric_instance().active_constraint_names == set()
     assert model.evaluate({0: 0, 1: 0}).constraint_names == set()
     assert model.evaluate_samples({7: {0: 0, 1: 0}}).constraint_names == set()
 
@@ -184,20 +186,29 @@ def test_constraint_names_match_extraction_on_every_root():
         samples,
     )
     for root in roots:
-        actual = root.constraint_names
+        actual = (
+            root.active_constraint_names
+            if isinstance(root, (Instance, ParametricInstance))
+            else root.constraint_names
+        )
         assert_type(actual, set[str])
         assert actual == set(names)
         actual.clear()
-        assert root.constraint_names == set(names)  # A fresh independent set.
+        refreshed = (
+            root.active_constraint_names
+            if isinstance(root, (Instance, ParametricInstance))
+            else root.constraint_names
+        )
+        assert refreshed == set(names)  # A fresh independent set.
     for name in names:
-        assert model.extract_constraints(name)
-        assert model.as_parametric_instance().extract_constraints(name)
+        assert model.extract_active_constraints(name)
+        assert model.as_parametric_instance().extract_active_constraints(name)
         assert solution.extract_constraints(name)
         assert samples.extract_constraints(name, 7)
 
-    old_names = model.constraint_names
+    old_names = model.active_constraint_names
     model.active_constraints[ConstraintID(5)].set_name("renamed")
-    assert model.constraint_names == {"renamed", "", "one_hot", "sos1"}
+    assert model.active_constraint_names == {"renamed", "", "one_hot", "sos1"}
     assert (
         old_names == solution.constraint_names == samples.constraint_names == set(names)
     )
@@ -209,11 +220,14 @@ def test_constraint_names_deduplicate_without_validating_subscripts():
         model.active_constraints[id_type(NUMBERS[id_type])].set_subscripts([])
     solution = model.evaluate({0: 0, 1: 0})
     samples = model.evaluate_samples({7: {0: 0, 1: 0}})
-    for root in [model, model.as_parametric_instance(), solution, samples]:
-        assert root.constraint_names == {"c"}
-    for root in [model, model.as_parametric_instance(), solution]:
+    for root in [model, model.as_parametric_instance()]:
+        assert root.active_constraint_names == {"c"}
         with pytest.raises(ValueError, match="Duplicate subscript"):
-            root.extract_constraints("c")
+            root.extract_active_constraints("c")
+    for result in [solution, samples]:
+        assert result.constraint_names == {"c"}
+    with pytest.raises(ValueError, match="Duplicate subscript"):
+        solution.extract_constraints("c")
     with pytest.raises(ValueError, match="Duplicate subscript"):
         samples.extract_constraints("c", 7)
 
@@ -226,9 +240,9 @@ def test_constraint_name_scope_tracks_deactivation_and_retained_results():
     for row in model.active_constraints.values():
         assert isinstance(row, AttachedConstraint)
         row.set_name("generated")
-    assert model.constraint_names == {"generated"}
+    assert model.active_constraint_names == {"generated"}
     parametric = model.as_parametric_instance()
-    assert parametric.constraint_names == {"generated"}
+    assert parametric.active_constraint_names == {"generated"}
     solution = model.evaluate({0: 0, 1: 0})
     samples = model.evaluate_samples({7: {0: 0, 1: 0}})
     expected = {"generated", *(str(name) for name, _, _ in FAMILIES)}
@@ -268,9 +282,9 @@ def test_parametric_variable_names_exclude_parameters_and_track_label_edits():
         model.with_parameters({100: 1}).decision_variable_names
         == model.decision_variable_names
     )
-    assert model.constraint_names == set()
+    assert model.active_constraint_names == set()
     empty = Instance.minimize()
-    assert empty.constraint_names == set()
+    assert empty.active_constraint_names == set()
     assert empty.as_parametric_instance().decision_variable_names == set()
     assert empty.evaluate({}).constraint_names == set()
     assert empty.evaluate_samples({7: {}}).constraint_names == set()

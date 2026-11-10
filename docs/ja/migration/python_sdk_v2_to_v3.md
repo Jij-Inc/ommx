@@ -164,6 +164,8 @@ v2の `sample_qubo_sa` が返したのは生のサンプルです。v3のAdapter
 
 `Instance.constraints` と `ParametricInstance.constraints` は全状態を含むようになります。型付きIDが識別するのは制約の種類であり、activenessではありません。検索結果の共通型は `ConstraintView` で、具体的な型はその時点の状態で決まります。型付きの接続されたハンドルには `active_constraints`、inactiveのスナップショットには `inactive_constraints` を使います。`Solution.constraints` と `SampleSet.constraints` は引き続き評価済みの全行を含みます。
 
+`Instance` と `ParametricInstance` では、`constraint_names` を `active_constraint_names`、`extract_constraints(name)` を `extract_active_constraints(name)` に変更します。対象は引き続きactiveな制約だけで、返り値の型も変わりません。`Solution` と `SampleSet` では `constraint_names` と `extract_constraints` を維持します。
+
 `from_components` の `constraints=` は `active_constraints=` に変更します。同様に `active_indicator_constraints=`、`active_one_hot_constraints=`、`active_sos1_constraints=` を使います。初期状態からinactiveにする行には、対応する `inactive_*` 引数と `Inactive*Constraint` ラッパーを使います。
 
 各行の `ConstraintActiveness` は、`ACTIVE`、`INACTIVE_CHECKED`（`skip_feasibility_check=False` のinactive）、`INACTIVE_SKIPPED`（`skip_feasibility_check=True` のinactive）のいずれか1つです。**inactive** は後ろの2状態の総称で、`inactive_constraints` は両方を含みます。

@@ -10,6 +10,8 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 モデルの `constraints` は全状態を含むようになります。activeな接続済みハンドルには `active_constraints`、保持したinactive行には `inactive_constraints` を使います。`Removed*Constraint` は `Inactive*Constraint`、`relax_*` / `restore_*` は `deactivate_*` / `activate_*` に変更します。`from_components` の入力も `active_*` / `inactive_*` に揃えます。
 
+`Instance` と `ParametricInstance` では、`constraint_names` を `active_constraint_names`、`extract_constraints(name)` を `extract_active_constraints(name)` に変更します。activeな制約だけを対象とする動作と返り値の型は変わりません。`Solution` と `SampleSet` では既存の名前を維持します。
+
 inactive行は既定で `INACTIVE_CHECKED`、`skip_feasibility_check=True` を指定すると `INACTIVE_SKIPPED` になります。どちらも数値評価は行いますが、skippedの行は既定の実行可能性判定から除外します。これらと `ACTIVE` は重複しない3状態で、inactiveはcheckedとskippedの総称です。`ConstraintActiveness` の順序は `INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE` で、`min_activeness` 以上の行を対象とします。`feasible()` とSampleSetの実行可能サンプル選択はメソッドとして呼びます。これらと `total_violation()` の既定値は `INACTIVE_CHECKED` です。`feasible_relaxed` は従来どおりactiveのみを判定します。`constraints_df` は `removed=` を同じ下限引数に置き換え、既定値の `INACTIVE_SKIPPED` では全行を返し、常に `activeness` 列を含みます。理由には `include=["inactive_reason"]` を指定します。
 
 v1のschemaは拡張せず、skipがtrueのデータのv1出力は失敗します。この状態を保存するにはv2を使ってください。APIの対応表は[移行ガイド](../migration/python_sdk_v2_to_v3.md)にあります。
@@ -220,13 +222,15 @@ Attachedの行は所有元の同一性と型付きIDで比較し、Inactiveと�
 具体的な行の型と代わりの値の型を保持します。不正な検索キーへのエラーは、
 内部enumの抽出失敗を列挙せず、必要な型付きIDの指定方法を示します。
 
-`extract_constraints(name)`は全種類を検索します。`Instance`・`ParametricInstance`では
-添字タプルからAttachedオブジェクトへの辞書、`Solution`・`SampleSet`では違反量への辞書を
+`Instance`・`ParametricInstance` の `extract_active_constraints(name)` は全種類のactiveな
+制約を検索し、添字タプルからAttachedオブジェクトへの辞書を返します。
+`Solution`・`SampleSet` の `extract_constraints(name)` は全種類を検索し、違反量への辞書を
 返します。**通常制約も符号付きの式の値から非負の違反量に変わります。** 決定変数の
 抽出と同様にparametersは無視し、種類をまたぐ添字の重複は`ValueError`にします。
 
-全4種類の所有元に`constraint_names: set[str]`を追加し、`extract_constraints`と同じ
-対象の名前を列挙できます。`ParametricInstance.decision_variable_names`も追加しました。
+`Instance`・`ParametricInstance` は `active_constraint_names: set[str]`、`Solution`・`SampleSet`
+は `constraint_names: set[str]` で、対応する抽出メソッドと同じ対象の名前を列挙できます。
+`ParametricInstance.decision_variable_names`も追加しました。
 未設定の名前とパラメータ名は除外し、同名は1件にまとめます。
 
 ### 🆕 変数の名前と添字から State を作成 ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))

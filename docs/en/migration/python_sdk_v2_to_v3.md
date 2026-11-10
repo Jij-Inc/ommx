@@ -164,6 +164,8 @@ Replace `relax_constraint` / `restore_constraint` with `deactivate_constraint` /
 
 `Instance.constraints` and `ParametricInstance.constraints` now include every state. A typed ID identifies the family, not activeness: lookup returns the common `ConstraintView`, whose concrete runtime type depends on the row's current state. Use `active_constraints` for typed attached handles and `inactive_constraints` for inactive snapshots. `Solution.constraints` and `SampleSet.constraints` continue to contain all evaluated rows.
 
+On `Instance` and `ParametricInstance`, rename `constraint_names` to `active_constraint_names` and `extract_constraints(name)` to `extract_active_constraints(name)`. Both queries still select only active constraints, and their return types are unchanged. `Solution` and `SampleSet` keep `constraint_names` and `extract_constraints`.
+
 For `from_components`, rename `constraints=` to `active_constraints=`, and similarly use `active_indicator_constraints=`, `active_one_hot_constraints=`, and `active_sos1_constraints=`. Initial inactive rows use the corresponding `inactive_*` arguments and `Inactive*Constraint` wrappers.
 
 Each row has exactly one `ConstraintActiveness` state: `ACTIVE`, `INACTIVE_CHECKED` (inactive with `skip_feasibility_check=False`), or `INACTIVE_SKIPPED` (inactive with `skip_feasibility_check=True`). **Inactive** is the umbrella term for the last two states; `inactive_constraints` contains both.
