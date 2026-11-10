@@ -574,7 +574,7 @@ mod tests {
             stage: crate::indicator_constraint::IndicatorEvaluatedData {
                 evaluated_value: 0.0,
                 activation_atol: crate::ATol::default(),
-                indicator_active: true,
+                indicator_on: true,
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
@@ -1649,7 +1649,7 @@ mod tests {
             .unwrap();
         indicator_row.evaluated_value = *atol;
         indicator_row.feasible = true;
-        indicator_row.indicator_active = true;
+        indicator_row.indicator_on = true;
         Solution::try_from(indicator).unwrap();
 
         let mut one_hot = v2_solution_with_one_hot_constraint();
@@ -1725,7 +1725,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v2_solution_parse_rejects_indicator_active_mismatching_variable_value() {
+    fn test_v2_solution_parse_rejects_indicator_on_mismatching_variable_value() {
         use crate::{
             indicator_constraint::{EvaluatedIndicatorConstraint, IndicatorEvaluatedData},
             DecisionVariable, EvaluatedDecisionVariable, IndicatorConstraintID, Sense, VariableID,
@@ -1741,7 +1741,7 @@ mod tests {
             stage: IndicatorEvaluatedData {
                 evaluated_value: 0.0,
                 activation_atol: crate::ATol::default(),
-                indicator_active: true,
+                indicator_on: true,
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1765,12 +1765,12 @@ mod tests {
             .entries
             .get_mut(&1)
             .unwrap();
-        row.indicator_active = false;
+        row.indicator_on = false;
         row.feasible = true;
 
         let err = Solution::try_from(proto).unwrap_err();
         assert!(
-            err.to_string().contains("indicator_active=false")
+            err.to_string().contains("indicator_on=false")
                 && err
                     .to_string()
                     .contains("does not match indicator variable"),
@@ -1779,7 +1779,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v2_solution_parse_rejects_inactive_infeasible_indicator() {
+    fn test_v2_solution_parse_rejects_infeasible_indicator_off() {
         use crate::{
             indicator_constraint::{EvaluatedIndicatorConstraint, IndicatorEvaluatedData},
             DecisionVariable, EvaluatedDecisionVariable, IndicatorConstraintID, Sense, VariableID,
@@ -1795,7 +1795,7 @@ mod tests {
             stage: IndicatorEvaluatedData {
                 evaluated_value: 1.0,
                 activation_atol: crate::ATol::default(),
-                indicator_active: false,
+                indicator_on: false,
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1819,7 +1819,7 @@ mod tests {
             .entries
             .get_mut(&1)
             .unwrap();
-        row.indicator_active = false;
+        row.indicator_on = false;
         row.feasible = false;
 
         let err = Solution::try_from(proto).unwrap_err();

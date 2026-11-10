@@ -816,7 +816,7 @@ mod tests {
             stage: IndicatorSampledData {
                 evaluated_values: crate::Sampled::from((sample_id, 0.0)),
                 activation_atol: crate::ATol::default(),
-                indicator_active: BTreeMap::from([(sample_id, true)]),
+                indicator_on: BTreeMap::from([(sample_id, true)]),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
@@ -974,7 +974,7 @@ mod tests {
             stage: IndicatorSampledData {
                 evaluated_values: crate::Sampled::from((crate::SampleID::from(0), 0.0)),
                 activation_atol: crate::ATol::default(),
-                indicator_active: BTreeMap::from([(crate::SampleID::from(0), false)]),
+                indicator_on: BTreeMap::from([(crate::SampleID::from(0), false)]),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
@@ -1870,7 +1870,7 @@ mod tests {
             .unwrap();
         indicator_row.evaluated_values.as_mut().unwrap().entries[0].value = *atol;
         indicator_row.feasible.insert(0, true);
-        indicator_row.indicator_active.insert(0, true);
+        indicator_row.indicator_on.insert(0, true);
         SampleSet::try_from(indicator).unwrap();
 
         let mut one_hot = v2_sample_set_with_one_hot_constraint();
@@ -1938,7 +1938,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v2_sample_set_parse_rejects_indicator_active_mismatching_variable_value() {
+    fn test_v2_sample_set_parse_rejects_indicator_on_mismatching_variable_value() {
         use crate::{
             indicator_constraint::{IndicatorSampledData, SampledIndicatorConstraint},
             DecisionVariable, IndicatorConstraintID, SampleID, Sampled, SampledDecisionVariable,
@@ -1961,7 +1961,7 @@ mod tests {
             stage: IndicatorSampledData {
                 evaluated_values: Sampled::from((sample_id, 0.0)),
                 activation_atol: crate::ATol::default(),
-                indicator_active: BTreeMap::from([(sample_id, true)]),
+                indicator_on: BTreeMap::from([(sample_id, true)]),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1985,12 +1985,12 @@ mod tests {
             .entries
             .get_mut(&1)
             .unwrap();
-        row.indicator_active.insert(sample_id.into_inner(), false);
+        row.indicator_on.insert(sample_id.into_inner(), false);
         row.feasible.insert(sample_id.into_inner(), true);
 
         let err = SampleSet::try_from(proto).unwrap_err();
         assert!(
-            err.to_string().contains("indicator_active=false")
+            err.to_string().contains("indicator_on=false")
                 && err
                     .to_string()
                     .contains("does not match indicator variable"),

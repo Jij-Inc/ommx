@@ -45,7 +45,7 @@ impl Equality {
         crate::constraint_type::violation_is_feasible(self.violation(evaluated_value), atol)
     }
 
-    /// Residual metric shared by regular constraints and active indicators.
+    /// Residual metric shared by regular constraints and indicators that are ON.
     pub(crate) fn violation(self, evaluated_value: f64) -> f64 {
         if !evaluated_value.is_finite() {
             return f64::INFINITY;

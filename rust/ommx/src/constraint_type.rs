@@ -105,7 +105,7 @@ where
 /// Return the sample IDs carried by a sample-keyed side map.
 ///
 /// Sampled stage data is split across multiple per-sample side maps
-/// (`active_variable`, `indicator_active`, ...). Constraint
+/// (`active_variable`, `indicator_on`, ...). Constraint
 /// families use this helper to validate that those maps stay aligned with the
 /// canonical sampled values for the same constraint.
 pub(crate) fn sample_ids_from_map<V>(map: &BTreeMap<SampleID, V>) -> SampleIDSet {

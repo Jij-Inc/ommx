@@ -266,8 +266,9 @@ pub struct EvaluatedIndicatorConstraint {
     pub evaluated_value: f64,
     #[prost(bool, tag = "4")]
     pub feasible: bool,
+    /// Whether the indicator variable is ON at this state, independently of activeness.
     #[prost(bool, tag = "5")]
-    pub indicator_active: bool,
+    pub indicator_on: bool,
     #[prost(uint64, repeated, tag = "6")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
 }
@@ -384,8 +385,9 @@ pub struct SampledIndicatorConstraint {
     pub evaluated_values: ::core::option::Option<super::v1::SampledValues>,
     #[prost(btree_map = "uint64, bool", tag = "4")]
     pub feasible: ::prost::alloc::collections::BTreeMap<u64, bool>,
+    /// Whether the indicator variable is ON at each sample, independently of activeness.
     #[prost(btree_map = "uint64, bool", tag = "5")]
-    pub indicator_active: ::prost::alloc::collections::BTreeMap<u64, bool>,
+    pub indicator_on: ::prost::alloc::collections::BTreeMap<u64, bool>,
     #[prost(uint64, repeated, tag = "6")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
 }

@@ -164,6 +164,8 @@ For `from_components`, rename `constraints=` to `active_constraints=`, and simil
 
 Each row has exactly one `ConstraintActiveness` state: `ACTIVE`, `INACTIVE_CHECKED` (inactive with `skip_feasibility_check=False`), or `INACTIVE_SKIPPED` (inactive with `skip_feasibility_check=True`). **Inactive** is the umbrella term for the last two states; `inactive_constraints` contains both.
 
+Indicator result properties and DataFrame columns use `indicator_on` to report whether the indicator variable is one within the evaluation tolerance. This describes the evaluated candidate, independently of the constraint's activeness.
+
 The query selector is an ordered minimum, so it can include more than one state:
 
 | `min_activeness` | Included constraints |

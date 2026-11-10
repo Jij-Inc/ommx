@@ -33,15 +33,18 @@ The following model limits the amount to five only when the facility is enabled:
 >>> on = instance.evaluate({enabled.id: 1, amount.id: 5})
 >>> violated = instance.evaluate({enabled.id: 1, amount.id: 6})
 >>> assert off.feasible() and on.feasible() and not violated.feasible()
->>> assert not off.constraints_df(kind=ConstraintKind.Indicator).loc[
-...     cid, "indicator_active"
-... ]
->>> assert on.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_active"]
+>>> assert not off.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_on"]
+>>> assert on.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_on"]
 
 ```
 
-The `indicator_active` column distinguishes an inactive condition from an active
-condition whose body is satisfied. Indicator results do not have a dual variable.
+The `indicator_on` column records whether the controlling variable is one,
+using the evaluation tolerance. It distinguishes an OFF Indicator from an ON
+Indicator whose body is satisfied. This is independent of `activeness`, which
+records whether the constraint belongs to the current formulation and its default
+feasibility participation. An active constraint can have its Indicator OFF;
+an inactive constraint can have its Indicator ON. Indicator results do not have
+a dual variable.
 See {meth}`~ommx.Solution.constraints_df` for the precise columns and violation
 semantics, and {meth}`~ommx.Instance.evaluate` for numerical tolerances and invalid
 activation values.
@@ -51,7 +54,7 @@ activation values.
 {meth}`~ommx.Instance.add_indicator_constraint` returns an attached handle. The
 constructor above creates an independent value; context changes on it do not
 edit a constraint already inserted into a host. Alternatively, provide explicit
-IDs through the `indicator_constraints` mapping of
+IDs through the `active_indicator_constraints` mapping of
 {meth}`~ommx.Instance.from_components`. Constraint numbers must be distinct
 across all active and inactive families, as described by {class}`~ommx.Instance`.
 

@@ -247,10 +247,10 @@ impl EvaluatedIndicatorConstraint {
         self.0.stage.evaluated_value
     }
 
-    /// Whether the indicator was active at evaluation time.
+    /// Whether the indicator was ON at evaluation time, independently of activeness.
     #[getter]
-    pub fn indicator_active(&self) -> bool {
-        self.0.stage.indicator_active
+    pub fn indicator_on(&self) -> bool {
+        self.0.stage.indicator_on
     }
 }
 
@@ -312,14 +312,14 @@ impl SampledIndicatorConstraint {
             .collect()
     }
 
-    /// Activation diagnostics keyed by sample ID.
+    /// Indicator ON/OFF diagnostics keyed by sample ID, independently of activeness.
     #[getter]
-    pub fn indicator_active(&self) -> BTreeMap<u64, bool> {
+    pub fn indicator_on(&self) -> BTreeMap<u64, bool> {
         self.0
             .stage
-            .indicator_active
+            .indicator_on
             .iter()
-            .map(|(id, active)| (id.into_inner(), *active))
+            .map(|(id, on)| (id.into_inner(), *on))
             .collect()
     }
 }

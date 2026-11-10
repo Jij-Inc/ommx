@@ -81,7 +81,7 @@ pub struct IndicatorConstraint<S: Stage<Self> = Created> {
 /// Data carried by an indicator constraint in the Evaluated stage.
 ///
 /// Unlike regular [`EvaluatedData`](crate::constraint::EvaluatedData), this records
-/// whether the indicator variable was active and does not include a dual variable
+/// whether the indicator was ON and does not include a dual variable
 /// (duals are not well-defined for indicator constraints).
 #[derive(Debug, Clone, PartialEq)]
 pub struct IndicatorEvaluatedData {
@@ -89,14 +89,15 @@ pub struct IndicatorEvaluatedData {
     /// Tolerance used to determine the retained activation diagnostic.
     /// Feasibility queries supply their own tolerance and do not change it.
     pub activation_atol: ATol,
-    /// Whether the indicator variable was active (ON) at evaluation time.
-    pub indicator_active: bool,
+    /// Whether the indicator variable equals one under `activation_atol` at evaluation time.
+    /// This ON/OFF diagnostic is independent of the constraint's activeness.
+    pub indicator_on: bool,
     pub used_decision_variable_ids: VariableIDSet,
 }
 
 /// Data carried by an indicator constraint in the Sampled stage.
 ///
-/// `evaluated_values` and `indicator_active` must have identical sample IDs.
+/// `evaluated_values` and `indicator_on` must have identical sample IDs.
 /// Evaluation and parsing establish this row invariant, and SampleSet validates
 /// the IDs against its other tables before exposing the result.
 #[derive(Debug, Clone, PartialEq)]
@@ -105,8 +106,9 @@ pub struct IndicatorSampledData {
     /// Tolerance used to determine the retained activation diagnostic.
     /// Feasibility queries supply their own tolerance and do not change it.
     pub activation_atol: ATol,
-    /// Whether the indicator variable was active (ON) for each sample.
-    pub indicator_active: BTreeMap<SampleID, bool>,
+    /// Whether the indicator variable equals one under `activation_atol` for each sample.
+    /// This ON/OFF diagnostic is independent of the constraint's activeness.
+    pub indicator_on: BTreeMap<SampleID, bool>,
     pub used_decision_variable_ids: VariableIDSet,
 }
 
@@ -130,7 +132,7 @@ pub type EvaluatedIndicatorConstraint = IndicatorConstraint<Evaluated>;
 pub type SampledIndicatorConstraint = IndicatorConstraint<stage::Sampled>;
 
 impl EvaluatedIndicatorConstraint {
-    /// The inner constraint's nonnegative violation when active, otherwise zero.
+    /// The inner constraint's nonnegative violation when the Indicator is ON, otherwise zero.
     ///
     /// Equality uses `|f(x)|`; inequality uses `max(0, f(x))`. Zero implies
     /// feasibility, but a small positive violation may be feasible within tolerance.
@@ -147,7 +149,7 @@ impl EvaluatedConstraintData for EvaluatedIndicatorConstraint {
         indicator_violation(
             self.equality,
             self.stage.evaluated_value,
-            self.stage.indicator_active,
+            self.stage.indicator_on,
         )
     }
 
@@ -164,7 +166,7 @@ impl SampledConstraintData for SampledIndicatorConstraint {
         Some(indicator_violation(
             self.equality,
             *self.stage.evaluated_values.get(sample_id)?,
-            *self.stage.indicator_active.get(&sample_id)?,
+            *self.stage.indicator_on.get(&sample_id)?,
         ))
     }
 
@@ -173,9 +175,9 @@ impl SampledConstraintData for SampledIndicatorConstraint {
             return Err(self.stage.evaluated_values.ids());
         }
 
-        let indicator_active_ids = sample_ids_from_map(&self.stage.indicator_active);
-        if &indicator_active_ids != expected {
-            return Err(indicator_active_ids);
+        let indicator_on_ids = sample_ids_from_map(&self.stage.indicator_on);
+        if &indicator_on_ids != expected {
+            return Err(indicator_on_ids);
         }
         Ok(())
     }
@@ -187,7 +189,7 @@ impl SampledConstraintData for SampledIndicatorConstraint {
     fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated> {
         let evaluated_value = *self.stage.evaluated_values.get(sample_id)?;
 
-        let indicator_active = *self.stage.indicator_active.get(&sample_id)?;
+        let indicator_on = *self.stage.indicator_on.get(&sample_id)?;
 
         Some(IndicatorConstraint {
             indicator_variable: self.indicator_variable,
@@ -195,7 +197,7 @@ impl SampledConstraintData for SampledIndicatorConstraint {
             stage: IndicatorEvaluatedData {
                 evaluated_value,
                 activation_atol: self.stage.activation_atol,
-                indicator_active,
+                indicator_on,
                 used_decision_variable_ids: self.stage.used_decision_variable_ids.clone(),
             },
         })
@@ -282,7 +284,7 @@ impl EvaluatedIndicatorConstraint {
             equality: constraint.equality.into(),
             evaluated_value: constraint.stage.evaluated_value,
             feasible,
-            indicator_active: constraint.stage.indicator_active,
+            indicator_on: constraint.stage.indicator_on,
             used_decision_variable_ids: constraint
                 .stage
                 .used_decision_variable_ids
@@ -293,8 +295,8 @@ impl EvaluatedIndicatorConstraint {
     }
 }
 
-fn indicator_violation(equality: Equality, evaluated_value: f64, indicator_active: bool) -> f64 {
-    if indicator_active {
+fn indicator_violation(equality: Equality, evaluated_value: f64, indicator_on: bool) -> f64 {
+    if indicator_on {
         equality.violation(evaluated_value)
     } else {
         0.0
@@ -304,13 +306,13 @@ fn indicator_violation(equality: Equality, evaluated_value: f64, indicator_activ
 fn validate_indicator_feasible_from_evaluated_value(
     equality: Equality,
     evaluated_value: f64,
-    indicator_active: bool,
+    indicator_on: bool,
     provided_feasible: bool,
     atol: ATol,
     message: &'static str,
 ) -> Result<(), ParseError> {
     let computed_feasible = crate::constraint_type::violation_is_feasible(
-        indicator_violation(equality, evaluated_value, indicator_active),
+        indicator_violation(equality, evaluated_value, indicator_on),
         atol,
     );
     if provided_feasible != computed_feasible {
@@ -339,7 +341,7 @@ impl Parse for crate::v2::EvaluatedIndicatorConstraint {
         validate_indicator_feasible_from_evaluated_value(
             equality,
             self.evaluated_value,
-            self.indicator_active,
+            self.indicator_on,
             self.feasible,
             *atol,
             message,
@@ -350,7 +352,7 @@ impl Parse for crate::v2::EvaluatedIndicatorConstraint {
             stage: IndicatorEvaluatedData {
                 evaluated_value: self.evaluated_value,
                 activation_atol: *atol,
-                indicator_active: self.indicator_active,
+                indicator_on: self.indicator_on,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                     self.used_decision_variable_ids,
                     message,
@@ -383,9 +385,9 @@ impl SampledIndicatorConstraint {
             equality: constraint.equality.into(),
             evaluated_values: Some(constraint.stage.evaluated_values.into()),
             feasible,
-            indicator_active: constraint
+            indicator_on: constraint
                 .stage
-                .indicator_active
+                .indicator_on
                 .into_iter()
                 .map(|(id, value)| (id.into_inner(), value))
                 .collect(),
@@ -427,18 +429,18 @@ impl Parse for crate::v2::SampledIndicatorConstraint {
             ))
             .context(message, "feasible"));
         }
-        let indicator_active = crate::v2_io::sample_bool_map_from_v2(self.indicator_active);
-        if sample_ids_from_map(&indicator_active) != evaluated_values.ids() {
+        let indicator_on = crate::v2_io::sample_bool_map_from_v2(self.indicator_on);
+        if sample_ids_from_map(&indicator_on) != evaluated_values.ids() {
             return Err(ParseError::new(crate::error!(
-                "indicator_active sample IDs must match evaluated values"
+                "indicator_on sample IDs must match evaluated values"
             ))
-            .context(message, "indicator_active"));
+            .context(message, "indicator_on"));
         }
         for (sample_id, evaluated_value) in evaluated_values.iter() {
             validate_indicator_feasible_from_evaluated_value(
                 equality,
                 *evaluated_value,
-                indicator_active[sample_id],
+                indicator_on[sample_id],
                 feasible[sample_id],
                 *atol,
                 message,
@@ -450,7 +452,7 @@ impl Parse for crate::v2::SampledIndicatorConstraint {
             stage: IndicatorSampledData {
                 evaluated_values,
                 activation_atol: *atol,
-                indicator_active,
+                indicator_on,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                     self.used_decision_variable_ids,
                     message,
@@ -516,13 +518,13 @@ mod tests {
     }
 
     #[test]
-    fn parse_v2_evaluated_rejects_non_finite_value_even_when_inactive() {
+    fn parse_v2_evaluated_rejects_non_finite_value_even_when_indicator_off() {
         let proto = crate::v2::EvaluatedIndicatorConstraint {
             indicator_variable: 1,
             equality: crate::v1::Equality::EqualToZero.into(),
             evaluated_value: f64::INFINITY,
             feasible: true,
-            indicator_active: false,
+            indicator_on: false,
             used_decision_variable_ids: vec![],
         };
 
@@ -541,7 +543,7 @@ mod tests {
             equality: crate::v1::Equality::EqualToZero.into(),
             evaluated_value: 0.0,
             feasible: false,
-            indicator_active: false,
+            indicator_on: false,
             used_decision_variable_ids: vec![],
         };
 
@@ -558,7 +560,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_v2_sampled_rejects_non_finite_values_even_when_inactive() {
+    fn parse_v2_sampled_rejects_non_finite_values_even_when_indicator_off() {
         let proto = crate::v2::SampledIndicatorConstraint {
             indicator_variable: 1,
             equality: crate::v1::Equality::EqualToZero.into(),
@@ -569,7 +571,7 @@ mod tests {
                 }],
             }),
             feasible: std::collections::BTreeMap::from([(0, true)]),
-            indicator_active: std::collections::BTreeMap::from([(0, false)]),
+            indicator_on: std::collections::BTreeMap::from([(0, false)]),
             used_decision_variable_ids: vec![],
         };
 
@@ -584,7 +586,7 @@ mod tests {
     #[test]
     fn parse_v2_sampled_rejects_missing_and_extra_activation_ids() {
         // A row parser must establish its own sample shape even without a SampleSet.
-        for indicator_active in [
+        for indicator_on in [
             BTreeMap::new(),
             BTreeMap::from([(0, false), (99, false)]),
             BTreeMap::from([(99, false)]),
@@ -594,23 +596,23 @@ mod tests {
                 equality: crate::v1::Equality::EqualToZero.into(),
                 evaluated_values: Some(crate::Sampled::from((SampleID::from(0), 1.0)).into()),
                 feasible: BTreeMap::from([(0, true)]),
-                indicator_active,
+                indicator_on,
                 used_decision_variable_ids: vec![1],
             };
             let error = proto.parse(&ATol::default()).unwrap_err();
-            assert!(error.to_string().contains("indicator_active sample IDs"));
+            assert!(error.to_string().contains("indicator_on sample IDs"));
         }
     }
 
     #[test]
-    fn inactive_indicator_does_not_create_a_sample_without_an_evaluated_value() {
+    fn indicator_off_does_not_create_a_sample_without_an_evaluated_value() {
         let constraint = SampledIndicatorConstraint {
             indicator_variable: 1.into(),
             equality: Equality::EqualToZero,
             stage: IndicatorSampledData {
                 evaluated_values: crate::Sampled::from((SampleID::from(0), 1.0)),
                 activation_atol: ATol::default(),
-                indicator_active: BTreeMap::from([(0.into(), false), (99.into(), false)]),
+                indicator_on: BTreeMap::from([(0.into(), false), (99.into(), false)]),
                 used_decision_variable_ids: [1.into()].into(),
             },
         };

@@ -107,7 +107,8 @@ message EvaluatedIndicatorConstraint {
   ommx.v1.Equality equality = 2;
   double evaluated_value = 3;
   bool feasible = 4;
-  bool indicator_active = 5;
+  // Whether the indicator variable is ON at this state, independently of activeness.
+  bool indicator_on = 5;
   repeated uint64 used_decision_variable_ids = 6;
 }
 
@@ -175,7 +176,8 @@ message SampledIndicatorConstraint {
   ommx.v1.Equality equality = 2;
   ommx.v1.SampledValues evaluated_values = 3;
   map<uint64, bool> feasible = 4;
-  map<uint64, bool> indicator_active = 5;
+  // Whether the indicator variable is ON at each sample, independently of activeness.
+  map<uint64, bool> indicator_on = 5;
   repeated uint64 used_decision_variable_ids = 6;
 }
 

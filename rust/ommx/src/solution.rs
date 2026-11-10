@@ -126,7 +126,7 @@ pub enum SolutionError {
 ///   must be binary; one-hot and SOS1 variable sets must be non-empty, and
 ///   `active_variable` values must belong to their structural variable set.
 /// - Evaluated special-constraint stage fields are consistent with
-///   [`Self::decision_variables`]: `indicator_active` reflects the indicator
+///   [`Self::decision_variables`]: `indicator_on` reflects the indicator
 ///   variable value, and one-hot/SOS1 `active_variable` plus scalar violation reflect
 ///   the structural variable values under `feasibility_atol`.
 /// - `feasibility_atol` is the absolute tolerance used to interpret
@@ -980,7 +980,7 @@ fn validate_solution_indicator_stage_values(
         let variable = decision_variables
             .get(&constraint.indicator_variable)
             .expect("indicator structural variables must be validated first");
-        let computed_indicator_active = expected_binary_activity(
+        let computed_indicator_on = expected_binary_activity(
             constraint.indicator_variable,
             *variable.value(),
             atol,
@@ -991,13 +991,13 @@ fn validate_solution_indicator_stage_values(
             constraint_id: format!("{id:?}"),
             message,
         })?;
-        if constraint.stage.indicator_active != computed_indicator_active {
+        if constraint.stage.indicator_on != computed_indicator_on {
             return Err(SolutionError::InvalidConstraintStructure {
                 constraint_family: "indicator",
                 constraint_id: format!("{id:?}"),
                 message: format!(
-                    "indicator_active={} does not match indicator variable {:?} value {}",
-                    constraint.stage.indicator_active,
+                    "indicator_on={} does not match indicator variable {:?} value {}",
+                    constraint.stage.indicator_on,
                     constraint.indicator_variable,
                     variable.value(),
                 ),
@@ -2233,7 +2233,7 @@ mod tests {
             stage: crate::indicator_constraint::IndicatorEvaluatedData {
                 evaluated_value: 0.0,
                 activation_atol: crate::ATol::default(),
-                indicator_active: true,
+                indicator_on: true,
                 used_decision_variable_ids: BTreeSet::from([missing_id]),
             },
         };

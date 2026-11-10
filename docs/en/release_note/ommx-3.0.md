@@ -14,6 +14,8 @@ Inactive rows are `INACTIVE_CHECKED` by default and `INACTIVE_SKIPPED` when `ski
 
 The v1 schema is unchanged and v1 export rejects a true skip flag; use v2 to preserve it. See the [migration guide](../migration/python_sdk_v2_to_v3.md) for the full API mapping.
 
+Indicator result properties and DataFrame columns now use `indicator_on` for the indicator's ON/OFF state at the evaluated candidate, independently of constraint activeness.
+
 ### 🛠 ⚠ Report infeasible constant constraints through the solver ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))
 
 HiGHS and PySCIPOpt now accept constant regular equalities and inequalities

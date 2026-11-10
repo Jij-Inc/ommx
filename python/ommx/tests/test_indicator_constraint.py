@@ -36,6 +36,54 @@ def _instance(ic: IndicatorConstraint, x_lower: float = 0.0, x_upper: float = 5.
     )
 
 
+@pytest.mark.parametrize(
+    "activeness",
+    [
+        ConstraintActiveness.ACTIVE,
+        ConstraintActiveness.INACTIVE_CHECKED,
+        ConstraintActiveness.INACTIVE_SKIPPED,
+    ],
+)
+def test_indicator_on_is_independent_of_constraint_activeness(activeness):
+    y = DecisionVariable.binary(1)
+    instance = _instance(
+        IndicatorConstraint(
+            indicator_variable=y,
+            function=DecisionVariable.continuous(0, lower=0, upper=5) - 2,
+            equality=Equality.LessThanOrEqualToZero,
+        )
+    )
+    cid = IndicatorConstraintID(7)
+    skipped = activeness == ConstraintActiveness.INACTIVE_SKIPPED
+    if activeness != ConstraintActiveness.ACTIVE:
+        instance.deactivate_indicator_constraint(
+            cid, "retain for evaluation", skip_feasibility_check=skipped
+        )
+
+    states = {4: {0: 3, 1: 0}, 9: {0: 3, 1: 1}}
+    for sample_id, state in states.items():
+        on = sample_id == 9
+        solution = instance.evaluate(state)
+        row = solution.constraints[cid]
+        assert row.activeness == activeness
+        assert row.indicator_on is on
+        assert row.evaluated_value == 1
+        assert solution.feasible() is (not on or skipped)
+        frame = solution.constraints_df(kind=ConstraintKind.Indicator)
+        assert bool(frame.loc[cid, "indicator_on"]) is on
+        assert frame.loc[cid, "activeness"] == activeness
+
+    samples = instance.evaluate_samples(states)
+    sampled_row = samples.constraints[cid]
+    assert sampled_row.activeness == activeness
+    assert sampled_row.indicator_on == {4: False, 9: True}
+    assert samples.feasible() == {4: True, 9: skipped}
+    frame = samples.constraints_df(kind=ConstraintKind.Indicator)
+    assert not frame.loc[cid, "indicator_on.4"]
+    assert frame.loc[cid, "indicator_on.9"]
+    assert frame.loc[cid, "activeness"] == activeness
+
+
 def test_convert_inequality_emits_only_upper_big_m():
     """`y=1 → x - 2 <= 0` with x in [0, 5]: upper = 3 > 0, lower side irrelevant.
     Expect exactly one new constraint `x + 3 y - 5 <= 0` and the original indicator

@@ -471,8 +471,8 @@ mod tests {
                 actual_constraint.is_feasible(actual.feasibility_atol())
             );
             prop_assert_eq!(
-                expected_constraint.stage.indicator_active,
-                actual_constraint.stage.indicator_active
+                expected_constraint.stage.indicator_on,
+                actual_constraint.stage.indicator_on
             );
         }
 

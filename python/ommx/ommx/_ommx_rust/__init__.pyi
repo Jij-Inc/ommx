@@ -2976,9 +2976,9 @@ class EvaluatedIndicatorConstraint(ConstraintView):
         Inner residual at the evaluated state.
         """
     @property
-    def indicator_active(self) -> builtins.bool:
+    def indicator_on(self) -> builtins.bool:
         r"""
-        Whether the indicator was active at evaluation time.
+        Whether the indicator was ON at evaluation time, independently of activeness.
         """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def violation(self) -> builtins.float:
@@ -5186,14 +5186,19 @@ class IndicatorConstraint:
     >>> violated = instance.evaluate({enabled.id: 1, amount.id: 6})
     >>> assert off.feasible() and on.feasible() and not violated.feasible()
     >>> assert not off.constraints_df(kind=ConstraintKind.Indicator).loc[
-    ...     cid, "indicator_active"
+    ...     cid, "indicator_on"
     ... ]
-    >>> assert on.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_active"]
+    >>> assert on.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_on"]
 
     ```
 
-    The `indicator_active` column distinguishes an inactive condition from an active
-    condition whose body is satisfied. Indicator results do not have a dual variable.
+    The `indicator_on` column records whether the controlling variable is one,
+    using the evaluation tolerance. It distinguishes an OFF Indicator from an ON
+    Indicator whose body is satisfied. This is independent of `activeness`, which
+    records whether the constraint belongs to the current formulation and its default
+    feasibility participation. An active constraint can have its Indicator OFF;
+    an inactive constraint can have its Indicator ON. Indicator results do not have
+    a dual variable.
     See {meth}`~ommx.Solution.constraints_df` for the precise columns and violation
     semantics, and {meth}`~ommx.Instance.evaluate` for numerical tolerances and invalid
     activation values.
@@ -5203,7 +5208,7 @@ class IndicatorConstraint:
     {meth}`~ommx.Instance.add_indicator_constraint` returns an attached handle. The
     constructor above creates an independent value; context changes on it do not
     edit a constraint already inserted into a host. Alternatively, provide explicit
-    IDs through the `indicator_constraints` mapping of
+    IDs through the `active_indicator_constraints` mapping of
     {meth}`~ommx.Instance.from_components`. Constraint numbers must be distinct
     across all active and inactive families, as described by {class}`~ommx.Instance`.
 
@@ -5348,7 +5353,7 @@ class Instance:
       what is minimized or maximized.
     - {attr}`~ommx.Instance.used_decision_variables` supplies the variables and
       their domains.
-    - {attr}`~ommx.Instance.constraints` supplies all active regular and special
+    - {attr}`~ommx.Instance.active_constraints` supplies all active regular and special
       constraints.
 
     Regular constraints have the form ``f(x) == 0`` or ``f(x) <= 0``;
@@ -5531,13 +5536,14 @@ class Instance:
     automatic renumbering, including data from earlier v3 beta versions that
     used separate number spaces.
 
-    {attr}`~ommx.Instance.constraints` is a live collection of all active
-    families. A typed ID identifies both the family and the number. Bare
-    integers are rejected by this heterogeneous collection even though
-    constraint numbers are globally unique within the Instance. Obtaining
+    {attr}`~ommx.Instance.constraints` is a live collection of all constraint
+    families and activeness states. A typed ID identifies the family and the number,
+    but not activeness. Bare integers are rejected by this heterogeneous collection
+    even though constraint numbers are globally unique within the Instance. Obtaining
     the collection does not collect rows; each row is fetched when accessed.
-    {attr}`~ommx.Instance.inactive_constraints` exposes retained constraints
-    that are no longer active.
+    {attr}`~ommx.Instance.active_constraints` exposes active attached handles;
+    {attr}`~ommx.Instance.inactive_constraints` exposes snapshots of retained
+    inactive constraints.
 
     ```pycon
     >>> from ommx import ConstraintKind, ConstraintID, Instance
@@ -5552,7 +5558,8 @@ class Instance:
 
     Use {meth}`~ommx.Instance.constraints_df` with an explicit ``kind``, such
     as ``kind=ConstraintKind.Regular``, to collect one family into a DataFrame. Collection
-    lookup and iteration contracts belong to {class}`~ommx.ActiveConstraintCollection`.
+    lookup and iteration contracts belong to {class}`~ommx.ConstraintCollection`
+    and {class}`~ommx.ActiveConstraintCollection`.
 
     **Edit the Instance through attached handles**
 
@@ -5572,13 +5579,13 @@ class Instance:
     >>> labeled.objective = choice
     >>> rule = labeled.add_constraint(choice <= 1, "limit")
     >>> variable = labeled.attached_decision_variable(choice.id)
-    >>> constraint = labeled.constraints[rule.constraint_id]
+    >>> constraint = labeled.active_constraints[rule.constraint_id]
     >>> variable.set_name("selected")
     >>> variable.set_subscripts([0])
     >>> variable.set_description("Whether product 0 is selected")
     >>> constraint.set_name("selection_limit")
     >>> assert labeled.attached_decision_variable(choice.id).name == "selected"
-    >>> assert labeled.constraints[rule.constraint_id].name == "selection_limit"
+    >>> assert labeled.active_constraints[rule.constraint_id].name == "selection_limit"
 
     ```
 
@@ -13369,9 +13376,9 @@ class SampledIndicatorConstraint(ConstraintView):
         Inner residuals keyed by sample ID.
         """
     @property
-    def indicator_active(self) -> builtins.dict[builtins.int, builtins.bool]:
+    def indicator_on(self) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
-        Activation diagnostics keyed by sample ID.
+        Indicator ON/OFF diagnostics keyed by sample ID, independently of activeness.
         """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def feasible(

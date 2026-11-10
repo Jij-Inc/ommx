@@ -10,7 +10,7 @@ roles are called **Active Formulation** and **Interpretation Context**.
   what is minimized or maximized.
 - {attr}`~ommx.Instance.used_decision_variables` supplies the variables and
   their domains.
-- {attr}`~ommx.Instance.constraints` supplies all active regular and special
+- {attr}`~ommx.Instance.active_constraints` supplies all active regular and special
   constraints.
 
 Regular constraints have the form ``f(x) == 0`` or ``f(x) <= 0``;
@@ -193,13 +193,14 @@ Protobuf input with cross-family duplicate numbers is rejected without
 automatic renumbering, including data from earlier v3 beta versions that
 used separate number spaces.
 
-{attr}`~ommx.Instance.constraints` is a live collection of all active
-families. A typed ID identifies both the family and the number. Bare
-integers are rejected by this heterogeneous collection even though
-constraint numbers are globally unique within the Instance. Obtaining
+{attr}`~ommx.Instance.constraints` is a live collection of all constraint
+families and activeness states. A typed ID identifies the family and the number,
+but not activeness. Bare integers are rejected by this heterogeneous collection
+even though constraint numbers are globally unique within the Instance. Obtaining
 the collection does not collect rows; each row is fetched when accessed.
-{attr}`~ommx.Instance.inactive_constraints` exposes retained constraints
-that are no longer active.
+{attr}`~ommx.Instance.active_constraints` exposes active attached handles;
+{attr}`~ommx.Instance.inactive_constraints` exposes snapshots of retained
+inactive constraints.
 
 ```pycon
 >>> from ommx import ConstraintKind, ConstraintID, Instance
@@ -214,7 +215,8 @@ that are no longer active.
 
 Use {meth}`~ommx.Instance.constraints_df` with an explicit ``kind``, such
 as ``kind=ConstraintKind.Regular``, to collect one family into a DataFrame. Collection
-lookup and iteration contracts belong to {class}`~ommx.ActiveConstraintCollection`.
+lookup and iteration contracts belong to {class}`~ommx.ConstraintCollection`
+and {class}`~ommx.ActiveConstraintCollection`.
 
 **Edit the Instance through attached handles**
 
@@ -234,13 +236,13 @@ replace their fields; ``add_subscripts`` appends indices and
 >>> labeled.objective = choice
 >>> rule = labeled.add_constraint(choice <= 1, "limit")
 >>> variable = labeled.attached_decision_variable(choice.id)
->>> constraint = labeled.constraints[rule.constraint_id]
+>>> constraint = labeled.active_constraints[rule.constraint_id]
 >>> variable.set_name("selected")
 >>> variable.set_subscripts([0])
 >>> variable.set_description("Whether product 0 is selected")
 >>> constraint.set_name("selection_limit")
 >>> assert labeled.attached_decision_variable(choice.id).name == "selected"
->>> assert labeled.constraints[rule.constraint_id].name == "selection_limit"
+>>> assert labeled.active_constraints[rule.constraint_id].name == "selection_limit"
 
 ```
 

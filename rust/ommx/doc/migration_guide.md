@@ -63,6 +63,10 @@ Replace `relax_*` / `restore_*` with `deactivate_*` / `activate_*`. Inactive mem
 
 Each row has exactly one `ConstraintActiveness` state: `Active`, `InactiveChecked` (`skip_feasibility_check: false`), or `InactiveSkipped` (`skip_feasibility_check: true`). Inactive membership includes both `InactiveChecked` and `InactiveSkipped`; `inactive_constraints()` returns both.
 
+Indicator stage data use `indicator_on` to record whether the indicator variable
+is one within the evaluation tolerance. This candidate-dependent diagnostic is
+independent of the constraint's activeness.
+
 The query minimum includes every state at or above its value:
 
 | Minimum | Included constraints |
@@ -154,7 +158,7 @@ stage data also store `violation`/`violations` in the SDK.
 
 A retained tolerance-dependent decision must retain its conditions. Indicator,
 OneHot, and SOS1 stage data therefore retain `activation_atol` alongside
-`indicator_active` / `active_variable`. Feasibility queries do not change these
+`indicator_on` / `active_variable`. Feasibility queries do not change these
 decisions or repeat input canonicalization. Solution/SampleSet retain their
 shared `feasibility_atol`, exposed by an accessor, and pass it to constraint
 queries. The current wire format requires retained activation conditions to

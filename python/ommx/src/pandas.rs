@@ -868,7 +868,7 @@ impl<'m> ToPandasEntry
         set_equality(&dict, c.equality)?;
         dict.set_item("value", c.stage.evaluated_value)?;
         dict.set_item("feasible", c.is_feasible(atol))?;
-        dict.set_item("indicator_active", c.stage.indicator_active)?;
+        dict.set_item("indicator_on", c.stage.indicator_on)?;
         set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
         set_label_columns(
             &dict,
@@ -915,11 +915,8 @@ impl<'a, 'm> ToPandasEntry
             dict.set_item(format!("value.{}", sample_id.into_inner()), value)?;
             let feas = ic.is_feasible_for(sample_id, *atol);
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
-            let active = ic.stage.indicator_active.get(&sample_id).copied();
-            dict.set_item(
-                format!("indicator_active.{}", sample_id.into_inner()),
-                active,
-            )?;
+            let on = ic.stage.indicator_on.get(&sample_id).copied();
+            dict.set_item(format!("indicator_on.{}", sample_id.into_inner()), on)?;
         }
         Ok(dict)
     }

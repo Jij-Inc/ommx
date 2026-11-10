@@ -141,7 +141,7 @@ pub enum SampleSetError {
 ///   must be binary; one-hot and SOS1 variable sets must be non-empty, and
 ///   `active_variable` values must belong to their structural variable set.
 /// - Sampled special-constraint stage fields are consistent with
-///   [`Self::decision_variables`]: `indicator_active` reflects the indicator
+///   [`Self::decision_variables`]: `indicator_on` reflects the indicator
 ///   variable values, and one-hot/SOS1 `active_variable` plus scalar violation
 ///   reflect the structural variable values under `feasibility_atol`.
 /// - [`Self::feasible`] and [`Self::feasible_relaxed`] require every sampled
@@ -683,25 +683,25 @@ fn validate_sampled_indicator_stage_values(
         let variable = decision_variables
             .get(&constraint.indicator_variable)
             .expect("indicator structural variables must be validated first");
-        for (sample_id, provided_indicator_active) in &constraint.stage.indicator_active {
+        for (sample_id, provided_indicator_on) in &constraint.stage.indicator_on {
             let value = *variable
                 .samples()
                 .get(*sample_id)
                 .expect("sample IDs must be validated first");
-            let computed_indicator_active =
+            let computed_indicator_on =
                 expected_binary_activity(constraint.indicator_variable, value, atol, "indicator")
                     .map_err(|message| SampleSetError::InvalidConstraintStructure {
                     constraint_family: "indicator",
                     constraint_id: format!("{id:?}"),
                     message: format!("{message} at sample {sample_id:?}"),
                 })?;
-            if *provided_indicator_active != computed_indicator_active {
+            if *provided_indicator_on != computed_indicator_on {
                 return Err(SampleSetError::InvalidConstraintStructure {
                     constraint_family: "indicator",
                     constraint_id: format!("{id:?}"),
                     message: format!(
-                        "indicator_active={} at sample {sample_id:?} does not match indicator variable {:?} value {value}",
-                        provided_indicator_active,
+                        "indicator_on={} at sample {sample_id:?} does not match indicator variable {:?} value {value}",
+                        provided_indicator_on,
                         constraint.indicator_variable,
                     ),
                 });

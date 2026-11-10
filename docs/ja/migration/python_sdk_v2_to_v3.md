@@ -164,6 +164,8 @@ v2の `sample_qubo_sa` が返したのは生のサンプルです。v3のAdapter
 
 各行の `ConstraintActiveness` は、`ACTIVE`、`INACTIVE_CHECKED`（`skip_feasibility_check=False` のinactive）、`INACTIVE_SKIPPED`（`skip_feasibility_check=True` のinactive）のいずれか1つです。**inactive** は後ろの2状態の総称で、`inactive_constraints` は両方を含みます。
 
+Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` を使い、指示変数が評価時の許容誤差内で1かどうかを表します。これは評価した候補点についての情報であり、制約のactivenessとは独立です。
+
 取得時の `min_activeness` は次の順序における下限なので、複数の状態を含められます。
 
 | `min_activeness` | 含む制約 |
