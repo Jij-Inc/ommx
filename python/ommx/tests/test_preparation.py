@@ -67,7 +67,9 @@ def test_prepare_mutates_in_place_and_establishes_target_membership() -> None:
         max_integer_range=1,
         slack_upper_bound=2,
     )
-    policy.integer_encoding = IntegerEncodingPreparation.log_encode_all_used_integers()
+    policy.integer_encoding = (
+        IntegerEncodingPreparation.log_encode_all_active_integers()
+    )
     policy.fixed_penalty = (
         FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=2.0)
     )

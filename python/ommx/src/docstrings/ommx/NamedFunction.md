@@ -72,8 +72,8 @@ metrics does not change the objective-based ordering or the selection made by
 
 **Supply values for variables used only in reporting**
 
-Appearing only in a named function does not make a variable used by the current
-objective or active constraints. If it also has no fixed value or dependency,
+Appearing only in a named function does not make a variable active in the current
+formulation. If it also has no fixed value or dependency,
 the variable is irrelevant to that current problem. When its value is omitted,
 {meth}`~ommx.Instance.populate_state` supplies a default before the named
 function is evaluated. That default is not a recovered value of the candidate.

@@ -55,7 +55,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         The recommendation lowers every special-constraint family, converts the
         active objective to minimization, adds Integer slack while permitting an
         inequality to remain when exact equality conversion is unavailable,
-        and log-encodes every used Integer variable. Both Integer slack ranges
+        and log-encodes every active Integer variable. Both Integer slack ranges
         use 32.
 
         Fixed penalty magnitudes remain explicit caller parameters because
@@ -77,7 +77,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 max_integer_range=32,
                 slack_upper_bound=32,
             ),
-            integer_encoding=IntegerEncodingPreparation.log_encode_all_used_integers(),
+            integer_encoding=IntegerEncodingPreparation.log_encode_all_active_integers(),
         )
 
     ommx_instance: Instance
@@ -388,7 +388,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         with _tracer.start_as_current_span("convert"):
             out_of_range_ids = sorted(
                 variable.id
-                for variable in self.ommx_instance.used_decision_variables
+                for variable in self.ommx_instance.active_decision_variables
                 if variable.id > self.MAX_OPENJIJ_VARIABLE_ID
             )
             if out_of_range_ids:

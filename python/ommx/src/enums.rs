@@ -106,15 +106,15 @@ class Kind:
 ///
 /// | Role | Meaning | Value for candidate evaluation |
 /// | --- | --- | --- |
-/// | `Used` | Referenced by the current objective or active constraints | Supplied by the caller |
-/// | `Fixed` | A retained, non-used variable with a recorded fixed value | Restored from that value |
-/// | `Dependent` | Neither used nor fixed; represented by an expression in other variables | Computed from that expression |
-/// | `Irrelevant` | Neither used, fixed, nor dependent | Supplied by the caller, or filled with a default when omitted |
+/// | `Active` | Belongs to the current Active Formulation | Supplied by the caller |
+/// | `Fixed` | A retained variable outside the Active Formulation with a recorded fixed value | Restored from that value |
+/// | `Dependent` | Neither active nor fixed; represented by an expression in other variables | Computed from that expression |
+/// | `Irrelevant` | Neither active, fixed, nor dependent | Supplied by the caller, or filled with a default when omitted |
 ///
 /// Active constraints include regular and special constraints, including an
 /// Indicator's controlling Binary variable. References only from named functions,
 /// inactive constraints, output objectives, or dependency right-hand sides do not
-/// make a variable used. Being irrelevant to solver input does not mean its value
+/// make a variable active. Being irrelevant to solver input does not mean its value
 /// cannot affect reporting.
 ///
 /// {meth}`~ommx.Instance.populate_state` explains reconstruction, defaults,
@@ -123,13 +123,13 @@ class Kind:
 #[pyclass(from_py_object, eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DecisionVariableRole {
-    /// Used by the objective or active constraints passed to solvers
-    Used = 1,
-    /// Fixed by the instance-owned fixed-value table and not used by solver input
+    /// Belongs to the Active Formulation through its objective or active constraints
+    Active = 1,
+    /// Fixed by the instance-owned fixed-value table and outside the Active Formulation
     Fixed = 2,
     /// Defined by decision_variable_dependency
     Dependent = 3,
-    /// Not used, fixed, or dependent
+    /// Not active, fixed, or dependent
     Irrelevant = 4,
 }
 
@@ -142,7 +142,7 @@ impl DecisionVariableRole {
 
     fn __repr__(&self) -> &'static str {
         match self {
-            DecisionVariableRole::Used => "DecisionVariableRole.Used",
+            DecisionVariableRole::Active => "DecisionVariableRole.Active",
             DecisionVariableRole::Fixed => "DecisionVariableRole.Fixed",
             DecisionVariableRole::Dependent => "DecisionVariableRole.Dependent",
             DecisionVariableRole::Irrelevant => "DecisionVariableRole.Irrelevant",
@@ -151,7 +151,7 @@ impl DecisionVariableRole {
 
     fn __str__(&self) -> &'static str {
         match self {
-            DecisionVariableRole::Used => "used",
+            DecisionVariableRole::Active => "active",
             DecisionVariableRole::Fixed => "fixed",
             DecisionVariableRole::Dependent => "dependent",
             DecisionVariableRole::Irrelevant => "irrelevant",
@@ -162,7 +162,7 @@ impl DecisionVariableRole {
 impl From<ommx::DecisionVariableRole> for DecisionVariableRole {
     fn from(role: ommx::DecisionVariableRole) -> Self {
         match role {
-            ommx::DecisionVariableRole::Used => DecisionVariableRole::Used,
+            ommx::DecisionVariableRole::Active => DecisionVariableRole::Active,
             ommx::DecisionVariableRole::Fixed => DecisionVariableRole::Fixed,
             ommx::DecisionVariableRole::Dependent => DecisionVariableRole::Dependent,
             ommx::DecisionVariableRole::Irrelevant => DecisionVariableRole::Irrelevant,
@@ -173,7 +173,7 @@ impl From<ommx::DecisionVariableRole> for DecisionVariableRole {
 impl From<DecisionVariableRole> for ommx::DecisionVariableRole {
     fn from(role: DecisionVariableRole) -> Self {
         match role {
-            DecisionVariableRole::Used => ommx::DecisionVariableRole::Used,
+            DecisionVariableRole::Active => ommx::DecisionVariableRole::Active,
             DecisionVariableRole::Fixed => ommx::DecisionVariableRole::Fixed,
             DecisionVariableRole::Dependent => ommx::DecisionVariableRole::Dependent,
             DecisionVariableRole::Irrelevant => ommx::DecisionVariableRole::Irrelevant,

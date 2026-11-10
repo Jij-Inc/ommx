@@ -29,20 +29,20 @@ fn validate_fixed_decision_variable_partition(
     decision_variable_dependency: &AcyclicAssignments,
     fixed_decision_variable_values: &BTreeMap<VariableID, f64>,
 ) -> Result<(), ParseError> {
-    let mut used: VariableIDSet = objective.required_ids();
+    let mut active: VariableIDSet = objective.required_ids();
     for constraint in constraints.values() {
-        used.extend(constraint.required_ids());
+        active.extend(constraint.required_ids());
     }
     let fixed: VariableIDSet = fixed_decision_variable_values.keys().copied().collect();
     let dependent: VariableIDSet = decision_variable_dependency.keys().collect();
 
-    if let Some(id) = used.intersection(&dependent).next() {
+    if let Some(id) = active.intersection(&dependent).next() {
         return Err(ParseError::new(crate::error!(
             "Dependent variable cannot be used in objectives or constraints: {id:?}"
         ))
         .context(message, "decision_variables"));
     }
-    if let Some(id) = used.intersection(&fixed).next() {
+    if let Some(id) = active.intersection(&fixed).next() {
         return Err(ParseError::new(crate::error!(
             "Fixed variable {id:?} cannot be used in objectives or constraints"
         ))
@@ -128,7 +128,7 @@ fn validate_created_constraint_references<T: crate::ConstraintType>(
     Ok(())
 }
 
-fn active_used_ids_from_created_collection<T: crate::ConstraintType>(
+fn variable_ids_from_active_collection<T: crate::ConstraintType>(
     collection: &ConstraintCollection<T>,
 ) -> VariableIDSet {
     collection
@@ -139,7 +139,7 @@ fn active_used_ids_from_created_collection<T: crate::ConstraintType>(
 }
 
 fn validate_fixed_dependent_partition_from_sets(
-    used: &VariableIDSet,
+    active: &VariableIDSet,
     fixed_values: &BTreeMap<VariableID, f64>,
     decision_variable_dependency: &AcyclicAssignments,
     message: &'static str,
@@ -147,13 +147,13 @@ fn validate_fixed_dependent_partition_from_sets(
     let fixed: VariableIDSet = fixed_values.keys().copied().collect();
     let dependent: VariableIDSet = decision_variable_dependency.keys().collect();
 
-    if let Some(id) = used.intersection(&dependent).next() {
+    if let Some(id) = active.intersection(&dependent).next() {
         return Err(ParseError::new(crate::error!(
             "Dependent variable cannot be used in objectives or constraints: {id:?}"
         ))
         .context(message, "decision_variables"));
     }
-    if let Some(id) = used.intersection(&fixed).next() {
+    if let Some(id) = active.intersection(&fixed).next() {
         return Err(ParseError::new(crate::error!(
             "Fixed variable {id:?} cannot be used in objectives or constraints"
         ))
@@ -577,21 +577,19 @@ impl Parse for v2::Instance {
             }
         }
 
-        let mut used = objective.required_ids();
-        used.extend(active_used_ids_from_created_collection(
-            &constraint_collection,
-        ));
-        used.extend(active_used_ids_from_created_collection(
+        let mut active = objective.required_ids();
+        active.extend(variable_ids_from_active_collection(&constraint_collection));
+        active.extend(variable_ids_from_active_collection(
             &indicator_constraint_collection,
         ));
-        used.extend(active_used_ids_from_created_collection(
+        active.extend(variable_ids_from_active_collection(
             &one_hot_constraint_collection,
         ));
-        used.extend(active_used_ids_from_created_collection(
+        active.extend(variable_ids_from_active_collection(
             &sos1_constraint_collection,
         ));
         validate_fixed_dependent_partition_from_sets(
-            &used,
+            &active,
             decision_variables.fixed_values(),
             &decision_variable_dependency,
             message,
@@ -1018,21 +1016,19 @@ impl Parse for v2::ParametricInstance {
             }
         }
 
-        let mut used = objective.required_ids();
-        used.extend(active_used_ids_from_created_collection(
-            &constraint_collection,
-        ));
-        used.extend(active_used_ids_from_created_collection(
+        let mut active = objective.required_ids();
+        active.extend(variable_ids_from_active_collection(&constraint_collection));
+        active.extend(variable_ids_from_active_collection(
             &indicator_constraint_collection,
         ));
-        used.extend(active_used_ids_from_created_collection(
+        active.extend(variable_ids_from_active_collection(
             &one_hot_constraint_collection,
         ));
-        used.extend(active_used_ids_from_created_collection(
+        active.extend(variable_ids_from_active_collection(
             &sos1_constraint_collection,
         ));
         validate_fixed_dependent_partition_from_sets(
-            &used,
+            &active,
             decision_variables.fixed_values(),
             &decision_variable_dependency,
             message,

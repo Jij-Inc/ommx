@@ -54,7 +54,7 @@ The writer accepts both minimization and maximization. The active objective
 and active regular constraint functions must be stored as expanded
 polynomials of degree at most two. Quadratic terms are written using
 ``QUADOBJ`` and ``QCMATRIX`` sections, with the coefficient convention
-described below. Variables used by the active formulation must have
+described below. Active variables must have
 Binary, Integer, or Continuous kind. Active Indicator, OneHot, and SOS1
 constraints are rejected; lower them before export if appropriate.
 No preparation is performed automatically.
@@ -87,11 +87,11 @@ adapt the coefficients to a selected external tool.
 # Information boundary
 
 The writer exports the active objective and sense, active regular
-constraints, and the kinds and bounds of variables used by that model.
+constraints, and the kinds and bounds of active variables.
 Quadratic coefficients follow the convention above.
-Unused variables, including those referenced only by output semantics,
-named functions, or inactive constraints, are omitted. Unused variables
-of unsupported kinds do not prevent export.
+Variables outside the Active Formulation, including those referenced only by
+output semantics, named functions, or inactive constraints, are omitted.
+Their kinds do not prevent export.
 
 ``description.name`` supplies the problem name. Variables and constraints
 use generated names ``OMMX_VAR_<id>`` and ``OMMX_CONSTR_<id>``; their

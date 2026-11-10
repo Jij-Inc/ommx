@@ -94,7 +94,11 @@ assert model.active_constraints[live.constraint_id].name == "capacity"
 
 ### 変数の役割を読む処理を置き換える
 
-一変数の役割を判定するなら {meth}`~ommx.Instance.decision_variable_role`、複数の変数を帳票にまとめるなら `decision_variables_df()` の `state_role`・`substituted_value` 列を使います。Adapterでソルバーに渡す変数だけが必要なら `used_decision_variables` を使います。固定値や従属変数を候補の評価用に保持している場合、これらの問いの答えは異なります。
+一変数の役割を判定するなら {meth}`~ommx.Instance.decision_variable_role`、複数の変数を帳票にまとめるなら `decision_variables_df()` の `state_role`・`substituted_value` 列を使います。Adapterでソルバーに渡す変数だけが必要なら `active_decision_variables` を使います。固定値や従属変数を候補の評価用に保持している場合、これらの問いの答えは異なります。
+
+`used_decision_variables` は `active_decision_variables`、`DecisionVariableRole.Used` は `DecisionVariableRole.Active` に置き換えます。`state_role` の値も `"active"` になります。AdapterはInstanceのactiveな変数とactiveな制約をActive Formulationとして使います。activeな変数集合は、現在の目的関数とactive制約の参照関係からInstanceが導出します。行ごとの `used_decision_variable_ids` やDataFrameの `used_ids` は、その行が参照する変数を表すため、inactive行でも引き続き使います。
+
+Preparationの選択も `IntegerEncodingPreparation.log_encode_all_active_integers()` に揃え、`log_encode_all_used_integers()` を置き換えます。
 
 ### 数式と制約の意味を引き継ぐ
 

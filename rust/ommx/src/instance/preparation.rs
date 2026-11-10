@@ -61,15 +61,15 @@ pub struct IntegerSlackPreparation {
     pub slack_upper_bound: Option<u64>,
 }
 
-/// Preparation of currently used Integer decision variables.
+/// Preparation of active Integer decision variables.
 ///
 /// Exactly one encoding owner operation is selected. Validation and mutation
 /// semantics remain owned by that operation.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IntegerEncodingPreparation {
-    /// Invoke [`Instance::log_encode_all_used_integers`].
-    LogEncodeAllUsedIntegers {
+    /// Invoke [`Instance::log_encode_all_active_integers`].
+    LogEncodeAllActiveIntegers {
         /// Absolute tolerance passed to the owner operation.
         atol: ATol,
     },
@@ -148,7 +148,7 @@ pub struct PreparationPolicy {
     pub objective: Option<ObjectivePreparation>,
     /// Optional Integer slack phase. `None` does not introduce Integer slack.
     pub integer_slack: Option<IntegerSlackPreparation>,
-    /// Optional used-Integer encoding phase.
+    /// Optional active-Integer encoding phase.
     pub integer_encoding: Option<IntegerEncodingPreparation>,
     /// Optional fixed-weight penalty phase.
     pub fixed_penalty: Option<FixedPenaltyPreparation>,
@@ -184,7 +184,7 @@ impl PreparationPolicy {
     /// assert_eq!(slack.slack_upper_bound, Some(31));
     /// assert!(matches!(
     ///     policy.integer_encoding,
-    ///     Some(IntegerEncodingPreparation::LogEncodeAllUsedIntegers { .. }),
+    ///     Some(IntegerEncodingPreparation::LogEncodeAllActiveIntegers { .. }),
     /// ));
     /// assert!(matches!(
     ///     policy.fixed_penalty,
@@ -245,7 +245,7 @@ impl PreparationPolicy {
                 atol: ATol::default(),
                 slack_upper_bound: Some(31),
             }),
-            integer_encoding: Some(IntegerEncodingPreparation::LogEncodeAllUsedIntegers {
+            integer_encoding: Some(IntegerEncodingPreparation::LogEncodeAllActiveIntegers {
                 atol: ATol::default(),
             }),
             fixed_penalty: Some(
@@ -339,8 +339,8 @@ impl PreparationStep for IntegerSlackPreparation {
 impl PreparationStep for IntegerEncodingPreparation {
     fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
         match self {
-            Self::LogEncodeAllUsedIntegers { atol } => {
-                instance.log_encode_all_used_integers(*atol)?;
+            Self::LogEncodeAllActiveIntegers { atol } => {
+                instance.log_encode_all_active_integers(*atol)?;
             }
         }
         Ok(())

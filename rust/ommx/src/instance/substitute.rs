@@ -519,7 +519,7 @@ mod tests {
                 .decision_variable_dependency()
                 .get(&dependent)
                 .is_some());
-            let ids: Vec<_> = encoded.used_decision_variable_ids().into_iter().collect();
+            let ids: Vec<_> = encoded.active_decision_variable_ids().into_iter().collect();
             assert_eq!(ids.len(), 2);
             for mask in 0..4 {
                 let state = crate::v1::State::from_iter(

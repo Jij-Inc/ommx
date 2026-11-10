@@ -44,9 +44,9 @@ def test_random_samples_basic():
             )
 
 
-def test_random_samples_only_used_variables():
-    """Test that random_samples only generates values for used variables"""
-    # Create instance with some unused variables
+def test_random_samples_only_active_variables():
+    """Test that random_samples only generates values for active variables"""
+    # Create an instance with some irrelevant variables
     x = [DecisionVariable.binary(i) for i in range(10)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -63,13 +63,13 @@ def test_random_samples_only_used_variables():
         num_samples=5,
     )
 
-    # Check that only used variables have values
-    used_vars = {0, 1, 2, 3}
+    # Check that only active variables have values
+    active_vars = {0, 1, 2, 3}
     assert samples.num_samples() == 5
 
     for sample_id in samples.sample_ids():
         state = samples.get_state(sample_id)
-        assert set(state.entries.keys()) == used_vars
+        assert set(state.entries.keys()) == active_vars
 
 
 def test_random_samples_with_different_variable_types():

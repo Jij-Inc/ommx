@@ -1157,12 +1157,12 @@ class OMMXHighsAdapter(SolverAdapter):
         return State(
             entries={
                 var.id: solution.col_value[i]
-                for i, var in enumerate(self.instance.used_decision_variables)
+                for i, var in enumerate(self.instance.active_decision_variables)
             }
         )
 
     def _set_decision_variables(self):
-        variables = self.instance.used_decision_variables
+        variables = self.instance.active_decision_variables
         num_cols = len(variables)
         if num_cols == 0:
             # HiGHS reports ModelEmpty without checking rows when there are no

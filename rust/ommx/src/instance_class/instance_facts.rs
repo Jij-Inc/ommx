@@ -41,13 +41,13 @@ impl ConstraintFacts {
 ///
 /// This private value is diagnostic evidence for instance-class membership,
 /// not another mutable source of truth. It includes the objective and every
-/// active constraint family, and groups only used decision variables by
+/// active constraint family, and groups only active decision variables by
 /// [`Kind`]. Fixed, dependent, irrelevant, inactive-constraint-only, and
 /// named-function-only variables are excluded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstanceFacts {
     sense: Sense,
-    used_variables_by_kind: BTreeMap<Kind, VariableIDSet>,
+    active_variables_by_kind: BTreeMap<Kind, VariableIDSet>,
     objective_classification: FunctionClassification,
     regular_constraints: BTreeMap<ConstraintID, ConstraintFacts>,
     indicator_constraints: BTreeMap<IndicatorConstraintID, ConstraintFacts>,
@@ -60,13 +60,13 @@ impl InstanceFacts {
         self.sense
     }
 
-    pub fn used_variables_by_kind(&self) -> &BTreeMap<Kind, VariableIDSet> {
-        &self.used_variables_by_kind
+    pub fn active_variables_by_kind(&self) -> &BTreeMap<Kind, VariableIDSet> {
+        &self.active_variables_by_kind
     }
 
     #[cfg(test)]
-    pub fn used_variable_ids(&self) -> VariableIDSet {
-        self.used_variables_by_kind
+    pub fn active_variable_ids(&self) -> VariableIDSet {
+        self.active_variables_by_kind
             .values()
             .flat_map(|ids| ids.iter().copied())
             .collect()
@@ -95,9 +95,9 @@ impl InstanceFacts {
 
 impl From<&Instance> for InstanceFacts {
     fn from(instance: &Instance) -> Self {
-        let mut used_variables_by_kind = BTreeMap::<Kind, VariableIDSet>::new();
-        for (id, variable) in instance.used_decision_variables() {
-            used_variables_by_kind
+        let mut active_variables_by_kind = BTreeMap::<Kind, VariableIDSet>::new();
+        for (id, variable) in instance.active_decision_variables() {
+            active_variables_by_kind
                 .entry(variable.kind())
                 .or_default()
                 .insert(id);
@@ -105,7 +105,7 @@ impl From<&Instance> for InstanceFacts {
 
         Self {
             sense: instance.sense(),
-            used_variables_by_kind,
+            active_variables_by_kind,
             objective_classification: instance.objective().into(),
             regular_constraints: instance
                 .active_constraints()
@@ -164,10 +164,10 @@ mod tests {
                 facts.objective_classification(),
                 FunctionClassification::from(instance.objective())
             );
-            prop_assert_eq!(facts.used_variable_ids(), instance.used_decision_variable_ids());
-            for (id, variable) in instance.used_decision_variables() {
+            prop_assert_eq!(facts.active_variable_ids(), instance.active_decision_variable_ids());
+            for (id, variable) in instance.active_decision_variables() {
                 prop_assert!(facts
-                    .used_variables_by_kind()
+                    .active_variables_by_kind()
                     .get(&variable.kind())
                     .is_some_and(|ids| ids.contains(&id)));
             }
@@ -246,7 +246,7 @@ mod tests {
                 classification: FunctionClassification::Polynomial(1.into()),
             })
         );
-        assert_eq!(after.used_variable_ids(), before.used_variable_ids());
+        assert_eq!(after.active_variable_ids(), before.active_variable_ids());
     }
 
     #[test]
@@ -299,9 +299,9 @@ mod tests {
             .unwrap();
 
         let facts = InstanceFacts::from(&instance);
-        assert_eq!(facts.used_variable_ids(), BTreeSet::from([used]));
+        assert_eq!(facts.active_variable_ids(), BTreeSet::from([used]));
         assert_eq!(
-            facts.used_variables_by_kind(),
+            facts.active_variables_by_kind(),
             &BTreeMap::from([(Kind::Binary, BTreeSet::from([used]))])
         );
         assert!(facts.regular_constraints().is_empty());

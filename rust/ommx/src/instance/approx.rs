@@ -97,13 +97,13 @@ impl AbsDiffEq for Instance {
             return false;
         }
 
-        let self_used_ids = self.used_decision_variable_ids();
-        let other_used_ids = other.used_decision_variable_ids();
-        if self_used_ids != other_used_ids {
+        let self_active_ids = self.active_decision_variable_ids();
+        let other_active_ids = other.active_decision_variable_ids();
+        if self_active_ids != other_active_ids {
             return false;
         }
 
-        // Output-only variables are not solver-used, but their definitions and
+        // Output-only variables are not active, but their definitions and
         // state-population rules still affect evaluation. Follow dependent RHS
         // expressions transitively and require the two population environments
         // to agree. This is deliberately a sufficient, conservative comparison:
@@ -155,11 +155,11 @@ impl AbsDiffEq for Instance {
                         return false;
                     }
                 }
-                DecisionVariableRole::Used | DecisionVariableRole::Irrelevant => {}
+                DecisionVariableRole::Active | DecisionVariableRole::Irrelevant => {}
             }
         }
 
-        let mut compared_ids = self_used_ids;
+        let mut compared_ids = self_active_ids;
         compared_ids.extend(self_output_ids);
         for id in compared_ids {
             let Some(self_var) = self.decision_variables.get(&id) else {

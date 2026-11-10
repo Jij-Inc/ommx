@@ -5185,9 +5185,7 @@ class IndicatorConstraint:
     >>> on = instance.evaluate({enabled.id: 1, amount.id: 5})
     >>> violated = instance.evaluate({enabled.id: 1, amount.id: 6})
     >>> assert off.feasible() and on.feasible() and not violated.feasible()
-    >>> assert not off.constraints_df(kind=ConstraintKind.Indicator).loc[
-    ...     cid, "indicator_on"
-    ... ]
+    >>> assert not off.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_on"]
     >>> assert on.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_on"]
 
     ```
@@ -5351,7 +5349,7 @@ class Instance:
 
     - {attr}`~ommx.Instance.objective` and {attr}`~ommx.Instance.sense` define
       what is minimized or maximized.
-    - {attr}`~ommx.Instance.used_decision_variables` supplies the variables and
+    - {attr}`~ommx.Instance.active_decision_variables` supplies the variables and
       their domains.
     - {attr}`~ommx.Instance.active_constraints` supplies all active regular and special
       constraints.
@@ -5376,7 +5374,7 @@ class Instance:
     definition can serve both roles. Interpretation Context need not contain an
     independent, complete copy of the original problem.
 
-    **Implementation contract:** {attr}`~ommx.Instance.used_decision_variables`
+    **Implementation contract:** {attr}`~ommx.Instance.active_decision_variables`
     must contain exactly the variables referenced by the active objective and
     every active constraint family, including structural uses such as an
     Indicator's controlling variable. {meth}`~ommx.Instance.required_ids` returns
@@ -5384,8 +5382,9 @@ class Instance:
     not contribute to this set. Maintaining this correspondence is the
     responsibility of the Instance implementation: construction, successful
     mutations and transformations, and extensions with new constraint families
-    must preserve it. Solver adapters may rely on this contract when creating
-    backend variables.
+    must preserve it. Adapters use `active_decision_variables` and `active_constraints`
+    as the variables and constraints of this formulation. The Instance derives the
+    active variable set; adapters do not need to collect variable references themselves.
 
     **Transformation principle**
 
@@ -5609,8 +5608,8 @@ class Instance:
     **Retained variables and output evaluation**
 
     {attr}`~ommx.Instance.decision_variables` contains every retained variable.
-    {attr}`~ommx.Instance.used_decision_variables` selects variables used in
-    the current objective or active constraints. Fixed and dependent variables
+    {attr}`~ommx.Instance.active_decision_variables` selects the variables of
+    the Active Formulation. Fixed and dependent variables
     remain defined so that evaluation can reconstruct their values, although
     the solver no longer chooses those values directly.
 
@@ -5622,7 +5621,7 @@ class Instance:
     >>> original.objective = x + y
     >>> fixed = original.partial_evaluate({x.id: 1})
     >>> assert {v.id for v in fixed.decision_variables} == {x.id, y.id}
-    >>> assert {v.id for v in fixed.used_decision_variables} == {y.id}
+    >>> assert {v.id for v in fixed.active_decision_variables} == {y.id}
     >>> assert fixed.evaluate({y.id: 0}).state.entries == {x.id: 1.0, y.id: 0.0}
 
     ```
@@ -5632,7 +5631,7 @@ class Instance:
     constraints for checking original conditions, and an
     {class}`~ommx.OutputObjective` separate from the current solver-facing
     objective. A variable appearing only in this information is not thereby
-    a used variable. {meth}`~ommx.Instance.populate_state` restores fixed and
+    an active variable. {meth}`~ommx.Instance.populate_state` restores fixed and
     dependent values before evaluation. An otherwise irrelevant variable is
     assigned a default when omitted; that default is not a reconstructed
     candidate value. Supply its value explicitly when it matters to the output.
@@ -5660,7 +5659,7 @@ class Instance:
     >>> assert fixed.sense == Sense.Minimize
     >>> assert fixed.objective.evaluate({}) == -3.0
     >>> assert fixed.required_ids() == set()
-    >>> assert fixed.used_decision_variables == []
+    >>> assert fixed.active_decision_variables == []
     >>> assert fixed.populate_state({}).entries == {0: 1.0}
     >>> solution = fixed.evaluate({})
     >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)
@@ -5917,9 +5916,9 @@ class Instance:
     @property
     def description(self) -> typing.Optional[InstanceDescription]: ...
     @property
-    def used_decision_variables(self) -> builtins.list[DecisionVariable]:
+    def active_decision_variables(self) -> builtins.list[DecisionVariable]:
         r"""
-        Decision variables used by the mathematical solver input.
+        Decision variables and their domains in the current Active Formulation.
 
         This property implements the Active Formulation contract of
         {class}`~ommx.Instance`: it contains exactly the variables referenced by
@@ -5934,7 +5933,7 @@ class Instance:
         {meth}`~ommx.Instance.evaluate_samples` populate their output values from
         stored values, dependencies, or defaults respectively.
         See {meth}`~ommx.Instance.populate_state` for the complete reconstruction
-        and default rules and examples of retained versus used variables.
+        and default rules and examples of retained versus active variables.
         """
     def replace_annotations(
         self, annotations: typing.Mapping[builtins.str, builtins.str]
@@ -7127,8 +7126,8 @@ class Instance:
 
         Accepts a {class}`~ommx.State`, an ID-to-value mapping, or an iterable of ID/value
         pairs. The returned State contains exactly the decision-variable IDs retained by
-        this Instance. Supply every variable used by its current objective and active
-        constraints; missing used values are errors, not opportunities to choose defaults.
+        this Instance. Supply every active variable; missing active values are errors,
+        not opportunities to choose defaults.
 
         Use {meth}`~ommx.Instance.evaluate` to populate a candidate and then evaluate its
         objective, variable domains, and constraints, or
@@ -7150,17 +7149,17 @@ class Instance:
         >>> _ = original.add_constraint(x * y == 0)
         >>> fixed = original.partial_evaluate({x.id: 1})
         >>> assert {v.id for v in fixed.decision_variables} == {x.id, y.id}
-        >>> assert {v.id for v in fixed.used_decision_variables} == {y.id}
+        >>> assert {v.id for v in fixed.active_decision_variables} == {y.id}
         >>> assert fixed.decision_variable_role(x.id) == DecisionVariableRole.Fixed
         >>> assert fixed.fixed_decision_variables() == {x.id: 1.0}
         >>> assert fixed.populate_state({y.id: 0}).entries == {x.id: 1.0, y.id: 0.0}
         >>> assert fixed.evaluate({y.id: 0}).objective == 1.0
-        >>> assert original.decision_variable_role(x.id) == DecisionVariableRole.Used
+        >>> assert original.decision_variable_role(x.id) == DecisionVariableRole.Active
 
         ```
 
         {attr}`~ommx.Instance.decision_variables` contains all retained variables.
-        {attr}`~ommx.Instance.used_decision_variables` selects solver-input variables,
+        {attr}`~ommx.Instance.active_decision_variables` selects solver-input variables,
         including variables in active special constraints and an Indicator's controlling
         Binary variable. Roles belong to an Instance and can change after transformation;
         they are independent of the variable's Binary, Integer, or other kind. See
@@ -7180,7 +7179,7 @@ class Instance:
         >>> encoded.substitute({count.id: 2 * flag})
         >>> assert encoded.decision_variable_roles() == {
         ...     count.id: DecisionVariableRole.Dependent,
-        ...     flag.id: DecisionVariableRole.Used,
+        ...     flag.id: DecisionVariableRole.Active,
         ... }
         >>> assert encoded.dependent_decision_variable_ids() == {count.id}
         >>> assert encoded.populate_state({flag.id: 1}).entries == {count.id: 2.0, flag.id: 1.0}
@@ -7196,7 +7195,7 @@ class Instance:
 
         **Irrelevant values and defaults**
 
-        An irrelevant variable is neither used, fixed, nor dependent. Its value is not
+        An irrelevant variable is neither active, fixed, nor dependent. Its value is not
         determined by optimization or reconstruction. When omitted, Binary, Integer, and
         Continuous variables receive the value in their bound nearest to zero;
         SemiInteger and SemiContinuous variables receive zero. The latter kinds allow
@@ -7225,7 +7224,7 @@ class Instance:
         ```
 
         A reference only from a named function, inactive constraint, output objective, or
-        dependency right-hand side does not make a variable used. If such a variable is
+        dependency right-hand side does not make a variable active. If such a variable is
         irrelevant, omitting its value means these expressions use its default. Supply the
         value explicitly when checking a particular candidate; the default is neither a
         solver-selected value nor a reconstruction of that candidate.
@@ -7264,7 +7263,7 @@ class Instance:
         ```
 
         `atol` defaults to the value returned by {func}`~ommx.get_default_atol`.
-        Missing used IDs, unknown IDs,
+        Missing active IDs, unknown IDs,
         non-finite supplied values, and inconsistent fixed or dependent assertions raise
         `ValueError`. Invalid finite values can remain in the populated state: use
         {meth}`~ommx.Instance.evaluate` to inspect kind, bound, and constraint feasibility.
@@ -7329,7 +7328,7 @@ class Instance:
         >>> assert original_candidate.feasible() and original_candidate.objective == 0.0
         >>> assert conditioned_candidate.feasible() and conditioned_candidate.objective == 1.0
         >>> assert conditioned_candidate.state.entries[x.id] == 1.0
-        >>> assert {v.id for v in source.used_decision_variables} == {x.id}
+        >>> assert {v.id for v in source.active_decision_variables} == {x.id}
 
         ```
 
@@ -7404,8 +7403,8 @@ class Instance:
         r"""
         Generate a random state for this instance using the provided random number generator.
 
-        This method generates random values only for variables that are actually used in the
-        objective function or constraints, as determined by decision variable usage.
+        This method generates random values only for the Active Formulation's
+        decision variables, as exposed by {attr}`~ommx.Instance.active_decision_variables`.
         Generated values respect the bounds of each variable type.
 
         **Args:**
@@ -7413,11 +7412,11 @@ class Instance:
 
         **Returns:**
         A randomly generated state that satisfies the variable bounds of this instance.
-        Only contains values for variables that are used in the problem.
+        Only contains values for active decision variables.
 
         # Examples
 
-        Generate random state only for used variables
+        Generate random state only for active variables
 
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Rng, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(5)]
@@ -7431,7 +7430,7 @@ class Instance:
         >>> rng = Rng()
         >>> state = instance.random_state(rng)
 
-        Only used variables have values
+        Only active variables have values
 
         >>> set(state.entries.keys())
         {0, 1}
@@ -7913,7 +7912,7 @@ class Instance:
 
         **Args:**
         - `decision_variable_ids`: The IDs of the integer decision variables to log-encode.
-          If not specified (or empty), all used integer variables are log-encoded.
+          If not specified (or empty), all active integer variables are log-encoded.
         - `atol`: Optional absolute tolerance used when normalizing integer
           bounds before encoding. If None, uses the default tolerance.
 
@@ -7965,7 +7964,7 @@ class Instance:
 
         **Args:**
         - `decision_variable_ids`: The IDs of the integer decision variables to unary-encode.
-          If not specified (or empty), all used integer variables are unary-encoded.
+          If not specified (or empty), all active integer variables are unary-encoded.
         - `max_range`: Maximum allowed `upper - lower` range for each encoded
           variable. This also bounds the number of auxiliary binary variables
           introduced per integer variable.
@@ -8256,7 +8255,7 @@ class Instance:
         """
     def irrelevant_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
-        Return IDs of decision variables not used, fixed, or dependent.
+        Return IDs of decision variables not active, fixed, or dependent.
 
         Values omitted from a candidate receive defaults under
         {meth}`~ommx.Instance.populate_state`. Supply a value explicitly when
@@ -8287,7 +8286,7 @@ class Instance:
                 "by_usage": {
                     "used_in_objective": int,
                     "used_in_constraints": int,
-                    "used": int,
+                    "active": int,
                     "fixed": int,
                     "dependent": int,
                     "irrelevant": int
@@ -8665,7 +8664,7 @@ class Instance:
         and active regular constraint functions must be stored as expanded
         polynomials of degree at most two. Quadratic terms are written using
         ``QUADOBJ`` and ``QCMATRIX`` sections, with the coefficient convention
-        described below. Variables used by the active formulation must have
+        described below. Active variables must have
         Binary, Integer, or Continuous kind. Active Indicator, OneHot, and SOS1
         constraints are rejected; lower them before export if appropriate.
         No preparation is performed automatically.
@@ -8698,11 +8697,11 @@ class Instance:
         # Information boundary
 
         The writer exports the active objective and sense, active regular
-        constraints, and the kinds and bounds of variables used by that model.
+        constraints, and the kinds and bounds of active variables.
         Quadratic coefficients follow the convention above.
-        Unused variables, including those referenced only by output semantics,
-        named functions, or inactive constraints, are omitted. Unused variables
-        of unsupported kinds do not prevent export.
+        Variables outside the Active Formulation, including those referenced only by
+        output semantics, named functions, or inactive constraints, are omitted.
+        Their kinds do not prevent export.
 
         ``description.name`` supplies the problem name. Variables and constraints
         use generated names ``OMMX_VAR_<id>`` and ``OMMX_CONSTR_<id>``; their
@@ -9184,7 +9183,7 @@ class InstanceClass:
     not automatically include mixed-integer quadratic problems. An empty list of
     clauses accepts no Instance.
 
-    A clause specifies the allowed kinds of used variables, the objective's
+    A clause specifies the allowed kinds of active variables, the objective's
     polynomial representation and degree, the relations and polynomial requirements
     of regular constraints and Indicator bodies, whether active OneHot and SOS1
     constraints are allowed, and the optimization direction. Its label identifies
@@ -9271,7 +9270,7 @@ class InstanceClass:
 
     **The active representation determines membership**
 
-    Variable-kind checks use {attr}`~ommx.Instance.used_decision_variables`: variables
+    Variable-kind checks use {attr}`~ommx.Instance.active_decision_variables`: variables
     referenced by the active objective and active constraints, including special
     constraints. Fixed, dependent, and irrelevant variables are excluded, as are
     variables referenced only by inactive constraints, named functions, or the output
@@ -9741,27 +9740,27 @@ class InstanceDescription:
 @typing.final
 class IntegerEncodingPreparation:
     r"""
-    Selection for the used-Integer encoding Preparation phase.
+    Selection for the active-Integer encoding Preparation phase.
 
     Exactly one encoding owner operation is selected. Validation and mutation
     semantics remain owned by that operation.
     """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
-    def log_encode_all_used_integers(
+    def log_encode_all_active_integers(
         *, atol: typing.Optional[builtins.float] = None
     ) -> IntegerEncodingPreparation:
         r"""
-        Select log encoding of every used Integer decision variable.
+        Select log encoding of every active Integer decision variable.
 
         The complete target set is determined from
-        {attr}`~ommx.Instance.used_decision_variables` before mutation and encoded
+        {attr}`~ommx.Instance.active_decision_variables` before mutation and encoded
         together with the same mathematical rule as {meth}`~ommx.Instance.log_encode`.
         ``atol`` normalizes bounds that are within tolerance of integers. On
-        success, no used Integer decision variable remains; irrelevant Integer
+        success, no active Integer decision variable remains; irrelevant Integer
         variables are not encoded.
 
-        A used Integer with a non-finite or otherwise non-encodable bound raises
+        An active Integer with a non-finite or otherwise non-encodable bound raises
         {class}`~ommx.LogEncodingError`. Active SOS1 members cannot be substituted
         and must be lowered first. Any error leaves this phase's input unchanged.
         """
@@ -10088,8 +10087,8 @@ class NamedFunction:
 
     **Supply values for variables used only in reporting**
 
-    Appearing only in a named function does not make a variable used by the current
-    objective or active constraints. If it also has no fixed value or dependency,
+    Appearing only in a named function does not make a variable active in the current
+    formulation. If it also has no fixed value or dependency,
     the variable is irrelevant to that current problem. When its value is omitted,
     {meth}`~ommx.Instance.populate_state` supplies a default before the named
     function is evaluated. That default is not a recovered value of the candidate.
@@ -11829,7 +11828,7 @@ class PreparationPolicy:
         >>> assert first.special_constraints == expected_special
         >>> assert first.objective == ObjectivePreparation(target=Sense.Minimize)
         >>> assert first.integer_slack == IntegerSlackPreparation(max_integer_range=17, slack_upper_bound=17)
-        >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_used_integers()
+        >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_active_integers()
         >>> assert first.fixed_penalty == expected_penalty
         >>> assert first.binary_power_reduction == BinaryPowerPreparation()
         >>> first.fixed_penalty = None
@@ -11893,7 +11892,7 @@ class PreparationPolicy:
         >>> assert first.special_constraints == expected_special
         >>> assert first.objective == ObjectivePreparation(target=Sense.Minimize)
         >>> assert first.integer_slack == IntegerSlackPreparation(max_integer_range=17, slack_upper_bound=17)
-        >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_used_integers()
+        >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_active_integers()
         >>> assert first.fixed_penalty == FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=1.0)
         >>> assert first.binary_power_reduction is None
         >>> first.fixed_penalty = None
@@ -15071,28 +15070,28 @@ class DecisionVariableRole(enum.Enum):
 
     | Role | Meaning | Value for candidate evaluation |
     | --- | --- | --- |
-    | `Used` | Referenced by the current objective or active constraints | Supplied by the caller |
-    | `Fixed` | A retained, non-used variable with a recorded fixed value | Restored from that value |
-    | `Dependent` | Neither used nor fixed; represented by an expression in other variables | Computed from that expression |
-    | `Irrelevant` | Neither used, fixed, nor dependent | Supplied by the caller, or filled with a default when omitted |
+    | `Active` | Belongs to the current Active Formulation | Supplied by the caller |
+    | `Fixed` | A retained variable outside the Active Formulation with a recorded fixed value | Restored from that value |
+    | `Dependent` | Neither active nor fixed; represented by an expression in other variables | Computed from that expression |
+    | `Irrelevant` | Neither active, fixed, nor dependent | Supplied by the caller, or filled with a default when omitted |
 
     Active constraints include regular and special constraints, including an
     Indicator's controlling Binary variable. References only from named functions,
     inactive constraints, output objectives, or dependency right-hand sides do not
-    make a variable used. Being irrelevant to solver input does not mean its value
+    make a variable active. Being irrelevant to solver input does not mean its value
     cannot affect reporting.
 
     {meth}`~ommx.Instance.populate_state` explains reconstruction, defaults,
     canonicalization, and consistency assertions with executable examples.
     """
 
-    Used = ...
+    Active = ...
     r"""
-    Used by the objective or active constraints passed to solvers
+    Belongs to the Active Formulation through its objective or active constraints
     """
     Fixed = ...
     r"""
-    Fixed by the instance-owned fixed-value table and not used by solver input
+    Fixed by the instance-owned fixed-value table and outside the Active Formulation
     """
     Dependent = ...
     r"""
@@ -15100,7 +15099,7 @@ class DecisionVariableRole(enum.Enum):
     """
     Irrelevant = ...
     r"""
-    Not used, fixed, or dependent
+    Not active, fixed, or dependent
     """
 
     def __hash__(self) -> builtins.int: ...

@@ -8,7 +8,7 @@ roles are called **Active Formulation** and **Interpretation Context**.
 
 - {attr}`~ommx.Instance.objective` and {attr}`~ommx.Instance.sense` define
   what is minimized or maximized.
-- {attr}`~ommx.Instance.used_decision_variables` supplies the variables and
+- {attr}`~ommx.Instance.active_decision_variables` supplies the variables and
   their domains.
 - {attr}`~ommx.Instance.active_constraints` supplies all active regular and special
   constraints.
@@ -33,7 +33,7 @@ not separate SDK types or disjoint copies of the model. A retained variable
 definition can serve both roles. Interpretation Context need not contain an
 independent, complete copy of the original problem.
 
-**Implementation contract:** {attr}`~ommx.Instance.used_decision_variables`
+**Implementation contract:** {attr}`~ommx.Instance.active_decision_variables`
 must contain exactly the variables referenced by the active objective and
 every active constraint family, including structural uses such as an
 Indicator's controlling variable. {meth}`~ommx.Instance.required_ids` returns
@@ -41,8 +41,9 @@ the same set of IDs. References occurring only in Interpretation Context must
 not contribute to this set. Maintaining this correspondence is the
 responsibility of the Instance implementation: construction, successful
 mutations and transformations, and extensions with new constraint families
-must preserve it. Solver adapters may rely on this contract when creating
-backend variables.
+must preserve it. Adapters use `active_decision_variables` and `active_constraints`
+as the variables and constraints of this formulation. The Instance derives the
+active variable set; adapters do not need to collect variable references themselves.
 
 **Transformation principle**
 
@@ -266,8 +267,8 @@ Instance.
 **Retained variables and output evaluation**
 
 {attr}`~ommx.Instance.decision_variables` contains every retained variable.
-{attr}`~ommx.Instance.used_decision_variables` selects variables used in
-the current objective or active constraints. Fixed and dependent variables
+{attr}`~ommx.Instance.active_decision_variables` selects the variables of
+the Active Formulation. Fixed and dependent variables
 remain defined so that evaluation can reconstruct their values, although
 the solver no longer chooses those values directly.
 
@@ -279,7 +280,7 @@ the solver no longer chooses those values directly.
 >>> original.objective = x + y
 >>> fixed = original.partial_evaluate({x.id: 1})
 >>> assert {v.id for v in fixed.decision_variables} == {x.id, y.id}
->>> assert {v.id for v in fixed.used_decision_variables} == {y.id}
+>>> assert {v.id for v in fixed.active_decision_variables} == {y.id}
 >>> assert fixed.evaluate({y.id: 0}).state.entries == {x.id: 1.0, y.id: 0.0}
 
 ```
@@ -289,7 +290,7 @@ Interpretation Context also includes information used only to interpret results:
 constraints for checking original conditions, and an
 {class}`~ommx.OutputObjective` separate from the current solver-facing
 objective. A variable appearing only in this information is not thereby
-a used variable. {meth}`~ommx.Instance.populate_state` restores fixed and
+an active variable. {meth}`~ommx.Instance.populate_state` restores fixed and
 dependent values before evaluation. An otherwise irrelevant variable is
 assigned a default when omitted; that default is not a reconstructed
 candidate value. Supply its value explicitly when it matters to the output.
@@ -317,7 +318,7 @@ been fixed:
 >>> assert fixed.sense == Sense.Minimize
 >>> assert fixed.objective.evaluate({}) == -3.0
 >>> assert fixed.required_ids() == set()
->>> assert fixed.used_decision_variables == []
+>>> assert fixed.active_decision_variables == []
 >>> assert fixed.populate_state({}).entries == {0: 1.0}
 >>> solution = fixed.evaluate({})
 >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)

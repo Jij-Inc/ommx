@@ -277,7 +277,7 @@ impl ParametricInstanceBuilder {
     /// - The keys of `decision_variable_dependency` are not in `decision_variables`
     /// - The RHS expressions of `decision_variable_dependency` reference IDs
     ///   outside `decision_variables` or `parameters`
-    /// - Construction-time `used`, `fixed`, and `dependent` sets are not pairwise disjoint
+    /// - Construction-time `active`, `fixed`, and `dependent` sets are not pairwise disjoint
     pub fn build(self) -> crate::Result<ParametricInstance> {
         let sense = self
             .sense
@@ -498,36 +498,36 @@ impl ParametricInstanceBuilder {
             }
         }
 
-        // Construction invariant: raw used, fixed, and dependent sets must be pairwise disjoint.
-        // - used: IDs appearing in objective or constraints
+        // Construction invariant: raw active, fixed, and dependent sets must be pairwise disjoint.
+        // - active: IDs appearing in objective or constraints
         // - fixed: IDs in the decision-variable table's fixed-value column
         // - dependent: keys of decision_variable_dependency
-        let mut used: VariableIDSet = objective.required_ids().into_iter().collect();
+        let mut active: VariableIDSet = objective.required_ids().into_iter().collect();
         for constraint in constraints.values() {
-            used.extend(constraint.required_ids());
+            active.extend(constraint.required_ids());
         }
         for ic in self.indicator_constraints.values() {
-            used.extend(ic.required_ids());
+            active.extend(ic.required_ids());
         }
         for oh in self.one_hot_constraints.values() {
-            used.extend(oh.required_ids());
+            active.extend(oh.required_ids());
         }
         for sos1 in self.sos1_constraints.values() {
-            used.extend(sos1.required_ids());
+            active.extend(sos1.required_ids());
         }
         let fixed: VariableIDSet = decision_variables.fixed_values().keys().copied().collect();
         let dependent: VariableIDSet = self.decision_variable_dependency.keys().collect();
 
-        // Check used ∩ dependent = ∅
-        if let Some(id) = used.intersection(&dependent).next() {
+        // Check active ∩ dependent = ∅
+        if let Some(id) = active.intersection(&dependent).next() {
             crate::bail!(
                 { ?id },
                 "Dependent variable cannot be used in objectives or constraints: {id:?}",
             );
         }
 
-        // Check used ∩ fixed = ∅
-        if let Some(id) = used.intersection(&fixed).next() {
+        // Check active ∩ fixed = ∅
+        if let Some(id) = active.intersection(&fixed).next() {
             crate::bail!(
                 { ?id },
                 "Fixed variable {id:?} cannot be used in objectives or constraints",

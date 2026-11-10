@@ -35,7 +35,7 @@ def test_kind_comparisons_defer_to_the_other_operand(kind):
     ("member", "value"),
     [
         (ConstraintKind.Indicator, 1),
-        (DecisionVariableRole.Used, 1),
+        (DecisionVariableRole.Active, 1),
         (Sense.Minimize, 1),
         (Sense.Maximize, 2),
         (Equality.EqualToZero, 1),

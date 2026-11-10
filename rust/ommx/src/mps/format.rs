@@ -14,15 +14,15 @@ pub(crate) const VAR_PREFIX: &str = "OMMX_VAR_";
 /// This function does not automatically Gzip the output -- that is the
 /// responsibility of the Write implementation.
 ///
-/// Decision variables used by the objective or active constraints must be
+/// Active decision variables must be
 /// Binary, Integer, or Continuous. Polynomial objectives and regular
 /// constraints of degree at most two are supported. Active Indicator, OneHot,
-/// and SOS1 constraints must be lowered before export. Unused variables of
+/// and SOS1 constraints must be lowered before export. Non-active variables of
 /// other kinds are accepted and omitted as described below.
 ///
 /// ## Information Loss and Filtering
 ///
-/// The active objective, active regular constraints, and used decision-variable
+/// The active objective, active regular constraints, and active decision-variable
 /// kinds and bounds are exported. `description.name` is used as the MPS problem
 /// name. Other Instance state is not represented, including the remaining
 /// description fields, parameters, annotations, output objective, named
@@ -178,10 +178,10 @@ fn write_columns<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()
     }
 
     // Second pass: write variables that only appear in quadratic terms (with zero coefficient)
-    let used_ids = instance.used_decision_variable_ids();
-    for var_id in used_ids.difference(&written_variables) {
+    let active_ids = instance.active_decision_variable_ids();
+    for var_id in active_ids.difference(&written_variables) {
         let dvar = instance.decision_variables().get(var_id).expect(
-            "Variable ID from used_decision_variable_ids() must exist in decision_variables",
+            "Variable ID from active_decision_variable_ids() must exist in decision_variables",
         );
         let var_name = dvar_name(*var_id);
         match dvar.kind() {
@@ -237,7 +237,7 @@ fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
 fn write_bounds<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
     writeln!(out, "BOUNDS")?;
 
-    for (var_id, dvar) in instance.used_decision_variables() {
+    for (var_id, dvar) in instance.active_decision_variables() {
         let name = dvar_name(var_id);
         let bound = dvar.bound();
 

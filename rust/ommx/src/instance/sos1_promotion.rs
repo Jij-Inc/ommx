@@ -1491,9 +1491,9 @@ impl Instance {
             regular_constraints: excluded_regular_constraints.clone(),
             ..Default::default()
         };
-        let used = super::analysis::used_decision_variable_ids_except(self, &except);
+        let active = super::analysis::active_decision_variable_ids_except(self, &except);
         for &id in private_ids {
-            if used.contains(&id) {
+            if active.contains(&id) {
                 crate::bail!(
                     { ?id },
                     "Fresh SOS1 selector {id:?} is used by active solver input outside the claimed formulation rows"
@@ -1785,7 +1785,7 @@ mod tests {
         let (mut instance, request) = mixed_instance();
         assert_eq!(
             instance.decision_variable_role(selector_id()),
-            Some(DecisionVariableRole::Used)
+            Some(DecisionVariableRole::Active)
         );
         let promotion = promote_one(&mut instance, &request).unwrap();
 
@@ -3367,7 +3367,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_v1_hint_accepts_all_reused_binary_members_without_big_m_rows() {
+    fn legacy_v1_hint_accepts_all_reactive_binary_members_without_big_m_rows() {
         let first = VariableID::from(0);
         let second = VariableID::from(2);
         let cardinality = ConstraintID::from(7);

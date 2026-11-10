@@ -351,7 +351,7 @@ def test_decode_to_sampleset_uses_instance_variables():
         ),
     ],
 )
-def test_prepared_instance_evaluation_populates_variable_unused_after_trivial_inequality(
+def test_prepared_instance_evaluation_populates_variable_non_active_after_trivial_inequality(
     variable,
     constraint,
     expected_value,
@@ -367,7 +367,7 @@ def test_prepared_instance_evaluation_populates_variable_unused_after_trivial_in
         input_class,
         OMMXOpenJijSAAdapter.recommended_preparation_policy(),
     )
-    assert instance.used_decision_variables == []
+    assert instance.active_decision_variables == []
 
     sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=1, seed=999)
     solution = sample_set.get(0)

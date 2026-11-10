@@ -1385,7 +1385,7 @@ impl Instance {
         self.inner.description.clone().map(InstanceDescription)
     }
 
-    /// Decision variables used by the mathematical solver input.
+    /// Decision variables and their domains in the current Active Formulation.
     ///
     /// This property implements the Active Formulation contract of
     /// {class}`~ommx.Instance`: it contains exactly the variables referenced by
@@ -1400,12 +1400,12 @@ impl Instance {
     /// {meth}`~ommx.Instance.evaluate_samples` populate their output values from
     /// stored values, dependencies, or defaults respectively.
     /// See {meth}`~ommx.Instance.populate_state` for the complete reconstruction
-    /// and default rules and examples of retained versus used variables.
+    /// and default rules and examples of retained versus active variables.
     #[getter]
-    pub fn used_decision_variables(&self) -> Vec<DecisionVariable> {
+    pub fn active_decision_variables(&self) -> Vec<DecisionVariable> {
         let labels = self.inner.variable_labels();
         self.inner
-            .used_decision_variables()
+            .active_decision_variables()
             .iter()
             .map(|(id, &var)| {
                 DecisionVariable::from_parts(*id, var.clone(), labels.collect_for(*id))
@@ -2057,8 +2057,8 @@ impl Instance {
 
     /// Generate a random state for this instance using the provided random number generator.
     ///
-    /// This method generates random values only for variables that are actually used in the
-    /// objective function or constraints, as determined by decision variable usage.
+    /// This method generates random values only for the Active Formulation's
+    /// decision variables, as exposed by {attr}`~ommx.Instance.active_decision_variables`.
     /// Generated values respect the bounds of each variable type.
     ///
     /// **Args:**
@@ -2066,11 +2066,11 @@ impl Instance {
     ///
     /// **Returns:**
     /// A randomly generated state that satisfies the variable bounds of this instance.
-    /// Only contains values for variables that are used in the problem.
+    /// Only contains values for active decision variables.
     ///
     /// # Examples
     ///
-    /// Generate random state only for used variables
+    /// Generate random state only for active variables
     ///
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Rng, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(5)]
@@ -2084,7 +2084,7 @@ impl Instance {
     /// >>> rng = Rng()
     /// >>> state = instance.random_state(rng)
     ///
-    /// Only used variables have values
+    /// Only active variables have values
     ///
     /// >>> set(state.entries.keys())
     /// {0, 1}
@@ -2576,7 +2576,7 @@ impl Instance {
     ///
     /// **Args:**
     /// - `decision_variable_ids`: The IDs of the integer decision variables to log-encode.
-    ///   If not specified (or empty), all used integer variables are log-encoded.
+    ///   If not specified (or empty), all active integer variables are log-encoded.
     /// - `atol`: Optional absolute tolerance used when normalizing integer
     ///   bounds before encoding. If None, uses the default tolerance.
     ///
@@ -2618,10 +2618,10 @@ impl Instance {
             None => ommx::ATol::default(),
         };
         let ids: BTreeSet<u64> = if decision_variable_ids.is_empty() {
-            // Auto-detect: find all used integer decision variables
+            // Auto-detect: find all active integer decision variables
             let usage = self.inner.decision_variable_usage();
             let integer_ids: BTreeSet<u64> = usage
-                .used_integer()
+                .active_integer()
                 .into_keys()
                 .map(|id| id.into_inner())
                 .collect();
@@ -2651,7 +2651,7 @@ impl Instance {
     ///
     /// **Args:**
     /// - `decision_variable_ids`: The IDs of the integer decision variables to unary-encode.
-    ///   If not specified (or empty), all used integer variables are unary-encoded.
+    ///   If not specified (or empty), all active integer variables are unary-encoded.
     /// - `max_range`: Maximum allowed `upper - lower` range for each encoded
     ///   variable. This also bounds the number of auxiliary binary variables
     ///   introduced per integer variable.
@@ -2695,7 +2695,7 @@ impl Instance {
         let ids: BTreeSet<u64> = if decision_variable_ids.is_empty() {
             let usage = self.inner.decision_variable_usage();
             let integer_ids: BTreeSet<u64> = usage
-                .used_integer()
+                .active_integer()
                 .into_keys()
                 .map(|id| id.into_inner())
                 .collect();
@@ -3017,7 +3017,7 @@ impl Instance {
             .collect()
     }
 
-    /// Return IDs of decision variables not used, fixed, or dependent.
+    /// Return IDs of decision variables not active, fixed, or dependent.
     ///
     /// Values omitted from a candidate receive defaults under
     /// {meth}`~ommx.Instance.populate_state`. Supply a value explicitly when
@@ -3053,7 +3053,7 @@ impl Instance {
     ///         "by_usage": {
     ///             "used_in_objective": int,
     ///             "used_in_constraints": int,
-    ///             "used": int,
+    ///             "active": int,
     ///             "fixed": int,
     ///             "dependent": int,
     ///             "irrelevant": int

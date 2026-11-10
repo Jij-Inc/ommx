@@ -94,7 +94,11 @@ A dictionary made with `dict(model.active_constraints)` still holds attached row
 
 ### Replace a variable analysis query
 
-For one variable, use {meth}`~ommx.Instance.decision_variable_role`. For a report over many variables, use `decision_variables_df()` and its `state_role` and `substituted_value` columns. If your adapter only needs variables sent to the solver, use `used_decision_variables`. These queries answer different questions when fixed or dependent variables remain available for evaluating candidates.
+For one variable, use {meth}`~ommx.Instance.decision_variable_role`. For a report over many variables, use `decision_variables_df()` and its `state_role` and `substituted_value` columns. If your adapter only needs variables sent to the solver, use `active_decision_variables`. These queries answer different questions when fixed or dependent variables remain available for evaluating candidates.
+
+Replace `used_decision_variables` with `active_decision_variables` and `DecisionVariableRole.Used` with `DecisionVariableRole.Active`; the `state_role` value is now `"active"`. Adapters use the Instance's active variables and active constraints as its Active Formulation. The Instance derives the active variable set from its current objective and active constraints. Row-level `used_decision_variable_ids` and DataFrame `used_ids` still describe references within that row, including inactive rows.
+
+The Preparation selector is also named `IntegerEncodingPreparation.log_encode_all_active_integers()`, replacing `log_encode_all_used_integers()`.
 
 ### Carry over the mathematical structure
 

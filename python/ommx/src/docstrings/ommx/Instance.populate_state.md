@@ -6,8 +6,8 @@ two roles of the intermediate representation.
 
 Accepts a {class}`~ommx.State`, an ID-to-value mapping, or an iterable of ID/value
 pairs. The returned State contains exactly the decision-variable IDs retained by
-this Instance. Supply every variable used by its current objective and active
-constraints; missing used values are errors, not opportunities to choose defaults.
+this Instance. Supply every active variable; missing active values are errors,
+not opportunities to choose defaults.
 
 Use {meth}`~ommx.Instance.evaluate` to populate a candidate and then evaluate its
 objective, variable domains, and constraints, or
@@ -29,17 +29,17 @@ Instance; the original remains unchanged.
 >>> _ = original.add_constraint(x * y == 0)
 >>> fixed = original.partial_evaluate({x.id: 1})
 >>> assert {v.id for v in fixed.decision_variables} == {x.id, y.id}
->>> assert {v.id for v in fixed.used_decision_variables} == {y.id}
+>>> assert {v.id for v in fixed.active_decision_variables} == {y.id}
 >>> assert fixed.decision_variable_role(x.id) == DecisionVariableRole.Fixed
 >>> assert fixed.fixed_decision_variables() == {x.id: 1.0}
 >>> assert fixed.populate_state({y.id: 0}).entries == {x.id: 1.0, y.id: 0.0}
 >>> assert fixed.evaluate({y.id: 0}).objective == 1.0
->>> assert original.decision_variable_role(x.id) == DecisionVariableRole.Used
+>>> assert original.decision_variable_role(x.id) == DecisionVariableRole.Active
 
 ```
 
 {attr}`~ommx.Instance.decision_variables` contains all retained variables.
-{attr}`~ommx.Instance.used_decision_variables` selects solver-input variables,
+{attr}`~ommx.Instance.active_decision_variables` selects solver-input variables,
 including variables in active special constraints and an Indicator's controlling
 Binary variable. Roles belong to an Instance and can change after transformation;
 they are independent of the variable's Binary, Integer, or other kind. See
@@ -59,7 +59,7 @@ A substituted variable is restored from its recorded expression. In this example
 >>> encoded.substitute({count.id: 2 * flag})
 >>> assert encoded.decision_variable_roles() == {
 ...     count.id: DecisionVariableRole.Dependent,
-...     flag.id: DecisionVariableRole.Used,
+...     flag.id: DecisionVariableRole.Active,
 ... }
 >>> assert encoded.dependent_decision_variable_ids() == {count.id}
 >>> assert encoded.populate_state({flag.id: 1}).entries == {count.id: 2.0, flag.id: 1.0}
@@ -75,7 +75,7 @@ its transformation contract when choosing an expression.
 
 **Irrelevant values and defaults**
 
-An irrelevant variable is neither used, fixed, nor dependent. Its value is not
+An irrelevant variable is neither active, fixed, nor dependent. Its value is not
 determined by optimization or reconstruction. When omitted, Binary, Integer, and
 Continuous variables receive the value in their bound nearest to zero;
 SemiInteger and SemiContinuous variables receive zero. The latter kinds allow
@@ -104,7 +104,7 @@ zero as well as values in their nonzero interval.
 ```
 
 A reference only from a named function, inactive constraint, output objective, or
-dependency right-hand side does not make a variable used. If such a variable is
+dependency right-hand side does not make a variable active. If such a variable is
 irrelevant, omitting its value means these expressions use its default. Supply the
 value explicitly when checking a particular candidate; the default is neither a
 solver-selected value nor a reconstruction of that candidate.
@@ -143,7 +143,7 @@ can be rejected as inconsistent.
 ```
 
 `atol` defaults to the value returned by {func}`~ommx.get_default_atol`.
-Missing used IDs, unknown IDs,
+Missing active IDs, unknown IDs,
 non-finite supplied values, and inconsistent fixed or dependent assertions raise
 `ValueError`. Invalid finite values can remain in the populated state: use
 {meth}`~ommx.Instance.evaluate` to inspect kind, bound, and constraint feasibility.

@@ -92,12 +92,12 @@ impl Instance {
         let usage = self.decision_variable_usage();
 
         (
-            arbitrary_integer_state(&usage.used_binary(), 1),
-            arbitrary_integer_state(&usage.used_integer(), 100),
-            arbitrary_semi_integer_state(&usage.used_semi_integer(), 100),
-            arbitrary_continuous_state(&usage.used_continuous(), 100.0),
-            arbitrary_semi_continuous_state(&usage.used_semi_continuous(), 100.0),
-            arbitrary_finite_state(&usage.used_finite_domain()),
+            arbitrary_integer_state(&usage.active_binary(), 1),
+            arbitrary_integer_state(&usage.active_integer(), 100),
+            arbitrary_semi_integer_state(&usage.active_semi_integer(), 100),
+            arbitrary_continuous_state(&usage.active_continuous(), 100.0),
+            arbitrary_semi_continuous_state(&usage.active_semi_continuous(), 100.0),
+            arbitrary_finite_state(&usage.active_finite_domain()),
         )
             .prop_map(
                 |(binary, integer, semi_integer, continuous, semi_continuous, finite)| {
@@ -780,10 +780,10 @@ mod tests {
             prop_assert!(!output.preserves_optimality());
             let output_only_ids = output.function().required_ids();
             prop_assert!(!output_only_ids.is_empty());
-            let solver_used_ids = instance.used_decision_variable_ids();
+            let active_ids = instance.active_decision_variable_ids();
             let usage = instance.decision_variable_usage();
             for id in output_only_ids {
-                prop_assert!(!solver_used_ids.contains(&id));
+                prop_assert!(!active_ids.contains(&id));
                 prop_assert!(usage.get(id).is_none());
             }
             prop_assert!(

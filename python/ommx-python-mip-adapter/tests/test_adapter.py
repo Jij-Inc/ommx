@@ -119,7 +119,7 @@ def test_error_nonlinear_constraint():
         ),
     ],
 )
-def test_rejects_used_unsupported_variable_kinds(
+def test_rejects_active_unsupported_variable_kinds(
     variable: DecisionVariable, kind: Kind
 ) -> None:
     instance = Instance.from_components(
@@ -138,12 +138,12 @@ def test_rejects_used_unsupported_variable_kinds(
     assert mismatch.variable_ids == {0}
 
 
-def test_ignores_unused_unsupported_variable_kind() -> None:
-    used = DecisionVariable.continuous(0)
-    unused = DecisionVariable.semi_integer(1, lower=1, upper=3)
+def test_ignores_non_active_unsupported_variable_kind() -> None:
+    active = DecisionVariable.continuous(0)
+    non_active = DecisionVariable.semi_integer(1, lower=1, upper=3)
     instance = Instance.from_components(
-        decision_variables=[used, unused],
-        objective=used,
+        decision_variables=[active, non_active],
+        objective=active,
         active_constraints={},
         sense=Sense.Minimize,
     )

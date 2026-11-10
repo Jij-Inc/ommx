@@ -19,9 +19,9 @@ def test_variable_domains_and_column_mapping():
     binary = DecisionVariable.binary(100)
     integer = DecisionVariable.integer(7, lower=-3, upper=4)
     continuous = DecisionVariable.continuous(42, lower=-2.5, upper=6.5)
-    unused = DecisionVariable.continuous(321)
+    non_active = DecisionVariable.continuous(321)
     instance = Instance.from_components(
-        decision_variables=[continuous, unused, binary, integer],
+        decision_variables=[continuous, non_active, binary, integer],
         objective=3 * binary + 5 * integer + 7 * continuous,
         active_constraints={},
         sense=Sense.Minimize,
@@ -47,10 +47,12 @@ def test_variable_domains_and_column_mapping():
     assert state.entries == pytest.approx({100: 0, 7: -3, 42: -2.5})
 
 
-@pytest.mark.parametrize("has_unused_variable", [False, True])
-def test_constructor_without_active_variables(has_unused_variable):
+@pytest.mark.parametrize("has_non_active_variable", [False, True])
+def test_constructor_without_active_variables(has_non_active_variable):
     instance = Instance.from_components(
-        decision_variables=[DecisionVariable.binary(11)] if has_unused_variable else [],
+        decision_variables=[DecisionVariable.binary(11)]
+        if has_non_active_variable
+        else [],
         objective=7,
         active_constraints={},
         sense=Sense.Minimize,
@@ -270,10 +272,10 @@ def test_partial_evaluate():
         active_constraints={0: x[0] + x[1] + x[2] <= 1},  # one-hot constraint
         sense=Sense.Minimize,
     )
-    assert instance.used_decision_variables == x
+    assert instance.active_decision_variables == x
     partial = instance.partial_evaluate({0: 1})
     # x[0] is no longer present in the problem
-    assert partial.used_decision_variables == x[1:]
+    assert partial.active_decision_variables == x[1:]
 
     solution = OMMXHighsAdapter.solve(partial)
     assert [var.value for var in solution.decision_variables] == [1, 0, 0]
@@ -296,7 +298,7 @@ def test_relax_constraint():
         sense=Sense.Minimize,
     )
 
-    assert instance.used_decision_variables == x
+    assert instance.active_decision_variables == x
     instance.deactivate_constraint(1, "relax")
     # id for x[2] is listed as irrelevant
     assert instance.irrelevant_decision_variable_ids() == {x[2].id}

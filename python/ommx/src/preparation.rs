@@ -195,7 +195,7 @@ impl From<ommx::IntegerSlackPreparation> for IntegerSlackPreparation {
     }
 }
 
-/// Selection for the used-Integer encoding Preparation phase.
+/// Selection for the active-Integer encoding Preparation phase.
 ///
 /// Exactly one encoding owner operation is selected. Validation and mutation
 /// semantics remain owned by that operation.
@@ -209,23 +209,23 @@ pub struct IntegerEncodingPreparation {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl IntegerEncodingPreparation {
-    /// Select log encoding of every used Integer decision variable.
+    /// Select log encoding of every active Integer decision variable.
     ///
     /// The complete target set is determined from
-    /// {attr}`~ommx.Instance.used_decision_variables` before mutation and encoded
+    /// {attr}`~ommx.Instance.active_decision_variables` before mutation and encoded
     /// together with the same mathematical rule as {meth}`~ommx.Instance.log_encode`.
     /// ``atol`` normalizes bounds that are within tolerance of integers. On
-    /// success, no used Integer decision variable remains; irrelevant Integer
+    /// success, no active Integer decision variable remains; irrelevant Integer
     /// variables are not encoded.
     ///
-    /// A used Integer with a non-finite or otherwise non-encodable bound raises
+    /// An active Integer with a non-finite or otherwise non-encodable bound raises
     /// {class}`~ommx.LogEncodingError`. Active SOS1 members cannot be substituted
     /// and must be lowered first. Any error leaves this phase's input unchanged.
     #[staticmethod]
     #[pyo3(signature = (*, atol=None))]
-    pub fn log_encode_all_used_integers(atol: Option<f64>) -> OmmxPyResult<Self> {
+    pub fn log_encode_all_active_integers(atol: Option<f64>) -> OmmxPyResult<Self> {
         Ok(Self {
-            inner: ommx::IntegerEncodingPreparation::LogEncodeAllUsedIntegers {
+            inner: ommx::IntegerEncodingPreparation::LogEncodeAllActiveIntegers {
                 atol: resolve_atol(atol)?,
             },
         })
@@ -478,7 +478,7 @@ impl PreparationPolicy {
     /// >>> assert first.special_constraints == expected_special
     /// >>> assert first.objective == ObjectivePreparation(target=Sense.Minimize)
     /// >>> assert first.integer_slack == IntegerSlackPreparation(max_integer_range=17, slack_upper_bound=17)
-    /// >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_used_integers()
+    /// >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_active_integers()
     /// >>> assert first.fixed_penalty == expected_penalty
     /// >>> assert first.binary_power_reduction == BinaryPowerPreparation()
     /// >>> first.fixed_penalty = None
@@ -546,7 +546,7 @@ impl PreparationPolicy {
     /// >>> assert first.special_constraints == expected_special
     /// >>> assert first.objective == ObjectivePreparation(target=Sense.Minimize)
     /// >>> assert first.integer_slack == IntegerSlackPreparation(max_integer_range=17, slack_upper_bound=17)
-    /// >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_used_integers()
+    /// >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_active_integers()
     /// >>> assert first.fixed_penalty == FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=1.0)
     /// >>> assert first.binary_power_reduction is None
     /// >>> first.fixed_penalty = None

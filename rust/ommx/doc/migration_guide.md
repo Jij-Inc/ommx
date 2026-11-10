@@ -55,6 +55,30 @@ is queried through narrow per-collection accessors on `Instance` /
 Decision variables and named functions additionally follow the table-owned ID
 rule: the row data no longer stores its own ID.
 
+## Active decision variables
+
+The Active Formulation consists of active decision variables and their domains,
+active constraints, and the current objective and sense. `Instance` derives its
+active variable set from references in that objective and those constraints;
+adapters consume the resulting set rather than collecting references themselves.
+
+Replace `Instance::used_decision_variables()` with `active_decision_variables()`
+and `used_decision_variable_ids()` with `active_decision_variable_ids()`.
+`DecisionVariableRole::Used` becomes `DecisionVariableRole::Active`, and its
+serialized name is `"active"`. `DecisionVariableUsage` keeps the reference index,
+but its full-set and kind selectors become `active()`, `active_integer()`, and
+the corresponding `active_*` methods. `by_used_variable()` becomes
+`by_active_variable()`, and `is_used_by_solver()` becomes `is_active()`.
+`VariableStatsByUsage::used` is now `active`, including the JSON key.
+`log_encode_all_used_integers()` becomes `log_encode_all_active_integers()`.
+The Preparation variant is likewise
+`IntegerEncodingPreparation::LogEncodeAllActiveIntegers`.
+
+Keep `used_in_objective` and `used_in_*_constraints`: they describe reference
+relationships within the Active Formulation. Row-level
+`used_decision_variable_ids` also keeps its name and reports that row's references,
+including references retained in inactive constraints and named functions.
+
 ## Constraint activeness
 
 Constraint membership is now explicit: `active_constraints()` returns the solver-facing rows, `inactive_constraints()` returns retained rows, and `constraints()` returns the complete regular-constraint collection. The corresponding special-family accessors use the same prefixes. Builders take `active_constraints(...)` and `inactive_constraints(...)`, with equivalent methods for each family.
@@ -867,7 +891,7 @@ dependency backwards.
 Legacy v1 protobuf `substituted_value` fields are still accepted on parse, but
 the parser drains them into the same table before constructing the domain
 model. The host builder rejects states where a fixed variable is also
-solver-used or dependent, and `ParametricInstance` additionally rejects
+active or dependent, and `ParametricInstance` additionally rejects
 decision-variable / parameter ID collisions; these host-level invariants cannot
 be checked by an individual `DecisionVariable` or by the table alone.
 

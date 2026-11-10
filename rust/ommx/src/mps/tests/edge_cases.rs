@@ -6,7 +6,7 @@ use maplit::btreemap;
 
 // Test variable filtering and inactive constraint handling
 #[test]
-fn test_unused_variable_filtering() {
+fn test_non_active_variable_filtering() {
     // Create instance with 3 variables but only use 2
     let decision_variables = btreemap! {
         VariableID::from(0) => DecisionVariable::new(
@@ -46,7 +46,7 @@ fn test_unused_variable_filtering() {
     // Should only have 2 variables (x0, x1), not 3
     assert_eq!(loaded_instance.decision_variables().len(), 2);
 
-    // Check that unused variable (id=2) is not present
+    // Check that the non-active variable (id=2) is not present
     let var_ids: Vec<u64> = loaded_instance
         .decision_variables()
         .keys()

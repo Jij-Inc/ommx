@@ -14,7 +14,7 @@ union of continuous quadratic problems and mixed-integer linear problems does
 not automatically include mixed-integer quadratic problems. An empty list of
 clauses accepts no Instance.
 
-A clause specifies the allowed kinds of used variables, the objective's
+A clause specifies the allowed kinds of active variables, the objective's
 polynomial representation and degree, the relations and polynomial requirements
 of regular constraints and Indicator bodies, whether active OneHot and SOS1
 constraints are allowed, and the optimization direction. Its label identifies
@@ -101,7 +101,7 @@ Alternatively, add a clause that accepts the dedicated OneHot representation:
 
 **The active representation determines membership**
 
-Variable-kind checks use {attr}`~ommx.Instance.used_decision_variables`: variables
+Variable-kind checks use {attr}`~ommx.Instance.active_decision_variables`: variables
 referenced by the active objective and active constraints, including special
 constraints. Fixed, dependent, and irrelevant variables are excluded, as are
 variables referenced only by inactive constraints, named functions, or the output

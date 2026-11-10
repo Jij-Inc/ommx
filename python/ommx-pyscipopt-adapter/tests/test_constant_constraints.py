@@ -16,7 +16,7 @@ from ommx.adapter import InfeasibleDetected, UnboundedDetected
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 
-@pytest.mark.parametrize("variable_mode", ["none", "unused", "active"])
+@pytest.mark.parametrize("variable_mode", ["none", "non_active", "active"])
 @pytest.mark.parametrize("magnitude", [1, 1e20, sys.float_info.max])
 @pytest.mark.parametrize(
     "equality,constant,feasible",

@@ -142,12 +142,12 @@ def test_rejects_unsupported_variable_kinds(variable, kind):
     assert mismatch.variable_ids == {0}
 
 
-def test_accepts_unused_unsupported_variable_kind_without_mutating_input():
-    used = DecisionVariable.binary(0)
-    unused = DecisionVariable.semi_integer(1, lower=1, upper=3)
+def test_accepts_non_active_unsupported_variable_kind_without_mutating_input():
+    active = DecisionVariable.binary(0)
+    non_active = DecisionVariable.semi_integer(1, lower=1, upper=3)
     instance = Instance.from_components(
-        decision_variables=[used, unused],
-        objective=used,
+        decision_variables=[active, non_active],
+        objective=active,
         active_constraints={},
         sense=Sense.Minimize,
     )

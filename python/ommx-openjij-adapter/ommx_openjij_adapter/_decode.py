@@ -44,7 +44,7 @@ def _decode_response(
 
 def _decode_for_instance(response: oj.Response, instance: Instance) -> SampleSet:
     """Decode and evaluate a response against the exact Adapter input."""
-    variable_ids = {variable.id for variable in instance.used_decision_variables}
+    variable_ids = {variable.id for variable in instance.active_decision_variables}
     samples = _decode_response(
         response,
         variable_ids=variable_ids,

@@ -258,27 +258,27 @@ impl Instance {
         Ok(encodings)
     }
 
-    /// Log-encode all Integer decision variables currently used by solver input.
+    /// Log-encode all active Integer decision variables.
     ///
     /// The complete target set is derived from
     /// [`Self::decision_variable_usage`] before mutation. All targets are
     /// encoded together through [`Self::log_encode`]. On success,
-    /// [`DecisionVariableUsage::used_integer`](crate::DecisionVariableUsage::used_integer)
+    /// [`DecisionVariableUsage::active_integer`](crate::DecisionVariableUsage::active_integer)
     /// is empty; irrelevant Integer variables are not encoded.
     ///
     /// # Errors
     ///
-    /// Returns an error from [`Self::log_encode`] if any used Integer variable
-    /// cannot be encoded. In particular, used variables with non-finite bounds
+    /// Returns an error from [`Self::log_encode`] if any active Integer variable
+    /// cannot be encoded. In particular, active variables with non-finite bounds
     /// retain [`LogEncodingUnavailable`], while an active SOS1 member retains
     /// [`SubstitutionError`](crate::SubstitutionError). Lower active SOS1
     /// constraints with [`Self::lower_special_constraints`] before calling this
     /// method. Any error leaves the instance unchanged.
-    pub fn log_encode_all_used_integers(
+    pub fn log_encode_all_active_integers(
         &mut self,
         atol: ATol,
     ) -> crate::Result<BTreeMap<VariableID, Linear>> {
-        let ids = self.decision_variable_usage().used_integer().into_keys();
+        let ids = self.decision_variable_usage().active_integer().into_keys();
         self.log_encode(ids, atol)
     }
 
@@ -460,7 +460,7 @@ mod tests {
         let special_variables = active_special_constraint_variables(instance);
         instance
             .decision_variable_usage()
-            .used_integer()
+            .active_integer()
             .into_iter()
             .filter_map(|(id, bound)| {
                 if special_variables.contains(&id)
@@ -477,7 +477,7 @@ mod tests {
     fn arbitrary_log_encode_case() -> BoxedStrategy<(Instance, LogEncodeTarget, State)> {
         Instance::arbitrary_with(polynomial_full_v3_parameters())
             .prop_filter_map(
-                "instance must contain an encodable used integer variable",
+                "instance must contain an encodable active integer variable",
                 |instance| {
                     let targets = log_encode_targets(&instance, MAX_PROPTEST_LOG_BITS);
                     (!targets.is_empty()).then_some((instance, targets))
@@ -844,10 +844,10 @@ mod tests {
             with_output.decision_variable_role(id),
             Some(DecisionVariableRole::Dependent)
         );
-        assert!(!with_output.used_decision_variable_ids().contains(&id));
+        assert!(!with_output.active_decision_variable_ids().contains(&id));
         let state = State::from_iter(
             with_output
-                .used_decision_variable_ids()
+                .active_decision_variable_ids()
                 .into_iter()
                 .map(|id| (id.into_inner(), 0.0)),
         );
@@ -1248,7 +1248,7 @@ mod tests {
     }
 
     #[test]
-    fn log_encode_all_used_integers_satisfies_its_postcondition() {
+    fn log_encode_all_active_integers_satisfies_its_postcondition() {
         let used0 = VariableID::from(0);
         let used1 = VariableID::from(1);
         let irrelevant = VariableID::from(2);
@@ -1274,19 +1274,22 @@ mod tests {
             .unwrap();
         let used_before = instance
             .decision_variable_usage()
-            .used_integer()
+            .active_integer()
             .into_keys()
             .collect::<BTreeSet<_>>();
 
         let encodings = instance
-            .log_encode_all_used_integers(ATol::default())
+            .log_encode_all_active_integers(ATol::default())
             .unwrap();
 
         assert_eq!(
             encodings.keys().copied().collect::<BTreeSet<_>>(),
             used_before
         );
-        assert!(instance.decision_variable_usage().used_integer().is_empty());
+        assert!(instance
+            .decision_variable_usage()
+            .active_integer()
+            .is_empty());
         assert_eq!(
             instance.decision_variable_role(used0),
             Some(DecisionVariableRole::Dependent)
@@ -1302,7 +1305,7 @@ mod tests {
     }
 
     #[test]
-    fn log_encode_all_used_integers_is_atomic_when_one_target_is_unbounded() {
+    fn log_encode_all_active_integers_is_atomic_when_one_target_is_unbounded() {
         let bounded = VariableID::from(0);
         let unbounded = VariableID::from(1);
         let bounded_integer = DecisionVariable::new(
@@ -1326,7 +1329,7 @@ mod tests {
         let before = instance.clone();
 
         let err = instance
-            .log_encode_all_used_integers(ATol::default())
+            .log_encode_all_active_integers(ATol::default())
             .unwrap_err();
 
         assert!(matches!(
@@ -1337,7 +1340,7 @@ mod tests {
     }
 
     #[test]
-    fn log_encode_all_used_integers_requires_sos1_to_be_lowered() {
+    fn log_encode_all_active_integers_requires_sos1_to_be_lowered() {
         let ordinary = VariableID::from(0);
         let sos1_member = VariableID::from(1);
         let sos1_id = Sos1ConstraintID::from(0);
@@ -1366,7 +1369,7 @@ mod tests {
         assert_eq!(
             instance
                 .decision_variable_usage()
-                .used_integer()
+                .active_integer()
                 .into_keys()
                 .collect::<BTreeSet<_>>(),
             BTreeSet::from([ordinary, sos1_member])
@@ -1374,7 +1377,7 @@ mod tests {
         let before = instance.clone();
 
         let err = instance
-            .log_encode_all_used_integers(ATol::default())
+            .log_encode_all_active_integers(ATol::default())
             .unwrap_err();
 
         assert!(matches!(

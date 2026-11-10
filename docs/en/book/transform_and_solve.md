@@ -19,7 +19,9 @@ When the solver supports special constraints directly, you may also want to make
 (adapter-responsibilities)=
 ## Responsibilities an adapter must uphold
 
-An adapter is responsible for the mathematical correspondence between an OMMX problem and a backend's inputs and outputs. OMMX requires the following contract:
+An adapter takes the Instance's **Active Formulation**: its active decision variables and their domains, active constraints, objective, and optimization direction. The Instance maintains which variables belong to this formulation from references in the objective and active constraints. Retained fixed or dependent variables and inactive constraints provide context for interpreting results.
+
+The adapter is responsible for the mathematical correspondence between this formulation and a backend's inputs and outputs. OMMX requires the following contract:
 
 - State which problems it accepts, and preserve the meaning of their conditions and objective when passing them to the backend. It must not silently omit unsupported constraints.
 - Map candidate values to OMMX variables and evaluate them against the same mathematical problem that was passed to the backend.

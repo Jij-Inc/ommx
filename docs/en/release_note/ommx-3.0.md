@@ -16,6 +16,8 @@ The v1 schema is unchanged and v1 export rejects a true skip flag; use v2 to pre
 
 Indicator result properties and DataFrame columns now use `indicator_on` for the indicator's ON/OFF state at the evaluated candidate, independently of constraint activeness.
 
+The Active Formulation also names its variables explicitly: use `active_decision_variables` and `DecisionVariableRole.Active`. The `state_role` value is `"active"`. Adapters consume active variables and active constraints; row-level `used_ids` retain their reference meaning.
+
 ### 🛠 ⚠ Report infeasible constant constraints through the solver ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))
 
 HiGHS and PySCIPOpt now accept constant regular equalities and inequalities
@@ -29,7 +31,7 @@ handlers for `OMMXHighsAdapterError` or `OMMXPySCIPOptAdapterError` around
 construction for this case with an `InfeasibleDetected` handler around
 `solve()`, `solve_without_preparation()`, or `decode()`.
 
-HiGHS also solves models with no used decision variables using an internal
+HiGHS also solves models with no active decision variables using an internal
 fixed variable, which does not appear in the decoded OMMX state. Feasible
 constant rows are retained and their HiGHS dual values are mapped back to the
 corresponding OMMX constraint IDs.
@@ -128,7 +130,7 @@ assert not instance.evaluate({x.id: 0.4}).feasible
 
 The value set must be non-empty and contain unique, finite numbers. OMMX
 preserves the exact set through evaluation, sampling, and v1/v2 serialization.
-The bounds give its minimum and maximum. MPS export rejects a solver-used
+The bounds give its minimum and maximum. MPS export rejects an active
 finite-domain variable because bounds cannot represent an arbitrary set of allowed values.
 See {meth}`~ommx.DecisionVariable.finite_domain` for the domain and DataFrame representation.
 
@@ -1385,9 +1387,9 @@ assert state.entries == {1: 2.0, 2: 3.0, 5: 6.0, 10: 5.0, 99: 4.0}
 
 ### ⚠ Decision variable role queries on `Instance` ([#946](https://github.com/Jij-Inc/ommx/pull/946))
 
-The Python SDK no longer exposes `DecisionVariableUsage` or `DecisionVariableUsageEntry` objects. Use {attr}`~ommx.Instance.used_decision_variables` when adapters need the solver input variables, and use {meth}`~ommx.Instance.decision_variable_role`, {meth}`~ommx.Instance.decision_variable_roles`, {meth}`~ommx.Instance.fixed_decision_variables`, {meth}`~ommx.Instance.dependent_decision_variable_ids`, and {meth}`~ommx.Instance.irrelevant_decision_variable_ids` to query state roles directly from the owning Instance.
+The Python SDK no longer exposes `DecisionVariableUsage` or `DecisionVariableUsageEntry` objects. Use {attr}`~ommx.Instance.active_decision_variables` when adapters need the solver input variables, and use {meth}`~ommx.Instance.decision_variable_role`, {meth}`~ommx.Instance.decision_variable_roles`, {meth}`~ommx.Instance.fixed_decision_variables`, {meth}`~ommx.Instance.dependent_decision_variable_ids`, and {meth}`~ommx.Instance.irrelevant_decision_variable_ids` to query state roles directly from the owning Instance.
 
-{meth}`~ommx.Instance.decision_variables_df` continues to include the `state_role` column, so DataFrame-based workflows can inspect `used`, `fixed`, `dependent`, and `irrelevant` roles without constructing a separate usage object.
+{meth}`~ommx.Instance.decision_variables_df` continues to include the `state_role` column, so DataFrame-based workflows can inspect `active`, `fixed`, `dependent`, and `irrelevant` roles without constructing a separate usage object.
 
 ### ⚠ Fixed decision-variable values are owned by instances ([#959](https://github.com/Jij-Inc/ommx/pull/959))
 

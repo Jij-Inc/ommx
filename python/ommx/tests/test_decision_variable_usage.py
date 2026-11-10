@@ -1,10 +1,17 @@
-"""Test decision-variable role and used-variable APIs."""
+"""Test decision-variable roles and Active Formulation variable APIs."""
 
 import math
 
 import pytest
 
-from ommx import DecisionVariable, DecisionVariableRole, Instance, Sense
+from ommx import (
+    ConstraintID,
+    DecisionVariable,
+    DecisionVariableRole,
+    Instance,
+    NamedFunction,
+    Sense,
+)
 
 
 def test_decision_variable_roles_basic():
@@ -18,18 +25,49 @@ def test_decision_variable_roles_basic():
         sense=Sense.Maximize,
     )
 
-    assert instance.used_decision_variables == x
+    assert instance.active_decision_variables == x
     assert instance.decision_variable_roles() == {
-        0: DecisionVariableRole.Used,
-        1: DecisionVariableRole.Used,
-        2: DecisionVariableRole.Used,
+        0: DecisionVariableRole.Active,
+        1: DecisionVariableRole.Active,
+        2: DecisionVariableRole.Active,
     }
-    assert instance.decision_variable_role(0) == DecisionVariableRole.Used
+    assert instance.decision_variable_role(0) == DecisionVariableRole.Active
     assert instance.decision_variable_role(999) is None
+    assert str(DecisionVariableRole.Active) == "active"
+    assert repr(DecisionVariableRole.Active) == "DecisionVariableRole.Active"
+
+
+def test_active_variables_follow_constraint_membership_and_retain_row_references():
+    x = [DecisionVariable.continuous(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0],
+        active_constraints={0: x[1] <= 4},
+        named_functions=[NamedFunction(id=0, function=x[2], name="report")],
+        sense=Sense.Minimize,
+    )
+    cid = ConstraintID(0)
+
+    assert instance.active_decision_variables == x[:2]
+    assert instance.required_ids() == {0, 1}
+    assert instance.decision_variable_role(2) == DecisionVariableRole.Irrelevant
+
+    instance.deactivate_constraint(cid, "retain for interpretation")
+    assert instance.active_decision_variables == x[:1]
+    assert instance.required_ids() == {0}
+    assert instance.decision_variable_role(1) == DecisionVariableRole.Irrelevant
+    result = instance.evaluate({0: 0, 1: 1, 2: 2})
+    assert result.constraints[cid].used_decision_variable_ids == {1}
+    assert result.feasible()
+
+    instance.activate_constraint(cid)
+    assert instance.active_decision_variables == x[:2]
+    assert instance.required_ids() == {0, 1}
+    assert instance.decision_variable_role(1) == DecisionVariableRole.Active
 
 
 def test_decision_variable_role_partitions():
-    """Test used/fixed/dependent/irrelevant role partitions on Instance."""
+    """Test active/fixed/dependent/irrelevant role partitions on Instance."""
     x = {i: DecisionVariable.continuous(i) for i in range(4)}
     instance = Instance.from_components(
         decision_variables=list(x.values()),
@@ -41,7 +79,7 @@ def test_decision_variable_role_partitions():
     instance = instance.partial_evaluate({1: 2.0})
 
     assert instance.decision_variable_roles() == {
-        0: DecisionVariableRole.Used,
+        0: DecisionVariableRole.Active,
         1: DecisionVariableRole.Fixed,
         2: DecisionVariableRole.Dependent,
         3: DecisionVariableRole.Irrelevant,

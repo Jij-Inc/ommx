@@ -8,11 +8,11 @@ class OMMXOpenJijSAAdapter(_OMMXOpenJijSAAdapter):
     Install ``ommx-openjij-adapter`` alongside a compatible OMMX SDK. The example
     below needs no other Adapter, external data, or earlier Notebook state.
     :attr:`INPUT_CLASS` describes the exact input accepted by the constructor
-    and preparation-free methods: used decision variables must be Binary, the
+    and preparation-free methods: active decision variables must be Binary, the
     objective must be a polynomial minimization, and no regular or special
     constraints may remain active. Polynomial degree is not limited to two:
     OpenJij's QUBO and Binary-HUBO paths are supported.
-    When constructing the backend input, used variable IDs must fit signed
+    When constructing the backend input, active variable IDs must fit signed
     64-bit integers and the converted interaction coefficients must be finite.
     Violations are reported as conversion errors.
 

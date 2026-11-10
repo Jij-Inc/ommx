@@ -341,7 +341,7 @@ impl PartialEvaluatePlan {
 
 impl<'a> PreparedStatePopulation<'a> {
     fn prepare(instance: &'a Instance) -> Self {
-        let required_ids = instance.used_decision_variable_ids();
+        let required_ids = instance.active_decision_variable_ids();
         let fixed_values = instance.fixed_decision_variable_values();
         let dependency = &instance.decision_variable_dependency;
 
@@ -631,7 +631,7 @@ impl Instance {
         // preserve feasibility under the sum of member errors. An active row cannot
         // reference a fixed variable, and its current structural form has no
         // constant-member representation. Reject instead of dropping that term.
-        for id in self.used_decision_variable_ids() {
+        for id in self.active_decision_variable_ids() {
             if self.decision_variables.fixed_value(id).is_some() {
                 crate::bail!(
                     "Cannot partially evaluate fixed member {id:?} without changing constraint feasibility. Evaluate the complete state, or lower special constraints before partial evaluation."
@@ -923,7 +923,7 @@ impl Evaluate for Instance {
     }
 
     fn required_ids(&self) -> VariableIDSet {
-        self.used_decision_variable_ids()
+        self.active_decision_variable_ids()
     }
 }
 
@@ -2804,7 +2804,7 @@ mod tests {
             VariableID::from(5) => x5,
         };
 
-        // Objective: minimize x1 (only x1 is "used")
+        // Objective: minimize x1 (only x1 is "active")
         let objective = Function::from(linear!(1));
 
         // Create instance with dependency: x3 = 2 * x4
@@ -2843,10 +2843,10 @@ mod tests {
             .unwrap();
         instance.decision_variable_dependency = decision_variable_dependency;
 
-        // Verify the usage: x1 is used, x2 is fixed, x3 is dependent,
-        // x4 and x5 should be irrelevant (named_functions don't contribute to "used")
+        // Verify the roles: x1 is active, x2 is fixed, x3 is dependent,
+        // x4 and x5 should be irrelevant (named_functions do not contribute to "active")
         let usage = instance.decision_variable_usage();
-        assert!(usage.used().contains(&VariableID::from(1)));
+        assert!(usage.active().contains(&VariableID::from(1)));
         assert!(usage.fixed().contains_key(&VariableID::from(2)));
         assert!(usage.dependent().contains(&VariableID::from(3)));
         assert!(usage.irrelevant().contains(&VariableID::from(4)));

@@ -313,7 +313,7 @@ mod tests {
         let special_variables = active_special_constraint_variables(instance);
         instance
             .decision_variable_usage()
-            .used_integer()
+            .active_integer()
             .into_iter()
             .filter_map(|(id, bound)| {
                 if special_variables.contains(&id) {
@@ -328,7 +328,7 @@ mod tests {
     fn arbitrary_unary_encode_case() -> BoxedStrategy<(Instance, UnaryEncodeTarget, State)> {
         Instance::arbitrary_with(polynomial_full_v3_parameters())
             .prop_filter_map(
-                "instance must contain an encodable used integer variable",
+                "instance must contain an encodable active integer variable",
                 |instance| {
                     let targets = unary_encode_targets(&instance, MAX_PROPTEST_UNARY_WIDTH);
                     (!targets.is_empty()).then_some((instance, targets))
@@ -734,10 +734,10 @@ mod tests {
             with_output.decision_variable_role(id),
             Some(DecisionVariableRole::Dependent)
         );
-        assert!(!with_output.used_decision_variable_ids().contains(&id));
+        assert!(!with_output.active_decision_variable_ids().contains(&id));
         let state = State::from_iter(
             with_output
-                .used_decision_variable_ids()
+                .active_decision_variable_ids()
                 .into_iter()
                 .map(|id| (id.into_inner(), 0.0)),
         );

@@ -1156,7 +1156,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             return State(
                 entries={
                     var.id: sol[varname_map[str(var.id)]]
-                    for var in self.instance.used_decision_variables
+                    for var in self.instance.active_decision_variables
                 }
             )
         except Exception:
@@ -1165,7 +1165,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
 
     def _set_decision_variables(self):
-        for var in self.instance.used_decision_variables:
+        for var in self.instance.active_decision_variables:
             if var.kind == Kind.Binary:
                 self.model.addVar(name=str(var.id), vtype="B")
             elif var.kind == Kind.Integer:
@@ -1378,7 +1378,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             # auxiliary must describe that same complete initial point.
             objective_state = {
                 var.id: values.get(str(var.id), 0.0)
-                for var in self.instance.used_decision_variables
+                for var in self.instance.active_decision_variables
             }
             values[_OBJECTIVE_AUXILIARY_NAME] = self.instance.objective.evaluate(
                 objective_state

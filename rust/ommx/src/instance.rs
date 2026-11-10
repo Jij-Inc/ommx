@@ -191,7 +191,7 @@ impl OutputObjective {
 /// needed to reconstruct and interpret its results against the user's input:
 ///
 /// - **Active Formulation** is the currently effective optimization problem:
-///   the objective and sense, used decision variables and their domains, and
+///   the objective and sense, active decision variables and their domains, and
 ///   all active constraints, including special-constraint families. This is
 ///   the solver-facing part of the intermediate representation. Acceptance by
 ///   a particular adapter is a separate question; see [`crate::InstanceClass`].
@@ -206,10 +206,10 @@ impl OutputObjective {
 /// variable definition may serve both roles. Interpretation Context need not
 /// contain an independent, complete copy of the original problem.
 ///
-/// **Implementation contract:** [`Self::used_decision_variable_ids`] must be
+/// **Implementation contract:** [`Self::active_decision_variable_ids`] must be
 /// exactly the union of decision-variable IDs referenced by the active
 /// objective and every active constraint family, including structural uses
-/// such as an Indicator's controlling variable. [`Self::used_decision_variables`]
+/// such as an Indicator's controlling variable. [`Self::active_decision_variables`]
 /// must return the corresponding variable definitions. References occurring
 /// only in Interpretation Context must not contribute to this set.
 /// Maintaining this correspondence is the responsibility of the `Instance`
@@ -255,7 +255,7 @@ impl OutputObjective {
 /// values and [`Evaluate::evaluate`] to evaluate the candidate with the
 /// transformed instance.
 ///
-/// # Declared and solver-used variables
+/// # Declared and active variables
 ///
 /// An instance can retain a decision variable even when the solver no longer
 /// needs to choose its value. For example, partial evaluation fixes a variable
@@ -265,14 +265,14 @@ impl OutputObjective {
 /// information needed to reconstruct it.
 ///
 /// [`Self::decision_variables`] returns all retained variable definitions.
-/// [`Self::used_decision_variables`] and [`Self::used_decision_variable_ids`]
+/// [`Self::active_decision_variables`] and [`Self::active_decision_variable_ids`]
 /// return only those referenced by the current active objective or active
 /// constraints, including every special-constraint family. This is a structural
 /// property of the current instance, not a solver's presolve result. References
 /// only in the output objective, named functions, or inactive constraints do not
-/// make a variable solver-used; merely declaring a variable does not either.
+/// make a variable active; merely declaring a variable does not either.
 ///
-/// Solver integrations should build their backend variables from the used set,
+/// Solver integrations should build their backend variables from the active set,
 /// then evaluate the returned state with this same instance through
 /// [`Evaluate::evaluate`]. Evaluation supplies stored fixed values and computes
 /// dependent values. Omitted irrelevant variables receive defaults, not values
@@ -345,20 +345,20 @@ impl OutputObjective {
 ///   These are "dependent variables" whose values are computed from other variables.
 /// - Every variable ID in [`Self::output_objective`] belongs to
 ///   [`Self::decision_variables`]. The output objective does not contribute to
-///   the solver-used variable set and is evaluated after state population.
+///   the active variable set and is evaluated after state population.
 /// - Decision variables are classified into mutually exclusive roles:
-///   - **used**: Variable IDs appearing in the active objective or active constraints
-///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
-///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
+///   - **active**: Variable IDs appearing in the active objective or active constraints
+///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not active
+///   - **dependent**: Keys of `decision_variable_dependency` that are not active or fixed
 ///   - **irrelevant**: All other declared variables; these do not affect the active formulation
-/// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
+/// - [`DecisionVariableUsage`] is the reverse-usage index for active decision variables only.
 /// - [`Self::inactive_constraints`] may contain fixed or dependent variable IDs.
 ///   These are substituted when the constraint is activated via [`Self::activate_constraint`].
 /// - [`Self::named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; named-function rows do not carry IDs.
 /// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `inactive_constraints`).
 ///   Variable IDs referenced by named functions must be registered in [`Self::decision_variables`],
-///   but are NOT included in the "used" set calculation.
+///   but are NOT included in the "active" set calculation.
 /// - Modeling-label and constraint-context sidecars are owned by their
 ///   corresponding top-level table or collection; every label/context ID must
 ///   refer to an existing decision variable, named function, or active/inactive
@@ -366,7 +366,7 @@ impl OutputObjective {
 /// - Fixed decision-variable values are owned by
 ///   [`DecisionVariableTable`], not by individual [`DecisionVariable`]
 ///   values. The root [`Instance`] owns the host-level invariant that fixed
-///   IDs are disjoint from solver-used and dependent variables.
+///   IDs are disjoint from active and dependent variables.
 ///
 /// The output objective remains evaluable when one of its variables is removed
 /// from the active formulation by partial evaluation:
@@ -1071,18 +1071,18 @@ impl Instance {
 ///   specialized by [`Self::with_parameters`] before the pair is installed on
 ///   the resulting [`Instance`].
 /// - Decision variables are classified into mutually exclusive roles:
-///   - **used**: Variable IDs appearing in the active objective or active constraints
-///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
-///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
+///   - **active**: Variable IDs appearing in the active objective or active constraints
+///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not active
+///   - **dependent**: Keys of `decision_variable_dependency` that are not active or fixed
 ///   - **irrelevant**: All other declared variables; these do not affect the active formulation
-/// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
+/// - [`DecisionVariableUsage`] is the reverse-usage index for active decision variables only.
 /// - [`Self::named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; named-function rows do not carry IDs.
 /// - [`Self::named_functions`] may contain fixed or dependent decision-variable
 ///   IDs (like `inactive_constraints`) and may also reference parameter IDs.
 ///   Every referenced ID must be registered in either
 ///   [`Self::decision_variables`] or [`Self::parameters`], but decision-variable
-///   IDs appearing only in named functions are NOT included in the "used" set
+///   IDs appearing only in named functions are NOT included in the "active" set
 ///   calculation.
 /// - Modeling-label and constraint-context sidecars are owned by their
 ///   corresponding top-level table or collection; every label/context ID must
@@ -1091,7 +1091,7 @@ impl Instance {
 ///   [`ParameterTable`]; parameter IDs are not valid variable-label IDs.
 /// - Fixed decision-variable values are owned by
 ///   [`DecisionVariableTable`]. The root [`ParametricInstance`] owns
-///   the host-level invariant that fixed IDs are disjoint from solver-used and
+///   the host-level invariant that fixed IDs are disjoint from active and
 ///   dependent variables, and from parameter IDs via the shared namespace rule.
 ///
 /// ## Special-constraint invariants

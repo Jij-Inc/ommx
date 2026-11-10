@@ -16,6 +16,8 @@ v1のschemaは拡張せず、skipがtrueのデータのv1出力は失敗しま�
 
 Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` に揃えます。評価した候補点でのIndicatorのON/OFFを表し、制約のactivenessとは独立です。
 
+Active Formulationの変数も明示的に `active_decision_variables` と `DecisionVariableRole.Active` で表します。`state_role` の値は `"active"` です。Adapterはactiveな変数と制約を使い、行ごとの `used_ids` は参照関係を表す名前として維持します。
+
 ### 🛠 ⚠ 実行不能な定数制約をソルバーの判定結果として扱う ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))
 
 HiGHSとPySCIPOptのAdapterは、`1 <= 0` のように実行不能なものも含め、
@@ -29,7 +31,7 @@ Python SDK 2.6.xから、例外の種類と発生するタイミングが変わ�
 `solve()`、`solve_without_preparation()`、または `decode()` の呼び出しで
 `InfeasibleDetected` を捕捉するように変更してください。
 
-HiGHSでは、使用される決定変数がないモデルも内部の固定変数を使って求解します。
+HiGHSでは、activeな決定変数がないモデルも内部の固定変数を使って求解します。
 この補助変数はデコード後のOMMX状態には含まれません。実行可能な定数制約も
 ソルバーの行として保持され、そのHiGHS双対値は対応するOMMX制約IDに紐付けられます。
 
@@ -840,7 +842,7 @@ source instanceを `INPUT_CLASS` に属するinputへ変換する操作を `Prep
 （[#1111](https://github.com/Jij-Inc/ommx/issues/1111)）。
 
 `INPUT_CLASS` は、{class}`~ommx.InstanceClassClause` の有限和である
-{class}`~ommx.InstanceClass` です。各clauseには、使用中の変数kind、目的関数と制約の
+{class}`~ommx.InstanceClass` です。各clauseには、activeな変数kind、目的関数と制約の
 次数、通常制約とIndicator制約のrelation、OneHot / SOS1制約の有無、最適化senseを
 指定できます。例えば、線形目的関数と線形制約だけを受け入れるclassを記述できます。
 指定できる条件の詳細は {class}`~ommx.InstanceClassClause` を参照してください。
@@ -1311,9 +1313,9 @@ assert state.entries == {1: 2.0, 2: 3.0, 5: 6.0, 10: 5.0, 99: 4.0}
 
 ### ⚠ `Instance` 上の決定変数 role query ([#946](https://github.com/Jij-Inc/ommx/pull/946))
 
-Python SDK では `DecisionVariableUsage` と `DecisionVariableUsageEntry` オブジェクトを公開しない形に整理しました。Adapter が solver input の変数を必要とする場合は {attr}`~ommx.Instance.used_decision_variables` を使い、state role は所有者である Instance から {meth}`~ommx.Instance.decision_variable_role`、{meth}`~ommx.Instance.decision_variable_roles`、{meth}`~ommx.Instance.fixed_decision_variables`、{meth}`~ommx.Instance.dependent_decision_variable_ids`、{meth}`~ommx.Instance.irrelevant_decision_variable_ids` で直接取得してください。
+Python SDK では `DecisionVariableUsage` と `DecisionVariableUsageEntry` オブジェクトを公開しない形に整理しました。Adapter が solver input の変数を必要とする場合は {attr}`~ommx.Instance.active_decision_variables` を使い、state role は所有者である Instance から {meth}`~ommx.Instance.decision_variable_role`、{meth}`~ommx.Instance.decision_variable_roles`、{meth}`~ommx.Instance.fixed_decision_variables`、{meth}`~ommx.Instance.dependent_decision_variable_ids`、{meth}`~ommx.Instance.irrelevant_decision_variable_ids` で直接取得してください。
 
-{meth}`~ommx.Instance.decision_variables_df` は引き続き `state_role` column を含むため、DataFrame ベースの workflow では別の usage object を作らずに `used`、`fixed`、`dependent`、`irrelevant` の分類を確認できます。
+{meth}`~ommx.Instance.decision_variables_df` は引き続き `state_role` column を含むため、DataFrame ベースの workflow では別の usage object を作らずに `active`、`fixed`、`dependent`、`irrelevant` の分類を確認できます。
 
 ### ⚠ 固定された決定変数の値は Instance が所有するようになりました ([#959](https://github.com/Jij-Inc/ommx/pull/959))
 

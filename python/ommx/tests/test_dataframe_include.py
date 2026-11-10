@@ -94,7 +94,7 @@ def test_decision_variables_df_state_role():
 
     df = instance.decision_variables_df(include=[])
     assert df["state_role"].to_dict() == {
-        0: "used",
+        0: "active",
         1: "fixed",
         2: "dependent",
         3: "irrelevant",

@@ -28,13 +28,13 @@ pub struct VariableStatsByUsage {
     pub used_in_objective: usize,
     /// Number of variables used in regular constraints
     pub used_in_constraints: usize,
-    /// Number of variables used in either objective or active constraints
-    pub used: usize,
+    /// Number of variables in the Active Formulation
+    pub active: usize,
     /// Number of fixed variables
     pub fixed: usize,
     /// Number of dependent variables
     pub dependent: usize,
-    /// Number of irrelevant variables (not used, fixed, or dependent)
+    /// Number of irrelevant variables (not active, fixed, or dependent)
     pub irrelevant: usize,
 }
 
@@ -42,12 +42,12 @@ pub struct VariableStatsByUsage {
 ///
 /// This struct provides counts of decision variables categorized by:
 /// - Kind: binary, integer, continuous, semi-integer, semi-continuous, finite-domain
-/// - Usage: used (in objective or constraints), fixed, dependent, irrelevant
+/// - Role: active (in the Active Formulation), fixed, dependent, irrelevant
 ///
 /// Note on usage categories:
-/// The usage-based categories (used, fixed, dependent, irrelevant) are mutually exclusive.
+/// The roles (active, fixed, dependent, irrelevant) are mutually exclusive.
 /// A variable belongs to exactly one category, determined by this priority:
-/// 1. `used`: Variables appearing in objective or active constraints
+/// 1. `active`: Variables appearing in the active objective or active constraints
 /// 2. `fixed`: Variables with table-owned fixed values (not in category 1)
 /// 3. `dependent`: Variables defined by assignments in decision_variable_dependency (not in categories 1-2)
 /// 4. `irrelevant`: All other variables (not in categories 1-3)
@@ -147,7 +147,7 @@ impl super::Instance {
                 .flat_map(|vars| vars.iter())
                 .collect::<std::collections::HashSet<_>>()
                 .len(),
-            used: usage.used().len(),
+            active: usage.active().len(),
             fixed: roles
                 .values()
                 .filter(|&&role| role == DecisionVariableRole::Fixed)
@@ -213,7 +213,7 @@ mod tests {
         assert_eq!(stats.decision_variables.by_kind.binary, 0);
         assert_eq!(stats.decision_variables.by_kind.integer, 0);
         assert_eq!(stats.decision_variables.by_kind.continuous, 0);
-        assert_eq!(stats.decision_variables.by_usage.used, 0);
+        assert_eq!(stats.decision_variables.by_usage.active, 0);
         assert_eq!(stats.decision_variables.by_usage.fixed, 0);
         assert_eq!(stats.decision_variables.by_usage.dependent, 0);
         assert_eq!(stats.decision_variables.by_usage.irrelevant, 0);
@@ -250,7 +250,7 @@ mod tests {
         assert_eq!(stats.decision_variables.by_kind.integer, 1);
         assert_eq!(stats.decision_variables.by_kind.continuous, 1);
         assert_eq!(stats.decision_variables.by_usage.used_in_objective, 2);
-        assert_eq!(stats.decision_variables.by_usage.used, 2);
+        assert_eq!(stats.decision_variables.by_usage.active, 2);
         assert_eq!(stats.decision_variables.by_usage.irrelevant, 2); // variables 3 and 4
     }
 
@@ -293,7 +293,7 @@ mod tests {
         // Note: Inactive constraints are NOT counted in used_in_constraints
         assert_eq!(stats.decision_variables.by_usage.used_in_constraints, 2);
         // Variable 1 is used in both objective and constraint 1, variable 2 is used in constraint 1
-        assert_eq!(stats.decision_variables.by_usage.used, 2);
+        assert_eq!(stats.decision_variables.by_usage.active, 2);
     }
 
     #[test]

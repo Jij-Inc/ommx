@@ -823,7 +823,7 @@
     },
     {
       "id": "variables.roles",
-      "label": "retainedとusedの変数を区別する",
+      "label": "retainedとactiveの変数を区別する",
       "owner": "R_API.instance.population",
       "requires": [
         "instance.model",
@@ -831,12 +831,12 @@
       ],
       "external": false,
       "aliases": [
-        "used_decision_variables",
+        "active_decision_variables",
         "retained",
         "required_ids",
-        "used_ids"
+        "DecisionVariableRole.Active"
       ],
-      "scope": ""
+      "scope": "Active Formulationの変数集合は目的関数とactive制約の参照関係からInstanceが導出する。active・fixed・dependent・irrelevantの役割と、式や行ごとの参照変数を表すused_idsを区別する。"
     },
     {
       "id": "variables.recovery",
@@ -1020,7 +1020,7 @@
     },
     {
       "id": "class.scope",
-      "label": "所属判定のactive・usedの対象範囲を読む",
+      "label": "所属判定がActive Formulationを対象にすることを読む",
       "owner": "R_API.instance_class.scope",
       "requires": [
         "class.membership",
@@ -1030,7 +1030,7 @@
       ],
       "external": false,
       "aliases": [
-        "used variables",
+        "active variables",
         "active constraints",
         "active objective"
       ],
@@ -1632,7 +1632,7 @@
     },
     {
       "id": "adapter.encode_decode",
-      "label": "使用変数とbackend表現の対応を実装する",
+      "label": "active変数とbackend表現の対応を実装する",
       "owner": "R_API.adapter.implement",
       "requires": [
         "adapter.contract",
@@ -1642,7 +1642,7 @@
       "aliases": [
         "encode",
         "decode",
-        "used_decision_variables"
+        "active_decision_variables"
       ],
       "scope": ""
     },
@@ -2022,7 +2022,7 @@
       ],
       "external": false,
       "aliases": [],
-      "scope": "受理範囲の明示、条件や目的の意味の保存、未対応制約の拒否、候補の変数対応と同じ問題での評価、解いた問題への報告の対応、保証に基づく元問題への結論の引継ぎをBookの契約として理解する。実装の達成状況とは独立の契約であり、個別の対応範囲やAPI実装手順の習得は含めない。"
+      "scope": "Adapterの入力はactive変数と定義域、active制約、目的関数と最適化方向からなるActive Formulationで、変数集合はInstanceが維持する。受理範囲の明示、条件や目的の意味の保存、未対応制約の拒否、候補の変数対応と同じ問題での評価、解いた問題への報告の対応、保証に基づく元問題への結論の引継ぎをBookの契約として理解する。実装の達成状況とは独立の契約であり、個別の対応範囲やAPI実装手順の習得は含めない。"
     }
   ],
   "pages": [
@@ -3578,7 +3578,7 @@
           "mentions": [
             "adapter.contract"
           ],
-          "notes": "Bookの責務の契約を、実装の達成状況と独立に明記する。機能・Adapterごとの対応範囲はReferenceへの補足導線とする。"
+          "notes": "冒頭でActive Formulationの構成要素と、Instanceがactive変数集合を維持する責務を紹介する。続いてAdapterの責務の契約を、実装の達成状況と独立に明記する。機能・Adapterごとの対応範囲はReferenceへの補足導線とする。"
         },
         {
           "id": "input-and-transformations",
@@ -3985,7 +3985,7 @@
       ],
       "deferred": [],
       "parent_page": "R_API",
-      "notes": "旧日英InstanceClass/capability説明を共有クラス本文へ統合。clauseの和集合、OneHotを保持した非所属例、reportとunion、格納表現、QUBOと係数整形を説明する。表現条件の宣言は完全例、active/usedの対象範囲は子契約で追跡する。",
+      "notes": "旧日英InstanceClass/capability説明を共有クラス本文へ統合。clauseの和集合、OneHotを保持した非所属例、reportとunion、格納表現、QUBOと係数整形を説明する。表現条件の宣言は完全例、Active Formulationの対象範囲は子契約で追跡する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -4025,7 +4025,7 @@
       ],
       "deferred": [],
       "parent_page": "R_API.instance_class",
-      "notes": "The active representation determines membership節がactive objective/constraintsとused variablesを検査対象にし、fixed/dependent/irrelevant、inactive-only、named/output-onlyを除外する契約を所有する。基本のcontains操作とは独立した詳細である。",
+      "notes": "The active representation determines membership節がactive objective/constraints/variablesを検査対象にし、fixed/dependent/irrelevant、inactive-only、named/output-onlyを除外する契約を所有する。基本のcontains操作とは独立した詳細である。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -6239,7 +6239,7 @@
       ],
       "deferred": [],
       "parent_page": "R_API.named_function",
-      "notes": "NamedFunctionの省略値と明示値を比較する実行例で、報告用の式だけに使う変数はusedとはならず、特定候補の指標にはその値が必要と説明する。指標は制約ではないが、与えた変数値の定義域は候補評価で検査される。全変数役割・補完規則はG6とpopulate_stateに委ねる。",
+      "notes": "NamedFunctionの省略値と明示値を比較する実行例で、報告用の式だけに使う変数はactiveとはならず、特定候補の指標にはその値が必要と説明する。指標は制約ではないが、与えた変数値の定義域は候補評価で検査される。全変数役割・補完規則はG6とpopulate_stateに委ねる。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [

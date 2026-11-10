@@ -752,7 +752,7 @@ def test_stats_empty_instance():
     assert stats["decision_variables"]["by_kind"]["binary"] == 0
     assert stats["decision_variables"]["by_kind"]["integer"] == 0
     assert stats["decision_variables"]["by_kind"]["continuous"] == 0
-    assert stats["decision_variables"]["by_usage"]["used"] == 0
+    assert stats["decision_variables"]["by_usage"]["active"] == 0
     assert stats["decision_variables"]["by_usage"]["fixed"] == 0
     assert stats["decision_variables"]["by_usage"]["dependent"] == 0
     assert stats["decision_variables"]["by_usage"]["irrelevant"] == 0
@@ -782,7 +782,7 @@ def test_stats_with_variables():
     assert stats["decision_variables"]["by_kind"]["integer"] == 1
     assert stats["decision_variables"]["by_kind"]["continuous"] == 1
     assert stats["decision_variables"]["by_usage"]["used_in_objective"] == 2
-    assert stats["decision_variables"]["by_usage"]["used"] == 2
+    assert stats["decision_variables"]["by_usage"]["active"] == 2
     assert stats["decision_variables"]["by_usage"]["irrelevant"] == 2  # x[2] and x[3]
 
 

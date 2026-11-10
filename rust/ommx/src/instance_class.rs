@@ -239,7 +239,7 @@ impl InstanceClassClause {
     fn check(&self, clause_index: usize, facts: &InstanceFacts) -> InstanceClassClauseReport {
         let mut mismatches = Vec::new();
 
-        for (kind, variable_ids) in facts.used_variables_by_kind() {
+        for (kind, variable_ids) in facts.active_variables_by_kind() {
             if !self.allowed_variable_kinds.contains(kind) {
                 mismatches.push(InstanceClassMismatch::VariableKindNotAllowed {
                     kind: *kind,
@@ -875,7 +875,7 @@ mod tests {
         };
         let mut clause = InstanceClassClause::new(
             "covering",
-            facts.used_variables_by_kind().keys().copied().collect(),
+            facts.active_variables_by_kind().keys().copied().collect(),
             PolynomialRequirement::AtMost(objective_degree),
             BTreeSet::from([facts.sense()]),
         );

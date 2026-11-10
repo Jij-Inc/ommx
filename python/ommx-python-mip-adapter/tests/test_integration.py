@@ -136,10 +136,10 @@ def test_partial_evaluate():
         active_constraints={0: x[0] + x[1] + x[2] <= 1},  # one-hot constraint
         sense=Sense.Minimize,
     )
-    assert instance.used_decision_variables == x
+    assert instance.active_decision_variables == x
     partial = instance.partial_evaluate({0: 1})
     # x[0] is no longer present in the problem
-    assert partial.used_decision_variables == x[1:]
+    assert partial.active_decision_variables == x[1:]
 
     solution = OMMXPythonMIPAdapter.solve(partial)
     assert [var.value for var in solution.decision_variables] == [1, 0, 0]
@@ -163,7 +163,7 @@ def test_relax_constraint():
         sense=Sense.Minimize,
     )
 
-    assert instance.used_decision_variables == x
+    assert instance.active_decision_variables == x
     instance.deactivate_constraint(1, "relax")
     # id for x[2] is listed as irrelevant
     assert instance.irrelevant_decision_variable_ids() == {x[2].id}
