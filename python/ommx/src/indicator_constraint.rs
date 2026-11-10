@@ -27,14 +27,14 @@ impl IndicatorConstraint {
     /// Create a new indicator constraint.
     ///
     /// By default, `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).
-    /// Set `activate_on_zero=True` to activate the body at zero instead.
+    /// Set `trigger_value=0` to enforce the body at zero instead.
     ///
     /// **Args:**
     ///
     /// - `indicator_variable`: A variable ID or decision-variable object that
-    ///   activates this constraint. Only its ID is stored; the enclosing host
+    ///   controls this constraint. Only its ID is stored; the enclosing host
     ///   requires the referenced variable to be binary when the constraint is inserted.
-    /// - `activate_on_zero`: If true, activate at zero instead of one (default false).
+    /// - `trigger_value`: Binary value (0 or 1) at which the body is enforced (default 1).
     /// - `function`: The constraint function
     /// - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
     /// - `name`: Optional name for the constraint
@@ -42,22 +42,22 @@ impl IndicatorConstraint {
     /// - `description`: Optional description
     /// - `parameters`: Optional key-value parameters
     #[new]
-    #[pyo3(signature = (*, indicator_variable, function, equality, activate_on_zero=false, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
+    #[pyo3(signature = (*, indicator_variable, function, equality, trigger_value=1, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
     fn new(
         indicator_variable: VariableIDInput,
         function: Function,
         equality: Equality,
-        activate_on_zero: bool,
+        trigger_value: u32,
         name: Option<String>,
         subscripts: Vec<i64>,
         description: Option<String>,
         parameters: HashMap<String, String>,
-    ) -> PyResult<Self> {
+    ) -> crate::error::OmmxPyResult<Self> {
         let ic = ommx::IndicatorConstraint::new(
             indicator_variable.0,
             equality.into(),
             function.0,
-            activate_on_zero,
+            trigger_value.try_into()?,
         );
         let context = ommx::ConstraintContext {
             label: ommx::ModelingLabel {
@@ -76,10 +76,10 @@ impl IndicatorConstraint {
         self.0.indicator_variable.into_inner()
     }
 
-    /// Whether zero activates the body instead of one.
+    /// Binary value (0 or 1) at which the body is enforced.
     #[getter]
-    pub fn activate_on_zero(&self) -> bool {
-        self.0.activate_on_zero
+    pub fn trigger_value(&self) -> u8 {
+        self.0.trigger_value.into()
     }
 
     #[getter]
@@ -242,10 +242,10 @@ impl InactiveIndicatorConstraint {
         self.constraint.indicator_variable.into_inner()
     }
 
-    /// Whether zero activates the body instead of one.
+    /// Binary value (0 or 1) at which the body is enforced.
     #[getter]
-    pub fn activate_on_zero(&self) -> bool {
-        self.constraint.activate_on_zero
+    pub fn trigger_value(&self) -> u8 {
+        self.constraint.trigger_value.into()
     }
 
     #[getter]
@@ -420,15 +420,17 @@ impl AttachedIndicatorConstraint {
         }
     }
 
-    /// Whether zero activates the body instead of one.
+    /// Binary value (0 or 1) at which the body is enforced.
     #[getter]
-    pub fn activate_on_zero(&self, py: Python<'_>) -> PyResult<bool> {
+    pub fn trigger_value(&self, py: Python<'_>) -> PyResult<u8> {
         match &self.host {
-            ConstraintHost::Instance(p) => {
-                Ok(lookup_indicator(&p.borrow(py).inner, self.id)?.activate_on_zero)
-            }
+            ConstraintHost::Instance(p) => Ok(lookup_indicator(&p.borrow(py).inner, self.id)?
+                .trigger_value
+                .into()),
             ConstraintHost::Parametric(p) => {
-                Ok(lookup_indicator_parametric(&p.borrow(py).inner, self.id)?.activate_on_zero)
+                Ok(lookup_indicator_parametric(&p.borrow(py).inner, self.id)?
+                    .trigger_value
+                    .into())
             }
         }
     }

@@ -40,13 +40,13 @@ impl ConstraintFacts {
 /// Membership facts for an indicator's activation condition and body.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IndicatorConstraintFacts {
-    activate_on_zero: bool,
+    trigger_value: crate::IndicatorTriggerValue,
     body: ConstraintFacts,
 }
 
 impl IndicatorConstraintFacts {
-    pub fn activate_on_zero(&self) -> bool {
-        self.activate_on_zero
+    pub fn trigger_value(&self) -> crate::IndicatorTriggerValue {
+        self.trigger_value
     }
     #[cfg(test)]
     pub fn relation(&self) -> Equality {
@@ -153,7 +153,7 @@ impl From<&Instance> for InstanceFacts {
                     (
                         *id,
                         IndicatorConstraintFacts {
-                            activate_on_zero: constraint.activate_on_zero,
+                            trigger_value: constraint.trigger_value,
                             body: ConstraintFacts {
                                 relation: constraint.equality,
                                 classification: constraint.function().into(),

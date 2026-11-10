@@ -820,7 +820,7 @@ mod tests {
         .unwrap();
         let constraint = SampledIndicatorConstraint {
             indicator_variable: variable_id,
-            activate_on_zero: false,
+            trigger_value: crate::IndicatorTriggerValue::One,
             equality: crate::Equality::EqualToZero,
             stage: IndicatorSampledData {
                 evaluated_values: crate::Sampled::from((sample_id, 0.0)),
@@ -979,7 +979,7 @@ mod tests {
         let constraint_id = crate::IndicatorConstraintID::from(3);
         let constraint = SampledIndicatorConstraint {
             indicator_variable: crate::VariableID::from(2),
-            activate_on_zero: false,
+            trigger_value: crate::IndicatorTriggerValue::One,
             equality: crate::Equality::EqualToZero,
             stage: IndicatorSampledData {
                 evaluated_values: crate::Sampled::from((crate::SampleID::from(0), 0.0)),
@@ -1957,7 +1957,7 @@ mod tests {
         .unwrap();
         let indicator = SampledIndicatorConstraint {
             indicator_variable: var_id,
-            activate_on_zero: false,
+            trigger_value: crate::IndicatorTriggerValue::One,
             equality: crate::Equality::EqualToZero,
             stage: IndicatorSampledData {
                 evaluated_values: Sampled::from((sample_id, 0.0)),

@@ -2988,17 +2988,6 @@
           ],
           "attributes": [
             {
-              "name": "activate_on_zero",
-              "doc": "Whether zero activates the body instead of one.",
-              "type_": {
-                "display": "bool",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "activeness",
               "doc": "Current activeness of this owner-backed row.",
               "type_": {
@@ -3165,6 +3154,17 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "trigger_value",
+              "doc": "Binary value (0 or 1) at which the body is enforced.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -5070,7 +5070,7 @@
             },
             {
               "name": "with_indicator",
-              "doc": "Create an indicator constraint from this constraint.\n\nReturns `indicator_variable = 1 → this constraint`, or activation at zero\nwhen `activate_on_zero=True`.\n`indicator_variable` may be a variable ID or a decision-variable object.\nOnly its ID is stored; the enclosing host requires the referenced variable\nto be binary when the constraint is inserted.",
+              "doc": "Create an indicator constraint from this constraint.\n\nReturns `indicator_variable = trigger_value → this constraint`.\nThe trigger value must be 0 or 1 and defaults to 1.\n`indicator_variable` may be a variable ID or a decision-variable object.\nOnly its ID is stored; the enclosing host requires the referenced variable\nto be binary when the constraint is inserted.",
               "signatures": [
                 {
                   "parameters": [
@@ -5089,15 +5089,15 @@
                       "default": null
                     },
                     {
-                      "name": "activate_on_zero",
+                      "name": "trigger_value",
                       "type_": {
-                        "display": "bool",
+                        "display": "int",
                         "link_target": null,
                         "children": []
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "False"
+                        "value": "1"
                       }
                     }
                   ],
@@ -10391,17 +10391,6 @@
           ],
           "attributes": [
             {
-              "name": "activate_on_zero",
-              "doc": "Whether zero activates the body instead of one.",
-              "type_": {
-                "display": "bool",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "activation_atol",
               "doc": "Tolerance used when the activation diagnostic was computed.",
               "type_": {
@@ -10519,7 +10508,7 @@
             },
             {
               "name": "indicator_variable_id",
-              "doc": "Decision variable that activates this constraint.",
+              "doc": "Binary decision variable controlling when the body is enforced.",
               "type_": {
                 "display": "int",
                 "link_target": null,
@@ -10597,6 +10586,17 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "trigger_value",
+              "doc": "Binary value (0 or 1) at which the body is enforced.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -14622,17 +14622,6 @@
           ],
           "attributes": [
             {
-              "name": "activate_on_zero",
-              "doc": "Whether zero activates the body instead of one.",
-              "type_": {
-                "display": "bool",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "activeness",
               "doc": "",
               "type_": {
@@ -14827,6 +14816,17 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "trigger_value",
+              "doc": "Binary value (0 or 1) at which the body is enforced.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -15473,7 +15473,7 @@
         {
           "kind": "Class",
           "name": "IndicatorConstraint",
-          "doc": "A condition enforced when a controlling Binary variable equals its activation value.\n\nFor a Binary variable $z$, an Indicator requires $f(x)\\leq0$ or $f(x)=0$\nwhen $z=1$ by default. With `activate_on_zero=True`, it is enforced when $z=0$.\nAt the other binary value, the Indicator is satisfied regardless of the body's\nvalue; variable domains and other constraints still apply. This is a one-way\nimplication: a satisfied body does not force the trigger to its activation value.\n\nConstruct one from a regular constraint with {meth}`~ommx.Constraint.with_indicator`,\nor pass `indicator_variable`, `function`, and `equality` to this class.\nThe controlling variable accepts a variable ID, a standalone\n{class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.\nThese accepted forms are exposed as the `VariableIDLike` type alias.\nIts ID and activation condition are stored. The enclosing Instance validates that the referenced\nvariables exist and that the controlling variable is Binary when inserting it.\n\n**Construct and evaluate a conditional limit**\n\nThe following model limits the amount to five only when the facility is enabled:\n\n```pycon\n>>> from ommx import ConstraintKind, Equality, IndicatorConstraintID, Instance\n>>> instance = Instance.maximize()\n>>> enabled = instance.new_binary(\"enabled\")\n>>> amount = instance.new_continuous(\"amount\", lower=0, upper=10)\n>>> instance.objective = amount\n>>> condition = (amount <= 5).with_indicator(enabled)\n>>> assert condition.indicator_variable_id == enabled.id\n>>> assert condition.equality == Equality.LessThanOrEqualToZero\n>>> attached = instance.add_indicator_constraint(condition)\n>>> cid = attached.constraint_id\n>>> assert isinstance(cid, IndicatorConstraintID)\n>>> off = instance.evaluate({enabled.id: 0, amount.id: 6})\n>>> on = instance.evaluate({enabled.id: 1, amount.id: 5})\n>>> violated = instance.evaluate({enabled.id: 1, amount.id: 6})\n>>> assert off.feasible and on.feasible and not violated.feasible\n>>> assert not off.constraints_df(kind=ConstraintKind.Indicator).loc[cid, \"indicator_on\"]\n>>> assert on.constraints_df(kind=ConstraintKind.Indicator).loc[cid, \"indicator_on\"]\n\n```\n\nPass `activate_on_zero=True` to enforce the body when the trigger is zero:\n\n```pycon\n>>> disabled_limit = (amount <= 5).with_indicator(enabled, activate_on_zero=True)\n>>> assert disabled_limit.activate_on_zero\n\n```\n\nThe constructor accepts the same keyword. Attached, inactive, evaluated, and\nsampled rows expose `activate_on_zero`; Indicator DataFrames retain it as a\ncolumn. It describes the constraint, independently of whether a particular\ncandidate activates it.\n\nThe `indicator_on` column records whether the controlling variable equals its\nactivation value, using the evaluation tolerance. It distinguishes an OFF\nIndicator from an ON Indicator whose body is satisfied. This is independent of\n`activeness`, which records whether the constraint belongs to the current\nformulation and its default feasibility participation. An active constraint can\nhave its Indicator OFF; an inactive constraint can have its Indicator ON.\nIndicator results do not have a dual variable.\nSee {meth}`~ommx.Solution.constraints_df` for the precise columns and violation\nsemantics, and {meth}`~ommx.Instance.evaluate` for numerical tolerances and invalid\nactivation values.\n\n**Identity, transformation, and solver use**\n\n{meth}`~ommx.Instance.add_indicator_constraint` returns an attached handle. The\nconstructor above creates an independent value; context changes on it do not\nedit a constraint already inserted into a host. Alternatively, provide explicit\nIDs through the `active_indicator_constraints` mapping of\n{meth}`~ommx.Instance.from_components`. Constraint numbers must be distinct\nacross all active and inactive families, as described by {class}`~ommx.Instance`.\n\n{meth}`~ommx.Instance.deactivate_indicator_constraint` moves a condition out of the\nactive formulation while retaining it for evaluation.\n{meth}`~ommx.Instance.activate_indicator_constraint` makes it active again, subject\nto the current variable dependencies and fixed values.\n\nA backend may receive this structure directly or require regular constraints.\nFor explicit Big-M lowering, use {meth}`~ommx.Instance.convert_indicator_to_constraint`;\nits finite-bound and numerical conditions are part of that operation's contract.\nThe {class}`PySCIPOpt Adapter <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`\ndocuments native handling and its complete solving examples.",
+          "doc": "A condition enforced when a controlling Binary variable equals its trigger value.\n\nFor a Binary variable $z$, an Indicator requires $f(x)\\leq0$ or $f(x)=0$\nwhen $z=1$ by default. With `trigger_value=0`, it is enforced when $z=0$.\nOnly 0 and 1 are valid trigger values.\nAt the other binary value, the Indicator is satisfied regardless of the body's\nvalue; variable domains and other constraints still apply. This is a one-way\nimplication: a satisfied body does not force the variable to its trigger value.\n\nConstruct one from a regular constraint with {meth}`~ommx.Constraint.with_indicator`,\nor pass `indicator_variable`, `function`, and `equality` to this class.\nThe controlling variable accepts a variable ID, a standalone\n{class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.\nThese accepted forms are exposed as the `VariableIDLike` type alias.\nIts ID and trigger value are stored. The enclosing Instance validates that the referenced\nvariables exist and that the controlling variable is Binary when inserting it.\n\n**Construct and evaluate a conditional limit**\n\nThe following model limits the amount to five only when the facility is enabled:\n\n```pycon\n>>> from ommx import ConstraintKind, Equality, IndicatorConstraintID, Instance\n>>> instance = Instance.maximize()\n>>> enabled = instance.new_binary(\"enabled\")\n>>> amount = instance.new_continuous(\"amount\", lower=0, upper=10)\n>>> instance.objective = amount\n>>> condition = (amount <= 5).with_indicator(enabled)\n>>> assert condition.indicator_variable_id == enabled.id\n>>> assert condition.trigger_value == 1\n>>> assert condition.equality == Equality.LessThanOrEqualToZero\n>>> attached = instance.add_indicator_constraint(condition)\n>>> cid = attached.constraint_id\n>>> assert isinstance(cid, IndicatorConstraintID)\n>>> off = instance.evaluate({enabled.id: 0, amount.id: 6})\n>>> on = instance.evaluate({enabled.id: 1, amount.id: 5})\n>>> violated = instance.evaluate({enabled.id: 1, amount.id: 6})\n>>> assert off.feasible and on.feasible and not violated.feasible\n>>> assert not off.constraints_df(kind=ConstraintKind.Indicator).loc[cid, \"indicator_on\"]\n>>> assert on.constraints_df(kind=ConstraintKind.Indicator).loc[cid, \"indicator_on\"]\n\n```\n\nPass `trigger_value=0` to enforce the body when the controlling variable is zero:\n\n```pycon\n>>> disabled_limit = (amount <= 5).with_indicator(enabled, trigger_value=0)\n>>> assert disabled_limit.trigger_value == 0\n\n```\n\nThe constructor accepts the same keyword. Attached, inactive, evaluated, and\nsampled rows expose the integer `trigger_value`; Indicator DataFrames retain it\nas a column. This is the constraint's configuration, independently of its ON/OFF\nstate at a particular candidate.\n\nThe `indicator_on` column records whether the controlling variable equals its\ntrigger value, using the evaluation tolerance. It distinguishes an OFF\nIndicator from an ON Indicator whose body is satisfied. This is independent of\n`activeness`, which records whether the constraint belongs to the current\nformulation and its default feasibility participation. An active constraint can\nhave its Indicator OFF; an inactive constraint can have its Indicator ON.\nIndicator results do not have a dual variable.\nSee {meth}`~ommx.Solution.constraints_df` for the precise columns and violation\nsemantics, and {meth}`~ommx.Instance.evaluate` for numerical tolerances and invalid\ncontrolling-variable values.\n\n**Identity, transformation, and solver use**\n\n{meth}`~ommx.Instance.add_indicator_constraint` returns an attached handle. The\nconstructor above creates an independent value; context changes on it do not\nedit a constraint already inserted into a host. Alternatively, provide explicit\nIDs through the `active_indicator_constraints` mapping of\n{meth}`~ommx.Instance.from_components`. Constraint numbers must be distinct\nacross all active and inactive families, as described by {class}`~ommx.Instance`.\n\n{meth}`~ommx.Instance.deactivate_indicator_constraint` moves a condition out of the\nactive formulation while retaining it for evaluation.\n{meth}`~ommx.Instance.activate_indicator_constraint` makes it active again, subject\nto the current variable dependencies and fixed values.\n\nA backend may receive this structure directly or require regular constraints.\nFor explicit Big-M lowering, use {meth}`~ommx.Instance.convert_indicator_to_constraint`;\nits finite-bound and numerical conditions are part of that operation's contract.\nThe {class}`PySCIPOpt Adapter <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`\ndocuments native handling and its complete solving examples.",
           "bases": [],
           "methods": [
             {
@@ -15520,7 +15520,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new indicator constraint.\n\nBy default, `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).\nSet `activate_on_zero=True` to activate the body at zero instead.\n\n**Args:**\n\n- `indicator_variable`: A variable ID or decision-variable object that\n  activates this constraint. Only its ID is stored; the enclosing host\n  requires the referenced variable to be binary when the constraint is inserted.\n- `activate_on_zero`: If true, activate at zero instead of one (default false).\n- `function`: The constraint function\n- `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)\n- `name`: Optional name for the constraint\n- `subscripts`: Optional subscripts for indexing\n- `description`: Optional description\n- `parameters`: Optional key-value parameters",
+              "doc": "Create a new indicator constraint.\n\nBy default, `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).\nSet `trigger_value=0` to enforce the body at zero instead.\n\n**Args:**\n\n- `indicator_variable`: A variable ID or decision-variable object that\n  controls this constraint. Only its ID is stored; the enclosing host\n  requires the referenced variable to be binary when the constraint is inserted.\n- `trigger_value`: Binary value (0 or 1) at which the body is enforced (default 1).\n- `function`: The constraint function\n- `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)\n- `name`: Optional name for the constraint\n- `subscripts`: Optional subscripts for indexing\n- `description`: Optional description\n- `parameters`: Optional key-value parameters",
               "signatures": [
                 {
                   "parameters": [
@@ -15562,15 +15562,15 @@
                       "default": null
                     },
                     {
-                      "name": "activate_on_zero",
+                      "name": "trigger_value",
                       "type_": {
-                        "display": "bool",
+                        "display": "int",
                         "link_target": null,
                         "children": []
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "False"
+                        "value": "1"
                       }
                     },
                     {
@@ -15801,17 +15801,6 @@
           ],
           "attributes": [
             {
-              "name": "activate_on_zero",
-              "doc": "Whether zero activates the body instead of one.",
-              "type_": {
-                "display": "bool",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "description",
               "doc": "",
               "type_": {
@@ -15918,6 +15907,17 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "trigger_value",
+              "doc": "Binary value (0 or 1) at which the body is enforced.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -17418,7 +17418,7 @@
             },
             {
               "name": "convert_indicator_to_constraint",
-              "doc": "Convert an indicator constraint to regular constraints using the Big-M method.\n\nAn indicator constraint ``y = 1 → f(x) <= 0`` (or ``= 0``) is encoded with\nupper and lower Big-M sides computed from the interval bounds of $f(x)$:\n\n$$\nf(x) + u y - u \\leq 0, \\qquad -f(x) - l y + l \\leq 0,\n$$\n\nwhere $u \\geq \\sup f(x)$ and $l \\leq \\inf f(x)$ are the upper and lower\nbounds of $f$ over the decision variables' domains.\n\nWith `activate_on_zero=True`, the sides are `f(x) - u y <= 0` and\n`-f(x) + l y <= 0`; the same side-emission rules apply.\n\nSide emission:\n\n- For ``<=`` indicators, only the upper side is considered; it is emitted\n  iff $u > 0$. If $u \\leq 0$ the constraint is already implied by the\n  variable bounds and no Big-M is emitted.\n- For ``=`` indicators, both sides are considered independently: upper\n  emitted iff $u > 0$, lower emitted iff $l < 0$.\n\nWhen an equality side is skipped, the remaining constraints still enforce\nthe implication correctly because the skipped inequality is already implied\nby the variable bounds: e.g. $u \\leq 0$ together with the emitted lower side\nforces $f(x) = 0$ at $y = 1$ when $u = 0$, or renders $y = 1$ infeasible\nwhen $u < 0$ (correctly reflecting that $f(x) = 0$ has no solution under the\ngiven bounds). When both $u = 0$ and $l = 0$, the bound says $f(x) \\equiv 0$\nso the equality is vacuously satisfied and nothing is emitted.\n\nReturns the list of newly created regular constraint IDs in insertion order\n(upper first, then lower). The list is empty when both sides are redundant.\n\nRaises if the bound needed for an emitted side is non-finite, or if $f(x)$\nreferences a semi-continuous / semi-integer variable (the split domain\n$\\{0\\} \\cup [l, u]$ is not uniformly implemented, so Big-M conversion could\nsilently drop the upper side when $0 \\notin [l, u]$). Also raises if the\nID is not active or there are insufficient fresh constraint IDs for the\nemitted sides. A conversion emitting no sides needs no fresh IDs.\nThe instance is not mutated on error.\n\n``atol`` controls which Function-body values the bound evaluator treats\nas zero. If omitted, the default from {func}`~ommx.get_default_atol` is used. Big-M algebra assumes\nthe indicator variable is exactly binary; this does not canonicalize an\napproximate solver value near 0 or 1.\n\nOn success, the original indicator constraint is moved to\n{attr}`~ommx.Instance.inactive_constraints` with\n``reason=\"ommx.Instance.convert_indicator_to_constraint\"`` and a\ncomma-separated ``constraint_ids`` parameter in returned order (empty\nwhen no side is emitted). Every generated regular constraint records a\n{class}`~ommx.Provenance` entry identifying the original indicator\nconstraint.\n\n# Examples\n\nConvert an inequality indicator where the upper side is active:\n\n>>> from ommx import (\n...     Instance, DecisionVariable, IndicatorConstraint, Equality, Sense,\n... )\n>>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)\n>>> y = DecisionVariable.binary(1)\n>>> ic = IndicatorConstraint(\n...     indicator_variable=y,\n...     function=x - 2,\n...     equality=Equality.LessThanOrEqualToZero,\n... )\n>>> instance = Instance.from_components(\n...     decision_variables=[x, y],\n...     objective=x,\n...     active_constraints={},\n...     active_indicator_constraints={1: ic},\n...     sense=Sense.Minimize,\n... )\n>>> instance.convert_indicator_to_constraint(1)\n[ConstraintID(2)]\n>>> instance.active_constraints\n{ConstraintID(2): Constraint(x0 + 3*x1 - 5 <= 0)}\n>>> assert len(instance.constraints) == 2\n>>> assert set(instance.constraints) == set(instance.active_constraints) | set(instance.inactive_constraints)",
+              "doc": "Convert an indicator constraint to regular constraints using the Big-M method.\n\nAn indicator constraint ``y = 1 → f(x) <= 0`` (or ``= 0``) is encoded with\nupper and lower Big-M sides computed from the interval bounds of $f(x)$:\n\n$$\nf(x) + u y - u \\leq 0, \\qquad -f(x) - l y + l \\leq 0,\n$$\n\nwhere $u \\geq \\sup f(x)$ and $l \\leq \\inf f(x)$ are the upper and lower\nbounds of $f$ over the decision variables' domains.\n\nWith `trigger_value=0`, the sides are `f(x) - u y <= 0` and\n`-f(x) + l y <= 0`; the same side-emission rules apply.\n\nSide emission:\n\n- For ``<=`` indicators, only the upper side is considered; it is emitted\n  iff $u > 0$. If $u \\leq 0$ the constraint is already implied by the\n  variable bounds and no Big-M is emitted.\n- For ``=`` indicators, both sides are considered independently: upper\n  emitted iff $u > 0$, lower emitted iff $l < 0$.\n\nWhen an equality side is skipped, the remaining constraints still enforce\nthe implication correctly because the skipped inequality is already implied\nby the variable bounds: e.g. $u \\leq 0$ together with the emitted lower side\nforces $f(x) = 0$ at $y = 1$ when $u = 0$, or renders $y = 1$ infeasible\nwhen $u < 0$ (correctly reflecting that $f(x) = 0$ has no solution under the\ngiven bounds). When both $u = 0$ and $l = 0$, the bound says $f(x) \\equiv 0$\nso the equality is vacuously satisfied and nothing is emitted.\n\nReturns the list of newly created regular constraint IDs in insertion order\n(upper first, then lower). The list is empty when both sides are redundant.\n\nRaises if the bound needed for an emitted side is non-finite, or if $f(x)$\nreferences a semi-continuous / semi-integer variable (the split domain\n$\\{0\\} \\cup [l, u]$ is not uniformly implemented, so Big-M conversion could\nsilently drop the upper side when $0 \\notin [l, u]$). Also raises if the\nID is not active or there are insufficient fresh constraint IDs for the\nemitted sides. A conversion emitting no sides needs no fresh IDs.\nThe instance is not mutated on error.\n\n``atol`` controls which Function-body values the bound evaluator treats\nas zero. If omitted, the default from {func}`~ommx.get_default_atol` is used. Big-M algebra assumes\nthe indicator variable is exactly binary; this does not canonicalize an\napproximate solver value near 0 or 1.\n\nOn success, the original indicator constraint is moved to\n{attr}`~ommx.Instance.inactive_constraints` with\n``reason=\"ommx.Instance.convert_indicator_to_constraint\"`` and a\ncomma-separated ``constraint_ids`` parameter in returned order (empty\nwhen no side is emitted). Every generated regular constraint records a\n{class}`~ommx.Provenance` entry identifying the original indicator\nconstraint.\n\n# Examples\n\nConvert an inequality indicator where the upper side is active:\n\n>>> from ommx import (\n...     Instance, DecisionVariable, IndicatorConstraint, Equality, Sense,\n... )\n>>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)\n>>> y = DecisionVariable.binary(1)\n>>> ic = IndicatorConstraint(\n...     indicator_variable=y,\n...     function=x - 2,\n...     equality=Equality.LessThanOrEqualToZero,\n... )\n>>> instance = Instance.from_components(\n...     decision_variables=[x, y],\n...     objective=x,\n...     active_constraints={},\n...     active_indicator_constraints={1: ic},\n...     sense=Sense.Minimize,\n... )\n>>> instance.convert_indicator_to_constraint(1)\n[ConstraintID(2)]\n>>> instance.active_constraints\n{ConstraintID(2): Constraint(x0 + 3*x1 - 5 <= 0)}\n>>> assert len(instance.constraints) == 2\n>>> assert set(instance.constraints) == set(instance.active_constraints) | set(instance.inactive_constraints)",
               "signatures": [
                 {
                   "parameters": [
@@ -22024,7 +22024,7 @@
         {
           "kind": "Class",
           "name": "InstanceClass",
-          "doc": "A set of exact {class}`~ommx.Instance` representations, used for inspection and\nas a target for {meth}`~ommx.Instance.prepare`.\n\nMembership checks the Instance as it is: it does not convert expressions,\nprepare a model, or run a solver. An Adapter's `INPUT_CLASS` is one use of this\ncommon representation contract.\n\n**Clauses describe alternatives**\n\nAn InstanceClass is a finite union of {class}`~ommx.InstanceClassClause` values.\nAn Instance belongs to the class if it satisfies every condition in at least one\nclause. Conditions from different clauses are not combined. For example, a\nunion of continuous quadratic problems and mixed-integer linear problems does\nnot automatically include mixed-integer quadratic problems. An empty list of\nclauses accepts no Instance.\n\nA clause specifies the allowed kinds of active variables, the objective's\npolynomial representation and degree, the relations and polynomial requirements\nof regular constraints and Indicator bodies, whether active OneHot and SOS1\nconstraints are allowed, and the optimization direction. Its label identifies\nit in diagnostics without changing membership.\n\n**Inspect membership without changing the model**\n\nThis target accepts Binary variables, a linear objective, regular linear\nequalities, and maximization. It does not accept active special constraints.\n\n```pycon\n>>> from ommx import (\n...     Equality,\n...     Instance,\n...     InstanceClass,\n...     InstanceClassClause,\n...     Kind,\n...     OneHotConstraint,\n...     OneHotConstraintID,\n...     PolynomialRequirement,\n...     Sense,\n... )\n>>> linear = PolynomialRequirement.at_most(1)\n>>> target = InstanceClass(\n...     [\n...         InstanceClassClause(\n...             label=\"binary-linear-equality\",\n...             allowed_variable_kinds={Kind.Binary},\n...             objective_polynomial_requirement=linear,\n...             regular_constraint_polynomial_requirements={Equality.EqualToZero: linear},\n...             allowed_senses={Sense.Maximize},\n...         )\n...     ]\n... )\n>>> instance = Instance.maximize()\n>>> xs = [instance.new_binary(\"x\", subscripts=[i]) for i in range(2)]\n>>> instance.objective = 3 * xs[0] + 2 * xs[1]\n>>> _ = instance.add_one_hot_constraint(OneHotConstraint(variables=xs))\n>>> assert not target.contains(instance)\n>>> report = target.check_membership(instance)\n>>> assert not report.is_member\n>>> assert report.matching_clauses == []\n>>> assert report.clause_reports[0].clause_label == \"binary-linear-equality\"\n>>> assert report.clause_reports[0].mismatches\n>>> assert set(instance.constraints) == {OneHotConstraintID(0)}\n\n```\n\nOneHot means exactly one member is one. Although a linear equality can express\nthat condition for Binary variables, its dedicated representation does not\nmatch a clause that permits only regular equalities. The check leaves OneHot\nunchanged. {meth}`~ommx.Instance.prepare` contains a complete example converting\nthis representation and comparing candidate evaluations before and after it.\n\n{meth}`~ommx.InstanceClass.contains` returns a Boolean.\n{meth}`~ommx.InstanceClass.check_membership` returns an\n{class}`~ommx.InstanceClassMembershipReport`; its `clause_reports` describe each\nalternative, and `matching_clauses` identifies every matching index and label.\nEach {class}`~ommx.InstanceClassClauseReport` exposes structured\n{class}`~ommx.InstanceClassMismatch` values with the affected positions or IDs.\n\nAlternatively, add a clause that accepts the dedicated OneHot representation:\n\n```pycon\n>>> with_one_hot = InstanceClass(\n...     [\n...         InstanceClassClause(\n...             label=\"binary-linear-with-one-hot\",\n...             allowed_variable_kinds={Kind.Binary},\n...             objective_polynomial_requirement=linear,\n...             allowed_senses={Sense.Maximize},\n...             allows_one_hot=True,\n...         )\n...     ]\n... )\n>>> combined = target.union(with_one_hot)\n>>> assert combined.contains(instance)\n>>> assert combined.check_membership(instance).matching_clauses == [\n...     (1, \"binary-linear-with-one-hot\")\n... ]\n>>> assert not target.contains(instance)\n\n```\n\n**The active representation determines membership**\n\nVariable-kind checks use {attr}`~ommx.Instance.active_decision_variables`: variables\nreferenced by the active objective and active constraints, including special\nconstraints. Fixed, dependent, and irrelevant variables are excluded, as are\nvariables referenced only by inactive constraints, named functions, or the output\nobjective. Inactive constraints do not contribute their relations, degrees, or\nspecial-constraint kinds. A lowered Instance can therefore retain the original\nspecial constraints for evaluation while matching a class that disallows them\nas active constraints.\n\nThe stored {class}`~ommx.Function` representation matters as well as its\nmathematical meaning. Polynomial requirements reject composed expressions even\nwhen they happen to define a polynomial; see {meth}`~ommx.Function.powi` for an\nexample. Membership establishes representation requirements, not equivalence to\na previous model or a guarantee about the solution returned by a backend.\n\n**QUBO is one Instance class**\n\n{meth}`~ommx.InstanceClass.qubo` accepts Binary polynomial minimization of degree\nat most two with no active constraints. Linear and constant objectives are\nincluded. The model remains an OMMX Instance:\n\n```pycon\n>>> qubo = Instance.minimize()\n>>> a = qubo.new_binary(\"a\")\n>>> b = qubo.new_binary(\"b\")\n>>> qubo.objective = a + 2 * a * b + 3\n>>> assert InstanceClass.qubo().contains(qubo)\n>>> coefficients, offset = qubo.as_qubo_format()\n>>> assert coefficients == {(a.id, a.id): 1.0, (a.id, b.id): 2.0}\n>>> assert offset == 3.0\n\n```\n\n{meth}`~ommx.Instance.as_qubo_format` extracts active-objective coefficients and\nthe constant without Preparation. Those values do not replace the Instance's\nreconstruction rules, retained constraints, or output objective.\n{meth}`~ommx.Instance.to_qubo` combines Preparation and formatting and changes\nthe Instance in place; {meth}`~ommx.Instance.prepare` shows the explicit path.\n\nUse a concrete Adapter's `INPUT_CLASS` rather than inferring it from a solver\nname: some samplers accept Binary polynomials beyond degree two. For membership,\nrecommended policies, and the distinction between automatic and explicit\nPreparation, see {class}`~ommx.adapter.SolverAdapter` and\n{class}`~ommx.adapter.SamplerAdapter`.\n\n**Indicator activation conditions**\n\n`InstanceClassClause.allowed_indicator_activation_values` specifies the allowed\ntrigger values independently of `indicator_body_polynomial_requirements`.\nThe latter maps `Equality` to polynomial requirements shared by all admitted\nactivation values. The default activation set is `{1}`; an empty activation\nset or an empty body map rejects all Indicators. Values other than 0 and 1\nare rejected when constructing the clause.\n\n```pycon\n>>> from ommx import Equality, InstanceClassClause, Kind, PolynomialRequirement, Sense\n>>> clause = InstanceClassClause(\n...     label=\"linear indicators at either value\",\n...     allowed_variable_kinds={Kind.Binary},\n...     allowed_senses={Sense.Minimize},\n...     objective_polynomial_requirement=PolynomialRequirement.at_most(1),\n...     allowed_indicator_activation_values={0, 1},\n...     indicator_body_polynomial_requirements={\n...         Equality.EqualToZero: PolynomialRequirement.at_most(1),\n...     },\n... )\n>>> assert clause.allowed_indicator_activation_values == {0, 1}\n\n```\n\nAn unsupported trigger value produces `InstanceClassMismatch.IndicatorActivationNotAllowed`,\nwith `activation_value` and `allowed_activation_values`. Body-relation and degree\nrequirements are checked independently, so their diagnostics can accompany an\nactivation mismatch. Membership checking does not transform the Instance.",
+          "doc": "A set of exact {class}`~ommx.Instance` representations, used for inspection and\nas a target for {meth}`~ommx.Instance.prepare`.\n\nMembership checks the Instance as it is: it does not convert expressions,\nprepare a model, or run a solver. An Adapter's `INPUT_CLASS` is one use of this\ncommon representation contract.\n\n**Clauses describe alternatives**\n\nAn InstanceClass is a finite union of {class}`~ommx.InstanceClassClause` values.\nAn Instance belongs to the class if it satisfies every condition in at least one\nclause. Conditions from different clauses are not combined. For example, a\nunion of continuous quadratic problems and mixed-integer linear problems does\nnot automatically include mixed-integer quadratic problems. An empty list of\nclauses accepts no Instance.\n\nA clause specifies the allowed kinds of active variables, the objective's\npolynomial representation and degree, the relations and polynomial requirements\nof regular constraints and Indicator bodies, whether active OneHot and SOS1\nconstraints are allowed, and the optimization direction. Its label identifies\nit in diagnostics without changing membership.\n\n**Inspect membership without changing the model**\n\nThis target accepts Binary variables, a linear objective, regular linear\nequalities, and maximization. It does not accept active special constraints.\n\n```pycon\n>>> from ommx import (\n...     Equality,\n...     Instance,\n...     InstanceClass,\n...     InstanceClassClause,\n...     Kind,\n...     OneHotConstraint,\n...     OneHotConstraintID,\n...     PolynomialRequirement,\n...     Sense,\n... )\n>>> linear = PolynomialRequirement.at_most(1)\n>>> target = InstanceClass(\n...     [\n...         InstanceClassClause(\n...             label=\"binary-linear-equality\",\n...             allowed_variable_kinds={Kind.Binary},\n...             objective_polynomial_requirement=linear,\n...             regular_constraint_polynomial_requirements={Equality.EqualToZero: linear},\n...             allowed_senses={Sense.Maximize},\n...         )\n...     ]\n... )\n>>> instance = Instance.maximize()\n>>> xs = [instance.new_binary(\"x\", subscripts=[i]) for i in range(2)]\n>>> instance.objective = 3 * xs[0] + 2 * xs[1]\n>>> _ = instance.add_one_hot_constraint(OneHotConstraint(variables=xs))\n>>> assert not target.contains(instance)\n>>> report = target.check_membership(instance)\n>>> assert not report.is_member\n>>> assert report.matching_clauses == []\n>>> assert report.clause_reports[0].clause_label == \"binary-linear-equality\"\n>>> assert report.clause_reports[0].mismatches\n>>> assert set(instance.constraints) == {OneHotConstraintID(0)}\n\n```\n\nOneHot means exactly one member is one. Although a linear equality can express\nthat condition for Binary variables, its dedicated representation does not\nmatch a clause that permits only regular equalities. The check leaves OneHot\nunchanged. {meth}`~ommx.Instance.prepare` contains a complete example converting\nthis representation and comparing candidate evaluations before and after it.\n\n{meth}`~ommx.InstanceClass.contains` returns a Boolean.\n{meth}`~ommx.InstanceClass.check_membership` returns an\n{class}`~ommx.InstanceClassMembershipReport`; its `clause_reports` describe each\nalternative, and `matching_clauses` identifies every matching index and label.\nEach {class}`~ommx.InstanceClassClauseReport` exposes structured\n{class}`~ommx.InstanceClassMismatch` values with the affected positions or IDs.\n\nAlternatively, add a clause that accepts the dedicated OneHot representation:\n\n```pycon\n>>> with_one_hot = InstanceClass(\n...     [\n...         InstanceClassClause(\n...             label=\"binary-linear-with-one-hot\",\n...             allowed_variable_kinds={Kind.Binary},\n...             objective_polynomial_requirement=linear,\n...             allowed_senses={Sense.Maximize},\n...             allows_one_hot=True,\n...         )\n...     ]\n... )\n>>> combined = target.union(with_one_hot)\n>>> assert combined.contains(instance)\n>>> assert combined.check_membership(instance).matching_clauses == [\n...     (1, \"binary-linear-with-one-hot\")\n... ]\n>>> assert not target.contains(instance)\n\n```\n\n**The active representation determines membership**\n\nVariable-kind checks use {attr}`~ommx.Instance.active_decision_variables`: variables\nreferenced by the active objective and active constraints, including special\nconstraints. Fixed, dependent, and irrelevant variables are excluded, as are\nvariables referenced only by inactive constraints, named functions, or the output\nobjective. Inactive constraints do not contribute their relations, degrees, or\nspecial-constraint kinds. A lowered Instance can therefore retain the original\nspecial constraints for evaluation while matching a class that disallows them\nas active constraints.\n\nThe stored {class}`~ommx.Function` representation matters as well as its\nmathematical meaning. Polynomial requirements reject composed expressions even\nwhen they happen to define a polynomial; see {meth}`~ommx.Function.powi` for an\nexample. Membership establishes representation requirements, not equivalence to\na previous model or a guarantee about the solution returned by a backend.\n\n**QUBO is one Instance class**\n\n{meth}`~ommx.InstanceClass.qubo` accepts Binary polynomial minimization of degree\nat most two with no active constraints. Linear and constant objectives are\nincluded. The model remains an OMMX Instance:\n\n```pycon\n>>> qubo = Instance.minimize()\n>>> a = qubo.new_binary(\"a\")\n>>> b = qubo.new_binary(\"b\")\n>>> qubo.objective = a + 2 * a * b + 3\n>>> assert InstanceClass.qubo().contains(qubo)\n>>> coefficients, offset = qubo.as_qubo_format()\n>>> assert coefficients == {(a.id, a.id): 1.0, (a.id, b.id): 2.0}\n>>> assert offset == 3.0\n\n```\n\n{meth}`~ommx.Instance.as_qubo_format` extracts active-objective coefficients and\nthe constant without Preparation. Those values do not replace the Instance's\nreconstruction rules, retained constraints, or output objective.\n{meth}`~ommx.Instance.to_qubo` combines Preparation and formatting and changes\nthe Instance in place; {meth}`~ommx.Instance.prepare` shows the explicit path.\n\nUse a concrete Adapter's `INPUT_CLASS` rather than inferring it from a solver\nname: some samplers accept Binary polynomials beyond degree two. For membership,\nrecommended policies, and the distinction between automatic and explicit\nPreparation, see {class}`~ommx.adapter.SolverAdapter` and\n{class}`~ommx.adapter.SamplerAdapter`.\n\n**Indicator trigger values**\n\n`InstanceClassClause.allowed_indicator_trigger_values` specifies the allowed\ntrigger values independently of `indicator_body_polynomial_requirements`.\nThe latter maps `Equality` to polynomial requirements shared by all admitted\ntrigger values. The default trigger set is `{1}`; an empty trigger\nset or an empty body map rejects all Indicators. Values other than 0 and 1\nare rejected when constructing the clause.\n\n```pycon\n>>> from ommx import Equality, InstanceClassClause, Kind, PolynomialRequirement, Sense\n>>> clause = InstanceClassClause(\n...     label=\"linear indicators at either value\",\n...     allowed_variable_kinds={Kind.Binary},\n...     allowed_senses={Sense.Minimize},\n...     objective_polynomial_requirement=PolynomialRequirement.at_most(1),\n...     allowed_indicator_trigger_values={0, 1},\n...     indicator_body_polynomial_requirements={\n...         Equality.EqualToZero: PolynomialRequirement.at_most(1),\n...     },\n... )\n>>> assert clause.allowed_indicator_trigger_values == {0, 1}\n\n```\n\nAn unsupported trigger value produces `InstanceClassMismatch.IndicatorTriggerNotAllowed`,\nwith `trigger_value` and `allowed_trigger_values`. Body-relation and degree\nrequirements are checked independently, so their diagnostics can accompany a\ntrigger-value mismatch. Membership checking does not transform the Instance.",
           "bases": [],
           "methods": [
             {
@@ -22210,7 +22210,7 @@
         {
           "kind": "Class",
           "name": "InstanceClassClause",
-          "doc": "One conjunctive clause in an :class:`InstanceClass`.\n\nEvery condition in a clause must hold. The containing instance class is\nthe finite union of its clauses, so alternatives are not combined across\nclause boundaries.\n\nOmitted regular-constraint and Indicator-body maps are empty, so those\nconstraint families are not accepted. OneHot and SOS1 are also disabled\nunless their Boolean options are enabled. The objective and constraint\nrequirements describe stored polynomials, not a request to expand expressions.\nIndicator activation values are checked independently of the body map.\n`allowed_indicator_activation_values` defaults to `{1}` and accepts only 0 and 1.\nAn empty activation set rejects all Indicators, even with a nonempty body map.\nSee {class}`~ommx.InstanceClass` for construction and membership examples.",
+          "doc": "One conjunctive clause in an :class:`InstanceClass`.\n\nEvery condition in a clause must hold. The containing instance class is\nthe finite union of its clauses, so alternatives are not combined across\nclause boundaries.\n\nOmitted regular-constraint and Indicator-body maps are empty, so those\nconstraint families are not accepted. OneHot and SOS1 are also disabled\nunless their Boolean options are enabled. The objective and constraint\nrequirements describe stored polynomials, not a request to expand expressions.\nIndicator trigger values are checked independently of the body map.\n`allowed_indicator_trigger_values` defaults to `{1}` and accepts only 0 and 1.\nAn empty trigger-value set rejects all Indicators, even with a nonempty body map.\nSee {class}`~ommx.InstanceClass` for construction and membership examples.",
           "bases": [],
           "methods": [
             {
@@ -22331,7 +22331,7 @@
                       }
                     },
                     {
-                      "name": "allowed_indicator_activation_values",
+                      "name": "allowed_indicator_trigger_values",
                       "type_": {
                         "display": "Optional[set[int]]",
                         "link_target": null,
@@ -22408,7 +22408,7 @@
           ],
           "attributes": [
             {
-              "name": "allowed_indicator_activation_values",
+              "name": "allowed_indicator_trigger_values",
               "doc": "Allowed trigger values (0 and/or 1), independently of body requirements.",
               "type_": {
                 "display": "set[int]",
@@ -36351,17 +36351,6 @@
           ],
           "attributes": [
             {
-              "name": "activate_on_zero",
-              "doc": "Whether zero activates the body instead of one.",
-              "type_": {
-                "display": "bool",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "activation_atol",
               "doc": "Tolerance used when the activation diagnostics were computed.",
               "type_": {
@@ -36501,7 +36490,7 @@
             },
             {
               "name": "indicator_variable_id",
-              "doc": "Decision variable that activates this constraint.",
+              "doc": "Binary decision variable controlling when the body is enforced.",
               "type_": {
                 "display": "int",
                 "link_target": null,
@@ -36579,6 +36568,17 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "trigger_value",
+              "doc": "Binary value (0 or 1) at which the body is enforced.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true

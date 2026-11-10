@@ -170,7 +170,7 @@ For `from_components`, rename `constraints=` to `active_constraints=`, and simil
 
 Each row has exactly one `ConstraintActiveness` state: `ACTIVE`, `INACTIVE_CHECKED` (inactive with `skip_feasibility_check=False`), or `INACTIVE_SKIPPED` (inactive with `skip_feasibility_check=True`). **Inactive** is the umbrella term for the last two states; `inactive_constraints` contains both.
 
-Indicator result properties and DataFrame columns use `indicator_on` to report whether the indicator variable matches the configured activation value within the evaluation tolerance: zero when `activate_on_zero=True`, and one otherwise. This describes the evaluated candidate, independently of the constraint's activeness.
+Indicator result properties and DataFrame columns use `indicator_on` to report whether the indicator variable matches the configured `trigger_value` within the evaluation tolerance. The trigger value is 0 or 1, with a default of 1. This describes the evaluated candidate, independently of the constraint's activeness.
 
 OneHot and SOS1 result properties rename `active_variable` to `selected_variable`, including per-sample mappings. DataFrame columns become `selected_variable` and `selected_variable.<sample_id>`. This diagnostic describes selection at the evaluated candidate, independently of variable or constraint membership in the Active Formulation. Evaluation behavior is unchanged.
 
@@ -369,21 +369,22 @@ The site-wide {ref}`general index <genindex>` also lists the detailed examples u
 
 For changes between individual v3 prereleases, see the [Python SDK 3.0 release notes](../release_note/ommx-3.0.md).
 
-## Indicator activation values
+## Indicator trigger values
 
 `IndicatorConstraint` and `Constraint.with_indicator` accept
-`activate_on_zero=True` to enforce the body when the binary trigger is zero.
-The default remains activation at one. The property is retained in attached,
-inactive, evaluated, and sampled rows and Indicator DataFrames.
+`trigger_value=0` to enforce the body when the binary controlling variable is zero.
+The default is `trigger_value=1`; values other than 0 and 1 are rejected. The
+integer property is retained in attached, inactive, evaluated, and sampled rows
+and Indicator DataFrames.
 
 `InstanceClassClause.indicator_body_polynomial_requirements` remains a map from
 `Equality` to `PolynomialRequirement`. Set
-`allowed_indicator_activation_values={0, 1}` separately to admit both trigger
+`allowed_indicator_trigger_values={0, 1}` separately to admit both trigger
 values with the same body requirements. Its default is `{1}`; `{0}` admits only
-zero activation, and an empty set rejects all Indicators. Only 0 and 1 are valid.
-An empty body map also rejects all Indicators, regardless of the activation set.
+the zero trigger value, and an empty set rejects all Indicators. Only 0 and 1 are valid.
+An empty body map also rejects all Indicators, regardless of the trigger set.
 
-PySCIPOpt accepts both activation values. Big-M conversion also handles both.
+PySCIPOpt accepts both trigger values. Big-M conversion also handles both.
 The v2 wire format declares an additional required feature when any retained
-Indicator activates at zero, so older readers reject the payload instead of
-interpreting the trigger incorrectly.
+Indicator has `trigger_value=0`, so readers without that feature reject the
+payload instead of interpreting the trigger incorrectly.

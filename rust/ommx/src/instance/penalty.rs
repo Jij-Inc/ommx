@@ -749,7 +749,7 @@ mod tests {
                         variable,
                         Equality::EqualToZero,
                         Function::Zero,
-                        false,
+                        crate::IndicatorTriggerValue::One,
                     ),
                 )
             })

@@ -223,9 +223,13 @@ impl Instance {
             let f = (function.clone()
                 + Linear::single_term(
                     LinearMonomial::Variable(indicator_variable),
-                    if ic.activate_on_zero { -u } else { u },
+                    if ic.trigger_value == crate::IndicatorTriggerValue::Zero {
+                        -u
+                    } else {
+                        u
+                    },
                 ))?;
-            let f = if ic.activate_on_zero {
+            let f = if ic.trigger_value == crate::IndicatorTriggerValue::Zero {
                 f
             } else {
                 (f + Linear::from(-u))?
@@ -239,9 +243,13 @@ impl Instance {
             let f = (-function.clone()
                 + Linear::single_term(
                     LinearMonomial::Variable(indicator_variable),
-                    if ic.activate_on_zero { l } else { neg_l },
+                    if ic.trigger_value == crate::IndicatorTriggerValue::Zero {
+                        l
+                    } else {
+                        neg_l
+                    },
                 ))?;
-            let f = if ic.activate_on_zero {
+            let f = if ic.trigger_value == crate::IndicatorTriggerValue::Zero {
                 f
             } else {
                 (f + Linear::from(l))?
@@ -333,7 +341,12 @@ mod tests {
         let x = DecisionVariable::new(Kind::Continuous, x_bound, crate::ATol::default()).unwrap();
         let y = DecisionVariable::binary();
 
-        let ic = IndicatorConstraint::new(VariableID::from(10), equality, function, false);
+        let ic = IndicatorConstraint::new(
+            VariableID::from(10),
+            equality,
+            function,
+            crate::IndicatorTriggerValue::One,
+        );
 
         Instance::builder()
             .sense(Sense::Minimize)
@@ -512,7 +525,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1)),
-            false,
+            crate::IndicatorTriggerValue::One,
         );
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
@@ -591,7 +604,7 @@ mod tests {
                 coeff!(-1.0),
             )) + coeff!(0.5))
             .unwrap(),
-            false,
+            crate::IndicatorTriggerValue::One,
         );
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
@@ -658,10 +671,14 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             f(),
-            false,
+            crate::IndicatorTriggerValue::One,
         );
-        let ic_eq =
-            IndicatorConstraint::new(VariableID::from(10), Equality::EqualToZero, f(), false);
+        let ic_eq = IndicatorConstraint::new(
+            VariableID::from(10),
+            Equality::EqualToZero,
+            f(),
+            crate::IndicatorTriggerValue::One,
+        );
 
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
@@ -705,13 +722,13 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-2.0)),
-            false,
+            crate::IndicatorTriggerValue::One,
         );
         let ic_bad = IndicatorConstraint::new(
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(2)),
-            false,
+            crate::IndicatorTriggerValue::One,
         );
 
         let mut instance = Instance::builder()
@@ -795,7 +812,7 @@ mod tests {
             VariableID::from(10),
             Equality::EqualToZero,
             Function::from(linear!(1)),
-            false,
+            crate::IndicatorTriggerValue::One,
         );
         let mut instance = indicator_instance_with_constraint_id(
             u64::MAX - 1,
@@ -818,7 +835,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1)),
-            false,
+            crate::IndicatorTriggerValue::One,
         );
         let mut instance = indicator_instance_with_constraint_id(
             u64::MAX - 1,
@@ -846,7 +863,7 @@ mod tests {
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
                 Function::from(linear!(1)),
-                false,
+                crate::IndicatorTriggerValue::One,
             );
             let mut instance = indicator_instance_with_constraint_id(
                 u64::MAX,
@@ -871,7 +888,7 @@ mod tests {
             VariableID::from(10),
             Equality::EqualToZero,
             Function::from(linear!(1)),
-            false,
+            crate::IndicatorTriggerValue::One,
         );
         let mut instance = indicator_instance_with_constraint_id(
             u64::MAX - 2,
@@ -901,7 +918,7 @@ mod tests {
             VariableID::from(10),
             Equality::EqualToZero,
             Function::Zero,
-            false,
+            crate::IndicatorTriggerValue::One,
         );
         let mut instance = indicator_instance_with_constraint_id(
             u64::MAX,

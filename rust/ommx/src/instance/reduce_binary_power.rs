@@ -112,7 +112,10 @@ mod tests {
 
     #[test]
     fn reduction_preserves_indicator_activation() {
-        for activate_on_zero in [false, true] {
+        for trigger_value in [
+            crate::IndicatorTriggerValue::One,
+            crate::IndicatorTriggerValue::Zero,
+        ] {
             for equality in [Equality::EqualToZero, Equality::LessThanOrEqualToZero] {
                 let source = Instance::builder()
                     .sense(Sense::Minimize)
@@ -128,7 +131,7 @@ mod tests {
                             0.into(),
                             equality,
                             Function::from(quadratic!(1, 1)),
-                            activate_on_zero,
+                            trigger_value,
                         ),
                     )]))
                     .build()
@@ -136,14 +139,14 @@ mod tests {
                 let mut reduced = source.clone();
                 assert!(reduced.reduce_binary_power().unwrap());
                 let row = &reduced.active_indicator_constraints()[&7.into()];
-                assert_eq!(row.activate_on_zero, activate_on_zero);
+                assert_eq!(row.trigger_value, trigger_value);
                 assert_eq!(row.equality, equality);
                 // Reduction preserves the storage variant; its polynomial degree becomes one.
                 assert_eq!(row.function().degree(), Some(1.into()));
                 for z in [0.0, 1.0] {
                     for x in [0.0, 1.0] {
                         let state = v1::State::from_iter([(0, z), (1, x)]);
-                        let expected = z != if activate_on_zero { 0.0 } else { 1.0 } || x == 0.0;
+                        let expected = z != f64::from(u8::from(trigger_value)) || x == 0.0;
                         assert_eq!(
                             source.evaluate(&state, ATol::default()).unwrap().feasible(),
                             expected
@@ -370,7 +373,7 @@ mod tests {
                     VariableID::from(1),
                     Equality::LessThanOrEqualToZero,
                     indicator,
-                    false,
+                    crate::IndicatorTriggerValue::One,
                 ),
             )]))
             .named_functions(BTreeMap::from([(
@@ -394,7 +397,7 @@ mod tests {
                         VariableID::from(1),
                         Equality::EqualToZero,
                         Function::from(quadratic!(1, 1)),
-                        false,
+                        crate::IndicatorTriggerValue::One,
                     ),
                     reason,
                 ),

@@ -781,7 +781,7 @@ mod tests {
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
                 Function::from(linear!(1) + coeff!(-5.0)),
-                false,
+                crate::IndicatorTriggerValue::One,
             ),
         );
 
@@ -823,7 +823,7 @@ mod tests {
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
                 Function::from(linear!(1) + coeff!(-5.0)),
-                false,
+                crate::IndicatorTriggerValue::One,
             ),
         );
 

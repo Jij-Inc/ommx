@@ -15,7 +15,7 @@ use crate::{
 
 pub fn required_features(
     has_indicator_constraints: bool,
-    has_zero_activated_indicators: bool,
+    has_zero_triggered_indicators: bool,
     has_one_hot_constraints: bool,
     has_sos1_constraints: bool,
     has_finite_domain_variables: bool,
@@ -25,8 +25,8 @@ pub fn required_features(
     if has_indicator_constraints {
         features.push(Feature::ConstraintIndicator as i32);
     }
-    if has_zero_activated_indicators {
-        features.push(Feature::IndicatorActivateOnZero as i32);
+    if has_zero_triggered_indicators {
+        features.push(Feature::IndicatorTriggerValue as i32);
     }
     if has_one_hot_constraints {
         features.push(Feature::ConstraintOneHot as i32);
@@ -235,7 +235,7 @@ mod required_features_tests {
                 Feature::OutputObjective as i32,
                 Feature::DecisionVariableFiniteDomain as i32,
                 Feature::ConstraintSkipFeasibilityCheck as i32,
-                Feature::IndicatorActivateOnZero as i32,
+                Feature::IndicatorTriggerValue as i32,
             ],
             "test.Message",
         )

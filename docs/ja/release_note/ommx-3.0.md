@@ -24,6 +24,8 @@ protobuf形式の `ommx.v2` はまだ正式リリース前で、Python SDKのバ
 
 Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` に揃えます。評価した候補点でのIndicatorのON/OFFを表し、制約のactivenessとは独立です。
 
+Indicatorの設定はboolの `activate_on_zero` から、`trigger_value=0` または既定値の `trigger_value=1` に変更します。整数のpropertyとDataFrame列は本体を適用する条件を表し、評価結果のboolは引き続き `indicator_on` で表します。Instance classの節では `allowed_indicator_trigger_values` を使い、許可しない発火値は `IndicatorTriggerNotAllowed` の `trigger_value` と `allowed_trigger_values` で報告します。
+
 OneHot/SOS1の評価結果のpropertyは、サンプルごとの対応を返すものも含めて `active_variable` から `selected_variable` に変更します。DataFrame列も `selected_variable` と `selected_variable.<sample_id>` になります。候補点での選択を表す情報であり、変数や制約がActive Formulationに属するかどうかとは独立です。評価の動作は変わりません。
 
 Active Formulationの変数も明示的に `active_decision_variables` と `DecisionVariableRole.Active` で表します。`state_role` の値は `"active"` です。Adapterはactiveな変数と制約を使い、行ごとの `used_ids` は参照関係を表す名前として維持します。

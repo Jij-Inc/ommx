@@ -27,7 +27,11 @@ fn instance(zero: bool, equality: Equality) -> Instance {
                 0.into(),
                 equality,
                 Function::from((linear!(1) - coeff!(2.0)).unwrap()),
-                zero,
+                if zero {
+                    ommx::IndicatorTriggerValue::Zero
+                } else {
+                    ommx::IndicatorTriggerValue::One
+                },
             ),
         )]))
         .build()
@@ -52,7 +56,7 @@ fn skipped_zero_activated_indicator_preserves_both_policies() {
     );
     let samples = model.evaluate_samples(&states, ATol::default()).unwrap();
     let row = &solution.evaluated_indicator_constraints().inner()[&7.into()];
-    assert!(row.activate_on_zero);
+    assert_eq!(row.trigger_value, ommx::IndicatorTriggerValue::Zero);
     assert!(row.stage.indicator_on);
     assert_eq!(row.violation(), 1.0);
     assert!(solution.feasible());
@@ -79,7 +83,7 @@ fn skipped_zero_activated_indicator_preserves_both_policies() {
         v2::Solution::from(solution.clone()).required_features,
         v2::SampleSet::from(samples.clone()).required_features,
     ] {
-        assert!(features.contains(&(v2::Feature::IndicatorActivateOnZero as i32)));
+        assert!(features.contains(&(v2::Feature::IndicatorTriggerValue as i32)));
         assert!(features.contains(&(v2::Feature::ConstraintSkipFeasibilityCheck as i32)));
     }
     assert_eq!(
@@ -119,8 +123,12 @@ fn activation_evaluation_propagation_and_bigm() {
             assert_eq!(
                 lowered.inactive_indicator_constraints()[&7.into()]
                     .0
-                    .activate_on_zero,
-                zero
+                    .trigger_value,
+                if zero {
+                    ommx::IndicatorTriggerValue::Zero
+                } else {
+                    ommx::IndicatorTriggerValue::One
+                }
             );
             for z in [0.0, 1.0] {
                 let indicator_on = z == if zero { 0.0 } else { 1.0 };
@@ -163,7 +171,7 @@ fn activation_evaluation_propagation_and_bigm() {
                         expected
                     );
                     let row = &result.evaluated_indicator_constraints().inner()[&7.into()];
-                    assert_eq!(row.activate_on_zero, zero);
+                    assert_eq!(u8::from(row.trigger_value), u8::from(!zero));
                     assert_eq!(row.stage.indicator_on, indicator_on);
                     assert_eq!(row.is_feasible(ATol::default()), expected);
                     assert_eq!(
@@ -201,7 +209,7 @@ fn activation_tolerance_and_invalid_values() {
 
 #[test]
 fn all_wire_roots_declare_activation_feature_including_inactive_rows() {
-    let feature = v2::Feature::IndicatorActivateOnZero as i32;
+    let feature = v2::Feature::IndicatorTriggerValue as i32;
     for zero in [false, true] {
         let model = instance(zero, Equality::EqualToZero);
         let proto: v2::Instance = model.clone().into();
@@ -256,9 +264,9 @@ fn all_wire_roots_declare_activation_feature_including_inactive_rows() {
             parametric
         );
     }
-    // Legacy proto3 omission has the historical activation-on-one meaning.
+    // An absent trigger value uses the default value one.
     let row = v2::IndicatorConstraint::decode(&b""[..]).unwrap();
-    assert!(!row.activate_on_zero);
+    assert_eq!(row.trigger_value, None);
 }
 
 fn class(values: &[u8], conditions: &[(Equality, u32)]) -> InstanceClass {
@@ -268,7 +276,7 @@ fn class(values: &[u8], conditions: &[(Equality, u32)]) -> InstanceClass {
         PolynomialRequirement::at_most(1),
         BTreeSet::from([Sense::Minimize]),
     )
-    .with_allowed_indicator_activation_values(values.iter().copied().collect())
+    .with_allowed_indicator_trigger_values(values.iter().copied().collect())
     .unwrap();
     for &(relation, degree) in conditions {
         clause = clause.with_indicator_constraint(relation, PolynomialRequirement::at_most(degree));
@@ -288,8 +296,8 @@ fn class_checks_activation_and_body_independently_without_mutation() {
         assert!(class(&[0, 1], &[(eq, 1)]).contains(&model));
         let report = class(&[1 - value], &[(eq, 1)]).check_membership(&model);
         assert!(matches!(&report.clause_reports()[0].mismatches()[0],
-            InstanceClassMismatch::IndicatorActivationNotAllowed { activation_value, constraint_ids, .. }
-            if *activation_value == value && constraint_ids == &BTreeSet::from([IndicatorConstraintID::from(7)])));
+            InstanceClassMismatch::IndicatorTriggerNotAllowed { trigger_value, constraint_ids, .. }
+            if *trigger_value == value && constraint_ids == &BTreeSet::from([IndicatorConstraintID::from(7)])));
         assert!(!class(&[0, 1], &[(le, 2)]).contains(&model));
         assert!(!class(&[0, 1], &[(eq, 0)]).contains(&model));
         assert!(!class(&[], &[(eq, 1)]).contains(&model));
@@ -306,7 +314,12 @@ fn class_checks_activation_and_body_independently_without_mutation() {
     let mut mixed = instance(false, eq);
     mixed
         .add_indicator_constraint(
-            IndicatorConstraint::new(0.into(), le, Function::Zero, true),
+            IndicatorConstraint::new(
+                0.into(),
+                le,
+                Function::Zero,
+                ommx::IndicatorTriggerValue::Zero,
+            ),
             Default::default(),
         )
         .unwrap();
@@ -320,11 +333,11 @@ fn class_checks_activation_and_body_independently_without_mutation() {
         BTreeSet::from([Sense::Minimize]),
     );
     assert_eq!(
-        clause.allowed_indicator_activation_values(),
+        clause.allowed_indicator_trigger_values(),
         &BTreeSet::from([1])
     );
     assert!(clause
-        .with_allowed_indicator_activation_values(BTreeSet::from([0, 2]))
+        .with_allowed_indicator_trigger_values(BTreeSet::from([0, 2]))
         .is_err());
 }
 
@@ -390,7 +403,7 @@ fn constant_body_lowering_and_wire_activation_consistency() {
             .entries
             .get_mut(&7)
             .unwrap()
-            .activate_on_zero = !zero;
+            .trigger_value = Some(u32::from(zero));
         assert!(Solution::from_v2_bytes(&proto.encode_to_vec()).is_err());
         let samples = model
             .evaluate_samples(&Sampled::from((0.into(), state)), ATol::default())
@@ -403,7 +416,7 @@ fn constant_body_lowering_and_wire_activation_consistency() {
             .entries
             .get_mut(&7)
             .unwrap()
-            .activate_on_zero = !zero;
+            .trigger_value = Some(u32::from(zero));
         assert!(SampleSet::from_v2_bytes(&proto.encode_to_vec()).is_err());
     }
 }

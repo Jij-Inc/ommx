@@ -1,17 +1,18 @@
-A condition enforced when a controlling Binary variable equals its activation value.
+A condition enforced when a controlling Binary variable equals its trigger value.
 
 For a Binary variable $z$, an Indicator requires $f(x)\leq0$ or $f(x)=0$
-when $z=1$ by default. With `activate_on_zero=True`, it is enforced when $z=0$.
+when $z=1$ by default. With `trigger_value=0`, it is enforced when $z=0$.
+Only 0 and 1 are valid trigger values.
 At the other binary value, the Indicator is satisfied regardless of the body's
 value; variable domains and other constraints still apply. This is a one-way
-implication: a satisfied body does not force the trigger to its activation value.
+implication: a satisfied body does not force the variable to its trigger value.
 
 Construct one from a regular constraint with {meth}`~ommx.Constraint.with_indicator`,
 or pass `indicator_variable`, `function`, and `equality` to this class.
 The controlling variable accepts a variable ID, a standalone
 {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.
 These accepted forms are exposed as the `VariableIDLike` type alias.
-Its ID and activation condition are stored. The enclosing Instance validates that the referenced
+Its ID and trigger value are stored. The enclosing Instance validates that the referenced
 variables exist and that the controlling variable is Binary when inserting it.
 
 **Construct and evaluate a conditional limit**
@@ -26,6 +27,7 @@ The following model limits the amount to five only when the facility is enabled:
 >>> instance.objective = amount
 >>> condition = (amount <= 5).with_indicator(enabled)
 >>> assert condition.indicator_variable_id == enabled.id
+>>> assert condition.trigger_value == 1
 >>> assert condition.equality == Equality.LessThanOrEqualToZero
 >>> attached = instance.add_indicator_constraint(condition)
 >>> cid = attached.constraint_id
@@ -39,21 +41,21 @@ The following model limits the amount to five only when the facility is enabled:
 
 ```
 
-Pass `activate_on_zero=True` to enforce the body when the trigger is zero:
+Pass `trigger_value=0` to enforce the body when the controlling variable is zero:
 
 ```pycon
->>> disabled_limit = (amount <= 5).with_indicator(enabled, activate_on_zero=True)
->>> assert disabled_limit.activate_on_zero
+>>> disabled_limit = (amount <= 5).with_indicator(enabled, trigger_value=0)
+>>> assert disabled_limit.trigger_value == 0
 
 ```
 
 The constructor accepts the same keyword. Attached, inactive, evaluated, and
-sampled rows expose `activate_on_zero`; Indicator DataFrames retain it as a
-column. It describes the constraint, independently of whether a particular
-candidate activates it.
+sampled rows expose the integer `trigger_value`; Indicator DataFrames retain it
+as a column. This is the constraint's configuration, independently of its ON/OFF
+state at a particular candidate.
 
 The `indicator_on` column records whether the controlling variable equals its
-activation value, using the evaluation tolerance. It distinguishes an OFF
+trigger value, using the evaluation tolerance. It distinguishes an OFF
 Indicator from an ON Indicator whose body is satisfied. This is independent of
 `activeness`, which records whether the constraint belongs to the current
 formulation and its default feasibility participation. An active constraint can
@@ -61,7 +63,7 @@ have its Indicator OFF; an inactive constraint can have its Indicator ON.
 Indicator results do not have a dual variable.
 See {meth}`~ommx.Solution.constraints_df` for the precise columns and violation
 semantics, and {meth}`~ommx.Instance.evaluate` for numerical tolerances and invalid
-activation values.
+controlling-variable values.
 
 **Identity, transformation, and solver use**
 

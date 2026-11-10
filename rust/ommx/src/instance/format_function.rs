@@ -585,7 +585,7 @@ where
         writeln!(
             out,
             "{indicator} = {} -> {} {} 0{}",
-            u8::from(!constraint.activate_on_zero),
+            u8::from(constraint.trigger_value),
             format_function(constraint.function())?,
             equality_symbol(constraint.equality),
             inactive_suffix(inactive_metadata),

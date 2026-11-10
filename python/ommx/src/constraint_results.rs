@@ -229,16 +229,16 @@ sampled_methods!(SampledSos1Constraint, violations);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl EvaluatedIndicatorConstraint {
-    /// Decision variable that activates this constraint.
+    /// Binary decision variable controlling when the body is enforced.
     #[getter]
     pub fn indicator_variable_id(&self) -> u64 {
         self.0.indicator_variable.into_inner()
     }
 
-    /// Whether zero activates the body instead of one.
+    /// Binary value (0 or 1) at which the body is enforced.
     #[getter]
-    pub fn activate_on_zero(&self) -> bool {
-        self.0.activate_on_zero
+    pub fn trigger_value(&self) -> u8 {
+        self.0.trigger_value.into()
     }
 
     /// Equality of the inner constraint.
@@ -295,16 +295,16 @@ impl EvaluatedSos1Constraint {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SampledIndicatorConstraint {
-    /// Decision variable that activates this constraint.
+    /// Binary decision variable controlling when the body is enforced.
     #[getter]
     pub fn indicator_variable_id(&self) -> u64 {
         self.0.indicator_variable.into_inner()
     }
 
-    /// Whether zero activates the body instead of one.
+    /// Binary value (0 or 1) at which the body is enforced.
     #[getter]
-    pub fn activate_on_zero(&self) -> bool {
-        self.0.activate_on_zero
+    pub fn trigger_value(&self) -> u8 {
+        self.0.trigger_value.into()
     }
 
     /// Equality of the inner constraint.

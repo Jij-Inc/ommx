@@ -32,7 +32,7 @@ def test_reduction_preserves_indicator_activation(zero, equality):
                 indicator_variable=z,
                 function=x * x,
                 equality=equality,
-                activate_on_zero=zero,
+                trigger_value=int(not zero),
                 name="conditional_square",
             )
         },
@@ -40,7 +40,7 @@ def test_reduction_preserves_indicator_activation(zero, equality):
     reduced = copy.deepcopy(source)
     assert reduced.reduce_binary_power()
     row = reduced.active_constraints[IndicatorConstraintID(7)]
-    assert row.activate_on_zero == zero
+    assert row.trigger_value == int(not zero)
     assert row.equality == equality
     assert row.name == "conditional_square"
     assert row.function.terms == {(1,): 1.0}

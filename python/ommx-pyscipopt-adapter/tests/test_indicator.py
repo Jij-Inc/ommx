@@ -111,7 +111,7 @@ def test_indicator_constraint_multiple():
 )
 @pytest.mark.parametrize("indicator_on", [False, True])
 @pytest.mark.parametrize("sense", [Sense.Minimize, Sense.Maximize])
-def test_both_activation_values(zero, equality, indicator_on, sense):
+def test_both_trigger_values(zero, equality, indicator_on, sense):
     z = DecisionVariable.binary(0)
     x = DecisionVariable.continuous(1, lower=0, upper=10)
     value = int(not zero) if indicator_on else int(zero)
@@ -125,7 +125,7 @@ def test_both_activation_values(zero, equality, indicator_on, sense):
                 indicator_variable=z,
                 function=x - 3,
                 equality=equality,
-                activate_on_zero=zero,
+                trigger_value=int(not zero),
             )
         },
     )
@@ -160,7 +160,7 @@ def test_constant_body_uses_indicator_off_value(zero, equality, residual):
                 indicator_variable=z,
                 function=Function.from_scalar(residual),
                 equality=equality,
-                activate_on_zero=zero,
+                trigger_value=int(not zero),
             )
         },
     )

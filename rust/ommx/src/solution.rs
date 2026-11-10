@@ -996,11 +996,7 @@ fn validate_solution_indicator_stage_values(
         })?;
         let computed_indicator_on = atol.approx_eq(
             *variable.value(),
-            if constraint.activate_on_zero {
-                0.0
-            } else {
-                1.0
-            },
+            f64::from(u8::from(constraint.trigger_value)),
         );
         if constraint.stage.indicator_on != computed_indicator_on {
             return Err(SolutionError::InvalidConstraintStructure {
@@ -1358,7 +1354,7 @@ impl SolutionBuilder {
     /// - All `used_decision_variable_ids` in constraints and evaluated named
     ///   functions exist in `decision_variables`
     /// - Special-constraint violations and activation decisions are consistent
-    ///   with `decision_variables`; their `activation_atol` equals `feasibility_atol`
+    ///   with `decision_variables`; their retained evaluation tolerance equals `feasibility_atol`
     ///
     /// Use [`Self::build`] for validated construction.
     /// This method is useful when invariants are guaranteed by construction,
@@ -1495,7 +1491,7 @@ mod tests {
                     0.into(),
                     Equality::EqualToZero,
                     Function::from(crate::coeff!(-3.0)),
-                    false,
+                    crate::IndicatorTriggerValue::One,
                 ),
             )]))
             .active_one_hot_constraints(BTreeMap::from([(
@@ -1617,7 +1613,7 @@ mod tests {
                     VariableID::from(0),
                     Equality::LessThanOrEqualToZero,
                     Function::from(crate::coeff!(1.5)),
-                    false,
+                    crate::IndicatorTriggerValue::One,
                 ),
             )]))
             .active_one_hot_constraints(BTreeMap::from([(
@@ -2242,7 +2238,7 @@ mod tests {
         let indicator_id = crate::IndicatorConstraintID::from(3);
         let indicator = crate::indicator_constraint::EvaluatedIndicatorConstraint {
             indicator_variable: structural_id,
-            activate_on_zero: false,
+            trigger_value: crate::IndicatorTriggerValue::One,
             equality: crate::Equality::EqualToZero,
             stage: crate::indicator_constraint::IndicatorEvaluatedData {
                 evaluated_value: 0.0,

@@ -237,24 +237,24 @@ impl Constraint {
 
     /// Create an indicator constraint from this constraint.
     ///
-    /// Returns `indicator_variable = 1 → this constraint`, or activation at zero
-    /// when `activate_on_zero=True`.
+    /// Returns `indicator_variable = trigger_value → this constraint`.
+    /// The trigger value must be 0 or 1 and defaults to 1.
     /// `indicator_variable` may be a variable ID or a decision-variable object.
     /// Only its ID is stored; the enclosing host requires the referenced variable
     /// to be binary when the constraint is inserted.
-    #[pyo3(signature = (indicator_variable, *, activate_on_zero=false))]
+    #[pyo3(signature = (indicator_variable, *, trigger_value=1))]
     fn with_indicator(
         &self,
         indicator_variable: crate::VariableIDInput,
-        activate_on_zero: bool,
-    ) -> crate::IndicatorConstraint {
+        trigger_value: u32,
+    ) -> crate::error::OmmxPyResult<crate::IndicatorConstraint> {
         let ic = ommx::IndicatorConstraint::new(
             indicator_variable.0,
             self.0.equality,
             self.0.stage.function.clone(),
-            activate_on_zero,
+            trigger_value.try_into()?,
         );
-        crate::IndicatorConstraint(ic, self.1.clone())
+        Ok(crate::IndicatorConstraint(ic, self.1.clone()))
     }
 
     pub fn __repr__(&self) -> String {

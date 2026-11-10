@@ -666,7 +666,7 @@ mod tests {
                     var_id,
                     crate::Equality::LessThanOrEqualToZero,
                     Function::Zero,
-                    false,
+                    crate::IndicatorTriggerValue::One,
                 ),
             )]))
             .indicator_constraint_context(indicator_context)

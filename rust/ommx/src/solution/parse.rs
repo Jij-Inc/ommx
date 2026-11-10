@@ -579,7 +579,7 @@ mod tests {
             EvaluatedDecisionVariable::new(variable_id, DecisionVariable::binary(), 1.0).unwrap();
         let constraint = crate::indicator_constraint::EvaluatedIndicatorConstraint {
             indicator_variable: variable_id,
-            activate_on_zero: false,
+            trigger_value: crate::IndicatorTriggerValue::One,
             equality: crate::Equality::EqualToZero,
             stage: crate::indicator_constraint::IndicatorEvaluatedData {
                 evaluated_value: 0.0,
@@ -1745,7 +1745,7 @@ mod tests {
             EvaluatedDecisionVariable::new(var_id, DecisionVariable::binary(), 1.0).unwrap();
         let indicator = EvaluatedIndicatorConstraint {
             indicator_variable: var_id,
-            activate_on_zero: false,
+            trigger_value: crate::IndicatorTriggerValue::One,
             equality: crate::Equality::EqualToZero,
             stage: IndicatorEvaluatedData {
                 evaluated_value: 0.0,
@@ -1800,7 +1800,7 @@ mod tests {
             EvaluatedDecisionVariable::new(var_id, DecisionVariable::binary(), 0.0).unwrap();
         let indicator = EvaluatedIndicatorConstraint {
             indicator_variable: var_id,
-            activate_on_zero: false,
+            trigger_value: crate::IndicatorTriggerValue::One,
             equality: crate::Equality::EqualToZero,
             stage: IndicatorEvaluatedData {
                 evaluated_value: 1.0,

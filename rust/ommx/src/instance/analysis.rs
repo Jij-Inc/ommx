@@ -771,7 +771,7 @@ mod tests {
                     VariableID::from(3),
                     Equality::LessThanOrEqualToZero,
                     crate::Function::from(linear!(4)),
-                    false,
+                    crate::IndicatorTriggerValue::One,
                 ),
                 Default::default(),
             )

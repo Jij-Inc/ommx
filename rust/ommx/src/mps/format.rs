@@ -443,7 +443,7 @@ mod tests {
                     binary,
                     Equality::EqualToZero,
                     Function::from(linear!(binary)),
-                    false,
+                    crate::IndicatorTriggerValue::One,
                 ),
             )]))
             .active_one_hot_constraints(BTreeMap::from([(

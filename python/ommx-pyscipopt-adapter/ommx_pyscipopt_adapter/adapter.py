@@ -654,7 +654,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     native ``addConsIndicator`` and ``addConsSOS1`` operations. A nonconstant
     equality indicator becomes two inequality indicators. A constant body is
     simplified: a satisfied body needs no row, while an unsatisfied body forces
-    its indicator to the inactive value. Both activation values are supported.
+    its indicator to the OFF value. Both trigger values are supported.
     OneHot constraints are lowered to regular equalities by the recommended
     preparation policy.
 
@@ -829,7 +829,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 regular_constraint_polynomial_requirements=(
                     _QUADRATIC_REGULAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS
                 ),
-                allowed_indicator_activation_values={0, 1},
+                allowed_indicator_trigger_values={0, 1},
                 indicator_body_polynomial_requirements=(
                     _LINEAR_INDICATOR_BODY_POLYNOMIAL_REQUIREMENTS
                 ),
@@ -1313,7 +1313,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             # that forces the indicator to its OFF value
             binvar = self.varname_map[str(indicator.indicator_variable_id)]
             self.model.addCons(
-                binvar == int(indicator.activate_on_zero),
+                binvar == 1 - indicator.trigger_value,
                 name=f"ind_{ind_id}_forced_off",
             )
             return
@@ -1331,20 +1331,20 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             self.model.addConsIndicator(
                 expr <= 0,
                 binvar=binvar,
-                activeone=not indicator.activate_on_zero,
+                activeone=indicator.trigger_value == 1,
                 name=f"ind_{ind_id}_le",
             )
             self.model.addConsIndicator(
                 -expr <= 0,
                 binvar=binvar,
-                activeone=not indicator.activate_on_zero,
+                activeone=indicator.trigger_value == 1,
                 name=f"ind_{ind_id}_ge",
             )
         elif indicator.equality == Equality.LessThanOrEqualToZero:
             self.model.addConsIndicator(
                 expr <= 0,
                 binvar=binvar,
-                activeone=not indicator.activate_on_zero,
+                activeone=indicator.trigger_value == 1,
                 name=f"ind_{ind_id}",
             )
         else:

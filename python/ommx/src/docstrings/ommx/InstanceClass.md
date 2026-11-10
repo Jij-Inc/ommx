@@ -146,12 +146,12 @@ recommended policies, and the distinction between automatic and explicit
 Preparation, see {class}`~ommx.adapter.SolverAdapter` and
 {class}`~ommx.adapter.SamplerAdapter`.
 
-**Indicator activation conditions**
+**Indicator trigger values**
 
-`InstanceClassClause.allowed_indicator_activation_values` specifies the allowed
+`InstanceClassClause.allowed_indicator_trigger_values` specifies the allowed
 trigger values independently of `indicator_body_polynomial_requirements`.
 The latter maps `Equality` to polynomial requirements shared by all admitted
-activation values. The default activation set is `{1}`; an empty activation
+trigger values. The default trigger set is `{1}`; an empty trigger
 set or an empty body map rejects all Indicators. Values other than 0 and 1
 are rejected when constructing the clause.
 
@@ -162,16 +162,16 @@ are rejected when constructing the clause.
 ...     allowed_variable_kinds={Kind.Binary},
 ...     allowed_senses={Sense.Minimize},
 ...     objective_polynomial_requirement=PolynomialRequirement.at_most(1),
-...     allowed_indicator_activation_values={0, 1},
+...     allowed_indicator_trigger_values={0, 1},
 ...     indicator_body_polynomial_requirements={
 ...         Equality.EqualToZero: PolynomialRequirement.at_most(1),
 ...     },
 ... )
->>> assert clause.allowed_indicator_activation_values == {0, 1}
+>>> assert clause.allowed_indicator_trigger_values == {0, 1}
 
 ```
 
-An unsupported trigger value produces `InstanceClassMismatch.IndicatorActivationNotAllowed`,
-with `activation_value` and `allowed_activation_values`. Body-relation and degree
-requirements are checked independently, so their diagnostics can accompany an
-activation mismatch. Membership checking does not transform the Instance.
+An unsupported trigger value produces `InstanceClassMismatch.IndicatorTriggerNotAllowed`,
+with `trigger_value` and `allowed_trigger_values`. Body-relation and degree
+requirements are checked independently, so their diagnostics can accompany a
+trigger-value mismatch. Membership checking does not transform the Instance.

@@ -36,7 +36,7 @@ fn all_families() -> Instance {
                             0.into(),
                             Equality::LessThanOrEqualToZero,
                             Function::from(coeff!(1.0)),
-                            false,
+                            crate::IndicatorTriggerValue::One,
                         ),
                     )
                 })
@@ -369,7 +369,7 @@ fn specialization_and_partial_evaluation_preserve_inactive_policy() {
                         0.into(),
                         Equality::LessThanOrEqualToZero,
                         function,
-                        false,
+                        crate::IndicatorTriggerValue::One,
                     ),
                     metadata(true),
                 ),

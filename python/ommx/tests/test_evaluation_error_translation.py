@@ -140,7 +140,7 @@ def test_fixed_state_conflict_reuses_decision_variable_value_error() -> None:
 def test_invalid_indicator_value_reuses_decision_variable_value_error(
     operation,
 ) -> None:
-    with pytest.raises(ValueError, match="invalid activation value"):
+    with pytest.raises(ValueError, match="invalid binary value"):
         operation()
 
 

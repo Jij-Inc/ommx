@@ -3128,7 +3128,7 @@ mod tests {
                     selector_id(),
                     Equality::LessThanOrEqualToZero,
                     Function::Zero,
-                    false,
+                    crate::IndicatorTriggerValue::One,
                 ),
                 Default::default(),
             )
@@ -3186,7 +3186,7 @@ mod tests {
                     selector_id(),
                     Equality::LessThanOrEqualToZero,
                     Function::Zero,
-                    false,
+                    crate::IndicatorTriggerValue::One,
                 ),
                 Default::default(),
             )

@@ -48,8 +48,8 @@ message IndicatorConstraint {
   uint64 indicator_variable = 1;
   ommx.v1.Equality equality = 2;
   ommx.v1.Function function = 3;
-  // False activates at one (including legacy payloads); true activates at zero.
-  bool activate_on_zero = 4;
+  // The binary value that turns the indicator ON. Must be 0 or 1; absent means 1.
+  optional uint32 trigger_value = 4;
 }
 
 // One-hot constraint row.
@@ -109,11 +109,12 @@ message EvaluatedIndicatorConstraint {
   ommx.v1.Equality equality = 2;
   double evaluated_value = 3;
   bool feasible = 4;
-  // Whether the trigger matches its configured activation value at this state,
+  // Whether the indicator variable matches its configured trigger_value at this state,
   // independently of constraint activeness.
   bool indicator_on = 5;
   repeated uint64 used_decision_variable_ids = 6;
-  bool activate_on_zero = 7;
+  // The binary value that turns the indicator ON. Must be 0 or 1; absent means 1.
+  optional uint32 trigger_value = 7;
 }
 
 // Evaluated one-hot constraint row.
@@ -185,11 +186,12 @@ message SampledIndicatorConstraint {
   ommx.v1.Equality equality = 2;
   ommx.v1.SampledValues evaluated_values = 3;
   map<uint64, bool> feasible = 4;
-  // Whether the trigger matches its configured activation value at each sample,
+  // Whether the indicator variable matches its configured trigger_value at each sample,
   // independently of constraint activeness.
   map<uint64, bool> indicator_on = 5;
   repeated uint64 used_decision_variable_ids = 6;
-  bool activate_on_zero = 7;
+  // The binary value that turns the indicator ON. Must be 0 or 1; absent means 1.
+  optional uint32 trigger_value = 7;
 }
 
 // Sampled one-hot constraint row.

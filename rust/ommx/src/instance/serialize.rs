@@ -174,7 +174,7 @@ impl From<Instance> for v2::Instance {
             value
                 .indicator_constraint_collection
                 .values()
-                .any(|c| c.activate_on_zero),
+                .any(|c| c.trigger_value == crate::IndicatorTriggerValue::Zero),
             created_collection_has_payload(&value.one_hot_constraint_collection),
             created_collection_has_payload(&value.sos1_constraint_collection),
             value
@@ -267,7 +267,7 @@ impl From<ParametricInstance> for v2::ParametricInstance {
             value
                 .indicator_constraint_collection
                 .values()
-                .any(|c| c.activate_on_zero),
+                .any(|c| c.trigger_value == crate::IndicatorTriggerValue::Zero),
             created_collection_has_payload(&value.one_hot_constraint_collection),
             created_collection_has_payload(&value.sos1_constraint_collection),
             value
@@ -440,7 +440,7 @@ mod tests {
                     variable_1,
                     Equality::LessThanOrEqualToZero,
                     Function::Zero,
-                    false,
+                    crate::IndicatorTriggerValue::One,
                 ),
             )]))
             .indicator_constraint_context(indicator_context)
@@ -1015,10 +1015,10 @@ mod tests {
             // The existing full_v3 generator supplies the other root invariants.
             let mut proto: v2::Instance = instance.into();
             let rows = proto.indicator_constraints.as_mut().unwrap();
-            for row in rows.active.values_mut() { row.activate_on_zero = active_zero; }
-            for row in rows.inactive.values_mut() { row.activate_on_zero = inactive_zero; }
+            for row in rows.active.values_mut() { row.trigger_value = Some(u32::from(!active_zero)); }
+            for row in rows.inactive.values_mut() { row.trigger_value = Some(u32::from(!inactive_zero)); }
             if active_zero || inactive_zero {
-                proto.required_features.push(v2::Feature::IndicatorActivateOnZero as i32);
+                proto.required_features.push(v2::Feature::IndicatorTriggerValue as i32);
             }
             let source: Instance = proto.parse(&()).unwrap();
             let restored = Instance::from_v2_bytes(&source.to_v2_bytes()).unwrap();
@@ -1101,7 +1101,7 @@ mod activeness_wire_tests {
                             0.into(),
                             crate::Equality::LessThanOrEqualToZero,
                             positive,
-                            false,
+                            crate::IndicatorTriggerValue::One,
                         )
                         .into(),
                     )]),

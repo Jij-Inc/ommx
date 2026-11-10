@@ -41,7 +41,7 @@ impl From<SampleSet> for v2::SampleSet {
                 .indicator_constraints
                 .inner()
                 .values()
-                .any(|c| c.activate_on_zero),
+                .any(|c| c.trigger_value == crate::IndicatorTriggerValue::Zero),
             !value.one_hot_constraints.is_empty(),
             !value.sos1_constraints.is_empty(),
             value

@@ -649,14 +649,8 @@ fn validate_sampled_indicator_stage_values(
                     constraint_id: format!("{id:?}"),
                     message: format!("{message} at sample {sample_id:?}"),
                 })?;
-            let computed_indicator_on = atol.approx_eq(
-                value,
-                if constraint.activate_on_zero {
-                    0.0
-                } else {
-                    1.0
-                },
-            );
+            let computed_indicator_on =
+                atol.approx_eq(value, f64::from(u8::from(constraint.trigger_value)));
             if *provided_indicator_on != computed_indicator_on {
                 return Err(SampleSetError::InvalidConstraintStructure {
                     constraint_family: "indicator",
@@ -1133,7 +1127,7 @@ impl SampleSetBuilder {
     ///   named functions exist in `decision_variables`
     /// - Sample IDs are consistent across all components
     /// - Special-constraint violations and activation decisions are consistent
-    ///   with `decision_variables`; their `activation_atol` equals `feasibility_atol`
+    ///   with `decision_variables`; their retained evaluation tolerance equals `feasibility_atol`
     ///
     /// Use [`Self::build`] for validated construction.
     /// This method is useful when invariants are guaranteed by construction,

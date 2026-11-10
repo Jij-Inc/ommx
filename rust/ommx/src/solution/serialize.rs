@@ -41,7 +41,7 @@ impl From<Solution> for v2::Solution {
                 .evaluated_indicator_constraints
                 .inner()
                 .values()
-                .any(|c| c.activate_on_zero),
+                .any(|c| c.trigger_value == crate::IndicatorTriggerValue::Zero),
             !value.evaluated_one_hot_constraints.is_empty(),
             !value.evaluated_sos1_constraints.is_empty(),
             value
@@ -385,7 +385,11 @@ mod tests {
                             0.into(),
                             crate::Equality::EqualToZero,
                             Function::from(crate::linear!(1)),
-                            family == "indicator-zero",
+                            if family == "indicator-zero" {
+                                crate::IndicatorTriggerValue::Zero
+                            } else {
+                                crate::IndicatorTriggerValue::One
+                            },
                         );
                         builder = if inactive {
                             builder.inactive_indicator_constraints(BTreeMap::from([(

@@ -59,9 +59,9 @@
 # ---
 # name: test_instance_constraints_df_kind[indicator]
   '''
-                             indicator_variable_id  activate_on_zero equality    type   used_ids  name subscripts description                   activeness
-  indicator_constraint_id                                                                                                                                 
-  IndicatorConstraintID(20)                      0             False       =0  Linear  {0, 1, 2}  <NA>         []        <NA>  ConstraintActiveness.ACTIVE
+                             indicator_variable_id  trigger_value equality    type   used_ids  name subscripts description                   activeness
+  indicator_constraint_id                                                                                                                              
+  IndicatorConstraintID(20)                      0              1       =0  Linear  {0, 1, 2}  <NA>         []        <NA>  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_instance_constraints_df_kind[one_hot]
@@ -123,9 +123,9 @@
 # ---
 # name: test_sample_set_constraints_df_kind[indicator]
   '''
-                             indicator_variable_id  activate_on_zero equality   used_ids  name subscripts description  value.0  feasible.0  indicator_on.0  value.1  feasible.1  indicator_on.1                   activeness
-  indicator_constraint_id                                                                                                                                                                                                   
-  IndicatorConstraintID(20)                      0             False       =0  {0, 1, 2}  <NA>         []        <NA>      0.0        True           False      0.0        True            True  ConstraintActiveness.ACTIVE
+                             indicator_variable_id  trigger_value equality   used_ids  name subscripts description  value.0  feasible.0  indicator_on.0  value.1  feasible.1  indicator_on.1                   activeness
+  indicator_constraint_id                                                                                                                                                                                                
+  IndicatorConstraintID(20)                      0              1       =0  {0, 1, 2}  <NA>         []        <NA>      0.0        True           False      0.0        True            True  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_sample_set_constraints_df_kind[one_hot]
@@ -165,9 +165,9 @@
 # ---
 # name: test_solution_constraints_df_kind[indicator]
   '''
-                             indicator_variable_id  activate_on_zero equality  value  feasible  indicator_on   used_ids  name subscripts description  violation                   activeness
-  indicator_constraint_id                                                                                                                                                                   
-  IndicatorConstraintID(20)                      0             False       =0    0.0      True         False  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintActiveness.ACTIVE
+                             indicator_variable_id  trigger_value equality  value  feasible  indicator_on   used_ids  name subscripts description  violation                   activeness
+  indicator_constraint_id                                                                                                                                                                
+  IndicatorConstraintID(20)                      0              1       =0    0.0      True         False  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_solution_constraints_df_kind[one_hot]

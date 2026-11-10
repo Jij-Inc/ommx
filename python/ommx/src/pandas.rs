@@ -831,7 +831,7 @@ impl<'m> ToPandasEntry
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         dict.set_item("indicator_variable_id", c.indicator_variable.into_inner())?;
-        dict.set_item("activate_on_zero", c.activate_on_zero)?;
+        dict.set_item("trigger_value", u8::from(c.trigger_value))?;
         set_equality(&dict, c.equality)?;
         set_function_type(&dict, &c.stage.function)?;
         // Include indicator_variable in used_ids
@@ -866,7 +866,7 @@ impl<'m> ToPandasEntry
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         dict.set_item("indicator_variable_id", c.indicator_variable.into_inner())?;
-        dict.set_item("activate_on_zero", c.activate_on_zero)?;
+        dict.set_item("trigger_value", u8::from(c.trigger_value))?;
         set_equality(&dict, c.equality)?;
         dict.set_item("value", c.stage.evaluated_value)?;
         dict.set_item("feasible", c.is_feasible(atol))?;
@@ -903,7 +903,7 @@ impl<'a, 'm> ToPandasEntry
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         dict.set_item("indicator_variable_id", ic.indicator_variable.into_inner())?;
-        dict.set_item("activate_on_zero", ic.activate_on_zero)?;
+        dict.set_item("trigger_value", u8::from(ic.trigger_value))?;
         set_equality(&dict, ic.equality)?;
         set_used_ids(&dict, &ic.stage.used_decision_variable_ids)?;
         set_label_columns(

@@ -97,8 +97,8 @@ Replace `relax_*` / `restore_*` with `deactivate_*` / `activate_*`. Inactive mem
 Each row has exactly one `ConstraintActiveness` state: `Active`, `InactiveChecked` (`skip_feasibility_check: false`), or `InactiveSkipped` (`skip_feasibility_check: true`). Inactive membership includes both `InactiveChecked` and `InactiveSkipped`; `inactive_constraints()` returns both.
 
 Indicator stage data use `indicator_on` to record whether the indicator variable
-matches the configured activation value within the evaluation tolerance: zero
-when `activate_on_zero` is true, and one otherwise. This candidate-dependent
+matches the configured `trigger_value` within the evaluation tolerance. The
+trigger value is zero or one. This candidate-dependent
 diagnostic is independent of the constraint's activeness.
 
 OneHot/SOS1 evaluated and sampled stage fields rename `active_variable` to
@@ -194,12 +194,15 @@ passing the corresponding typed ID. Unknown IDs return `None`.
 
 Indicator uses its inner violation when `indicator_on` is true and zero otherwise.
 [`IndicatorConstraint::new`](crate::IndicatorConstraint::new) requires an explicit
-`activate_on_zero` argument after the function: `false` activates at one and
-`true` at zero. The field is retained at every stage and in v2 serialization.
-Existing v2 payloads that omit the field still activate at one.
+`trigger_value` argument after the function:
+[`IndicatorTriggerValue::Zero`](crate::IndicatorTriggerValue::Zero) or
+[`IndicatorTriggerValue::One`](crate::IndicatorTriggerValue::One). The enum's
+default is `One`; numeric conversion rejects values other than 0 and 1. The
+field is retained at every stage and in v2 serialization. An omitted v2 trigger
+value means one.
 [`InstanceClassClause::with_indicator_constraint`](crate::InstanceClassClause::with_indicator_constraint)
-sets the body relation and polynomial requirement, shared by all allowed activation values.
-Use [`InstanceClassClause::with_allowed_indicator_activation_values`](crate::InstanceClassClause::with_allowed_indicator_activation_values)
+sets the body relation and polynomial requirement, shared by all allowed trigger values.
+Use [`InstanceClassClause::with_allowed_indicator_trigger_values`](crate::InstanceClassClause::with_allowed_indicator_trigger_values)
 to set those values independently (`{1}` by default); values other than 0 and 1
 are rejected.
 

@@ -170,7 +170,7 @@ v2の `sample_qubo_sa` が返したのは生のサンプルです。v3のAdapter
 
 各行の `ConstraintActiveness` は、`ACTIVE`、`INACTIVE_CHECKED`（`skip_feasibility_check=False` のinactive）、`INACTIVE_SKIPPED`（`skip_feasibility_check=True` のinactive）のいずれか1つです。**inactive** は後ろの2状態の総称で、`inactive_constraints` は両方を含みます。
 
-Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` を使い、指示変数が評価時の許容誤差内で設定した発火値に一致するかどうかを表します。発火値は `activate_on_zero=True` なら0、それ以外は1です。これは評価した候補点についての情報であり、制約のactivenessとは独立です。
+Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` を使い、指示変数が評価時の許容誤差内で設定した `trigger_value` に一致するかどうかを表します。発火値は0または1で、既定値は1です。これは評価した候補点についての情報であり、制約のactivenessとは独立です。
 
 OneHotとSOS1の評価結果のpropertyは、サンプルごとの対応を返すものも含めて `active_variable` から `selected_variable` に変更します。DataFrame列も `selected_variable` と `selected_variable.<sample_id>` になります。評価した候補点での選択を表す情報であり、変数や制約がActive Formulationに属するかどうかとは独立です。評価の動作は変わりません。
 
@@ -372,17 +372,17 @@ v3の各プレリリースでの変更経緯は[Python SDK 3.0のリリースノ
 ## Indicator の発火値
 
 `IndicatorConstraint` と `Constraint.with_indicator` に
-`activate_on_zero=True` を指定すると、二値の制御変数が 0 のときに本体を強制します。
-既定値は従来どおり 1 で発火します。この属性は attached・inactive・evaluated・sampled
+`trigger_value=0` を指定すると、二値の制御変数が 0 のときに本体を強制します。
+既定値は `trigger_value=1` で、0・1以外の値は拒否します。この整数の属性は attached・inactive・evaluated・sampled
 の各行と Indicator の DataFrame にも保持されます。
 
 `InstanceClassClause.indicator_body_polynomial_requirements` は従来どおり
 `Equality` から `PolynomialRequirement` への対応です。
-`allowed_indicator_activation_values={0, 1}` を独立に指定すると、同じ本体条件で
+`allowed_indicator_trigger_values={0, 1}` を独立に指定すると、同じ本体条件で
 両方の発火値を許可します。既定値は `{1}`、0 発火のみなら `{0}`、空集合なら
 すべての Indicator を拒否します。指定できる値は 0 と 1 だけです。
 本体条件の辞書が空の場合も、発火値の指定にかかわらずすべての Indicator を拒否します。
 
 PySCIPOpt と Big-M 変換は両方の発火値に対応します。
-v2 保存形式では、保持している Indicator に 0 発火が含まれる場合、専用の required
-feature を宣言します。旧 reader は発火条件を誤解釈せず、読み込みを拒否します。
+v2 保存形式では、保持している Indicator に `trigger_value=0` が含まれる場合、専用の required
+feature を宣言します。この機能に未対応の reader は発火条件を誤解釈せず、読み込みを拒否します。

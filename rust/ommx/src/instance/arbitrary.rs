@@ -480,7 +480,7 @@ impl Arbitrary for Instance {
                                             Function::from(
                                                 linear!(indicator_body_var.into_inner()),
                                             ),
-                                            false,
+                                            crate::IndicatorTriggerValue::One,
                                         ),
                                     );
                                     indicator_constraint_context
@@ -497,7 +497,7 @@ impl Arbitrary for Instance {
                                                 Function::from(linear!(
                                                     inactive_indicator_body_var.into_inner()
                                                 )),
-                                                false,
+                                                crate::IndicatorTriggerValue::One,
                                             ),
                                             arbitrary_inactive_metadata(),
                                         ),

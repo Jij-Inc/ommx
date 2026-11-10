@@ -16,7 +16,12 @@ fn mixed() -> Instance {
         )]))
         .active_indicator_constraints(BTreeMap::from([(
             1.into(),
-            IndicatorConstraint::new(0.into(), Equality::EqualToZero, Function::Zero, false),
+            IndicatorConstraint::new(
+                0.into(),
+                Equality::EqualToZero,
+                Function::Zero,
+                crate::IndicatorTriggerValue::One,
+            ),
         )]))
         .active_one_hot_constraints(BTreeMap::from([(
             2.into(),
@@ -110,7 +115,12 @@ fn protobuf_rejects_every_cross_family_and_lifecycle_collision() {
 fn builders_reject_cross_family_ids() {
     let indicator = BTreeMap::from([(
         0.into(),
-        IndicatorConstraint::new(0.into(), Equality::EqualToZero, Function::Zero, false),
+        IndicatorConstraint::new(
+            0.into(),
+            Equality::EqualToZero,
+            Function::Zero,
+            crate::IndicatorTriggerValue::One,
+        ),
     )]);
     let regular = BTreeMap::from([(0.into(), Constraint::equal_to_zero(Function::Zero))]);
     let variables = BTreeMap::from([(0.into(), DecisionVariable::binary())]);
@@ -210,7 +220,12 @@ fn inactive_special_maximum_exhausts_all_model_allocators_atomically() {
         .is_err());
     assert!(instance
         .add_indicator_constraint(
-            IndicatorConstraint::new(0.into(), Equality::EqualToZero, Function::Zero, false),
+            IndicatorConstraint::new(
+                0.into(),
+                Equality::EqualToZero,
+                Function::Zero,
+                crate::IndicatorTriggerValue::One
+            ),
             Default::default()
         )
         .is_err());

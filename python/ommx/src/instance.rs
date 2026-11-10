@@ -2468,7 +2468,7 @@ impl Instance {
     /// where $u \geq \sup f(x)$ and $l \leq \inf f(x)$ are the upper and lower
     /// bounds of $f$ over the decision variables' domains.
     ///
-    /// With `activate_on_zero=True`, the sides are `f(x) - u y <= 0` and
+    /// With `trigger_value=0`, the sides are `f(x) - u y <= 0` and
     /// `-f(x) + l y <= 0`; the same side-emission rules apply.
     ///
     /// Side emission:

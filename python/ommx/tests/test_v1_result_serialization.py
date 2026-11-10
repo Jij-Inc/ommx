@@ -30,7 +30,9 @@ def test_v1_rejects_special_results_and_preserves_v2(
     )
     if family.startswith("indicator"):
         instance.add_indicator_constraint(
-            (x == 0).with_indicator(z, activate_on_zero=family == "indicator-zero")
+            (x == 0).with_indicator(
+                z, trigger_value=0 if family == "indicator-zero" else 1
+            )
         )
         expected_family = "Indicator"
         if inactive:
