@@ -152,7 +152,7 @@ fn compile_regular() -> Instance {
             (7.into(), DecisionVariable::binary()),
             (8.into(), DecisionVariable::binary()),
         ]))
-        .constraints(BTreeMap::from([(
+        .active_constraints(BTreeMap::from([(
             23.into(),
             Constraint::equal_to_zero(equality.into()),
         )]))
