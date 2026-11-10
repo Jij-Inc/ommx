@@ -58,7 +58,7 @@ def test_active_variables_follow_constraint_membership_and_retain_row_references
     assert instance.decision_variable_role(1) == DecisionVariableRole.Irrelevant
     result = instance.evaluate({0: 0, 1: 1, 2: 2})
     assert result.constraints[cid].used_decision_variable_ids == {1}
-    assert result.feasible()
+    assert result.feasible
 
     instance.activate_constraint(cid)
     assert instance.active_decision_variables == x[:2]

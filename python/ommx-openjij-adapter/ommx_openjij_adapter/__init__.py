@@ -101,7 +101,7 @@ class OMMXOpenJijSAAdapter(_OMMXOpenJijSAAdapter):
     ...     candidate = sample_set.get(sample_id)
     ...     values = candidate.extract_decision_variables("x")
     ...     assert candidate.objective == 3 * values[(0,)] + 2 * values[(1,)]
-    ...     assert candidate.feasible() == (sum(values.values()) == 1)
+    ...     assert candidate.feasible == (sum(values.values()) == 1)
 
     **Select among the obtained feasible candidates**
 
@@ -109,9 +109,9 @@ class OMMXOpenJijSAAdapter(_OMMXOpenJijSAAdapter):
     the feasible candidates actually obtained. The names and subscripts set
     while modeling identify the selected values:
 
-    >>> solution = sample_set.best_feasible()
+    >>> solution = sample_set.best_feasible
     >>> selected = solution.extract_decision_variables("x")
-    >>> assert solution.feasible() and sum(selected.values()) == 1
+    >>> assert solution.feasible and sum(selected.values()) == 1
     >>> assert solution.objective == 3 * selected[(0,)] + 2 * selected[(1,)]
     >>> details = solution.decision_variables_df()[["name", "subscripts", "value"]]
 
@@ -147,7 +147,7 @@ class OMMXOpenJijSAAdapter(_OMMXOpenJijSAAdapter):
     >>> assert decoded.num_samples() == 3
     >>> for sample_id in decoded.sample_ids():
     ...     candidate = decoded.get(sample_id)
-    ...     assert candidate.feasible()
+    ...     assert candidate.feasible
     ...     assert candidate.objective == problem.objective.evaluate(candidate.state)
     """
 

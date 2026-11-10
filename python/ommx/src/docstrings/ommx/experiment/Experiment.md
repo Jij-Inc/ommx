@@ -31,7 +31,7 @@ record that can later be opened by {meth}`load`.
 ...             solution = problem.evaluate(candidate)
 ...             run.log_parameter("candidate", label)
 ...             run.log_parameter("objective", solution.objective)
-...             run.log_parameter("feasible", solution.feasible())
+...             run.log_parameter("feasible", solution.feasible)
 ...             run.log_solution("evaluation", solution)
 >>> experiment.run_parameters_df()[["candidate", "objective", "feasible"]].to_dict(
 ...     "records"
@@ -69,7 +69,7 @@ without rerunning either a solver or the candidate evaluation.
 ... assert len(problem.decision_variables) == 2
 ... for run in loaded.runs:
 ...     result = run.get_solution("evaluation")
-...     print(run.run_id, run.status, result.objective, result.feasible())
+...     print(run.run_id, run.status, result.objective, result.feasible)
 ... """
 >>> with TemporaryDirectory() as directory:
 ...     archive = Path(directory) / "candidate-trials.ommx"

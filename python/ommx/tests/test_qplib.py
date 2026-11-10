@@ -47,7 +47,7 @@ assert len(instance.decision_variables) == 50
 state = State.load_qplib_solution(str(fixtures / "QPLIB_0018.sol"), num_variables=50)
 solution = instance.evaluate(state, atol=1e-8)
 assert abs(solution.objective - (-6.38601498159835)) < 1e-10
-assert solution.feasible()
+assert solution.feasible
 assert len(Artifact.load(legacy_ref).instance.decision_variables) == 0
 """,
             str(FIXTURES),
@@ -75,7 +75,7 @@ def test_published_qplib_solution(tag: str, expected: float) -> None:
     }
     solution = instance.evaluate(state, atol=1e-8)
     assert solution.objective == pytest.approx(expected, abs=1e-10, rel=0)
-    assert solution.feasible()
+    assert solution.feasible
 
 
 def test_solution_loader_fills_omitted_variables(tmp_path: Path) -> None:

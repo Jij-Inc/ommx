@@ -32,7 +32,7 @@ The following model limits the amount to five only when the facility is enabled:
 >>> off = instance.evaluate({enabled.id: 0, amount.id: 6})
 >>> on = instance.evaluate({enabled.id: 1, amount.id: 5})
 >>> violated = instance.evaluate({enabled.id: 1, amount.id: 6})
->>> assert off.feasible() and on.feasible() and not violated.feasible()
+>>> assert off.feasible and on.feasible and not violated.feasible
 >>> assert not off.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_on"]
 >>> assert on.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_on"]
 

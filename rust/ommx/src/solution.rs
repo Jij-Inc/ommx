@@ -345,35 +345,36 @@ impl Solution {
             .all(|dv| dv.is_valid(self.feasibility_atol))
     }
 
-    /// Check whether every constraint at or above `min_activeness` is feasible.
+    /// Check whether every active and inactive checked constraint is feasible.
+    /// Inactive skipped constraints remain evaluated but do not participate.
     ///
     /// Note: This only checks constraints, not decision variable bounds/kinds.
     /// - To check both constraints and decision variables, use [`feasible()`](Self::feasible)
     /// - To check only decision variables, use [`feasible_decision_variables()`](Self::feasible_decision_variables)
-    pub fn feasible_constraints(&self, min_activeness: crate::ConstraintActiveness) -> bool {
+    pub fn feasible_constraints(&self) -> bool {
         self.evaluated_constraints
-            .is_feasible(self.feasibility_atol, min_activeness)
+            .is_feasible(self.feasibility_atol)
             && self
                 .evaluated_indicator_constraints
-                .is_feasible(self.feasibility_atol, min_activeness)
+                .is_feasible(self.feasibility_atol)
             && self
                 .evaluated_one_hot_constraints
-                .is_feasible(self.feasibility_atol, min_activeness)
+                .is_feasible(self.feasibility_atol)
             && self
                 .evaluated_sos1_constraints
-                .is_feasible(self.feasibility_atol, min_activeness)
+                .is_feasible(self.feasibility_atol)
     }
 
-    /// Check selected constraints and every decision variable for feasibility.
+    /// Check active and inactive checked constraints, and all decision variable domains.
     ///
-    /// This is the most comprehensive feasibility check, verifying:
-    /// - Constraints at or above `min_activeness` are satisfied (via [`feasible_constraints()`](Self::feasible_constraints))
+    /// This checks:
+    /// - Active and inactive checked constraints are satisfied (via [`feasible_constraints()`](Self::feasible_constraints))
     /// - All decision variables satisfy their bounds and kinds (via [`feasible_decision_variables()`](Self::feasible_decision_variables))
-    pub fn feasible(&self, min_activeness: crate::ConstraintActiveness) -> bool {
-        self.feasible_constraints(min_activeness) && self.feasible_decision_variables()
+    pub fn feasible(&self) -> bool {
+        self.feasible_constraints() && self.feasible_decision_variables()
     }
 
-    /// Check if all constraints are feasible in the relaxed problem
+    /// Check whether every active constraint is feasible.
     ///
     /// Note: This only checks constraints, not decision variable bounds/kinds.
     /// - To check both constraints and decision variables, use [`feasible_relaxed()`](Self::feasible_relaxed)
@@ -392,10 +393,10 @@ impl Solution {
                 .is_feasible_relaxed(self.feasibility_atol)
     }
 
-    /// Check if all constraints and decision variables are feasible in the relaxed problem
+    /// Check active constraints and all decision variable domains.
     ///
     /// This checks:
-    /// - Relaxed constraints are satisfied (via [`feasible_constraints_relaxed()`](Self::feasible_constraints_relaxed))
+    /// - Active constraints are satisfied (via [`feasible_constraints_relaxed()`](Self::feasible_constraints_relaxed))
     /// - All decision variables satisfy their bounds and kinds (via [`feasible_decision_variables()`](Self::feasible_decision_variables))
     pub fn feasible_relaxed(&self) -> bool {
         self.feasible_constraints_relaxed() && self.feasible_decision_variables()
@@ -403,7 +404,9 @@ impl Solution {
 
     /// Sum nonnegative scalar violations at or above `min_activeness`.
     ///
-    /// Uses the same selected constraint set as [`Self::feasible_constraints`]:
+    /// `InactiveChecked` selects the same constraints as [`Self::feasible_constraints`];
+    /// `Active` selects the same constraints as [`Self::feasible_constraints_relaxed`].
+    /// `InactiveSkipped` includes every constraint, even skipped rows:
     /// - Equality: `|f(x)|`; inequality: `max(0, f(x))`.
     /// - Indicator: the inner constraint's violation when `indicator_on`, otherwise zero.
     /// - One-hot: `min_i (|x_i - 1| + Σ_{j != i} |x_j|)`.
@@ -2040,7 +2043,7 @@ mod tests {
                 .unwrap();
             let restored = Solution::from_v2_bytes(&result.to_v2_bytes()).unwrap();
             for result in [result, restored] {
-                assert_eq!(result.feasible(Default::default()), expected);
+                assert_eq!(result.feasible(), expected);
                 assert_eq!(result.total_violation(Default::default()), 0.0625);
                 assert_eq!(result.feasibility_atol(), atol);
             }

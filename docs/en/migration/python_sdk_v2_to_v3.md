@@ -174,7 +174,7 @@ Indicator result properties and DataFrame columns use `indicator_on` to report w
 
 OneHot and SOS1 result properties rename `active_variable` to `selected_variable`, including per-sample mappings. DataFrame columns become `selected_variable` and `selected_variable.<sample_id>`. This diagnostic describes selection at the evaluated candidate, independently of variable or constraint membership in the Active Formulation. Evaluation behavior is unchanged.
 
-The query selector is an ordered minimum, so it can include more than one state:
+The `min_activeness` selector for `total_violation()` and `constraints_df` is an ordered minimum, so it can include more than one state:
 
 | `min_activeness` | Included constraints |
 | --- | --- |
@@ -184,7 +184,7 @@ The query selector is an ordered minimum, so it can include more than one state:
 
 The order is `INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE`; a query includes rows whose activeness is at least the minimum. It cannot include skipped rows while excluding checked inactive rows.
 
-Call `solution.feasible()` and `samples.feasible()` as methods. Feasibility, `total_violation()`, and SampleSet feasible-sample selection default to `INACTIVE_CHECKED`; `constraints_df` defaults to `INACTIVE_SKIPPED`. Pass the same minimum to compare the same constraint set. `feasible_relaxed` keeps its active-only meaning. Feasibility applies each row's tolerance and checks variable domains; do not infer it from an exact-zero test of the total.
+Read `solution.feasible` and `samples.feasible` as properties. They check active and inactive checked constraints; `feasible_relaxed` checks active constraints only. SampleSet's `best_feasible` and `best_feasible_id` remain properties, while `feasible_ids()` remains a method without arguments. Feasibility and sample selection do not accept `min_activeness`. The default `total_violation()` uses `INACTIVE_CHECKED`, matching the constraints checked by `feasible`; selecting `ACTIVE` matches `feasible_relaxed`. `constraints_df` defaults to `INACTIVE_SKIPPED`. Feasibility applies each row's tolerance and checks variable domains; do not infer it from an exact-zero test of the total.
 
 The v1 wire schema is unchanged. Export to v1 fails if any retained row has `skip_feasibility_check=True`; use v2 to preserve this state. Existing restrictions on v1 exports still apply.
 
@@ -224,7 +224,7 @@ assert result.get_constraint_value(limit.constraint_id) == -1.0
 
 {meth}`~ommx.Solution.extract_constraints` now searches all families and returns nonnegative violations keyed by subscript tuple. Duplicate subscripts for a name are ambiguous, even across families. If you relied on the sign or slack of a regular row, use `get_constraint_value` as above. For a violation by typed ID use `constraint_violation`. When reading a single evaluated row, use `row.is_feasible(atol=result.feasibility_atol)` to apply the result's tolerance. Overall feasibility also checks variable domains. A zero total constraint violation alone is insufficient.
 
-For a regular equality, the violation is the absolute residual. For an inequality it is the excess above the limit. Special constraints have family-specific metrics. `total_violation(min_activeness=...)` adds these values for the same constraint set selected by `feasible(min_activeness=...)`. Adding rows during transformation can therefore change the total. See {meth}`~ommx.Solution.total_violation` for definitions and tolerances. Update error handling for a missing required variable in `evaluate()` to catch `ValueError`. Partial assignments remain valid inputs to `partial_evaluate()`.
+For a regular equality, the violation is the absolute residual. For an inequality it is the excess above the limit. Special constraints have family-specific metrics. `total_violation()` adds these values for the constraints checked by `feasible`; pass `min_activeness=ConstraintActiveness.ACTIVE` to use the constraints checked by `feasible_relaxed`. Adding rows during transformation can therefore change the total. See {meth}`~ommx.Solution.total_violation` for definitions and tolerances. Update error handling for a missing required variable in `evaluate()` to catch `ValueError`. Partial assignments remain valid inputs to `partial_evaluate()`.
 
 ### Update tables and sample aggregation
 

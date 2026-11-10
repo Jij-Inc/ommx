@@ -77,7 +77,7 @@ def test_named_initial_state_is_stored_before_optimization(
     model.optimize()
     solution = adapter.decode(model)
 
-    assert solution.feasible()
+    assert solution.feasible
     assert solution.state.entries == {x.id: 5.0, y.id: 0.0}
     assert solution.objective == 10.0
 

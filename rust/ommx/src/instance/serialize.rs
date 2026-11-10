@@ -877,10 +877,7 @@ mod tests {
 
         let restored = crate::SampleSet::from_v2_bytes(&sample_set.to_v2_bytes()).unwrap();
 
-        assert_eq!(
-            restored.feasible(Default::default()),
-            sample_set.feasible(Default::default())
-        );
+        assert_eq!(restored.feasible(), sample_set.feasible());
         assert_eq!(restored.feasible_relaxed(), sample_set.feasible_relaxed());
         assert_eq!(restored.indicator_constraints().len(), 1);
         assert_eq!(restored.one_hot_constraints().len(), 1);
@@ -1139,11 +1136,18 @@ mod activeness_wire_tests {
                         crate::ATol::default(),
                     )
                     .unwrap();
-                assert_eq!(solution.feasible(A::InactiveChecked), skip);
-                assert!(!solution.feasible(A::InactiveSkipped));
+                assert_eq!(solution.feasible(), skip);
+                assert!(solution.total_violation(A::InactiveSkipped) > 0.0);
                 assert!(solution.feasible_relaxed());
-                assert_eq!(samples.feasible(A::InactiveChecked)[&7.into()], skip);
-                assert!(!samples.feasible(A::InactiveSkipped)[&7.into()]);
+                assert_eq!(samples.feasible()[&7.into()], skip);
+                assert!(samples.feasible_relaxed()[&7.into()]);
+                assert!(
+                    samples
+                        .get(7.into())
+                        .unwrap()
+                        .total_violation(A::InactiveSkipped)
+                        > 0.0
+                );
 
                 let instance_wire = v2::Instance::from(instance.clone());
                 let parametric_wire = v2::ParametricInstance::from(parametric.clone());

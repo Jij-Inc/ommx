@@ -65,17 +65,17 @@ use std::collections::{BTreeMap, BTreeSet};
 /// {attr}`~ommx.SampleSet.summary` shows each sample's objective and feasibility.
 /// Feasible candidates appear first, ordered by the objective according to
 /// {attr}`~ommx.SampleSet.sense`. Feasibility checks variable kinds and bounds
-/// and active plus ordinary inactive constraints; skipped constraints are excluded.
+/// and active plus inactive checked constraints; skipped constraints are excluded.
 /// Retrieve an individual sample as a Solution using its ID:
 ///
 /// >>> solution = sample_set.get(sample_id=0)
 /// >>> solution.objective
 /// 1.0
 ///
-/// {meth}`~ommx.SampleSet.best_feasible` selects the largest objective value
+/// {attr}`~ommx.SampleSet.best_feasible` selects the largest objective value
 /// among feasible samples for this maximization problem:
 ///
-/// >>> solution = sample_set.best_feasible()
+/// >>> solution = sample_set.best_feasible
 /// >>> solution.objective
 /// 3.0
 ///
@@ -117,12 +117,12 @@ use std::collections::{BTreeMap, BTreeSet};
 /// >>> assert results.sense == Sense.Maximize
 /// >>> assert results.objectives == {7: 3.0, 9: 4.0}
 /// >>> assert results.get(7).state.entries == {x.id: 1.0, y.id: 0.0}
-/// >>> assert results.best_feasible_id() == 9
-/// >>> assert results.best_feasible().optimality == Optimality.Unspecified
+/// >>> assert results.best_feasible_id == 9
+/// >>> assert results.best_feasible.optimality == Optimality.Unspecified
 ///
 /// Successful value reconstruction, feasibility, and optimality remain separate
-/// questions. {meth}`~ommx.SampleSet.feasible` selects active and ordinary inactive
-/// constraints by default; {attr}`~ommx.SampleSet.feasible_relaxed` excludes them while
+/// questions. {attr}`~ommx.SampleSet.feasible` checks active and inactive checked
+/// constraints; {attr}`~ommx.SampleSet.feasible_relaxed` excludes inactive constraints while
 /// still checking all variable domains. See {class}`~ommx.Solution` for output
 /// interpretation and {meth}`~ommx.Instance.populate_state` for reconstruction,
 /// defaults, and normalization. Choosing the best supplied candidate never
@@ -229,10 +229,9 @@ impl SampleSet {
             .collect()
     }
 
-    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE_CHECKED))]
-    pub fn feasible_ids(&self, min_activeness: crate::ConstraintActiveness) -> BTreeSet<u64> {
+    pub fn feasible_ids(&self) -> BTreeSet<u64> {
         self.inner
-            .feasible_ids(min_activeness.into())
+            .feasible_ids()
             .iter()
             .map(|id| id.into_inner())
             .collect()
@@ -246,25 +245,18 @@ impl SampleSet {
             .collect()
     }
 
-    /// Equivalent to {meth}`~ommx.SampleSet.feasible_ids` with
-    /// ``min_activeness=ConstraintActiveness.INACTIVE_CHECKED``.
+    /// Alias for {meth}`~ommx.SampleSet.feasible_ids`.
     pub fn feasible_unrelaxed_ids(&self) -> BTreeSet<u64> {
-        self.feasible_ids(crate::ConstraintActiveness::INACTIVE_CHECKED)
+        self.feasible_ids()
     }
 
     /// ID of the best feasible candidate, using the same selection as
-    /// {meth}`~ommx.SampleSet.best_feasible`.
+    /// {attr}`~ommx.SampleSet.best_feasible`.
     ///
     /// Raises ValueError if there is no feasible sample, including when empty.
-    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE_CHECKED))]
-    pub fn best_feasible_id(
-        &self,
-        min_activeness: crate::ConstraintActiveness,
-    ) -> OmmxPyResult<u64> {
-        Ok(self
-            .inner
-            .best_feasible_id(min_activeness.into())?
-            .into_inner())
+    #[getter]
+    pub fn best_feasible_id(&self) -> OmmxPyResult<u64> {
+        Ok(self.inner.best_feasible_id()?.into_inner())
     }
 
     #[getter]
@@ -279,11 +271,10 @@ impl SampleSet {
 
     /// The best feasible candidate as an independent Solution.
     ///
-    /// Selects only candidates satisfying {meth}`~ommx.SampleSet.feasible` with
-    /// the same ``min_activeness``. All variable kinds and bounds apply.
-    /// The default ``INACTIVE_CHECKED`` includes active and inactive checked
-    /// constraints and excludes inactive skipped constraints. Use ``ACTIVE`` to
-    /// check only active constraints, or ``INACTIVE_SKIPPED`` to check all rows.
+    /// Selects only candidates satisfying {attr}`~ommx.SampleSet.feasible`:
+    /// active and inactive checked constraints, plus all variable kinds and bounds.
+    /// Inactive skipped constraints are excluded. Use
+    /// {attr}`~ommx.SampleSet.best_feasible_relaxed` for active constraints only.
     /// Minimization selects the smallest reported objective; maximization selects
     /// the largest.
     /// Selection does not prove global optimality or change the extracted
@@ -300,20 +291,17 @@ impl SampleSet {
     /// >>> instance.objective = x
     /// >>> _ = instance.add_constraint(x == 1, "required")
     /// >>> results = instance.evaluate_samples({10: {x.id: 0}, 20: {x.id: 1}})
-    /// >>> assert results.best_feasible_id() == 20
-    /// >>> assert results.best_feasible().state.entries == {x.id: 1.0}
+    /// >>> assert results.best_feasible_id == 20
+    /// >>> assert results.best_feasible.state.entries == {x.id: 1.0}
     /// >>> infeasible = instance.evaluate_samples([{x.id: 0}])
-    /// >>> infeasible.best_feasible()
+    /// >>> infeasible.best_feasible
     /// Traceback (most recent call last):
     /// ...
     /// ValueError: No feasible solution found
-    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE_CHECKED))]
-    pub fn best_feasible(
-        &self,
-        min_activeness: crate::ConstraintActiveness,
-    ) -> OmmxPyResult<Solution> {
+    #[getter]
+    pub fn best_feasible(&self) -> OmmxPyResult<Solution> {
         Ok(Solution {
-            inner: self.inner.best_feasible(min_activeness.into())?,
+            inner: self.inner.best_feasible()?,
         })
     }
 
@@ -322,7 +310,7 @@ impl SampleSet {
     ///
     /// Uses {attr}`~ommx.SampleSet.feasible_relaxed`: inactive constraints are
     /// excluded, while all variable kinds and bounds still apply. The selected
-    /// candidate can therefore fail {meth}`~ommx.Solution.feasible`.
+    /// candidate can therefore fail {attr}`~ommx.Solution.feasible`.
     /// Comparison still uses the reported objective and sense; it does not switch
     /// to an active solver-facing objective. Raises ValueError if there is no
     /// qualifying candidate, including when empty.
@@ -333,21 +321,20 @@ impl SampleSet {
     }
 
     #[getter]
-    /// Equivalent to {meth}`~ommx.SampleSet.best_feasible` with
-    /// ``min_activeness=ConstraintActiveness.INACTIVE_CHECKED``.
+    /// Alias for {attr}`~ommx.SampleSet.best_feasible`.
     ///
     /// Checks active and inactive checked constraints, plus all variable kinds
     /// and bounds. Inactive skipped constraints are excluded.
     /// Raises ValueError if there is no feasible sample.
     pub fn best_feasible_unrelaxed(&self) -> OmmxPyResult<Solution> {
-        self.best_feasible(crate::ConstraintActiveness::INACTIVE_CHECKED)
+        self.best_feasible()
     }
 
     /// Reported objective values keyed by sample ID.
     ///
     /// Evaluation uses the Instance's preserved output objective when present,
     /// otherwise its active objective. An infeasible candidate can still have
-    /// an objective value; read this together with {meth}`~ommx.SampleSet.feasible`.
+    /// an objective value; read this together with {attr}`~ommx.SampleSet.feasible`.
     #[getter]
     pub fn objectives(&self) -> BTreeMap<u64, f64> {
         self.inner
@@ -359,14 +346,14 @@ impl SampleSet {
 
     /// Get feasibility status for all samples, including variable bounds and kinds.
     ///
-    /// Checks rows at or above min_activeness across every constraint family.
-    /// The default INACTIVE_CHECKED excludes skipped rows; ACTIVE matches feasible_relaxed.
-    /// Each value matches {meth}`~ommx.Solution.feasible` on the corresponding
+    /// Checks active and inactive checked constraints across every family.
+    /// Inactive skipped constraints are excluded but remain evaluated and inspectable.
+    /// Each value matches {attr}`~ommx.Solution.feasible` on the corresponding
     /// extracted Solution and uses {attr}`~ommx.SampleSet.feasibility_atol`.
-    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE_CHECKED))]
-    pub fn feasible(&self, min_activeness: crate::ConstraintActiveness) -> BTreeMap<u64, bool> {
+    #[getter]
+    pub fn feasible(&self) -> BTreeMap<u64, bool> {
         self.inner
-            .feasible(min_activeness.into())
+            .feasible()
             .iter()
             .map(|(sample_id, &is_feasible)| (sample_id.into_inner(), is_feasible))
             .collect()
@@ -384,12 +371,11 @@ impl SampleSet {
             .collect()
     }
 
-    /// Equivalent to {meth}`~ommx.SampleSet.feasible` with
-    /// ``min_activeness=ConstraintActiveness.INACTIVE_CHECKED``, keyed by sample ID.
+    /// Alias for {attr}`~ommx.SampleSet.feasible`, keyed by sample ID.
     /// Inactive skipped constraints are excluded; all variable kinds and bounds apply.
     #[getter]
     pub fn feasible_unrelaxed(&self) -> BTreeMap<u64, bool> {
-        self.feasible(crate::ConstraintActiveness::INACTIVE_CHECKED)
+        self.feasible()
     }
 
     /// Absolute tolerance associated with the stored evaluation and feasibility results.
@@ -715,8 +701,8 @@ impl SampleSet {
     /// A materialized overview with one row per sample ID.
     ///
     /// The index is ``sample_id`` and the columns are ``objective`` and
-    /// ``feasible``. Feasibility matches {meth}`~ommx.SampleSet.feasible`, including
-    /// variable kinds and bounds plus active and ordinary inactive constraints.
+    /// ``feasible``. Feasibility matches {attr}`~ommx.SampleSet.feasible`, including
+    /// variable kinds and bounds plus active and inactive checked constraints.
     /// Feasible candidates appear first; within each feasibility group, objective
     /// values are ascending for minimization and descending for maximization,
     /// according to {attr}`~ommx.SampleSet.sense`.
@@ -727,9 +713,7 @@ impl SampleSet {
     /// the SampleSet. See the {class}`~ommx.SampleSet` example for the table layout.
     #[getter]
     pub fn summary<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        let feasible_map = self
-            .inner
-            .feasible(ommx::ConstraintActiveness::InactiveChecked);
+        let feasible_map = self.inner.feasible();
         let ascending = matches!(self.inner.sense(), ommx::Sense::Minimize);
         let entries: Vec<_> = self
             .inner
@@ -799,7 +783,7 @@ impl SampleSet {
     /// (`value.{sample_id}`, `feasible.{sample_id}`, etc.) on top of
     /// the kind-specific core columns.
     ///
-    /// min_activeness selects the same ordered states as feasibility queries,
+    /// min_activeness selects rows at or above the given ordered state,
     /// defaulting to all rows. Reason data is gated by
     /// `"inactive_reason"` in `include=`.
     #[pyo3(signature = (*, kind, include = None, min_activeness=crate::ConstraintActiveness::INACTIVE_SKIPPED))]

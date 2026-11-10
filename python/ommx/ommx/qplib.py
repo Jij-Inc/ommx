@@ -25,7 +25,7 @@ def load_solution(path: str, *, num_variables: int) -> State:
     >>> instance = Instance.load_qplib("QPLIB_0018.qplib")
     >>> candidate = load_solution("QPLIB_0018.sol", num_variables=len(instance.decision_variables))
     >>> solution = instance.evaluate(candidate, atol=1e-8)
-    >>> solution.feasible(), round(solution.objective, 6)
+    >>> solution.feasible, round(solution.objective, 6)
     (True, -6.386015)
 
     Passing the variable count fills omitted coordinates with zero. Evaluation
@@ -43,7 +43,7 @@ def load_solution(path: str, *, num_variables: int) -> State:
 
     >>> zeros = {v.id: 0.0 for v in instance.decision_variables}
     >>> rejected = instance.evaluate(zeros, atol=1e-8)
-    >>> rejected.feasible(), rejected.objective
+    >>> rejected.feasible, rejected.objective
     (False, 0.0)
     >>> rows = rejected.constraints_df(kind=ConstraintKind.Regular)
     >>> rows.loc[~rows["feasible"], "violation"].tolist()

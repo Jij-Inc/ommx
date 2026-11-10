@@ -229,7 +229,7 @@ class HighsDiagnosticsAnalyzer:
     >>> collector = DiagnosticCollector()
     >>> solution = OMMXHighsAdapter.solve(instance, diagnostics=collector)
     >>> analysis = HighsDiagnosticsAnalyzer(collector.diagnostics)
-    >>> solution.objective, solution.feasible()
+    >>> solution.objective, solution.feasible
     (3.0, True)
     >>> solution.decision_variables_df()[["name", "value"]].to_dict("records")
     [{'name': 'x', 'value': 1.0}, {'name': 'y', 'value': 0.0}]
@@ -562,7 +562,7 @@ class OMMXHighsAdapter(SolverAdapter):
     >>> instance.objective = 2 * x + 3 * y
     >>> _ = instance.add_constraint(x + y <= 5)
     >>> solution = OMMXHighsAdapter.solve(instance)
-    >>> assert solution.feasible()
+    >>> assert solution.feasible
     >>> assert solution.optimality == Solution.OPTIMAL
     >>> assert abs(solution.objective - 15.0) < 1e-6
     >>> assert solution.state.entries == {x.id: 0.0, y.id: 5.0}
@@ -594,7 +594,7 @@ class OMMXHighsAdapter(SolverAdapter):
     ... )
     >>> assert not OMMXHighsAdapter.INPUT_CLASS.contains(source)
     >>> solution = OMMXHighsAdapter.solve(source)
-    >>> assert solution.feasible()
+    >>> assert solution.feasible
     >>> assert abs(solution.objective - 20.0) < 1e-6
     >>> assert source.active_special_constraint_kinds == {
     ...     ConstraintKind.Indicator, ConstraintKind.Sos1,
@@ -619,7 +619,7 @@ class OMMXHighsAdapter(SolverAdapter):
     >>> problem.objective = -x
     >>> with capture_trace("highs_solve") as trace:
     ...     solution = OMMXHighsAdapter.solve(problem, verbose=False)
-    >>> assert solution.feasible() and solution.objective == -1
+    >>> assert solution.feasible and solution.objective == -1
     >>> assert {"convert", "call", "decode"} <= {span.name for span in trace.spans}
 
     Display the trace to read the stages within the solve. The parent
@@ -908,7 +908,7 @@ class OMMXHighsAdapter(SolverAdapter):
         >>> solution = OMMXHighsAdapter.solve(instance)
         >>> sorted([(id, value) for id, value in solution.state.entries.items()])
         [(0, 1.0), (1, 0.0), (2, 0.0), (3, 1.0), (4, 0.0), (5, 0.0)]
-        >>> solution.feasible()
+        >>> solution.feasible
         True
         >>> assert solution.optimality == Solution.OPTIMAL
         >>> solution.objective

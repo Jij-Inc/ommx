@@ -1208,7 +1208,7 @@ mod tests {
                 active_objective,
             );
             let solution = instance.evaluate(&state, ATol::default()).unwrap();
-            assert!(solution.feasible(Default::default()));
+            assert!(solution.feasible());
             assert_eq!(*solution.objective(), value);
         }
     }

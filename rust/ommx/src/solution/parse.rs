@@ -209,7 +209,7 @@ impl Parse for crate::v1::Solution {
         };
 
         // Validate feasibility consistency
-        let computed_feasible = solution.feasible(Default::default());
+        let computed_feasible = solution.feasible();
         let computed_feasible_relaxed = solution.feasible_relaxed();
 
         if computed_feasible != provided_feasible {
@@ -410,7 +410,7 @@ impl Parse for v2::Solution {
             annotations,
         };
 
-        let computed_feasible = solution.feasible(Default::default());
+        let computed_feasible = solution.feasible();
         if computed_feasible != self.feasible {
             return Err(ParseError::new(SolutionError::InconsistentFeasibility {
                 provided_feasible: self.feasible,
@@ -498,8 +498,7 @@ impl TryFrom<Solution> for crate::v1::Solution {
         } = solution;
         let atol = ATol::default();
         let variables_feasible = decision_variables.values().all(|dv| dv.is_valid(atol));
-        let feasible =
-            variables_feasible && evaluated_constraints.is_feasible(atol, Default::default());
+        let feasible = variables_feasible && evaluated_constraints.is_feasible(atol);
         let feasible_relaxed =
             Some(variables_feasible && evaluated_constraints.is_feasible_relaxed(atol));
         let state = {
@@ -1004,7 +1003,7 @@ mod tests {
         let parsed: Solution = v1_solution.parse(&()).unwrap();
 
         assert_eq!(parsed.objective(), &42.5);
-        assert!(parsed.feasible(Default::default()));
+        assert!(parsed.feasible());
         assert!(parsed.feasible_relaxed());
         assert_eq!(parsed.optimality, v1::Optimality::Optimal);
         assert_eq!(parsed.relaxation, v1::Relaxation::Unspecified);

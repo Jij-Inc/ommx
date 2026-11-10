@@ -138,7 +138,7 @@ can be rejected as inconsistent.
 ... else:
 ...     raise AssertionError("a dependent assertion overwrote the recorded expression")
 >>> assert encoded.populate_state({flag.id: 0.25}).entries[flag.id] == 0.25
->>> assert not encoded.evaluate({flag.id: 0.25}).feasible()
+>>> assert not encoded.evaluate({flag.id: 0.25}).feasible
 
 ```
 

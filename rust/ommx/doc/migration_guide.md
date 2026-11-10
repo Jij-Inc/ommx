@@ -106,7 +106,7 @@ of variable or constraint membership in the Active Formulation. The v2 fields
 use the same name, and `SampledActiveVariable` becomes `SampledSelectedVariable`.
 Protobuf field numbers and evaluation behavior are unchanged.
 
-The query minimum includes every state at or above its value:
+The `total_violation` query minimum includes every state at or above its value:
 
 | Minimum | Included constraints |
 | --- | --- |
@@ -114,7 +114,7 @@ The query minimum includes every state at or above its value:
 | `InactiveChecked` (default) | Active and inactive without the skip flag |
 | `InactiveSkipped` | Every retained row |
 
-Thus `InactiveSkipped < InactiveChecked < Active`, and a minimum includes every row at or above that level. `Solution::feasible`, `feasible_constraints`, and `total_violation` now take this minimum. SampleSet feasibility and feasible-sample selection take it too. Pass `Default::default()`, which is `InactiveChecked`, to retain the usual checked set. `feasible_relaxed()` retains its active-only meaning. Feasibility and total violation select the same constraints for the same minimum; feasibility applies the tolerance to each row and checks variable domains separately. No exact-zero implication is part of the total-violation contract.
+Thus `InactiveSkipped < InactiveChecked < Active`, and a minimum includes every row at or above that level. `Solution::feasible()` and `feasible_constraints()` check active and inactive checked constraints without taking a minimum. SampleSet feasibility and feasible-sample selection also retain their signatures without a minimum. `feasible_relaxed()` checks active constraints only. For `total_violation`, pass `Default::default()` (`InactiveChecked`) to use the constraints checked by `feasible()`, or `Active` to use those checked by `feasible_relaxed()`. Feasibility applies the tolerance to each row and checks variable domains separately. No exact-zero implication is part of the total-violation contract.
 
 The v1 wire schema is unchanged. Export fails if any retained constraint has `skip_feasibility_check: true`; v2 preserves the flag with a required feature. Existing v1 export restrictions still apply.
 
@@ -164,7 +164,9 @@ assert_eq!(bounds[&id], Bound::new(2.0, 8.0)?);
 `Solution::total_violation_l1()` is renamed to
 [`Solution::total_violation`](crate::Solution::total_violation), and
 `Solution::total_violation_l2()` is removed. The total sums one nonnegative
-scalar per selected constraint across all families. Pass the same `min_activeness` as for feasibility to select the same rows.
+scalar per selected constraint across all families. Pass `InactiveChecked` to
+select the constraints checked by `feasible()`, or `Active` for those checked by
+`feasible_relaxed()`.
 Regular equality and inequality definitions are unchanged.
 
 Query individual values with [`Solution::constraint_violation`](crate::Solution::constraint_violation),
@@ -695,8 +697,8 @@ pub struct SampledCollection<T: ConstraintType> {
 
 // Both Deref to BTreeMap<T::ID, T::Evaluated/Sampled> for backward-compatible access
 // and provide feasibility / inactivity / context accessors:
-collection.is_feasible(atol, min_activeness) // selected constraints feasible
-collection.is_feasible_relaxed(atol)       // all non-inactive constraints feasible
+collection.is_feasible(atol) // active and inactive checked constraints feasible
+collection.is_feasible_relaxed(atol) // active constraints feasible
 collection.is_inactive(&id)             // check if a constraint is inactive
 collection.inactive_metadata()           // &BTreeMap<T::ID, InactiveConstraintMetadata>
 collection.context()                   // &ConstraintContextStore<T::ID>

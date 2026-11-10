@@ -577,10 +577,7 @@ mod tests {
         actual: &Solution,
     ) -> Result<(), proptest::test_runner::TestCaseError> {
         assert_float_eq("objective", *expected.objective(), *actual.objective())?;
-        prop_assert_eq!(
-            expected.feasible(Default::default()),
-            actual.feasible(Default::default())
-        );
+        prop_assert_eq!(expected.feasible(), actual.feasible());
         prop_assert_eq!(
             expected.feasible_constraints_relaxed(),
             actual.feasible_constraints_relaxed()

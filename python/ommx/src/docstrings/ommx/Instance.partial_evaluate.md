@@ -30,8 +30,8 @@ value without establishing optimality for the original problem:
 >>> original_candidate = source.evaluate({x.id: 0})
 >>> conditioned = source.partial_evaluate({x.id: 1})
 >>> conditioned_candidate = conditioned.evaluate({})
->>> assert original_candidate.feasible() and original_candidate.objective == 0.0
->>> assert conditioned_candidate.feasible() and conditioned_candidate.objective == 1.0
+>>> assert original_candidate.feasible and original_candidate.objective == 0.0
+>>> assert conditioned_candidate.feasible and conditioned_candidate.objective == 1.0
 >>> assert conditioned_candidate.state.entries[x.id] == 1.0
 >>> assert {v.id for v in source.active_decision_variables} == {x.id}
 

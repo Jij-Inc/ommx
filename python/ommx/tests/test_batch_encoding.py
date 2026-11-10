@@ -37,5 +37,5 @@ def test_encoding_precedes_penalty_and_preserves_output_semantics(format_name, k
         solution = instance.evaluate(state)
         assert instance.objective.evaluate(state) == decoded + 3 * (decoded - 2) ** 2
         assert solution.objective == decoded
-        assert solution.feasible() == (decoded == 2)
+        assert solution.feasible == (decoded == 2)
         assert inactive.function.evaluate(state) == decoded - 2

@@ -19,11 +19,13 @@ from ommx import (
     InactiveSos1Constraint,
     Instance,
     OneHotConstraint,
+    OneHotConstraintID,
     ParametricInstance,
     Sense,
     Solution,
     SampleSet,
     Sos1Constraint,
+    Sos1ConstraintID,
 )
 
 
@@ -70,9 +72,10 @@ def test_ordered_selection_and_evaluated_skipped_rows():
             Activeness.INACTIVE_SKIPPED
         )
     solution = model.evaluate({x.id: 0})
-    assert solution.feasible(min_activeness=Activeness.ACTIVE)
-    assert solution.feasible_relaxed
-    assert not solution.feasible()
+    assert_type(solution.feasible, bool)
+    assert solution.feasible is False
+    assert solution.feasible_relaxed is True
+    assert solution.feasible_unrelaxed is False
     assert solution.total_violation(min_activeness=Activeness.ACTIVE) == 0
     assert solution.total_violation() == 1
     assert solution.total_violation(min_activeness=Activeness.INACTIVE_SKIPPED) == 3
@@ -82,13 +85,21 @@ def test_ordered_selection_and_evaluated_skipped_rows():
         == Activeness.INACTIVE_SKIPPED
     )
     checked_feasible = model.evaluate({x.id: 1})
-    assert checked_feasible.feasible()
-    assert not checked_feasible.feasible(min_activeness=Activeness.INACTIVE_SKIPPED)
+    assert checked_feasible.feasible is True
+    assert (
+        checked_feasible.constraints[skipped.constraint_id].is_feasible(
+            atol=checked_feasible.feasibility_atol
+        )
+        is False
+    )
     samples = model.evaluate_samples({0: {x.id: 0}, 1: {x.id: 1}})
-    assert samples.feasible() == {0: False, 1: True}
+    assert_type(samples.feasible, dict[int, bool])
+    assert_type(samples.best_feasible, Solution)
+    assert_type(samples.best_feasible_id, int)
+    assert samples.feasible == {0: False, 1: True}
     assert samples.feasible_ids() == {1}
-    assert samples.best_feasible_id() == 1
-    assert samples.best_feasible().state.entries == {x.id: 1.0}
+    assert samples.best_feasible_id == 1
+    assert samples.best_feasible.state.entries == {x.id: 1.0}
     for owner in (model, solution, model.evaluate_samples([{x.id: 0}])):
         table = owner.constraints_df(kind=ConstraintKind.Regular)
         assert set(table.index) == {
@@ -196,8 +207,20 @@ def test_initial_inactive_components_and_all_family_transitions(host):
         model.with_parameters({}) if isinstance(model, ParametricInstance) else model
     )
     evaluated = instance.evaluate({x.id: 1, y.id: 1})
-    assert evaluated.feasible()
-    assert not evaluated.feasible(min_activeness=Activeness.INACTIVE_SKIPPED)
+    assert evaluated.feasible is True
+    assert evaluated.feasible_relaxed is True
+    assert (
+        evaluated.constraints[OneHotConstraintID(3)].is_feasible(
+            atol=evaluated.feasibility_atol
+        )
+        is False
+    )
+    assert (
+        evaluated.constraints[Sos1ConstraintID(4)].is_feasible(
+            atol=evaluated.feasibility_atol
+        )
+        is False
+    )
     assert evaluated.total_violation() == 0
     assert evaluated.total_violation(min_activeness=Activeness.INACTIVE_SKIPPED) == 2
     with pytest.raises(RuntimeError, match="skip_feasibility_check"):
@@ -211,17 +234,21 @@ def test_sample_selection_and_wire_round_trip():
     row = model.add_constraint(x == 0)
     model.deactivate_constraint(row.constraint_id, "report")
     samples = model.evaluate_samples({0: {x.id: 0}, 1: {x.id: 1}})
-    assert samples.feasible() == {0: True, 1: False}
-    assert (
-        samples.feasible(min_activeness=Activeness.ACTIVE) == samples.feasible_relaxed
-    )
-    assert samples.best_feasible_id() == 0
-    assert samples.best_feasible_id(min_activeness=Activeness.ACTIVE) == 1
-    assert samples.best_feasible(min_activeness=Activeness.ACTIVE).objective == 1
-    assert samples.feasible_ids(min_activeness=Activeness.ACTIVE) == {0, 1}
+    assert samples.feasible == {0: True, 1: False}
+    assert samples.feasible_relaxed == {0: True, 1: True}
+    assert samples.feasible_unrelaxed == samples.feasible
+    assert samples.best_feasible_id == 0
+    assert samples.best_feasible.objective == 0
+    assert samples.best_feasible_relaxed_id == 1
+    assert samples.best_feasible_relaxed.objective == 1
+    assert samples.feasible_ids() == {0}
+    assert samples.feasible_relaxed_ids() == {0, 1}
     model.set_constraint_skip_feasibility_check(row.constraint_id, True)
     solution = model.evaluate({x.id: 1})
     samples = model.evaluate_samples({1: {x.id: 1}})
+    assert solution.feasible is True
+    assert samples.feasible == {1: True}
+    assert samples.best_feasible_id == samples.best_feasible_relaxed_id == 1
     for result, cls in ((solution, Solution), (samples, SampleSet)):
         restored = cls.from_v2_bytes(result.to_v2_bytes())
         assert (

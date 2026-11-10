@@ -174,7 +174,7 @@ Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` を使い�
 
 OneHotとSOS1の評価結果のpropertyは、サンプルごとの対応を返すものも含めて `active_variable` から `selected_variable` に変更します。DataFrame列も `selected_variable` と `selected_variable.<sample_id>` になります。評価した候補点での選択を表す情報であり、変数や制約がActive Formulationに属するかどうかとは独立です。評価の動作は変わりません。
 
-取得時の `min_activeness` は次の順序における下限なので、複数の状態を含められます。
+`total_violation()` と `constraints_df` の `min_activeness` は次の順序における下限なので、複数の状態を含められます。
 
 | `min_activeness` | 含む制約 |
 | --- | --- |
@@ -184,7 +184,7 @@ OneHotとSOS1の評価結果のpropertyは、サンプルごとの対応を返�
 
 順序は `INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE` です。指定した下限以上の行を含むため、検査するinactiveを除外してskipの行だけを含める指定はありません。
 
-`solution.feasible()` と `samples.feasible()` はメソッドとして呼びます。実行可能性、`total_violation()`、SampleSetの実行可能サンプル選択は `INACTIVE_CHECKED`、`constraints_df` は `INACTIVE_SKIPPED` が既定値です。同じ制約集合を比較するには同じ下限を渡します。`feasible_relaxed` はactiveのみを検査する従来の意味を保ちます。実行可能性は各行の許容誤差と変数の定義域を検査するため、合計が厳密にゼロかどうかから判定しないでください。
+`solution.feasible` と `samples.feasible` はpropertyとして読み、activeと検査対象のinactive制約を判定します。`feasible_relaxed` はactive制約のみを検査します。SampleSetの `best_feasible` と `best_feasible_id` はpropertyを維持し、`feasible_ids()` は引数なしのメソッドです。実行可能性の判定とサンプル選択は `min_activeness` を取りません。`total_violation()` の既定値は `INACTIVE_CHECKED` で、`feasible` と同じ制約集合を対象とします。`ACTIVE` を指定すると `feasible_relaxed` と同じ制約集合になります。`constraints_df` の既定値は `INACTIVE_SKIPPED` です。実行可能性は各行の許容誤差と変数の定義域を検査するため、合計が厳密にゼロかどうかから判定しないでください。
 
 v1のwire schemaは拡張しません。保持する行のどれかが `skip_feasibility_check=True` の場合、v1への書き出しは失敗します。この状態を保存するにはv2を使ってください。既存のv1出力制限も引き続き適用されます。
 
@@ -224,7 +224,7 @@ assert result.get_constraint_value(limit.constraint_id) == -1.0
 
 {meth}`~ommx.Solution.extract_constraints` は全種類の制約を検索し、添字タプルをキーとして非負の違反量を返します。同じ名前に対して添字が重複すると、種類が違っていても曖昧になります。通常制約の符号や余裕を使っていた集計では、上の例のように `get_constraint_value` で式の値を読んでください。型付きIDで違反量を調べる場合は `constraint_violation` を使います。評価済みの行で `row.is_feasible(atol=result.feasibility_atol)` を呼ぶと、結果と同じ許容誤差で判定できます。候補全体の実行可能性には変数の値域も影響するため、制約違反量の合計がゼロでも実行不可能な場合があります。
 
-通常制約の違反量は、等式なら残差の絶対値、不等式なら上限を超えた量です。特殊制約にも種類ごとの違反量があります。`total_violation(min_activeness=...)` は、`feasible(min_activeness=...)` と同じ制約集合について各違反量を足します。変換で行を追加した場合、この合計は変換前と一致するとは限りません。定義と許容誤差は {meth}`~ommx.Solution.total_violation` を参照してください。`evaluate()` で必要な変数が不足した場合の例外処理は `ValueError` に更新します。`partial_evaluate()` には一部の変数だけを渡せます。
+通常制約の違反量は、等式なら残差の絶対値、不等式なら上限を超えた量です。特殊制約にも種類ごとの違反量があります。`total_violation()` は、`feasible` が検査する制約集合について各違反量を足します。`min_activeness=ConstraintActiveness.ACTIVE` を指定すると `feasible_relaxed` と同じ制約集合になります。変換で行を追加した場合、この合計は変換前と一致するとは限りません。定義と許容誤差は {meth}`~ommx.Solution.total_violation` を参照してください。`evaluate()` で必要な変数が不足した場合の例外処理は `ValueError` に更新します。`partial_evaluate()` には一部の変数だけを渡せます。
 
 ### 表とサンプル集計を更新する
 

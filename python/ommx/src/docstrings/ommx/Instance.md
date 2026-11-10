@@ -108,7 +108,7 @@ problem; use {meth}`~ommx.Instance.minimize` for minimization.
 >>> instance.objective = x + y
 >>> exclusive = instance.add_constraint(x * y == 0, "exclusive")
 >>> solution = instance.evaluate({x.id: 1, y.id: 0})
->>> assert solution.feasible()
+>>> assert solution.feasible
 >>> assert solution.objective == 1.0
 
 ```
@@ -134,7 +134,7 @@ constraints refer to variables defined in that Instance.
 ...     sense=Sense.Maximize,
 ... )
 >>> assert ConstraintID(7) in assembled.constraints
->>> assert assembled.evaluate({a.id: 1}).feasible()
+>>> assert assembled.evaluate({a.id: 1}).feasible
 
 ```
 

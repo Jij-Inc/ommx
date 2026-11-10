@@ -126,7 +126,7 @@ no matching cardinality row, illustrating rejection without relying on a solver.
 ...     ConstraintID(102),
 ... }
 >>> assert instance.populate_state({0: 0, 1: 2}).entries[10] == 1.0
->>> assert instance.evaluate({0: 0, 1: 2}).feasible()
+>>> assert instance.evaluate({0: 0, 1: 2}).feasible
 
 ```
 

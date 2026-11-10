@@ -1778,10 +1778,7 @@ mod tests {
                 solution.evaluated_constraints()[&constraint_id].violation(),
                 1.0,
             );
-            assert_eq!(
-                solution.feasible(Default::default()),
-                skip_feasibility_check
-            );
+            assert_eq!(solution.feasible(), skip_feasibility_check);
             assert!(solution.feasible_relaxed());
 
             let supplied = v1::State::from(HashMap::from([(1, 1.0), (2, 1.0)]));
@@ -1791,7 +1788,7 @@ mod tests {
                 solution.evaluated_constraints()[&constraint_id].violation(),
                 0.0,
             );
-            assert!(solution.feasible(Default::default()));
+            assert!(solution.feasible());
         }
     }
 
@@ -3384,7 +3381,7 @@ mod tests {
                 .evaluated_value,
             0.0
         );
-        assert!(direct.feasible_constraints(Default::default()));
+        assert!(direct.feasible_constraints());
 
         let mut rewritten = instance.clone();
         rewritten.partial_evaluate(&state, atol).unwrap();
@@ -3407,7 +3404,7 @@ mod tests {
                 .evaluated_value,
             0.0
         );
-        assert!(rewritten_solution.feasible_constraints(Default::default()));
+        assert!(rewritten_solution.feasible_constraints());
     }
 
     #[test]

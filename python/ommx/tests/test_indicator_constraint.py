@@ -68,7 +68,7 @@ def test_indicator_on_is_independent_of_constraint_activeness(activeness):
         assert row.activeness == activeness
         assert row.indicator_on is on
         assert row.evaluated_value == 1
-        assert solution.feasible() is (not on or skipped)
+        assert solution.feasible is (not on or skipped)
         frame = solution.constraints_df(kind=ConstraintKind.Indicator)
         assert bool(frame.loc[cid, "indicator_on"]) is on
         assert frame.loc[cid, "activeness"] == activeness
@@ -77,7 +77,7 @@ def test_indicator_on_is_independent_of_constraint_activeness(activeness):
     sampled_row = samples.constraints[cid]
     assert sampled_row.activeness == activeness
     assert sampled_row.indicator_on == {4: False, 9: True}
-    assert samples.feasible() == {4: True, 9: skipped}
+    assert samples.feasible == {4: True, 9: skipped}
     frame = samples.constraints_df(kind=ConstraintKind.Indicator)
     assert not frame.loc[cid, "indicator_on.4"]
     assert frame.loc[cid, "indicator_on.9"]

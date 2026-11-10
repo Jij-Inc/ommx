@@ -37,7 +37,7 @@ use std::collections::BTreeSet;
 /// >>> state = State({x.id: 1, y.id: 0})
 /// >>> solution = instance.evaluate(state)
 /// >>> assert solution.state.entries == {x.id: 1.0, y.id: 0.0}
-/// >>> assert solution.feasible()
+/// >>> assert solution.feasible
 /// >>> assert solution.objective == 1.0
 /// >>> assert solution.optimality == Optimality.Unspecified
 ///
@@ -45,7 +45,7 @@ use std::collections::BTreeSet;
 ///
 /// | Property | Meaning | Does not establish |
 /// | --- | --- | --- |
-/// | {meth}`~ommx.Solution.feasible` | Variable domains and constraints selected by min_activeness are satisfied | No better candidate exists |
+/// | {attr}`~ommx.Solution.feasible` | Variable domains and active / inactive checked constraints are satisfied | No better candidate exists |
 /// | {attr}`~ommx.Solution.objective` | The candidate's reported objective value | Feasibility or optimality |
 /// | {attr}`~ommx.Solution.optimality` | Recorded optimality status, for example supplied by an adapter | A proof performed by ``evaluate`` |
 ///
@@ -55,7 +55,7 @@ use std::collections::BTreeSet;
 ///
 /// >>> infeasible = instance.evaluate({x.id: 1, y.id: 1})
 /// >>> assert infeasible.objective == 2.0
-/// >>> assert not infeasible.feasible()
+/// >>> assert not infeasible.feasible
 ///
 /// Feasibility includes variable ``kind`` and bounds, not only constraints.
 /// Floating-point checks use the tolerance supplied to ``evaluate(..., atol=...)``;
@@ -200,7 +200,7 @@ impl Solution {
     ///
     /// Evaluation uses the Instance's preserved output objective when one is
     /// present; otherwise it uses the active objective. Read the value together
-    /// with {attr}`~ommx.Solution.sense` and {meth}`~ommx.Solution.feasible`.
+    /// with {attr}`~ommx.Solution.sense` and {attr}`~ommx.Solution.feasible`.
     /// An infeasible candidate can have an objective value, and the value alone
     /// establishes neither feasibility nor optimality.
     #[getter]
@@ -218,16 +218,15 @@ impl Solution {
         crate::State(self.inner.state())
     }
 
-    /// Whether selected constraints and every variable domain are satisfied.
+    /// Whether active and inactive checked constraints and every variable domain are satisfied.
     ///
-    /// min_activeness selects rows at or above the given ordered state:
-    /// INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE. The default INACTIVE_CHECKED checks
-    /// active and checked inactive constraints; skipped rows are still evaluated
-    /// and remain inspectable. ACTIVE matches feasible_relaxed.
+    /// Inactive skipped constraints are excluded from this judgment, but are still
+    /// evaluated and remain inspectable. Use {attr}`~ommx.Solution.feasible_relaxed`
+    /// to check only active constraints together with every variable domain.
     /// Uses feasibility_atol independently for each constraint and variable.
-    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE_CHECKED))]
-    pub fn feasible(&self, min_activeness: crate::ConstraintActiveness) -> bool {
-        self.inner.feasible(min_activeness.into())
+    #[getter]
+    pub fn feasible(&self) -> bool {
+        self.inner.feasible()
     }
 
     /// Whether active constraints and all retained variable domains are satisfied.
@@ -235,7 +234,7 @@ impl Solution {
     /// Excludes constraints retained after deactivation, across all constraint families.
     /// Variable kind and bound checks are still applied with
     /// {attr}`~ommx.Solution.feasibility_atol`. A result can satisfy this property
-    /// while failing {meth}`~ommx.Solution.feasible` because an inactive constraint
+    /// while failing {attr}`~ommx.Solution.feasible` because an inactive constraint
     /// is violated.
     ///
     /// >>> from ommx import ConstraintKind, Instance
@@ -246,22 +245,20 @@ impl Solution {
     /// >>> instance.deactivate_constraint(required.constraint_id, "manual relaxation")
     /// >>> solution = instance.evaluate({x.id: 0})
     /// >>> assert solution.feasible_relaxed
-    /// >>> assert not solution.feasible()
+    /// >>> assert not solution.feasible
     /// >>> assert solution.constraints[required.constraint_id].violation() == 1.0
     #[getter]
     pub fn feasible_relaxed(&self) -> bool {
         self.inner.feasible_relaxed()
     }
 
-    /// Equivalent to {meth}`~ommx.Solution.feasible` with
-    /// ``min_activeness=ConstraintActiveness.INACTIVE_CHECKED``.
+    /// Alias for {attr}`~ommx.Solution.feasible`.
     ///
     /// Checks active and inactive checked constraints, plus every retained
     /// variable's kind and bounds. Inactive skipped constraints are excluded.
     #[getter]
     pub fn feasible_unrelaxed(&self) -> bool {
-        self.inner
-            .feasible(ommx::ConstraintActiveness::InactiveChecked)
+        self.inner.feasible()
     }
 
     /// Absolute tolerance associated with the stored evaluation and feasibility results.
@@ -449,7 +446,7 @@ impl Solution {
     /// >>> instance.objective = 3 * x[0] + 5 * x[1] + y
     /// >>> _ = instance.add_constraint(x[0] + x[1] <= 1)
     /// >>> solution = instance.evaluate({x[0].id: 1, x[1].id: 0, y.id: 2})
-    /// >>> assert solution.feasible()
+    /// >>> assert solution.feasible
     /// >>> assert solution.extract_decision_variables("x") == {(0,): 1.0, (1,): 0.0}
     /// >>> assert solution.extract_decision_variables("y") == {(): 2.0}
     /// >>> named_values = solution.extract_all_decision_variables()
@@ -808,7 +805,7 @@ impl Solution {
     /// {meth}`ommx.Instance.constraints_df` for column / `kind=` /
     /// `include=` semantics.
     ///
-    /// min_activeness selects the same ordered states as feasibility queries,
+    /// min_activeness selects rows at or above the given ordered state,
     /// defaulting to all rows. Reason data is gated by
     /// `"inactive_reason"` in `include=`. When the flag is on, rows for
     /// constraints deactivated before evaluation get `inactive_reason` /
@@ -1069,7 +1066,9 @@ impl Solution {
     /// - OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.
     /// - SOS1: `min_i sum_{j != i} abs(x_j)`.
     ///
-    /// The selected constraint set is the same as for feasible(min_activeness=...).
+    /// The default ``INACTIVE_CHECKED`` selects the same constraints as
+    /// {attr}`~ommx.Solution.feasible`. ``ACTIVE`` selects the same constraints as
+    /// {attr}`~ommx.Solution.feasible_relaxed`; ``INACTIVE_SKIPPED`` includes all rows.
     /// This sum is a diagnostic metric, not a feasibility predicate.
     /// Variable bound and kind violations
     /// are not added. Values use the evaluated state after discrete-value

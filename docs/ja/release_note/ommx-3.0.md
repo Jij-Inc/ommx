@@ -12,7 +12,11 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 `Instance` と `ParametricInstance` では、`constraint_names` を `active_constraint_names`、`extract_constraints(name)` を `extract_active_constraints(name)` に変更します。activeな制約だけを対象とする動作と返り値の型は変わりません。`Solution` と `SampleSet` では既存の名前を維持します。
 
-inactive行は既定で `INACTIVE_CHECKED`、`skip_feasibility_check=True` を指定すると `INACTIVE_SKIPPED` になります。どちらも数値評価は行いますが、skippedの行は既定の実行可能性判定から除外します。これらと `ACTIVE` は重複しない3状態で、inactiveはcheckedとskippedの総称です。`ConstraintActiveness` の順序は `INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE` で、`min_activeness` 以上の行を対象とします。`feasible()` とSampleSetの実行可能サンプル選択はメソッドとして呼びます。これらと `total_violation()` の既定値は `INACTIVE_CHECKED` です。`feasible_relaxed` は従来どおりactiveのみを判定します。`constraints_df` は `removed=` を同じ下限引数に置き換え、既定値の `INACTIVE_SKIPPED` では全行を返し、常に `activeness` 列を含みます。理由には `include=["inactive_reason"]` を指定します。
+inactive行は既定で `INACTIVE_CHECKED`、`skip_feasibility_check=True` を指定すると `INACTIVE_SKIPPED` になります。どちらも数値評価は行いますが、skippedの行は既定の実行可能性判定から除外します。これらと `ACTIVE` は重複しない3状態で、inactiveはcheckedとskippedの総称です。
+
+`Solution.feasible` と `SampleSet.feasible` はpropertyのまま維持し、activeと検査対象のinactive制約を判定します。`feasible_relaxed` もpropertyのまま、active制約のみを判定します。どちらも変数の定義域を検査します。SampleSetの `best_feasible` と `best_feasible_id` もpropertyを維持し、`feasible_ids()` は引数なしのメソッドです。実行可能性の判定とサンプル選択には `min_activeness` を渡しません。
+
+`total_violation()` と `constraints_df` では、`INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE` の順序で `min_activeness` 以上の行を対象とします。違反量合計の既定値は `INACTIVE_CHECKED` で、`feasible` が検査する制約集合と一致します。`ACTIVE` を指定すると `feasible_relaxed` と同じ制約集合になります。`constraints_df` は `removed=` をこの下限引数に置き換え、既定値の `INACTIVE_SKIPPED` では全行を返し、常に `activeness` 列を含みます。理由には `include=["inactive_reason"]` を指定します。
 
 v1のschemaは拡張せず、skipがtrueのデータのv1出力は失敗します。この状態を保存するにはv2を使ってください。APIの対応表は[移行ガイド](../migration/python_sdk_v2_to_v3.md)にあります。
 

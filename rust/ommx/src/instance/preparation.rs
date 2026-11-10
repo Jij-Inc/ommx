@@ -482,7 +482,7 @@ impl Instance {
     /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
     /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
     /// assert_eq!(*solution.objective(), 0.0);
-    /// assert!(!solution.feasible(Default::default()));
+    /// assert!(!solution.feasible());
     /// assert_eq!(
     ///     instance.map_active_optimality(Optimality::Optimal),
     ///     Optimality::Unspecified,

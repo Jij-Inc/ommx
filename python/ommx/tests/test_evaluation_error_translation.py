@@ -153,7 +153,7 @@ def test_non_binary_value_without_indicator_semantics_remains_infeasible() -> No
         sense=ommx.Sense.Minimize,
     )
 
-    assert not instance.evaluate({1: 0.5}).feasible()
+    assert not instance.evaluate({1: 0.5}).feasible
 
 
 def test_non_finite_dependent_evaluation_falls_back_to_runtime_error() -> None:

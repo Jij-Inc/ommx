@@ -397,8 +397,6 @@ def test_decode_before_optimize():
 
 @pytest.mark.parametrize("skip_feasibility_check", [False, True])
 def test_inactive_constraints_are_evaluated_but_not_imposed(skip_feasibility_check):
-    from ommx import ConstraintActiveness
-
     instance = Instance.minimize()
     x = instance.new_continuous("x", lower=0, upper=2)
     instance.objective = x
@@ -412,5 +410,10 @@ def test_inactive_constraints_are_evaluated_but_not_imposed(skip_feasibility_che
     assert solution.state.entries[x.id] == pytest.approx(0)
     assert solution.constraint_violation(row.constraint_id) == pytest.approx(1)
     assert solution.feasible_relaxed
-    assert solution.feasible() is skip_feasibility_check
-    assert not solution.feasible(min_activeness=ConstraintActiveness.INACTIVE_SKIPPED)
+    assert solution.feasible is skip_feasibility_check
+    assert (
+        solution.constraints[row.constraint_id].is_feasible(
+            atol=solution.feasibility_atol
+        )
+        is False
+    )

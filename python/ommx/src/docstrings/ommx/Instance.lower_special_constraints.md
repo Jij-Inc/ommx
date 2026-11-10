@@ -68,7 +68,7 @@ the active SOS1, retains the original OneHot for evaluation, and adds an equalit
 >>> assert rows.loc[original.constraint_id, "inactive_reason"] == inactive.inactive_reason
 >>> assert instance.evaluate(
 ...     {choices[0].id: 1, choices[1].id: 0, choices[2].id: 0}
-... ).feasible()
+... ).feasible
 >>> assert instance.lower_special_constraints({ConstraintKind.OneHot}) == set()
 >>> assert instance.lower_special_constraints(set()) == set()
 

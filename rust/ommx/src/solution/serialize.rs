@@ -67,7 +67,7 @@ impl From<Solution> for v2::Solution {
                 )
                 .any(|metadata| metadata.skip_feasibility_check),
         );
-        let feasible = value.feasible(Default::default());
+        let feasible = value.feasible();
         let feasible_relaxed = value.feasible_relaxed();
 
         let Solution {
@@ -158,10 +158,7 @@ mod tests {
         assert_eq!(row.finite_domain().unwrap().values(), expected_values);
         assert_eq!(*row.bound(), expected_bound);
         assert_eq!(row.samples().ids(), states.ids());
-        assert_eq!(
-            restored_samples.feasible(Default::default()),
-            samples.feasible(Default::default())
-        );
+        assert_eq!(restored_samples.feasible(), samples.feasible());
         assert_eq!(
             restored_samples.feasible_relaxed(),
             samples.feasible_relaxed()
@@ -185,7 +182,7 @@ mod tests {
             for result in [&restored, &extracted] {
                 assert_eq!(result, &solution);
                 assert_eq!(result.feasibility_atol(), atol);
-                assert_eq!(result.feasible(Default::default()), expected_feasible);
+                assert_eq!(result.feasible(), expected_feasible);
                 assert_eq!(result.feasible_relaxed(), expected_feasible);
                 let row = &result.decision_variables()[&variable_id];
                 assert_eq!(row.finite_domain().unwrap().values(), expected_values);
@@ -193,9 +190,7 @@ mod tests {
                 assert_eq!(*row.value(), value);
             }
             assert_eq!(
-                restored_samples
-                    .feasible_ids(Default::default())
-                    .contains(&sample_id),
+                restored_samples.feasible_ids().contains(&sample_id),
                 expected_feasible
             );
             assert_eq!(
@@ -272,11 +267,9 @@ mod tests {
                 let samples = instance
                     .evaluate_samples(&Sampled::from((sample_id, state)), atol)
                     .unwrap();
-                assert_eq!(solution.feasible(Default::default()), !expected, "{source}");
+                assert_eq!(solution.feasible(), !expected, "{source}");
                 assert_eq!(
-                    samples
-                        .feasible_ids(Default::default())
-                        .contains(&sample_id),
+                    samples.feasible_ids().contains(&sample_id),
                     !expected,
                     "{source}"
                 );
@@ -288,9 +281,7 @@ mod tests {
                 let restored_samples =
                     SampleSet::from_v1_bytes(&samples.to_v1_bytes().unwrap()).unwrap();
                 assert_eq!(
-                    restored_samples
-                        .feasible_ids(Default::default())
-                        .contains(&sample_id),
+                    restored_samples.feasible_ids().contains(&sample_id),
                     expected
                 );
                 assert_eq!(
@@ -300,7 +291,7 @@ mod tests {
                 let restored = Solution::from_v1_bytes(&solution.to_v1_bytes().unwrap()).unwrap();
                 for result in [restored, restored_samples.get(sample_id).unwrap()] {
                     assert_eq!(result.feasibility_atol(), default_atol);
-                    assert_eq!(result.feasible(Default::default()), expected, "{source}");
+                    assert_eq!(result.feasible(), expected, "{source}");
                     assert_eq!(
                         result.feasible_relaxed(),
                         source == "inactive" || expected,
@@ -318,10 +309,7 @@ mod tests {
                 let restored_samples = SampleSet::from_v2_bytes(&samples.to_v2_bytes()).unwrap();
                 assert_eq!(restored, solution);
                 assert_eq!(restored_samples.feasibility_atol(), atol);
-                assert_eq!(
-                    restored_samples.feasible_ids(Default::default()),
-                    samples.feasible_ids(Default::default())
-                );
+                assert_eq!(restored_samples.feasible_ids(), samples.feasible_ids());
                 assert_eq!(
                     restored_samples.feasible_relaxed_ids(),
                     samples.feasible_relaxed_ids()
@@ -348,7 +336,7 @@ mod tests {
                     ATol::default(),
                 )
                 .unwrap();
-            assert!(!solution.feasible(Default::default()));
+            assert!(!solution.feasible());
             for with_state in [true, false] {
                 let mut wire = v1::Solution::try_from(solution.clone()).unwrap();
                 if !with_state {
@@ -413,16 +401,13 @@ mod tests {
             let samples = instance
                 .evaluate_samples(&Sampled::from((7.into(), state)), ATol::default())
                 .unwrap();
-            assert!(!solution.feasible(Default::default()), "{family}");
-            assert!(
-                samples.feasible_ids(Default::default()).is_empty(),
-                "{family}"
-            );
+            assert!(!solution.feasible(), "{family}");
+            assert!(samples.feasible_ids().is_empty(), "{family}");
             let restored = Solution::from_v1_bytes(&solution.to_v1_bytes().unwrap()).unwrap();
             let restored_samples =
                 SampleSet::from_v1_bytes(&samples.to_v1_bytes().unwrap()).unwrap();
             for result in [restored, restored_samples.get(7.into()).unwrap()] {
-                assert!(result.feasible(Default::default()), "{family}");
+                assert!(result.feasible(), "{family}");
                 assert!(result.feasible_relaxed(), "{family}");
                 assert_eq!(result.total_violation(Default::default()), 0.0);
             }
@@ -499,7 +484,7 @@ mod tests {
                 prop_assert!(result.evaluated_one_hot_constraints().is_empty());
                 prop_assert!(result.evaluated_sos1_constraints().is_empty());
             }
-            prop_assert_eq!(restored_samples.feasible_ids(Default::default()).contains(&7.into()), restored.feasible(Default::default()));
+            prop_assert_eq!(restored_samples.feasible_ids().contains(&7.into()), restored.feasible());
             prop_assert_eq!(restored_samples.feasible_relaxed_ids().contains(&7.into()), restored.feasible_relaxed());
         }
     }

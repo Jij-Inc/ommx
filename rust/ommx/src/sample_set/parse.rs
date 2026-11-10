@@ -254,9 +254,7 @@ impl Parse for crate::v1::SampleSet {
         // Check the consistency of feasibility maps from the original v1 data
         for (sample_id_u64, provided_feasible) in self.feasible {
             let sample_id = crate::SampleID::from(sample_id_u64);
-            if let Some(computed_feasible) =
-                sample_set.is_sample_feasible(sample_id, Default::default())
-            {
+            if let Some(computed_feasible) = sample_set.is_sample_feasible(sample_id) {
                 if provided_feasible != computed_feasible {
                     return Err(
                         ParseError::new(crate::SampleSetError::InconsistentFeasibility {
@@ -1429,15 +1427,9 @@ mod tests {
         let sample_id_2 = crate::SampleID::from(2);
 
         // Since there are no constraints, all samples should be feasible
-        assert!(parsed
-            .is_sample_feasible(sample_id_0, Default::default())
-            .unwrap());
-        assert!(parsed
-            .is_sample_feasible(sample_id_1, Default::default())
-            .unwrap());
-        assert!(parsed
-            .is_sample_feasible(sample_id_2, Default::default())
-            .unwrap());
+        assert!(parsed.is_sample_feasible(sample_id_0).unwrap());
+        assert!(parsed.is_sample_feasible(sample_id_1).unwrap());
+        assert!(parsed.is_sample_feasible(sample_id_2).unwrap());
 
         assert!(parsed.is_sample_feasible_relaxed(sample_id_0).unwrap());
         assert!(parsed.is_sample_feasible_relaxed(sample_id_1).unwrap());
@@ -1445,9 +1437,7 @@ mod tests {
 
         // Test error handling for unknown sample IDs
         let unknown_sample_id = crate::SampleID::from(999);
-        assert!(parsed
-            .is_sample_feasible(unknown_sample_id, Default::default())
-            .is_none());
+        assert!(parsed.is_sample_feasible(unknown_sample_id).is_none());
         assert!(parsed
             .is_sample_feasible_relaxed(unknown_sample_id)
             .is_none());

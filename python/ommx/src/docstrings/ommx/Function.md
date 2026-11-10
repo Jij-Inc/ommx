@@ -20,7 +20,7 @@ constraint. Here the expression is ``2*x + 3``, while the problem also requires
 >>> _ = instance.add_constraint(x == 0)
 >>> candidate = {x.id: 1}
 >>> assert f.evaluate(candidate) == 5.0
->>> assert not instance.evaluate(candidate).feasible()
+>>> assert not instance.evaluate(candidate).feasible
 
 The {class}`~ommx.Solution` records the problem-level evaluation. To register
 other quantities to report for each candidate, use {class}`~ommx.NamedFunction`;

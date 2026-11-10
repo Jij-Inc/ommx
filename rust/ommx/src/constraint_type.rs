@@ -1598,15 +1598,17 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
             .filter(move |(id, _)| self.activeness(id).is_some_and(|a| a >= min_activeness))
     }
 
-    /// Check the selected constraints using their individual violation metrics.
-    pub fn is_feasible(&self, atol: ATol, min_activeness: crate::ConstraintActiveness) -> bool {
-        self.selected(min_activeness)
+    /// Check active and inactive checked constraints using their individual violation metrics.
+    /// Inactive skipped constraints do not participate in feasibility.
+    pub fn is_feasible(&self, atol: ATol) -> bool {
+        self.selected(crate::ConstraintActiveness::InactiveChecked)
             .all(|(_, c)| c.is_feasible(atol))
     }
 
     /// Check if all non-inactive constraints are feasible.
     pub fn is_feasible_relaxed(&self, atol: ATol) -> bool {
-        self.is_feasible(atol, crate::ConstraintActiveness::Active)
+        self.selected(crate::ConstraintActiveness::Active)
+            .all(|(_, c)| c.is_feasible(atol))
     }
 }
 
@@ -1829,20 +1831,17 @@ impl<T: ConstraintType> SampledCollection<T> {
             .filter(move |(id, _)| self.activeness(id).is_some_and(|a| a >= min_activeness))
     }
 
-    /// Check selected constraints for a sample.
-    pub fn is_feasible_for(
-        &self,
-        sample_id: SampleID,
-        atol: ATol,
-        min_activeness: crate::ConstraintActiveness,
-    ) -> bool {
-        self.selected(min_activeness)
+    /// Check active and inactive checked constraints for a sample.
+    /// Inactive skipped constraints do not participate in feasibility.
+    pub fn is_feasible_for(&self, sample_id: SampleID, atol: ATol) -> bool {
+        self.selected(crate::ConstraintActiveness::InactiveChecked)
             .all(|(_, c)| c.is_feasible_for(sample_id, atol).unwrap_or(false))
     }
 
     /// Check if all non-inactive constraints are feasible for a given sample.
     pub fn is_feasible_relaxed_for(&self, sample_id: SampleID, atol: ATol) -> bool {
-        self.is_feasible_for(sample_id, atol, crate::ConstraintActiveness::Active)
+        self.selected(crate::ConstraintActiveness::Active)
+            .all(|(_, c)| c.is_feasible_for(sample_id, atol).unwrap_or(false))
     }
 }
 

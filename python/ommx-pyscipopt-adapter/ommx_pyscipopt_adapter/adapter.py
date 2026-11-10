@@ -312,7 +312,7 @@ class SCIPDiagnosticsAnalyzer:
     >>> collector = DiagnosticCollector()
     >>> solution = OMMXPySCIPOptAdapter.solve(instance, diagnostics=collector)
     >>> analysis = SCIPDiagnosticsAnalyzer(collector.diagnostics)
-    >>> solution.objective, solution.feasible()
+    >>> solution.objective, solution.feasible
     (3.0, True)
     >>> solution.decision_variables_df()[["name", "value"]].to_dict("records")
     [{'name': 'x', 'value': 1.0}, {'name': 'y', 'value': 0.0}]
@@ -680,7 +680,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     ...     "Weight limit",
     ... )
     >>> solution = OMMXPySCIPOptAdapter.solve(problem)
-    >>> assert solution.feasible()
+    >>> assert solution.feasible
     >>> assert solution.optimality == Solution.OPTIMAL
     >>> selected = sorted(
     ...     i for (i,), value in solution.extract_decision_variables("item").items()
@@ -737,7 +737,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     ... )
     >>> assert OMMXPySCIPOptAdapter.INPUT_CLASS.contains(source)
     >>> solution = OMMXPySCIPOptAdapter.solve(source)
-    >>> assert solution.feasible()
+    >>> assert solution.feasible
     >>> assert abs(solution.objective - 20.0) < 1e-6
     >>> assert source.active_special_constraint_kinds == {
     ...     ConstraintKind.Indicator, ConstraintKind.Sos1,
@@ -762,7 +762,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     >>> _ = choice_model.add_one_hot_constraint(OneHotConstraint(variables=choices))
     >>> assert not OMMXPySCIPOptAdapter.INPUT_CLASS.contains(choice_model)
     >>> solution = OMMXPySCIPOptAdapter.solve(choice_model)
-    >>> assert solution.feasible()
+    >>> assert solution.feasible
     >>> assert abs(solution.objective - 10.0) < 1e-6
     >>> assert choice_model.active_special_constraint_kinds == {ConstraintKind.OneHot}
     >>> assert not choice_model.inactive_constraints
@@ -779,7 +779,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     >>> sparse_model.objective = sum(ys)
     >>> _ = sparse_model.add_sos1_constraint(Sos1Constraint(variables=ys))
     >>> solution = OMMXPySCIPOptAdapter.solve(sparse_model)
-    >>> assert solution.feasible()
+    >>> assert solution.feasible
     >>> assert abs(solution.objective - 10.0) < 1e-6
 
     **Select a policy and use the strict solve path**
@@ -809,7 +809,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     >>> assert OMMXPySCIPOptAdapter.check_applicability(model).is_member
     >>> assert model.active_special_constraint_kinds == {ConstraintKind.Sos1}
     >>> solution = OMMXPySCIPOptAdapter.solve_without_preparation(model)
-    >>> assert solution.feasible()
+    >>> assert solution.feasible
     >>> assert abs(solution.objective - 14.0) < 1e-6
     >>> assert len(solution.decision_variables_df()) == 4
 
@@ -920,9 +920,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         >>> _ = problem.add_constraint(x + y <= 5)
         >>> proposed = {x.id: 3, y.id: 2}
         >>> initial = problem.evaluate(proposed)
-        >>> assert initial.feasible() and initial.objective == 1
+        >>> assert initial.feasible and initial.objective == 1
         >>> result = OMMXPySCIPOptAdapter.solve(problem, initial_state=proposed)
-        >>> assert result.feasible() and result.objective == 5
+        >>> assert result.feasible and result.objective == 5
 
         To reuse a plan across models whose IDs differ, supply names and
         tuple subscripts. Use an empty tuple for a scalar and ``(i,)`` for
@@ -931,7 +931,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         >>> named = {"x": {(): 3.0}, "y": {(): 2.0}}
         >>> state = problem.state_from_named_values(named)
-        >>> assert problem.evaluate(state).feasible()
+        >>> assert problem.evaluate(state).feasible
         >>> assert OMMXPySCIPOptAdapter.solve(problem, initial_state=named).objective == 5
 
         You can also pass the resolved State or a previous solution's

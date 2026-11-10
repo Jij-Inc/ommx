@@ -823,7 +823,7 @@ impl Instance {
     /// >>> source.objective = 3 * x[0] + 5 * x[1] + y
     /// >>> _ = source.add_constraint(x[0] + x[1] <= 1)
     /// >>> solution = source.evaluate({x[0].id: 1, x[1].id: 0, y.id: 2})
-    /// >>> assert solution.feasible()
+    /// >>> assert solution.feasible
     /// >>> named_values = solution.extract_all_decision_variables()
     /// >>> target = Instance.maximize()
     /// >>> target_y = target.new_integer("y", lower=0, upper=1)
@@ -833,7 +833,7 @@ impl Instance {
     /// >>> _ = target.add_constraint(target_x0 + target_x1 <= 1)
     /// >>> state = target.state_from_named_values(named_values)
     /// >>> assert state.entries == {target_x0.id: 1.0, target_x1.id: 0.0, target_y.id: 2.0}
-    /// >>> assert not target.evaluate(state).feasible()
+    /// >>> assert not target.evaluate(state).feasible
     ///
     /// Matching labels transfers the values; it does not establish feasibility
     /// for the new problem. Unnamed variables and other values omitted from the
@@ -1833,7 +1833,7 @@ impl Instance {
     ///
     /// The penalized constraints become inactive and remain in the all-state
     /// {attr}`~ommx.ParametricInstance.constraints` mapping. The active formulation
-    /// is unconstrained; ordinary inactive rows still participate in feasibility.
+    /// is unconstrained; inactive checked rows still participate in feasibility.
     ///
     /// > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
     /// > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
@@ -1858,7 +1858,7 @@ impl Instance {
     /// >>> assert ConstraintID(7) in parametric.inactive_constraints
     /// >>> assert prepared.objective.evaluate({0: 0}) == 2.0
     /// >>> solution = prepared.evaluate({0: 0})
-    /// >>> assert (solution.sense, solution.objective, solution.feasible()) == (Sense.Minimize, 0.0, False)
+    /// >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
     /// >>> assert prepared.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified
     pub fn penalty_method(&self, py: Python<'_>) -> OmmxPyResult<ParametricInstance> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -1905,7 +1905,7 @@ impl Instance {
     /// >>> assert ConstraintID(7) in parametric.inactive_constraints
     /// >>> assert prepared.objective.evaluate({0: 0}) == 2.0
     /// >>> solution = prepared.evaluate({0: 0})
-    /// >>> assert (solution.sense, solution.objective, solution.feasible()) == (Sense.Minimize, 0.0, False)
+    /// >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
     /// >>> assert prepared.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified
     pub fn uniform_penalty_method(&self, py: Python<'_>) -> OmmxPyResult<ParametricInstance> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -2747,7 +2747,7 @@ impl Instance {
     /// The substituted variable's definition is retained and its value becomes
     /// dependent on the replacement expression. {meth}`~ommx.Instance.evaluate`
     /// reconstructs that value and checks its original kind and bound when
-    /// determining {meth}`~ommx.Solution.feasible`. Those checks do not add
+    /// determining {attr}`~ommx.Solution.feasible`. Those checks do not add
     /// constraints to the solver input. Being able to reconstruct a value is
     /// therefore not a guarantee of an equivalent optimization problem.
     ///
@@ -2769,8 +2769,8 @@ impl Instance {
     /// >>> linked.objective = original
     /// >>> bits = [linked.new_binary("bit", subscripts=[i]) for i in range(2)]
     /// >>> _ = linked.add_constraint(original == bits[0] + bits[1])
-    /// >>> assert linked.evaluate({original.id: 1, bits[0].id: 1, bits[1].id: 0}).feasible()
-    /// >>> assert not linked.evaluate({original.id: 1, bits[0].id: 1, bits[1].id: 1}).feasible()
+    /// >>> assert linked.evaluate({original.id: 1, bits[0].id: 1, bits[1].id: 0}).feasible
+    /// >>> assert not linked.evaluate({original.id: 1, bits[0].id: 1, bits[1].id: 1}).feasible
     ///
     /// Alternatively, eliminate the original variable from the solver input
     /// and constrain the replacement expression explicitly. Because the new
@@ -2789,9 +2789,9 @@ impl Instance {
     /// >>> _ = encoded.add_constraint(expression >= 0)
     /// >>> _ = encoded.add_constraint(expression <= 1)
     /// >>> solution = encoded.evaluate({bits[0].id: 1, bits[1].id: 0})
-    /// >>> assert solution.feasible()
+    /// >>> assert solution.feasible
     /// >>> assert solution.state.entries[original.id] == 1.0
-    /// >>> assert not encoded.evaluate({bits[0].id: 1, bits[1].id: 1}).feasible()
+    /// >>> assert not encoded.evaluate({bits[0].id: 1, bits[1].id: 1}).feasible
     ///
     /// # Postconditions
     ///

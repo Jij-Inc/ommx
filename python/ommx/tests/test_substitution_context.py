@@ -141,7 +141,7 @@ def test_partial_evaluate_preserves_reporting_context(path):
         solution = result.evaluate({1: 0, 2: 2})
         source = instance.evaluate({0: 1, 1: 0, 2: 2})
         assert solution.objective == source.objective
-        assert solution.feasible() == source.feasible()
+        assert solution.feasible == source.feasible
         evaluated = solution.get_named_function_by_id(9)
         assert evaluated.evaluated_value == 3
         assert evaluated.used_decision_variable_ids == {0, 1, 2}
@@ -218,7 +218,7 @@ def test_substitution_preserves_named_function_for_reconstructed_values(
             original_x = result.state.entries[0]
             seen.add(original_x)
             expected = source.evaluate({0: original_x})
-            assert result.feasible() == expected.feasible()
+            assert result.feasible == expected.feasible
             assert result.objective == expected.objective
             assert (
                 result.get_named_function_by_id(9).evaluated_value
@@ -342,6 +342,6 @@ def test_substitution_allows_intentionally_restricted_domain(parametric):
     assert instance.named_functions[0].function.required_ids() == {0}
     for value in (0, 1):
         result = instance.evaluate({1: value})
-        assert result.feasible()
+        assert result.feasible
         assert result.state.entries[0] == 2 * value
         assert result.get_named_function_by_id(9).evaluated_value == 4 * value

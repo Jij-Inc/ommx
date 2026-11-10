@@ -34,11 +34,12 @@ inactive constraints.
 {meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Instance.evaluate_samples`
 evaluate both active and inactive constraints after restoring and completing
 variable values through {meth}`~ommx.Instance.populate_state`.
-{meth}`~ommx.Solution.feasible` checks active and checked inactive constraints by default; skipped inactive constraints require
-`min_activeness=ConstraintActiveness.INACTIVE_SKIPPED`.
+{attr}`~ommx.Solution.feasible` checks active and inactive checked constraints;
+inactive skipped constraints are excluded from the judgment but remain evaluated
+and available for inspection.
 {attr}`~ommx.Solution.feasible_relaxed` excludes inactive constraints. Both also
 check every retained variable's kind and bounds. The corresponding
-{meth}`~ommx.SampleSet.feasible` and {attr}`~ommx.SampleSet.feasible_relaxed`
+{attr}`~ommx.SampleSet.feasible` and {attr}`~ommx.SampleSet.feasible_relaxed`
 queries return these judgments by sample ID.
 
 A variable used only in inactive constraints may be irrelevant to the active

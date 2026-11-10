@@ -157,7 +157,7 @@ fn ordered_selection_counts_the_same_rows_across_families() {
 }
 
 #[test]
-fn sample_selection_and_best_solution_follow_the_requested_minimum() {
+fn sample_selection_preserves_feasible_and_relaxed_judgments() {
     let x = Function::from(linear!(0));
     let instance = Instance::builder()
         .sense(Sense::Minimize)
@@ -188,28 +188,31 @@ fn sample_selection_and_best_solution_follow_the_requested_minimum() {
     )
     .unwrap();
     let samples = instance.evaluate_samples(&states, ATol::default()).unwrap();
-    for (minimum, best, expected) in [
-        (A::Active, 0, [true, true, true]),
-        (A::InactiveChecked, 1, [false, true, true]),
-        (A::InactiveSkipped, 2, [false, false, true]),
-    ] {
-        assert_eq!(samples.best_feasible_id(minimum).unwrap(), best.into());
-        let feasible = samples.feasible(minimum);
-        for (id, expected) in expected.into_iter().enumerate() {
-            let id = (id as u64).into();
-            assert_eq!(feasible[&id], expected);
-            assert_eq!(samples.feasible_ids(minimum).contains(&id), expected);
-            assert_eq!(samples.get(id).unwrap().feasible(minimum), expected);
-        }
-        assert!(samples.best_feasible(minimum).unwrap().feasible(minimum));
-    }
-    assert_eq!(samples.feasible_relaxed(), &samples.feasible(A::Active));
+    assert_eq!(samples.best_feasible_id().unwrap(), 1.into());
     assert_eq!(samples.best_feasible_relaxed_id().unwrap(), 0.into());
-    assert_eq!(samples.best_feasible_id(A::default()).unwrap(), 1.into());
-    assert_eq!(
-        samples.feasible(A::default()),
-        samples.feasible(A::InactiveChecked)
-    );
+    assert_eq!(samples.feasible_unrelaxed_ids(), samples.feasible_ids());
+    for (id, expected) in [false, true, true].into_iter().enumerate() {
+        let id = (id as u64).into();
+        assert_eq!(samples.feasible()[&id], expected);
+        assert_eq!(samples.feasible_ids().contains(&id), expected);
+        assert_eq!(samples.is_sample_feasible(id), Some(expected));
+        let solution = samples.get(id).unwrap();
+        assert_eq!(solution.feasible(), expected);
+        assert_eq!(solution.feasible_constraints(), expected);
+        assert!(samples.feasible_relaxed()[&id]);
+        assert!(samples.feasible_relaxed_ids().contains(&id));
+        assert_eq!(samples.is_sample_feasible_relaxed(id), Some(true));
+        assert!(solution.feasible_relaxed());
+    }
+    assert_eq!(samples.is_sample_feasible(99.into()), None);
+    assert_eq!(samples.is_sample_feasible_relaxed(99.into()), None);
+    let best = samples.best_feasible().unwrap();
+    assert!(best.feasible());
+    assert_eq!(best.total_violation(A::InactiveChecked), 0.0);
+    assert_eq!(best.total_violation(A::InactiveSkipped), 1.0);
+    let best_relaxed = samples.best_feasible_relaxed().unwrap();
+    assert!(best_relaxed.feasible_relaxed());
+    assert!(!best_relaxed.feasible());
 }
 
 #[test]
@@ -413,8 +416,10 @@ fn specialization_and_partial_evaluation_preserve_inactive_policy() {
     let solution = instance
         .evaluate(&v1::State::default(), ATol::default())
         .unwrap();
-    assert!(solution.feasible(A::InactiveChecked));
-    assert!(!solution.feasible(A::InactiveSkipped));
+    assert!(solution.feasible());
+    assert!(solution.feasible_relaxed());
+    assert_eq!(solution.total_violation(A::InactiveChecked), 0.0);
+    assert!(solution.total_violation(A::InactiveSkipped) > 0.0);
     assert_eq!(solution.constraint_violation(0.into()), Some(3.0));
     assert_eq!(solution.indicator_constraint_violation(1.into()), Some(3.0));
 }

@@ -44,8 +44,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 /// >>> one_item = family.with_parameters({capacity.id: 1})
 /// >>> two_items = family.with_parameters({capacity.id: 2})
 /// >>> candidate = {xs[0].id: 1, xs[1].id: 1}
-/// >>> assert not one_item.evaluate(candidate).feasible()
-/// >>> assert two_items.evaluate(candidate).feasible()
+/// >>> assert not one_item.evaluate(candidate).feasible
+/// >>> assert two_items.evaluate(candidate).feasible
 /// >>> assert two_items.evaluate(candidate).objective == 5.0
 /// >>> assert {v.id for v in one_item.decision_variables} == {v.id for v in two_items.decision_variables}
 /// >>> assert set(one_item.constraints) == set(two_items.constraints) == {ConstraintID(0)}
@@ -236,8 +236,8 @@ impl ParametricInstance {
     /// >>> values[capacity.id] = 2
     /// >>> instance = family.with_parameters(values)
     /// >>> solution = instance.evaluate({xs[0].id: 1, xs[1].id: 0})
-    /// >>> assert solution.feasible() and solution.objective == 3.0
-    /// >>> assert not instance.evaluate({xs[0].id: 1, xs[1].id: 1}).feasible()
+    /// >>> assert solution.feasible and solution.objective == 3.0
+    /// >>> assert not instance.evaluate({xs[0].id: 1, xs[1].id: 1}).feasible
     #[staticmethod]
     #[pyo3(signature = (*, sense, objective, decision_variables, active_constraints, parameters, active_indicator_constraints=None, active_one_hot_constraints=None, active_sos1_constraints=None, named_functions=None, description=None, inactive_constraints=None, inactive_indicator_constraints=None, inactive_one_hot_constraints=None, inactive_sos1_constraints=None))]
     pub(crate) fn from_components(
@@ -510,7 +510,7 @@ impl ParametricInstance {
     /// >>> materialized = parametric.with_parameters({parameter_id: 2.0})
     /// >>> assert materialized.objective.evaluate({0: 0}) == 2.0
     /// >>> solution = materialized.evaluate({0: 0})
-    /// >>> assert (solution.sense, solution.objective, solution.feasible()) == (Sense.Minimize, 0.0, False)
+    /// >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
     pub fn with_parameters(&self, parameters: HashMap<u64, f64>) -> OmmxPyResult<Instance> {
         let mut v1_params = ommx::v1::Parameters::default();
         v1_params.entries = parameters;

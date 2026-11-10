@@ -303,7 +303,7 @@ def test_compilation_uses_promotion_plans_and_explicit_wire_messages(monkeypatch
     restored = INSTANCE.from_v1_bytes(calls[0][1])
     assert set(restored.constraints) == {ommx.ConstraintID(23)}
     for state in ({7: 0.0}, {7: 1.0}):
-        assert legacy.evaluate(state).feasible() == value.evaluate(state).feasible()
+        assert legacy.evaluate(state).feasible == value.evaluate(state).feasible
         assert legacy.evaluate(state).objective == value.evaluate(state).objective
 
 

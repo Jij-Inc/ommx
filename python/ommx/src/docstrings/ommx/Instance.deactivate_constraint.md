@@ -27,7 +27,7 @@ allows `x=1`, while the retained `x <= 0` condition rejects it:
 >>> assert inactive.inactive_reason_parameters == {"purpose": "inspection"}
 >>> solution = instance.evaluate({x.id: 1})
 >>> assert solution.feasible_relaxed
->>> assert not solution.feasible()
+>>> assert not solution.feasible
 
 ```
 

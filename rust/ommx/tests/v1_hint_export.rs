@@ -259,10 +259,7 @@ fn hint_conversion_commits_only_bounds_and_retains_the_regular_formulation() {
                 ATol::default(),
             )
             .unwrap();
-        assert_eq!(
-            regular.feasible(Default::default()),
-            native.feasible(Default::default())
-        );
+        assert_eq!(regular.feasible(), native.feasible());
     }
 }
 

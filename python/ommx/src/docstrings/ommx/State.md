@@ -12,7 +12,7 @@ problem to obtain a {class}`~ommx.Solution` with evaluation results.
 >>> candidate = State({x.id: 1})
 >>> assert candidate.entries == {x.id: 1.0}
 >>> result = instance.evaluate(candidate)
->>> assert result.feasible() and result.objective == 1.0
+>>> assert result.feasible and result.objective == 1.0
 
 APIs accepting a State also accept an ID-to-value mapping or an iterable of
 ID/value pairs. The assignment must use the IDs of the Instance being evaluated.

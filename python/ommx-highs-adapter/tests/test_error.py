@@ -196,7 +196,7 @@ def test_rejects_special_constraints_without_mutating_input():
     assert instance.to_v2_bytes() == before
 
     solution = OMMXHighsAdapter.solve(instance)
-    assert solution.feasible()
+    assert solution.feasible
     assert instance.to_v2_bytes() == before
 
 

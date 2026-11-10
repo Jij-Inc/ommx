@@ -291,7 +291,7 @@ def test_evaluate_with_one_hot_feasible():
     # x1=0, x2=1, x3=0 → feasible (exactly one is 1)
     state = State({1: 0.0, 2: 1.0, 3: 0.0})
     solution = instance.evaluate(state)
-    assert solution.feasible()
+    assert solution.feasible
 
 
 def test_evaluate_with_one_hot_infeasible():
@@ -314,7 +314,7 @@ def test_evaluate_with_one_hot_infeasible():
     # x1=1, x2=1, x3=0 → infeasible (two are 1)
     state = State({1: 1.0, 2: 1.0, 3: 0.0})
     solution = instance.evaluate(state)
-    assert not solution.feasible()
+    assert not solution.feasible
 
 
 def test_evaluate_with_sos1_feasible():
@@ -337,12 +337,12 @@ def test_evaluate_with_sos1_feasible():
     # x1=0, x2=5, x3=0 → feasible (at most one non-zero)
     state = State({1: 0.0, 2: 5.0, 3: 0.0})
     solution = instance.evaluate(state)
-    assert solution.feasible()
+    assert solution.feasible
 
     # All zeros → also feasible for SOS1
     state_zeros = State({1: 0.0, 2: 0.0, 3: 0.0})
     solution_zeros = instance.evaluate(state_zeros)
-    assert solution_zeros.feasible()
+    assert solution_zeros.feasible
 
 
 def test_convert_sos1_with_integer_variables_emits_bigm_pair():
@@ -444,7 +444,7 @@ def test_evaluate_with_sos1_infeasible():
     # x1=1, x2=2, x3=0 → infeasible (two non-zero)
     state = State({1: 1.0, 2: 2.0, 3: 0.0})
     solution = instance.evaluate(state)
-    assert not solution.feasible()
+    assert not solution.feasible
 
 
 @pytest.fixture

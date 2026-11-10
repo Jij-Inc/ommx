@@ -45,7 +45,7 @@ def test_explicit_feasibility_queries_preserve_evaluation_and_saved_conditions()
         assert result.constraints[ConstraintID(1)].is_feasible(
             atol=result.feasibility_atol
         )
-        assert result.feasible()
+        assert result.feasible
         assert result.constraints_df(kind=ConstraintKind.Regular).loc[
             ConstraintID(1), "feasible"
         ]
@@ -61,7 +61,7 @@ def test_explicit_feasibility_queries_preserve_evaluation_and_saved_conditions()
             7: True,
             8: False,
         }
-        assert result.feasible() == {7: True, 8: False}
+        assert result.feasible == {7: True, 8: False}
         assert result.get(7).feasibility_atol == result.feasibility_atol
         assert sampled_constraint.evaluated_values == {7: 0.0625, 8: 0.25}
         assert result.to_v2_bytes() == wire
@@ -80,28 +80,28 @@ def test_v1_roundtrip_uses_default_feasibility_tolerance(atol, value, expected):
     )
     solution = instance.evaluate({0: value}, atol=atol)
     samples = instance.evaluate_samples({7: {0: value}, 8: {0: 0}}, atol=atol)
-    assert solution.feasible() is not expected
-    assert samples.feasible() == {7: not expected, 8: True}
+    assert solution.feasible is not expected
+    assert samples.feasible == {7: not expected, 8: True}
 
     restored = Solution.from_v1_bytes(solution.to_v1_bytes())
     restored_samples = SampleSet.from_v1_bytes(samples.to_v1_bytes())
-    assert restored_samples.feasible() == {7: expected, 8: True}
+    assert restored_samples.feasible == {7: expected, 8: True}
     assert restored_samples.feasible_relaxed == {7: expected, 8: True}
     assert restored_samples.constraints[ConstraintID(0)].feasible(
         atol=restored_samples.feasibility_atol
     ) == {7: expected, 8: True}
     for result in [restored, restored_samples.get(7)]:
         assert result.feasibility_atol == 1e-6
-        assert result.feasible() is expected
+        assert result.feasible is expected
         assert result.feasible_relaxed is expected
         assert result.constraints[ConstraintID(0)].violation() == value
 
     restored_v2 = Solution.from_v2_bytes(solution.to_v2_bytes())
     restored_samples_v2 = SampleSet.from_v2_bytes(samples.to_v2_bytes())
     assert restored_v2.feasibility_atol == atol
-    assert restored_v2.feasible() is solution.feasible()
+    assert restored_v2.feasible is solution.feasible
     assert restored_samples_v2.feasibility_atol == atol
-    assert restored_samples_v2.feasible() == samples.feasible()
+    assert restored_samples_v2.feasible == samples.feasible
 
 
 def test_evaluated_constraint_violation_equality():
@@ -351,7 +351,7 @@ def test_violation_uses_evaluated_discrete_values():
     )
     solution = instance.evaluate({0: 0.125, 1: 0.875}, atol=0.125)
     assert solution.total_violation() == 0
-    assert solution.feasible()
+    assert solution.feasible
 
 
 @pytest.mark.parametrize("atol", [1e-12, 0.5, 1.0, 2.0])
@@ -374,7 +374,7 @@ def test_zero_violation_implies_one_hot_feasibility_with_large_tolerance(atol):
         SampleSet.from_v2_bytes(samples.to_v2_bytes()).get(7),
     ]:
         assert result.total_violation() == 0
-        assert result.feasible()
+        assert result.feasible
 
 
 def test_total_is_sum_of_individual_and_dataframe_violations():
@@ -464,7 +464,7 @@ def test_zero_constraint_violation_does_not_validate_variable_bounds():
     assert solution.constraints_df(kind=ConstraintKind.Sos1).loc[
         Sos1ConstraintID(0), "feasible"
     ]
-    assert not solution.feasible()
+    assert not solution.feasible
 
 
 def test_feasible_sos1_can_have_positive_violation_within_tolerance():
@@ -478,7 +478,7 @@ def test_feasible_sos1_can_have_positive_violation_within_tolerance():
     )
     solution = instance.evaluate({0: 3, 1: 0.125}, atol=0.125)
     assert solution.total_violation() == 0.125
-    assert solution.feasible()
+    assert solution.feasible
 
 
 @pytest.mark.parametrize("atol", [1e-4, 1e-8])
@@ -522,7 +522,7 @@ def test_sos1_feasibility_uses_total_member_error_across_evaluation_paths(
         row = result.constraints_df(kind=ConstraintKind.Sos1).loc[Sos1ConstraintID(0)]
         assert row["violation"] == violation
         assert not row["feasible"]
-        assert not result.feasible()
+        assert not result.feasible
         assert result.feasible_relaxed == lowered
 
 
@@ -538,7 +538,7 @@ def test_partial_evaluation_cannot_discard_small_sos1_member_contributions(atol)
     )
     fixed = {1: 0.75 * atol, 2: 0.75 * atol}
     original = instance.evaluate({0: 1, **fixed}, atol=atol)
-    assert not original.feasible()
+    assert not original.feasible
     with pytest.raises(RuntimeError, match="without changing constraint feasibility"):
         instance.partial_evaluate(fixed, atol=atol)
     assert (
@@ -553,7 +553,7 @@ def test_partial_evaluation_cannot_discard_small_sos1_member_contributions(atol)
     for problem in [partial, restored]:
         result = problem.evaluate({0: 1, 1: 0.75 * atol}, atol=atol)
         assert result.total_violation() == original.total_violation()
-        assert result.feasible()
+        assert result.feasible
 
 
 def test_constraint_thresholds_do_not_apply_to_total_violation():
@@ -566,7 +566,7 @@ def test_constraint_thresholds_do_not_apply_to_total_violation():
     )
     solution = instance.evaluate({0: 0.000075}, atol=0.0001)
     assert solution.total_violation() == pytest.approx(0.00015)
-    assert solution.feasible()
+    assert solution.feasible
 
 
 @pytest.mark.parametrize(
@@ -590,16 +590,16 @@ def test_sampleset_feasibility_and_best_sample_include_variable_domains(
     )
     samples = instance.evaluate_samples({0: {0: invalid}, 1: {0: valid}}, atol=atol)
     for result in [samples, SampleSet.from_v2_bytes(samples.to_v2_bytes())]:
-        assert result.feasible() == result.feasible_relaxed == {0: False, 1: True}
+        assert result.feasible == result.feasible_relaxed == {0: False, 1: True}
         for sample_id in (0, 1):
             solution = result.get(sample_id)
-            assert result.feasible()[sample_id] == solution.feasible()
+            assert result.feasible[sample_id] == solution.feasible
             # Variable-domain validity does not change the constraint metric.
             assert solution.total_violation() == 0
-        assert result.best_feasible().objective == valid
+        assert result.best_feasible.objective == valid
         assert result.best_feasible_relaxed.objective == valid
         assert result.summary.index.tolist() == [1, 0]
-        assert result.summary["feasible"].to_dict() == result.feasible()
+        assert result.summary["feasible"].to_dict() == result.feasible
 
 
 def test_binary_canonicalization_precedes_constraint_violation():
@@ -614,4 +614,4 @@ def test_binary_canonicalization_precedes_constraint_violation():
     solution = instance.evaluate({0: 1, 1: 0.000075, 2: 0.000075}, atol=0.0001)
     assert solution.state.entries == {0: 1, 1: 0, 2: 0}
     assert solution.constraint_violation(OneHotConstraintID(0)) == 0
-    assert solution.feasible()
+    assert solution.feasible

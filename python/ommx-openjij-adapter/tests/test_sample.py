@@ -194,7 +194,7 @@ def _assert_sample_set_uses_instance_model(sample_set, instance):
         expected = instance.evaluate(actual.state)
         assert actual.objective == pytest.approx(expected.objective)
         assert actual.sense == expected.sense
-        assert actual.feasible() == expected.feasible()
+        assert actual.feasible == expected.feasible
         assert len(
             {cid for cid in actual.constraints if isinstance(cid, ConstraintID)}
         ) == len({cid for cid in expected.constraints if isinstance(cid, ConstraintID)})
@@ -204,7 +204,7 @@ def _assert_solution_uses_source_model(solution, instance, ans):
     expected = _expected_solution(instance, ans)
     assert solution.sense == expected.sense
     assert solution.objective == pytest.approx(expected.objective)
-    assert solution.feasible() == expected.feasible()
+    assert solution.feasible == expected.feasible
     assert len(
         {cid for cid in solution.constraints if isinstance(cid, ConstraintID)}
     ) == len({cid for cid in expected.constraints if isinstance(cid, ConstraintID)})
@@ -372,7 +372,7 @@ def test_prepared_instance_evaluation_populates_variable_non_active_after_trivia
     sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=1, seed=999)
     solution = sample_set.get(0)
     assert solution.state.get(0) == expected_value
-    assert solution.feasible()
+    assert solution.feasible
 
 
 def test_prepared_instance_evaluation_restores_integer_sos1():

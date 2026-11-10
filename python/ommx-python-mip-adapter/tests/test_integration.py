@@ -106,7 +106,7 @@ def test_solution_optimality_is_not_transported_through_fixed_penalty():
 
     solution = OMMXPythonMIPAdapter.solve(instance)
 
-    assert not solution.feasible()
+    assert not solution.feasible
     assert solution.optimality == Optimality.Unspecified
 
 
