@@ -1667,10 +1667,8 @@ mod tests {
     }
 
     /// Regression: `SampleSet::to_v1_bytes` / `from_v1_bytes` must preserve the
-    /// variable-label and regular-constraint-context stores. Indicator /
-    /// one-hot / sos1 sampled context is dropped because `v1::SampleSet`
-    /// has no fields for those collections — that's a wire-format
-    /// limitation older than the SoA refactor and is out of scope here.
+    /// variable-label and regular-constraint-context stores for regular-only
+    /// results. Native special constraints are rejected by v1 export.
     #[test]
     fn test_sample_set_roundtrip_preserves_labels_and_context() {
         use crate::constraint::SampledData;
