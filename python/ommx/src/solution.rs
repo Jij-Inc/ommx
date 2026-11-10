@@ -164,14 +164,24 @@ impl Solution {
         })
     }
 
-    /// Serialize to v1. Raises RuntimeError if Indicator, OneHot, or SOS1
-    /// constraints are retained, including removed rows. Use `to_v2_bytes()`
-    /// to preserve these constraints and the feasibility tolerance.
+    /// Serialize for compatibility with older OMMX SDKs using the v1 wire format.
+    ///
+    /// Use `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.
+    /// This compatibility format cannot represent v3 features such as native
+    /// Indicator constraints. Raises `RuntimeError` if Indicator, OneHot, or
+    /// SOS1 results are retained, including inactive, satisfied, and removed
+    /// constraints. Use `to_v2_bytes()` to preserve them.
+    ///
+    /// For results that can be exported, v1 recomputes feasibility at the SDK
+    /// default tolerance. Use v2 to preserve the evaluation tolerance.
     pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyBytes::new(py, &self.inner.to_v1_bytes()?))
     }
 
+    /// Serialize in the v2 wire format for storage and exchange with v3 or later SDKs.
+    ///
+    /// Preserves native special constraints and the evaluation tolerance.
     pub fn to_v2_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let _guard = crate::TRACING.attach_parent_context(py);
         PyBytes::new(py, &self.inner.to_v2_bytes())

@@ -6190,11 +6190,17 @@ class Instance:
         """
     def to_v1_bytes(self) -> bytes:
         r"""
-        Serialize this instance in the OMMX v1 wire format.
+        Serialize for compatibility with older OMMX SDKs using the v1 wire format.
+
+        Use `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.
+        This compatibility format can export only data representable in v1;
+        v3 features such as native Indicator constraints cannot be serialized.
 
         # Errors
 
-        Serialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.
+        Raises `RuntimeError` if an output objective or any Indicator, OneHot,
+        or SOS1 constraint is present, including removed constraints. Use
+        `to_v2_bytes()` to preserve these features.
 
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
@@ -6212,7 +6218,7 @@ class Instance:
         """
     def to_v2_bytes(self) -> bytes:
         r"""
-        Serialize this instance in the OMMX v2 wire format.
+        Serialize in the v2 wire format for storage and exchange with v3 or later SDKs.
 
         # Postconditions
 
@@ -10446,11 +10452,17 @@ class ParametricInstance:
         """
     def to_v1_bytes(self) -> bytes:
         r"""
-        Serialize this parametric instance in the OMMX v1 wire format.
+        Serialize for compatibility with older OMMX SDKs using the v1 wire format.
+
+        Use `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.
+        This compatibility format can export only data representable in v1;
+        v3 features such as native Indicator constraints cannot be serialized.
 
         # Errors
 
-        Serialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.
+        Raises `RuntimeError` if an output objective or any Indicator, OneHot,
+        or SOS1 constraint is present, including removed constraints. Use
+        `to_v2_bytes()` to preserve these features.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
@@ -10469,7 +10481,7 @@ class ParametricInstance:
         """
     def to_v2_bytes(self) -> bytes:
         r"""
-        Serialize this parametric instance in the OMMX v2 wire format.
+        Serialize in the v2 wire format for storage and exchange with v3 or later SDKs.
 
         # Postconditions
 
@@ -12489,11 +12501,23 @@ class SampleSet:
     def from_v2_bytes(bytes: bytes) -> SampleSet: ...
     def to_v1_bytes(self) -> bytes:
         r"""
-        Serialize to v1. Raises RuntimeError if Indicator, OneHot, or SOS1
-        constraints are retained, including removed rows. Use `to_v2_bytes()`
-        to preserve these constraints and the feasibility tolerance.
+        Serialize for compatibility with older OMMX SDKs using the v1 wire format.
+
+        Use `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.
+        This compatibility format cannot represent v3 features such as native
+        Indicator constraints. Raises `RuntimeError` if Indicator, OneHot, or
+        SOS1 results are retained, including inactive, satisfied, and removed
+        constraints. Use `to_v2_bytes()` to preserve them.
+
+        For results that can be exported, v1 recomputes feasibility at the SDK
+        default tolerance. Use v2 to preserve the evaluation tolerance.
         """
-    def to_v2_bytes(self) -> bytes: ...
+    def to_v2_bytes(self) -> bytes:
+        r"""
+        Serialize in the v2 wire format for storage and exchange with v3 or later SDKs.
+
+        Preserves native special constraints and the evaluation tolerance.
+        """
     def get(self, sample_id: builtins.int) -> Solution:
         r"""
         Return one sample as a Solution.
@@ -13906,11 +13930,23 @@ class Solution:
     def from_v2_bytes(bytes: bytes) -> Solution: ...
     def to_v1_bytes(self) -> bytes:
         r"""
-        Serialize to v1. Raises RuntimeError if Indicator, OneHot, or SOS1
-        constraints are retained, including removed rows. Use `to_v2_bytes()`
-        to preserve these constraints and the feasibility tolerance.
+        Serialize for compatibility with older OMMX SDKs using the v1 wire format.
+
+        Use `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.
+        This compatibility format cannot represent v3 features such as native
+        Indicator constraints. Raises `RuntimeError` if Indicator, OneHot, or
+        SOS1 results are retained, including inactive, satisfied, and removed
+        constraints. Use `to_v2_bytes()` to preserve them.
+
+        For results that can be exported, v1 recomputes feasibility at the SDK
+        default tolerance. Use v2 to preserve the evaluation tolerance.
         """
-    def to_v2_bytes(self) -> bytes: ...
+    def to_v2_bytes(self) -> bytes:
+        r"""
+        Serialize in the v2 wire format for storage and exchange with v3 or later SDKs.
+
+        Preserves native special constraints and the evaluation tolerance.
+        """
     def extract_decision_variables(self, name: builtins.str) -> dict:
         r"""
         Extract evaluated variable values using their model name and subscript tuples.

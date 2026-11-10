@@ -1336,11 +1336,17 @@ impl Instance {
             .collect()
     }
 
-    /// Serialize this instance in the OMMX v1 wire format.
+    /// Serialize for compatibility with older OMMX SDKs using the v1 wire format.
+    ///
+    /// Use `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.
+    /// This compatibility format can export only data representable in v1;
+    /// v3 features such as native Indicator constraints cannot be serialized.
     ///
     /// # Errors
     ///
-    /// Serialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.
+    /// Raises `RuntimeError` if an output objective or any Indicator, OneHot,
+    /// or SOS1 constraint is present, including removed constraints. Use
+    /// `to_v2_bytes()` to preserve these features.
     ///
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
@@ -1360,7 +1366,7 @@ impl Instance {
         Ok(PyBytes::new(py, &self.inner.to_v1_bytes()?))
     }
 
-    /// Serialize this instance in the OMMX v2 wire format.
+    /// Serialize in the v2 wire format for storage and exchange with v3 or later SDKs.
     ///
     /// # Postconditions
     ///

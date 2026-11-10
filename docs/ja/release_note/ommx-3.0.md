@@ -8,6 +8,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ### 特殊制約の結果が欠落するv1書き出しを拒否 ([#1380](https://github.com/Jij-Inc/ommx/pull/1380))
 
+`to_v1_bytes()` は旧OMMX SDK向けの互換シリアライズ方式です。V3の機能のうちv1形式で表現できないものには `to_v2_bytes()` を使います。
 `Solution.to_v1_bytes()` と `SampleSet.to_v1_bytes()` は、Indicator・OneHot・SOS1の結果が残っている場合に `RuntimeError` を送出します。
 非発火・成立済みの条件やremovedの制約も対象です。これらを保持するには `to_v2_bytes()` を使ってください。
 通常制約だけの結果のv1書き出しと、既存v1データの読込みは変わりません。

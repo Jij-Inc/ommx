@@ -8,6 +8,8 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ### Reject v1 exports that would discard special-constraint results ([#1380](https://github.com/Jij-Inc/ommx/pull/1380))
 
+`to_v1_bytes()` is a compatibility serialization format for older OMMX SDKs;
+v3 features that cannot be represented in v1 require `to_v2_bytes()`.
 `Solution.to_v1_bytes()` and `SampleSet.to_v1_bytes()` now raise `RuntimeError`
 when Indicator, OneHot, or SOS1 results are retained, including inactive,
 satisfied, and removed constraints. Use `to_v2_bytes()` to preserve them.

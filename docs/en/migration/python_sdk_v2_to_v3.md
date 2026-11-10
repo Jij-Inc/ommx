@@ -237,12 +237,9 @@ The SDK version and the protobuf version are separate. A payload written by `Ins
 
 Version 2.9.4 already preserves annotations in root payloads. In v3, set typed metadata through properties such as `title` and use `add_user_annotation` for extension keys. Update any direct edits to the `annotations` dictionary.
 
-If a 2.x program must still consume your output, check that it supports the representation as well as the wire format. For example, 2.9.4's schema includes finite-domain variables but its SDK rejects them when loading a model. An explicit output objective cannot be written with `to_v1_bytes()`. Use the v2 wire format to preserve native special constraints and a result's feasibility tolerance.
+Use `to_v1_bytes()` when you need to send data to an older OMMX SDK, such as SDK 2.x. It is a compatibility serialization format: only data representable in v1 can be exported. V3 features such as native Indicator, OneHot, and SOS1 constraints cannot be represented, so serialization raises `RuntimeError`. This applies to `Instance`, `ParametricInstance`, `Solution`, and `SampleSet`, including constraints retained as removed after lowering. An explicit output objective also prevents model export. Use `to_v2_bytes()` to preserve these features.
 
-`Solution.to_v1_bytes()` and `SampleSet.to_v1_bytes()` raise `RuntimeError`
-when Indicator, OneHot, or SOS1 constraints are retained, even if they are inactive,
-satisfied, or removed by lowering. They no longer silently discard those results.
-Use `to_v2_bytes()` for these objects. Reading existing v1 payloads is unchanged.
+Even when v1 serialization succeeds, check that the receiving SDK supports the representation. For example, 2.9.4's schema includes finite-domain variables but its SDK rejects them when loading a model. For results that can be exported, v1 recomputes feasibility at the SDK default tolerance; v2 preserves the evaluation tolerance. Reading existing v1 payloads is unchanged.
 
 If you export MPS to another tool, replace `write_mps` with {meth}`~ommx.Instance.save_mps`. Use the SDK byte format to restore model structure and metadata that MPS cannot represent.
 
