@@ -403,10 +403,17 @@ impl Instance {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Instance {
-    /// Deserialize an instance from v1 protobuf bytes.
+    /// Read legacy v1 bytes into a current-SDK instance.
     ///
-    /// Raises {class}`ValueError` if the protobuf payload is malformed or
-    /// semantically invalid.
+    /// This is a compatibility import for data saved by older OMMX SDKs.
+    /// Its policy is to recover as much existing data as possible through
+    /// legacy defaults and normalization while preserving mathematical meaning.
+    /// Recovery must not invent missing mathematical data or silently change it.
+    ///
+    /// Current recovery covers known legacy representations, such as omitted
+    /// variable bounds. Advisory constraint hints do not trigger automatic
+    /// promotion to special constraints. Recovery is not exhaustive: malformed
+    /// or semantically inconsistent payloads still raise {class}`ValueError`.
     #[staticmethod]
     pub fn from_v1_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);

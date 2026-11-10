@@ -148,6 +148,21 @@ impl Solution {
         self.inner.constraint_names()
     }
 
+    /// Read legacy v1 bytes into a current-SDK solution.
+    ///
+    /// This is a compatibility import for data saved by older OMMX SDKs.
+    /// Its policy is to recover as much existing data as possible through
+    /// legacy defaults and normalization while preserving mathematical meaning.
+    /// Recovery must not invent missing mathematical data or silently change it.
+    ///
+    /// For example, a missing state value can be restored from a saved variable
+    /// value, and legacy feasibility fields are recognized.
+    ///
+    /// Current recovery is not exhaustive. Saved feasibility judgments that
+    /// disagree with recomputation at the SDK default tolerance still raise
+    /// {class}`ValueError`; v1 does not store the original tolerance. Malformed
+    /// or otherwise semantically inconsistent payloads also raise ValueError.
+    /// Further recovery is tracked in [issue #1381](https://github.com/Jij-Inc/ommx/issues/1381).
     #[staticmethod]
     pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());

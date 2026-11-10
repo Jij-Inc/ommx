@@ -15174,7 +15174,7 @@
             },
             {
               "name": "from_v1_bytes",
-              "doc": "Deserialize an instance from v1 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed or\nsemantically invalid.",
+              "doc": "Read legacy v1 bytes into a current-SDK instance.\n\nThis is a compatibility import for data saved by older OMMX SDKs.\nIts policy is to recover as much existing data as possible through\nlegacy defaults and normalization while preserving mathematical meaning.\nRecovery must not invent missing mathematical data or silently change it.\n\nCurrent recovery covers known legacy representations, such as omitted\nvariable bounds. Advisory constraint hints do not trigger automatic\npromotion to special constraints. Recovery is not exhaustive: malformed\nor semantically inconsistent payloads still raise {class}`ValueError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -24262,7 +24262,7 @@
             },
             {
               "name": "from_v1_bytes",
-              "doc": "Deserialize a parametric instance from v1 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed or\nsemantically invalid.",
+              "doc": "Read legacy v1 bytes into a current-SDK parametric instance.\n\nThis is a compatibility import for data saved by older OMMX SDKs.\nIts policy is to recover as much existing data as possible through\nlegacy defaults and normalization while preserving mathematical meaning.\nRecovery must not invent missing mathematical data or silently change it.\n\nCurrent recovery covers known legacy representations, such as omitted\nvariable bounds. Advisory constraint hints do not trigger automatic\npromotion to special constraints. Recovery is not exhaustive: malformed\nor semantically inconsistent payloads still raise {class}`ValueError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -30780,7 +30780,7 @@
             },
             {
               "name": "from_v1_bytes",
-              "doc": "",
+              "doc": "Read legacy v1 bytes into a current-SDK sample set.\n\nThis is a compatibility import for data saved by older OMMX SDKs.\nIts policy is to recover as much existing data as possible through\nlegacy defaults and normalization while preserving mathematical meaning.\nRecovery must not invent missing mathematical data or silently change it.\n\nFor example, omitted root feasibility maps are reconstructed from the\nsaved variable and constraint results.\n\nCurrent recovery is not exhaustive. Saved feasibility judgments that\ndisagree with recomputation at the SDK default tolerance still raise\n{class}`ValueError`; v1 does not store the original tolerance. Malformed\nor otherwise semantically inconsistent payloads also raise ValueError.\nFurther recovery is tracked in [issue #1381](https://github.com/Jij-Inc/ommx/issues/1381).",
               "signatures": [
                 {
                   "parameters": [
@@ -34946,7 +34946,7 @@
             },
             {
               "name": "from_v1_bytes",
-              "doc": "",
+              "doc": "Read legacy v1 bytes into a current-SDK solution.\n\nThis is a compatibility import for data saved by older OMMX SDKs.\nIts policy is to recover as much existing data as possible through\nlegacy defaults and normalization while preserving mathematical meaning.\nRecovery must not invent missing mathematical data or silently change it.\n\nFor example, a missing state value can be restored from a saved variable\nvalue, and legacy feasibility fields are recognized.\n\nCurrent recovery is not exhaustive. Saved feasibility judgments that\ndisagree with recomputation at the SDK default tolerance still raise\n{class}`ValueError`; v1 does not store the original tolerance. Malformed\nor otherwise semantically inconsistent payloads also raise ValueError.\nFurther recovery is tracked in [issue #1381](https://github.com/Jij-Inc/ommx/issues/1381).",
               "signatures": [
                 {
                   "parameters": [

@@ -14,6 +14,10 @@ v3 features that cannot be represented in v1 require `to_v2_bytes()`.
 when Indicator, OneHot, or SOS1 results are retained, including inactive,
 satisfied, and removed constraints. Use `to_v2_bytes()` to preserve them.
 Regular-only v1 exports and existing v1 readers retain their behavior.
+`from_v1_bytes()` is documented as compatibility import that aims to recover
+legacy data without changing its mathematical meaning. Current recovery limits
+are explicit; implementation improvements are tracked separately in
+[#1381](https://github.com/Jij-Inc/ommx/issues/1381).
 See the [migration guide](../migration/python_sdk_v2_to_v3.md) for versioned serialization.
 
 ### 🛠 ⚠ Report infeasible constant constraints through the solver ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))

@@ -5656,10 +5656,17 @@ class Instance:
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> Instance:
         r"""
-        Deserialize an instance from v1 protobuf bytes.
+        Read legacy v1 bytes into a current-SDK instance.
 
-        Raises {class}`ValueError` if the protobuf payload is malformed or
-        semantically invalid.
+        This is a compatibility import for data saved by older OMMX SDKs.
+        Its policy is to recover as much existing data as possible through
+        legacy defaults and normalization while preserving mathematical meaning.
+        Recovery must not invent missing mathematical data or silently change it.
+
+        Current recovery covers known legacy representations, such as omitted
+        variable bounds. Advisory constraint hints do not trigger automatic
+        promotion to special constraints. Recovery is not exhaustive: malformed
+        or semantically inconsistent payloads still raise {class}`ValueError`.
         """
     @staticmethod
     def from_v2_bytes(bytes: bytes) -> Instance:
@@ -10437,10 +10444,17 @@ class ParametricInstance:
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> ParametricInstance:
         r"""
-        Deserialize a parametric instance from v1 protobuf bytes.
+        Read legacy v1 bytes into a current-SDK parametric instance.
 
-        Raises {class}`ValueError` if the protobuf payload is malformed or
-        semantically invalid.
+        This is a compatibility import for data saved by older OMMX SDKs.
+        Its policy is to recover as much existing data as possible through
+        legacy defaults and normalization while preserving mathematical meaning.
+        Recovery must not invent missing mathematical data or silently change it.
+
+        Current recovery covers known legacy representations, such as omitted
+        variable bounds. Advisory constraint hints do not trigger automatic
+        promotion to special constraints. Recovery is not exhaustive: malformed
+        or semantically inconsistent payloads still raise {class}`ValueError`.
         """
     @staticmethod
     def from_v2_bytes(bytes: bytes) -> ParametricInstance:
@@ -12496,7 +12510,24 @@ class SampleSet:
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
     @staticmethod
-    def from_v1_bytes(bytes: bytes) -> SampleSet: ...
+    def from_v1_bytes(bytes: bytes) -> SampleSet:
+        r"""
+        Read legacy v1 bytes into a current-SDK sample set.
+
+        This is a compatibility import for data saved by older OMMX SDKs.
+        Its policy is to recover as much existing data as possible through
+        legacy defaults and normalization while preserving mathematical meaning.
+        Recovery must not invent missing mathematical data or silently change it.
+
+        For example, omitted root feasibility maps are reconstructed from the
+        saved variable and constraint results.
+
+        Current recovery is not exhaustive. Saved feasibility judgments that
+        disagree with recomputation at the SDK default tolerance still raise
+        {class}`ValueError`; v1 does not store the original tolerance. Malformed
+        or otherwise semantically inconsistent payloads also raise ValueError.
+        Further recovery is tracked in [issue #1381](https://github.com/Jij-Inc/ommx/issues/1381).
+        """
     @staticmethod
     def from_v2_bytes(bytes: bytes) -> SampleSet: ...
     def to_v1_bytes(self) -> bytes:
@@ -13925,7 +13956,24 @@ class Solution:
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
     @staticmethod
-    def from_v1_bytes(bytes: bytes) -> Solution: ...
+    def from_v1_bytes(bytes: bytes) -> Solution:
+        r"""
+        Read legacy v1 bytes into a current-SDK solution.
+
+        This is a compatibility import for data saved by older OMMX SDKs.
+        Its policy is to recover as much existing data as possible through
+        legacy defaults and normalization while preserving mathematical meaning.
+        Recovery must not invent missing mathematical data or silently change it.
+
+        For example, a missing state value can be restored from a saved variable
+        value, and legacy feasibility fields are recognized.
+
+        Current recovery is not exhaustive. Saved feasibility judgments that
+        disagree with recomputation at the SDK default tolerance still raise
+        {class}`ValueError`; v1 does not store the original tolerance. Malformed
+        or otherwise semantically inconsistent payloads also raise ValueError.
+        Further recovery is tracked in [issue #1381](https://github.com/Jij-Inc/ommx/issues/1381).
+        """
     @staticmethod
     def from_v2_bytes(bytes: bytes) -> Solution: ...
     def to_v1_bytes(self) -> bytes:
