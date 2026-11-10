@@ -16,6 +16,8 @@ Inactive rows are `INACTIVE_CHECKED` by default and `INACTIVE_SKIPPED` when `ski
 
 The v1 schema is unchanged and v1 export rejects a true skip flag; use v2 to preserve it. See the [migration guide](../migration/python_sdk_v2_to_v3.md) for the full API mapping.
 
+The `ommx.v2` protobuf format is still pre-release; its version is separate from the Python SDK version. This update does not guarantee compatibility with earlier pre-release v2 data. Field numbers, types, and structure may change, and unchanged field numbers are not a compatibility commitment. `required_features` remains the mechanism for rejecting unsupported semantic extensions.
+
 Indicator result properties and DataFrame columns now use `indicator_on` for the indicator's ON/OFF state at the evaluated candidate, independently of constraint activeness.
 
 OneHot/SOS1 result properties rename `active_variable` to `selected_variable`, including per-sample mappings. DataFrame columns use `selected_variable` and `selected_variable.<sample_id>`. This reports selection at a candidate, independently of variable or constraint membership in the Active Formulation. Evaluation behavior is unchanged.

@@ -16,6 +16,8 @@ inactive行は既定で `INACTIVE_CHECKED`、`skip_feasibility_check=True` を�
 
 v1のschemaは拡張せず、skipがtrueのデータのv1出力は失敗します。この状態を保存するにはv2を使ってください。APIの対応表は[移行ガイド](../migration/python_sdk_v2_to_v3.md)にあります。
 
+protobuf形式の `ommx.v2` はまだ正式リリース前で、Python SDKのバージョンとは別です。今回の更新では、過去のプレリリース版v2データとの互換性を保証しません。フィールド番号・型・構造は変更されることがあり、番号が同じでも互換性を保証するものではありません。未対応の意味的拡張を拒否する `required_features` の仕組みは維持します。
+
 Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` に揃えます。評価した候補点でのIndicatorのON/OFFを表し、制約のactivenessとは独立です。
 
 OneHot/SOS1の評価結果のpropertyは、サンプルごとの対応を返すものも含めて `active_variable` から `selected_variable` に変更します。DataFrame列も `selected_variable` と `selected_variable.<sample_id>` になります。候補点での選択を表す情報であり、変数や制約がActive Formulationに属するかどうかとは独立です。評価の動作は変わりません。
