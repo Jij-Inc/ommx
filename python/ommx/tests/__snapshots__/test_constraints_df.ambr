@@ -130,9 +130,9 @@
 # ---
 # name: test_sample_set_constraints_df_kind[one_hot]
   '''
-                           used_ids  name subscripts description  feasible.0  active_variable.0  feasible.1 active_variable.1                   activeness
-  one_hot_constraint_id                                                                                                                                   
-  OneHotConstraintID(30)  {0, 1, 2}  <NA>         []        <NA>        True                  1       False              <NA>  ConstraintActiveness.ACTIVE
+                           used_ids  name subscripts description  feasible.0  selected_variable.0  feasible.1 selected_variable.1                   activeness
+  one_hot_constraint_id                                                                                                                                       
+  OneHotConstraintID(30)  {0, 1, 2}  <NA>         []        <NA>        True                    1       False                <NA>  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_sample_set_constraints_df_kind[regular]
@@ -144,9 +144,9 @@
 # ---
 # name: test_sample_set_constraints_df_kind[sos1]
   '''
-                         used_ids  name subscripts description  feasible.0  active_variable.0  feasible.1 active_variable.1                   activeness
-  sos1_constraint_id                                                                                                                                    
-  Sos1ConstraintID(40)  {0, 1, 2}  <NA>         []        <NA>        True                  1       False              <NA>  ConstraintActiveness.ACTIVE
+                         used_ids  name subscripts description  feasible.0  selected_variable.0  feasible.1 selected_variable.1                   activeness
+  sos1_constraint_id                                                                                                                                        
+  Sos1ConstraintID(40)  {0, 1, 2}  <NA>         []        <NA>        True                    1       False                <NA>  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_solution_constraints_df_inactive_reason_include
@@ -172,9 +172,9 @@
 # ---
 # name: test_solution_constraints_df_kind[one_hot]
   '''
-                          feasible  active_variable   used_ids  name subscripts description  violation                   activeness
-  one_hot_constraint_id                                                                                                            
-  OneHotConstraintID(30)      True                1  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintActiveness.ACTIVE
+                          feasible  selected_variable   used_ids  name subscripts description  violation                   activeness
+  one_hot_constraint_id                                                                                                              
+  OneHotConstraintID(30)      True                  1  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintActiveness.ACTIVE
   '''
 # ---
 # name: test_solution_constraints_df_kind[regular]
@@ -186,8 +186,8 @@
 # ---
 # name: test_solution_constraints_df_kind[sos1]
   '''
-                        feasible  active_variable   used_ids  name subscripts description  violation                   activeness
-  sos1_constraint_id                                                                                                             
-  Sos1ConstraintID(40)      True                1  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintActiveness.ACTIVE
+                        feasible  selected_variable   used_ids  name subscripts description  violation                   activeness
+  sos1_constraint_id                                                                                                               
+  Sos1ConstraintID(40)      True                  1  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintActiveness.ACTIVE
   '''
 # ---

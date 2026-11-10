@@ -490,8 +490,8 @@ mod tests {
                 actual_constraint.is_feasible(actual.feasibility_atol())
             );
             prop_assert_eq!(
-                expected_constraint.stage.active_variable,
-                actual_constraint.stage.active_variable
+                expected_constraint.stage.selected_variable,
+                actual_constraint.stage.selected_variable
             );
         }
 
@@ -509,8 +509,8 @@ mod tests {
                 actual_constraint.is_feasible(actual.feasibility_atol())
             );
             prop_assert_eq!(
-                expected_constraint.stage.active_variable,
-                actual_constraint.stage.active_variable
+                expected_constraint.stage.selected_variable,
+                actual_constraint.stage.selected_variable
             );
         }
 

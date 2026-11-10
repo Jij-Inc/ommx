@@ -355,7 +355,7 @@ impl Parse for v2::SampleSet {
                         "sampled_one_hot_constraints",
                     )?;
                     validate_sample_map_ids(
-                        &row.active_variable,
+                        &row.selected_variable,
                         &objective_sample_ids,
                         message,
                         "sampled_one_hot_constraints",
@@ -389,7 +389,7 @@ impl Parse for v2::SampleSet {
                         "sampled_sos1_constraints",
                     )?;
                     validate_sample_map_ids(
-                        &row.active_variable,
+                        &row.selected_variable,
                         &objective_sample_ids,
                         message,
                         "sampled_sos1_constraints",
@@ -717,7 +717,7 @@ mod tests {
                         .entries[0]
                         .ids = vec![99];
                 } else {
-                    let (feasible, active) = if one_hot {
+                    let (feasible, selections) = if one_hot {
                         let row = wire
                             .sampled_one_hot_constraints
                             .as_mut()
@@ -725,7 +725,7 @@ mod tests {
                             .entries
                             .get_mut(&1)
                             .unwrap();
-                        (&mut row.feasible, &mut row.active_variable)
+                        (&mut row.feasible, &mut row.selected_variable)
                     } else {
                         let row = wire
                             .sampled_sos1_constraints
@@ -734,15 +734,15 @@ mod tests {
                             .entries
                             .get_mut(&1)
                             .unwrap();
-                        (&mut row.feasible, &mut row.active_variable)
+                        (&mut row.feasible, &mut row.selected_variable)
                     };
                     if change == 0 {
                         let flag = feasible.remove(&0).unwrap();
                         feasible.insert(99, flag);
-                        let selected = active.remove(&0).unwrap();
-                        active.insert(99, selected);
+                        let selected = selections.remove(&0).unwrap();
+                        selections.insert(99, selected);
                     } else {
-                        active.clear();
+                        selections.clear();
                     }
                 }
                 let error = SampleSet::try_from(wire).unwrap_err();
@@ -850,7 +850,7 @@ mod tests {
             stage: OneHotSampledData {
                 activation_atol: crate::ATol::default(),
                 violations: crate::Sampled::from((sample_id, 0.0)),
-                active_variable: BTreeMap::from([(sample_id, Some(variable_id))]),
+                selected_variable: BTreeMap::from([(sample_id, Some(variable_id))]),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
@@ -884,7 +884,7 @@ mod tests {
             stage: Sos1SampledData {
                 activation_atol: crate::ATol::default(),
                 violations: crate::Sampled::from((sample_id, 0.0)),
-                active_variable: BTreeMap::from([(sample_id, None)]),
+                selected_variable: BTreeMap::from([(sample_id, None)]),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
@@ -1031,7 +1031,7 @@ mod tests {
                         stage: OneHotSampledData {
                             activation_atol: crate::ATol::default(),
                             violations: crate::Sampled::from((crate::SampleID::from(0), 0.0)),
-                            active_variable: BTreeMap::from([(
+                            selected_variable: BTreeMap::from([(
                                 crate::SampleID::from(0),
                                 Some(structural_id),
                             )]),
@@ -1082,7 +1082,7 @@ mod tests {
             stage: Sos1SampledData {
                 activation_atol: crate::ATol::default(),
                 violations: crate::Sampled::from((crate::SampleID::from(0), 0.0)),
-                active_variable: BTreeMap::from([(crate::SampleID::from(0), None)]),
+                selected_variable: BTreeMap::from([(crate::SampleID::from(0), None)]),
                 used_decision_variable_ids: [crate::VariableID::from(1)].into_iter().collect(),
             },
         };
@@ -1264,9 +1264,9 @@ mod tests {
             .get_mut(&1)
             .unwrap();
         row.variables = vec![2];
-        row.active_variable.insert(
+        row.selected_variable.insert(
             0,
-            v2::SampledActiveVariable {
+            v2::SampledSelectedVariable {
                 variable_id: Some(2),
             },
         );
@@ -1999,7 +1999,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v2_sample_set_parse_rejects_one_hot_active_variable_mismatching_values() {
+    fn test_v2_sample_set_parse_rejects_one_hot_selected_variable_mismatching_values() {
         use crate::{
             one_hot_constraint::{OneHotSampledData, SampledOneHotConstraint},
             DecisionVariable, OneHotConstraintID, SampleID, Sampled, SampledDecisionVariable,
@@ -2021,7 +2021,7 @@ mod tests {
             stage: OneHotSampledData {
                 activation_atol: crate::ATol::default(),
                 violations: crate::Sampled::from((sample_id, 0.0)),
-                active_variable: BTreeMap::from([(sample_id, Some(var_id))]),
+                selected_variable: BTreeMap::from([(sample_id, Some(var_id))]),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -2059,9 +2059,9 @@ mod tests {
             .entries
             .get_mut(&1)
             .unwrap();
-        row.active_variable.insert(
+        row.selected_variable.insert(
             sample_id.into_inner(),
-            crate::v2::SampledActiveVariable {
+            crate::v2::SampledSelectedVariable {
                 variable_id: Some(2),
             },
         );
@@ -2069,7 +2069,7 @@ mod tests {
         let err = SampleSet::try_from(proto).unwrap_err();
         assert!(
             err.to_string()
-                .contains("active_variable=Some(VariableID(2))")
+                .contains("selected_variable=Some(VariableID(2))")
                 && err
                     .to_string()
                     .contains("does not match decision-variable values"),

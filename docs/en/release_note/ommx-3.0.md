@@ -18,6 +18,8 @@ The v1 schema is unchanged and v1 export rejects a true skip flag; use v2 to pre
 
 Indicator result properties and DataFrame columns now use `indicator_on` for the indicator's ON/OFF state at the evaluated candidate, independently of constraint activeness.
 
+OneHot/SOS1 result properties rename `active_variable` to `selected_variable`, including per-sample mappings. DataFrame columns use `selected_variable` and `selected_variable.<sample_id>`. This reports selection at a candidate, independently of variable or constraint membership in the Active Formulation. Evaluation behavior is unchanged.
+
 The Active Formulation also names its variables explicitly: use `active_decision_variables` and `DecisionVariableRole.Active`. The `state_role` value is `"active"`. Adapters consume active variables and active constraints; row-level `used_ids` retain their reference meaning.
 
 ### 🛠 ⚠ Report infeasible constant constraints through the solver ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))

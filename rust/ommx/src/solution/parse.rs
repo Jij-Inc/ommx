@@ -604,7 +604,7 @@ mod tests {
             stage: crate::one_hot_constraint::OneHotEvaluatedData {
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
-                active_variable: Some(variable_id),
+                selected_variable: Some(variable_id),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
@@ -636,7 +636,7 @@ mod tests {
             stage: crate::sos1_constraint::Sos1EvaluatedData {
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
-                active_variable: None,
+                selected_variable: None,
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
@@ -867,7 +867,7 @@ mod tests {
             .get_mut(&1)
             .unwrap();
         row.variables = vec![2];
-        row.active_variable = Some(2);
+        row.selected_variable = Some(2);
 
         let error = Solution::try_from(proto).unwrap_err();
 
@@ -1831,7 +1831,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v2_solution_parse_rejects_one_hot_active_variable_mismatching_values() {
+    fn test_v2_solution_parse_rejects_one_hot_selected_variable_mismatching_values() {
         use crate::{
             one_hot_constraint::{EvaluatedOneHotConstraint, OneHotEvaluatedData},
             DecisionVariable, EvaluatedDecisionVariable, OneHotConstraintID, Sense, VariableID,
@@ -1846,7 +1846,7 @@ mod tests {
             stage: OneHotEvaluatedData {
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
-                active_variable: Some(var_id),
+                selected_variable: Some(var_id),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1884,12 +1884,12 @@ mod tests {
             .entries
             .get_mut(&1)
             .unwrap();
-        row.active_variable = Some(2);
+        row.selected_variable = Some(2);
 
         let err = Solution::try_from(proto).unwrap_err();
         assert!(
             err.to_string()
-                .contains("active_variable=Some(VariableID(2))")
+                .contains("selected_variable=Some(VariableID(2))")
                 && err
                     .to_string()
                     .contains("does not match decision-variable values"),
@@ -1898,7 +1898,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v2_solution_parse_rejects_feasible_one_hot_without_active_variable() {
+    fn test_v2_solution_parse_rejects_feasible_one_hot_without_selected_variable() {
         use crate::{
             one_hot_constraint::{EvaluatedOneHotConstraint, OneHotEvaluatedData},
             DecisionVariable, EvaluatedDecisionVariable, OneHotConstraintID, Sense, VariableID,
@@ -1913,7 +1913,7 @@ mod tests {
             stage: OneHotEvaluatedData {
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
-                active_variable: Some(var_id),
+                selected_variable: Some(var_id),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1941,12 +1941,12 @@ mod tests {
             .get_mut(&1)
             .unwrap();
         row.feasible = true;
-        row.active_variable = None;
+        row.selected_variable = None;
 
         let err = Solution::try_from(proto).unwrap_err();
         assert!(
             err.to_string()
-                .contains("feasible must be true exactly when active_variable is set"),
+                .contains("feasible must be true exactly when selected_variable is set"),
             "unexpected error: {err}"
         );
     }

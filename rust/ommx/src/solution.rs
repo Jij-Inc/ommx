@@ -124,10 +124,10 @@ pub enum SolutionError {
 /// - Evaluated special-constraint structural variables are defined in
 ///   [`Self::decision_variables`]. Indicator variables and one-hot variables
 ///   must be binary; one-hot and SOS1 variable sets must be non-empty, and
-///   `active_variable` values must belong to their structural variable set.
+///   `selected_variable` values must belong to their structural variable set.
 /// - Evaluated special-constraint stage fields are consistent with
 ///   [`Self::decision_variables`]: `indicator_on` reflects the indicator
-///   variable value, and one-hot/SOS1 `active_variable` plus scalar violation reflect
+///   variable value, and one-hot/SOS1 `selected_variable` plus scalar violation reflect
 ///   the structural variable values under `feasibility_atol`.
 /// - `feasibility_atol` is the absolute tolerance used to interpret
 ///   decision-variable feasibility and to validate serialized per-constraint
@@ -405,7 +405,7 @@ impl Solution {
     ///
     /// Uses the same selected constraint set as [`Self::feasible_constraints`]:
     /// - Equality: `|f(x)|`; inequality: `max(0, f(x))`.
-    /// - Indicator: the inner constraint's violation when active, otherwise zero.
+    /// - Indicator: the inner constraint's violation when `indicator_on`, otherwise zero.
     /// - One-hot: `min_i (|x_i - 1| + Σ_{j != i} |x_j|)`.
     /// - SOS1: `min_i Σ_{j != i} |x_j|`.
     ///
@@ -898,13 +898,13 @@ fn validate_solution_one_hot_constraint_structure(
         }
         if constraint
             .stage
-            .active_variable
+            .selected_variable
             .is_some_and(|variable_id| !constraint.variables.contains(&variable_id))
         {
             return Err(SolutionError::InvalidConstraintStructure {
                 constraint_family: "one-hot",
                 constraint_id: format!("{id:?}"),
-                message: "active_variable must be a member of variables".to_string(),
+                message: "selected_variable must be a member of variables".to_string(),
             });
         }
     }
@@ -929,13 +929,13 @@ fn validate_solution_sos1_constraint_structure(
         }
         if constraint
             .stage
-            .active_variable
+            .selected_variable
             .is_some_and(|variable_id| !constraint.variables.contains(&variable_id))
         {
             return Err(SolutionError::InvalidConstraintStructure {
                 constraint_family: "SOS1",
                 constraint_id: format!("{id:?}"),
-                message: "active_variable must be a member of variables".to_string(),
+                message: "selected_variable must be a member of variables".to_string(),
             });
         }
     }
@@ -1014,7 +1014,7 @@ fn validate_solution_one_hot_stage_values(
 ) -> Result<(), SolutionError> {
     for (id, constraint) in one_hot_constraints.inner() {
         let provided_violation = constraint.violation();
-        let (computed_violation, computed_active_variable) = constraint
+        let (computed_violation, computed_selected_variable) = constraint
             .evaluate_members(
                 |variable_id| {
                     decision_variables
@@ -1034,11 +1034,11 @@ fn validate_solution_one_hot_stage_values(
                 message: format!("violation={provided_violation} does not match decision-variable values; computed={computed_violation}"),
             });
         }
-        let provided_active_variable = constraint.stage.active_variable;
-        if provided_active_variable != computed_active_variable {
+        let provided_selected_variable = constraint.stage.selected_variable;
+        if provided_selected_variable != computed_selected_variable {
             return Err(SolutionError::InvalidConstraintStructure {
                 constraint_family: "one-hot", constraint_id: format!("{id:?}"),
-                message: format!("active_variable={provided_active_variable:?} does not match decision-variable values; computed={computed_active_variable:?}"),
+                message: format!("selected_variable={provided_selected_variable:?} does not match decision-variable values; computed={computed_selected_variable:?}"),
             });
         }
     }
@@ -1052,7 +1052,7 @@ fn validate_solution_sos1_stage_values(
 ) -> Result<(), SolutionError> {
     for (id, constraint) in sos1_constraints.inner() {
         let provided_violation = constraint.violation();
-        let (computed_violation, computed_active_variable) = constraint
+        let (computed_violation, computed_selected_variable) = constraint
             .evaluate_members(
                 |variable_id| {
                     decision_variables
@@ -1072,11 +1072,11 @@ fn validate_solution_sos1_stage_values(
                 message: format!("violation={provided_violation} does not match decision-variable values; computed={computed_violation}"),
             });
         }
-        let provided_active_variable = constraint.stage.active_variable;
-        if provided_active_variable != computed_active_variable {
+        let provided_selected_variable = constraint.stage.selected_variable;
+        if provided_selected_variable != computed_selected_variable {
             return Err(SolutionError::InvalidConstraintStructure {
                 constraint_family: "SOS1", constraint_id: format!("{id:?}"),
-                message: format!("active_variable={provided_active_variable:?} does not match decision-variable values; computed={computed_active_variable:?}"),
+                message: format!("selected_variable={provided_selected_variable:?} does not match decision-variable values; computed={computed_selected_variable:?}"),
             });
         }
     }
@@ -2055,7 +2055,7 @@ mod tests {
             stage: crate::one_hot_constraint::OneHotEvaluatedData {
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
-                active_variable: None,
+                selected_variable: None,
                 used_decision_variable_ids: BTreeSet::new(),
             },
         };
@@ -2261,7 +2261,7 @@ mod tests {
             stage: crate::one_hot_constraint::OneHotEvaluatedData {
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
-                active_variable: Some(structural_id),
+                selected_variable: Some(structural_id),
                 used_decision_variable_ids: BTreeSet::from([missing_id]),
             },
         };
@@ -2292,7 +2292,7 @@ mod tests {
             stage: crate::sos1_constraint::Sos1EvaluatedData {
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
-                active_variable: Some(structural_id),
+                selected_variable: Some(structural_id),
                 used_decision_variable_ids: BTreeSet::from([missing_id]),
             },
         };

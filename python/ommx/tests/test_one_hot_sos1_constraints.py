@@ -449,7 +449,7 @@ def test_evaluate_with_sos1_infeasible():
 
 @pytest.fixture
 def _solution_one_hot_feasible():
-    """One-hot constraint with a feasible solution (active_variable=2)."""
+    """One-hot constraint with a feasible solution (selected_variable=2)."""
     x = [DecisionVariable.binary(i) for i in range(1, 4)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -463,7 +463,7 @@ def _solution_one_hot_feasible():
 
 @pytest.fixture
 def _solution_one_hot_infeasible():
-    """One-hot constraint with an infeasible solution (active_variable=NA)."""
+    """One-hot constraint with an infeasible solution (selected_variable=NA)."""
     x = [DecisionVariable.binary(i) for i in range(1, 4)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -477,7 +477,11 @@ def _solution_one_hot_infeasible():
 
 def test_solution_one_hot_constraints_df_feasible(snapshot, _solution_one_hot_feasible):
     """`Solution.constraints_df(kind=ConstraintKind.OneHot)` for feasible: feasible=True,
-    active_variable=2."""
+    selected_variable=2."""
+    assert (
+        _solution_one_hot_feasible.constraints[OneHotConstraintID(10)].selected_variable
+        == 2
+    )
     assert (
         _df_snap(_solution_one_hot_feasible.constraints_df(kind=ConstraintKind.OneHot))
         == snapshot
@@ -488,7 +492,13 @@ def test_solution_one_hot_constraints_df_infeasible(
     snapshot, _solution_one_hot_infeasible
 ):
     """`Solution.constraints_df(kind=ConstraintKind.OneHot)` for infeasible: feasible=False,
-    active_variable=NA."""
+    selected_variable=NA."""
+    assert (
+        _solution_one_hot_infeasible.constraints[
+            OneHotConstraintID(10)
+        ].selected_variable
+        is None
+    )
     assert (
         _df_snap(
             _solution_one_hot_infeasible.constraints_df(kind=ConstraintKind.OneHot)
@@ -498,8 +508,8 @@ def test_solution_one_hot_constraints_df_infeasible(
 
 
 @pytest.fixture
-def _solution_sos1_one_active():
-    """SOS1 with exactly one nonzero variable → feasible, active_variable=2."""
+def _solution_sos1_one_nonzero():
+    """SOS1 with exactly one nonzero variable → feasible, selected_variable=2."""
     x = [DecisionVariable.continuous(i, lower=0, upper=10) for i in range(1, 4)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -513,7 +523,7 @@ def _solution_sos1_one_active():
 
 @pytest.fixture
 def _solution_sos1_all_zero():
-    """SOS1 with all zero → feasible (≤1 nonzero), active_variable=NA."""
+    """SOS1 with all zero → feasible (≤1 nonzero), selected_variable=NA."""
     x = [DecisionVariable.continuous(i, lower=0, upper=10) for i in range(1, 4)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -525,18 +535,26 @@ def _solution_sos1_all_zero():
     return instance.evaluate({1: 0.0, 2: 0.0, 3: 0.0})
 
 
-def test_solution_sos1_constraints_df_one_active(snapshot, _solution_sos1_one_active):
+def test_solution_sos1_constraints_df_one_nonzero(snapshot, _solution_sos1_one_nonzero):
     """`Solution.constraints_df(kind=ConstraintKind.Sos1)` with one nonzero: feasible=True,
-    active_variable=2."""
+    selected_variable=2."""
     assert (
-        _df_snap(_solution_sos1_one_active.constraints_df(kind=ConstraintKind.Sos1))
+        _solution_sos1_one_nonzero.constraints[Sos1ConstraintID(20)].selected_variable
+        == 2
+    )
+    assert (
+        _df_snap(_solution_sos1_one_nonzero.constraints_df(kind=ConstraintKind.Sos1))
         == snapshot
     )
 
 
 def test_solution_sos1_constraints_df_all_zero(snapshot, _solution_sos1_all_zero):
     """`Solution.constraints_df(kind=ConstraintKind.Sos1)` with all-zero: feasible=True,
-    active_variable=NA."""
+    selected_variable=NA."""
+    assert (
+        _solution_sos1_all_zero.constraints[Sos1ConstraintID(20)].selected_variable
+        is None
+    )
     assert (
         _df_snap(_solution_sos1_all_zero.constraints_df(kind=ConstraintKind.Sos1))
         == snapshot
@@ -592,7 +610,7 @@ def test_solution_sos1_inactive_reasons_df_after_conversion(snapshot):
 
 @pytest.fixture
 def _sample_set_one_hot():
-    """SampleSet with two samples: 0 feasible (active=1), 1 infeasible."""
+    """SampleSet with two samples: 0 feasible (selected=1), 1 infeasible."""
     x = [DecisionVariable.binary(i) for i in range(1, 4)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -613,7 +631,13 @@ def test_sample_set_one_hot_constraints_df_dynamic_columns(
     snapshot, _sample_set_one_hot
 ):
     """`SampleSet.constraints_df(kind=ConstraintKind.OneHot)` static columns + per-sample
-    `feasible.{sample_id}` / `active_variable.{sample_id}` columns."""
+    `feasible.{sample_id}` / `selected_variable.{sample_id}` columns."""
+    assert _sample_set_one_hot.constraints[
+        OneHotConstraintID(10)
+    ].selected_variable == {
+        0: 1,
+        1: None,
+    }
     assert (
         _df_snap(_sample_set_one_hot.constraints_df(kind=ConstraintKind.OneHot))
         == snapshot
@@ -622,7 +646,7 @@ def test_sample_set_one_hot_constraints_df_dynamic_columns(
 
 @pytest.fixture
 def _sample_set_sos1():
-    """SampleSet with three samples: 0 active=2, 1 all-zero (feasible, NA), 2 infeasible."""
+    """SampleSet with three samples: 0 selected=2, 1 all-zero (feasible, NA), 2 infeasible."""
     x = [DecisionVariable.continuous(i, lower=0, upper=10) for i in range(1, 4)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -642,7 +666,12 @@ def _sample_set_sos1():
 
 def test_sample_set_sos1_constraints_df_dynamic_columns(snapshot, _sample_set_sos1):
     """`SampleSet.constraints_df(kind=ConstraintKind.Sos1)` per-sample feasibility +
-    active_variable columns."""
+    selected_variable columns."""
+    assert _sample_set_sos1.constraints[Sos1ConstraintID(20)].selected_variable == {
+        0: 2,
+        1: None,
+        2: None,
+    }
     assert (
         _df_snap(_sample_set_sos1.constraints_df(kind=ConstraintKind.Sos1)) == snapshot
     )

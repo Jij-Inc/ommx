@@ -959,9 +959,9 @@ impl<'m> ToPandasEntry
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         dict.set_item("feasible", c.is_feasible(atol))?;
-        match c.stage.active_variable {
-            Some(v) => dict.set_item("active_variable", v.into_inner())?,
-            None => dict.set_item("active_variable", &na)?,
+        match c.stage.selected_variable {
+            Some(v) => dict.set_item("selected_variable", v.into_inner())?,
+            None => dict.set_item("selected_variable", &na)?,
         }
         set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
         set_label_columns(
@@ -1006,10 +1006,10 @@ impl<'a, 'm> ToPandasEntry
         for &sample_id in self.item.sample_ids {
             let feas = c.is_feasible_for(sample_id, *atol);
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
-            let active_col = format!("active_variable.{}", sample_id.into_inner());
-            match c.stage.active_variable.get(&sample_id) {
-                Some(Some(v)) => dict.set_item(active_col, v.into_inner())?,
-                _ => dict.set_item(active_col, &na)?,
+            let selected_col = format!("selected_variable.{}", sample_id.into_inner());
+            match c.stage.selected_variable.get(&sample_id) {
+                Some(Some(v)) => dict.set_item(selected_col, v.into_inner())?,
+                _ => dict.set_item(selected_col, &na)?,
             }
         }
         Ok(dict)
@@ -1034,9 +1034,9 @@ impl<'m> ToPandasEntry
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         dict.set_item("feasible", c.is_feasible(atol))?;
-        match c.stage.active_variable {
-            Some(v) => dict.set_item("active_variable", v.into_inner())?,
-            None => dict.set_item("active_variable", &na)?,
+        match c.stage.selected_variable {
+            Some(v) => dict.set_item("selected_variable", v.into_inner())?,
+            None => dict.set_item("selected_variable", &na)?,
         }
         set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
         set_label_columns(
@@ -1081,10 +1081,10 @@ impl<'a, 'm> ToPandasEntry
         for &sample_id in self.item.sample_ids {
             let feas = c.is_feasible_for(sample_id, *atol);
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
-            let active_col = format!("active_variable.{}", sample_id.into_inner());
-            match c.stage.active_variable.get(&sample_id) {
-                Some(Some(v)) => dict.set_item(active_col, v.into_inner())?,
-                _ => dict.set_item(active_col, &na)?,
+            let selected_col = format!("selected_variable.{}", sample_id.into_inner());
+            match c.stage.selected_variable.get(&sample_id) {
+                Some(Some(v)) => dict.set_item(selected_col, v.into_inner())?,
+                _ => dict.set_item(selected_col, &na)?,
             }
         }
         Ok(dict)

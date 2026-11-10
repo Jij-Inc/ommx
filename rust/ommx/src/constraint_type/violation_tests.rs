@@ -82,8 +82,8 @@ fn small_member_errors_accumulate_without_input_canonicalization() {
         assert_eq!(sos1_result.violation(), 1.5 * tolerance);
         assert!(!one_hot_result.is_feasible(atol));
         assert!(!sos1_result.is_feasible(atol));
-        assert_eq!(one_hot_result.stage.active_variable, None);
-        assert_eq!(sos1_result.stage.active_variable, None);
+        assert_eq!(one_hot_result.stage.selected_variable, None);
+        assert_eq!(sos1_result.stage.selected_variable, None);
         assert_contract::<OneHotConstraint>(&one_hot, &state, atol);
         assert_contract::<Sos1Constraint>(&sos1, &state, atol);
     }

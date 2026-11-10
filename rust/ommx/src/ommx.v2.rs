@@ -281,8 +281,10 @@ pub struct EvaluatedOneHotConstraint {
     pub variables: ::prost::alloc::vec::Vec<u64>,
     #[prost(bool, tag = "2")]
     pub feasible: bool,
+    /// Member selected at the evaluation tolerance; unset when infeasible.
+    /// This diagnostic is independent of Active Formulation membership.
     #[prost(uint64, optional, tag = "3")]
-    pub active_variable: ::core::option::Option<u64>,
+    pub selected_variable: ::core::option::Option<u64>,
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
 }
@@ -295,8 +297,11 @@ pub struct EvaluatedSos1Constraint {
     pub variables: ::prost::alloc::vec::Vec<u64>,
     #[prost(bool, tag = "2")]
     pub feasible: bool,
+    /// Member selected at the evaluation tolerance; unset when infeasible or all
+    /// members are approximately zero.
+    /// This diagnostic is independent of Active Formulation membership.
     #[prost(uint64, optional, tag = "3")]
-    pub active_variable: ::core::option::Option<u64>,
+    pub selected_variable: ::core::option::Option<u64>,
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
 }
@@ -348,11 +353,11 @@ pub struct EvaluatedSos1ConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
-/// Map value used when a present sample can have no active variable.
+/// Map value used when a present sample can have no selected variable.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SampledActiveVariable {
+pub struct SampledSelectedVariable {
     #[prost(uint64, optional, tag = "1")]
     pub variable_id: ::core::option::Option<u64>,
 }
@@ -401,7 +406,7 @@ pub struct SampledOneHotConstraint {
     #[prost(btree_map = "uint64, bool", tag = "2")]
     pub feasible: ::prost::alloc::collections::BTreeMap<u64, bool>,
     #[prost(btree_map = "uint64, message", tag = "3")]
-    pub active_variable: ::prost::alloc::collections::BTreeMap<u64, SampledActiveVariable>,
+    pub selected_variable: ::prost::alloc::collections::BTreeMap<u64, SampledSelectedVariable>,
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
 }
@@ -415,7 +420,7 @@ pub struct SampledSos1Constraint {
     #[prost(btree_map = "uint64, bool", tag = "2")]
     pub feasible: ::prost::alloc::collections::BTreeMap<u64, bool>,
     #[prost(btree_map = "uint64, message", tag = "3")]
-    pub active_variable: ::prost::alloc::collections::BTreeMap<u64, SampledActiveVariable>,
+    pub selected_variable: ::prost::alloc::collections::BTreeMap<u64, SampledSelectedVariable>,
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
 }

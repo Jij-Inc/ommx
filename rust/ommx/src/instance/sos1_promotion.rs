@@ -2378,7 +2378,7 @@ mod tests {
             .get(&promotion)
             .unwrap();
         assert!(evaluated.is_feasible(atol));
-        assert_eq!(evaluated.stage.active_variable, None);
+        assert_eq!(evaluated.stage.selected_variable, None);
 
         let on_boundary = instance
             .evaluate(&crate::v1::State::from_iter([(1, 1.0e-6)]), atol)
@@ -2392,7 +2392,7 @@ mod tests {
             .get(&promotion)
             .unwrap();
         assert!(evaluated.is_feasible(atol));
-        assert_eq!(evaluated.stage.active_variable, None);
+        assert_eq!(evaluated.stage.selected_variable, None);
         assert!(on_boundary
             .evaluated_constraints()
             .get(&upper_row_id())
@@ -2416,7 +2416,7 @@ mod tests {
         );
         let sampled = &sample_set.sos1_constraints()[&promotion];
         assert!(sampled.is_feasible_for(sample_id, atol).unwrap());
-        assert_eq!(sampled.stage.active_variable[&sample_id], None);
+        assert_eq!(sampled.stage.selected_variable[&sample_id], None);
         assert_eq!(
             sample_set.is_sample_feasible(sample_id, Default::default()),
             Some(true)
@@ -2436,7 +2436,7 @@ mod tests {
                 .get(&promotion)
                 .unwrap()
                 .stage
-                .active_variable,
+                .selected_variable,
             None
         );
         assert!(negative_boundary

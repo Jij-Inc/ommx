@@ -100,6 +100,12 @@ Indicator stage data use `indicator_on` to record whether the indicator variable
 is one within the evaluation tolerance. This candidate-dependent diagnostic is
 independent of the constraint's activeness.
 
+OneHot/SOS1 evaluated and sampled stage fields rename `active_variable` to
+`selected_variable`. This candidate-dependent selection diagnostic is independent
+of variable or constraint membership in the Active Formulation. The v2 fields
+use the same name, and `SampledActiveVariable` becomes `SampledSelectedVariable`.
+Protobuf field numbers and evaluation behavior are unchanged.
+
 The query minimum includes every state at or above its value:
 
 | Minimum | Included constraints |
@@ -191,7 +197,7 @@ stage data also store `violation`/`violations` in the SDK.
 
 A retained tolerance-dependent decision must retain its conditions. Indicator,
 OneHot, and SOS1 stage data therefore retain `activation_atol` alongside
-`indicator_on` / `active_variable`. Feasibility queries do not change these
+`indicator_on` / `selected_variable`. Feasibility queries do not change these
 decisions or repeat input canonicalization. Solution/SampleSet retain their
 shared `feasibility_atol`, exposed by an accessor, and pass it to constraint
 queries. The current wire format requires retained activation conditions to

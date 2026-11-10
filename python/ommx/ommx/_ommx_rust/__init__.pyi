@@ -3074,7 +3074,7 @@ class EvaluatedOneHotConstraint(ConstraintView):
         Member decision variable IDs.
         """
     @property
-    def active_variable(self) -> typing.Optional[builtins.int]:
+    def selected_variable(self) -> typing.Optional[builtins.int]:
         r"""
         Retained selected-variable diagnostic, using activation_atol.
         """
@@ -3146,7 +3146,7 @@ class EvaluatedSos1Constraint(ConstraintView):
         Member decision variable IDs.
         """
     @property
-    def active_variable(self) -> typing.Optional[builtins.int]:
+    def selected_variable(self) -> typing.Optional[builtins.int]:
         r"""
         Retained selected-variable diagnostic, using activation_atol.
         """
@@ -6150,7 +6150,7 @@ class Instance:
         - `sense`: Optimization sense (minimize or maximize)
         - `objective`: Objective function
         - `decision_variables`: List of decision variables
-        - `constraints`: Mapping from regular constraint IDs to constraints
+        - `active_constraints`: Mapping from regular constraint IDs to active constraints
         - `named_functions`: Optional list of named functions
         - `description`: Optional instance description
 
@@ -10318,13 +10318,16 @@ class OneHotConstraint:
     Unlike {class}`~ommx.Sos1Constraint`, this condition does not allow selecting
     no member. Numerical evaluation and reported violations use the contracts of
     {meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Solution.constraints_df`.
+    Evaluated and sampled result rows expose `selected_variable` as a
+    candidate-dependent diagnostic, independently of variable or constraint
+    membership in the Active Formulation.
 
     **Identity and lowering**
 
     {meth}`~ommx.Instance.add_one_hot_constraint` returns an attached handle. The
     constructor creates an independent value; context changes on it do not edit a
     constraint already inserted into a host. For explicit IDs, use the
-    `one_hot_constraints` mapping of {meth}`~ommx.Instance.from_components`.
+    `active_one_hot_constraints` mapping of {meth}`~ommx.Instance.from_components`.
     Constraint numbers share the active/inactive cross-family space described by
     {class}`~ommx.Instance`.
 
@@ -13494,7 +13497,7 @@ class SampledOneHotConstraint(ConstraintView):
         Member decision variable IDs.
         """
     @property
-    def active_variable(
+    def selected_variable(
         self,
     ) -> builtins.dict[builtins.int, typing.Optional[builtins.int]]:
         r"""
@@ -13571,7 +13574,7 @@ class SampledSos1Constraint(ConstraintView):
         Member decision variable IDs.
         """
     @property
-    def active_variable(
+    def selected_variable(
         self,
     ) -> builtins.dict[builtins.int, typing.Optional[builtins.int]]:
         r"""
@@ -14842,10 +14845,13 @@ class Sos1Constraint:
     ```
 
     See {meth}`~ommx.Instance.evaluate` for numerical evaluation and
-    {meth}`~ommx.Solution.constraints_df` for violation and activation diagnostics.
+    {meth}`~ommx.Solution.constraints_df` for violation and selection diagnostics.
+    Evaluated and sampled result rows expose `selected_variable` as a
+    candidate-dependent diagnostic, independently of variable or constraint
+    membership in the Active Formulation.
     The constructor creates an independent value;
     {meth}`~ommx.Instance.add_sos1_constraint` returns an attached handle.
-    For explicit IDs, use the `sos1_constraints` mapping of
+    For explicit IDs, use the `active_sos1_constraints` mapping of
     {meth}`~ommx.Instance.from_components`. Constraint numbers follow the same
     cross-family uniqueness rule as regular constraints, including inactive rows.
 

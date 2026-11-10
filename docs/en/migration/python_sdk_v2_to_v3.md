@@ -172,6 +172,8 @@ Each row has exactly one `ConstraintActiveness` state: `ACTIVE`, `INACTIVE_CHECK
 
 Indicator result properties and DataFrame columns use `indicator_on` to report whether the indicator variable is one within the evaluation tolerance. This describes the evaluated candidate, independently of the constraint's activeness.
 
+OneHot and SOS1 result properties rename `active_variable` to `selected_variable`, including per-sample mappings. DataFrame columns become `selected_variable` and `selected_variable.<sample_id>`. This diagnostic describes selection at the evaluated candidate, independently of variable or constraint membership in the Active Formulation. Evaluation behavior is unchanged.
+
 The query selector is an ordered minimum, so it can include more than one state:
 
 | `min_activeness` | Included constraints |

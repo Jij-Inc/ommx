@@ -177,8 +177,8 @@ pub fn sample_bool_map_from_v2(map: BTreeMap<u64, bool>) -> BTreeMap<SampleID, b
         .collect()
 }
 
-pub fn sampled_active_variable_map_from_v2(
-    map: BTreeMap<u64, crate::v2::SampledActiveVariable>,
+pub fn sampled_selected_variable_map_from_v2(
+    map: BTreeMap<u64, crate::v2::SampledSelectedVariable>,
 ) -> BTreeMap<SampleID, Option<VariableID>> {
     map.into_iter()
         .map(|(sample_id, value)| {

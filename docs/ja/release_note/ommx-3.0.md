@@ -18,6 +18,8 @@ v1のschemaは拡張せず、skipがtrueのデータのv1出力は失敗しま�
 
 Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` に揃えます。評価した候補点でのIndicatorのON/OFFを表し、制約のactivenessとは独立です。
 
+OneHot/SOS1の評価結果のpropertyは、サンプルごとの対応を返すものも含めて `active_variable` から `selected_variable` に変更します。DataFrame列も `selected_variable` と `selected_variable.<sample_id>` になります。候補点での選択を表す情報であり、変数や制約がActive Formulationに属するかどうかとは独立です。評価の動作は変わりません。
+
 Active Formulationの変数も明示的に `active_decision_variables` と `DecisionVariableRole.Active` で表します。`state_role` の値は `"active"` です。Adapterはactiveな変数と制約を使い、行ごとの `used_ids` は参照関係を表す名前として維持します。
 
 ### 🛠 ⚠ 実行不能な定数制約をソルバーの判定結果として扱う ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))

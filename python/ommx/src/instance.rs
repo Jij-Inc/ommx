@@ -442,7 +442,7 @@ impl Instance {
     /// - `sense`: Optimization sense (minimize or maximize)
     /// - `objective`: Objective function
     /// - `decision_variables`: List of decision variables
-    /// - `constraints`: Mapping from regular constraint IDs to constraints
+    /// - `active_constraints`: Mapping from regular constraint IDs to active constraints
     /// - `named_functions`: Optional list of named functions
     /// - `description`: Optional instance description
     ///

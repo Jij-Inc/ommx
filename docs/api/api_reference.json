@@ -10867,23 +10867,6 @@
               "is_readonly": true
             },
             {
-              "name": "active_variable",
-              "doc": "Retained selected-variable diagnostic, using activation_atol.",
-              "type_": {
-                "display": "Optional[int]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "activeness",
               "doc": "",
               "type_": {
@@ -11003,6 +10986,23 @@
                 "children": [
                   {
                     "display": "Provenance",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "selected_variable",
+              "doc": "Retained selected-variable diagnostic, using activation_atol.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
                     "link_target": null,
                     "children": []
                   }
@@ -11164,23 +11164,6 @@
               "is_readonly": true
             },
             {
-              "name": "active_variable",
-              "doc": "Retained selected-variable diagnostic, using activation_atol.",
-              "type_": {
-                "display": "Optional[int]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "activeness",
               "doc": "",
               "type_": {
@@ -11300,6 +11283,23 @@
                 "children": [
                   {
                     "display": "Provenance",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "selected_variable",
+              "doc": "Retained selected-variable diagnostic, using activation_atol.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
                     "link_target": null,
                     "children": []
                   }
@@ -18326,7 +18326,7 @@
             },
             {
               "name": "from_components",
-              "doc": "Create an instance from its components.\n\nConstraint mappings accept integer keys or IDs of the matching family.\nIntegers are promoted to that family's ID. IDs of another family raise\n{class}`TypeError`; keys that become duplicates raise {class}`ValueError`.\nReturned collections always use typed IDs.\n\n**Args:**\n- `sense`: Optimization sense (minimize or maximize)\n- `objective`: Objective function\n- `decision_variables`: List of decision variables\n- `constraints`: Mapping from regular constraint IDs to constraints\n- `named_functions`: Optional list of named functions\n- `description`: Optional instance description\n\n**Returns:**\nA new Instance",
+              "doc": "Create an instance from its components.\n\nConstraint mappings accept integer keys or IDs of the matching family.\nIntegers are promoted to that family's ID. IDs of another family raise\n{class}`TypeError`; keys that become duplicates raise {class}`ValueError`.\nReturned collections always use typed IDs.\n\n**Args:**\n- `sense`: Optimization sense (minimize or maximize)\n- `objective`: Objective function\n- `decision_variables`: List of decision variables\n- `active_constraints`: Mapping from regular constraint IDs to active constraints\n- `named_functions`: Optional list of named functions\n- `description`: Optional instance description\n\n**Returns:**\nA new Instance",
               "signatures": [
                 {
                   "parameters": [
@@ -25273,7 +25273,7 @@
         {
           "kind": "Class",
           "name": "OneHotConstraint",
-          "doc": "Require exactly one member of a nonempty set of Binary variables to equal one.\n\nAll other members must equal zero, so the mathematical condition is\n$\\sum_i x_i=1$. This is a structural constraint: it stores member IDs rather than\nan explicit Function. Keeping the selection structure allows transformations and\nresult inspection to retain its meaning.\n\nEach `variables` entry accepts a variable ID, a standalone\n{class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.\nThese accepted forms are exposed as the `VariableIDLike` type alias.\nOnly their IDs are stored; duplicate entries identify the same member. The\nconstructor rejects an empty set. The enclosing Instance validates that every\nreferenced variable exists and is Binary when inserting the constraint.\n\n**Construct and evaluate a choice**\n\n```pycon\n>>> from ommx import ConstraintKind, Instance, OneHotConstraint, OneHotConstraintID\n>>> instance = Instance.maximize()\n>>> choices = [instance.new_binary(\"choice\", subscripts=[i]) for i in range(3)]\n>>> instance.objective = sum(value * x for value, x in zip([5, 10, 3], choices))\n>>> condition = OneHotConstraint(variables=choices)\n>>> assert condition.variables == [x.id for x in choices]\n>>> attached = instance.add_one_hot_constraint(condition)\n>>> cid = attached.constraint_id\n>>> assert isinstance(cid, OneHotConstraintID)\n>>> chosen = instance.evaluate({choices[0].id: 0, choices[1].id: 1, choices[2].id: 0})\n>>> assert chosen.feasible() and chosen.objective == 10\n>>> assert not instance.evaluate({x.id: 0 for x in choices}).feasible()\n>>> assert not instance.evaluate({x.id: 1 for x in choices}).feasible()\n>>> rows = chosen.constraints_df(kind=ConstraintKind.OneHot)\n>>> assert list(rows.index) == [cid]\n>>> assert rows.loc[cid, \"violation\"] == 0.0\n\n```\n\nUnlike {class}`~ommx.Sos1Constraint`, this condition does not allow selecting\nno member. Numerical evaluation and reported violations use the contracts of\n{meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Solution.constraints_df`.\n\n**Identity and lowering**\n\n{meth}`~ommx.Instance.add_one_hot_constraint` returns an attached handle. The\nconstructor creates an independent value; context changes on it do not edit a\nconstraint already inserted into a host. For explicit IDs, use the\n`one_hot_constraints` mapping of {meth}`~ommx.Instance.from_components`.\nConstraint numbers share the active/inactive cross-family space described by\n{class}`~ommx.Instance`.\n\n{meth}`~ommx.Instance.convert_one_hot_to_constraint` lowers the condition to a\nregular equality, assigns the equality a fresh ID, and retains the original\nOneHot for evaluation. Generated constraints carry provenance back to that\noriginal; the method's example shows how to inspect the relationship.\n{meth}`~ommx.Instance.lower_special_constraints` selects whole families to lower.\nFor automatic preparation and execution, consult the selected Adapter's\nReference, such as {class}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter`.",
+          "doc": "Require exactly one member of a nonempty set of Binary variables to equal one.\n\nAll other members must equal zero, so the mathematical condition is\n$\\sum_i x_i=1$. This is a structural constraint: it stores member IDs rather than\nan explicit Function. Keeping the selection structure allows transformations and\nresult inspection to retain its meaning.\n\nEach `variables` entry accepts a variable ID, a standalone\n{class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.\nThese accepted forms are exposed as the `VariableIDLike` type alias.\nOnly their IDs are stored; duplicate entries identify the same member. The\nconstructor rejects an empty set. The enclosing Instance validates that every\nreferenced variable exists and is Binary when inserting the constraint.\n\n**Construct and evaluate a choice**\n\n```pycon\n>>> from ommx import ConstraintKind, Instance, OneHotConstraint, OneHotConstraintID\n>>> instance = Instance.maximize()\n>>> choices = [instance.new_binary(\"choice\", subscripts=[i]) for i in range(3)]\n>>> instance.objective = sum(value * x for value, x in zip([5, 10, 3], choices))\n>>> condition = OneHotConstraint(variables=choices)\n>>> assert condition.variables == [x.id for x in choices]\n>>> attached = instance.add_one_hot_constraint(condition)\n>>> cid = attached.constraint_id\n>>> assert isinstance(cid, OneHotConstraintID)\n>>> chosen = instance.evaluate({choices[0].id: 0, choices[1].id: 1, choices[2].id: 0})\n>>> assert chosen.feasible() and chosen.objective == 10\n>>> assert not instance.evaluate({x.id: 0 for x in choices}).feasible()\n>>> assert not instance.evaluate({x.id: 1 for x in choices}).feasible()\n>>> rows = chosen.constraints_df(kind=ConstraintKind.OneHot)\n>>> assert list(rows.index) == [cid]\n>>> assert rows.loc[cid, \"violation\"] == 0.0\n\n```\n\nUnlike {class}`~ommx.Sos1Constraint`, this condition does not allow selecting\nno member. Numerical evaluation and reported violations use the contracts of\n{meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Solution.constraints_df`.\nEvaluated and sampled result rows expose `selected_variable` as a\ncandidate-dependent diagnostic, independently of variable or constraint\nmembership in the Active Formulation.\n\n**Identity and lowering**\n\n{meth}`~ommx.Instance.add_one_hot_constraint` returns an attached handle. The\nconstructor creates an independent value; context changes on it do not edit a\nconstraint already inserted into a host. For explicit IDs, use the\n`active_one_hot_constraints` mapping of {meth}`~ommx.Instance.from_components`.\nConstraint numbers share the active/inactive cross-family space described by\n{class}`~ommx.Instance`.\n\n{meth}`~ommx.Instance.convert_one_hot_to_constraint` lowers the condition to a\nregular equality, assigns the equality a fresh ID, and retains the original\nOneHot for evaluation. Generated constraints carry provenance back to that\noriginal; the method's example shows how to inspect the relationship.\n{meth}`~ommx.Instance.lower_special_constraints` selects whole families to lower.\nFor automatic preparation and execution, consult the selected Adapter's\nReference, such as {class}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter`.",
           "bases": [],
           "methods": [
             {
@@ -36926,34 +36926,6 @@
               "is_readonly": true
             },
             {
-              "name": "active_variable",
-              "doc": "Retained selected-variable diagnostics keyed by sample ID, using activation_atol.",
-              "type_": {
-                "display": "dict[int, Optional[int]]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "Optional[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "activeness",
               "doc": "",
               "type_": {
@@ -37075,6 +37047,34 @@
                     "display": "Provenance",
                     "link_target": null,
                     "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "selected_variable",
+              "doc": "Retained selected-variable diagnostics keyed by sample ID, using activation_atol.",
+              "type_": {
+                "display": "dict[int, Optional[int]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "Optional[int]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               },
@@ -37251,34 +37251,6 @@
               "is_readonly": true
             },
             {
-              "name": "active_variable",
-              "doc": "Retained selected-variable diagnostics keyed by sample ID, using activation_atol.",
-              "type_": {
-                "display": "dict[int, Optional[int]]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "Optional[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "activeness",
               "doc": "",
               "type_": {
@@ -37400,6 +37372,34 @@
                     "display": "Provenance",
                     "link_target": null,
                     "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "selected_variable",
+              "doc": "Retained selected-variable diagnostics keyed by sample ID, using activation_atol.",
+              "type_": {
+                "display": "dict[int, Optional[int]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "Optional[int]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               },
@@ -39822,7 +39822,7 @@
         {
           "kind": "Class",
           "name": "Sos1Constraint",
-          "doc": "A Special Ordered Set type 1: at most one member may be nonzero.\n\nMembers need not be Binary, and a nonzero member need not equal one. All-zero\nvalues are allowed, unlike {class}`~ommx.OneHotConstraint`. Negative values also\ncount as nonzero when the member's domain permits them. This structural\nconstraint stores member IDs rather than an explicit Function.\n\nEach `variables` entry accepts a variable ID, a standalone\n{class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.\nThese accepted forms are exposed as the `VariableIDLike` type alias.\nOnly their IDs are stored; duplicate entries identify the same member. The\nconstructor rejects an empty set. The enclosing Instance validates that the\nreferenced variables exist when inserting the constraint.\n\n**Construct and evaluate alternative amounts**\n\n```pycon\n>>> from ommx import ConstraintKind, Instance, Sos1Constraint, Sos1ConstraintID\n>>> instance = Instance.maximize()\n>>> amounts = [\n...     instance.new_continuous(\"amount\", lower=-10, upper=10, subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance.objective = sum(amounts)\n>>> condition = Sos1Constraint(variables=amounts)\n>>> assert condition.variables == [x.id for x in amounts]\n>>> attached = instance.add_sos1_constraint(condition)\n>>> cid = attached.constraint_id\n>>> assert isinstance(cid, Sos1ConstraintID)\n>>> assert instance.evaluate({x.id: 0 for x in amounts}).feasible()\n>>> one = instance.evaluate({amounts[0].id: 7, amounts[1].id: 0, amounts[2].id: 0})\n>>> assert one.feasible()\n>>> assert instance.evaluate(\n...     {amounts[0].id: -7, amounts[1].id: 0, amounts[2].id: 0}\n... ).feasible()\n>>> assert not instance.evaluate(\n...     {amounts[0].id: 7, amounts[1].id: 1, amounts[2].id: 0}\n... ).feasible()\n>>> rows = one.constraints_df(kind=ConstraintKind.Sos1)\n>>> assert list(rows.index) == [cid]\n>>> assert rows.loc[cid, \"violation\"] == 0.0\n\n```\n\nSee {meth}`~ommx.Instance.evaluate` for numerical evaluation and\n{meth}`~ommx.Solution.constraints_df` for violation and activation diagnostics.\nThe constructor creates an independent value;\n{meth}`~ommx.Instance.add_sos1_constraint` returns an attached handle.\nFor explicit IDs, use the `sos1_constraints` mapping of\n{meth}`~ommx.Instance.from_components`. Constraint numbers follow the same\ncross-family uniqueness rule as regular constraints, including inactive rows.\n\n**Use the structure directly or express it with regular constraints**\n\nThe {class}`PySCIPOpt Adapter <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` can\npass SOS1 directly to its backend. When regular constraints are required,\n{meth}`~ommx.Instance.convert_sos1_to_constraints` constructs a Big-M\nformulation under its domain and finite-bound conditions. The original SOS1 is\nretained for evaluation, and generated constraints record its provenance.\n\nThe reverse operation, {meth}`~ommx.Instance.promote_sos1_big_m`, validates\nexplicit claims that existing regular rows form an SOS1 formulation. Its\nReference explains the mathematical correspondence, accepted bounds, batch\noutcomes, and complete examples. The rows need not have been generated by OMMX.",
+          "doc": "A Special Ordered Set type 1: at most one member may be nonzero.\n\nMembers need not be Binary, and a nonzero member need not equal one. All-zero\nvalues are allowed, unlike {class}`~ommx.OneHotConstraint`. Negative values also\ncount as nonzero when the member's domain permits them. This structural\nconstraint stores member IDs rather than an explicit Function.\n\nEach `variables` entry accepts a variable ID, a standalone\n{class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.\nThese accepted forms are exposed as the `VariableIDLike` type alias.\nOnly their IDs are stored; duplicate entries identify the same member. The\nconstructor rejects an empty set. The enclosing Instance validates that the\nreferenced variables exist when inserting the constraint.\n\n**Construct and evaluate alternative amounts**\n\n```pycon\n>>> from ommx import ConstraintKind, Instance, Sos1Constraint, Sos1ConstraintID\n>>> instance = Instance.maximize()\n>>> amounts = [\n...     instance.new_continuous(\"amount\", lower=-10, upper=10, subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance.objective = sum(amounts)\n>>> condition = Sos1Constraint(variables=amounts)\n>>> assert condition.variables == [x.id for x in amounts]\n>>> attached = instance.add_sos1_constraint(condition)\n>>> cid = attached.constraint_id\n>>> assert isinstance(cid, Sos1ConstraintID)\n>>> assert instance.evaluate({x.id: 0 for x in amounts}).feasible()\n>>> one = instance.evaluate({amounts[0].id: 7, amounts[1].id: 0, amounts[2].id: 0})\n>>> assert one.feasible()\n>>> assert instance.evaluate(\n...     {amounts[0].id: -7, amounts[1].id: 0, amounts[2].id: 0}\n... ).feasible()\n>>> assert not instance.evaluate(\n...     {amounts[0].id: 7, amounts[1].id: 1, amounts[2].id: 0}\n... ).feasible()\n>>> rows = one.constraints_df(kind=ConstraintKind.Sos1)\n>>> assert list(rows.index) == [cid]\n>>> assert rows.loc[cid, \"violation\"] == 0.0\n\n```\n\nSee {meth}`~ommx.Instance.evaluate` for numerical evaluation and\n{meth}`~ommx.Solution.constraints_df` for violation and selection diagnostics.\nEvaluated and sampled result rows expose `selected_variable` as a\ncandidate-dependent diagnostic, independently of variable or constraint\nmembership in the Active Formulation.\nThe constructor creates an independent value;\n{meth}`~ommx.Instance.add_sos1_constraint` returns an attached handle.\nFor explicit IDs, use the `active_sos1_constraints` mapping of\n{meth}`~ommx.Instance.from_components`. Constraint numbers follow the same\ncross-family uniqueness rule as regular constraints, including inactive rows.\n\n**Use the structure directly or express it with regular constraints**\n\nThe {class}`PySCIPOpt Adapter <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` can\npass SOS1 directly to its backend. When regular constraints are required,\n{meth}`~ommx.Instance.convert_sos1_to_constraints` constructs a Big-M\nformulation under its domain and finite-bound conditions. The original SOS1 is\nretained for evaluation, and generated constraints record its provenance.\n\nThe reverse operation, {meth}`~ommx.Instance.promote_sos1_big_m`, validates\nexplicit claims that existing regular rows form an SOS1 formulation. Its\nReference explains the mathematical correspondence, accepted bounds, batch\noutcomes, and complete examples. The rows need not have been generated by OMMX.",
           "bases": [],
           "methods": [
             {

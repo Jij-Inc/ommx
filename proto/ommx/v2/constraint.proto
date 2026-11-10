@@ -116,7 +116,9 @@ message EvaluatedIndicatorConstraint {
 message EvaluatedOneHotConstraint {
   repeated uint64 variables = 1;
   bool feasible = 2;
-  optional uint64 active_variable = 3;
+  // Member selected at the evaluation tolerance; unset when infeasible.
+  // This diagnostic is independent of Active Formulation membership.
+  optional uint64 selected_variable = 3;
   repeated uint64 used_decision_variable_ids = 4;
 }
 
@@ -124,7 +126,10 @@ message EvaluatedOneHotConstraint {
 message EvaluatedSos1Constraint {
   repeated uint64 variables = 1;
   bool feasible = 2;
-  optional uint64 active_variable = 3;
+  // Member selected at the evaluation tolerance; unset when infeasible or all
+  // members are approximately zero.
+  // This diagnostic is independent of Active Formulation membership.
+  optional uint64 selected_variable = 3;
   repeated uint64 used_decision_variable_ids = 4;
 }
 
@@ -156,8 +161,8 @@ message EvaluatedSos1ConstraintCollection {
   map<uint64, ConstraintContext> contexts = 3;
 }
 
-// Map value used when a present sample can have no active variable.
-message SampledActiveVariable {
+// Map value used when a present sample can have no selected variable.
+message SampledSelectedVariable {
   optional uint64 variable_id = 1;
 }
 
@@ -185,7 +190,7 @@ message SampledIndicatorConstraint {
 message SampledOneHotConstraint {
   repeated uint64 variables = 1;
   map<uint64, bool> feasible = 2;
-  map<uint64, SampledActiveVariable> active_variable = 3;
+  map<uint64, SampledSelectedVariable> selected_variable = 3;
   repeated uint64 used_decision_variable_ids = 4;
 }
 
@@ -193,7 +198,7 @@ message SampledOneHotConstraint {
 message SampledSos1Constraint {
   repeated uint64 variables = 1;
   map<uint64, bool> feasible = 2;
-  map<uint64, SampledActiveVariable> active_variable = 3;
+  map<uint64, SampledSelectedVariable> selected_variable = 3;
   repeated uint64 used_decision_variable_ids = 4;
 }
 

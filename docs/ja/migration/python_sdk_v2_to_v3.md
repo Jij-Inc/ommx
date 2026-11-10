@@ -172,6 +172,8 @@ v2の `sample_qubo_sa` が返したのは生のサンプルです。v3のAdapter
 
 Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` を使い、指示変数が評価時の許容誤差内で1かどうかを表します。これは評価した候補点についての情報であり、制約のactivenessとは独立です。
 
+OneHotとSOS1の評価結果のpropertyは、サンプルごとの対応を返すものも含めて `active_variable` から `selected_variable` に変更します。DataFrame列も `selected_variable` と `selected_variable.<sample_id>` になります。評価した候補点での選択を表す情報であり、変数や制約がActive Formulationに属するかどうかとは独立です。評価の動作は変わりません。
+
 取得時の `min_activeness` は次の順序における下限なので、複数の状態を含められます。
 
 | `min_activeness` | 含む制約 |

@@ -265,8 +265,8 @@ impl EvaluatedOneHotConstraint {
 
     /// Retained selected-variable diagnostic, using activation_atol.
     #[getter]
-    pub fn active_variable(&self) -> Option<u64> {
-        self.0.stage.active_variable.map(|id| id.into_inner())
+    pub fn selected_variable(&self) -> Option<u64> {
+        self.0.stage.selected_variable.map(|id| id.into_inner())
     }
 }
 
@@ -281,8 +281,8 @@ impl EvaluatedSos1Constraint {
 
     /// Retained selected-variable diagnostic, using activation_atol.
     #[getter]
-    pub fn active_variable(&self) -> Option<u64> {
-        self.0.stage.active_variable.map(|id| id.into_inner())
+    pub fn selected_variable(&self) -> Option<u64> {
+        self.0.stage.selected_variable.map(|id| id.into_inner())
     }
 }
 
@@ -335,12 +335,12 @@ impl SampledOneHotConstraint {
 
     /// Retained selected-variable diagnostics keyed by sample ID, using activation_atol.
     #[getter]
-    pub fn active_variable(&self) -> BTreeMap<u64, Option<u64>> {
+    pub fn selected_variable(&self) -> BTreeMap<u64, Option<u64>> {
         self.0
             .stage
-            .active_variable
+            .selected_variable
             .iter()
-            .map(|(id, active)| (id.into_inner(), active.map(|v| v.into_inner())))
+            .map(|(id, selected)| (id.into_inner(), selected.map(|v| v.into_inner())))
             .collect()
     }
 }
@@ -356,12 +356,12 @@ impl SampledSos1Constraint {
 
     /// Retained selected-variable diagnostics keyed by sample ID, using activation_atol.
     #[getter]
-    pub fn active_variable(&self) -> BTreeMap<u64, Option<u64>> {
+    pub fn selected_variable(&self) -> BTreeMap<u64, Option<u64>> {
         self.0
             .stage
-            .active_variable
+            .selected_variable
             .iter()
-            .map(|(id, active)| (id.into_inner(), active.map(|v| v.into_inner())))
+            .map(|(id, selected)| (id.into_inner(), selected.map(|v| v.into_inner())))
             .collect()
     }
 }
