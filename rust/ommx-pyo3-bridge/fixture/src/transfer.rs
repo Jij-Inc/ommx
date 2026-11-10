@@ -229,8 +229,10 @@ macro_rules! negotiated_root {
                 return target.transfer(py, $source);
             }
             if let Some(target) = resolve_target::<ProtobufV1>(py)? {
-                // This fixed fixture has no special results or skipped constraints.
-                let value: ommx::v1::$wire = ($source).try_into().unwrap();
+                // Build a v1 root explicitly. This fixture has no special results or skipped constraints.
+                let value: ommx::v1::$wire = ($source)
+                    .try_into()
+                    .expect("regular-only fixture results are representable in v1");
                 return target.transfer(py, value);
             }
             Err(BridgeError::no_supported_protocol(
@@ -243,7 +245,7 @@ macro_rules! negotiated_root {
         }
     };
 }
-// ParametricInstance can be exported through the bridge directly.
+// ParametricInstance supports direct domain export over ProtobufV1.
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 fn negotiated_parametric_instance(py: Python<'_>) -> PyResult<PyParametricInstance> {

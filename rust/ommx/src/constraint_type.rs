@@ -2066,6 +2066,7 @@ mod tests {
                 0.into(),
                 Equality::EqualToZero,
                 Function::from(linear!(id)),
+                false,
             )
         });
     }

@@ -53,8 +53,10 @@ pub enum Feature {
     OutputObjective = 4,
     /// The payload contains a decision variable with an explicitly enumerated finite domain.
     DecisionVariableFiniteDomain = 5,
+    /// An indicator row (including inactive/evaluated/sampled rows) activates at zero.
+    IndicatorActivateOnZero = 6,
     /// The payload contains an inactive constraint excluded from default feasibility.
-    ConstraintSkipFeasibilityCheck = 6,
+    ConstraintSkipFeasibilityCheck = 7,
 }
 impl Feature {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -69,6 +71,7 @@ impl Feature {
             Feature::ConstraintSos1 => "FEATURE_CONSTRAINT_SOS1",
             Feature::OutputObjective => "FEATURE_OUTPUT_OBJECTIVE",
             Feature::DecisionVariableFiniteDomain => "FEATURE_DECISION_VARIABLE_FINITE_DOMAIN",
+            Feature::IndicatorActivateOnZero => "FEATURE_INDICATOR_ACTIVATE_ON_ZERO",
             Feature::ConstraintSkipFeasibilityCheck => "FEATURE_CONSTRAINT_SKIP_FEASIBILITY_CHECK",
         }
     }
@@ -81,6 +84,7 @@ impl Feature {
             "FEATURE_CONSTRAINT_SOS1" => Some(Self::ConstraintSos1),
             "FEATURE_OUTPUT_OBJECTIVE" => Some(Self::OutputObjective),
             "FEATURE_DECISION_VARIABLE_FINITE_DOMAIN" => Some(Self::DecisionVariableFiniteDomain),
+            "FEATURE_INDICATOR_ACTIVATE_ON_ZERO" => Some(Self::IndicatorActivateOnZero),
             "FEATURE_CONSTRAINT_SKIP_FEASIBILITY_CHECK" => {
                 Some(Self::ConstraintSkipFeasibilityCheck)
             }
@@ -164,6 +168,9 @@ pub struct IndicatorConstraint {
     pub equality: i32,
     #[prost(message, optional, tag = "3")]
     pub function: ::core::option::Option<super::v1::Function>,
+    /// False activates at one (including legacy payloads); true activates at zero.
+    #[prost(bool, tag = "4")]
+    pub activate_on_zero: bool,
 }
 /// One-hot constraint row.
 #[non_exhaustive]
@@ -266,11 +273,14 @@ pub struct EvaluatedIndicatorConstraint {
     pub evaluated_value: f64,
     #[prost(bool, tag = "4")]
     pub feasible: bool,
-    /// Whether the indicator variable is ON at this state, independently of activeness.
+    /// Whether the trigger matches its configured activation value at this state,
+    /// independently of constraint activeness.
     #[prost(bool, tag = "5")]
     pub indicator_on: bool,
     #[prost(uint64, repeated, tag = "6")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
+    #[prost(bool, tag = "7")]
+    pub activate_on_zero: bool,
 }
 /// Evaluated one-hot constraint row.
 #[non_exhaustive]
@@ -390,11 +400,14 @@ pub struct SampledIndicatorConstraint {
     pub evaluated_values: ::core::option::Option<super::v1::SampledValues>,
     #[prost(btree_map = "uint64, bool", tag = "4")]
     pub feasible: ::prost::alloc::collections::BTreeMap<u64, bool>,
-    /// Whether the indicator variable is ON at each sample, independently of activeness.
+    /// Whether the trigger matches its configured activation value at each sample,
+    /// independently of constraint activeness.
     #[prost(btree_map = "uint64, bool", tag = "5")]
     pub indicator_on: ::prost::alloc::collections::BTreeMap<u64, bool>,
     #[prost(uint64, repeated, tag = "6")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
+    #[prost(bool, tag = "7")]
+    pub activate_on_zero: bool,
 }
 /// Sampled one-hot constraint row.
 #[non_exhaustive]

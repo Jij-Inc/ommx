@@ -265,9 +265,10 @@ constructors and decoding methods are not part of the transfer contract.
 `ommx::Instance` and `ommx::ParametricInstance` export over ProtobufV1
 through their checked v1 serializers. Special constraints that cannot be
 represented in v1 cause an export error. Domain `Solution` and `SampleSet` only
-export
-over ProtobufV2: their existing v1 conversions discard special-constraint
-results, so callers choosing ProtobufV1 must explicitly construct v1 messages.
+export over ProtobufV2. Callers choosing ProtobufV1 must first use
+`ommx::v1::Solution::try_from(solution)` or
+`ommx::v1::SampleSet::try_from(sample_set)` to construct a raw v1 message;
+these conversions reject retained special constraints, including inactive rows.
 All four domain roots export over ProtobufV2.
 
 For callers that already hold complete raw `ommx::v1` roots, ProtobufV1 also

@@ -36,6 +36,7 @@ fn all_families() -> Instance {
                             0.into(),
                             Equality::LessThanOrEqualToZero,
                             Function::from(coeff!(1.0)),
+                            false,
                         ),
                     )
                 })
@@ -364,7 +365,12 @@ fn specialization_and_partial_evaluation_preserve_inactive_policy() {
             [(
                 1.into(),
                 (
-                    IndicatorConstraint::new(0.into(), Equality::LessThanOrEqualToZero, function),
+                    IndicatorConstraint::new(
+                        0.into(),
+                        Equality::LessThanOrEqualToZero,
+                        function,
+                        false,
+                    ),
                     metadata(true),
                 ),
             )]

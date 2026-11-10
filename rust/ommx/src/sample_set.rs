@@ -643,13 +643,20 @@ fn validate_sampled_indicator_stage_values(
                 .samples()
                 .get(*sample_id)
                 .expect("sample IDs must be validated first");
-            let computed_indicator_on =
-                expected_binary_activity(constraint.indicator_variable, value, atol, "indicator")
-                    .map_err(|message| SampleSetError::InvalidConstraintStructure {
+            expected_binary_activity(constraint.indicator_variable, value, atol, "indicator")
+                .map_err(|message| SampleSetError::InvalidConstraintStructure {
                     constraint_family: "indicator",
                     constraint_id: format!("{id:?}"),
                     message: format!("{message} at sample {sample_id:?}"),
                 })?;
+            let computed_indicator_on = atol.approx_eq(
+                value,
+                if constraint.activate_on_zero {
+                    0.0
+                } else {
+                    1.0
+                },
+            );
             if *provided_indicator_on != computed_indicator_on {
                 return Err(SampleSetError::InvalidConstraintStructure {
                     constraint_family: "indicator",

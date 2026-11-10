@@ -1556,6 +1556,11 @@ class AttachedIndicatorConstraint(ConstraintView):
         The parent host this constraint lives in.
         """
     @property
+    def activate_on_zero(self) -> builtins.bool:
+        r"""
+        Whether zero activates the body instead of one.
+        """
+    @property
     def indicator_variable_id(self) -> builtins.int: ...
     @property
     def function(self) -> Function: ...
@@ -2014,11 +2019,17 @@ class Constraint:
         Add a parameter to the constraint
         Returns self for method chaining
         """
-    def with_indicator(self, indicator_variable: VariableIDLike) -> IndicatorConstraint:
+    def with_indicator(
+        self,
+        indicator_variable: VariableIDLike,
+        *,
+        activate_on_zero: builtins.bool = False,
+    ) -> IndicatorConstraint:
         r"""
         Create an indicator constraint from this constraint.
 
-        Returns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.
+        Returns `indicator_variable = 1 → this constraint`, or activation at zero
+        when `activate_on_zero=True`.
         `indicator_variable` may be a variable ID or a decision-variable object.
         Only its ID is stored; the enclosing host requires the referenced variable
         to be binary when the constraint is inserted.
@@ -2989,6 +3000,11 @@ class EvaluatedIndicatorConstraint(ConstraintView):
     def indicator_variable_id(self) -> builtins.int:
         r"""
         Decision variable that activates this constraint.
+        """
+    @property
+    def activate_on_zero(self) -> builtins.bool:
+        r"""
+        Whether zero activates the body instead of one.
         """
     @property
     def equality(self) -> Equality:
@@ -5062,6 +5078,11 @@ class InactiveIndicatorConstraint(ConstraintView):
     @property
     def indicator_variable_id(self) -> builtins.int: ...
     @property
+    def activate_on_zero(self) -> builtins.bool:
+        r"""
+        Whether zero activates the body instead of one.
+        """
+    @property
     def equality(self) -> Equality: ...
     @property
     def function(self) -> Function: ...
@@ -5175,19 +5196,20 @@ class InactiveSos1Constraint(ConstraintView):
 @typing.final
 class IndicatorConstraint:
     r"""
-    A condition enforced when a controlling Binary variable equals one.
+    A condition enforced when a controlling Binary variable equals its activation value.
 
     For a Binary variable $z$, an Indicator requires $f(x)\leq0$ or $f(x)=0$
-    when $z=1$. At $z=0$, the Indicator is satisfied regardless of the body's
+    when $z=1$ by default. With `activate_on_zero=True`, it is enforced when $z=0$.
+    At the other binary value, the Indicator is satisfied regardless of the body's
     value; variable domains and other constraints still apply. This is a one-way
-    implication: a satisfied body does not require $z=1$.
+    implication: a satisfied body does not force the trigger to its activation value.
 
     Construct one from a regular constraint with {meth}`~ommx.Constraint.with_indicator`,
     or pass `indicator_variable`, `function`, and `equality` to this class.
     The controlling variable accepts a variable ID, a standalone
     {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.
     These accepted forms are exposed as the `VariableIDLike` type alias.
-    Only its ID is stored. The enclosing Instance validates that the referenced
+    Its ID and activation condition are stored. The enclosing Instance validates that the referenced
     variables exist and that the controlling variable is Binary when inserting it.
 
     **Construct and evaluate a conditional limit**
@@ -5215,13 +5237,26 @@ class IndicatorConstraint:
 
     ```
 
-    The `indicator_on` column records whether the controlling variable is one,
-    using the evaluation tolerance. It distinguishes an OFF Indicator from an ON
-    Indicator whose body is satisfied. This is independent of `activeness`, which
-    records whether the constraint belongs to the current formulation and its default
-    feasibility participation. An active constraint can have its Indicator OFF;
-    an inactive constraint can have its Indicator ON. Indicator results do not have
-    a dual variable.
+    Pass `activate_on_zero=True` to enforce the body when the trigger is zero:
+
+    ```pycon
+    >>> disabled_limit = (amount <= 5).with_indicator(enabled, activate_on_zero=True)
+    >>> assert disabled_limit.activate_on_zero
+
+    ```
+
+    The constructor accepts the same keyword. Attached, inactive, evaluated, and
+    sampled rows expose `activate_on_zero`; Indicator DataFrames retain it as a
+    column. It describes the constraint, independently of whether a particular
+    candidate activates it.
+
+    The `indicator_on` column records whether the controlling variable equals its
+    activation value, using the evaluation tolerance. It distinguishes an OFF
+    Indicator from an ON Indicator whose body is satisfied. This is independent of
+    `activeness`, which records whether the constraint belongs to the current
+    formulation and its default feasibility participation. An active constraint can
+    have its Indicator OFF; an inactive constraint can have its Indicator ON.
+    Indicator results do not have a dual variable.
     See {meth}`~ommx.Solution.constraints_df` for the precise columns and violation
     semantics, and {meth}`~ommx.Instance.evaluate` for numerical tolerances and invalid
     activation values.
@@ -5249,6 +5284,11 @@ class IndicatorConstraint:
     @property
     def indicator_variable_id(self) -> builtins.int: ...
     @property
+    def activate_on_zero(self) -> builtins.bool:
+        r"""
+        Whether zero activates the body instead of one.
+        """
+    @property
     def function(self) -> Function: ...
     @property
     def equality(self) -> Equality: ...
@@ -5266,6 +5306,7 @@ class IndicatorConstraint:
         indicator_variable: VariableIDLike,
         function: ToFunction,
         equality: Equality,
+        activate_on_zero: builtins.bool = False,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
@@ -5274,13 +5315,15 @@ class IndicatorConstraint:
         r"""
         Create a new indicator constraint.
 
-        An indicator constraint is: `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).
+        By default, `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).
+        Set `activate_on_zero=True` to activate the body at zero instead.
 
         **Args:**
 
         - `indicator_variable`: A variable ID or decision-variable object that
           activates this constraint. Only its ID is stored; the enclosing host
           requires the referenced variable to be binary when the constraint is inserted.
+        - `activate_on_zero`: If true, activate at zero instead of one (default false).
         - `function`: The constraint function
         - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
         - `name`: Optional name for the constraint
@@ -6100,10 +6143,17 @@ class Instance:
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> Instance:
         r"""
-        Deserialize an instance from v1 protobuf bytes.
+        Read legacy v1 bytes into a current-SDK instance.
 
-        Raises {class}`ValueError` if the protobuf payload is malformed or
-        semantically invalid.
+        This is a compatibility import for data saved by older OMMX SDKs.
+        Its policy is to recover as much existing data as possible through
+        legacy defaults and normalization while preserving mathematical meaning.
+        Recovery must not invent missing mathematical data or silently change it.
+
+        Current recovery covers known legacy representations, such as omitted
+        variable bounds. Advisory constraint hints do not trigger automatic
+        promotion to special constraints. Recovery is not exhaustive: malformed
+        or semantically inconsistent payloads still raise {class}`ValueError`.
         """
     @staticmethod
     def from_v2_bytes(bytes: bytes) -> Instance:
@@ -6658,11 +6708,18 @@ class Instance:
         """
     def to_v1_bytes(self) -> bytes:
         r"""
-        Serialize this instance in the OMMX v1 wire format.
+        Serialize for compatibility with older OMMX SDKs using the v1 wire format.
+
+        Use `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.
+        This compatibility format can export only data representable in v1;
+        v3 features such as native Indicator constraints cannot be serialized.
 
         # Errors
 
-        Serialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.
+        Raises `RuntimeError` if an output objective or any Indicator, OneHot,
+        or SOS1 constraint is present, including inactive constraints, or if any
+        inactive constraint skips feasibility checks. Use
+        `to_v2_bytes()` to preserve these features.
 
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
@@ -6680,7 +6737,7 @@ class Instance:
         """
     def to_v2_bytes(self) -> bytes:
         r"""
-        Serialize this instance in the OMMX v2 wire format.
+        Serialize in the v2 wire format for storage and exchange with v3 or later SDKs.
 
         # Postconditions
 
@@ -7834,6 +7891,9 @@ class Instance:
 
         where $u \geq \sup f(x)$ and $l \leq \inf f(x)$ are the upper and lower
         bounds of $f$ over the decision variables' domains.
+
+        With `activate_on_zero=True`, the sides are `f(x) - u y <= 0` and
+        `-f(x) + l y <= 0`; the same side-emission rules apply.
 
         Side emission:
 
@@ -9340,6 +9400,36 @@ class InstanceClass:
     recommended policies, and the distinction between automatic and explicit
     Preparation, see {class}`~ommx.adapter.SolverAdapter` and
     {class}`~ommx.adapter.SamplerAdapter`.
+
+    **Indicator activation conditions**
+
+    `InstanceClassClause.allowed_indicator_activation_values` specifies the allowed
+    trigger values independently of `indicator_body_polynomial_requirements`.
+    The latter maps `Equality` to polynomial requirements shared by all admitted
+    activation values. The default activation set is `{1}`; an empty activation
+    set or an empty body map rejects all Indicators. Values other than 0 and 1
+    are rejected when constructing the clause.
+
+    ```pycon
+    >>> from ommx import Equality, InstanceClassClause, Kind, PolynomialRequirement, Sense
+    >>> clause = InstanceClassClause(
+    ...     label="linear indicators at either value",
+    ...     allowed_variable_kinds={Kind.Binary},
+    ...     allowed_senses={Sense.Minimize},
+    ...     objective_polynomial_requirement=PolynomialRequirement.at_most(1),
+    ...     allowed_indicator_activation_values={0, 1},
+    ...     indicator_body_polynomial_requirements={
+    ...         Equality.EqualToZero: PolynomialRequirement.at_most(1),
+    ...     },
+    ... )
+    >>> assert clause.allowed_indicator_activation_values == {0, 1}
+
+    ```
+
+    An unsupported trigger value produces `InstanceClassMismatch.IndicatorActivationNotAllowed`,
+    with `activation_value` and `allowed_activation_values`. Body-relation and degree
+    requirements are checked independently, so their diagnostics can accompany an
+    activation mismatch. Membership checking does not transform the Instance.
     """
     @property
     def clauses(self) -> builtins.list[InstanceClassClause]: ...
@@ -9447,6 +9537,9 @@ class InstanceClassClause:
     constraint families are not accepted. OneHot and SOS1 are also disabled
     unless their Boolean options are enabled. The objective and constraint
     requirements describe stored polynomials, not a request to expand expressions.
+    Indicator activation values are checked independently of the body map.
+    `allowed_indicator_activation_values` defaults to `{1}` and accepts only 0 and 1.
+    An empty activation set rejects all Indicators, even with a nonempty body map.
     See {class}`~ommx.InstanceClass` for construction and membership examples.
     """
     @property
@@ -9467,6 +9560,11 @@ class InstanceClassClause:
         self,
     ) -> builtins.dict[Equality, PolynomialRequirement]: ...
     @property
+    def allowed_indicator_activation_values(self) -> builtins.set[builtins.int]:
+        r"""
+        Allowed trigger values (0 and/or 1), independently of body requirements.
+        """
+    @property
     def allows_one_hot(self) -> builtins.bool: ...
     @property
     def allows_sos1(self) -> builtins.bool: ...
@@ -9484,6 +9582,9 @@ class InstanceClassClause:
         ] = None,
         indicator_body_polynomial_requirements: typing.Optional[
             typing.Mapping[Equality, PolynomialRequirement]
+        ] = None,
+        allowed_indicator_activation_values: typing.Optional[
+            builtins.set[builtins.int]
         ] = None,
         allows_one_hot: builtins.bool = False,
         allows_sos1: builtins.bool = False,
@@ -9631,6 +9732,26 @@ class InstanceClassMismatch:
             cls,
             constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
         ) -> InstanceClassMismatch.IndicatorConstraintsNotAllowed: ...
+
+    @typing.final
+    class IndicatorActivationNotAllowed(InstanceClassMismatch):
+        __match_args__ = (
+            "activation_value",
+            "constraint_ids",
+            "allowed_activation_values",
+        )
+        @property
+        def activation_value(self) -> builtins.int: ...
+        @property
+        def constraint_ids(self) -> builtins.set[IndicatorConstraintID]: ...
+        @property
+        def allowed_activation_values(self) -> builtins.set[builtins.int]: ...
+        def __new__(
+            cls,
+            activation_value: builtins.int,
+            constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
+            allowed_activation_values: builtins.set[builtins.int],
+        ) -> InstanceClassMismatch.IndicatorActivationNotAllowed: ...
 
     @typing.final
     class IndicatorConstraintRelationNotAllowed(InstanceClassMismatch):
@@ -10951,10 +11072,17 @@ class ParametricInstance:
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> ParametricInstance:
         r"""
-        Deserialize a parametric instance from v1 protobuf bytes.
+        Read legacy v1 bytes into a current-SDK parametric instance.
 
-        Raises {class}`ValueError` if the protobuf payload is malformed or
-        semantically invalid.
+        This is a compatibility import for data saved by older OMMX SDKs.
+        Its policy is to recover as much existing data as possible through
+        legacy defaults and normalization while preserving mathematical meaning.
+        Recovery must not invent missing mathematical data or silently change it.
+
+        Current recovery covers known legacy representations, such as omitted
+        variable bounds. Advisory constraint hints do not trigger automatic
+        promotion to special constraints. Recovery is not exhaustive: malformed
+        or semantically inconsistent payloads still raise {class}`ValueError`.
         """
     @staticmethod
     def from_v2_bytes(bytes: bytes) -> ParametricInstance:
@@ -10966,11 +11094,18 @@ class ParametricInstance:
         """
     def to_v1_bytes(self) -> bytes:
         r"""
-        Serialize this parametric instance in the OMMX v1 wire format.
+        Serialize for compatibility with older OMMX SDKs using the v1 wire format.
+
+        Use `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.
+        This compatibility format can export only data representable in v1;
+        v3 features such as native Indicator constraints cannot be serialized.
 
         # Errors
 
-        Serialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.
+        Raises `RuntimeError` if an output objective or any Indicator, OneHot,
+        or SOS1 constraint is present, including inactive constraints, or if any
+        inactive constraint skips feasibility checks. Use
+        `to_v2_bytes()` to preserve these features.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
@@ -10989,7 +11124,7 @@ class ParametricInstance:
         """
     def to_v2_bytes(self) -> bytes:
         r"""
-        Serialize this parametric instance in the OMMX v2 wire format.
+        Serialize in the v2 wire format for storage and exchange with v3 or later SDKs.
 
         # Postconditions
 
@@ -12842,14 +12977,46 @@ class SampleSet:
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
     @staticmethod
-    def from_v1_bytes(bytes: bytes) -> SampleSet: ...
+    def from_v1_bytes(bytes: bytes) -> SampleSet:
+        r"""
+        Read legacy v1 bytes into a current-SDK sample set.
+
+        This is a compatibility import for data saved by older OMMX SDKs.
+        Its policy is to recover as much existing data as possible through
+        legacy defaults and normalization while preserving mathematical meaning.
+        Recovery must not invent missing mathematical data or silently change it.
+
+        For example, omitted root feasibility maps are reconstructed from the
+        saved variable and constraint results.
+
+        Current recovery is not exhaustive. Saved feasibility judgments that
+        disagree with recomputation at the SDK default tolerance still raise
+        {class}`ValueError`; v1 does not store the original tolerance. Malformed
+        or otherwise semantically inconsistent payloads also raise ValueError.
+        Further recovery is tracked in [issue #1381](https://github.com/Jij-Inc/ommx/issues/1381).
+        """
     @staticmethod
     def from_v2_bytes(bytes: bytes) -> SampleSet: ...
     def to_v1_bytes(self) -> bytes:
         r"""
-        Serialize to v1; fails if any inactive constraint skips feasibility checks.
+        Serialize for compatibility with older OMMX SDKs using the v1 wire format.
+
+        Use `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.
+        This compatibility format cannot represent v3 features such as native
+        Indicator constraints. Raises `RuntimeError` if Indicator, OneHot, or
+        SOS1 results are retained, including satisfied and inactive constraints,
+        or if any inactive constraint skips feasibility checks.
+        Use `to_v2_bytes()` to preserve these features.
+
+        For results that can be exported, v1 recomputes feasibility at the SDK
+        default tolerance. Use v2 to preserve the evaluation tolerance.
         """
-    def to_v2_bytes(self) -> bytes: ...
+    def to_v2_bytes(self) -> bytes:
+        r"""
+        Serialize in the v2 wire format for storage and exchange with v3 or later SDKs.
+
+        Preserves native special constraints and the evaluation tolerance.
+        """
     def get(self, sample_id: builtins.int) -> Solution:
         r"""
         Return one sample as a Solution.
@@ -13389,6 +13556,11 @@ class SampledIndicatorConstraint(ConstraintView):
     def indicator_variable_id(self) -> builtins.int:
         r"""
         Decision variable that activates this constraint.
+        """
+    @property
+    def activate_on_zero(self) -> builtins.bool:
+        r"""
+        Whether zero activates the body instead of one.
         """
     @property
     def equality(self) -> Equality:
@@ -14260,14 +14432,46 @@ class Solution:
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
     @staticmethod
-    def from_v1_bytes(bytes: bytes) -> Solution: ...
+    def from_v1_bytes(bytes: bytes) -> Solution:
+        r"""
+        Read legacy v1 bytes into a current-SDK solution.
+
+        This is a compatibility import for data saved by older OMMX SDKs.
+        Its policy is to recover as much existing data as possible through
+        legacy defaults and normalization while preserving mathematical meaning.
+        Recovery must not invent missing mathematical data or silently change it.
+
+        For example, a missing state value can be restored from a saved variable
+        value, and legacy feasibility fields are recognized.
+
+        Current recovery is not exhaustive. Saved feasibility judgments that
+        disagree with recomputation at the SDK default tolerance still raise
+        {class}`ValueError`; v1 does not store the original tolerance. Malformed
+        or otherwise semantically inconsistent payloads also raise ValueError.
+        Further recovery is tracked in [issue #1381](https://github.com/Jij-Inc/ommx/issues/1381).
+        """
     @staticmethod
     def from_v2_bytes(bytes: bytes) -> Solution: ...
     def to_v1_bytes(self) -> bytes:
         r"""
-        Serialize to v1; fails if any inactive constraint skips feasibility checks.
+        Serialize for compatibility with older OMMX SDKs using the v1 wire format.
+
+        Use `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.
+        This compatibility format cannot represent v3 features such as native
+        Indicator constraints. Raises `RuntimeError` if Indicator, OneHot, or
+        SOS1 results are retained, including satisfied and inactive constraints,
+        or if any inactive constraint skips feasibility checks.
+        Use `to_v2_bytes()` to preserve these features.
+
+        For results that can be exported, v1 recomputes feasibility at the SDK
+        default tolerance. Use v2 to preserve the evaluation tolerance.
         """
-    def to_v2_bytes(self) -> bytes: ...
+    def to_v2_bytes(self) -> bytes:
+        r"""
+        Serialize in the v2 wire format for storage and exchange with v3 or later SDKs.
+
+        Preserves native special constraints and the evaluation tolerance.
+        """
     def extract_decision_variables(self, name: builtins.str) -> dict:
         r"""
         Extract evaluated variable values using their model name and subscript tuples.

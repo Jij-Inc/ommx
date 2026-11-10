@@ -89,9 +89,9 @@ root!(
     protocol::V2_SAMPLE_SET
 );
 
-// Only allow domain roots that reject unsupported special constraints.
-// Solution/SampleSet's legacy `TryFrom` conversions still discard those results; they
-// require an explicitly constructed v1 source when selecting ProtobufV1.
+// Instance roots export through checked v1 domain conversions. Result roots
+// use ProtobufV2 by default; selecting ProtobufV1 requires a raw v1 message
+// obtained through their checked `TryFrom` conversion.
 macro_rules! checked_v1_root {
     ($wrapper:ident, $domain:ident) => {
         impl Export<ProtobufV1, $wrapper> for ommx::$domain {

@@ -442,17 +442,12 @@ impl TryFrom<v2::Solution> for Solution {
     }
 }
 
-/// Lossy: `v1::Solution` only has a `evaluated_constraints` field for
-/// regular constraints — it has no fields for indicator / one-hot / sos1
-/// evaluated constraints, so any data the in-memory [`Solution`] holds
-/// in those collections is dropped on serialization. This is a wire-format
-/// limitation that pre-dates the label/context SoA refactor; the matching
-/// `Parse` impl above initializes those collections to
-/// `Default::default()` for symmetry. Round-trip through `to_v1_bytes` /
-/// `from_v1_bytes` preserves variable labels and regular-constraint context.
-/// Since v1 cannot store a tolerance, feasibility flags are recomputed from
-/// the retained constraints and variable values using [`ATol::default`],
-/// which the v1 parser also uses.
+/// Convert to v1 only when no native special constraints are retained.
+///
+/// Indicator, OneHot, and SOS1 results cannot be represented in v1, including
+/// inactive constraints. Skipped constraints also cannot be represented.
+/// Use `to_v2_bytes()` to preserve them. Since v1 cannot
+/// store a tolerance, feasibility is recomputed at [`ATol::default`].
 impl TryFrom<Solution> for crate::v1::Solution {
     type Error = crate::Error;
 
@@ -481,6 +476,21 @@ impl TryFrom<Solution> for crate::v1::Solution {
                         .values(),
                 ),
         )?;
+        if !solution.evaluated_indicator_constraints.is_empty() {
+            crate::bail!(
+                "Indicator constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
+        }
+        if !solution.evaluated_one_hot_constraints.is_empty() {
+            crate::bail!(
+                "One-hot constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
+        }
+        if !solution.evaluated_sos1_constraints.is_empty() {
+            crate::bail!(
+                "SOS1 constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
+        }
         let Solution {
             objective,
             evaluated_constraints,
@@ -569,6 +579,7 @@ mod tests {
             EvaluatedDecisionVariable::new(variable_id, DecisionVariable::binary(), 1.0).unwrap();
         let constraint = crate::indicator_constraint::EvaluatedIndicatorConstraint {
             indicator_variable: variable_id,
+            activate_on_zero: false,
             equality: crate::Equality::EqualToZero,
             stage: crate::indicator_constraint::IndicatorEvaluatedData {
                 evaluated_value: 0.0,
@@ -1486,10 +1497,8 @@ mod tests {
     }
 
     /// Regression: `Solution::to_v1_bytes` / `from_v1_bytes` must preserve the
-    /// variable-label and regular-constraint-context stores. Indicator /
-    /// one-hot / sos1 evaluated context is dropped because `v1::Solution`
-    /// has no fields for those collections — that's a wire-format
-    /// limitation older than the SoA refactor and is out of scope here.
+    /// variable-label and regular-constraint-context stores for regular-only
+    /// results. Native special constraints are rejected by v1 export.
     #[test]
     fn test_solution_roundtrip_preserves_labels_and_context() {
         use crate::{
@@ -1736,6 +1745,7 @@ mod tests {
             EvaluatedDecisionVariable::new(var_id, DecisionVariable::binary(), 1.0).unwrap();
         let indicator = EvaluatedIndicatorConstraint {
             indicator_variable: var_id,
+            activate_on_zero: false,
             equality: crate::Equality::EqualToZero,
             stage: IndicatorEvaluatedData {
                 evaluated_value: 0.0,
@@ -1790,6 +1800,7 @@ mod tests {
             EvaluatedDecisionVariable::new(var_id, DecisionVariable::binary(), 0.0).unwrap();
         let indicator = EvaluatedIndicatorConstraint {
             indicator_variable: var_id,
+            activate_on_zero: false,
             equality: crate::Equality::EqualToZero,
             stage: IndicatorEvaluatedData {
                 evaluated_value: 1.0,

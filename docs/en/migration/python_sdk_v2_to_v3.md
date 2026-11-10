@@ -170,7 +170,7 @@ For `from_components`, rename `constraints=` to `active_constraints=`, and simil
 
 Each row has exactly one `ConstraintActiveness` state: `ACTIVE`, `INACTIVE_CHECKED` (inactive with `skip_feasibility_check=False`), or `INACTIVE_SKIPPED` (inactive with `skip_feasibility_check=True`). **Inactive** is the umbrella term for the last two states; `inactive_constraints` contains both.
 
-Indicator result properties and DataFrame columns use `indicator_on` to report whether the indicator variable is one within the evaluation tolerance. This describes the evaluated candidate, independently of the constraint's activeness.
+Indicator result properties and DataFrame columns use `indicator_on` to report whether the indicator variable matches the configured activation value within the evaluation tolerance: zero when `activate_on_zero=True`, and one otherwise. This describes the evaluated candidate, independently of the constraint's activeness.
 
 OneHot and SOS1 result properties rename `active_variable` to `selected_variable`, including per-sample mappings. DataFrame columns become `selected_variable` and `selected_variable.<sample_id>`. This diagnostic describes selection at the evaluated candidate, independently of variable or constraint membership in the Active Formulation. Evaluation behavior is unchanged.
 
@@ -269,9 +269,15 @@ A threshold is applied to each constraint's violation. For SOS1, leaving at most
 
 The SDK version and the protobuf version are separate. A payload written by `Instance.to_bytes()` in **SDK 2.9.4** uses the **v1 wire format**. Read it with `Instance.from_v1_bytes(data)` in v3. The same naming applies to `ParametricInstance`, `Solution`, and `SampleSet`. For new files use `to_v2_bytes()` and the matching `from_v2_bytes()` on the owning object. To persist a variable, expression, or constraint with its context, serialize the enclosing model or result.
 
+`from_v1_bytes()` is the compatibility import for reusing data saved by older SDKs. Its policy is to recover as much existing data as possible through legacy defaults, normalization, and reconstruction of derived values, while preserving mathematical meaning. Missing source data must not be invented, and ambiguous mathematical content remains an error.
+
+Current recovery is limited to implemented rules. For example, `Solution` can restore a missing state value from a saved variable value, and `SampleSet` reconstructs omitted root feasibility maps. However, both still reject saved feasibility judgments that disagree with recomputation at the SDK default tolerance. V1 does not record the producer's tolerance. Further healing is tracked in [issue #1381](https://github.com/Jij-Inc/ommx/issues/1381); the documentation of this policy does not change parsing behavior.
+
 Version 2.9.4 already preserves annotations in root payloads. In v3, set typed metadata through properties such as `title` and use `add_user_annotation` for extension keys. Update any direct edits to the `annotations` dictionary.
 
-If a 2.x program must still consume your output, check that it supports the representation as well as the wire format. For example, 2.9.4's schema includes finite-domain variables but its SDK rejects them when loading a model. An explicit output objective cannot be written with `to_v1_bytes()`. Use the v2 wire format to preserve native special constraints and a result's feasibility tolerance.
+Use `to_v1_bytes()` when you need to send data to an older OMMX SDK, such as SDK 2.x. It is a compatibility serialization format: only data representable in v1 can be exported. V3 features such as native Indicator, OneHot, and SOS1 constraints cannot be represented, so serialization raises `RuntimeError`. This applies to `Instance`, `ParametricInstance`, `Solution`, and `SampleSet`, including constraints retained as inactive after lowering. An explicit output objective also prevents model export. Use `to_v2_bytes()` to preserve these features.
+
+Even when v1 serialization succeeds, check that the receiving SDK supports the representation. For example, 2.9.4's schema includes finite-domain variables but its SDK rejects them when loading a model. For results that can be exported, v1 recomputes feasibility at the SDK default tolerance; v2 preserves the evaluation tolerance. Reading existing v1 payloads is unchanged.
 
 If you export MPS to another tool, replace `write_mps` with {meth}`~ommx.Instance.save_mps`. Use the SDK byte format to restore model structure and metadata that MPS cannot represent.
 
@@ -362,3 +368,22 @@ The site-wide {ref}`general index <genindex>` also lists the detailed examples u
 | `write_mps(path)` | {meth}`save_mps(path) <ommx.Instance.save_mps>` | {ref}`5 <migration-storage>` |
 
 For changes between individual v3 prereleases, see the [Python SDK 3.0 release notes](../release_note/ommx-3.0.md).
+
+## Indicator activation values
+
+`IndicatorConstraint` and `Constraint.with_indicator` accept
+`activate_on_zero=True` to enforce the body when the binary trigger is zero.
+The default remains activation at one. The property is retained in attached,
+inactive, evaluated, and sampled rows and Indicator DataFrames.
+
+`InstanceClassClause.indicator_body_polynomial_requirements` remains a map from
+`Equality` to `PolynomialRequirement`. Set
+`allowed_indicator_activation_values={0, 1}` separately to admit both trigger
+values with the same body requirements. Its default is `{1}`; `{0}` admits only
+zero activation, and an empty set rejects all Indicators. Only 0 and 1 are valid.
+An empty body map also rejects all Indicators, regardless of the activation set.
+
+PySCIPOpt accepts both activation values. Big-M conversion also handles both.
+The v2 wire format declares an additional required feature when any retained
+Indicator activates at zero, so older readers reject the payload instead of
+interpreting the trigger incorrectly.

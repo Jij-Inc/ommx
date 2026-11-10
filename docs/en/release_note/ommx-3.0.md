@@ -28,6 +28,21 @@ OneHot/SOS1 result properties rename `active_variable` to `selected_variable`, i
 
 The Active Formulation also names its variables explicitly: use `active_decision_variables` and `DecisionVariableRole.Active`. The `state_role` value is `"active"`. Adapters consume active variables and active constraints; row-level `used_ids` retain their reference meaning.
 
+### Reject v1 exports that would discard special-constraint results ([#1380](https://github.com/Jij-Inc/ommx/pull/1380))
+
+`to_v1_bytes()` is a compatibility serialization format for older OMMX SDKs;
+v3 features that cannot be represented in v1 require `to_v2_bytes()`.
+`Solution.to_v1_bytes()` and `SampleSet.to_v1_bytes()` now raise `RuntimeError`
+when Indicator, OneHot, or SOS1 results are retained, including Indicators that
+are OFF, satisfied constraints, and inactive rows. Use `to_v2_bytes()` to preserve them.
+Regular-only v1 exports remain available when they satisfy the other v1 export
+restrictions; existing v1 readers retain their behavior.
+`from_v1_bytes()` is documented as compatibility import that aims to recover
+legacy data without changing its mathematical meaning. Current recovery limits
+are explicit; implementation improvements are tracked separately in
+[#1381](https://github.com/Jij-Inc/ommx/issues/1381).
+See the [migration guide](../migration/python_sdk_v2_to_v3.md) for versioned serialization.
+
 ### 🛠 ⚠ Report infeasible constant constraints through the solver ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))
 
 HiGHS and PySCIPOpt now accept constant regular equalities and inequalities

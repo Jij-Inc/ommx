@@ -407,10 +407,17 @@ impl Instance {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Instance {
-    /// Deserialize an instance from v1 protobuf bytes.
+    /// Read legacy v1 bytes into a current-SDK instance.
     ///
-    /// Raises {class}`ValueError` if the protobuf payload is malformed or
-    /// semantically invalid.
+    /// This is a compatibility import for data saved by older OMMX SDKs.
+    /// Its policy is to recover as much existing data as possible through
+    /// legacy defaults and normalization while preserving mathematical meaning.
+    /// Recovery must not invent missing mathematical data or silently change it.
+    ///
+    /// Current recovery covers known legacy representations, such as omitted
+    /// variable bounds. Advisory constraint hints do not trigger automatic
+    /// promotion to special constraints. Recovery is not exhaustive: malformed
+    /// or semantically inconsistent payloads still raise {class}`ValueError`.
     #[staticmethod]
     pub fn from_v1_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -1413,11 +1420,18 @@ impl Instance {
             .collect()
     }
 
-    /// Serialize this instance in the OMMX v1 wire format.
+    /// Serialize for compatibility with older OMMX SDKs using the v1 wire format.
+    ///
+    /// Use `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.
+    /// This compatibility format can export only data representable in v1;
+    /// v3 features such as native Indicator constraints cannot be serialized.
     ///
     /// # Errors
     ///
-    /// Serialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.
+    /// Raises `RuntimeError` if an output objective or any Indicator, OneHot,
+    /// or SOS1 constraint is present, including inactive constraints, or if any
+    /// inactive constraint skips feasibility checks. Use
+    /// `to_v2_bytes()` to preserve these features.
     ///
     /// >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
@@ -1437,7 +1451,7 @@ impl Instance {
         Ok(PyBytes::new(py, &self.inner.to_v1_bytes()?))
     }
 
-    /// Serialize this instance in the OMMX v2 wire format.
+    /// Serialize in the v2 wire format for storage and exchange with v3 or later SDKs.
     ///
     /// # Postconditions
     ///
@@ -2453,6 +2467,9 @@ impl Instance {
     ///
     /// where $u \geq \sup f(x)$ and $l \leq \inf f(x)$ are the upper and lower
     /// bounds of $f$ over the decision variables' domains.
+    ///
+    /// With `activate_on_zero=True`, the sides are `f(x) - u y <= 0` and
+    /// `-f(x) + l y <= 0`; the same side-emission rules apply.
     ///
     /// Side emission:
     ///

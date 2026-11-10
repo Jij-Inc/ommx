@@ -1,6 +1,15 @@
 """Tests for indicator constraint support in PySCIPOpt adapter."""
 
-from ommx import DecisionVariable, Instance, Sense
+import pytest
+
+from ommx import (
+    DecisionVariable,
+    Equality,
+    Function,
+    IndicatorConstraint,
+    Instance,
+    Sense,
+)
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 
@@ -94,3 +103,67 @@ def test_indicator_constraint_multiple():
 
     # Optimal: b1=1, b2=0, x=50 (only the weaker constraint is enforced)
     assert abs(solution.objective - 50.0) < 1e-6
+
+
+@pytest.mark.parametrize("zero", [False, True])
+@pytest.mark.parametrize(
+    "equality", [Equality.EqualToZero, Equality.LessThanOrEqualToZero]
+)
+@pytest.mark.parametrize("indicator_on", [False, True])
+@pytest.mark.parametrize("sense", [Sense.Minimize, Sense.Maximize])
+def test_both_activation_values(zero, equality, indicator_on, sense):
+    z = DecisionVariable.binary(0)
+    x = DecisionVariable.continuous(1, lower=0, upper=10)
+    value = int(not zero) if indicator_on else int(zero)
+    instance = Instance.from_components(
+        sense=sense,
+        objective=x,
+        decision_variables=[z, x],
+        active_constraints={0: z == value},
+        active_indicator_constraints={
+            1: IndicatorConstraint(
+                indicator_variable=z,
+                function=x - 3,
+                equality=equality,
+                activate_on_zero=zero,
+            )
+        },
+    )
+    assert OMMXPySCIPOptAdapter.INPUT_CLASS.contains(instance)
+    solution = OMMXPySCIPOptAdapter.solve_without_preparation(instance)
+    expected = (
+        3
+        if indicator_on
+        and (equality == Equality.EqualToZero or sense == Sense.Maximize)
+        else (0 if sense == Sense.Minimize else 10)
+    )
+    assert solution.objective == pytest.approx(expected)
+    assert solution.feasible
+
+
+@pytest.mark.parametrize("zero", [False, True])
+@pytest.mark.parametrize(
+    "equality", [Equality.EqualToZero, Equality.LessThanOrEqualToZero]
+)
+@pytest.mark.parametrize("residual", [-1.0, 0.0, 1.0])
+def test_constant_body_uses_indicator_off_value(zero, equality, residual):
+    z = DecisionVariable.binary(0)
+    body_feasible = residual == 0 if equality == Equality.EqualToZero else residual <= 0
+    # Prefer the ON trigger: a feasible constant permits it, an infeasible one forbids it.
+    instance = Instance.from_components(
+        sense=Sense.Minimize if zero else Sense.Maximize,
+        objective=z,
+        decision_variables=[z],
+        active_constraints={},
+        active_indicator_constraints={
+            0: IndicatorConstraint(
+                indicator_variable=z,
+                function=Function.from_scalar(residual),
+                equality=equality,
+                activate_on_zero=zero,
+            )
+        },
+    )
+    solution = OMMXPySCIPOptAdapter.solve_without_preparation(instance)
+    assert solution.objective == int(not zero if body_feasible else zero)
+    assert solution.feasible

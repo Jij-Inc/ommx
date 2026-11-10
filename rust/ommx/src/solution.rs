@@ -983,7 +983,7 @@ fn validate_solution_indicator_stage_values(
         let variable = decision_variables
             .get(&constraint.indicator_variable)
             .expect("indicator structural variables must be validated first");
-        let computed_indicator_on = expected_binary_activity(
+        expected_binary_activity(
             constraint.indicator_variable,
             *variable.value(),
             atol,
@@ -994,6 +994,14 @@ fn validate_solution_indicator_stage_values(
             constraint_id: format!("{id:?}"),
             message,
         })?;
+        let computed_indicator_on = atol.approx_eq(
+            *variable.value(),
+            if constraint.activate_on_zero {
+                0.0
+            } else {
+                1.0
+            },
+        );
         if constraint.stage.indicator_on != computed_indicator_on {
             return Err(SolutionError::InvalidConstraintStructure {
                 constraint_family: "indicator",
@@ -1487,6 +1495,7 @@ mod tests {
                     0.into(),
                     Equality::EqualToZero,
                     Function::from(crate::coeff!(-3.0)),
+                    false,
                 ),
             )]))
             .active_one_hot_constraints(BTreeMap::from([(
@@ -1608,6 +1617,7 @@ mod tests {
                     VariableID::from(0),
                     Equality::LessThanOrEqualToZero,
                     Function::from(crate::coeff!(1.5)),
+                    false,
                 ),
             )]))
             .active_one_hot_constraints(BTreeMap::from([(
@@ -2232,6 +2242,7 @@ mod tests {
         let indicator_id = crate::IndicatorConstraintID::from(3);
         let indicator = crate::indicator_constraint::EvaluatedIndicatorConstraint {
             indicator_variable: structural_id,
+            activate_on_zero: false,
             equality: crate::Equality::EqualToZero,
             stage: crate::indicator_constraint::IndicatorEvaluatedData {
                 evaluated_value: 0.0,

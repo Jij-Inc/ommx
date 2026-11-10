@@ -8,6 +8,7 @@ use anyhow::Context;
 fn indicator_is_on(
     indicator_variable: VariableID,
     value: f64,
+    activate_on_zero: bool,
     sample_id: Option<SampleID>,
     atol: ATol,
 ) -> crate::Result<bool> {
@@ -21,7 +22,7 @@ fn indicator_is_on(
                 "indicator variable {indicator_variable:?} has an invalid activation value"
             ),
         })?;
-    Ok(atol.approx_eq(value, 1.0))
+    Ok(atol.approx_eq(value, if activate_on_zero { 0.0 } else { 1.0 }))
 }
 
 impl Propagate for IndicatorConstraint<Created> {
@@ -35,8 +36,14 @@ impl Propagate for IndicatorConstraint<Created> {
         let empty_state = crate::v1::State::default();
 
         if let Some(&indicator_value) = state.entries.get(&self.indicator_variable.into_inner()) {
-            if indicator_is_on(self.indicator_variable, indicator_value, None, atol)? {
-                // Indicator ON (~1) → promote inner constraint to regular Constraint.
+            if indicator_is_on(
+                self.indicator_variable,
+                indicator_value,
+                self.activate_on_zero,
+                None,
+                atol,
+            )? {
+                // Indicator at activation value → promote inner constraint to regular Constraint.
                 // Clone the function so self (going to inactive) retains its data.
                 let mut promoted_function = self.stage.function.clone();
                 promoted_function.partial_evaluate(state, atol)?;
@@ -61,7 +68,7 @@ impl Propagate for IndicatorConstraint<Created> {
                     empty_state,
                 ))
             } else {
-                // Indicator OFF (~0) → vacuously satisfied; the constraint is consumed.
+                // Indicator OFF → vacuously satisfied; the constraint is consumed.
                 Ok((PropagateOutcome::Consumed(self), empty_state))
             }
         } else {
@@ -91,10 +98,17 @@ impl Evaluate for IndicatorConstraint<Created> {
                 )
             })?;
 
-        let indicator_on = indicator_is_on(self.indicator_variable, *indicator_value, None, atol)?;
+        let indicator_on = indicator_is_on(
+            self.indicator_variable,
+            *indicator_value,
+            self.activate_on_zero,
+            None,
+            atol,
+        )?;
 
         Ok(IndicatorConstraint {
             indicator_variable: self.indicator_variable,
+            activate_on_zero: self.activate_on_zero,
             equality: self.equality,
             stage: IndicatorEvaluatedData {
                 evaluated_value,
@@ -132,6 +146,7 @@ impl Evaluate for IndicatorConstraint<Created> {
             let indicator_on = indicator_is_on(
                 self.indicator_variable,
                 *indicator_value,
+                self.activate_on_zero,
                 Some(sample_id),
                 atol,
             )?;
@@ -141,6 +156,7 @@ impl Evaluate for IndicatorConstraint<Created> {
 
         Ok(IndicatorConstraint {
             indicator_variable: self.indicator_variable,
+            activate_on_zero: self.activate_on_zero,
             equality: self.equality,
             stage: IndicatorSampledData {
                 evaluated_values,
@@ -189,6 +205,7 @@ mod tests {
             indicator_id,
             Equality::EqualToZero,
             Function::Constant(crate::Coefficient::try_from(*atol).unwrap()),
+            false,
         );
         let boundary_state = crate::v1::State::from(HashMap::from([(10, indicator_boundary)]));
 
@@ -219,6 +236,7 @@ mod tests {
             indicator_id,
             Equality::EqualToZero,
             Function::Constant(crate::Coefficient::try_from(outside).unwrap()),
+            false,
         );
         let exact_on = crate::v1::State::from(HashMap::from([(10, 1.0)]));
         assert!(!outside_constraint
@@ -238,6 +256,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
 
         // x1 = 3, x10 = 1 (indicator ON, 3 - 5 = -2 <= 0 → feasible)
@@ -255,6 +274,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
 
         // x1 = 7, x10 = 1 (indicator ON, 7 - 5 = 2 > 0 → infeasible)
@@ -272,6 +292,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
 
         // x1 = 100, x10 = 0 (indicator OFF → always feasible regardless of f(x))
@@ -288,6 +309,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1)),
+            false,
         );
         let state = crate::v1::State::from(HashMap::from([(1, 3.0), (10, 0.5)]));
 
@@ -312,6 +334,7 @@ mod tests {
             VariableID::from(10),
             Equality::EqualToZero,
             Function::from(linear!(1) + linear!(2)),
+            false,
         );
         let ids = ic.required_ids();
         assert!(ids.contains(&VariableID::from(1)));
@@ -326,6 +349,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(((linear!(1) + linear!(2)).unwrap() + coeff!(-5.0)).unwrap()),
+            false,
         );
 
         // Fix x1 = 3, but leave x2 and indicator x10 free
@@ -345,6 +369,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
 
         // Try to fix x10 (indicator variable)
@@ -360,6 +385,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
 
         let mut samples = crate::Sampled::<crate::v1::State>::default();
@@ -408,6 +434,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1)),
+            false,
         );
         let sample_id = crate::SampleID::from(7);
         let samples = crate::Sampled::from((
@@ -439,6 +466,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
 
         // x10 = 1 → Transformed: promote inner constraint
@@ -464,6 +492,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
+            false,
         );
 
         // x10 = 0 → Consumed (vacuously satisfied)
@@ -479,6 +508,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1)),
+            false,
         );
         let state = crate::v1::State::from(HashMap::from([(10, 0.5)]));
 
@@ -502,6 +532,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(((linear!(1) + linear!(2)).unwrap() + coeff!(-5.0)).unwrap()),
+            false,
         );
 
         // x1 = 3 (not indicator) → Active: function partial-evaluated
@@ -524,6 +555,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(((linear!(1) + linear!(2)).unwrap() + coeff!(-5.0)).unwrap()),
+            false,
         );
 
         // x10=1, x1=3 → Transformed with x1 substituted in promoted function

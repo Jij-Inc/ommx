@@ -97,8 +97,9 @@ Replace `relax_*` / `restore_*` with `deactivate_*` / `activate_*`. Inactive mem
 Each row has exactly one `ConstraintActiveness` state: `Active`, `InactiveChecked` (`skip_feasibility_check: false`), or `InactiveSkipped` (`skip_feasibility_check: true`). Inactive membership includes both `InactiveChecked` and `InactiveSkipped`; `inactive_constraints()` returns both.
 
 Indicator stage data use `indicator_on` to record whether the indicator variable
-is one within the evaluation tolerance. This candidate-dependent diagnostic is
-independent of the constraint's activeness.
+matches the configured activation value within the evaluation tolerance: zero
+when `activate_on_zero` is true, and one otherwise. This candidate-dependent
+diagnostic is independent of the constraint's activeness.
 
 OneHot/SOS1 evaluated and sampled stage fields rename `active_variable` to
 `selected_variable`. This candidate-dependent selection diagnostic is independent
@@ -117,6 +118,22 @@ The `total_violation` query minimum includes every state at or above its value:
 Thus `InactiveSkipped < InactiveChecked < Active`, and a minimum includes every row at or above that level. `Solution::feasible()` and `feasible_constraints()` check active and inactive checked constraints without taking a minimum. SampleSet feasibility and feasible-sample selection also retain their signatures without a minimum. `feasible_relaxed()` checks active constraints only. For `total_violation`, pass `Default::default()` (`InactiveChecked`) to use the constraints checked by `feasible()`, or `Active` to use those checked by `feasible_relaxed()`. Feasibility applies the tolerance to each row and checks variable domains separately. No exact-zero implication is part of the total-violation contract.
 
 The v1 wire schema is unchanged. Export fails if any retained constraint has `skip_feasibility_check: true`; v2 preserves the flag with a required feature. Existing v1 export restrictions still apply.
+
+## Result serialization to v1
+
+[`Solution::to_v1_bytes`](crate::Solution::to_v1_bytes) and
+[`SampleSet::to_v1_bytes`](crate::SampleSet::to_v1_bytes) return
+`ommx::Result<Vec<u8>>`. Add `?` at callers. The direct conversions to
+`v1::Solution` and `v1::SampleSet` use `TryFrom` instead of `From`; replace
+`.into()` with `.try_into()?`.
+
+These operations reject retained Indicator, OneHot, and SOS1 results, including
+Indicators that are OFF, satisfied constraints, and inactive rows, instead of
+silently omitting them.
+Big-M lowering retains the original special constraints, so its results also
+require `to_v2_bytes()`. Reading existing v1 payloads is unchanged. For results
+without special constraints, v1 export still recomputes feasibility using the
+SDK default tolerance; use v2 to retain the evaluation tolerance.
 
 ## Bounds collections
 
@@ -176,6 +193,16 @@ Query individual values with [`Solution::constraint_violation`](crate::Solution:
 passing the corresponding typed ID. Unknown IDs return `None`.
 
 Indicator uses its inner violation when `indicator_on` is true and zero otherwise.
+[`IndicatorConstraint::new`](crate::IndicatorConstraint::new) requires an explicit
+`activate_on_zero` argument after the function: `false` activates at one and
+`true` at zero. The field is retained at every stage and in v2 serialization.
+Existing v2 payloads that omit the field still activate at one.
+[`InstanceClassClause::with_indicator_constraint`](crate::InstanceClassClause::with_indicator_constraint)
+sets the body relation and polynomial requirement, shared by all allowed activation values.
+Use [`InstanceClassClause::with_allowed_indicator_activation_values`](crate::InstanceClassClause::with_allowed_indicator_activation_values)
+to set those values independently (`{1}` by default); values other than 0 and 1
+are rejected.
+
 OneHot and SOS1 measure the minimum sum of absolute changes needed to satisfy their
 structural condition. Every constraint is feasible exactly when its violation is
 at most `atol`. For OneHot and SOS1, tolerance now applies to the total change,

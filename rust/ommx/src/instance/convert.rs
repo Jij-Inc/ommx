@@ -622,6 +622,7 @@ mod with_parameters_tests {
             y,
             Equality::EqualToZero,
             Function::from(linear!(2) + linear!(100)),
+            false,
         );
 
         let parametric = ParametricInstance::builder()
@@ -678,6 +679,7 @@ mod with_parameters_tests {
             y,
             Equality::EqualToZero,
             Function::from(((linear!(2) + linear!(100)).unwrap() + coeff!(-1.0)).unwrap()),
+            false,
         );
 
         let parametric = ParametricInstance::builder()

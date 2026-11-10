@@ -37,6 +37,30 @@ impl ConstraintFacts {
     }
 }
 
+/// Membership facts for an indicator's activation condition and body.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IndicatorConstraintFacts {
+    activate_on_zero: bool,
+    body: ConstraintFacts,
+}
+
+impl IndicatorConstraintFacts {
+    pub fn activate_on_zero(&self) -> bool {
+        self.activate_on_zero
+    }
+    #[cfg(test)]
+    pub fn relation(&self) -> Equality {
+        self.body.relation()
+    }
+    #[cfg(test)]
+    pub fn classification(&self) -> FunctionClassification {
+        self.body.classification()
+    }
+    pub fn body(&self) -> ConstraintFacts {
+        self.body
+    }
+}
+
 /// Facts derived from the active mathematical content of an [`Instance`].
 ///
 /// This private value is diagnostic evidence for instance-class membership,
@@ -50,7 +74,7 @@ pub struct InstanceFacts {
     active_variables_by_kind: BTreeMap<Kind, VariableIDSet>,
     objective_classification: FunctionClassification,
     regular_constraints: BTreeMap<ConstraintID, ConstraintFacts>,
-    indicator_constraints: BTreeMap<IndicatorConstraintID, ConstraintFacts>,
+    indicator_constraints: BTreeMap<IndicatorConstraintID, IndicatorConstraintFacts>,
     one_hot_constraint_ids: BTreeSet<OneHotConstraintID>,
     sos1_constraint_ids: BTreeSet<Sos1ConstraintID>,
 }
@@ -80,7 +104,9 @@ impl InstanceFacts {
         &self.regular_constraints
     }
 
-    pub fn indicator_constraints(&self) -> &BTreeMap<IndicatorConstraintID, ConstraintFacts> {
+    pub fn indicator_constraints(
+        &self,
+    ) -> &BTreeMap<IndicatorConstraintID, IndicatorConstraintFacts> {
         &self.indicator_constraints
     }
 
@@ -126,9 +152,12 @@ impl From<&Instance> for InstanceFacts {
                 .map(|(id, constraint)| {
                     (
                         *id,
-                        ConstraintFacts {
-                            relation: constraint.equality,
-                            classification: constraint.function().into(),
+                        IndicatorConstraintFacts {
+                            activate_on_zero: constraint.activate_on_zero,
+                            body: ConstraintFacts {
+                                relation: constraint.equality,
+                                classification: constraint.function().into(),
+                            },
                         },
                     )
                 })

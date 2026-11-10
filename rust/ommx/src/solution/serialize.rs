@@ -3,16 +3,16 @@ use crate::{message_io, v1, v2, Message, Parse};
 use anyhow::Result;
 
 impl Solution {
-    /// Serialize using the lossy v1 format.
+    /// Serialize to v1, rejecting native special constraints.
     ///
-    /// Native special constraints are omitted. Feasibility is recomputed from
+    /// Indicator, OneHot, and SOS1 constraints (including inactive rows) return an
+    /// error. Use [`Self::to_v2_bytes`] to preserve them. Feasibility is recomputed from
     /// retained regular constraints and variable values at [`ATol::default`],
     /// as on v1 import. Use the same default on write and read, or use
     /// [`Self::to_v2_bytes`] to preserve the original tolerance and constraints.
-    ///
-    /// Returns an error if any constraint skips the default feasibility
-    /// judgment, because v1 cannot represent that policy. Use v2 instead.
-    pub fn to_v1_bytes(&self) -> Result<Vec<u8>> {
+    /// A true `skip_feasibility_check` flag also returns an error because v1
+    /// cannot represent that policy. Use v2 to preserve it.
+    pub fn to_v1_bytes(&self) -> crate::Result<Vec<u8>> {
         let v1_solution = v1::Solution::try_from(self.clone())?;
         Ok(v1_solution.encode_to_vec())
     }
@@ -37,6 +37,11 @@ impl From<Solution> for v2::Solution {
     fn from(value: Solution) -> Self {
         let required_features = crate::v2_io::required_features(
             !value.evaluated_indicator_constraints.is_empty(),
+            value
+                .evaluated_indicator_constraints
+                .inner()
+                .values()
+                .any(|c| c.activate_on_zero),
             !value.evaluated_one_hot_constraints.is_empty(),
             !value.evaluated_sos1_constraints.is_empty(),
             value
@@ -355,61 +360,102 @@ mod tests {
     }
 
     #[test]
-    fn v1_roundtrip_excludes_omitted_special_constraints_from_feasibility() {
-        for family in ["indicator", "one-hot", "sos1"] {
-            let variables: crate::VariableIDSet = [0.into(), 1.into()].into_iter().collect();
-            let mut builder = Instance::builder()
-                .sense(Sense::Minimize)
-                .objective(Function::Zero)
-                .active_constraints(BTreeMap::new())
-                .decision_variables(
-                    variables
-                        .iter()
-                        .map(|&id| (id, DecisionVariable::binary()))
-                        .collect(),
-                );
-            match family {
-                "indicator" => {
-                    builder = builder.active_indicator_constraints(BTreeMap::from([(
-                        0.into(),
-                        crate::IndicatorConstraint::new(
+    fn v1_rejects_active_and_inactive_special_constraints() {
+        for family in ["indicator-one", "indicator-zero", "one-hot", "sos1"] {
+            for inactive in [false, true] {
+                let variables: crate::VariableIDSet = [0.into(), 1.into()].into_iter().collect();
+                let mut builder = Instance::builder()
+                    .sense(Sense::Minimize)
+                    .objective(Function::Zero)
+                    .active_constraints(BTreeMap::new())
+                    .decision_variables(
+                        variables
+                            .iter()
+                            .map(|&id| (id, DecisionVariable::binary()))
+                            .collect(),
+                    );
+                let reason = InactiveConstraintMetadata {
+                    reason: "test relaxation".into(),
+                    parameters: Default::default(),
+                    skip_feasibility_check: false,
+                };
+                let expected_family = match family {
+                    "indicator-one" | "indicator-zero" => {
+                        let constraint = crate::IndicatorConstraint::new(
                             0.into(),
                             crate::Equality::EqualToZero,
-                            Function::from(crate::coeff!(1.0)),
-                        ),
-                    )]));
+                            Function::from(crate::linear!(1)),
+                            family == "indicator-zero",
+                        );
+                        builder = if inactive {
+                            builder.inactive_indicator_constraints(BTreeMap::from([(
+                                0.into(),
+                                (constraint, reason),
+                            )]))
+                        } else {
+                            builder.active_indicator_constraints(BTreeMap::from([(
+                                0.into(),
+                                constraint,
+                            )]))
+                        };
+                        "Indicator"
+                    }
+                    "one-hot" => {
+                        let constraint = crate::OneHotConstraint::new(variables).unwrap();
+                        builder = builder
+                            .active_one_hot_constraints(BTreeMap::from([(0.into(), constraint)]));
+                        "One-hot"
+                    }
+                    "sos1" => {
+                        let constraint = crate::Sos1Constraint::new(variables).unwrap();
+                        builder = builder
+                            .active_sos1_constraints(BTreeMap::from([(0.into(), constraint)]));
+                        "SOS1"
+                    }
+                    _ => unreachable!(),
+                };
+                let mut instance = builder.build().unwrap();
+                if inactive {
+                    match family {
+                        "one-hot" => {
+                            instance.convert_one_hot_to_constraint(0.into()).unwrap();
+                        }
+                        "sos1" => {
+                            instance.convert_sos1_to_constraints(0.into()).unwrap();
+                        }
+                        _ => {}
+                    }
                 }
-                "one-hot" => {
-                    builder = builder.active_one_hot_constraints(BTreeMap::from([(
-                        0.into(),
-                        crate::OneHotConstraint::new(variables).unwrap(),
-                    )]));
+                // Serialization must reject even satisfied or inactive conditions.
+                for z in [0.0, 1.0] {
+                    for x in [0.0, 1.0] {
+                        let state = v1::State::from_iter([(0, z), (1, x)]);
+                        let solution = instance.evaluate(&state, ATol::default()).unwrap();
+                        let samples = instance
+                            .evaluate_samples(&Sampled::from((7.into(), state)), ATol::default())
+                            .unwrap();
+                        for error in [
+                            solution.to_v1_bytes().unwrap_err(),
+                            samples.to_v1_bytes().unwrap_err(),
+                            v1::Solution::try_from(solution.clone()).unwrap_err(),
+                            v1::SampleSet::try_from(samples.clone()).unwrap_err(),
+                        ] {
+                            let message = error.to_string();
+                            assert!(message.contains(expected_family), "{message}");
+                            assert!(message.contains("to_v2_bytes()"), "{message}");
+                        }
+                        assert_eq!(
+                            Solution::from_v2_bytes(&solution.to_v2_bytes()).unwrap(),
+                            solution
+                        );
+                        assert_eq!(
+                            SampleSet::from_v2_bytes(&samples.to_v2_bytes())
+                                .unwrap()
+                                .to_v2_bytes(),
+                            samples.to_v2_bytes()
+                        );
+                    }
                 }
-                "sos1" => {
-                    builder = builder.active_sos1_constraints(BTreeMap::from([(
-                        0.into(),
-                        crate::Sos1Constraint::new(variables).unwrap(),
-                    )]));
-                }
-                _ => unreachable!(),
-            }
-            let instance = builder.build().unwrap();
-            let state = v1::State {
-                entries: [(0, 1.0), (1, 1.0)].into(),
-            };
-            let solution = instance.evaluate(&state, ATol::default()).unwrap();
-            let samples = instance
-                .evaluate_samples(&Sampled::from((7.into(), state)), ATol::default())
-                .unwrap();
-            assert!(!solution.feasible(), "{family}");
-            assert!(samples.feasible_ids().is_empty(), "{family}");
-            let restored = Solution::from_v1_bytes(&solution.to_v1_bytes().unwrap()).unwrap();
-            let restored_samples =
-                SampleSet::from_v1_bytes(&samples.to_v1_bytes().unwrap()).unwrap();
-            for result in [restored, restored_samples.get(7.into()).unwrap()] {
-                assert!(result.feasible(), "{family}");
-                assert!(result.feasible_relaxed(), "{family}");
-                assert_eq!(result.total_violation(Default::default()), 0.0);
             }
         }
     }
@@ -432,8 +478,8 @@ mod tests {
         }
 
         #[test]
-        fn result_wire_formats_preserve_or_reject_the_feasibility_policy(
-            (instance, state) in Instance::arbitrary().prop_flat_map(|instance| {
+        fn v1_export_rejects_special_constraints_or_preserves_regular_results(
+            (instance, state) in prop_oneof![Instance::arbitrary(), Instance::arbitrary_with(crate::InstanceParameters::v1_compatible())].prop_flat_map(|instance| {
                 let state = instance.arbitrary_state();
                 (Just(instance), state)
             }),
@@ -455,8 +501,6 @@ mod tests {
             prop_assert_eq!(v2_samples.get(7.into()).unwrap(), solution.clone());
             prop_assert_eq!(v2_samples.to_v2_bytes(), samples.to_v2_bytes());
 
-            // The full domain includes policies that v1 cannot encode, even on
-            // a special constraint that v1 would otherwise omit.
             let has_skipped_constraints = solution.evaluated_constraints().inactive_metadata().values()
                 .chain(solution.evaluated_indicator_constraints().inactive_metadata().values())
                 .chain(solution.evaluated_one_hot_constraints().inactive_metadata().values())
@@ -467,6 +511,18 @@ mod tests {
                     let error = result.unwrap_err();
                     prop_assert!(error.to_string().contains("skip_feasibility_check=True"), "{error:#}");
                 }
+                prop_assert!(v1::Solution::try_from(solution).is_err());
+                prop_assert!(v1::SampleSet::try_from(samples).is_err());
+                return Ok(());
+            }
+            if !solution.evaluated_indicator_constraints().is_empty()
+                || !solution.evaluated_one_hot_constraints().is_empty()
+                || !solution.evaluated_sos1_constraints().is_empty()
+            {
+                prop_assert!(solution.to_v1_bytes().is_err());
+                prop_assert!(samples.to_v1_bytes().is_err());
+                prop_assert!(v1::Solution::try_from(solution).is_err());
+                prop_assert!(v1::SampleSet::try_from(samples).is_err());
                 return Ok(());
             }
             let restored = Solution::from_v1_bytes(&solution.to_v1_bytes().unwrap()).unwrap();

@@ -3299,6 +3299,7 @@ mod tests {
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
                 Function::from(((linear!(1) + linear!(2)).unwrap() + coeff!(-5.0)).unwrap()),
+                false,
             ),
         );
 
@@ -3362,6 +3363,7 @@ mod tests {
                     VariableID::from(10),
                     Equality::LessThanOrEqualToZero,
                     inner_function,
+                    false,
                 ),
             )]))
             .build()
@@ -3425,6 +3427,7 @@ mod tests {
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
                 Function::from(linear!(1) + coeff!(-5.0)),
+                false,
             ),
         );
 

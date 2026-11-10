@@ -896,6 +896,7 @@ mod tests {
                     indicator_id,
                     Equality::LessThanOrEqualToZero,
                     Function::from(crate::linear!(1)),
+                    false,
                 ),
             )]))
             .build()

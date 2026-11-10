@@ -1,16 +1,17 @@
-A condition enforced when a controlling Binary variable equals one.
+A condition enforced when a controlling Binary variable equals its activation value.
 
 For a Binary variable $z$, an Indicator requires $f(x)\leq0$ or $f(x)=0$
-when $z=1$. At $z=0$, the Indicator is satisfied regardless of the body's
+when $z=1$ by default. With `activate_on_zero=True`, it is enforced when $z=0$.
+At the other binary value, the Indicator is satisfied regardless of the body's
 value; variable domains and other constraints still apply. This is a one-way
-implication: a satisfied body does not require $z=1$.
+implication: a satisfied body does not force the trigger to its activation value.
 
 Construct one from a regular constraint with {meth}`~ommx.Constraint.with_indicator`,
 or pass `indicator_variable`, `function`, and `equality` to this class.
 The controlling variable accepts a variable ID, a standalone
 {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.
 These accepted forms are exposed as the `VariableIDLike` type alias.
-Only its ID is stored. The enclosing Instance validates that the referenced
+Its ID and activation condition are stored. The enclosing Instance validates that the referenced
 variables exist and that the controlling variable is Binary when inserting it.
 
 **Construct and evaluate a conditional limit**
@@ -38,13 +39,26 @@ The following model limits the amount to five only when the facility is enabled:
 
 ```
 
-The `indicator_on` column records whether the controlling variable is one,
-using the evaluation tolerance. It distinguishes an OFF Indicator from an ON
-Indicator whose body is satisfied. This is independent of `activeness`, which
-records whether the constraint belongs to the current formulation and its default
-feasibility participation. An active constraint can have its Indicator OFF;
-an inactive constraint can have its Indicator ON. Indicator results do not have
-a dual variable.
+Pass `activate_on_zero=True` to enforce the body when the trigger is zero:
+
+```pycon
+>>> disabled_limit = (amount <= 5).with_indicator(enabled, activate_on_zero=True)
+>>> assert disabled_limit.activate_on_zero
+
+```
+
+The constructor accepts the same keyword. Attached, inactive, evaluated, and
+sampled rows expose `activate_on_zero`; Indicator DataFrames retain it as a
+column. It describes the constraint, independently of whether a particular
+candidate activates it.
+
+The `indicator_on` column records whether the controlling variable equals its
+activation value, using the evaluation tolerance. It distinguishes an OFF
+Indicator from an ON Indicator whose body is satisfied. This is independent of
+`activeness`, which records whether the constraint belongs to the current
+formulation and its default feasibility participation. An active constraint can
+have its Indicator OFF; an inactive constraint can have its Indicator ON.
+Indicator results do not have a dual variable.
 See {meth}`~ommx.Solution.constraints_df` for the precise columns and violation
 semantics, and {meth}`~ommx.Instance.evaluate` for numerical tolerances and invalid
 activation values.

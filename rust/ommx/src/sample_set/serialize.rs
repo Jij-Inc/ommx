@@ -3,16 +3,16 @@ use crate::{message_io, v1, v2, Message, Parse};
 use anyhow::Result;
 
 impl SampleSet {
-    /// Serialize using the lossy v1 format.
+    /// Serialize to v1, rejecting native special constraints.
     ///
-    /// Native special constraints are omitted. Feasibility is recomputed from
+    /// Indicator, OneHot, and SOS1 constraints (including inactive rows) return an
+    /// error. Use [`Self::to_v2_bytes`] to preserve them. Feasibility is recomputed from
     /// retained regular constraints and variable values at [`ATol::default`],
     /// as on v1 import. Use the same default on write and read, or use
     /// [`Self::to_v2_bytes`] to preserve the original tolerance and constraints.
-    ///
-    /// Returns an error if any constraint skips the default feasibility
-    /// judgment, because v1 cannot represent that policy. Use v2 instead.
-    pub fn to_v1_bytes(&self) -> Result<Vec<u8>> {
+    /// A true `skip_feasibility_check` flag also returns an error because v1
+    /// cannot represent that policy. Use v2 to preserve it.
+    pub fn to_v1_bytes(&self) -> crate::Result<Vec<u8>> {
         let v1_sample_set = v1::SampleSet::try_from(self.clone())?;
         Ok(v1_sample_set.encode_to_vec())
     }
@@ -37,6 +37,11 @@ impl From<SampleSet> for v2::SampleSet {
     fn from(value: SampleSet) -> Self {
         let required_features = crate::v2_io::required_features(
             !value.indicator_constraints.is_empty(),
+            value
+                .indicator_constraints
+                .inner()
+                .values()
+                .any(|c| c.activate_on_zero),
             !value.one_hot_constraints.is_empty(),
             !value.sos1_constraints.is_empty(),
             value

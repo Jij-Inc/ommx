@@ -44,13 +44,17 @@ def _instance(ic: IndicatorConstraint, x_lower: float = 0.0, x_upper: float = 5.
         ConstraintActiveness.INACTIVE_SKIPPED,
     ],
 )
-def test_indicator_on_is_independent_of_constraint_activeness(activeness):
+@pytest.mark.parametrize("activate_on_zero", [False, True])
+def test_indicator_on_is_independent_of_constraint_activeness(
+    activeness, activate_on_zero
+):
     y = DecisionVariable.binary(1)
     instance = _instance(
         IndicatorConstraint(
             indicator_variable=y,
             function=DecisionVariable.continuous(0, lower=0, upper=5) - 2,
             equality=Equality.LessThanOrEqualToZero,
+            activate_on_zero=activate_on_zero,
         )
     )
     cid = IndicatorConstraintID(7)
@@ -62,10 +66,11 @@ def test_indicator_on_is_independent_of_constraint_activeness(activeness):
 
     states = {4: {0: 3, 1: 0}, 9: {0: 3, 1: 1}}
     for sample_id, state in states.items():
-        on = sample_id == 9
+        on = state[1] == int(not activate_on_zero)
         solution = instance.evaluate(state)
         row = solution.constraints[cid]
         assert row.activeness == activeness
+        assert row.activate_on_zero is activate_on_zero
         assert row.indicator_on is on
         assert row.evaluated_value == 1
         assert solution.feasible is (not on or skipped)
@@ -76,11 +81,15 @@ def test_indicator_on_is_independent_of_constraint_activeness(activeness):
     samples = instance.evaluate_samples(states)
     sampled_row = samples.constraints[cid]
     assert sampled_row.activeness == activeness
-    assert sampled_row.indicator_on == {4: False, 9: True}
-    assert samples.feasible == {4: True, 9: skipped}
+    assert sampled_row.activate_on_zero is activate_on_zero
+    assert sampled_row.indicator_on == {4: activate_on_zero, 9: not activate_on_zero}
+    assert samples.feasible == {
+        4: not activate_on_zero or skipped,
+        9: activate_on_zero or skipped,
+    }
     frame = samples.constraints_df(kind=ConstraintKind.Indicator)
-    assert not frame.loc[cid, "indicator_on.4"]
-    assert frame.loc[cid, "indicator_on.9"]
+    assert bool(frame.loc[cid, "indicator_on.4"]) is activate_on_zero
+    assert bool(frame.loc[cid, "indicator_on.9"]) is not activate_on_zero
     assert frame.loc[cid, "activeness"] == activeness
 
 

@@ -171,6 +171,10 @@ impl From<Instance> for v2::Instance {
     fn from(value: Instance) -> Self {
         let mut required_features = crate::v2_io::required_features(
             created_collection_has_payload(&value.indicator_constraint_collection),
+            value
+                .indicator_constraint_collection
+                .values()
+                .any(|c| c.activate_on_zero),
             created_collection_has_payload(&value.one_hot_constraint_collection),
             created_collection_has_payload(&value.sos1_constraint_collection),
             value
@@ -260,6 +264,10 @@ impl From<ParametricInstance> for v2::ParametricInstance {
     fn from(value: ParametricInstance) -> Self {
         let mut required_features = crate::v2_io::required_features(
             created_collection_has_payload(&value.indicator_constraint_collection),
+            value
+                .indicator_constraint_collection
+                .values()
+                .any(|c| c.activate_on_zero),
             created_collection_has_payload(&value.one_hot_constraint_collection),
             created_collection_has_payload(&value.sos1_constraint_collection),
             value
@@ -432,6 +440,7 @@ mod tests {
                     variable_1,
                     Equality::LessThanOrEqualToZero,
                     Function::Zero,
+                    false,
                 ),
             )]))
             .indicator_constraint_context(indicator_context)
@@ -997,6 +1006,30 @@ mod tests {
 
     proptest! {
         #[test]
+        fn v2_round_trip_preserves_both_activation_conditions(
+            instance in Instance::arbitrary_with(crate::InstanceParameters::full_v3()),
+            active_zero in any::<bool>(),
+            inactive_zero in any::<bool>(),
+        ) {
+            // Sample the activation dimension independently for active and inactive rows.
+            // The existing full_v3 generator supplies the other root invariants.
+            let mut proto: v2::Instance = instance.into();
+            let rows = proto.indicator_constraints.as_mut().unwrap();
+            for row in rows.active.values_mut() { row.activate_on_zero = active_zero; }
+            for row in rows.inactive.values_mut() { row.activate_on_zero = inactive_zero; }
+            if active_zero || inactive_zero {
+                proto.required_features.push(v2::Feature::IndicatorActivateOnZero as i32);
+            }
+            let source: Instance = proto.parse(&()).unwrap();
+            let restored = Instance::from_v2_bytes(&source.to_v2_bytes()).unwrap();
+            prop_assert_eq!(&restored, &source);
+            let parameterized: ParametricInstance = source.into();
+            prop_assert_eq!(ParametricInstance::from_v2_bytes(&parameterized.to_v2_bytes()).unwrap(), parameterized);
+        }
+    }
+
+    proptest! {
+        #[test]
         fn v2_instance_round_trip_preserves_full_v3_semantics(
             instance in Instance::arbitrary_with(crate::InstanceParameters::full_v3())
         ) {
@@ -1068,6 +1101,7 @@ mod activeness_wire_tests {
                             0.into(),
                             crate::Equality::LessThanOrEqualToZero,
                             positive,
+                            false,
                         )
                         .into(),
                     )]),

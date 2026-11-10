@@ -75,14 +75,9 @@ impl Instance {
                 .function
                 .plan_binary_power_reduction(&binary_ids)?
             {
-                indicator_replacements.insert(
-                    id,
-                    IndicatorConstraint::new(
-                        constraint.indicator_variable,
-                        constraint.equality,
-                        function,
-                    ),
-                );
+                let mut replacement = constraint.clone();
+                replacement.stage.function = function;
+                indicator_replacements.insert(id, replacement);
             }
         }
         let changed = objective_replacement.is_some()
@@ -109,11 +104,63 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, constraint::CreatedData, linear, quadratic, Bound, Coefficient, Constraint,
+        coeff, constraint::CreatedData, linear, quadratic, ATol, Bound, Coefficient, Constraint,
         DecisionVariable, Equality, Kind, Sense,
     };
     use ::approx::assert_abs_diff_eq;
     use proptest::prelude::*;
+
+    #[test]
+    fn reduction_preserves_indicator_activation() {
+        for activate_on_zero in [false, true] {
+            for equality in [Equality::EqualToZero, Equality::LessThanOrEqualToZero] {
+                let source = Instance::builder()
+                    .sense(Sense::Minimize)
+                    .objective(Function::Zero)
+                    .decision_variables(BTreeMap::from([
+                        (0.into(), DecisionVariable::binary()),
+                        (1.into(), DecisionVariable::binary()),
+                    ]))
+                    .active_constraints(BTreeMap::new())
+                    .active_indicator_constraints(BTreeMap::from([(
+                        7.into(),
+                        IndicatorConstraint::new(
+                            0.into(),
+                            equality,
+                            Function::from(quadratic!(1, 1)),
+                            activate_on_zero,
+                        ),
+                    )]))
+                    .build()
+                    .unwrap();
+                let mut reduced = source.clone();
+                assert!(reduced.reduce_binary_power().unwrap());
+                let row = &reduced.active_indicator_constraints()[&7.into()];
+                assert_eq!(row.activate_on_zero, activate_on_zero);
+                assert_eq!(row.equality, equality);
+                // Reduction preserves the storage variant; its polynomial degree becomes one.
+                assert_eq!(row.function().degree(), Some(1.into()));
+                for z in [0.0, 1.0] {
+                    for x in [0.0, 1.0] {
+                        let state = v1::State::from_iter([(0, z), (1, x)]);
+                        let expected = z != if activate_on_zero { 0.0 } else { 1.0 } || x == 0.0;
+                        assert_eq!(
+                            source.evaluate(&state, ATol::default()).unwrap().feasible(),
+                            expected
+                        );
+                        assert_eq!(
+                            reduced
+                                .evaluate(&state, ATol::default())
+                                .unwrap()
+                                .feasible_relaxed(),
+                            expected
+                        );
+                    }
+                }
+                assert!(!reduced.reduce_binary_power().unwrap());
+            }
+        }
+    }
 
     #[test]
     fn test_instance_reduce_binary_power() {
@@ -323,6 +370,7 @@ mod tests {
                     VariableID::from(1),
                     Equality::LessThanOrEqualToZero,
                     indicator,
+                    false,
                 ),
             )]))
             .named_functions(BTreeMap::from([(
@@ -346,6 +394,7 @@ mod tests {
                         VariableID::from(1),
                         Equality::EqualToZero,
                         Function::from(quadratic!(1, 1)),
+                        false,
                     ),
                     reason,
                 ),

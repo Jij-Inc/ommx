@@ -2,6 +2,7 @@ use crate::constraint_id::{
     ConstraintIDInput, ConstraintMapInput, ConstraintSetInput, IndicatorConstraintIDInput,
     OneHotConstraintIDInput, Sos1ConstraintIDInput,
 };
+use crate::error::OmmxPyResult;
 use crate::{Equality, Instance, Kind, Sense};
 use pyo3::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -57,6 +58,9 @@ impl PolynomialRequirement {
 /// constraint families are not accepted. OneHot and SOS1 are also disabled
 /// unless their Boolean options are enabled. The objective and constraint
 /// requirements describe stored polynomials, not a request to expand expressions.
+/// Indicator activation values are checked independently of the body map.
+/// `allowed_indicator_activation_values` defaults to `{1}` and accepts only 0 and 1.
+/// An empty activation set rejects all Indicators, even with a nonempty body map.
 /// See {class}`~ommx.InstanceClass` for construction and membership examples.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(from_py_object, frozen)]
@@ -67,7 +71,7 @@ pub struct InstanceClassClause(pub ommx::InstanceClassClause);
 #[pymethods]
 impl InstanceClassClause {
     #[new]
-    #[pyo3(signature = (*, label, allowed_variable_kinds, objective_polynomial_requirement, allowed_senses, regular_constraint_polynomial_requirements=None, indicator_body_polynomial_requirements=None, allows_one_hot=false, allows_sos1=false))]
+    #[pyo3(signature = (*, label, allowed_variable_kinds, objective_polynomial_requirement, allowed_senses, regular_constraint_polynomial_requirements=None, indicator_body_polynomial_requirements=None, allowed_indicator_activation_values=None, allows_one_hot=false, allows_sos1=false))]
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         label: String,
@@ -78,9 +82,10 @@ impl InstanceClassClause {
             BTreeMap<Equality, PolynomialRequirement>,
         >,
         indicator_body_polynomial_requirements: Option<BTreeMap<Equality, PolynomialRequirement>>,
+        allowed_indicator_activation_values: Option<BTreeSet<u8>>,
         allows_one_hot: bool,
         allows_sos1: bool,
-    ) -> Self {
+    ) -> OmmxPyResult<Self> {
         let mut clause = ommx::InstanceClassClause::new(
             label,
             allowed_variable_kinds.into_iter().map(Into::into).collect(),
@@ -95,13 +100,16 @@ impl InstanceClassClause {
         for (relation, requirement) in indicator_body_polynomial_requirements.unwrap_or_default() {
             clause = clause.with_indicator_constraint(relation.into(), requirement.0);
         }
+        if let Some(values) = allowed_indicator_activation_values {
+            clause = clause.with_allowed_indicator_activation_values(values)?;
+        }
         if allows_one_hot {
             clause = clause.with_one_hot();
         }
         if allows_sos1 {
             clause = clause.with_sos1();
         }
-        Self(clause)
+        Ok(Self(clause))
     }
 
     /// Human-readable diagnostic label. It does not affect membership.
@@ -143,6 +151,12 @@ impl InstanceClassClause {
             .indicator_body_polynomial_requirements()
             .map(|(relation, requirement)| (relation.into(), PolynomialRequirement(requirement)))
             .collect()
+    }
+
+    /// Allowed trigger values (0 and/or 1), independently of body requirements.
+    #[getter]
+    pub fn allowed_indicator_activation_values(&self) -> BTreeSet<u8> {
+        self.0.allowed_indicator_activation_values().clone()
     }
 
     #[getter]
@@ -324,6 +338,11 @@ pub(crate) enum InstanceClassMismatch {
     IndicatorConstraintsNotAllowed {
         constraint_ids: ConstraintSetInput<IndicatorConstraintIDInput>,
     },
+    IndicatorActivationNotAllowed {
+        activation_value: u8,
+        constraint_ids: ConstraintSetInput<IndicatorConstraintIDInput>,
+        allowed_activation_values: BTreeSet<u8>,
+    },
     IndicatorConstraintRelationNotAllowed {
         relation: Equality,
         constraint_ids: ConstraintSetInput<IndicatorConstraintIDInput>,
@@ -408,6 +427,15 @@ impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
                     constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
                 }
             }
+            ommx::InstanceClassMismatch::IndicatorActivationNotAllowed {
+                activation_value,
+                constraint_ids,
+                allowed_activation_values,
+            } => Self::IndicatorActivationNotAllowed {
+                activation_value,
+                constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
+                allowed_activation_values,
+            },
             ommx::InstanceClassMismatch::IndicatorConstraintRelationNotAllowed {
                 relation,
                 constraint_ids,

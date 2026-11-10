@@ -39,9 +39,10 @@ def test_declares_quadratic_mip_input_class():
         Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(2),
     }
     assert clause.indicator_body_polynomial_requirements == {
-        Equality.EqualToZero: PolynomialRequirement.at_most(1),
-        Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(1),
+        relation: PolynomialRequirement.at_most(1)
+        for relation in (Equality.EqualToZero, Equality.LessThanOrEqualToZero)
     }
+    assert clause.allowed_indicator_activation_values == {0, 1}
     assert not clause.allows_one_hot
     assert clause.allows_sos1
     assert clause.allowed_senses == {Sense.Minimize, Sense.Maximize}

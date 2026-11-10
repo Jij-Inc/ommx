@@ -170,7 +170,7 @@ v2の `sample_qubo_sa` が返したのは生のサンプルです。v3のAdapter
 
 各行の `ConstraintActiveness` は、`ACTIVE`、`INACTIVE_CHECKED`（`skip_feasibility_check=False` のinactive）、`INACTIVE_SKIPPED`（`skip_feasibility_check=True` のinactive）のいずれか1つです。**inactive** は後ろの2状態の総称で、`inactive_constraints` は両方を含みます。
 
-Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` を使い、指示変数が評価時の許容誤差内で1かどうかを表します。これは評価した候補点についての情報であり、制約のactivenessとは独立です。
+Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` を使い、指示変数が評価時の許容誤差内で設定した発火値に一致するかどうかを表します。発火値は `activate_on_zero=True` なら0、それ以外は1です。これは評価した候補点についての情報であり、制約のactivenessとは独立です。
 
 OneHotとSOS1の評価結果のpropertyは、サンプルごとの対応を返すものも含めて `active_variable` から `selected_variable` に変更します。DataFrame列も `selected_variable` と `selected_variable.<sample_id>` になります。評価した候補点での選択を表す情報であり、変数や制約がActive Formulationに属するかどうかとは独立です。評価の動作は変わりません。
 
@@ -269,9 +269,15 @@ assert report.loc[limit.constraint_id, "owner"] == "planning"
 
 SDKの版とprotobufの形式には別々の番号があります。**SDK 2.9.4** の `Instance.to_bytes()` が出力したバイト列は **v1形式** です。v3では `Instance.from_v1_bytes(data)` で読みます。`ParametricInstance`、`Solution`、`SampleSet` でも同じ命名です。新しいファイルには所有元の `to_v2_bytes()` と、対になる `from_v2_bytes()` を使います。変数・式・制約を所属情報とともに保存したい場合は、それを含むモデルまたは結果をシリアライズします。
 
+`from_v1_bytes()` は、旧SDKで保存されたデータを現在のSDKで再利用するための互換読込みです。数学的な意味を保てる範囲で、旧仕様に基づく既定値の補完、表現の正規化、派生値の再構成を行い、既存データを可能な限り利用できるようにする方針です。元の情報が不足している場合に値を作り出すことはせず、数学的な意味を一意に復元できない場合はエラーにします。
+
+現時点のヒーリングは実装済みの規則に限られます。たとえば `Solution` は欠けたstateの値を保存済み変数値から復元し、`SampleSet` は省略された全体の実行可能性マップを再構成します。一方、両者とも保存済みの実行可能性判定がSDK既定の許容誤差による再計算と異なる場合は、現在も読込みを拒否します。v1には保存元の許容誤差が記録されていません。ヒーリングの拡充は [issue #1381](https://github.com/Jij-Inc/ommx/issues/1381) で扱い、この方針の文書化では読込みの実装を変更していません。
+
 2.9.4でもモデルと結果のバイト列に注釈が保存されます。v3では `title` などの専用プロパティでメタデータを、`add_user_annotation` で利用者定義のキーを設定するため、`annotations` の辞書に直接書き込んでいた箇所を更新してください。
 
-出力を2.xのプログラムにも渡す場合は、形式に加えて受信側が扱える表現も確認します。たとえば2.9.4のスキーマには有限集合を値域とする変数がありますが、2.xのSDKはその変数を含むモデルの読込みを拒否します。また出力用の目的関数を明示したモデルは `to_v1_bytes()` では書き出せません。特殊制約や結果の実行可能性判定の許容誤差を保つにはv2形式を使います。
+`to_v1_bytes()` は、SDK 2.xなどの旧OMMX SDKへデータを渡すための互換シリアライズ方式です。v1形式で表現できるデータだけを書き出せます。V3で導入されたIndicator・OneHot・SOS1などの特殊制約は表現できないため、シリアライズ時に `RuntimeError` になります。これは `Instance`、`ParametricInstance`、`Solution`、`SampleSet` に共通で、通常制約への変換後にinactiveとして残る制約も対象です。出力用の目的関数を明示したモデルも書き出せません。これらの機能を保持するには `to_v2_bytes()` を使ってください。
+
+書き出しに成功しても、受信側SDKがその表現を扱えるか確認してください。たとえば2.9.4のスキーマには有限集合を値域とする変数がありますが、2.xのSDKはその変数を含むモデルの読込みを拒否します。書き出せる結果については、v1はSDK既定の許容誤差で実行可能性を再計算し、v2は評価時の許容誤差を保持します。既存のv1データの読込みは変わりません。
 
 MPSを他のツールに渡す場合は `write_mps` を {meth}`~ommx.Instance.save_mps` に変更してください。ファイル形式に収まらない構造やメタデータも含めてモデルを復元するには、SDKのバイト列を保存します。
 
@@ -362,3 +368,21 @@ Local Registryに書き込まずにアーカイブの内容を調べるには {m
 | `write_mps(path)` | {meth}`save_mps(path) <ommx.Instance.save_mps>` | {ref}`5 <migration-storage>` |
 
 v3の各プレリリースでの変更経緯は[Python SDK 3.0のリリースノート](../release_note/ommx-3.0.md)を参照してください。
+
+## Indicator の発火値
+
+`IndicatorConstraint` と `Constraint.with_indicator` に
+`activate_on_zero=True` を指定すると、二値の制御変数が 0 のときに本体を強制します。
+既定値は従来どおり 1 で発火します。この属性は attached・inactive・evaluated・sampled
+の各行と Indicator の DataFrame にも保持されます。
+
+`InstanceClassClause.indicator_body_polynomial_requirements` は従来どおり
+`Equality` から `PolynomialRequirement` への対応です。
+`allowed_indicator_activation_values={0, 1}` を独立に指定すると、同じ本体条件で
+両方の発火値を許可します。既定値は `{1}`、0 発火のみなら `{0}`、空集合なら
+すべての Indicator を拒否します。指定できる値は 0 と 1 だけです。
+本体条件の辞書が空の場合も、発火値の指定にかかわらずすべての Indicator を拒否します。
+
+PySCIPOpt と Big-M 変換は両方の発火値に対応します。
+v2 保存形式では、保持している Indicator に 0 発火が含まれる場合、専用の required
+feature を宣言します。旧 reader は発火条件を誤解釈せず、読み込みを拒否します。

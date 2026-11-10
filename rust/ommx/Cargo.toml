@@ -142,3 +142,7 @@ harness = false
 [[bench]]
 name = "substitute"
 harness = false
+
+[[bench]]
+name = "substitute_context"
+harness = false

@@ -50,7 +50,7 @@ fn every_family_uses_the_same_inclusive_scalar_threshold() {
                     },
                 };
                 assert_contract::<Constraint>(&constraint, &state, atol);
-                let indicator = IndicatorConstraint::new(0.into(), equality, function);
+                let indicator = IndicatorConstraint::new(0.into(), equality, function, false);
                 assert_contract::<IndicatorConstraint>(&indicator, &state, atol);
                 let mut off = state.clone();
                 off.entries.insert(0, 0.0);
@@ -295,7 +295,8 @@ fn activation_decisions_retain_their_conditions_across_queries_and_extraction() 
         0.into(),
         crate::Equality::EqualToZero,
         (crate::Function::from(crate::linear!(1)) + crate::Function::from(crate::linear!(2)))
-            .unwrap()
+            .unwrap(),
+        false
     ));
     check!(OneHotConstraint::new([0.into(), 1.into(), 2.into()].into()).unwrap());
     check!(Sos1Constraint::new([0.into(), 1.into(), 2.into()].into()).unwrap());
@@ -317,6 +318,7 @@ fn hosts_reject_activation_conditions_the_current_wire_format_cannot_represent()
                 0.into(),
                 crate::Equality::EqualToZero,
                 crate::Function::Zero,
+                false,
             ),
         )]))
         .active_one_hot_constraints(BTreeMap::from([(

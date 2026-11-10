@@ -603,17 +603,12 @@ impl TryFrom<v2::SampleSet> for SampleSet {
     }
 }
 
-/// Lossy: `v1::SampleSet` only has a `constraints` field for regular
-/// sampled constraints — it has no fields for indicator / one-hot / sos1
-/// sampled constraints, so any data the in-memory [`SampleSet`] holds in
-/// those collections is dropped on serialization. This is a wire-format
-/// limitation that pre-dates the label/context SoA refactor; the matching
-/// `Parse` impl above initializes those collections to
-/// `Default::default()` for symmetry. Round-trip through `to_v1_bytes` /
-/// `from_v1_bytes` preserves variable labels and regular-constraint context.
-/// Since v1 cannot store a tolerance, row and root feasibility maps are
-/// recomputed from the retained constraints and variable values using
-/// [`ATol::default`], which the v1 parser also uses.
+/// Convert to v1 only when no native special constraints are retained.
+///
+/// Indicator, OneHot, and SOS1 results cannot be represented in v1, including
+/// inactive constraints. Skipped constraints also cannot be represented.
+/// Use `to_v2_bytes()` to preserve them. Since v1 cannot
+/// store a tolerance, feasibility is recomputed at [`ATol::default`].
 impl TryFrom<SampleSet> for crate::v1::SampleSet {
     type Error = crate::Error;
 
@@ -632,6 +627,21 @@ impl TryFrom<SampleSet> for crate::v1::SampleSet {
                 .chain(sample_set.one_hot_constraints.inactive_metadata().values())
                 .chain(sample_set.sos1_constraints.inactive_metadata().values()),
         )?;
+        if !sample_set.indicator_constraints.is_empty() {
+            crate::bail!(
+                "Indicator constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
+        }
+        if !sample_set.one_hot_constraints.is_empty() {
+            crate::bail!(
+                "One-hot constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
+        }
+        if !sample_set.sos1_constraints.is_empty() {
+            crate::bail!(
+                "SOS1 constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
+        }
         let SampleSet {
             decision_variables,
             objectives,
@@ -810,6 +820,7 @@ mod tests {
         .unwrap();
         let constraint = SampledIndicatorConstraint {
             indicator_variable: variable_id,
+            activate_on_zero: false,
             equality: crate::Equality::EqualToZero,
             stage: IndicatorSampledData {
                 evaluated_values: crate::Sampled::from((sample_id, 0.0)),
@@ -968,6 +979,7 @@ mod tests {
         let constraint_id = crate::IndicatorConstraintID::from(3);
         let constraint = SampledIndicatorConstraint {
             indicator_variable: crate::VariableID::from(2),
+            activate_on_zero: false,
             equality: crate::Equality::EqualToZero,
             stage: IndicatorSampledData {
                 evaluated_values: crate::Sampled::from((crate::SampleID::from(0), 0.0)),
@@ -1670,10 +1682,8 @@ mod tests {
     }
 
     /// Regression: `SampleSet::to_v1_bytes` / `from_v1_bytes` must preserve the
-    /// variable-label and regular-constraint-context stores. Indicator /
-    /// one-hot / sos1 sampled context is dropped because `v1::SampleSet`
-    /// has no fields for those collections — that's a wire-format
-    /// limitation older than the SoA refactor and is out of scope here.
+    /// variable-label and regular-constraint-context stores for regular-only
+    /// results. Native special constraints are rejected by v1 export.
     #[test]
     fn test_sample_set_roundtrip_preserves_labels_and_context() {
         use crate::constraint::SampledData;
@@ -1947,6 +1957,7 @@ mod tests {
         .unwrap();
         let indicator = SampledIndicatorConstraint {
             indicator_variable: var_id,
+            activate_on_zero: false,
             equality: crate::Equality::EqualToZero,
             stage: IndicatorSampledData {
                 evaluated_values: Sampled::from((sample_id, 0.0)),

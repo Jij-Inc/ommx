@@ -30,6 +30,9 @@ impl Instance {
     /// where $u \geq \sup f(x)$ and $l \leq \inf f(x)$ are taken from
     /// [`Function::evaluate_bound`] over the decision variables' bounds.
     ///
+    /// For activation at zero, the sides are `f(x) - u y <= 0` and
+    /// `-f(x) + l y <= 0`.
+    ///
     /// Side emission rules:
     /// - For [`Equality::LessThanOrEqualToZero`], only the upper side is considered.
     ///   It is emitted only if $u > 0$; otherwise $f(x) \leq 0$ is already implied by
@@ -216,19 +219,33 @@ impl Instance {
         let mut generated_constraints = Vec::new();
 
         if let Some(u) = upper_big_m {
-            // f(x) + u y - u <= 0
+            // f(x) <= u * inactive_literal, with inactive_literal = y or 1-y.
             let f = (function.clone()
-                + Linear::single_term(LinearMonomial::Variable(indicator_variable), u))?;
-            let f = (f + Linear::from(-u))?;
+                + Linear::single_term(
+                    LinearMonomial::Variable(indicator_variable),
+                    if ic.activate_on_zero { -u } else { u },
+                ))?;
+            let f = if ic.activate_on_zero {
+                f
+            } else {
+                (f + Linear::from(-u))?
+            };
             generated_constraints.push(Constraint::less_than_or_equal_to_zero(f));
         }
 
         if let Some(l) = lower_big_m {
-            // -f(x) - l y + l <= 0
+            // -f(x) <= -l * inactive_literal.
             let neg_l = -l;
             let f = (-function.clone()
-                + Linear::single_term(LinearMonomial::Variable(indicator_variable), neg_l))?;
-            let f = (f + Linear::from(l))?;
+                + Linear::single_term(
+                    LinearMonomial::Variable(indicator_variable),
+                    if ic.activate_on_zero { l } else { neg_l },
+                ))?;
+            let f = if ic.activate_on_zero {
+                f
+            } else {
+                (f + Linear::from(l))?
+            };
             generated_constraints.push(Constraint::less_than_or_equal_to_zero(f));
         }
 
@@ -316,7 +333,7 @@ mod tests {
         let x = DecisionVariable::new(Kind::Continuous, x_bound, crate::ATol::default()).unwrap();
         let y = DecisionVariable::binary();
 
-        let ic = IndicatorConstraint::new(VariableID::from(10), equality, function);
+        let ic = IndicatorConstraint::new(VariableID::from(10), equality, function, false);
 
         Instance::builder()
             .sense(Sense::Minimize)
@@ -495,6 +512,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1)),
+            false,
         );
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
@@ -573,6 +591,7 @@ mod tests {
                 coeff!(-1.0),
             )) + coeff!(0.5))
             .unwrap(),
+            false,
         );
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
@@ -635,9 +654,14 @@ mod tests {
         .unwrap();
         let y = DecisionVariable::binary();
         let f = || Function::from(linear!(1) + coeff!(-2.0));
-        let ic_le =
-            IndicatorConstraint::new(VariableID::from(10), Equality::LessThanOrEqualToZero, f());
-        let ic_eq = IndicatorConstraint::new(VariableID::from(10), Equality::EqualToZero, f());
+        let ic_le = IndicatorConstraint::new(
+            VariableID::from(10),
+            Equality::LessThanOrEqualToZero,
+            f(),
+            false,
+        );
+        let ic_eq =
+            IndicatorConstraint::new(VariableID::from(10), Equality::EqualToZero, f(), false);
 
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
@@ -681,11 +705,13 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-2.0)),
+            false,
         );
         let ic_bad = IndicatorConstraint::new(
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(2)),
+            false,
         );
 
         let mut instance = Instance::builder()
@@ -769,6 +795,7 @@ mod tests {
             VariableID::from(10),
             Equality::EqualToZero,
             Function::from(linear!(1)),
+            false,
         );
         let mut instance = indicator_instance_with_constraint_id(
             u64::MAX - 1,
@@ -791,6 +818,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1)),
+            false,
         );
         let mut instance = indicator_instance_with_constraint_id(
             u64::MAX - 1,
@@ -818,6 +846,7 @@ mod tests {
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
                 Function::from(linear!(1)),
+                false,
             );
             let mut instance = indicator_instance_with_constraint_id(
                 u64::MAX,
@@ -842,6 +871,7 @@ mod tests {
             VariableID::from(10),
             Equality::EqualToZero,
             Function::from(linear!(1)),
+            false,
         );
         let mut instance = indicator_instance_with_constraint_id(
             u64::MAX - 2,
@@ -867,8 +897,12 @@ mod tests {
     #[test]
     fn redundant_conversion_needs_no_constraint_ids_even_when_exhausted() {
         let id = IndicatorConstraintID::from(7);
-        let indicator =
-            IndicatorConstraint::new(VariableID::from(10), Equality::EqualToZero, Function::Zero);
+        let indicator = IndicatorConstraint::new(
+            VariableID::from(10),
+            Equality::EqualToZero,
+            Function::Zero,
+            false,
+        );
         let mut instance = indicator_instance_with_constraint_id(
             u64::MAX,
             false,
