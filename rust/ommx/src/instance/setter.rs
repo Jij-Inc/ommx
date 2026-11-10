@@ -19,7 +19,7 @@ fn validate_sos1_non_empty(constraint: &crate::Sos1Constraint) -> crate::Result<
 impl Instance {
     /// Internal helper to validate required IDs against precomputed sets.
     ///
-    /// Mirrors the `used / fixed / dependent` disjointness invariant the
+    /// Mirrors the `active / fixed / dependent` disjointness invariant the
     /// builder enforces (`builder.rs`): a constraint or objective cannot
     /// reference a variable whose value has been pinned via
     /// a table-owned fixed value (`fixed`), nor a variable

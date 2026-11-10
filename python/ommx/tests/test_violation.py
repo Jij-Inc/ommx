@@ -230,11 +230,11 @@ def test_solution_total_violation_empty():
     assert solution.total_violation() == pytest.approx(0.0)
 
 
-@pytest.mark.parametrize("active", [False, True])
+@pytest.mark.parametrize("indicator_on", [False, True])
 @pytest.mark.parametrize("equality", [False, True])
 @pytest.mark.parametrize("inactive", [False, True])
 @pytest.mark.parametrize("value", [-2.5, 0.0, 1.5])
-def test_total_violation_indicator(active, equality, inactive, value):
+def test_total_violation_indicator(indicator_on, equality, inactive, value):
     z = DecisionVariable.binary(0)
     x = DecisionVariable.continuous(1, lower=-10, upper=10)
     constraint = x == 0 if equality else x <= 0
@@ -247,8 +247,8 @@ def test_total_violation_indicator(active, equality, inactive, value):
     )
     if inactive:
         instance.deactivate_indicator_constraint(0, "test relaxation")
-    solution = instance.evaluate({0: float(active), 1: value})
-    violation = (abs(value) if equality else max(0, value)) if active else 0
+    solution = instance.evaluate({0: float(indicator_on), 1: value})
+    violation = (abs(value) if equality else max(0, value)) if indicator_on else 0
     assert solution.constraint_violation(IndicatorConstraintID(0)) == pytest.approx(
         violation
     )

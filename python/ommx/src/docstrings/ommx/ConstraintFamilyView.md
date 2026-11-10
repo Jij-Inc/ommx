@@ -31,6 +31,6 @@ independent snapshots. This applies to Instance and ParametricInstance active
 and inactive collections, and to Solution and SampleSet result collections.
 
 Filtering is an inspection operation. Selecting one family does not establish
-that a solver or transformation supports every constraint in the model. A
-consumer must inspect all constraints and reject unsupported families; see
+that a solver or transformation supports the complete Active Formulation. Such
+consumers must inspect all active constraints and reject unsupported families; see
 {class}`~ommx.ConstraintIDBase`.

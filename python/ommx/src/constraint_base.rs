@@ -55,30 +55,40 @@ use std::collections::HashMap;
 /// return the common ``ConstraintView`` type; activeness must be checked at runtime. The currently supported families are
 /// not an exhaustive list of future possibilities.
 ///
-/// A solver adapter or transformation must reject families it cannot handle.
-/// Silently skipping their constraints can relax the optimization problem.
+/// A solver adapter or transformation must reject active constraint families it
+/// cannot handle. Silently skipping their constraints can relax the optimization
+/// problem. Inactive constraints belong to the retained interpretation context
+/// and are not part of the Active Formulation consumed here.
 /// Keep this check even if an earlier applicability check normally excludes
 /// unsupported kinds. For example, a consumer requiring regular rows can
-/// validate the complete collection before processing it:
+/// validate the complete active collection before processing it:
 ///
 /// >>> from ommx import ConstraintKind, ConstraintID, Instance, OneHotConstraint
 /// >>> def regular_rows(model):
 /// ...     rows = []
-/// ...     for cid in model.constraints:
+/// ...     for cid in model.active_constraints:
 /// ...         if not isinstance(cid, ConstraintID):
 /// ...             raise NotImplementedError("Unsupported constraint family")
-/// ...         rows.append(model.constraints[cid])
+/// ...         rows.append(model.active_constraints[cid])
 /// ...     return rows
 /// >>> model = Instance.minimize()
 /// >>> x = model.new_binary("x")
 /// >>> y = model.new_binary("y")
 /// >>> rule = model.add_constraint(x + y <= 1)
 /// >>> assert regular_rows(model) == [rule]
-/// >>> _ = model.add_one_hot_constraint(OneHotConstraint(variables=[x, y]))
+/// >>> special = model.add_one_hot_constraint(OneHotConstraint(variables=[x, y]))
+/// >>> special_id = special.constraint_id
 /// >>> regular_rows(model)
 /// Traceback (most recent call last):
 /// ...
 /// NotImplementedError: Unsupported constraint family
+///
+/// After lowering, the original one-hot constraint remains inactive for
+/// evaluation. The consumer accepts the generated active regular constraint:
+///
+/// >>> converted = model.convert_all_one_hots_to_constraints()
+/// >>> assert special_id in model.inactive_constraints
+/// >>> assert [row.constraint_id for row in regular_rows(model)] == [rule.constraint_id, *converted]
 ///
 /// Handle additional concrete ID types explicitly when supported and retain
 /// the rejecting fallback. Receiving a new family in an older consumer should

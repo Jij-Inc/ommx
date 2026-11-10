@@ -64,5 +64,20 @@ that access raises ``KeyError``.
 ``dict(rows)`` materializes a mapping at that time; its active model values are
 still attached handles. To inspect just one family, use ``of_kind`` and
 {class}`~ommx.ConstraintFamilyView`. To collect a table, use the owner's
-``constraints_df(kind=...)``. Its typed index matches the selected family's keys;
-on models, ``min_activeness=ConstraintActiveness.INACTIVE_SKIPPED`` includes both active and inactive rows.
+``constraints_df(kind=..., min_activeness=ConstraintActiveness.ACTIVE)``. Its typed
+index matches this collection's keys for the selected family. The default
+``min_activeness=ConstraintActiveness.INACTIVE_SKIPPED`` includes all active and
+inactive rows, including those skipped by default feasibility checks.
+
+```pycon
+>>> from ommx import ConstraintActiveness, ConstraintKind
+>>> model.deactivate_constraint(cid, "retain for reporting")
+>>> table = model.constraints_df(
+...     kind=ConstraintKind.Regular,
+...     min_activeness=ConstraintActiveness.ACTIVE,
+... )
+>>> assert set(table.index) == set(rows.of_kind(ConstraintKind.Regular))
+>>> assert cid not in table.index
+>>> assert cid in model.constraints_df(kind=ConstraintKind.Regular).index
+
+```

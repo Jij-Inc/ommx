@@ -227,7 +227,6 @@ impl Solution {
     /// Uses feasibility_atol independently for each constraint and variable.
     #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE_CHECKED))]
     pub fn feasible(&self, min_activeness: crate::ConstraintActiveness) -> bool {
-        // The `feasible` means feasible in the unrelaxed problem
         self.inner.feasible(min_activeness.into())
     }
 
@@ -254,8 +253,11 @@ impl Solution {
         self.inner.feasible_relaxed()
     }
 
-    /// Alias for {meth}`~ommx.Solution.feasible`, including inactive constraints
-    /// and every retained variable's kind and bounds.
+    /// Equivalent to {meth}`~ommx.Solution.feasible` with
+    /// ``min_activeness=ConstraintActiveness.INACTIVE_CHECKED``.
+    ///
+    /// Checks active and inactive checked constraints, plus every retained
+    /// variable's kind and bounds. Inactive skipped constraints are excluded.
     #[getter]
     pub fn feasible_unrelaxed(&self) -> bool {
         self.inner
@@ -1063,7 +1065,7 @@ impl Solution {
     /// Sum the nonnegative scalar violations selected by min_activeness.
     ///
     /// - Equality: `abs(f(x))`; inequality: `max(0, f(x))`.
-    /// - Indicator: the inner violation when active, otherwise zero.
+    /// - Indicator: the inner violation when `indicator_on` is true, otherwise zero.
     /// - OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.
     /// - SOS1: `min_i sum_{j != i} abs(x_j)`.
     ///

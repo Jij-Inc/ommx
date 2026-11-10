@@ -268,8 +268,23 @@ class ActiveConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView
     ``dict(rows)`` materializes a mapping at that time; its active model values are
     still attached handles. To inspect just one family, use ``of_kind`` and
     {class}`~ommx.ConstraintFamilyView`. To collect a table, use the owner's
-    ``constraints_df(kind=...)``. Its typed index matches the selected family's keys;
-    on models, ``min_activeness=ConstraintActiveness.INACTIVE_SKIPPED`` includes both active and inactive rows.
+    ``constraints_df(kind=..., min_activeness=ConstraintActiveness.ACTIVE)``. Its typed
+    index matches this collection's keys for the selected family. The default
+    ``min_activeness=ConstraintActiveness.INACTIVE_SKIPPED`` includes all active and
+    inactive rows, including those skipped by default feasibility checks.
+
+    ```pycon
+    >>> from ommx import ConstraintActiveness, ConstraintKind
+    >>> model.deactivate_constraint(cid, "retain for reporting")
+    >>> table = model.constraints_df(
+    ...     kind=ConstraintKind.Regular,
+    ...     min_activeness=ConstraintActiveness.ACTIVE,
+    ... )
+    >>> assert set(table.index) == set(rows.of_kind(ConstraintKind.Regular))
+    >>> assert cid not in table.index
+    >>> assert cid in model.constraints_df(kind=ConstraintKind.Regular).index
+
+    ```
     """
     def __len__(self) -> builtins.int: ...
     def __contains__(self, key: builtins.object) -> builtins.bool: ...
@@ -2111,8 +2126,8 @@ class ConstraintFamilyView(typing.Mapping[_K, _V_co]):
     and inactive collections, and to Solution and SampleSet result collections.
 
     Filtering is an inspection operation. Selecting one family does not establish
-    that a solver or transformation supports every constraint in the model. A
-    consumer must inspect all constraints and reject unsupported families; see
+    that a solver or transformation supports the complete Active Formulation. Such
+    consumers must inspect all active constraints and reject unsupported families; see
     {class}`~ommx.ConstraintIDBase`.
     """
     def __len__(self) -> builtins.int:
@@ -2235,30 +2250,40 @@ class ConstraintIDBase:
     return the common ``ConstraintView`` type; activeness must be checked at runtime. The currently supported families are
     not an exhaustive list of future possibilities.
 
-    A solver adapter or transformation must reject families it cannot handle.
-    Silently skipping their constraints can relax the optimization problem.
+    A solver adapter or transformation must reject active constraint families it
+    cannot handle. Silently skipping their constraints can relax the optimization
+    problem. Inactive constraints belong to the retained interpretation context
+    and are not part of the Active Formulation consumed here.
     Keep this check even if an earlier applicability check normally excludes
     unsupported kinds. For example, a consumer requiring regular rows can
-    validate the complete collection before processing it:
+    validate the complete active collection before processing it:
 
     >>> from ommx import ConstraintKind, ConstraintID, Instance, OneHotConstraint
     >>> def regular_rows(model):
     ...     rows = []
-    ...     for cid in model.constraints:
+    ...     for cid in model.active_constraints:
     ...         if not isinstance(cid, ConstraintID):
     ...             raise NotImplementedError("Unsupported constraint family")
-    ...         rows.append(model.constraints[cid])
+    ...         rows.append(model.active_constraints[cid])
     ...     return rows
     >>> model = Instance.minimize()
     >>> x = model.new_binary("x")
     >>> y = model.new_binary("y")
     >>> rule = model.add_constraint(x + y <= 1)
     >>> assert regular_rows(model) == [rule]
-    >>> _ = model.add_one_hot_constraint(OneHotConstraint(variables=[x, y]))
+    >>> special = model.add_one_hot_constraint(OneHotConstraint(variables=[x, y]))
+    >>> special_id = special.constraint_id
     >>> regular_rows(model)
     Traceback (most recent call last):
     ...
     NotImplementedError: Unsupported constraint family
+
+    After lowering, the original one-hot constraint remains inactive for
+    evaluation. The consumer accepts the generated active regular constraint:
+
+    >>> converted = model.convert_all_one_hots_to_constraints()
+    >>> assert special_id in model.inactive_constraints
+    >>> assert [row.constraint_id for row in regular_rows(model)] == [rule.constraint_id, *converted]
 
     Handle additional concrete ID types explicitly when supported and retain
     the rejecting fallback. Receiving a new family in an older consumer should
@@ -12629,7 +12654,11 @@ class SampleSet:
     @property
     def best_feasible_unrelaxed(self) -> Solution:
         r"""
-        Alias for {meth}`~ommx.SampleSet.best_feasible`, including inactive constraints.
+        Equivalent to {meth}`~ommx.SampleSet.best_feasible` with
+        ``min_activeness=ConstraintActiveness.INACTIVE_CHECKED``.
+
+        Checks active and inactive checked constraints, plus all variable kinds
+        and bounds. Inactive skipped constraints are excluded.
         Raises ValueError if there is no feasible sample.
         """
     @property
@@ -12651,7 +12680,9 @@ class SampleSet:
     @property
     def feasible_unrelaxed(self) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
-        Alias for {meth}`~ommx.SampleSet.feasible`, keyed by sample ID.
+        Equivalent to {meth}`~ommx.SampleSet.feasible` with
+        ``min_activeness=ConstraintActiveness.INACTIVE_CHECKED``, keyed by sample ID.
+        Inactive skipped constraints are excluded; all variable kinds and bounds apply.
         """
     @property
     def feasibility_atol(self) -> builtins.float:
@@ -12811,7 +12842,11 @@ class SampleSet:
         min_activeness: ConstraintActiveness = ConstraintActiveness.INACTIVE_CHECKED,
     ) -> builtins.set[builtins.int]: ...
     def feasible_relaxed_ids(self) -> builtins.set[builtins.int]: ...
-    def feasible_unrelaxed_ids(self) -> builtins.set[builtins.int]: ...
+    def feasible_unrelaxed_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        Equivalent to {meth}`~ommx.SampleSet.feasible_ids` with
+        ``min_activeness=ConstraintActiveness.INACTIVE_CHECKED``.
+        """
     def best_feasible_id(
         self,
         *,
@@ -12831,9 +12866,13 @@ class SampleSet:
         r"""
         The best feasible candidate as an independent Solution.
 
-        Selects only candidates satisfying {meth}`~ommx.SampleSet.feasible`,
-        including variable domains and retained inactive constraints. Minimization
-        selects the smallest reported objective; maximization selects the largest.
+        Selects only candidates satisfying {meth}`~ommx.SampleSet.feasible` with
+        the same ``min_activeness``. All variable kinds and bounds apply.
+        The default ``INACTIVE_CHECKED`` includes active and inactive checked
+        constraints and excludes inactive skipped constraints. Use ``ACTIVE`` to
+        check only active constraints, or ``INACTIVE_SKIPPED`` to check all rows.
+        Minimization selects the smallest reported objective; maximization selects
+        the largest.
         Selection does not prove global optimality or change the extracted
         Solution's optimality status.
 
@@ -14078,8 +14117,11 @@ class Solution:
     @property
     def feasible_unrelaxed(self) -> builtins.bool:
         r"""
-        Alias for {meth}`~ommx.Solution.feasible`, including inactive constraints
-        and every retained variable's kind and bounds.
+        Equivalent to {meth}`~ommx.Solution.feasible` with
+        ``min_activeness=ConstraintActiveness.INACTIVE_CHECKED``.
+
+        Checks active and inactive checked constraints, plus every retained
+        variable's kind and bounds. Inactive skipped constraints are excluded.
         """
     @property
     def feasibility_atol(self) -> builtins.float:
@@ -14587,7 +14629,7 @@ class Solution:
         Sum the nonnegative scalar violations selected by min_activeness.
 
         - Equality: `abs(f(x))`; inequality: `max(0, f(x))`.
-        - Indicator: the inner violation when active, otherwise zero.
+        - Indicator: the inner violation when `indicator_on` is true, otherwise zero.
         - OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.
         - SOS1: `min_i sum_{j != i} abs(x_j)`.
 

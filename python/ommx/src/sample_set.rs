@@ -246,8 +246,9 @@ impl SampleSet {
             .collect()
     }
 
+    /// Equivalent to {meth}`~ommx.SampleSet.feasible_ids` with
+    /// ``min_activeness=ConstraintActiveness.INACTIVE_CHECKED``.
     pub fn feasible_unrelaxed_ids(&self) -> BTreeSet<u64> {
-        // For now, this is the same as feasible_ids since ommx::SampleSet doesn't distinguish
         self.feasible_ids(crate::ConstraintActiveness::INACTIVE_CHECKED)
     }
 
@@ -278,9 +279,13 @@ impl SampleSet {
 
     /// The best feasible candidate as an independent Solution.
     ///
-    /// Selects only candidates satisfying {meth}`~ommx.SampleSet.feasible`,
-    /// including variable domains and retained inactive constraints. Minimization
-    /// selects the smallest reported objective; maximization selects the largest.
+    /// Selects only candidates satisfying {meth}`~ommx.SampleSet.feasible` with
+    /// the same ``min_activeness``. All variable kinds and bounds apply.
+    /// The default ``INACTIVE_CHECKED`` includes active and inactive checked
+    /// constraints and excludes inactive skipped constraints. Use ``ACTIVE`` to
+    /// check only active constraints, or ``INACTIVE_SKIPPED`` to check all rows.
+    /// Minimization selects the smallest reported objective; maximization selects
+    /// the largest.
     /// Selection does not prove global optimality or change the extracted
     /// Solution's optimality status.
     ///
@@ -328,10 +333,13 @@ impl SampleSet {
     }
 
     #[getter]
-    /// Alias for {meth}`~ommx.SampleSet.best_feasible`, including inactive constraints.
+    /// Equivalent to {meth}`~ommx.SampleSet.best_feasible` with
+    /// ``min_activeness=ConstraintActiveness.INACTIVE_CHECKED``.
+    ///
+    /// Checks active and inactive checked constraints, plus all variable kinds
+    /// and bounds. Inactive skipped constraints are excluded.
     /// Raises ValueError if there is no feasible sample.
     pub fn best_feasible_unrelaxed(&self) -> OmmxPyResult<Solution> {
-        // Exactly the same as best_feasible
         self.best_feasible(crate::ConstraintActiveness::INACTIVE_CHECKED)
     }
 
@@ -376,7 +384,9 @@ impl SampleSet {
             .collect()
     }
 
-    /// Alias for {meth}`~ommx.SampleSet.feasible`, keyed by sample ID.
+    /// Equivalent to {meth}`~ommx.SampleSet.feasible` with
+    /// ``min_activeness=ConstraintActiveness.INACTIVE_CHECKED``, keyed by sample ID.
+    /// Inactive skipped constraints are excluded; all variable kinds and bounds apply.
     #[getter]
     pub fn feasible_unrelaxed(&self) -> BTreeMap<u64, bool> {
         self.feasible(crate::ConstraintActiveness::INACTIVE_CHECKED)

@@ -173,8 +173,8 @@ Query individual values with [`Solution::constraint_violation`](crate::Solution:
 [`Solution::sos1_constraint_violation`](crate::Solution::sos1_constraint_violation),
 passing the corresponding typed ID. Unknown IDs return `None`.
 
-Indicator uses its inner violation when active and zero otherwise. OneHot and
-SOS1 measure the minimum sum of absolute changes needed to satisfy their
+Indicator uses its inner violation when `indicator_on` is true and zero otherwise.
+OneHot and SOS1 measure the minimum sum of absolute changes needed to satisfy their
 structural condition. Every constraint is feasible exactly when its violation is
 at most `atol`. For OneHot and SOS1, tolerance now applies to the total change,
 rather than to each member independently. Bounds and kinds remain separate.

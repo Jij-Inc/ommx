@@ -91,7 +91,7 @@ def test_results_extract_violations_including_retained_inactive_constraints(inac
             assert isinstance(row, AttachedConstraint)
             row.set_name("lowered")
     samples = model.evaluate_samples({7: {0: 0, 1: 0}, 42: {0: 1, 1: 1}})
-    # Regular f(x)=-1 is a violation of +1; an inactive indicator has zero
+    # Regular f(x)=-1 is a violation of +1; an indicator that is OFF has zero
     # violation even though its body is -1. One-hot/SOS1 use their own metrics.
     expected = {
         7: {(0, -1): 1.0, (1, -1): 0.0, (2, -1): 1.0, (3, -1): 0.0},
@@ -155,7 +155,7 @@ def test_scalar_labels_missing_names_and_invalid_sample_ids():
         samples.extract_constraints("missing", 7)
 
 
-def test_feasible_regular_inequality_and_inactive_indicator_return_zero():
+def test_feasible_regular_inequality_and_indicator_off_return_zero():
     model = Instance.minimize()
     x = model.new_binary("x")
     model.add_constraint(x - 3 <= 0, "slack")
