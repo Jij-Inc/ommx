@@ -55,6 +55,21 @@ is queried through narrow per-collection accessors on `Instance` /
 Decision variables and named functions additionally follow the table-owned ID
 rule: the row data no longer stores its own ID.
 
+## Result serialization to v1
+
+[`Solution::to_v1_bytes`](crate::Solution::to_v1_bytes) and
+[`SampleSet::to_v1_bytes`](crate::SampleSet::to_v1_bytes) return
+`ommx::Result<Vec<u8>>`. Add `?` at callers. The direct conversions to
+`v1::Solution` and `v1::SampleSet` use `TryFrom` instead of `From`; replace
+`.into()` with `.try_into()?`.
+
+These operations reject retained Indicator, OneHot, and SOS1 results, including
+inactive, satisfied, and removed constraints, instead of silently omitting them.
+Big-M lowering retains the original special constraints, so its results also
+require `to_v2_bytes()`. Reading existing v1 payloads is unchanged. For results
+without special constraints, v1 export still recomputes feasibility using the
+SDK default tolerance; use v2 to retain the evaluation tolerance.
+
 ## Bounds collections
 
 [`Bounds`](crate::Bounds) is now a dedicated collection rather than a type alias

@@ -6,6 +6,20 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### Reject v1 exports that would discard special-constraint results ([#1380](https://github.com/Jij-Inc/ommx/pull/1380))
+
+`to_v1_bytes()` is a compatibility serialization format for older OMMX SDKs;
+v3 features that cannot be represented in v1 require `to_v2_bytes()`.
+`Solution.to_v1_bytes()` and `SampleSet.to_v1_bytes()` now raise `RuntimeError`
+when Indicator, OneHot, or SOS1 results are retained, including inactive,
+satisfied, and removed constraints. Use `to_v2_bytes()` to preserve them.
+Regular-only v1 exports and existing v1 readers retain their behavior.
+`from_v1_bytes()` is documented as compatibility import that aims to recover
+legacy data without changing its mathematical meaning. Current recovery limits
+are explicit; implementation improvements are tracked separately in
+[#1381](https://github.com/Jij-Inc/ommx/issues/1381).
+See the [migration guide](../migration/python_sdk_v2_to_v3.md) for versioned serialization.
+
 ### 🛠 ⚠ Report infeasible constant constraints through the solver ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))
 
 HiGHS and PySCIPOpt now accept constant regular equalities and inequalities

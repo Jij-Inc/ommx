@@ -3,15 +3,16 @@ use crate::{message_io, v1, v2, Message, Parse};
 use anyhow::Result;
 
 impl SampleSet {
-    /// Serialize using the lossy v1 format.
+    /// Serialize to v1, rejecting native special constraints.
     ///
-    /// Native special constraints are omitted. Feasibility is recomputed from
+    /// Indicator, OneHot, and SOS1 constraints (including removed rows) return an
+    /// error. Use [`Self::to_v2_bytes`] to preserve them. Feasibility is recomputed from
     /// retained regular constraints and variable values at [`ATol::default`],
     /// as on v1 import. Use the same default on write and read, or use
     /// [`Self::to_v2_bytes`] to preserve the original tolerance and constraints.
-    pub fn to_v1_bytes(&self) -> Vec<u8> {
-        let v1_sample_set = v1::SampleSet::from(self.clone());
-        v1_sample_set.encode_to_vec()
+    pub fn to_v1_bytes(&self) -> crate::Result<Vec<u8>> {
+        let v1_sample_set = v1::SampleSet::try_from(self.clone())?;
+        Ok(v1_sample_set.encode_to_vec())
     }
 
     pub fn to_v2_bytes(&self) -> Vec<u8> {

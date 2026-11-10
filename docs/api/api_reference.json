@@ -15174,7 +15174,7 @@
             },
             {
               "name": "from_v1_bytes",
-              "doc": "Deserialize an instance from v1 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed or\nsemantically invalid.",
+              "doc": "Read legacy v1 bytes into a current-SDK instance.\n\nThis is a compatibility import for data saved by older OMMX SDKs.\nIts policy is to recover as much existing data as possible through\nlegacy defaults and normalization while preserving mathematical meaning.\nRecovery must not invent missing mathematical data or silently change it.\n\nCurrent recovery covers known legacy representations, such as omitted\nvariable bounds. Advisory constraint hints do not trigger automatic\npromotion to special constraints. Recovery is not exhaustive: malformed\nor semantically inconsistent payloads still raise {class}`ValueError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -17426,7 +17426,7 @@
             },
             {
               "name": "to_v1_bytes",
-              "doc": "Serialize this instance in the OMMX v1 wire format.\n\n# Errors\n\nSerialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.\n\n>>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> assert instance.convert_active_objective(Sense.Maximize)\n>>> try:\n...     instance.to_v1_bytes()\n... except RuntimeError:\n...     pass\n... else:\n...     raise AssertionError(\"v1 serialization accepted an output objective\")",
+              "doc": "Serialize for compatibility with older OMMX SDKs using the v1 wire format.\n\nUse `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.\nThis compatibility format can export only data representable in v1;\nv3 features such as native Indicator constraints cannot be serialized.\n\n# Errors\n\nRaises `RuntimeError` if an output objective or any Indicator, OneHot,\nor SOS1 constraint is present, including removed constraints. Use\n`to_v2_bytes()` to preserve these features.\n\n>>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> assert instance.convert_active_objective(Sense.Maximize)\n>>> try:\n...     instance.to_v1_bytes()\n... except RuntimeError:\n...     pass\n... else:\n...     raise AssertionError(\"v1 serialization accepted an output objective\")",
               "signatures": [
                 {
                   "parameters": [],
@@ -17442,7 +17442,7 @@
             },
             {
               "name": "to_v2_bytes",
-              "doc": "Serialize this instance in the OMMX v2 wire format.\n\n# Postconditions\n\nA v2 round-trip preserves both active and output objective semantics.\n\n>>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> restored = Instance.from_v2_bytes(instance.to_v2_bytes())\n>>> assert restored.sense == Sense.Minimize\n>>> assert restored.objective.evaluate({0: 1}) == -3.0\n>>> solution = restored.evaluate({0: 1})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)",
+              "doc": "Serialize in the v2 wire format for storage and exchange with v3 or later SDKs.\n\n# Postconditions\n\nA v2 round-trip preserves both active and output objective semantics.\n\n>>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> restored = Instance.from_v2_bytes(instance.to_v2_bytes())\n>>> assert restored.sense == Sense.Minimize\n>>> assert restored.objective.evaluate({0: 1}) == -3.0\n>>> solution = restored.evaluate({0: 1})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)",
               "signatures": [
                 {
                   "parameters": [],
@@ -24262,7 +24262,7 @@
             },
             {
               "name": "from_v1_bytes",
-              "doc": "Deserialize a parametric instance from v1 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed or\nsemantically invalid.",
+              "doc": "Read legacy v1 bytes into a current-SDK parametric instance.\n\nThis is a compatibility import for data saved by older OMMX SDKs.\nIts policy is to recover as much existing data as possible through\nlegacy defaults and normalization while preserving mathematical meaning.\nRecovery must not invent missing mathematical data or silently change it.\n\nCurrent recovery covers known legacy representations, such as omitted\nvariable bounds. Advisory constraint hints do not trigger automatic\npromotion to special constraints. Recovery is not exhaustive: malformed\nor semantically inconsistent payloads still raise {class}`ValueError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -24631,7 +24631,7 @@
             },
             {
               "name": "to_v1_bytes",
-              "doc": "Serialize this parametric instance in the OMMX v1 wire format.\n\n# Errors\n\nSerialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> assert instance.convert_active_objective(Sense.Maximize)\n>>> parametric = instance.as_parametric_instance()\n>>> try:\n...     parametric.to_v1_bytes()\n... except RuntimeError:\n...     pass\n... else:\n...     raise AssertionError(\"v1 serialization accepted an output objective\")",
+              "doc": "Serialize for compatibility with older OMMX SDKs using the v1 wire format.\n\nUse `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.\nThis compatibility format can export only data representable in v1;\nv3 features such as native Indicator constraints cannot be serialized.\n\n# Errors\n\nRaises `RuntimeError` if an output objective or any Indicator, OneHot,\nor SOS1 constraint is present, including removed constraints. Use\n`to_v2_bytes()` to preserve these features.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> assert instance.convert_active_objective(Sense.Maximize)\n>>> parametric = instance.as_parametric_instance()\n>>> try:\n...     parametric.to_v1_bytes()\n... except RuntimeError:\n...     pass\n... else:\n...     raise AssertionError(\"v1 serialization accepted an output objective\")",
               "signatures": [
                 {
                   "parameters": [],
@@ -24647,7 +24647,7 @@
             },
             {
               "name": "to_v2_bytes",
-              "doc": "Serialize this parametric instance in the OMMX v2 wire format.\n\n# Postconditions\n\nA v2 round-trip preserves both active and output objective semantics through materialization.\n\n>>> from ommx import DecisionVariable, Instance, ParametricInstance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> source = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize\n... )\n>>> parametric = source.uniform_penalty_method()\n>>> parameter_id = parametric.parameters[0].id\n>>> restored = ParametricInstance.from_v2_bytes(parametric.to_v2_bytes())\n>>> materialized = restored.with_parameters({parameter_id: 2.0})\n>>> assert materialized.sense == Sense.Minimize\n>>> assert materialized.objective.evaluate({0: 0}) == 2.0\n>>> solution = materialized.evaluate({0: 0})\n>>> assert (solution.sense, solution.objective) == (Sense.Minimize, 0.0)",
+              "doc": "Serialize in the v2 wire format for storage and exchange with v3 or later SDKs.\n\n# Postconditions\n\nA v2 round-trip preserves both active and output objective semantics through materialization.\n\n>>> from ommx import DecisionVariable, Instance, ParametricInstance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> source = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize\n... )\n>>> parametric = source.uniform_penalty_method()\n>>> parameter_id = parametric.parameters[0].id\n>>> restored = ParametricInstance.from_v2_bytes(parametric.to_v2_bytes())\n>>> materialized = restored.with_parameters({parameter_id: 2.0})\n>>> assert materialized.sense == Sense.Minimize\n>>> assert materialized.objective.evaluate({0: 0}) == 2.0\n>>> solution = materialized.evaluate({0: 0})\n>>> assert (solution.sense, solution.objective) == (Sense.Minimize, 0.0)",
               "signatures": [
                 {
                   "parameters": [],
@@ -30780,7 +30780,7 @@
             },
             {
               "name": "from_v1_bytes",
-              "doc": "",
+              "doc": "Read legacy v1 bytes into a current-SDK sample set.\n\nThis is a compatibility import for data saved by older OMMX SDKs.\nIts policy is to recover as much existing data as possible through\nlegacy defaults and normalization while preserving mathematical meaning.\nRecovery must not invent missing mathematical data or silently change it.\n\nFor example, omitted root feasibility maps are reconstructed from the\nsaved variable and constraint results.\n\nCurrent recovery is not exhaustive. Saved feasibility judgments that\ndisagree with recomputation at the SDK default tolerance still raise\n{class}`ValueError`; v1 does not store the original tolerance. Malformed\nor otherwise semantically inconsistent payloads also raise ValueError.\nFurther recovery is tracked in [issue #1381](https://github.com/Jij-Inc/ommx/issues/1381).",
               "signatures": [
                 {
                   "parameters": [
@@ -31130,7 +31130,7 @@
             },
             {
               "name": "to_v1_bytes",
-              "doc": "",
+              "doc": "Serialize for compatibility with older OMMX SDKs using the v1 wire format.\n\nUse `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.\nThis compatibility format cannot represent v3 features such as native\nIndicator constraints. Raises `RuntimeError` if Indicator, OneHot, or\nSOS1 results are retained, including inactive, satisfied, and removed\nconstraints. Use `to_v2_bytes()` to preserve them.\n\nFor results that can be exported, v1 recomputes feasibility at the SDK\ndefault tolerance. Use v2 to preserve the evaluation tolerance.",
               "signatures": [
                 {
                   "parameters": [],
@@ -31146,7 +31146,7 @@
             },
             {
               "name": "to_v2_bytes",
-              "doc": "",
+              "doc": "Serialize in the v2 wire format for storage and exchange with v3 or later SDKs.\n\nPreserves native special constraints and the evaluation tolerance.",
               "signatures": [
                 {
                   "parameters": [],
@@ -34946,7 +34946,7 @@
             },
             {
               "name": "from_v1_bytes",
-              "doc": "",
+              "doc": "Read legacy v1 bytes into a current-SDK solution.\n\nThis is a compatibility import for data saved by older OMMX SDKs.\nIts policy is to recover as much existing data as possible through\nlegacy defaults and normalization while preserving mathematical meaning.\nRecovery must not invent missing mathematical data or silently change it.\n\nFor example, a missing state value can be restored from a saved variable\nvalue, and legacy feasibility fields are recognized.\n\nCurrent recovery is not exhaustive. Saved feasibility judgments that\ndisagree with recomputation at the SDK default tolerance still raise\n{class}`ValueError`; v1 does not store the original tolerance. Malformed\nor otherwise semantically inconsistent payloads also raise ValueError.\nFurther recovery is tracked in [issue #1381](https://github.com/Jij-Inc/ommx/issues/1381).",
               "signatures": [
                 {
                   "parameters": [
@@ -35353,7 +35353,7 @@
             },
             {
               "name": "to_v1_bytes",
-              "doc": "",
+              "doc": "Serialize for compatibility with older OMMX SDKs using the v1 wire format.\n\nUse `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.\nThis compatibility format cannot represent v3 features such as native\nIndicator constraints. Raises `RuntimeError` if Indicator, OneHot, or\nSOS1 results are retained, including inactive, satisfied, and removed\nconstraints. Use `to_v2_bytes()` to preserve them.\n\nFor results that can be exported, v1 recomputes feasibility at the SDK\ndefault tolerance. Use v2 to preserve the evaluation tolerance.",
               "signatures": [
                 {
                   "parameters": [],
@@ -35369,7 +35369,7 @@
             },
             {
               "name": "to_v2_bytes",
-              "doc": "",
+              "doc": "Serialize in the v2 wire format for storage and exchange with v3 or later SDKs.\n\nPreserves native special constraints and the evaluation tolerance.",
               "signatures": [
                 {
                   "parameters": [],
