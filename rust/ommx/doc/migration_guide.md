@@ -85,6 +85,13 @@ Constraint membership is now explicit: `active_constraints()` returns the solver
 
 On `Instance` and `ParametricInstance`, rename `constraint_names()` to `active_constraint_names()`. This query still selects only active constraints, and its return type is unchanged. `Solution` and `SampleSet` keep `constraint_names()`.
 
+For a standalone `ConstraintCollection`, `Evaluate::required_ids()` includes
+references from all evaluated rows, including inactive and skipped constraints.
+Import `Evaluate` to call this trait method. Use
+`ConstraintCollection::active_decision_variable_ids()` to query references from
+active constraints only. `Instance::required_ids()` still requires only active
+variable values because its evaluation populates the remaining values first.
+
 Replace `relax_*` / `restore_*` with `deactivate_*` / `activate_*`. Inactive membership uses `InactiveConstraintMetadata { reason, parameters, skip_feasibility_check }`. Pass `false` as the final argument to `deactivate_constraint(id, reason, parameters, false)` to retain the previous feasibility behavior. A row with `skip_feasibility_check: true` is still numerically evaluated; only its participation in aggregate queries changes.
 
 Each row has exactly one `ConstraintActiveness` state: `Active`, `InactiveChecked` (`skip_feasibility_check: false`), or `InactiveSkipped` (`skip_feasibility_check: true`). Inactive membership includes both `InactiveChecked` and `InactiveSkipped`; `inactive_constraints()` returns both.
@@ -647,6 +654,7 @@ pub struct ConstraintCollection<T: ConstraintType> {
 collection.active()                    // &BTreeMap<T::ID, T::Created>
 collection.inactive()                   // &BTreeMap<T::ID, (T::Created, InactiveConstraintMetadata)>
 collection.context()                   // &ConstraintContextStore<T::ID>
+collection.active_decision_variable_ids() // VariableIDSet, active constraints only
 // There is no public split-into-maps operation. Mutation and conversion go
 // through Instance / ParametricInstance methods so invariants
 // (active/inactive disjointness, variable-id validity, and context ownership)
@@ -657,7 +665,7 @@ collection.context()                   // &ConstraintContextStore<T::ID>
 collection.evaluate(state, atol)           // EvaluatedCollection<T>
 collection.evaluate_samples(samples, atol) // SampledCollection<T>
 collection.partial_evaluate(state, atol)   // only active constraints
-collection.required_ids()                  // VariableIDSet
+collection.required_ids()                  // VariableIDSet, all evaluated rows
 ```
 
 Inactive constraints are just `Created` constraints paired with an `InactiveConstraintMetadata`. The `Removed` stage type no longer exists.

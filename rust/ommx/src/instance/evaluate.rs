@@ -922,6 +922,8 @@ impl Evaluate for Instance {
         Ok(())
     }
 
+    /// Input IDs required before [`Instance::populate_state`] fills in the
+    /// remaining values for evaluation.
     fn required_ids(&self) -> VariableIDSet {
         self.active_decision_variable_ids()
     }
@@ -1729,6 +1731,68 @@ mod tests {
             instance.fixed_decision_variable_value(VariableID::from(2)),
             Some(0.0)
         );
+    }
+
+    #[test]
+    fn inactive_constraint_evaluation_uses_populated_values() {
+        let x = VariableID::from(1);
+        let y = VariableID::from(2);
+        let constraint_id = ConstraintID::from(1);
+        let atol = ATol::default();
+        for skip_feasibility_check in [false, true] {
+            let instance = Instance::builder()
+                .sense(Sense::Minimize)
+                .objective(Function::from(linear!(1)))
+                .decision_variables(BTreeMap::from([
+                    (x, crate::DecisionVariable::binary()),
+                    (y, crate::DecisionVariable::binary()),
+                ]))
+                .active_constraints(BTreeMap::new())
+                .inactive_constraints(BTreeMap::from([(
+                    constraint_id,
+                    (
+                        Constraint::equal_to_zero(Function::from(
+                            (linear!(2) + coeff!(-1.0)).unwrap(),
+                        )),
+                        InactiveConstraintMetadata {
+                            skip_feasibility_check,
+                            reason: "report".into(),
+                            parameters: Default::default(),
+                        },
+                    ),
+                )]))
+                .build()
+                .unwrap();
+
+            assert_eq!(instance.required_ids(), VariableIDSet::from([x]));
+            assert_eq!(
+                instance.constraint_collection().required_ids(),
+                VariableIDSet::from([y]),
+            );
+            let state = v1::State::from(HashMap::from([(1, 1.0)]));
+            let populated = instance.populate_state(state.clone(), atol).unwrap();
+            assert_eq!(populated.entries, HashMap::from([(1, 1.0), (2, 0.0)]));
+            let solution = instance.evaluate(&state, atol).unwrap();
+            assert_eq!(solution.state(), populated);
+            assert_eq!(
+                solution.evaluated_constraints()[&constraint_id].violation(),
+                1.0,
+            );
+            assert_eq!(
+                solution.feasible(Default::default()),
+                skip_feasibility_check
+            );
+            assert!(solution.feasible_relaxed());
+
+            let supplied = v1::State::from(HashMap::from([(1, 1.0), (2, 1.0)]));
+            let solution = instance.evaluate(&supplied, atol).unwrap();
+            assert_eq!(solution.state(), supplied);
+            assert_eq!(
+                solution.evaluated_constraints()[&constraint_id].violation(),
+                0.0,
+            );
+            assert!(solution.feasible(Default::default()));
+        }
     }
 
     fn inactive_only_instance(fixed_values: BTreeMap<VariableID, f64>) -> (Instance, ConstraintID) {

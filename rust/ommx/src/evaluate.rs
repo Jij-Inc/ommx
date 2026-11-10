@@ -77,7 +77,14 @@ pub trait Evaluate {
     /// Partially evaluate the function to return the used variable ids
     fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> crate::Result<()>;
 
-    /// Decision variable IDs required for evaluation
+    /// Decision-variable IDs whose values must be supplied for this object's evaluation.
+    ///
+    /// This follows the input contract of [`Self::evaluate`] and
+    /// [`Self::evaluate_samples`], including any value reconstruction they perform.
+    /// For example, [`crate::Instance`] populates fixed, dependent, and omitted
+    /// irrelevant values internally, so it requires only active variable values.
+    /// A standalone [`crate::ConstraintCollection`] performs no population and
+    /// requires values referenced by all rows it evaluates, including inactive rows.
     fn required_ids(&self) -> VariableIDSet;
 }
 
