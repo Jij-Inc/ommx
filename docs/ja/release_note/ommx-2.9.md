@@ -9,6 +9,12 @@
 
 ## 新機能
 
+### protobuf 6 に対応 ([#1382](https://github.com/Jij-Inc/ommx/pull/1382))
+
+protobuf の依存条件を `>=5.26.1,<7.0.0` に広げ、OR-Tools 9.15 などの
+protobuf 6 を要求するパッケージと OMMX 2.x を同じ環境にインストールできるようにしました。
+protobuf 5 を使う既存環境も引き続きサポートします。
+
 ### 名前と添字による SCIP 初期解の指定 (2.9.3, [#1274](https://github.com/Jij-Inc/ommx/pull/1274))
 
 `NamedState` で変数の名前と添字をキーとする初期値を指定できます。
@@ -45,12 +51,6 @@ Bridgeのプロトコル・データ検証の失敗は`ommx.BridgeError`で通�
 Bridge自体は制約のloweringや昇格を行いません。
 
 ## バグ修正
-
-### protobuf 6 に対応 ([#1382](https://github.com/Jij-Inc/ommx/pull/1382))
-
-protobuf の依存条件を `>=5.26.1,<7.0.0` に広げ、OR-Tools 9.15 などの
-protobuf 6 を要求するパッケージと OMMX 2.x を同じ環境にインストールできるようにしました。
-protobuf 5 を使う既存環境も引き続きサポートします。
 
 ### SCIP の二次目的関数に対する初期解を修正 (2.9.3, [#1274](https://github.com/Jij-Inc/ommx/pull/1274))
 
