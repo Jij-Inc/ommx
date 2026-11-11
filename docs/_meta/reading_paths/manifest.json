@@ -956,7 +956,7 @@
     },
     {
       "id": "feasibility.views",
-      "label": "min_activenessで実行可能性の検査対象を選ぶ",
+      "label": "実行可能性判定の対象と違反量集計の対象を区別する",
       "owner": "R_API.instance.retained_results",
       "requires": [
         "constraints.lifecycle",
@@ -968,7 +968,7 @@
         "feasible",
         "min_activeness"
       ],
-      "scope": "The order INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE makes the inclusive minimum select active only, checked inactive plus active, or every retained row."
+      "scope": "The feasible property checks active and checked inactive constraints; feasible_relaxed checks active constraints only. Both check variable domains and accept no selector. For total_violation and constraints_df, min_activeness selects rows inclusively in the order INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE; this selection is not an overall feasibility judgment."
     },
     {
       "id": "evaluation.snapshot",
