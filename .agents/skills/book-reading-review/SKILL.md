@@ -23,6 +23,10 @@ belongs to `sphinx-docs-review` and does not require this skill or its ledger.
 Apply both only when the request includes both concerns; do not load the other
 skill merely because a Book file changed.
 
+When introducing or explaining OMMX domain distinctions, use
+[OMMX Terminology](../ommx-terminology/SKILL.md) for the naming policy and its
+definition owners. Keep detailed user-facing meanings in the Book and Reference.
+
 ## Establish the reader and source
 
 - Resolve the requested PR/revision and read its actual files. A local checkout
@@ -33,7 +37,7 @@ skill merely because a Book file changed.
 - Identify the reader's goal, starting knowledge, entry link, and useful stopping
   point, including the understanding or decision the page should enable.
   Knowing Python and ordinary optimization does not imply knowing OMMX types,
-  retained variables, removed constraints, or Preparation.
+  retained variables, inactive constraints, or Preparation.
 - Follow the entry that the navigation promises, including direct chapter or
   Reference entry and alternative routes. Organize the primary navigation by
   reader purpose and the objects they work with; document genres and chapter

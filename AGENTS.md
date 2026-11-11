@@ -99,6 +99,10 @@ Run `task -l` to see all available commands.
 2. **Scope by Design Boundary**: Do not minimize changes for their own sake. Make the full coherent change required by the design, while still avoiding unrelated churn.
 3. **Extensible Constraint Families**: Adding a special-constraint family must be an additive API extension, not a breaking change to existing heterogeneous constraint queries. Expose extensible common types for IDs and rows instead of a closed union of all current families; keep concrete return types for family-specific lookups. Consumers must explicitly reject families they do not support. Silently skipping an unknown constraint changes the feasible region and can relax the optimization problem. Internal enums may enumerate current families, but public APIs must not promise that consumers can exhaustively enumerate every future family. Review both this extension contract and rejection paths when adding or changing constraint APIs.
 
+### Domain Terminology
+- When adding, renaming, or explaining OMMX domain concepts or public APIs, use `.agents/skills/ommx-terminology/SKILL.md`.
+- Keep formulation membership, feasibility participation, candidate diagnostics, and variable references distinct; apply the policy to the affected scope.
+
 ### Python SDK Development
 - Top-level `ommx` is the public Python API surface re-exported from `ommx._ommx_rust`.
 - Prefer top-level `ommx` imports in user-facing Python code, examples, tests, and adapters unless the change is specifically about binding internals.
