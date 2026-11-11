@@ -46,6 +46,12 @@ Bridge自体は制約のloweringや昇格を行いません。
 
 ## バグ修正
 
+### protobuf 6 に対応 ([#1382](https://github.com/Jij-Inc/ommx/pull/1382))
+
+protobuf の依存条件を `>=5.26.1,<7.0.0` に広げ、OR-Tools 9.15 などの
+protobuf 6 を要求するパッケージと OMMX 2.x を同じ環境にインストールできるようにしました。
+protobuf 5 を使う既存環境も引き続きサポートします。
+
 ### SCIP の二次目的関数に対する初期解を修正 (2.9.3, [#1274](https://github.com/Jij-Inc/ommx/pull/1274))
 
 SCIP の目的関数用補助変数にも、指定した初期値から計算した値を設定するようになりました。

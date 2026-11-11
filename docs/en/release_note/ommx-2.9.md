@@ -47,6 +47,12 @@ representation before transfer; the bridge does not lower or promote constraints
 
 ## Bug Fixes
 
+### Allow protobuf 6 ([#1382](https://github.com/Jij-Inc/ommx/pull/1382))
+
+The protobuf dependency now accepts `>=5.26.1,<7.0.0`, allowing OMMX 2.x
+to be installed alongside packages requiring protobuf 6, such as OR-Tools 9.15.
+Existing environments using protobuf 5 remain supported.
+
 ### Preserve SCIP initial solutions for quadratic objectives (2.9.3, [#1274](https://github.com/Jij-Inc/ommx/pull/1274))
 
 SCIP's objective auxiliary is initialized from the supplied variable values,
