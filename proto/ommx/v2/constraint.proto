@@ -110,7 +110,7 @@ message EvaluatedIndicatorConstraint {
   double evaluated_value = 3;
   bool feasible = 4;
   // Whether the indicator variable matches its configured trigger_value at this state,
-  // independently of constraint activeness.
+  // independently of the constraint's role.
   bool indicator_on = 5;
   repeated uint64 used_decision_variable_ids = 6;
   // The binary value that turns the indicator ON. Must be 0 or 1; absent means 1.
@@ -187,7 +187,7 @@ message SampledIndicatorConstraint {
   ommx.v1.SampledValues evaluated_values = 3;
   map<uint64, bool> feasible = 4;
   // Whether the indicator variable matches its configured trigger_value at each sample,
-  // independently of constraint activeness.
+  // independently of the constraint's role.
   map<uint64, bool> indicator_on = 5;
   repeated uint64 used_decision_variable_ids = 6;
   // The binary value that turns the indicator ON. Must be 0 or 1; absent means 1.

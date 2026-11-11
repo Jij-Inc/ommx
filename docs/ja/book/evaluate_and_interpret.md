@@ -13,7 +13,9 @@
 
 ソルバーの出力にも担当者が作った計画にも、同じ検査を使えます。この上限を満たしたら、ほかの制約と変数の定義域も確認します。すべてを満たす実行可能な計画でも、別の計画のほうがよい目的値を達成する可能性があります。
 
-OMMXは、ソルバーに課す条件から外した制約も保持できます。現在課している制約を **active**、外したあとも保持する制約を **inactive** と呼びます。inactiveには、既定の検査に含めるcheckedと、含めないskippedの2状態があります。`feasible` propertyは、active制約とchecked状態のinactive制約を検査します。`skip_feasibility_check=True` を指定すると、そのinactive制約はskippedになります。この判定には影響しませんが、数値の評価は行うため、値や違反量は引き続き調べられます。`feasible_relaxed` propertyはactive制約のみを検査します。どちらのpropertyも、整数性やboundといった変数の定義域を検査します。
+OMMXは、ソルバーに課す条件から外した制約も保持できます。現在課している制約を **active**、外したあとも保持する制約を **inactive** と呼びます。制約のroleは、その制約をどこまで利用するかを表します。`EVALUATION_ONLY` は評価値や違反量を確認するために使い、`FEASIBILITY_CHECK` はさらに実行可能性判定に使い、`ACTIVE` はさらにActive Formulationにも含めます。最初の2つのroleがinactiveです。roleは参加範囲を表し、評価が実施済みかどうかは表しません。
+
+`feasible` propertyは、roleが `FEASIBILITY_CHECK` または `ACTIVE` の制約を検査します。inactive制約のroleは既定で `FEASIBILITY_CHECK` となり、`skip_feasibility_check=True` を指定すると `EVALUATION_ONLY` に変わります。値や違反量は引き続き調べられますが、この判定には影響しません。`feasible_relaxed` propertyはactive制約のみを検査します。どちらのpropertyも、整数性やboundといった変数の定義域を検査します。
 
 特殊制約を同じ条件を表す通常制約へ置き換えた場合や、制約を目的関数のpenalty項へ変えた場合にも、元の制約をinactiveとして保持します。inactiveは変更の記録であり、それがあることだけでは元の問題を保存する変換かどうかは分かりません。特に有限のpenalty weightでは、元の条件に違反する候補が選ばれる可能性があります。
 

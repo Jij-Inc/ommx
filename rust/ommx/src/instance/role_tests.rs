@@ -1,5 +1,5 @@
 use super::*;
-use crate::{coeff, linear, ATol, ConstraintActiveness as A, Equality, Sampled, Sense};
+use crate::{coeff, linear, ATol, ConstraintRole as R, Equality, Sampled, Sense};
 
 fn metadata(skip: bool) -> InactiveConstraintMetadata {
     InactiveConstraintMetadata {
@@ -83,14 +83,14 @@ fn all_families() -> Instance {
 
 #[test]
 fn ordered_selection_counts_the_same_rows_across_families() {
-    assert!(A::InactiveSkipped < A::InactiveChecked && A::InactiveChecked < A::Active);
-    assert_eq!(A::default(), A::InactiveChecked);
+    assert!(R::EvaluationOnly < R::FeasibilityCheck && R::FeasibilityCheck < R::Active);
+    assert_eq!(R::default(), R::FeasibilityCheck);
     assert_eq!(
-        InactiveConstraintMetadata::default().activeness(),
-        A::InactiveChecked
+        InactiveConstraintMetadata::default().role(),
+        R::FeasibilityCheck
     );
-    assert_eq!(metadata(false).activeness(), A::InactiveChecked);
-    assert_eq!(metadata(true).activeness(), A::InactiveSkipped);
+    assert_eq!(metadata(false).role(), R::FeasibilityCheck);
+    assert_eq!(metadata(true).role(), R::EvaluationOnly);
     let instance = all_families();
     assert_eq!(instance.constraints().len(), 3);
     assert!(instance.constraints().get(&2.into()).is_some());
@@ -101,10 +101,48 @@ fn ordered_selection_counts_the_same_rows_across_families() {
     let samples = instance
         .evaluate_samples(&Sampled::from((0.into(), state)), ATol::default())
         .unwrap();
+    for (offset, expected) in [
+        (0_u64, R::Active),
+        (1, R::FeasibilityCheck),
+        (2, R::EvaluationOnly),
+    ] {
+        macro_rules! assert_role {
+            ($created:expr, $evaluated:expr, $sampled:expr, $id:expr) => {
+                let id = $id;
+                assert_eq!($created.role(&id.into()), Some(expected));
+                assert_eq!($evaluated.role(&id.into()), Some(expected));
+                assert_eq!($sampled.role(&id.into()), Some(expected));
+            };
+        }
+        assert_role!(
+            instance.constraints(),
+            solution.evaluated_constraints(),
+            samples.constraints(),
+            offset
+        );
+        assert_role!(
+            instance.indicator_constraints(),
+            solution.evaluated_indicator_constraints(),
+            samples.indicator_constraints(),
+            offset + 3
+        );
+        assert_role!(
+            instance.one_hot_constraints(),
+            solution.evaluated_one_hot_constraints(),
+            samples.one_hot_constraints(),
+            offset + 6
+        );
+        assert_role!(
+            instance.sos1_constraints(),
+            solution.evaluated_sos1_constraints(),
+            samples.sos1_constraints(),
+            offset + 9
+        );
+    }
     for (minimum, offsets) in [
-        (A::Active, &[0_u64][..]),
-        (A::InactiveChecked, &[0, 1][..]),
-        (A::InactiveSkipped, &[0, 1, 2][..]),
+        (R::Active, &[0_u64][..]),
+        (R::FeasibilityCheck, &[0, 1][..]),
+        (R::EvaluationOnly, &[0, 1, 2][..]),
     ] {
         let count = offsets.len();
         assert_eq!(
@@ -209,8 +247,8 @@ fn sample_selection_preserves_feasible_and_relaxed_judgments() {
     assert_eq!(samples.is_sample_feasible_relaxed(99.into()), None);
     let best = samples.best_feasible().unwrap();
     assert!(best.feasible());
-    assert_eq!(best.total_violation(A::InactiveChecked), 0.0);
-    assert_eq!(best.total_violation(A::InactiveSkipped), 1.0);
+    assert_eq!(best.total_violation(R::FeasibilityCheck), 0.0);
+    assert_eq!(best.total_violation(R::EvaluationOnly), 1.0);
     let best_relaxed = samples.best_feasible_relaxed().unwrap();
     assert!(best_relaxed.feasible_relaxed());
     assert!(!best_relaxed.feasible());
@@ -306,8 +344,8 @@ fn parametric_transitions_preserve_ids_context_and_inactive_policy() {
         .deactivate_constraint(2.into(), "again".into(), [], true)
         .unwrap();
     assert_eq!(
-        instance.constraints().activeness(&2.into()),
-        Some(A::InactiveSkipped)
+        instance.constraints().role(&2.into()),
+        Some(R::EvaluationOnly)
     );
     assert_eq!(instance.constraint_context().collect_for(2.into()), context);
 }
@@ -424,8 +462,8 @@ fn specialization_and_partial_evaluation_preserve_inactive_policy() {
         .unwrap();
     assert!(solution.feasible());
     assert!(solution.feasible_relaxed());
-    assert_eq!(solution.total_violation(A::InactiveChecked), 0.0);
-    assert!(solution.total_violation(A::InactiveSkipped) > 0.0);
+    assert_eq!(solution.total_violation(R::FeasibilityCheck), 0.0);
+    assert!(solution.total_violation(R::EvaluationOnly) > 0.0);
     assert_eq!(solution.constraint_violation(0.into()), Some(3.0));
     assert_eq!(solution.indicator_constraint_violation(1.into()), Some(3.0));
 }

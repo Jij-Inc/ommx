@@ -1,71 +1,71 @@
 # serializer version: 1
 # name: test_sample_set_one_hot_constraints_df_dynamic_columns
   '''
-                           used_ids  name subscripts description  feasible.0  selected_variable.0  feasible.1 selected_variable.1                   activeness
-  one_hot_constraint_id                                                                                                                                       
-  OneHotConstraintID(10)  {1, 2, 3}  <NA>         []        <NA>        True                    1       False                <NA>  ConstraintActiveness.ACTIVE
+                           used_ids  name subscripts description  feasible.0  selected_variable.0  feasible.1 selected_variable.1                   role
+  one_hot_constraint_id                                                                                                                                 
+  OneHotConstraintID(10)  {1, 2, 3}  <NA>         []        <NA>        True                    1       False                <NA>  ConstraintRole.ACTIVE
   '''
 # ---
 # name: test_sample_set_one_hot_inactive_reasons_df_after_conversion
   '''
-                          used_ids  name subscripts description  feasible.0  selected_variable.0                             activeness                              inactive_reason inactive_reason.constraint_id
-  one_hot_constraint_id                                                                                                                                                                                           
-  OneHotConstraintID(7)  {0, 1, 2}  <NA>         []        <NA>        True                    0  ConstraintActiveness.INACTIVE_CHECKED  ommx.Instance.convert_one_hot_to_constraint                             8
+                          used_ids  name subscripts description  feasible.0  selected_variable.0                              role                              inactive_reason inactive_reason.constraint_id
+  one_hot_constraint_id                                                                                                                                                                                      
+  OneHotConstraintID(7)  {0, 1, 2}  <NA>         []        <NA>        True                    0  ConstraintRole.FEASIBILITY_CHECK  ommx.Instance.convert_one_hot_to_constraint                             8
   '''
 # ---
 # name: test_sample_set_sos1_constraints_df_dynamic_columns
   '''
-                         used_ids  name subscripts description  feasible.0  selected_variable.0  feasible.1 selected_variable.1  feasible.2 selected_variable.2                   activeness
-  sos1_constraint_id                                                                                                                                                                        
-  Sos1ConstraintID(20)  {1, 2, 3}  <NA>         []        <NA>        True                    2        True                <NA>       False                <NA>  ConstraintActiveness.ACTIVE
+                         used_ids  name subscripts description  feasible.0  selected_variable.0  feasible.1 selected_variable.1  feasible.2 selected_variable.2                   role
+  sos1_constraint_id                                                                                                                                                                  
+  Sos1ConstraintID(20)  {1, 2, 3}  <NA>         []        <NA>        True                    2        True                <NA>       False                <NA>  ConstraintRole.ACTIVE
   '''
 # ---
 # name: test_solution_one_hot_constraints_df_feasible
   '''
-                          feasible  selected_variable   used_ids  name subscripts description  violation                   activeness
-  one_hot_constraint_id                                                                                                              
-  OneHotConstraintID(10)      True                  2  {1, 2, 3}  <NA>         []        <NA>        0.0  ConstraintActiveness.ACTIVE
+                          feasible  selected_variable   used_ids  name subscripts description  violation                   role
+  one_hot_constraint_id                                                                                                        
+  OneHotConstraintID(10)      True                  2  {1, 2, 3}  <NA>         []        <NA>        0.0  ConstraintRole.ACTIVE
   '''
 # ---
 # name: test_solution_one_hot_constraints_df_infeasible
   '''
-                          feasible selected_variable   used_ids  name subscripts description  violation                   activeness
-  one_hot_constraint_id                                                                                                             
-  OneHotConstraintID(10)     False              <NA>  {1, 2, 3}  <NA>         []        <NA>        1.0  ConstraintActiveness.ACTIVE
+                          feasible selected_variable   used_ids  name subscripts description  violation                   role
+  one_hot_constraint_id                                                                                                       
+  OneHotConstraintID(10)     False              <NA>  {1, 2, 3}  <NA>         []        <NA>        1.0  ConstraintRole.ACTIVE
   '''
 # ---
 # name: test_solution_one_hot_inactive_reasons_df_after_conversion
   '''
-                         feasible  selected_variable   used_ids  name subscripts description  violation                             activeness                              inactive_reason inactive_reason.constraint_id
-  one_hot_constraint_id                                                                                                                                                                                                  
-  OneHotConstraintID(7)      True                  0  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintActiveness.INACTIVE_CHECKED  ommx.Instance.convert_one_hot_to_constraint                             8
+                         feasible  selected_variable   used_ids  name subscripts description  violation                              role                              inactive_reason inactive_reason.constraint_id
+  one_hot_constraint_id                                                                                                                                                                                             
+  OneHotConstraintID(7)      True                  0  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintRole.FEASIBILITY_CHECK  ommx.Instance.convert_one_hot_to_constraint                             8
   '''
 # ---
 # name: test_solution_sos1_constraints_df_all_zero
   '''
-                        feasible selected_variable   used_ids  name subscripts description  violation                   activeness
-  sos1_constraint_id                                                                                                              
-  Sos1ConstraintID(20)      True              <NA>  {1, 2, 3}  <NA>         []        <NA>        0.0  ConstraintActiveness.ACTIVE
+                        feasible selected_variable   used_ids  name subscripts description  violation                   role
+  sos1_constraint_id                                                                                                        
+  Sos1ConstraintID(20)      True              <NA>  {1, 2, 3}  <NA>         []        <NA>        0.0  ConstraintRole.ACTIVE
   '''
 # ---
 # name: test_solution_sos1_constraints_df_one_nonzero
   '''
-                        feasible  selected_variable   used_ids  name subscripts description  violation                   activeness
-  sos1_constraint_id                                                                                                               
-  Sos1ConstraintID(20)      True                  2  {1, 2, 3}  <NA>         []        <NA>        0.0  ConstraintActiveness.ACTIVE
+                        feasible  selected_variable   used_ids  name subscripts description  violation                   role
+  sos1_constraint_id                                                                                                         
+  Sos1ConstraintID(20)      True                  2  {1, 2, 3}  <NA>         []        <NA>        0.0  ConstraintRole.ACTIVE
   '''
 # ---
 # name: test_solution_sos1_inactive_reasons_df_after_conversion
   '''
-                       feasible  selected_variable   used_ids  name subscripts description  violation                             activeness                            inactive_reason inactive_reason.constraint_ids
-  sos1_constraint_id                                                                                                                                                                                                  
-  Sos1ConstraintID(7)      True                  0  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintActiveness.INACTIVE_CHECKED  ommx.Instance.convert_sos1_to_constraints                              8
+                       feasible  selected_variable   used_ids  name subscripts description  violation                              role                            inactive_reason inactive_reason.constraint_ids
+  sos1_constraint_id                                                                                                                                                                                             
+  Sos1ConstraintID(7)      True                  0  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintRole.FEASIBILITY_CHECK  ommx.Instance.convert_sos1_to_constraints                              8
   '''
 # ---
 # name: test_sos1_constraints_df_roundtrips_inactive_context
   '''
-                       variables  num_variables   used_ids  name subscripts description                            inactive_reason inactive_reason.constraint_ids                             activeness
-  sos1_constraint_id                                                                                                                                                                                    
-  Sos1ConstraintID(7)  {0, 1, 2}              3  {0, 1, 2}  <NA>         []        <NA>  ommx.Instance.convert_sos1_to_constraints                              8  ConstraintActiveness.INACTIVE_CHECKED
+                       variables  num_variables   used_ids  name subscripts description                            inactive_reason inactive_reason.constraint_ids                              role
+  sos1_constraint_id                                                                                                                                                                               
+  Sos1ConstraintID(7)  {0, 1, 2}              3  {0, 1, 2}  <NA>         []        <NA>  ommx.Instance.convert_sos1_to_constraints                              8  ConstraintRole.FEASIBILITY_CHECK
   '''
 # ---

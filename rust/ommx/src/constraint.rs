@@ -18,8 +18,8 @@ pub use arbitrary::*;
 use derive_more::{Deref, From};
 use fnv::FnvHashSet;
 pub use stage::{
-    ConstraintActiveness, Created, CreatedData, Evaluated, EvaluatedData,
-    InactiveConstraintMetadata, Sampled as SampledStage, SampledData, Stage,
+    ConstraintRole, Created, CreatedData, Evaluated, EvaluatedData, InactiveConstraintMetadata,
+    Sampled as SampledStage, SampledData, Stage,
 };
 // The sampled lifecycle marker is re-exported as `SampledStage` to avoid a
 // name collision with `crate::Sampled<T>` (the sampled-values container).

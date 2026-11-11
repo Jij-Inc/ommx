@@ -345,7 +345,7 @@ impl Solution {
             .all(|dv| dv.is_valid(self.feasibility_atol))
     }
 
-    /// Check whether every active and inactive checked constraint is feasible.
+    /// Check whether every `FeasibilityCheck` and `Active` constraint is feasible.
     /// Inactive skipped constraints remain evaluated but do not participate.
     ///
     /// Note: This only checks constraints, not decision variable bounds/kinds.
@@ -365,10 +365,10 @@ impl Solution {
                 .is_feasible(self.feasibility_atol)
     }
 
-    /// Check active and inactive checked constraints, and all decision variable domains.
+    /// Check `FeasibilityCheck` and `Active` constraints, and all decision variable domains.
     ///
     /// This checks:
-    /// - Active and inactive checked constraints are satisfied (via [`feasible_constraints()`](Self::feasible_constraints))
+    /// - `FeasibilityCheck` and `Active` constraints are satisfied (via [`feasible_constraints()`](Self::feasible_constraints))
     /// - All decision variables satisfy their bounds and kinds (via [`feasible_decision_variables()`](Self::feasible_decision_variables))
     pub fn feasible(&self) -> bool {
         self.feasible_constraints() && self.feasible_decision_variables()
@@ -402,11 +402,11 @@ impl Solution {
         self.feasible_constraints_relaxed() && self.feasible_decision_variables()
     }
 
-    /// Sum nonnegative scalar violations at or above `min_activeness`.
+    /// Sum nonnegative scalar violations at or above `min_role`.
     ///
-    /// `InactiveChecked` selects the same constraints as [`Self::feasible_constraints`];
+    /// `FeasibilityCheck` selects the same constraints as [`Self::feasible_constraints`];
     /// `Active` selects the same constraints as [`Self::feasible_constraints_relaxed`].
-    /// `InactiveSkipped` includes every constraint, even skipped rows:
+    /// `EvaluationOnly` includes every constraint, including those excluded from feasibility:
     /// - Equality: `|f(x)|`; inequality: `max(0, f(x))`.
     /// - Indicator: the inner constraint's violation when `indicator_on`, otherwise zero.
     /// - One-hot: `min_i (|x_i - 1| + Σ_{j != i} |x_j|)`.
@@ -420,8 +420,8 @@ impl Solution {
     ///
     /// Lowering need not preserve this metric. When both an inactive original and
     /// its generated regular constraints are selected, all of them contribute.
-    pub fn total_violation(&self, min_activeness: crate::ConstraintActiveness) -> f64 {
-        self.constraint_violations(min_activeness).sum()
+    pub fn total_violation(&self, min_role: crate::ConstraintRole) -> f64 {
+        self.constraint_violations(min_role).sum()
     }
 
     /// Get a regular constraint's scalar violation, or `None` for an unknown ID.
@@ -432,7 +432,7 @@ impl Solution {
 
     /// Get an indicator constraint's violation, or `None` for an unknown ID.
     /// The value is zero when the indicator variable disables the row, and the
-    /// inner residual's violation otherwise, independently of activeness.
+    /// inner residual's violation otherwise, independently of role.
     /// Includes inactive constraints.
     pub fn indicator_constraint_violation(&self, id: crate::IndicatorConstraintID) -> Option<f64> {
         self.evaluated_indicator_constraints
@@ -464,24 +464,24 @@ impl Solution {
 
     fn constraint_violations(
         &self,
-        min_activeness: crate::ConstraintActiveness,
+        min_role: crate::ConstraintRole,
     ) -> impl Iterator<Item = f64> + '_ {
         self.evaluated_constraints
-            .selected(min_activeness)
+            .selected(min_role)
             .map(|(_, c)| c.violation())
             .chain(
                 self.evaluated_indicator_constraints
-                    .selected(min_activeness)
+                    .selected(min_role)
                     .map(|(_, c)| c.violation()),
             )
             .chain(
                 self.evaluated_one_hot_constraints
-                    .selected(min_activeness)
+                    .selected(min_role)
                     .map(|(_, c)| c.violation()),
             )
             .chain(
                 self.evaluated_sos1_constraints
-                    .selected(min_activeness)
+                    .selected(min_role)
                     .map(|(_, c)| c.violation()),
             )
     }

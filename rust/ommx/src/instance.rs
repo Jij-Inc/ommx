@@ -1,5 +1,3 @@
-#[cfg(test)]
-mod activeness_tests;
 mod analysis;
 mod approx;
 pub(crate) mod arbitrary;
@@ -15,6 +13,8 @@ mod evaluate;
 mod format_function;
 mod indicator;
 mod log_encode;
+#[cfg(test)]
+mod role_tests;
 pub use log_encode::LogEncodingUnavailable;
 mod logical_memory;
 mod named_function;
@@ -725,7 +725,7 @@ impl Instance {
         self.named_functions.set_label(id, label)
     }
 
-    /// All retained constraints, regardless of activeness.
+    /// All retained constraints, regardless of role.
     pub fn constraints(&self) -> &ConstraintCollection<Constraint> {
         &self.constraint_collection
     }
@@ -766,7 +766,7 @@ impl Instance {
             .set_context_for_owner(id, context, "constraint")
     }
 
-    /// All retained indicator constraints, regardless of activeness.
+    /// All retained indicator constraints, regardless of role.
     pub fn indicator_constraints(&self) -> &ConstraintCollection<IndicatorConstraint> {
         &self.indicator_constraint_collection
     }
@@ -811,7 +811,7 @@ impl Instance {
         )
     }
 
-    /// All retained one hot constraints, regardless of activeness.
+    /// All retained one hot constraints, regardless of role.
     pub fn one_hot_constraints(&self) -> &ConstraintCollection<crate::OneHotConstraint> {
         &self.one_hot_constraint_collection
     }
@@ -850,7 +850,7 @@ impl Instance {
             .set_context_for_owner(id, context, "one-hot constraint")
     }
 
-    /// All retained sos1 constraints, regardless of activeness.
+    /// All retained sos1 constraints, regardless of role.
     pub fn sos1_constraints(&self) -> &ConstraintCollection<crate::Sos1Constraint> {
         &self.sos1_constraint_collection
     }
@@ -1283,7 +1283,7 @@ impl ParametricInstance {
         self.named_functions.set_label(id, label)
     }
 
-    /// All retained constraints, regardless of activeness.
+    /// All retained constraints, regardless of role.
     pub fn constraints(&self) -> &ConstraintCollection<Constraint> {
         &self.constraint_collection
     }
@@ -1321,7 +1321,7 @@ impl ParametricInstance {
             .set_context_for_owner(id, context, "constraint")
     }
 
-    /// All retained indicator constraints, regardless of activeness.
+    /// All retained indicator constraints, regardless of role.
     pub fn indicator_constraints(&self) -> &ConstraintCollection<IndicatorConstraint> {
         &self.indicator_constraint_collection
     }
@@ -1367,7 +1367,7 @@ impl ParametricInstance {
         )
     }
 
-    /// All retained one hot constraints, regardless of activeness.
+    /// All retained one hot constraints, regardless of role.
     pub fn one_hot_constraints(&self) -> &ConstraintCollection<crate::OneHotConstraint> {
         &self.one_hot_constraint_collection
     }
@@ -1407,7 +1407,7 @@ impl ParametricInstance {
             .set_context_for_owner(id, context, "one-hot constraint")
     }
 
-    /// All retained sos1 constraints, regardless of activeness.
+    /// All retained sos1 constraints, regardless of role.
     pub fn sos1_constraints(&self) -> &ConstraintCollection<crate::Sos1Constraint> {
         &self.sos1_constraint_collection
     }

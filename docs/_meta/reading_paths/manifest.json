@@ -919,7 +919,7 @@
     },
     {
       "id": "constraints.lifecycle",
-      "label": "activeとchecked・skippedのinactive制約を区別する",
+      "label": "制約のroleとactive・inactiveへの所属を区別する",
       "owner": "R_API.instance.retained_results",
       "requires": [
         "instance.model",
@@ -931,11 +931,12 @@
         "active_constraints",
         "deactivate_constraint",
         "activate_constraint",
-        "INACTIVE_CHECKED",
-        "INACTIVE_SKIPPED",
+        "ConstraintRole",
+        "FEASIBILITY_CHECK",
+        "EVALUATION_ONLY",
         "skip_feasibility_check"
       ],
-      "scope": "Each row is ACTIVE, INACTIVE_CHECKED, or INACTIVE_SKIPPED. Inactive is the umbrella for the checked and skipped states; both are retained and evaluated, while skipped rows are excluded from default feasibility."
+      "scope": "ConstraintRole describes how a row participates: EVALUATION_ONLY uses it for numerical evaluation, FEASIBILITY_CHECK additionally participates in normal feasibility, and ACTIVE additionally belongs to the Active Formulation. Inactive is the umbrella for the first two roles. Role and evaluation stage are independent."
     },
     {
       "id": "objective.views",
@@ -966,9 +967,9 @@
       "aliases": [
         "feasible_relaxed",
         "feasible",
-        "min_activeness"
+        "min_role"
       ],
-      "scope": "The feasible property checks active and checked inactive constraints; feasible_relaxed checks active constraints only. Both check variable domains and accept no selector. For total_violation and constraints_df, min_activeness selects rows inclusively in the order INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE; this selection is not an overall feasibility judgment."
+      "scope": "The feasible property checks constraints with the FEASIBILITY_CHECK or ACTIVE role; feasible_relaxed checks active constraints only. Both check variable domains and accept no selector. For total_violation and constraints_df, min_role selects rows inclusively in the order EVALUATION_ONLY < FEASIBILITY_CHECK < ACTIVE; this selection is not an overall feasibility judgment."
     },
     {
       "id": "evaluation.snapshot",

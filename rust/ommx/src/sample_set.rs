@@ -147,10 +147,10 @@ pub enum SampleSetError {
 /// - [`Self::feasible`] and [`Self::feasible_relaxed`] require every sampled
 ///   variable to satisfy its bounds and kind, just as the extracted [`Solution`].
 ///   They also check all sampled constraint collections:
-///   - `feasible`: all active and inactive checked constraints must be satisfied.
+///   - `feasible`: all `FeasibilityCheck` and `Active` constraints must be satisfied.
 ///   - `feasible_relaxed`: all active constraints must be satisfied.
 ///
-///   Stored canonical judgments use `InactiveChecked` and `Active`, respectively.
+///   Stored canonical judgments use `FeasibilityCheck` and `Active`, respectively.
 /// - `feasibility_atol` is the absolute tolerance used to validate
 ///   serialized per-constraint feasibility columns and to interpret per-sample
 ///   [`Solution`] values extracted from this sample set.

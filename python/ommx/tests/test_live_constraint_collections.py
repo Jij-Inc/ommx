@@ -7,7 +7,7 @@ from typing import Any, overload
 import pytest
 from typing_extensions import assert_type
 
-from ommx import ConstraintActiveness
+from ommx import ConstraintRole
 from ommx import (
     ConstraintKind,
     AttachedConstraint,
@@ -144,7 +144,7 @@ def test_deactivation_activation_and_lowering_update_retained_views():
             set(
                 model.constraints_df(
                     kind=kind,
-                    min_activeness=ConstraintActiveness.INACTIVE_SKIPPED,
+                    min_role=ConstraintRole.EVALUATION_ONLY,
                 ).index
             )
             == expected

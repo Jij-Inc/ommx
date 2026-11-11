@@ -57,7 +57,7 @@ state at a particular candidate.
 The `indicator_on` column records whether the controlling variable equals its
 trigger value, using the evaluation tolerance. It distinguishes an OFF
 Indicator from an ON Indicator whose body is satisfied. This is independent of
-`activeness`, which records whether the constraint belongs to the current
+`role`, which records whether the constraint belongs to the current
 formulation and its default feasibility participation. An active constraint can
 have its Indicator OFF; an inactive constraint can have its Indicator ON.
 Indicator results do not have a dual variable.

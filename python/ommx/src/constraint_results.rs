@@ -26,12 +26,10 @@ macro_rules! constraint_result_context {
         #[pymethods]
         impl $name {
             #[getter]
-            pub fn activeness(&self) -> crate::ConstraintActiveness {
+            pub fn role(&self) -> crate::ConstraintRole {
                 self.2
                     .as_ref()
-                    .map_or(ommx::ConstraintActiveness::Active, |metadata| {
-                        metadata.activeness()
-                    })
+                    .map_or(ommx::ConstraintRole::Active, |metadata| metadata.role())
                     .into()
             }
 
@@ -253,7 +251,7 @@ impl EvaluatedIndicatorConstraint {
         self.0.stage.evaluated_value
     }
 
-    /// Whether the indicator was ON at evaluation time, independently of activeness.
+    /// Whether the indicator was ON at evaluation time, independently of role.
     #[getter]
     pub fn indicator_on(&self) -> bool {
         self.0.stage.indicator_on
@@ -324,7 +322,7 @@ impl SampledIndicatorConstraint {
             .collect()
     }
 
-    /// Indicator ON/OFF diagnostics keyed by sample ID, independently of activeness.
+    /// Indicator ON/OFF diagnostics keyed by sample ID, independently of role.
     #[getter]
     pub fn indicator_on(&self) -> BTreeMap<u64, bool> {
         self.0

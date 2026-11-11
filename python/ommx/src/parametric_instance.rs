@@ -807,9 +807,9 @@ impl ParametricInstance {
 
     /// Live lookup of every retained constraint, including active and inactive rows.
     ///
-    /// IDs determine the constraint family, not its activeness. Active rows are
+    /// IDs determine the constraint family, not its role. Active rows are
     /// attached handles; inactive rows are independent snapshots. Inspect the
-    /// returned row's activeness, or use active_constraints for attached rows.
+    /// returned row's role, or use active_constraints for attached rows.
     #[getter]
     pub fn constraints(slf: Bound<'_, Self>) -> crate::constraint_collection::ConstraintCollection {
         crate::constraint_collection::ConstraintCollection::new(crate::ConstraintHost::Parametric(
@@ -1057,14 +1057,14 @@ impl ParametricInstance {
 
     /// DataFrame of constraints, dispatched on `kind=`. See
     /// {meth}`ommx.Instance.constraints_df` for column / `kind=` /
-    /// `include=` / `min_activeness=` semantics.
-    #[pyo3(signature = (*, kind, include=None, min_activeness=crate::ConstraintActiveness::INACTIVE_SKIPPED))]
+    /// `include=` / `min_role=` semantics.
+    #[pyo3(signature = (*, kind, include=None, min_role=crate::ConstraintRole::EVALUATION_ONLY))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
         kind: ConstraintFamilyInput,
         include: Option<Vec<String>>,
-        min_activeness: crate::ConstraintActiveness,
+        min_role: crate::ConstraintRole,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
@@ -1083,7 +1083,7 @@ impl ParametricInstance {
                     let context = coll.context().collect_for(*id);
                     let dict = crate::pandas::WithModelingContext::new((*id, row), &context)
                         .to_pandas_entry(py)?;
-                    dict.set_item("activeness", crate::ConstraintActiveness::ACTIVE)?;
+                    dict.set_item("role", crate::ConstraintRole::ACTIVE)?;
                     if flags.inactive_reason {
                         crate::pandas::set_inactive_reason_na(&dict)?;
                     }
@@ -1092,16 +1092,13 @@ impl ParametricInstance {
                     entries.insert(*id, dict.into_any());
                 }
                 for (id, pair) in coll.inactive() {
-                    if pair.1.activeness() < min_activeness.into() {
+                    if pair.1.role() < min_role.into() {
                         continue;
                     }
                     let context = coll.context().collect_for(*id);
                     let dict = crate::pandas::WithModelingContext::new((*id, pair), &context)
                         .to_pandas_entry(py)?;
-                    dict.set_item(
-                        "activeness",
-                        crate::ConstraintActiveness::from(pair.1.activeness()),
-                    )?;
+                    dict.set_item("role", crate::ConstraintRole::from(pair.1.role()))?;
                     crate::pandas::apply_include_filter(&dict, flags)?;
                     crate::pandas::rename_id_column(&dict, id_col)?;
                     entries.insert(*id, dict.into_any());

@@ -5,7 +5,7 @@ integers as well as that family's typed IDs; an ID of another family raises
 ``TypeError``. Iteration and dictionary keys retain typed IDs. A known
 ``ConstraintKind`` constant fixes the key type. Filtered active/inactive and result
 collections also preserve the concrete row type. The all-state model ``constraints``
-view returns ``ConstraintView`` because a family ID does not encode activeness.
+view returns ``ConstraintView`` because a family ID does not encode role.
 
 >>> from ommx import ConstraintKind, ConstraintID, Instance
 >>> model = Instance.minimize()

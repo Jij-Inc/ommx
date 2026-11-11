@@ -6,8 +6,8 @@ independent snapshot, including labels, provenance, and inactivity reasons.
 Changing that snapshot does not update its owner; a later lookup reads the
 owner's current state.
 
-Both `ConstraintActiveness.INACTIVE_CHECKED` and
-`ConstraintActiveness.INACTIVE_SKIPPED` belong to this collection. Both are
+Both `ConstraintRole.FEASIBILITY_CHECK` and
+`ConstraintRole.EVALUATION_ONLY` belong to this collection. Both are
 excluded from the active formulation and still evaluated numerically.
 Deactivation can follow relaxation, an equivalent
 lowering, or another transformation; the collection's presence does not identify
@@ -19,4 +19,4 @@ The collection keeps its owner alive. The typed-key, ``get``, live-view,
 iteration, and snapshot equality rules are documented in
 {class}`~ommx.ActiveConstraintCollection`. Use ``of_kind`` and
 {class}`~ommx.ConstraintFamilyView` to inspect one family. A model's
-``constraints_df(kind=..., min_activeness=ConstraintActiveness.INACTIVE_SKIPPED)`` includes both active and inactive rows.
+``constraints_df(kind=..., min_role=ConstraintRole.EVALUATION_ONLY)`` includes both active and inactive rows.

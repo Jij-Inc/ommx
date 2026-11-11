@@ -335,8 +335,8 @@ impl InactiveConstraint {
     }
 
     #[getter]
-    pub fn activeness(&self) -> crate::ConstraintActiveness {
-        self.inactive_reason.activeness().into()
+    pub fn role(&self) -> crate::ConstraintRole {
+        self.inactive_reason.role().into()
     }
 
     #[getter]

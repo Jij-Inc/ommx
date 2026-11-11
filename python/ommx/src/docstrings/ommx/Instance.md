@@ -195,8 +195,8 @@ automatic renumbering, including data from earlier v3 beta versions that
 used separate number spaces.
 
 {attr}`~ommx.Instance.constraints` is a live collection of all constraint
-families and activeness states. A typed ID identifies the family and the number,
-but not activeness. Bare integers are rejected by this heterogeneous collection
+families and roles. A typed ID identifies the family and the number,
+but not role. Bare integers are rejected by this heterogeneous collection
 even though constraint numbers are globally unique within the Instance. Obtaining
 the collection does not collect rows; each row is fetched when accessed.
 {attr}`~ommx.Instance.active_constraints` exposes active attached handles;

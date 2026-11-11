@@ -8,21 +8,21 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ### ⚠ Active / inactiveへの整理 ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
 
-モデルの `constraints` は全状態を含むようになります。activeな接続済みハンドルには `active_constraints`、保持したinactive行には `inactive_constraints` を使います。`Removed*Constraint` は `Inactive*Constraint`、`relax_*` / `restore_*` は `deactivate_*` / `activate_*` に変更します。`from_components` の入力も `active_*` / `inactive_*` に揃えます。
+モデルの `constraints` はすべてのroleの行を含むようになります。activeな接続済みハンドルには `active_constraints`、保持したinactive行には `inactive_constraints` を使います。`Removed*Constraint` は `Inactive*Constraint`、`relax_*` / `restore_*` は `deactivate_*` / `activate_*` に変更します。`from_components` の入力も `active_*` / `inactive_*` に揃えます。
 
 `Instance` と `ParametricInstance` では、`constraint_names` を `active_constraint_names`、`extract_constraints(name)` を `extract_active_constraints(name)` に変更します。activeな制約だけを対象とする動作と返り値の型は変わりません。`Solution` と `SampleSet` では既存の名前を維持します。
 
-inactive行は既定で `INACTIVE_CHECKED`、`skip_feasibility_check=True` を指定すると `INACTIVE_SKIPPED` になります。どちらも数値評価は行いますが、skippedの行は既定の実行可能性判定から除外します。これらと `ACTIVE` は重複しない3状態で、inactiveはcheckedとskippedの総称です。
+各制約は `ConstraintRole` 型の `role` propertyを持ちます。`EVALUATION_ONLY` は数値評価に使い、`FEASIBILITY_CHECK` はさらに通常の実行可能性判定に使い、`ACTIVE` はさらにActive Formulationにも含めます。inactive行のroleは既定で `FEASIBILITY_CHECK`、`skip_feasibility_check=True` を指定すると `EVALUATION_ONLY` になります。inactiveはこの2つのroleの総称です。roleは制約をどこまで利用するかを表し、評価段階とは独立です。
 
-`Solution.feasible` と `SampleSet.feasible` はpropertyのまま維持し、activeと検査対象のinactive制約を判定します。`feasible_relaxed` もpropertyのまま、active制約のみを判定します。どちらも変数の定義域を検査します。SampleSetの `best_feasible` と `best_feasible_id` もpropertyを維持し、`feasible_ids()` は引数なしのメソッドです。実行可能性の判定とサンプル選択には `min_activeness` を渡しません。
+`Solution.feasible` と `SampleSet.feasible` はpropertyのまま維持し、roleが `FEASIBILITY_CHECK` または `ACTIVE` の制約を判定します。`feasible_relaxed` もpropertyのまま、active制約のみを判定します。どちらも変数の定義域を検査します。SampleSetの `best_feasible` と `best_feasible_id` もpropertyを維持し、`feasible_ids()` は引数なしのメソッドです。実行可能性の判定とサンプル選択には `min_role` を渡しません。
 
-`total_violation()` と `constraints_df` では、`INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE` の順序で `min_activeness` 以上の行を対象とします。違反量合計の既定値は `INACTIVE_CHECKED` で、`feasible` が検査する制約集合と一致します。`ACTIVE` を指定すると `feasible_relaxed` と同じ制約集合になります。`constraints_df` は `removed=` をこの下限引数に置き換え、既定値の `INACTIVE_SKIPPED` では全行を返し、常に `activeness` 列を含みます。理由には `include=["inactive_reason"]` を指定します。
+`total_violation()` と `constraints_df` では、`EVALUATION_ONLY < FEASIBILITY_CHECK < ACTIVE` の順序で `min_role` 以上の行を対象とします。違反量合計の既定値は `FEASIBILITY_CHECK` で、`feasible` が検査する制約集合と一致します。`ACTIVE` を指定すると `feasible_relaxed` と同じ制約集合になります。`constraints_df` は `removed=` をこの下限引数に置き換え、既定値の `EVALUATION_ONLY` では全行を返し、常に `role` 列を含みます。理由には `include=["inactive_reason"]` を指定します。
 
 v1のschemaは拡張せず、skipがtrueのデータのv1出力は失敗します。この状態を保存するにはv2を使ってください。APIの対応表は[移行ガイド](../migration/python_sdk_v2_to_v3.md)にあります。
 
 protobuf形式の `ommx.v2` はまだ正式リリース前で、Python SDKのバージョンとは別です。今回の更新では、過去のプレリリース版v2データとの互換性を保証しません。フィールド番号・型・構造は変更されることがあり、番号が同じでも互換性を保証するものではありません。未対応の意味的拡張を拒否する `required_features` の仕組みは維持します。
 
-Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` に揃えます。評価した候補点でのIndicatorのON/OFFを表し、制約のactivenessとは独立です。
+Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` に揃えます。評価した候補点でのIndicatorのON/OFFを表し、制約のroleとは独立です。
 
 Indicatorの設定はboolの `activate_on_zero` から、`trigger_value=0` または既定値の `trigger_value=1` に変更します。整数のpropertyとDataFrame列は本体を適用する条件を表し、評価結果のboolは引き続き `indicator_on` で表します。Instance classの節では `allowed_indicator_trigger_values` を使い、許可しない発火値は `IndicatorTriggerNotAllowed` の `trigger_value` と `allowed_trigger_values` で報告します。
 

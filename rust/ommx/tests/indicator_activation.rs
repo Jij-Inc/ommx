@@ -1,5 +1,5 @@
 use ommx::{
-    coeff, linear, v1::State, v2, ATol, Bound, ConstraintActiveness, DecisionVariable, Equality,
+    coeff, linear, v1::State, v2, ATol, Bound, ConstraintRole, DecisionVariable, Equality,
     Evaluate, EvaluatedConstraintBehavior, Function, IndicatorConstraint, IndicatorConstraintID,
     Instance, InstanceClass, InstanceClassClause, InstanceClassMismatch, Kind, Message,
     ParametricInstance, PolynomialRequirement, Propagate, PropagateOutcome, SampleSet, Sampled,
@@ -62,11 +62,11 @@ fn skipped_zero_activated_indicator_preserves_both_policies() {
     assert!(solution.feasible());
     assert!(solution.feasible_relaxed());
     assert_eq!(
-        solution.total_violation(ConstraintActiveness::InactiveChecked),
+        solution.total_violation(ConstraintRole::FeasibilityCheck),
         0.0
     );
     assert_eq!(
-        solution.total_violation(ConstraintActiveness::InactiveSkipped),
+        solution.total_violation(ConstraintRole::EvaluationOnly),
         1.0
     );
     assert!(samples.feasible().values().all(|feasible| *feasible));

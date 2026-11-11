@@ -158,33 +158,33 @@ Declare the accepted input as `INPUT_CLASS` and implement `solve_without_prepara
 (migration-results)=
 ## 4. Evaluate candidates and read results
 
-### Select constraints by activeness
+### Select constraints by role
 
-Replace `relax_constraint` / `restore_constraint` with `deactivate_constraint` / `activate_constraint`, and `RemovedConstraint` with `InactiveConstraint`. The same naming applies to indicator, OneHot, and SOS1 families. Deactivation retains the row and its reason; `skip_feasibility_check=False` is the default. A skipped row is still numerically evaluated, and evaluation errors still propagate.
+Replace `relax_constraint` / `restore_constraint` with `deactivate_constraint` / `activate_constraint`, and `RemovedConstraint` with `InactiveConstraint`. The same naming applies to indicator, OneHot, and SOS1 families. Deactivation retains the row and its reason; `skip_feasibility_check=False` is the default. A row with `skip_feasibility_check=True` is still numerically evaluated, and evaluation errors still propagate.
 
-`Instance.constraints` and `ParametricInstance.constraints` now include every state. A typed ID identifies the family, not activeness: lookup returns the common `ConstraintView`, whose concrete runtime type depends on the row's current state. Use `active_constraints` for typed attached handles and `inactive_constraints` for inactive snapshots. `Solution.constraints` and `SampleSet.constraints` continue to contain all evaluated rows.
+`Instance.constraints` and `ParametricInstance.constraints` now include every role. A typed ID identifies the family, not the role: lookup returns the common `ConstraintView`, whose concrete runtime type depends on the row's current active/inactive membership. Use `active_constraints` for typed attached handles and `inactive_constraints` for inactive snapshots. `Solution.constraints` and `SampleSet.constraints` continue to contain all evaluated rows.
 
 On `Instance` and `ParametricInstance`, rename `constraint_names` to `active_constraint_names` and `extract_constraints(name)` to `extract_active_constraints(name)`. Both queries still select only active constraints, and their return types are unchanged. `Solution` and `SampleSet` keep `constraint_names` and `extract_constraints`.
 
 For `from_components`, rename `constraints=` to `active_constraints=`, and similarly use `active_indicator_constraints=`, `active_one_hot_constraints=`, and `active_sos1_constraints=`. Initial inactive rows use the corresponding `inactive_*` arguments and `Inactive*Constraint` wrappers.
 
-Each row has exactly one `ConstraintActiveness` state: `ACTIVE`, `INACTIVE_CHECKED` (inactive with `skip_feasibility_check=False`), or `INACTIVE_SKIPPED` (inactive with `skip_feasibility_check=True`). **Inactive** is the umbrella term for the last two states; `inactive_constraints` contains both.
+Each row's `role` property is a `ConstraintRole`: `EVALUATION_ONLY` uses the row for numerical evaluation, `FEASIBILITY_CHECK` additionally uses it for normal feasibility, and `ACTIVE` additionally includes it in the Active Formulation. These roles describe participation, not whether evaluation has already occurred. **Inactive** is the umbrella term for the first two roles; `inactive_constraints` contains both. An inactive row has role `FEASIBILITY_CHECK` when `skip_feasibility_check=False`, and `EVALUATION_ONLY` when it is `True`.
 
-Indicator result properties and DataFrame columns use `indicator_on` to report whether the indicator variable matches the configured `trigger_value` within the evaluation tolerance. The trigger value is 0 or 1, with a default of 1. This describes the evaluated candidate, independently of the constraint's activeness.
+Indicator result properties and DataFrame columns use `indicator_on` to report whether the indicator variable matches the configured `trigger_value` within the evaluation tolerance. The trigger value is 0 or 1, with a default of 1. This describes the evaluated candidate, independently of the constraint's role.
 
 OneHot and SOS1 result properties rename `active_variable` to `selected_variable`, including per-sample mappings. DataFrame columns become `selected_variable` and `selected_variable.<sample_id>`. This diagnostic describes selection at the evaluated candidate, independently of variable or constraint membership in the Active Formulation. Evaluation behavior is unchanged.
 
-The `min_activeness` selector for `total_violation()` and `constraints_df` is an ordered minimum, so it can include more than one state:
+The `min_role` selector for `total_violation()` and `constraints_df` is an ordered minimum, so it can include more than one role:
 
-| `min_activeness` | Included constraints |
+| `min_role` | Included constraints |
 | --- | --- |
-| `ConstraintActiveness.ACTIVE` | Active only |
-| `ConstraintActiveness.INACTIVE_CHECKED` | Active and inactive with `skip_feasibility_check=False` |
-| `ConstraintActiveness.INACTIVE_SKIPPED` | Every retained constraint |
+| `ConstraintRole.ACTIVE` | Active only |
+| `ConstraintRole.FEASIBILITY_CHECK` | Active and inactive with `skip_feasibility_check=False` |
+| `ConstraintRole.EVALUATION_ONLY` | Every retained constraint |
 
-The order is `INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE`; a query includes rows whose activeness is at least the minimum. It cannot include skipped rows while excluding checked inactive rows.
+The order is `EVALUATION_ONLY < FEASIBILITY_CHECK < ACTIVE`; a query includes rows whose role is at least the minimum. It cannot include `EVALUATION_ONLY` rows while excluding `FEASIBILITY_CHECK` rows.
 
-Read `solution.feasible` and `samples.feasible` as properties. They check active and inactive checked constraints; `feasible_relaxed` checks active constraints only. SampleSet's `best_feasible` and `best_feasible_id` remain properties, while `feasible_ids()` remains a method without arguments. Feasibility and sample selection do not accept `min_activeness`. The default `total_violation()` uses `INACTIVE_CHECKED`, matching the constraints checked by `feasible`; selecting `ACTIVE` matches `feasible_relaxed`. `constraints_df` defaults to `INACTIVE_SKIPPED`. Feasibility applies each row's tolerance and checks variable domains; do not infer it from an exact-zero test of the total.
+Read `solution.feasible` and `samples.feasible` as properties. They check constraints with the `FEASIBILITY_CHECK` or `ACTIVE` role; `feasible_relaxed` checks active constraints only. SampleSet's `best_feasible` and `best_feasible_id` remain properties, while `feasible_ids()` remains a method without arguments. Feasibility and sample selection do not accept `min_role`. The default `total_violation()` uses `FEASIBILITY_CHECK`, matching the constraints checked by `feasible`; selecting `ACTIVE` matches `feasible_relaxed`. `constraints_df` defaults to `EVALUATION_ONLY`. Feasibility applies each row's tolerance and checks variable domains; do not infer it from an exact-zero test of the total.
 
 The v1 wire schema is unchanged. Export to v1 fails if any retained row has `skip_feasibility_check=True`; use v2 to preserve this state. Existing restrictions on v1 exports still apply.
 
@@ -224,11 +224,11 @@ assert result.get_constraint_value(limit.constraint_id) == -1.0
 
 {meth}`~ommx.Solution.extract_constraints` now searches all families and returns nonnegative violations keyed by subscript tuple. Duplicate subscripts for a name are ambiguous, even across families. If you relied on the sign or slack of a regular row, use `get_constraint_value` as above. For a violation by typed ID use `constraint_violation`. When reading a single evaluated row, use `row.is_feasible(atol=result.feasibility_atol)` to apply the result's tolerance. Overall feasibility also checks variable domains. A zero total constraint violation alone is insufficient.
 
-For a regular equality, the violation is the absolute residual. For an inequality it is the excess above the limit. Special constraints have family-specific metrics. `total_violation()` adds these values for the constraints checked by `feasible`; pass `min_activeness=ConstraintActiveness.ACTIVE` to use the constraints checked by `feasible_relaxed`. Adding rows during transformation can therefore change the total. See {meth}`~ommx.Solution.total_violation` for definitions and tolerances. Update error handling for a missing required variable in `evaluate()` to catch `ValueError`. Partial assignments remain valid inputs to `partial_evaluate()`.
+For a regular equality, the violation is the absolute residual. For an inequality it is the excess above the limit. Special constraints have family-specific metrics. `total_violation()` adds these values for the constraints checked by `feasible`; pass `min_role=ConstraintRole.ACTIVE` to use the constraints checked by `feasible_relaxed`. Adding rows during transformation can therefore change the total. See {meth}`~ommx.Solution.total_violation` for definitions and tolerances. Update error handling for a missing required variable in `evaluate()` to catch `ValueError`. Partial assignments remain valid inputs to `partial_evaluate()`.
 
 ### Update tables and sample aggregation
 
-Call the `*_df` methods. In particular, replace `solution.constraints_df` with `solution.constraints_df(kind=ConstraintKind.Regular)`. Constraint indexes contain family-specific ID objects. Update joins that expected integers. On models and results, `constraints_df(kind=...)` includes all activeness levels by default. Pass `min_activeness=ConstraintActiveness.ACTIVE` for active rows only. Result collections return snapshots on lookup. The constraint metadata tables for context, parameters, provenance, and inactivation reasons also require `kind=`.
+Call the `*_df` methods. In particular, replace `solution.constraints_df` with `solution.constraints_df(kind=ConstraintKind.Regular)`. Constraint indexes contain family-specific ID objects. Update joins that expected integers. On models and results, `constraints_df(kind=...)` includes rows of every role by default. Pass `min_role=ConstraintRole.ACTIVE` for active rows only. Result collections return snapshots on lookup. The constraint metadata tables for context, parameters, provenance, and inactivation reasons also require `kind=`.
 
 For multiple samples, use `samples.summary` for objectives and overall feasibility, and `samples.constraints_df(kind=...)` for per-constraint results. `samples.sample_ids()` returns a set. Use `samples.sample_ids_list` when the consumer needs a list. See {class}`~ommx.Solution` and {class}`~ommx.SampleSet` for complete examples.
 
@@ -256,7 +256,7 @@ report = rows.join(owners.rename(index=id_map))
 assert report.loc[limit.constraint_id, "owner"] == "planning"
 ```
 
-Use `include=["label", "parameters"]` for a wide table with metadata. For a join with one row per key/value, use `constraint_parameters_df(kind=...)`. Transformation history is in `constraint_provenance_df(kind=...)`, with one row per provenance step. The `activeness` column is always present. Filter out `ConstraintActiveness.ACTIVE` if your old report contained only removed rows. Request `include=["inactive_reason"]` to add the reason and its parameters, or use `constraint_inactive_reasons_df(kind=...)` for a long table.
+Use `include=["label", "parameters"]` for a wide table with metadata. For a join with one row per key/value, use `constraint_parameters_df(kind=...)`. Transformation history is in `constraint_provenance_df(kind=...)`, with one row per provenance step. The `role` column is always present. Filter out `ConstraintRole.ACTIVE` if your old report contained only removed rows. Request `include=["inactive_reason"]` to add the reason and its parameters, or use `constraint_inactive_reasons_df(kind=...)` for a long table.
 
 ### Compare feasibility near the tolerance
 
@@ -348,7 +348,7 @@ The site-wide {ref}`general index <genindex>` also lists the detailed examples u
 | `Artifact.load_archive` | {meth}`Artifact.import_archive <ommx.artifact.Artifact.import_archive>` / {meth}`Artifact.inspect_archive <ommx.artifact.Artifact.inspect_archive>` | {ref}`migration-artifact-archives` |
 | `Constraint.id` / `set_id` / `next_constraint_id` | {meth}`add_constraint <ommx.Instance.add_constraint>` or, to preserve external constraint numbers, {meth}`from_components <ommx.Instance.from_components>` | {ref}`2 <migration-build>` |
 | `constraint_hints` / `OneHot` / `Sos1` | {class}`OneHotConstraint <ommx.OneHotConstraint>` / {class}`Sos1Constraint <ommx.Sos1Constraint>` | {ref}`2 <migration-build>` |
-| `constraints_df` / `removed_constraints_df` | {meth}`constraints_df(kind=..., min_activeness=...) <ommx.Instance.constraints_df>`; filter `activeness` for inactive-only reports | {ref}`migration-constraint-tables` |
+| `constraints_df` / `removed_constraints_df` | {meth}`constraints_df(kind=..., min_role=...) <ommx.Instance.constraints_df>`; filter `role` for inactive-only reports | {ref}`migration-constraint-tables` |
 | `decision_variable_analysis()` | {meth}`decision_variable_roles() <ommx.Instance.decision_variable_roles>` / {meth}`fixed_decision_variables() <ommx.Instance.fixed_decision_variables>` | {ref}`migration-constraint-metadata` |
 | `DecisionVariable.substituted_value` | {meth}`model.fixed_decision_variables() <ommx.Instance.fixed_decision_variables>` | {ref}`2 <migration-build>` |
 | `evaluated.feasible` / `sampled.feasible` | {meth}`evaluated.is_feasible(atol=...) <ommx.EvaluatedConstraint.is_feasible>` / {meth}`sampled.feasible(atol=...) <ommx.SampledConstraint.feasible>` | {ref}`4 <migration-results>` |

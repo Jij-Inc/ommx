@@ -478,15 +478,18 @@ impl From<Relaxation> for ommx::v1::Relaxation {
 }
 
 open_kind!(
-    /// Ordered participation in constraint queries.
+    /// A constraint's role in evaluation, feasibility, and the Active Formulation.
     ///
-    /// INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE. A min_activeness query
-    /// includes rows whose activeness is at least the requested value.
-    /// Inactive collections contain both inactive states; skip_feasibility_check
-    /// selects whether an inactive row is checked by default feasibility queries.
-    ConstraintActiveness, ommx::ConstraintActiveness, |value| value as i32, module="ommx";
-    INACTIVE_SKIPPED => InactiveSkipped,
-    INACTIVE_CHECKED => InactiveChecked,
+    /// EVALUATION_ONLY < FEASIBILITY_CHECK < ACTIVE. A min_role query
+    /// includes rows whose role is at least the requested value.
+    /// EVALUATION_ONLY rows are evaluated without affecting normal feasibility;
+    /// FEASIBILITY_CHECK rows also participate in that judgment; ACTIVE rows
+    /// additionally belong to the Active Formulation. The first two roles are
+    /// inactive. skip_feasibility_check selects between them.
+    /// Roles describe participation, not whether evaluation has already occurred.
+    ConstraintRole, ommx::ConstraintRole, |value| value as i32, module="ommx";
+    EVALUATION_ONLY => EvaluationOnly,
+    FEASIBILITY_CHECK => FeasibilityCheck,
     ACTIVE => Active,
     ;
     fn __lt__(&self, other: Self) -> bool { self.0 < other.0 }
@@ -503,12 +506,12 @@ type NamedConstantPickle<'py> = (
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
-impl ConstraintActiveness {
+impl ConstraintRole {
     fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<NamedConstantPickle<'py>> {
         let name = match self.0 {
-            ommx::ConstraintActiveness::Active => "ACTIVE",
-            ommx::ConstraintActiveness::InactiveChecked => "INACTIVE_CHECKED",
-            ommx::ConstraintActiveness::InactiveSkipped => "INACTIVE_SKIPPED",
+            ommx::ConstraintRole::Active => "ACTIVE",
+            ommx::ConstraintRole::FeasibilityCheck => "FEASIBILITY_CHECK",
+            ommx::ConstraintRole::EvaluationOnly => "EVALUATION_ONLY",
         };
         Ok((
             py.import("builtins")?.getattr("getattr")?,

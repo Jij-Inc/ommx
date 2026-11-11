@@ -274,7 +274,7 @@ pub struct EvaluatedIndicatorConstraint {
     #[prost(bool, tag = "4")]
     pub feasible: bool,
     /// Whether the indicator variable matches its configured trigger_value at this state,
-    /// independently of constraint activeness.
+    /// independently of the constraint's role.
     #[prost(bool, tag = "5")]
     pub indicator_on: bool,
     #[prost(uint64, repeated, tag = "6")]
@@ -402,7 +402,7 @@ pub struct SampledIndicatorConstraint {
     #[prost(btree_map = "uint64, bool", tag = "4")]
     pub feasible: ::prost::alloc::collections::BTreeMap<u64, bool>,
     /// Whether the indicator variable matches its configured trigger_value at each sample,
-    /// independently of constraint activeness.
+    /// independently of the constraint's role.
     #[prost(btree_map = "uint64, bool", tag = "5")]
     pub indicator_on: ::prost::alloc::collections::BTreeMap<u64, bool>,
     #[prost(uint64, repeated, tag = "6")]

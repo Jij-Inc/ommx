@@ -65,7 +65,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// {attr}`~ommx.SampleSet.summary` shows each sample's objective and feasibility.
 /// Feasible candidates appear first, ordered by the objective according to
 /// {attr}`~ommx.SampleSet.sense`. Feasibility checks variable kinds and bounds
-/// and active plus inactive checked constraints; skipped constraints are excluded.
+/// and constraints with roles ACTIVE or FEASIBILITY_CHECK; EVALUATION_ONLY rows are excluded.
 /// Retrieve an individual sample as a Solution using its ID:
 ///
 /// >>> solution = sample_set.get(sample_id=0)
@@ -121,8 +121,8 @@ use std::collections::{BTreeMap, BTreeSet};
 /// >>> assert results.best_feasible.optimality == Optimality.Unspecified
 ///
 /// Successful value reconstruction, feasibility, and optimality remain separate
-/// questions. {attr}`~ommx.SampleSet.feasible` checks active and inactive checked
-/// constraints; {attr}`~ommx.SampleSet.feasible_relaxed` excludes inactive constraints while
+/// questions. {attr}`~ommx.SampleSet.feasible` checks constraints with roles ACTIVE or
+/// FEASIBILITY_CHECK; {attr}`~ommx.SampleSet.feasible_relaxed` excludes inactive constraints while
 /// still checking all variable domains. See {class}`~ommx.Solution` for output
 /// interpretation and {meth}`~ommx.Instance.populate_state` for reconstruction,
 /// defaults, and normalization. Choosing the best supplied candidate never
@@ -300,8 +300,8 @@ impl SampleSet {
     /// The best feasible candidate as an independent Solution.
     ///
     /// Selects only candidates satisfying {attr}`~ommx.SampleSet.feasible`:
-    /// active and inactive checked constraints, plus all variable kinds and bounds.
-    /// Inactive skipped constraints are excluded. Use
+    /// constraints with roles ACTIVE or FEASIBILITY_CHECK, plus all variable kinds and bounds.
+    /// EVALUATION_ONLY constraints are excluded. Use
     /// {attr}`~ommx.SampleSet.best_feasible_relaxed` for active constraints only.
     /// Minimization selects the smallest reported objective; maximization selects
     /// the largest.
@@ -351,8 +351,8 @@ impl SampleSet {
     #[getter]
     /// Alias for {attr}`~ommx.SampleSet.best_feasible`.
     ///
-    /// Checks active and inactive checked constraints, plus all variable kinds
-    /// and bounds. Inactive skipped constraints are excluded.
+    /// Checks constraints with roles ACTIVE or FEASIBILITY_CHECK, plus all variable kinds
+    /// and bounds. EVALUATION_ONLY constraints are excluded.
     /// Raises ValueError if there is no feasible sample.
     pub fn best_feasible_unrelaxed(&self) -> OmmxPyResult<Solution> {
         self.best_feasible()
@@ -374,8 +374,8 @@ impl SampleSet {
 
     /// Get feasibility status for all samples, including variable bounds and kinds.
     ///
-    /// Checks active and inactive checked constraints across every family.
-    /// Inactive skipped constraints are excluded but remain evaluated and inspectable.
+    /// Checks constraints with roles ACTIVE or FEASIBILITY_CHECK across every family.
+    /// EVALUATION_ONLY constraints are excluded but remain evaluated and inspectable.
     /// Each value matches {attr}`~ommx.Solution.feasible` on the corresponding
     /// extracted Solution and uses {attr}`~ommx.SampleSet.feasibility_atol`.
     #[getter]
@@ -400,7 +400,7 @@ impl SampleSet {
     }
 
     /// Alias for {attr}`~ommx.SampleSet.feasible`, keyed by sample ID.
-    /// Inactive skipped constraints are excluded; all variable kinds and bounds apply.
+    /// EVALUATION_ONLY constraints are excluded; all variable kinds and bounds apply.
     #[getter]
     pub fn feasible_unrelaxed(&self) -> BTreeMap<u64, bool> {
         self.feasible()
@@ -730,7 +730,7 @@ impl SampleSet {
     ///
     /// The index is ``sample_id`` and the columns are ``objective`` and
     /// ``feasible``. Feasibility matches {attr}`~ommx.SampleSet.feasible`, including
-    /// variable kinds and bounds plus active and inactive checked constraints.
+    /// variable kinds and bounds plus constraints with roles ACTIVE or FEASIBILITY_CHECK.
     /// Feasible candidates appear first; within each feasibility group, objective
     /// values are ascending for minimization and descending for maximization,
     /// according to {attr}`~ommx.SampleSet.sense`.
@@ -811,16 +811,16 @@ impl SampleSet {
     /// (`value.{sample_id}`, `feasible.{sample_id}`, etc.) on top of
     /// the kind-specific core columns.
     ///
-    /// min_activeness selects rows at or above the given ordered state,
+    /// min_role selects rows at or above the given role,
     /// defaulting to all rows. Reason data is gated by
     /// `"inactive_reason"` in `include=`.
-    #[pyo3(signature = (*, kind, include = None, min_activeness=crate::ConstraintActiveness::INACTIVE_SKIPPED))]
+    #[pyo3(signature = (*, kind, include = None, min_role=crate::ConstraintRole::EVALUATION_ONLY))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
         kind: ConstraintFamilyInput,
         include: Option<Vec<String>>,
-        min_activeness: crate::ConstraintActiveness,
+        min_role: crate::ConstraintRole,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
@@ -838,7 +838,7 @@ impl SampleSet {
                 let meta = coll.context().clone();
                 let inactive_metadata = coll.inactive_metadata();
                 let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
-                for (id, c) in coll.selected(min_activeness.into()) {
+                for (id, c) in coll.selected(min_role.into()) {
                     let m = meta.collect_for(*id);
                     let dict = crate::pandas::WithModelingContext::new(
                         WithSampleIds {
@@ -849,9 +849,9 @@ impl SampleSet {
                     )
                     .to_pandas_entry(py)?;
                     dict.set_item(
-                        "activeness",
-                        crate::ConstraintActiveness::from(
-                            coll.activeness(id).expect("selected constraint exists"),
+                        "role",
+                        crate::ConstraintRole::from(
+                            coll.role(id).expect("selected constraint exists"),
                         ),
                     )?;
                     if flags.inactive_reason {

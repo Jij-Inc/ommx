@@ -79,7 +79,7 @@ relationships within the Active Formulation. Row-level
 `used_decision_variable_ids` also keeps its name and reports that row's references,
 including references retained in inactive constraints and named functions.
 
-## Constraint activeness
+## Constraint roles
 
 Constraint membership is now explicit: `active_constraints()` returns the solver-facing rows, `inactive_constraints()` returns retained rows, and `constraints()` returns the complete regular-constraint collection. The corresponding special-family accessors use the same prefixes. Builders take `active_constraints(...)` and `inactive_constraints(...)`, with equivalent methods for each family.
 
@@ -94,12 +94,12 @@ variable values because its evaluation populates the remaining values first.
 
 Replace `relax_*` / `restore_*` with `deactivate_*` / `activate_*`. Inactive membership uses `InactiveConstraintMetadata { reason, parameters, skip_feasibility_check }`. Pass `false` as the final argument to `deactivate_constraint(id, reason, parameters, false)` to retain the previous feasibility behavior. A row with `skip_feasibility_check: true` is still numerically evaluated; only its participation in aggregate queries changes.
 
-Each row has exactly one `ConstraintActiveness` state: `Active`, `InactiveChecked` (`skip_feasibility_check: false`), or `InactiveSkipped` (`skip_feasibility_check: true`). Inactive membership includes both `InactiveChecked` and `InactiveSkipped`; `inactive_constraints()` returns both.
+Each row has exactly one `ConstraintRole`: `EvaluationOnly` evaluates the row for inspection, `FeasibilityCheck` also includes it in the normal feasibility judgment, and `Active` additionally includes it in the Active Formulation. Both `FeasibilityCheck` (`skip_feasibility_check: false`) and `EvaluationOnly` (`skip_feasibility_check: true`) are inactive; `inactive_constraints()` returns both. Collection `role(&id)` queries return the role regardless of the row's evaluation stage. The role describes its intended use, not whether evaluation or a feasibility check has already run.
 
 Indicator stage data use `indicator_on` to record whether the indicator variable
 matches the configured `trigger_value` within the evaluation tolerance. The
 trigger value is zero or one. This candidate-dependent
-diagnostic is independent of the constraint's activeness.
+diagnostic is independent of the constraint's role.
 
 OneHot/SOS1 evaluated and sampled stage fields rename `active_variable` to
 `selected_variable`. This candidate-dependent selection diagnostic is independent
@@ -112,10 +112,10 @@ The `total_violation` query minimum includes every state at or above its value:
 | Minimum | Included constraints |
 | --- | --- |
 | `Active` | Active only |
-| `InactiveChecked` (default) | Active and inactive without the skip flag |
-| `InactiveSkipped` | Every retained row |
+| `FeasibilityCheck` (default) | `FeasibilityCheck` and `Active` roles |
+| `EvaluationOnly` | Every retained row |
 
-Thus `InactiveSkipped < InactiveChecked < Active`, and a minimum includes every row at or above that level. `Solution::feasible()` and `feasible_constraints()` check active and inactive checked constraints without taking a minimum. SampleSet feasibility and feasible-sample selection also retain their signatures without a minimum. `feasible_relaxed()` checks active constraints only. For `total_violation`, pass `Default::default()` (`InactiveChecked`) to use the constraints checked by `feasible()`, or `Active` to use those checked by `feasible_relaxed()`. Feasibility applies the tolerance to each row and checks variable domains separately. No exact-zero implication is part of the total-violation contract.
+Thus `EvaluationOnly < FeasibilityCheck < Active`, and `min_role` includes every row at or above that level. This inclusion order is specific to `ConstraintRole`; `DecisionVariableRole` does not define the same participation hierarchy. `Solution::feasible()` and `feasible_constraints()` check the `FeasibilityCheck` and `Active` roles without taking a minimum. SampleSet feasibility and feasible-sample selection also retain their signatures without a minimum. `feasible_relaxed()` checks active constraints only. For `total_violation`, pass `Default::default()` (`FeasibilityCheck`) to use the constraints checked by `feasible()`, or `Active` to use those checked by `feasible_relaxed()`. Feasibility applies the tolerance to each row and checks variable domains separately. No exact-zero implication is part of the total-violation contract.
 
 The v1 wire schema is unchanged. Export fails if any retained constraint has `skip_feasibility_check: true`; v2 preserves the flag with a required feature. Existing v1 export restrictions still apply.
 
@@ -181,7 +181,7 @@ assert_eq!(bounds[&id], Bound::new(2.0, 8.0)?);
 `Solution::total_violation_l1()` is renamed to
 [`Solution::total_violation`](crate::Solution::total_violation), and
 `Solution::total_violation_l2()` is removed. The total sums one nonnegative
-scalar per selected constraint across all families. Pass `InactiveChecked` to
+scalar per selected constraint across all families. Pass `FeasibilityCheck` to
 select the constraints checked by `feasible()`, or `Active` for those checked by
 `feasible_relaxed()`.
 Regular equality and inequality definitions are unchanged.
@@ -727,7 +727,7 @@ pub struct SampledCollection<T: ConstraintType> {
 
 // Both Deref to BTreeMap<T::ID, T::Evaluated/Sampled> for backward-compatible access
 // and provide feasibility / inactivity / context accessors:
-collection.is_feasible(atol) // active and inactive checked constraints feasible
+collection.is_feasible(atol) // FeasibilityCheck and Active constraints feasible
 collection.is_feasible_relaxed(atol) // active constraints feasible
 collection.is_inactive(&id)             // check if a constraint is inactive
 collection.inactive_metadata()           // &BTreeMap<T::ID, InactiveConstraintMetadata>

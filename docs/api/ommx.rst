@@ -31,7 +31,7 @@ ommx
    _items/ommx.AttachedDecisionVariable
    _items/ommx.Parameter
    _items/ommx.ConstraintKind
-   _items/ommx.ConstraintActiveness
+   _items/ommx.ConstraintRole
    _items/ommx.ConstraintCollection
    _items/ommx.PolynomialRequirement
    _items/ommx.InstanceClassClause

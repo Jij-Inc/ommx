@@ -5,12 +5,15 @@ or its integer value. `reason` records why the condition was deactivated, and
 additional keyword arguments record string-valued reason parameters. The
 constraint keeps its ID, labels, and provenance.
 
-Set `skip_feasibility_check=True` to exclude it from default aggregate
-feasibility and total-violation queries. The row is still evaluated; explicit
-queries with the minimum `INACTIVE_SKIPPED` include it.
+Deactivation assigns the `FEASIBILITY_CHECK` role by default. Set
+`skip_feasibility_check=True` to assign `EVALUATION_ONLY`, excluding the row from
+normal feasibility and default total-violation queries. The row is still
+evaluated; total-violation and DataFrame queries with `min_role=EVALUATION_ONLY`
+include it.
 
 Inactive constraints no longer restrict the active formulation, but
-{meth}`~ommx.Instance.evaluate` still checks them. Here the relaxed formulation
+{meth}`~ommx.Instance.evaluate` still evaluates them and includes
+`FEASIBILITY_CHECK` rows in normal feasibility. Here the relaxed formulation
 allows `x=1`, while the retained `x <= 0` condition rejects it:
 
 ```pycon

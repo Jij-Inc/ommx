@@ -25,7 +25,7 @@ fn normalize_activation_error<ID: std::fmt::Debug>(
     )
 }
 
-macro_rules! impl_constraint_activeness {
+macro_rules! impl_constraint_role {
     ($host:ty) => {
 impl $host {
     pub fn deactivate_constraint(
@@ -213,8 +213,8 @@ impl $host {
 
     };
 }
-impl_constraint_activeness!(Instance);
-impl_constraint_activeness!(ParametricInstance);
+impl_constraint_role!(Instance);
+impl_constraint_role!(ParametricInstance);
 
 #[cfg(test)]
 mod tests {

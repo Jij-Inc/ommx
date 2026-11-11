@@ -18,22 +18,29 @@ pub struct Created;
 
 // ===== Common types =====
 
-/// Ordered participation of a constraint in the current formulation and queries.
+/// The role of a constraint in evaluation, feasibility, and the Active Formulation.
 ///
-/// Queries include a row when its activeness is at least the requested minimum.
-/// The order is [`Self::InactiveSkipped`] < [`Self::InactiveChecked`] < [`Self::Active`].
-/// The default, [`Self::InactiveChecked`], includes active and checked inactive rows;
-/// selecting [`Self::InactiveSkipped`] includes every retained row.
+/// Queries include a row when its role is at least the requested minimum.
+/// The order is [`Self::EvaluationOnly`] < [`Self::FeasibilityCheck`] < [`Self::Active`].
+/// The default minimum, [`Self::FeasibilityCheck`], includes that role and active rows;
+/// selecting [`Self::EvaluationOnly`] includes every retained row.
+///
+/// Roles describe participation before and after evaluation, not whether an
+/// evaluation or feasibility check has already run. Active/inactive membership
+/// and the inactive row's check policy determine the role. Both
+/// [`Self::EvaluationOnly`] and [`Self::FeasibilityCheck`] are inactive.
+/// This participation order is specific to constraints; it does not define an
+/// ordering of [`crate::DecisionVariableRole`] by participation.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, LogicalMemoryProfile,
 )]
-pub enum ConstraintActiveness {
-    /// Retained and evaluated, but excluded from default feasibility judgments.
-    InactiveSkipped,
-    /// Not imposed on the solver, but included in default feasibility judgments.
+pub enum ConstraintRole {
+    /// Numerically evaluated for inspection, without affecting aggregate feasibility.
+    EvaluationOnly,
+    /// Included in evaluation and normal feasibility, outside the Active Formulation.
     #[default]
-    InactiveChecked,
-    /// Imposed on the solver as part of the active formulation.
+    FeasibilityCheck,
+    /// Part of the Active Formulation, and included in evaluation and feasibility.
     Active,
 }
 
@@ -64,12 +71,12 @@ pub struct InactiveConstraintMetadata {
 }
 
 impl InactiveConstraintMetadata {
-    /// The activeness represented by this inactive membership record.
-    pub fn activeness(&self) -> ConstraintActiveness {
+    /// The role represented by this inactive membership record.
+    pub fn role(&self) -> ConstraintRole {
         if self.skip_feasibility_check {
-            ConstraintActiveness::InactiveSkipped
+            ConstraintRole::EvaluationOnly
         } else {
-            ConstraintActiveness::InactiveChecked
+            ConstraintRole::FeasibilityCheck
         }
     }
 }

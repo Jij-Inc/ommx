@@ -1,4 +1,4 @@
-"""Ordered activeness selects one coherent constraint set across query APIs."""
+"""Ordered roles select one coherent constraint set across query APIs."""
 
 import pickle
 from typing import Any
@@ -8,7 +8,7 @@ from typing_extensions import assert_type
 
 from ommx import (
     AttachedConstraint,
-    ConstraintActiveness as Activeness,
+    ConstraintRole as Role,
     ConstraintID,
     ConstraintKind,
     ConstraintView,
@@ -32,25 +32,25 @@ from ommx import (
 @pytest.mark.parametrize(
     ("member", "name", "code"),
     [
-        (Activeness.INACTIVE_SKIPPED, "INACTIVE_SKIPPED", 0),
-        (Activeness.INACTIVE_CHECKED, "INACTIVE_CHECKED", 1),
-        (Activeness.ACTIVE, "ACTIVE", 2),
+        (Role.EVALUATION_ONLY, "EVALUATION_ONLY", 0),
+        (Role.FEASIBILITY_CHECK, "FEASIBILITY_CHECK", 1),
+        (Role.ACTIVE, "ACTIVE", 2),
     ],
 )
-def test_activeness_member_names_and_pickle(member, name, code):
-    assert repr(member) == f"ConstraintActiveness.{name}"
-    assert str(member) == f"ConstraintActiveness.{name}"
+def test_role_member_names_and_pickle(member, name, code):
+    assert repr(member) == f"ConstraintRole.{name}"
+    assert str(member) == f"ConstraintRole.{name}"
     assert int(member) == code
-    assert pickle.loads(pickle.dumps(member)) == getattr(Activeness, name)
+    assert pickle.loads(pickle.dumps(member)) == getattr(Role, name)
 
 
-def test_activeness_old_member_names_are_absent():
-    assert not hasattr(Activeness, "INACTIVE")
-    assert not hasattr(Activeness, "SKIP_FEASIBILITY_CHECK")
+def test_role_old_member_names_are_absent():
+    assert not hasattr(Role, "INACTIVE")
+    assert not hasattr(Role, "SKIP_FEASIBILITY_CHECK")
 
 
 def test_ordered_selection_and_evaluated_skipped_rows():
-    assert Activeness.INACTIVE_SKIPPED < Activeness.INACTIVE_CHECKED < Activeness.ACTIVE
+    assert Role.EVALUATION_ONLY < Role.FEASIBILITY_CHECK < Role.ACTIVE
     model = Instance.minimize()
     x = model.new_binary("x")
     active = model.add_constraint(x <= 1)
@@ -65,25 +65,22 @@ def test_ordered_selection_and_evaluated_skipped_rows():
             checked.constraint_id,
             skipped.constraint_id,
         }
-        assert host.inactive_constraints[checked.constraint_id].activeness == (
-            Activeness.INACTIVE_CHECKED
+        assert host.inactive_constraints[checked.constraint_id].role == (
+            Role.FEASIBILITY_CHECK
         )
-        assert host.inactive_constraints[skipped.constraint_id].activeness == (
-            Activeness.INACTIVE_SKIPPED
+        assert host.inactive_constraints[skipped.constraint_id].role == (
+            Role.EVALUATION_ONLY
         )
     solution = model.evaluate({x.id: 0})
     assert_type(solution.feasible, bool)
     assert solution.feasible is False
     assert solution.feasible_relaxed is True
     assert solution.feasible_unrelaxed is False
-    assert solution.total_violation(min_activeness=Activeness.ACTIVE) == 0
+    assert solution.total_violation(min_role=Role.ACTIVE) == 0
     assert solution.total_violation() == 1
-    assert solution.total_violation(min_activeness=Activeness.INACTIVE_SKIPPED) == 3
+    assert solution.total_violation(min_role=Role.EVALUATION_ONLY) == 3
     assert solution.constraints[skipped.constraint_id].violation() == 2
-    assert (
-        solution.constraints[skipped.constraint_id].activeness
-        == Activeness.INACTIVE_SKIPPED
-    )
+    assert solution.constraints[skipped.constraint_id].role == Role.EVALUATION_ONLY
     checked_feasible = model.evaluate({x.id: 1})
     assert checked_feasible.feasible is True
     assert (
@@ -107,19 +104,19 @@ def test_ordered_selection_and_evaluated_skipped_rows():
             checked.constraint_id,
             skipped.constraint_id,
         }
-        assert table["activeness"].to_dict() == {
-            active.constraint_id: Activeness.ACTIVE,
-            checked.constraint_id: Activeness.INACTIVE_CHECKED,
-            skipped.constraint_id: Activeness.INACTIVE_SKIPPED,
+        assert table["role"].to_dict() == {
+            active.constraint_id: Role.ACTIVE,
+            checked.constraint_id: Role.FEASIBILITY_CHECK,
+            skipped.constraint_id: Role.EVALUATION_ONLY,
         }
         assert set(
             owner.constraints_df(
-                kind=ConstraintKind.Regular, min_activeness=Activeness.INACTIVE_CHECKED
+                kind=ConstraintKind.Regular, min_role=Role.FEASIBILITY_CHECK
             ).index
         ) == {active.constraint_id, checked.constraint_id}
         assert list(
             owner.constraints_df(
-                kind=ConstraintKind.Regular, min_activeness=Activeness.ACTIVE
+                kind=ConstraintKind.Regular, min_role=Role.ACTIVE
             ).index
         ) == [active.constraint_id]
 
@@ -137,19 +134,19 @@ def test_all_state_mapping_and_stale_attached_handle():
     assert isinstance(rows[cid], AttachedConstraint)
     model.deactivate_constraint(cid, "report", source="test")
     assert isinstance(rows[cid], InactiveConstraint)
-    assert attached.activeness == Activeness.INACTIVE_CHECKED
+    assert attached.role == Role.FEASIBILITY_CHECK
     with pytest.raises(KeyError):
         model.active_constraints[cid]
     with pytest.raises(RuntimeError, match="no longer active"):
         attached.set_name("stale")
     snapshot = model.inactive_constraints[cid]
     model.set_constraint_skip_feasibility_check(cid, True)
-    assert rows[cid].activeness == Activeness.INACTIVE_SKIPPED
-    assert attached.evaluate({x.id: 0}).activeness == Activeness.INACTIVE_SKIPPED
-    assert snapshot.activeness == Activeness.INACTIVE_CHECKED
+    assert rows[cid].role == Role.EVALUATION_ONLY
+    assert attached.evaluate({x.id: 0}).role == Role.EVALUATION_ONLY
+    assert snapshot.role == Role.FEASIBILITY_CHECK
     model.activate_constraint(cid)
     assert isinstance(rows[cid], AttachedConstraint)
-    assert attached.activeness == Activeness.ACTIVE
+    assert attached.role == Role.ACTIVE
     attached.set_name("active again")
     assert rows[cid].name == "active again"
 
@@ -194,14 +191,10 @@ def test_initial_inactive_components_and_all_family_transitions(host):
         getattr(model, f"deactivate_{family}constraint")(
             cid, "again", skip_feasibility_check=True
         )
-    assert all(
-        row.activeness == Activeness.INACTIVE_SKIPPED
-        for row in model.constraints.values()
-    )
+    assert all(row.role == Role.EVALUATION_ONLY for row in model.constraints.values())
     restored = host.from_v2_bytes(model.to_v2_bytes())
     assert all(
-        row.activeness == Activeness.INACTIVE_SKIPPED
-        for row in restored.constraints.values()
+        row.role == Role.EVALUATION_ONLY for row in restored.constraints.values()
     )
     instance = (
         model.with_parameters({}) if isinstance(model, ParametricInstance) else model
@@ -222,7 +215,7 @@ def test_initial_inactive_components_and_all_family_transitions(host):
         is False
     )
     assert evaluated.total_violation() == 0
-    assert evaluated.total_violation(min_activeness=Activeness.INACTIVE_SKIPPED) == 2
+    assert evaluated.total_violation(min_role=Role.EVALUATION_ONLY) == 2
     with pytest.raises(RuntimeError, match="skip_feasibility_check"):
         model.to_v1_bytes()
 
@@ -251,20 +244,17 @@ def test_sample_selection_and_wire_round_trip():
     assert samples.best_feasible_id == samples.best_feasible_relaxed_id == 1
     for result, cls in ((solution, Solution), (samples, SampleSet)):
         restored = cls.from_v2_bytes(result.to_v2_bytes())
-        assert (
-            restored.constraints[row.constraint_id].activeness
-            == Activeness.INACTIVE_SKIPPED
-        )
+        assert restored.constraints[row.constraint_id].role == Role.EVALUATION_ONLY
         with pytest.raises(RuntimeError, match="skip_feasibility_check"):
             result.to_v1_bytes()
 
 
-def test_empty_constraint_frames_keep_activeness_and_requested_reason():
+def test_empty_constraint_frames_keep_role_and_requested_reason():
     model = Instance.minimize()
     for owner in (model, model.evaluate({}), model.evaluate_samples([{}])):
         frame = owner.constraints_df(
             kind=ConstraintKind.Regular, include=["inactive_reason"]
         )
         assert frame.empty
-        assert "activeness" in frame.columns
+        assert "role" in frame.columns
         assert "inactive_reason" in frame.columns

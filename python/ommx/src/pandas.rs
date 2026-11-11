@@ -1473,7 +1473,7 @@ pub(crate) fn constraint_entries_to_dataframe<'py>(
     let df = raw_entries_to_dataframe(py, entries, index_col)?;
     if empty {
         df.as_any()
-            .call_method1("__setitem__", ("activeness", PyList::empty(py)))?;
+            .call_method1("__setitem__", ("role", PyList::empty(py)))?;
         if flags.inactive_reason {
             df.as_any()
                 .call_method1("__setitem__", ("inactive_reason", PyList::empty(py)))?;

@@ -513,14 +513,12 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         &self.inactive
     }
 
-    /// Look up a constraint's participation independently of its family.
-    pub fn activeness(&self, id: &T::ID) -> Option<crate::ConstraintActiveness> {
+    /// Look up a constraint's role independently of its family.
+    pub fn role(&self, id: &T::ID) -> Option<crate::ConstraintRole> {
         if self.active.contains_key(id) {
-            Some(crate::ConstraintActiveness::Active)
+            Some(crate::ConstraintRole::Active)
         } else {
-            self.inactive
-                .get(id)
-                .map(|(_, metadata)| metadata.activeness())
+            self.inactive.get(id).map(|(_, metadata)| metadata.role())
         }
     }
 
@@ -541,7 +539,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         self.iter().map(|(_, row)| row)
     }
 
-    /// Look up a retained row regardless of its activeness.
+    /// Look up a retained row regardless of its role.
     pub fn get(&self, id: &T::ID) -> Option<&T::Created> {
         self.active
             .get(id)
@@ -1440,7 +1438,7 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
         Ok(())
     }
 
-    /// IDs needed to evaluate every retained row, including skipped inactive rows.
+    /// IDs needed to evaluate every retained row, including `EvaluationOnly` rows.
     ///
     /// A collection does not populate fixed, dependent, or irrelevant values;
     /// its caller supplies the values referenced by all rows.
@@ -1578,36 +1576,36 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
         self.constraints.is_empty()
     }
 
-    /// Participation of an evaluated row, or `None` for an unknown ID.
-    pub fn activeness(&self, id: &T::ID) -> Option<crate::ConstraintActiveness> {
+    /// Role of an evaluated row, or `None` for an unknown ID.
+    pub fn role(&self, id: &T::ID) -> Option<crate::ConstraintRole> {
         self.constraints.contains_key(id).then(|| {
             self.inactive_metadata.get(id).map_or(
-                crate::ConstraintActiveness::Active,
-                InactiveConstraintMetadata::activeness,
+                crate::ConstraintRole::Active,
+                InactiveConstraintMetadata::role,
             )
         })
     }
 
-    /// Rows at or above the requested minimum activeness.
+    /// Rows at or above the requested minimum role.
     pub fn selected(
         &self,
-        min_activeness: crate::ConstraintActiveness,
+        min_role: crate::ConstraintRole,
     ) -> impl Iterator<Item = (&T::ID, &T::Evaluated)> {
         self.constraints
             .iter()
-            .filter(move |(id, _)| self.activeness(id).is_some_and(|a| a >= min_activeness))
+            .filter(move |(id, _)| self.role(id).is_some_and(|role| role >= min_role))
     }
 
-    /// Check active and inactive checked constraints using their individual violation metrics.
-    /// Inactive skipped constraints do not participate in feasibility.
+    /// Check rows with `FeasibilityCheck` or `Active` roles using their violation metrics.
+    /// Rows with the `EvaluationOnly` role do not participate in feasibility.
     pub fn is_feasible(&self, atol: ATol) -> bool {
-        self.selected(crate::ConstraintActiveness::InactiveChecked)
+        self.selected(crate::ConstraintRole::FeasibilityCheck)
             .all(|(_, c)| c.is_feasible(atol))
     }
 
     /// Check if all non-inactive constraints are feasible.
     pub fn is_feasible_relaxed(&self, atol: ATol) -> bool {
-        self.selected(crate::ConstraintActiveness::Active)
+        self.selected(crate::ConstraintRole::Active)
             .all(|(_, c)| c.is_feasible(atol))
     }
 }
@@ -1811,36 +1809,36 @@ impl<T: ConstraintType> SampledCollection<T> {
         self.constraints.is_empty()
     }
 
-    /// Participation of a sampled row, or `None` for an unknown ID.
-    pub fn activeness(&self, id: &T::ID) -> Option<crate::ConstraintActiveness> {
+    /// Role of a sampled row, or `None` for an unknown ID.
+    pub fn role(&self, id: &T::ID) -> Option<crate::ConstraintRole> {
         self.constraints.contains_key(id).then(|| {
             self.inactive_metadata.get(id).map_or(
-                crate::ConstraintActiveness::Active,
-                InactiveConstraintMetadata::activeness,
+                crate::ConstraintRole::Active,
+                InactiveConstraintMetadata::role,
             )
         })
     }
 
-    /// Rows at or above the requested minimum activeness.
+    /// Rows at or above the requested minimum role.
     pub fn selected(
         &self,
-        min_activeness: crate::ConstraintActiveness,
+        min_role: crate::ConstraintRole,
     ) -> impl Iterator<Item = (&T::ID, &T::Sampled)> {
         self.constraints
             .iter()
-            .filter(move |(id, _)| self.activeness(id).is_some_and(|a| a >= min_activeness))
+            .filter(move |(id, _)| self.role(id).is_some_and(|role| role >= min_role))
     }
 
-    /// Check active and inactive checked constraints for a sample.
-    /// Inactive skipped constraints do not participate in feasibility.
+    /// Check rows with `FeasibilityCheck` or `Active` roles for a sample.
+    /// Rows with the `EvaluationOnly` role do not participate in feasibility.
     pub fn is_feasible_for(&self, sample_id: SampleID, atol: ATol) -> bool {
-        self.selected(crate::ConstraintActiveness::InactiveChecked)
+        self.selected(crate::ConstraintRole::FeasibilityCheck)
             .all(|(_, c)| c.is_feasible_for(sample_id, atol).unwrap_or(false))
     }
 
     /// Check if all non-inactive constraints are feasible for a given sample.
     pub fn is_feasible_relaxed_for(&self, sample_id: SampleID, atol: ATol) -> bool {
-        self.selected(crate::ConstraintActiveness::Active)
+        self.selected(crate::ConstraintRole::Active)
             .all(|(_, c)| c.is_feasible_for(sample_id, atol).unwrap_or(false))
     }
 }

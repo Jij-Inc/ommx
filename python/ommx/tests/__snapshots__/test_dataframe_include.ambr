@@ -1,16 +1,16 @@
 # serializer version: 1
 # name: test_constraints_df_default
   '''
-                        equality    type   used_ids     name subscripts description                   activeness
+                        equality    type   used_ids     name subscripts description                   role
   regular_constraint_id
-  ConstraintID(10)            =0  Linear  {0, 1, 2}  balance         []        <NA>  ConstraintActiveness.ACTIVE
+  ConstraintID(10)            =0  Linear  {0, 1, 2}  balance         []        <NA>  ConstraintRole.ACTIVE
   '''
 # ---
 # name: test_constraints_df_include_empty
   '''
-                        equality    type   used_ids                   activeness
+                        equality    type   used_ids                   role
   regular_constraint_id
-  ConstraintID(10)            =0  Linear  {0, 1, 2}  ConstraintActiveness.ACTIVE
+  ConstraintID(10)            =0  Linear  {0, 1, 2}  ConstraintRole.ACTIVE
   '''
 # ---
 # name: test_decision_variables_df_default

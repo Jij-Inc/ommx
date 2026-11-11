@@ -709,10 +709,10 @@ impl PyStubType for ConstraintCollectionValue {
     }
 }
 
-/// Live mapping of every retained constraint, independent of activeness.
+/// Live mapping of every retained constraint, independent of role.
 ///
 /// IDs identify the family, not the state. Lookups return an attached active
-/// row or an independent inactive snapshot; inspect activeness at runtime.
+/// row or an independent inactive snapshot; inspect role at runtime.
 #[pyclass(frozen)]
 pub struct ConstraintCollection {
     owner: ConstraintHost,
@@ -720,7 +720,7 @@ pub struct ConstraintCollection {
 collection_stub!(
     ConstraintCollection,
     ConstraintCollectionValue,
-    "Live mapping of all retained constraints. IDs do not determine activeness."
+    "Live mapping of all retained constraints. IDs do not determine role."
 );
 impl ConstraintCollection {
     pub(crate) fn new(owner: ConstraintHost) -> Self {

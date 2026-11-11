@@ -1040,10 +1040,10 @@ mod tests {
 }
 
 #[cfg(test)]
-mod activeness_wire_tests {
+mod role_wire_tests {
     use super::*;
     use crate::{
-        ConstraintActiveness as A, ConstraintCollection, EvaluatedCollection, SampleID, SampleSet,
+        ConstraintCollection, ConstraintRole as R, EvaluatedCollection, SampleID, SampleSet,
         Sampled, Solution,
     };
     use std::collections::BTreeMap;
@@ -1171,7 +1171,7 @@ mod activeness_wire_tests {
                     )
                     .unwrap();
                 assert_eq!(solution.feasible(), skip);
-                assert!(solution.total_violation(A::InactiveSkipped) > 0.0);
+                assert!(solution.total_violation(R::EvaluationOnly) > 0.0);
                 assert!(solution.feasible_relaxed());
                 assert_eq!(samples.feasible()[&7.into()], skip);
                 assert!(samples.feasible_relaxed()[&7.into()]);
@@ -1179,7 +1179,7 @@ mod activeness_wire_tests {
                     samples
                         .get(7.into())
                         .unwrap()
-                        .total_violation(A::InactiveSkipped)
+                        .total_violation(R::EvaluationOnly)
                         > 0.0
                 );
 
@@ -1331,7 +1331,7 @@ mod activeness_wire_tests {
         let (_, metadata) = &collection.inactive()[&10.into()];
         assert_eq!(metadata.reason, "preprocess");
         assert_eq!(metadata.parameters["rule"], "redundant");
-        assert_eq!(metadata.activeness(), A::InactiveChecked);
+        assert_eq!(metadata.role(), R::FeasibilityCheck);
         assert_eq!(
             collection.context().name(10.into()),
             Some("legacy_constraint")

@@ -1190,9 +1190,9 @@ impl Instance {
 
     /// Live lookup of every retained constraint, including active and inactive rows.
     ///
-    /// IDs determine the constraint family, not its activeness. Active rows are
+    /// IDs determine the constraint family, not its role. Active rows are
     /// attached handles; inactive rows are independent snapshots. Inspect the
-    /// returned row's activeness, or use active_constraints for attached rows.
+    /// returned row's role, or use active_constraints for attached rows.
     #[getter]
     pub fn constraints(slf: Bound<'_, Self>) -> crate::constraint_collection::ConstraintCollection {
         crate::constraint_collection::ConstraintCollection::new(crate::ConstraintHost::Instance(
@@ -1847,7 +1847,7 @@ impl Instance {
     ///
     /// The penalized constraints become inactive and remain in the all-state
     /// {attr}`~ommx.ParametricInstance.constraints` mapping. The active formulation
-    /// is unconstrained; inactive checked rows still participate in feasibility.
+    /// is unconstrained; FEASIBILITY_CHECK rows still participate in feasibility.
     ///
     /// > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
     /// > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
@@ -1857,7 +1857,7 @@ impl Instance {
     ///
     /// Penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
     ///
-    /// >>> from ommx import ConstraintActiveness, ConstraintID
+    /// >>> from ommx import ConstraintRole, ConstraintID
     /// >>> from ommx import DecisionVariable, Instance, Optimality, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
@@ -1868,7 +1868,7 @@ impl Instance {
     /// >>> prepared = parametric.with_parameters(parameters)
     /// >>> assert parametric.active_constraints == {}
     /// >>> assert set(parametric.constraints) == {ConstraintID(7)}
-    /// >>> assert parametric.constraints[ConstraintID(7)].activeness == ConstraintActiveness.INACTIVE_CHECKED
+    /// >>> assert parametric.constraints[ConstraintID(7)].role == ConstraintRole.FEASIBILITY_CHECK
     /// >>> assert ConstraintID(7) in parametric.inactive_constraints
     /// >>> assert prepared.objective.evaluate({0: 0}) == 2.0
     /// >>> solution = prepared.evaluate({0: 0})
@@ -1904,7 +1904,7 @@ impl Instance {
     ///
     /// Uniform-penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
     ///
-    /// >>> from ommx import ConstraintActiveness, ConstraintID
+    /// >>> from ommx import ConstraintRole, ConstraintID
     /// >>> from ommx import DecisionVariable, Instance, Optimality, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
@@ -1915,7 +1915,7 @@ impl Instance {
     /// >>> prepared = parametric.with_parameters({parameter_id: 2.0})
     /// >>> assert parametric.active_constraints == {}
     /// >>> assert set(parametric.constraints) == {ConstraintID(7)}
-    /// >>> assert parametric.constraints[ConstraintID(7)].activeness == ConstraintActiveness.INACTIVE_CHECKED
+    /// >>> assert parametric.constraints[ConstraintID(7)].role == ConstraintRole.FEASIBILITY_CHECK
     /// >>> assert ConstraintID(7) in parametric.inactive_constraints
     /// >>> assert prepared.objective.evaluate({0: 0}) == 2.0
     /// >>> solution = prepared.evaluate({0: 0})
@@ -3143,16 +3143,16 @@ impl Instance {
     /// is a unit flag that gates both the `inactive_reason` column and the
     /// `inactive_reason.{key}` parameter columns together.
     ///
-    /// Includes every retained constraint by default. Set min_activeness to
-    /// INACTIVE_CHECKED to exclude skipped rows or ACTIVE to select the active formulation.
-    /// The activeness column is always present. Reason columns are opt-in.
-    #[pyo3(signature = (*, kind, include=None, min_activeness=crate::ConstraintActiveness::INACTIVE_SKIPPED))]
+    /// Includes every retained constraint by default. Set min_role to
+    /// FEASIBILITY_CHECK to exclude EVALUATION_ONLY rows or ACTIVE to select the active formulation.
+    /// The role column is always present. Reason columns are opt-in.
+    #[pyo3(signature = (*, kind, include=None, min_role=crate::ConstraintRole::EVALUATION_ONLY))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
         kind: ConstraintFamilyInput,
         include: Option<Vec<String>>,
-        min_activeness: crate::ConstraintActiveness,
+        min_role: crate::ConstraintRole,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
@@ -3171,7 +3171,7 @@ impl Instance {
                     let context = coll.context().collect_for(*id);
                     let dict = crate::pandas::WithModelingContext::new((*id, row), &context)
                         .to_pandas_entry(py)?;
-                    dict.set_item("activeness", crate::ConstraintActiveness::ACTIVE)?;
+                    dict.set_item("role", crate::ConstraintRole::ACTIVE)?;
                     if flags.inactive_reason {
                         crate::pandas::set_inactive_reason_na(&dict)?;
                     }
@@ -3180,16 +3180,13 @@ impl Instance {
                     entries.insert(*id, dict.into_any());
                 }
                 for (id, pair) in coll.inactive() {
-                    if pair.1.activeness() < min_activeness.into() {
+                    if pair.1.role() < min_role.into() {
                         continue;
                     }
                     let context = coll.context().collect_for(*id);
                     let dict = crate::pandas::WithModelingContext::new((*id, pair), &context)
                         .to_pandas_entry(py)?;
-                    dict.set_item(
-                        "activeness",
-                        crate::ConstraintActiveness::from(pair.1.activeness()),
-                    )?;
+                    dict.set_item("role", crate::ConstraintRole::from(pair.1.role()))?;
                     crate::pandas::apply_include_filter(&dict, flags)?;
                     crate::pandas::rename_id_column(&dict, id_col)?;
                     entries.insert(*id, dict.into_any());

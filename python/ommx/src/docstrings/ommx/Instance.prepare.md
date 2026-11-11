@@ -15,7 +15,7 @@ necessary when it must be evaluated or reused separately after the mutation.
 
 ```pycon
 >>> from ommx import (
-...     ConstraintActiveness,
+...     ConstraintRole,
 ...     ConstraintID,
 ...     Equality,
 ...     Instance,
@@ -62,8 +62,7 @@ necessary when it must be evaluated or reused separately after the mutation.
 >>> assert set(instance.active_constraints) == {ConstraintID(1)}
 >>> assert set(instance.constraints) == {ConstraintID(1), OneHotConstraintID(0)}
 >>> assert (
-...     instance.constraints[OneHotConstraintID(0)].activeness
-...     == ConstraintActiveness.INACTIVE_CHECKED
+...     instance.constraints[OneHotConstraintID(0)].role == ConstraintRole.FEASIBILITY_CHECK
 ... )
 >>> assert instance.active_special_constraint_kinds == set()
 >>> assert set(instance.inactive_constraints) == {OneHotConstraintID(0)}

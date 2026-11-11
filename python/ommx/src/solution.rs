@@ -45,7 +45,7 @@ use std::collections::BTreeSet;
 ///
 /// | Property | Meaning | Does not establish |
 /// | --- | --- | --- |
-/// | {attr}`~ommx.Solution.feasible` | Variable domains and active / inactive checked constraints are satisfied | No better candidate exists |
+/// | {attr}`~ommx.Solution.feasible` | Variable domains and constraints with roles ACTIVE or FEASIBILITY_CHECK are satisfied | No better candidate exists |
 /// | {attr}`~ommx.Solution.objective` | The candidate's reported objective value | Feasibility or optimality |
 /// | {attr}`~ommx.Solution.optimality` | Recorded optimality status, for example supplied by an adapter | A proof performed by ``evaluate`` |
 ///
@@ -246,9 +246,9 @@ impl Solution {
         crate::State(self.inner.state())
     }
 
-    /// Whether active and inactive checked constraints and every variable domain are satisfied.
+    /// Whether constraints with roles ACTIVE or FEASIBILITY_CHECK and every variable domain are satisfied.
     ///
-    /// Inactive skipped constraints are excluded from this judgment, but are still
+    /// EVALUATION_ONLY constraints are excluded from this judgment, but are still
     /// evaluated and remain inspectable. Use {attr}`~ommx.Solution.feasible_relaxed`
     /// to check only active constraints together with every variable domain.
     /// Uses feasibility_atol independently for each constraint and variable.
@@ -282,8 +282,8 @@ impl Solution {
 
     /// Alias for {attr}`~ommx.Solution.feasible`.
     ///
-    /// Checks active and inactive checked constraints, plus every retained
-    /// variable's kind and bounds. Inactive skipped constraints are excluded.
+    /// Checks constraints with roles ACTIVE or FEASIBILITY_CHECK, plus every retained
+    /// variable's kind and bounds. EVALUATION_ONLY constraints are excluded.
     #[getter]
     pub fn feasible_unrelaxed(&self) -> bool {
         self.inner.feasible()
@@ -833,7 +833,7 @@ impl Solution {
     /// {meth}`ommx.Instance.constraints_df` for column / `kind=` /
     /// `include=` semantics.
     ///
-    /// min_activeness selects rows at or above the given ordered state,
+    /// min_role selects rows at or above the given role,
     /// defaulting to all rows. Reason data is gated by
     /// `"inactive_reason"` in `include=`. When the flag is on, rows for
     /// constraints deactivated before evaluation get `inactive_reason` /
@@ -852,13 +852,13 @@ impl Solution {
     /// >>> assert table.loc[capacity.constraint_id, "value"] == -2.0
     /// >>> assert table.loc[capacity.constraint_id, "violation"] == 0.0
     /// >>> assert table.loc[capacity.constraint_id, "feasible"]
-    #[pyo3(signature = (*, kind, include = None, min_activeness=crate::ConstraintActiveness::INACTIVE_SKIPPED))]
+    #[pyo3(signature = (*, kind, include = None, min_role=crate::ConstraintRole::EVALUATION_ONLY))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
         kind: ConstraintFamilyInput,
         include: Option<Vec<String>>,
-        min_activeness: crate::ConstraintActiveness,
+        min_role: crate::ConstraintRole,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let id_col = constraint_id_col(kind);
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
@@ -875,7 +875,7 @@ impl Solution {
                 let meta = coll.context().clone();
                 let inactive_metadata = coll.inactive_metadata();
                 let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
-                for (id, c) in coll.selected(min_activeness.into()) {
+                for (id, c) in coll.selected(min_role.into()) {
                     let m = meta.collect_for(*id);
                     let dict = crate::pandas::WithModelingContext::new(
                         (*id, c, self.inner.feasibility_atol()),
@@ -884,9 +884,9 @@ impl Solution {
                     .to_pandas_entry(py)?;
                     dict.set_item("violation", self.constraint_violation((*id).into())?)?;
                     dict.set_item(
-                        "activeness",
-                        crate::ConstraintActiveness::from(
-                            coll.activeness(id).expect("selected constraint exists"),
+                        "role",
+                        crate::ConstraintRole::from(
+                            coll.role(id).expect("selected constraint exists"),
                         ),
                     )?;
                     if flags.inactive_reason {
@@ -1087,16 +1087,16 @@ impl Solution {
         self.clone()
     }
 
-    /// Sum the nonnegative scalar violations selected by min_activeness.
+    /// Sum the nonnegative scalar violations selected by min_role.
     ///
     /// - Equality: `abs(f(x))`; inequality: `max(0, f(x))`.
     /// - Indicator: the inner violation when `indicator_on` is true, otherwise zero.
     /// - OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.
     /// - SOS1: `min_i sum_{j != i} abs(x_j)`.
     ///
-    /// The default ``INACTIVE_CHECKED`` selects the same constraints as
+    /// The default ``FEASIBILITY_CHECK`` selects the same constraints as
     /// {attr}`~ommx.Solution.feasible`. ``ACTIVE`` selects the same constraints as
-    /// {attr}`~ommx.Solution.feasible_relaxed`; ``INACTIVE_SKIPPED`` includes all rows.
+    /// {attr}`~ommx.Solution.feasible_relaxed`; ``EVALUATION_ONLY`` includes all rows.
     /// This sum is a diagnostic metric, not a feasibility predicate.
     /// Variable bound and kind violations
     /// are not added. Values use the evaluated state after discrete-value
@@ -1105,9 +1105,9 @@ impl Solution {
     ///
     /// Use {meth}`constraint_violation` for individual values, also available in
     /// the `violation` column of {meth}`constraints_df` for every constraint kind.
-    #[pyo3(signature = (*, min_activeness=crate::ConstraintActiveness::INACTIVE_CHECKED))]
-    pub fn total_violation(&self, min_activeness: crate::ConstraintActiveness) -> f64 {
-        self.inner.total_violation(min_activeness.into())
+    #[pyo3(signature = (*, min_role=crate::ConstraintRole::FEASIBILITY_CHECK))]
+    pub fn total_violation(&self, min_role: crate::ConstraintRole) -> f64 {
+        self.inner.total_violation(min_role.into())
     }
 
     /// Get one constraint's nonnegative scalar violation.

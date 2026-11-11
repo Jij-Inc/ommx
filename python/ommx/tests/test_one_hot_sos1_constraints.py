@@ -1,6 +1,6 @@
 """Tests for OneHotConstraint and Sos1Constraint as first-class constraint types."""
 
-from ommx import ConstraintActiveness
+from ommx import ConstraintRole
 from ommx import ConstraintKind
 
 from ommx import OneHotConstraintID, Sos1ConstraintID
@@ -397,7 +397,7 @@ def test_convert_sos1_rejects_domain_excluding_zero():
 
 
 def test_sos1_constraints_df_roundtrips_inactive_context(snapshot):
-    """`constraints_df(kind=ConstraintKind.Sos1, min_activeness=ConstraintActiveness.INACTIVE_SKIPPED)` surfaces reason + constraint_ids
+    """`constraints_df(kind=ConstraintKind.Sos1, min_role=ConstraintRole.EVALUATION_ONLY)` surfaces reason + constraint_ids
     parameter as columns on inactive rows. Active is empty after conversion."""
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
@@ -410,13 +410,13 @@ def test_sos1_constraints_df_roundtrips_inactive_context(snapshot):
     instance.convert_sos1_to_constraints(7)
 
     assert instance.constraints_df(
-        kind=ConstraintKind.Sos1, min_activeness=ConstraintActiveness.ACTIVE
+        kind=ConstraintKind.Sos1, min_role=ConstraintRole.ACTIVE
     ).empty
     assert (
         _df_snap(
             instance.constraints_df(
                 kind=ConstraintKind.Sos1,
-                min_activeness=ConstraintActiveness.INACTIVE_SKIPPED,
+                min_role=ConstraintRole.EVALUATION_ONLY,
                 include=["label", "parameters", "inactive_reason"],
             )
         )

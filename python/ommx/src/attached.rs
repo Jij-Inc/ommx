@@ -66,12 +66,12 @@ macro_rules! attached_constraint_context_methods {
         #[pyo3_stub_gen::derive::gen_stub_pymethods]
         #[pymethods]
         impl $Self {
-            /// Current activeness of this owner-backed row.
+            /// Current role of this owner-backed row.
             #[getter]
-            pub fn activeness(&self, py: pyo3::Python<'_>) -> pyo3::PyResult<$crate::ConstraintActiveness> {
+            pub fn role(&self, py: pyo3::Python<'_>) -> pyo3::PyResult<$crate::ConstraintRole> {
                 let state = match &self.host {
-                    $crate::ConstraintHost::Instance(p) => p.borrow(py).inner.$collection().activeness(&self.id),
-                    $crate::ConstraintHost::Parametric(p) => p.borrow(py).inner.$collection().activeness(&self.id),
+                    $crate::ConstraintHost::Instance(p) => p.borrow(py).inner.$collection().role(&self.id),
+                    $crate::ConstraintHost::Parametric(p) => p.borrow(py).inner.$collection().role(&self.id),
                 };
                 state.map(Into::into).ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Constraint no longer exists"))
             }

@@ -8,21 +8,21 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ### ⚠ Active and inactive constraints ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
 
-Model `constraints` now contains every activeness state. Use `active_constraints` for active attached handles and `inactive_constraints` for retained inactive rows. Rename `Removed*Constraint` to `Inactive*Constraint`, `relax_*` / `restore_*` to `deactivate_*` / `activate_*`, and `from_components` inputs to `active_*` / `inactive_*`.
+Model `constraints` now contains rows of every role. Use `active_constraints` for active attached handles and `inactive_constraints` for retained inactive rows. Rename `Removed*Constraint` to `Inactive*Constraint`, `relax_*` / `restore_*` to `deactivate_*` / `activate_*`, and `from_components` inputs to `active_*` / `inactive_*`.
 
 On `Instance` and `ParametricInstance`, `constraint_names` becomes `active_constraint_names` and `extract_constraints(name)` becomes `extract_active_constraints(name)`. Their active-only scope and return types are unchanged. `Solution` and `SampleSet` keep their existing names.
 
-Inactive rows are `INACTIVE_CHECKED` by default and `INACTIVE_SKIPPED` when `skip_feasibility_check=True`. Both states remain numerically evaluated, but default feasibility excludes skipped rows. These and `ACTIVE` are three disjoint `ConstraintActiveness` states; inactive is the umbrella term for the checked and skipped states.
+Each constraint exposes a `role` property of type `ConstraintRole`. `EVALUATION_ONLY` participates in numerical evaluation; `FEASIBILITY_CHECK` additionally participates in normal feasibility; `ACTIVE` additionally belongs to the Active Formulation. Inactive rows have role `FEASIBILITY_CHECK` by default and `EVALUATION_ONLY` when `skip_feasibility_check=True`. Inactive is the umbrella term for these two roles. Roles describe how a constraint is used, independently of its evaluation stage.
 
-`Solution.feasible` and `SampleSet.feasible` remain properties and check active and inactive checked constraints. `feasible_relaxed` remains a property checking active constraints only. Both check variable domains. SampleSet's `best_feasible` and `best_feasible_id` also remain properties; `feasible_ids()` remains a method without arguments. Feasibility queries and sample selection do not take `min_activeness`.
+`Solution.feasible` and `SampleSet.feasible` remain properties and check constraints with the `FEASIBILITY_CHECK` or `ACTIVE` role. `feasible_relaxed` remains a property checking active constraints only. Both check variable domains. SampleSet's `best_feasible` and `best_feasible_id` also remain properties; `feasible_ids()` remains a method without arguments. Feasibility queries and sample selection do not take `min_role`.
 
-For `total_violation()` and `constraints_df`, the order is `INACTIVE_SKIPPED < INACTIVE_CHECKED < ACTIVE`; `min_activeness` includes rows at or above the minimum. The default total violation uses `INACTIVE_CHECKED`, matching the constraints checked by `feasible`; `ACTIVE` matches `feasible_relaxed`. `constraints_df` replaces `removed=` with this selector, defaults to `INACTIVE_SKIPPED` to include all rows, and always includes `activeness`. Request `include=["inactive_reason"]` for reasons.
+For `total_violation()` and `constraints_df`, the order is `EVALUATION_ONLY < FEASIBILITY_CHECK < ACTIVE`; `min_role` includes rows at or above the minimum. The default total violation uses `FEASIBILITY_CHECK`, matching the constraints checked by `feasible`; `ACTIVE` matches `feasible_relaxed`. `constraints_df` replaces `removed=` with this selector, defaults to `EVALUATION_ONLY` to include all rows, and always includes `role`. Request `include=["inactive_reason"]` for reasons.
 
 The v1 schema is unchanged and v1 export rejects a true skip flag; use v2 to preserve it. See the [migration guide](../migration/python_sdk_v2_to_v3.md) for the full API mapping.
 
 The `ommx.v2` protobuf format is still pre-release; its version is separate from the Python SDK version. This update does not guarantee compatibility with earlier pre-release v2 data. Field numbers, types, and structure may change, and unchanged field numbers are not a compatibility commitment. `required_features` remains the mechanism for rejecting unsupported semantic extensions.
 
-Indicator result properties and DataFrame columns now use `indicator_on` for the indicator's ON/OFF state at the evaluated candidate, independently of constraint activeness.
+Indicator result properties and DataFrame columns now use `indicator_on` for the indicator's ON/OFF state at the evaluated candidate, independently of constraint role.
 
 Indicator configuration uses `trigger_value=0` or `trigger_value=1` (the default), replacing the boolean `activate_on_zero`. The integer property and DataFrame column describe when the body applies; `indicator_on` remains the evaluated boolean result. Instance-class clauses use `allowed_indicator_trigger_values`, and unsupported values are reported by `IndicatorTriggerNotAllowed` with `trigger_value` and `allowed_trigger_values`.
 

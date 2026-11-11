@@ -151,7 +151,7 @@ pub struct IndicatorEvaluatedData {
     /// Feasibility queries supply their own tolerance and do not change it.
     pub activation_atol: ATol,
     /// Whether the indicator variable equals its trigger value under `activation_atol` at evaluation time.
-    /// This ON/OFF diagnostic is independent of the constraint's activeness.
+    /// This ON/OFF diagnostic is independent of the constraint's role.
     pub indicator_on: bool,
     pub used_decision_variable_ids: VariableIDSet,
 }
@@ -168,7 +168,7 @@ pub struct IndicatorSampledData {
     /// Feasibility queries supply their own tolerance and do not change it.
     pub activation_atol: ATol,
     /// Whether the indicator variable equals its trigger value under `activation_atol` for each sample.
-    /// This ON/OFF diagnostic is independent of the constraint's activeness.
+    /// This ON/OFF diagnostic is independent of the constraint's role.
     pub indicator_on: BTreeMap<SampleID, bool>,
     pub used_decision_variable_ids: VariableIDSet,
 }

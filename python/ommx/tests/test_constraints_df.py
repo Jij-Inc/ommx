@@ -1,15 +1,15 @@
-"""Snapshot tests for the unified `constraints_df(kind=, include=, min_activeness=)`
+"""Snapshot tests for the unified `constraints_df(kind=, include=, min_role=)`
 method on Instance / ParametricInstance / Solution / SampleSet.
 
 Wave 2 of the v3-alpha pandas surface collapses 26 per-kind methods into
 4 unified `constraints_df` accessors. The `.ambr` snapshots are the
 authoritative description of the column / index schema for each host ×
-kind × include / activeness combination — update via
+kind × include / role combination — update via
 `pytest --snapshot-update` after a deliberate API change.
 """
 
 from __future__ import annotations
-from ommx import ConstraintActiveness, ConstraintKind
+from ommx import ConstraintRole, ConstraintKind
 from ommx import ConstraintID, OneHotConstraintID
 
 import pandas as pd
@@ -212,7 +212,7 @@ def test_instance_constraints_df_include_parameters_only(snapshot):
 
 
 # ---------------------------------------------------------------------------
-# Instance.constraints_df — min_activeness=
+# Instance.constraints_df — min_role=
 # ---------------------------------------------------------------------------
 
 
@@ -222,7 +222,7 @@ def test_instance_constraints_df_active_only_excludes_inactive(snapshot):
         _df_snap(
             _instance_with_inactive().constraints_df(
                 kind=ConstraintKind.Regular,
-                min_activeness=ConstraintActiveness.ACTIVE,
+                min_role=ConstraintRole.ACTIVE,
             )
         )
         == snapshot
@@ -377,7 +377,7 @@ def test_parametric_instance_constraints_df_special_kinds_empty(
 )
 def test_solution_constraints_df_kind(snapshot, kind):
     """`Solution.constraints_df(kind=...)` — evaluated stage core columns +
-    context, with rows selected by `min_activeness`."""
+    context, with rows selected by `min_role`."""
     assert _df_snap(_solution_basic().constraints_df(kind=kind)) == snapshot
 
 

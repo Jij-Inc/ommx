@@ -52,7 +52,7 @@ use std::collections::HashMap;
 /// ``Mapping[ConstraintIDBase, ConstraintView]``. Filtered active/inactive and
 /// evaluated/sampled mappings retain precise row overloads for known ID families.
 /// Model ``constraints`` combines active and inactive rows, so even concrete IDs
-/// return the common ``ConstraintView`` type; activeness must be checked at runtime. The currently supported families are
+/// return the common ``ConstraintView`` type; role must be checked at runtime. The currently supported families are
 /// not an exhaustive list of future possibilities.
 ///
 /// A solver adapter or transformation must reject active constraint families it
@@ -126,9 +126,9 @@ pub struct ConstraintView;
 impl ConstraintView {
     /// The row's current participation state, independent of its family.
     #[getter]
-    fn activeness(&self) -> PyResult<crate::ConstraintActiveness> {
+    fn role(&self) -> PyResult<crate::ConstraintRole> {
         Err(PyNotImplementedError::new_err(
-            "Constraint family must implement activeness",
+            "Constraint family must implement role",
         ))
     }
     #[getter]

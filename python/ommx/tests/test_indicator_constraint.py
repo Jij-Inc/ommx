@@ -1,6 +1,6 @@
 """Tests for IndicatorConstraint Big-M conversion to regular constraints."""
 
-from ommx import ConstraintActiveness
+from ommx import ConstraintRole
 from ommx import ConstraintKind
 
 from ommx import IndicatorConstraintID
@@ -37,17 +37,15 @@ def _instance(ic: IndicatorConstraint, x_lower: float = 0.0, x_upper: float = 5.
 
 
 @pytest.mark.parametrize(
-    "activeness",
+    "role",
     [
-        ConstraintActiveness.ACTIVE,
-        ConstraintActiveness.INACTIVE_CHECKED,
-        ConstraintActiveness.INACTIVE_SKIPPED,
+        ConstraintRole.ACTIVE,
+        ConstraintRole.FEASIBILITY_CHECK,
+        ConstraintRole.EVALUATION_ONLY,
     ],
 )
 @pytest.mark.parametrize("trigger_value", [0, 1])
-def test_indicator_on_is_independent_of_constraint_activeness(
-    activeness, trigger_value
-):
+def test_indicator_on_is_independent_of_constraint_role(role, trigger_value):
     y = DecisionVariable.binary(1)
     instance = _instance(
         IndicatorConstraint(
@@ -58,8 +56,8 @@ def test_indicator_on_is_independent_of_constraint_activeness(
         )
     )
     cid = IndicatorConstraintID(7)
-    skipped = activeness == ConstraintActiveness.INACTIVE_SKIPPED
-    if activeness != ConstraintActiveness.ACTIVE:
+    skipped = role == ConstraintRole.EVALUATION_ONLY
+    if role != ConstraintRole.ACTIVE:
         instance.deactivate_indicator_constraint(
             cid, "retain for evaluation", skip_feasibility_check=skipped
         )
@@ -69,18 +67,18 @@ def test_indicator_on_is_independent_of_constraint_activeness(
         on = state[1] == trigger_value
         solution = instance.evaluate(state)
         row = solution.constraints[cid]
-        assert row.activeness == activeness
+        assert row.role == role
         assert row.trigger_value == trigger_value
         assert row.indicator_on is on
         assert row.evaluated_value == 1
         assert solution.feasible is (not on or skipped)
         frame = solution.constraints_df(kind=ConstraintKind.Indicator)
         assert bool(frame.loc[cid, "indicator_on"]) is on
-        assert frame.loc[cid, "activeness"] == activeness
+        assert frame.loc[cid, "role"] == role
 
     samples = instance.evaluate_samples(states)
     sampled_row = samples.constraints[cid]
-    assert sampled_row.activeness == activeness
+    assert sampled_row.role == role
     assert sampled_row.trigger_value == trigger_value
     assert sampled_row.indicator_on == {4: trigger_value == 0, 9: trigger_value == 1}
     assert samples.feasible == {
@@ -90,7 +88,7 @@ def test_indicator_on_is_independent_of_constraint_activeness(
     frame = samples.constraints_df(kind=ConstraintKind.Indicator)
     assert bool(frame.loc[cid, "indicator_on.4"]) is (trigger_value == 0)
     assert bool(frame.loc[cid, "indicator_on.9"]) is (trigger_value == 1)
-    assert frame.loc[cid, "activeness"] == activeness
+    assert frame.loc[cid, "role"] == role
 
 
 def test_convert_inequality_emits_only_upper_big_m():
@@ -252,7 +250,7 @@ def test_convert_all_is_atomic_on_error():
 
 
 def test_inactive_indicator_constraints_df_surfaces_reason_and_ids(snapshot):
-    """`constraints_df(kind=ConstraintKind.Indicator, min_activeness=ConstraintActiveness.INACTIVE_SKIPPED)` surfaces the
+    """`constraints_df(kind=ConstraintKind.Indicator, min_role=ConstraintRole.EVALUATION_ONLY)` surfaces the
     reason and comma-joined new-constraint IDs on inactive rows."""
     y = DecisionVariable.binary(1)
     ic = IndicatorConstraint(
@@ -266,7 +264,7 @@ def test_inactive_indicator_constraints_df_surfaces_reason_and_ids(snapshot):
         _df_snap(
             instance.constraints_df(
                 kind=ConstraintKind.Indicator,
-                min_activeness=ConstraintActiveness.INACTIVE_SKIPPED,
+                min_role=ConstraintRole.EVALUATION_ONLY,
                 include=["label", "parameters", "inactive_reason"],
             )
         )
