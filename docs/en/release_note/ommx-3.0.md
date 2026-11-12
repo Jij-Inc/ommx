@@ -6,6 +6,28 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### OneHot and SOS1 violation diagnostics ([#1384](https://github.com/Jij-Inc/ommx/pull/1384))
+
+OneHot and SOS1 now use L-infinity distance to a satisfying assignment instead
+of the earlier prerelease L1 sum. For example, SOS1 values `(1, 0.00006, 0.00006)`
+have violation `0.00006` and pass at tolerance `0.0001`.
+
+```python
+details = solution.one_hot_violation_details(OneHotConstraintID(7))
+# None, or OneHotViolation.MissingSelection / MultipleSelections / ValueErrors
+excess = solution.sos1_violating_values(Sos1ConstraintID(8))
+# Empty exactly when this SOS1 row is feasible at its feasibility_atol.
+```
+
+OneHot diagnostics distinguish missing selection, multiple selections, and value
+errors, including all-zero candidates. SOS1 returns excess member values after
+retaining one largest absolute member. `Solution` and `SampleSet` compute details
+on demand from stored variable values; constraint rows retain scalar violations
+without duplicating member values. For samples, pass a constraint ID and sample ID
+to the same methods. Diagnostics use `feasibility_atol`, include inactive rows,
+and remain available after sample extraction and v2 serialization. See the
+[migration guide](../migration/python_sdk_v2_to_v3.md) for classification rules.
+
 ### ⚠ Active and inactive constraints ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
 
 Model `constraints` now contains rows of every role. Use `active_constraints` for active attached handles and `inactive_constraints` for retained inactive rows. Rename `Removed*Constraint` to `Inactive*Constraint`, `relax_*` / `restore_*` to `deactivate_*` / `activate_*`, and `from_components` inputs to `active_*` / `inactive_*`.

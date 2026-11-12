@@ -34,6 +34,7 @@ mod linear;
 mod message_io;
 mod named_function;
 mod one_hot_constraint;
+mod one_hot_violation;
 mod pandas;
 mod parameter;
 mod parameters;
@@ -86,6 +87,7 @@ pub use instance_class::*;
 pub use linear::*;
 pub use named_function::*;
 pub use one_hot_constraint::*;
+pub use one_hot_violation::OneHotViolation;
 pub use parameter::*;
 pub use parameters::*;
 pub use parametric_instance::*;
@@ -243,6 +245,7 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<AttachedIndicatorConstraint>()?;
     m.add_class::<InactiveIndicatorConstraint>()?;
     m.add_class::<OneHotConstraint>()?;
+    m.add_class::<OneHotViolation>()?;
     m.add_class::<AttachedOneHotConstraint>()?;
     m.add_class::<InactiveOneHotConstraint>()?;
     m.add_class::<Sos1Constraint>()?;
@@ -382,6 +385,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "AttachedIndicatorConstraint",
     "InactiveIndicatorConstraint",
     "OneHotConstraint",
+    "OneHotViolation",
     "AttachedOneHotConstraint",
     "InactiveOneHotConstraint",
     "Sos1Constraint",

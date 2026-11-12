@@ -139,6 +139,47 @@ impl_solution_annotations!(SampleSet);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SampleSet {
+    /// Explain a OneHot violation from stored member values, computed on demand.
+    ///
+    /// Returns OneHotViolation.MissingSelection, MultipleSelections, or ValueErrors,
+    /// or None exactly when this row is feasible at feasibility_atol. Includes
+    /// inactive constraints regardless of role. Details are not cached and
+    /// feasibility queries with another tolerance do not change the diagnostic.
+    /// Raises RuntimeError for an unknown OneHot constraint ID.
+    /// Only the requested sample is inspected; an unknown sample raises KeyError.
+    fn one_hot_violation_details(
+        &self,
+        constraint_id: crate::constraint_id::OneHotConstraintIDInput,
+        sample_id: u64,
+    ) -> OmmxPyResult<Option<crate::OneHotViolation>> {
+        Ok(self
+            .inner
+            .one_hot_violation_details(constraint_id.into(), sample_id.into())?
+            .map(Into::into))
+    }
+
+    /// Explain an SOS1 violation from stored member values, computed on demand.
+    ///
+    /// Retains one member of largest absolute value (ties retain the largest ID)
+    /// and returns the other values exceeding feasibility_atol in absolute value.
+    /// Empty exactly when this row is feasible at that tolerance. The retained
+    /// member is one possible repair choice, not a uniquely intended selection.
+    /// Includes inactive constraints regardless of role; results are not cached.
+    /// Raises RuntimeError for an unknown SOS1 constraint ID.
+    /// Only the requested sample is inspected; an unknown sample raises KeyError.
+    fn sos1_violating_values(
+        &self,
+        constraint_id: crate::constraint_id::Sos1ConstraintIDInput,
+        sample_id: u64,
+    ) -> OmmxPyResult<std::collections::BTreeMap<u64, f64>> {
+        Ok(self
+            .inner
+            .sos1_violating_values(constraint_id.into(), sample_id.into())?
+            .into_iter()
+            .map(|(id, value)| (id.into_inner(), value))
+            .collect())
+    }
+
     /// Unique names across all constraint families, as a set of strings.
     ///
     /// Retained inactive constraints are included; no sample ID is needed.

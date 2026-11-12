@@ -700,59 +700,7 @@ def test_sample_set_one_hot_inactive_reasons_df_after_conversion(snapshot):
     )
 
 
-@pytest.mark.parametrize("family", ["one_hot", "sos1"])
-@pytest.mark.parametrize("inactive", [False, True])
-def test_nonzero_values_survive_evaluation_storage_and_sample_extraction(
-    family, inactive
-):
-    from ommx import SampleSet, Solution
-
-    variables = [DecisionVariable.binary(i) for i in range(3)]
-    constraint_type, id_type = (
-        (OneHotConstraint, OneHotConstraintID)
-        if family == "one_hot"
-        else (Sos1Constraint, Sos1ConstraintID)
-    )
-    instance = Instance.from_components(
-        decision_variables=variables,
-        objective=0,
-        active_constraints={},
-        sense=Sense.Minimize,
-        **{f"active_{family}_constraints": {7: constraint_type(variables=variables)}},
-    )
-    if inactive:
-        if family == "one_hot":
-            instance.convert_one_hot_to_constraint(7)
-        else:
-            instance.convert_sos1_to_constraints(7)
-    constraint_id = id_type(7)
-    states = {
-        2: {0: 1.0, 1: 1.0, 2: 0.0},
-        5: {0: -0.5, 1: 0.5, 2: 0.0},
-        8: {0: 0.0, 1: -0.0, 2: 0.0},
-        11: {0: 0.0, 1: 1.0, 2: 0.0},
-    }
-    expected = {2: {0: 1.0, 1: 1.0}, 5: {0: -0.5, 1: 0.5}, 8: {}, 11: {1: 1.0}}
-    samples = instance.evaluate_samples(states)
-    restored_samples = SampleSet.from_v2_bytes(samples.to_v2_bytes())
-    for result in [samples, restored_samples]:
-        assert result.constraints[constraint_id].nonzero_values == expected
-        for sample_id, state in states.items():
-            solution = instance.evaluate(state)
-            restored = Solution.from_v2_bytes(solution.to_v2_bytes())
-            for candidate in [solution, restored, result.get(sample_id)]:
-                row = candidate.constraints[constraint_id]
-                assert row.nonzero_values == expected[sample_id]
-                if sample_id in (2, 5):
-                    assert row.selected_variable is None
-                    assert not candidate.feasible
-                # Returned dictionaries are detached from the retained result.
-                values = row.nonzero_values
-                values.clear()
-                assert row.nonzero_values == expected[sample_id]
-
-
-def test_sos1_nonzero_values_include_values_below_tolerance():
+def test_sos1_small_member_errors_are_feasible_without_changing_values():
     variables = [DecisionVariable.continuous(i, lower=-10, upper=10) for i in range(3)]
     instance = Instance.from_components(
         decision_variables=variables,
@@ -763,6 +711,203 @@ def test_sos1_nonzero_values_include_values_below_tolerance():
     )
     state = {0: 1.0, 1: 0.00006, 2: -0.00006}
     solution = instance.evaluate(state, atol=0.0001)
-    assert not solution.feasible
+    assert solution.feasible
     row = solution.constraints[Sos1ConstraintID(7)]
-    assert row.nonzero_values == state
+    assert solution.state.entries == state
+    assert solution.sos1_violating_values(Sos1ConstraintID(7)) == {}
+    assert row.violation() == 0.00006
+
+
+@pytest.mark.parametrize("inactive", [False, True])
+def test_one_hot_violation_details_survive_storage_and_sample_extraction(inactive):
+    from ommx import OneHotViolation, SampleSet, Solution
+
+    variables = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=variables,
+        objective=0,
+        active_constraints={},
+        active_one_hot_constraints={7: OneHotConstraint(variables=variables)},
+        sense=Sense.Minimize,
+    )
+    if inactive:
+        instance.convert_one_hot_to_constraint(7)
+    states = {
+        2: {0: 0.0, 1: 0.0, 2: 0.0},
+        5: {0: 1.0, 1: 1.0, 2: -0.5},
+        8: {0: 0.9, 1: 0.2, 2: 0.0},
+        11: {0: 0.0, 1: 1.0, 2: 0.0},
+        14: {0: 0.5, 1: 0.5, 2: 0.0},
+    }
+    constraint_id = OneHotConstraintID(7)
+    atol = 1e-6
+    samples = instance.evaluate_samples(states, atol=atol)
+    for result in [samples, SampleSet.from_v2_bytes(samples.to_v2_bytes())]:
+        details = {
+            sid: result.one_hot_violation_details(constraint_id, sid) for sid in states
+        }
+        assert set(details) == set(states)
+        for sample_id, state in states.items():
+            solution = instance.evaluate(state, atol=atol)
+            for candidate in [
+                solution,
+                Solution.from_v2_bytes(solution.to_v2_bytes()),
+                result.get(sample_id),
+            ]:
+                row = candidate.constraints[constraint_id]
+                diagnostic = candidate.one_hot_violation_details(constraint_id)
+                assert diagnostic == details[sample_id]
+                assert (diagnostic is None) == row.is_feasible(atol=atol)
+                if sample_id == 11:
+                    assert diagnostic is None
+                    continue
+                assert diagnostic.values == state
+                if sample_id == 2:
+                    assert isinstance(diagnostic, OneHotViolation.MissingSelection)
+                    assert row.violation() == 1.0
+                elif sample_id == 5:
+                    assert isinstance(diagnostic, OneHotViolation.MultipleSelections)
+                    assert diagnostic.selected_variables == {0, 1}
+                    assert row.violation() == 1.0
+                else:
+                    assert isinstance(diagnostic, OneHotViolation.ValueErrors)
+                    if sample_id == 8:
+                        assert diagnostic.target_variable == 0
+                        assert diagnostic.errors == pytest.approx({0: 0.1, 1: 0.2})
+                    else:
+                        assert diagnostic.target_variable == 1
+                        assert diagnostic.errors == {0: 0.5, 1: 0.5}
+                    assert max(diagnostic.errors.values()) == row.violation()
+                # The returned maps are snapshots, not mutable result storage.
+                diagnostic.values.clear()
+                assert (
+                    candidate.one_hot_violation_details(constraint_id).values == state
+                )
+
+
+@pytest.mark.parametrize("atol", [0.125, 0.5, 1.0, 2.0])
+def test_one_hot_diagnostics_follow_retained_tolerance(atol):
+    variables = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=variables,
+        objective=0,
+        active_constraints={},
+        active_one_hot_constraints={7: OneHotConstraint(variables=variables)},
+        sense=Sense.Minimize,
+    )
+    for state in [{0: 0, 1: 0, 2: 0}, {0: 1, 1: 1, 2: 0}, {0: 0.875, 1: 0.25, 2: 0}]:
+        solution = instance.evaluate(state, atol=atol)
+        row = solution.constraints[OneHotConstraintID(7)]
+        before = solution.one_hot_violation_details(7)
+        assert (before is None) == row.is_feasible(atol=atol)
+        row.is_feasible(atol=10.0)
+        assert solution.one_hot_violation_details(7) == before
+
+
+@pytest.mark.parametrize("inactive", [False, True])
+def test_sos1_violating_values_match_feasibility_and_survive_storage(inactive):
+    from ommx import SampleSet, Solution
+
+    variables = [DecisionVariable.continuous(i, lower=-10, upper=10) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=variables,
+        objective=0,
+        active_constraints={},
+        active_sos1_constraints={7: Sos1Constraint(variables=variables)},
+        sense=Sense.Minimize,
+    )
+    if inactive:
+        instance.convert_sos1_to_constraints(7)
+    states = {
+        2: {0: 0.0, 1: 0.0, 2: 0.0},
+        5: {0: 2.0, 1: -3.0, 2: 0.0},
+        8: {0: 1.0, 1: 0.125, 2: -0.125},
+        11: {0: 1.0, 1: -1.0, 2: 0.0},
+    }
+    if inactive:
+        for state in states.values():
+            retained = max(range(3), key=lambda i: (abs(state[i]), i))
+            state.update({3 + i: float(i == retained) for i in range(3)})
+    expected = {2: {}, 5: {0: 2.0}, 8: {}, 11: {0: 1.0}}
+    constraint_id = Sos1ConstraintID(7)
+    samples = instance.evaluate_samples(states, atol=0.125)
+    for result in [samples, SampleSet.from_v2_bytes(samples.to_v2_bytes())]:
+        assert {
+            sid: result.sos1_violating_values(constraint_id, sid) for sid in states
+        } == expected
+        for sample_id, state in states.items():
+            solution = instance.evaluate(state, atol=0.125)
+            for candidate in [
+                solution,
+                Solution.from_v2_bytes(solution.to_v2_bytes()),
+                result.get(sample_id),
+            ]:
+                row = candidate.constraints[constraint_id]
+                assert (
+                    candidate.sos1_violating_values(constraint_id)
+                    == expected[sample_id]
+                )
+                assert (
+                    candidate.sos1_violating_values(constraint_id) == {}
+                ) == row.is_feasible(atol=0.125)
+                row.is_feasible(atol=10.0)
+                assert (
+                    candidate.sos1_violating_values(constraint_id)
+                    == expected[sample_id]
+                )
+
+
+def test_lazy_diagnostics_reject_unknown_ids_and_wrong_families():
+    instance = Instance.minimize()
+    x = [instance.new_binary() for _ in range(2)]
+    one_hot = instance.add_one_hot_constraint(
+        OneHotConstraint(variables=x)
+    ).constraint_id
+    sos1 = instance.add_sos1_constraint(Sos1Constraint(variables=x)).constraint_id
+    solution = instance.evaluate({v.id: 1 for v in x})
+    samples = instance.evaluate_samples({7: {v.id: 1 for v in x}})
+    for owner, suffix in [(solution, ()), (samples, (7,))]:
+        with pytest.raises(RuntimeError, match="Unknown OneHot constraint ID"):
+            owner.one_hot_violation_details(999, *suffix)
+        with pytest.raises(RuntimeError, match="Unknown SOS1 constraint ID"):
+            owner.sos1_violating_values(999, *suffix)
+        with pytest.raises(TypeError):
+            owner.one_hot_violation_details(sos1, *suffix)
+        with pytest.raises(TypeError):
+            owner.sos1_violating_values(one_hot, *suffix)
+    with pytest.raises(KeyError, match="Unknown sample ID"):
+        samples.one_hot_violation_details(one_hot, 999)
+    with pytest.raises(KeyError, match="Unknown sample ID"):
+        samples.sos1_violating_values(sos1, 999)
+
+
+def test_lazy_diagnostics_include_evaluation_only_constraints():
+    from ommx import OneHotViolation, SampleSet, Solution
+
+    instance = Instance.minimize()
+    x = [instance.new_binary() for _ in range(2)]
+    one_hot = instance.add_one_hot_constraint(
+        OneHotConstraint(variables=x)
+    ).constraint_id
+    sos1 = instance.add_sos1_constraint(Sos1Constraint(variables=x)).constraint_id
+    instance.deactivate_one_hot_constraint(
+        one_hot, "diagnostic", skip_feasibility_check=True
+    )
+    instance.deactivate_sos1_constraint(sos1, "diagnostic", skip_feasibility_check=True)
+    state = {v.id: 1 for v in x}
+    samples = instance.evaluate_samples({7: state})
+    for result in [samples, SampleSet.from_v2_bytes(samples.to_v2_bytes())]:
+        assert result.feasible == {7: True}
+        assert isinstance(
+            result.one_hot_violation_details(one_hot, 7),
+            OneHotViolation.MultipleSelections,
+        )
+        assert result.sos1_violating_values(sos1, 7) == {x[0].id: 1}
+        solution = result.get(7)
+        for candidate in [solution, Solution.from_v2_bytes(solution.to_v2_bytes())]:
+            assert candidate.feasible
+            assert isinstance(
+                candidate.one_hot_violation_details(one_hot),
+                OneHotViolation.MultipleSelections,
+            )
+            assert candidate.sos1_violating_values(sos1) == {x[0].id: 1}

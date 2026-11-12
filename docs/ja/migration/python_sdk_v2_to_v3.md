@@ -174,7 +174,15 @@ Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` を使い�
 
 OneHotとSOS1の評価結果のpropertyは、サンプルごとの対応を返すものも含めて `active_variable` から `selected_variable` に変更します。DataFrame列も `selected_variable` と `selected_variable.<sample_id>` になります。評価した候補点での選択を表す情報であり、変数や制約がActive Formulationに属するかどうかとは独立です。評価の動作は変わりません。
 
-OneHotやSOS1の違反を調べるには `solution.constraints[constraint_id].nonzero_values` を使います。制約に属する変数のIDと非ゼロの評価値を対応させた辞書で、複数選択なら例えば `{1: 1.0, 2: 1.0}` となり、`selected_variable` が `None` の場合も参照できます。許容誤差以下の値も含み、厳密なゼロだけを除きます。空辞書は全変数がゼロであることを表します（既定の許容誤差ではOneHotは違反、SOS1は実行可能）。`samples.constraints[constraint_id].nonzero_values` はサンプルIDごとにこの辞書を返します。inactiveな制約でも保持され、サンプル抽出やv2形式の保存・復元後も参照できます。
+OneHotの違反は `solution.one_hot_violation_details(constraint_id)` で調べます。保存された `feasibility_atol` で制約を満たす場合に限り `None` となり、それ以外は `OneHotViolation` の次のvariantを返します。
+
+- `MissingSelection`：全メンバーが許容誤差内でゼロです。`values` は全メンバーを含み、全ゼロの候補も明示します。
+- `MultipleSelections`：許容誤差内で1のメンバーが2つ以上あります。`selected_variables` がそのIDを示し、`values` はほかのメンバーの値のずれも保持します。
+- `ValueErrors`：それ以外の値のずれで、`values`・`target_variable`・`errors` を返します。targetは最も近いOneHot状態のうち、1にするメンバーの候補です（値が最大の変数、同率なら最大のID）。errorsは許容誤差を超える変更量の絶対値です。例えば `(0.9, 0.2, 0)` では、小さい許容誤差なら約 `{0: 0.1, 1: 0.2}` となります。
+
+SOS1の `solution.sos1_violating_values(constraint_id)` は、絶対値が最大の1変数を残し（同率なら最大のID）、残りから `feasibility_atol` を超える値を返します。保存された許容誤差でそのSOS1制約が実行可能であることと、空辞書であることが同値です。残す変数は修正方法の一例であり、一意の正しい選択を表すものではありません。
+
+SampleSetでは `samples.one_hot_violation_details(constraint_id, sample_id)` または `samples.sos1_violating_values(constraint_id, sample_id)` を呼びます。Solution全体を抽出せず、保存された変数値から指定した診断だけを計算します。スカラーの違反量は保持しますが、詳細診断はキャッシュせず、変数値を制約行に重複保持しません。inactiveな制約も対象で、サンプル抽出やv2形式の保存・復元後も同じ診断を取得できます。別の許容誤差で実行可能性を問い合わせても診断の許容誤差は変わりません。変数の定義域は別に検査します。
 
 `total_violation()` と `constraints_df` の `min_role` は次の順序における下限なので、複数のroleを含められます。
 
@@ -262,7 +270,7 @@ assert report.loc[limit.constraint_id, "owner"] == "planning"
 
 ### 許容誤差付近で実行可能性を照合する
 
-判定では制約ごとの違反量に許容誤差を適用します。SOS1の値が `(1, 0.00006, 0.00006)` のとき、非ゼロ値を一つだけ残すには、合計 `0.00012` の変更が必要です。小さい二値はそれぞれ `0.0001` 未満でも、許容誤差 `0.0001` でこの制約は実行不可能です。帳票を照合するときは、評価時に保存された許容誤差を使い、同じ種類の制約を比較してください。問合せ時の許容誤差を変えても、離散値の正規化はやり直されません。定義は {meth}`~ommx.Solution.total_violation` にあります。
+判定では制約ごとの違反量に許容誤差を適用します。OneHotとSOS1は、条件を満たすために必要な各メンバーの変更量の最大値を最小にするL∞距離を使います。以前のプレリリース版の変更量の合計から変わります。SOS1の `(1, 0.00006, 0.00006)` の違反量は `0.00006` で、`atol=0.0001` なら実行可能です。OneHotの `(0.9, 0.2, 0)` の違反量は `0.2`、全ゼロの違反量は `1` です。帳票を照合するときは、評価時に保存された許容誤差を使い、同じ種類の制約を比較してください。問合せ時の許容誤差を変えても、離散値の正規化はやり直されません。定義は {meth}`~ommx.Solution.total_violation` にあります。
 
 (migration-storage)=
 ## 5. 保存済みモデルとArtifactを引き継ぐ

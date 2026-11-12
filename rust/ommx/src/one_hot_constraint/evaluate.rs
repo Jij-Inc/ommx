@@ -11,7 +11,7 @@ impl Propagate for OneHotConstraint<Created> {
     ) -> crate::Result<(PropagateOutcome<Self>, crate::v1::State)> {
         let mut fixed_to_one: Option<VariableID> = None;
         let mut unfixed = BTreeSet::new();
-        let mut fixed_deviation = 0.0;
+        let mut fixed_deviation = 0.0_f64;
 
         for &var_id in &self.variables {
             let Some(&value) = state.entries.get(&var_id.into_inner()) else {
@@ -20,7 +20,7 @@ impl Propagate for OneHotConstraint<Created> {
             };
 
             if value >= 0.5 && atol.approx_eq(value, 1.0) {
-                fixed_deviation += (value - 1.0).abs();
+                fixed_deviation = fixed_deviation.max((value - 1.0).abs());
                 // Variable is ~1
                 if let Some(first) = fixed_to_one {
                     crate::bail!(
@@ -31,7 +31,7 @@ impl Propagate for OneHotConstraint<Created> {
                 }
                 fixed_to_one = Some(var_id);
             } else if value < 0.5 && atol.approx_is_zero(value) {
-                fixed_deviation += value.abs();
+                fixed_deviation = fixed_deviation.max(value.abs());
             } else {
                 crate::bail!(
                     "Variable {:?} in one-hot constraint fixed to invalid value {} (must be 0 or 1)",
@@ -81,7 +81,7 @@ impl Evaluate for OneHotConstraint<Created> {
 
     fn evaluate(&self, state: &crate::v1::State, atol: ATol) -> crate::Result<Self::Output> {
         let used_decision_variable_ids = self.required_ids();
-        let (violation, selected_variable, nonzero_values) =
+        let (violation, selected_variable) =
             self.evaluate_members(|id| state.entries.get(&id.into_inner()).copied(), atol)?;
 
         Ok(OneHotConstraint {
@@ -90,7 +90,6 @@ impl Evaluate for OneHotConstraint<Created> {
                 activation_atol: atol,
                 violation,
                 selected_variable,
-                nonzero_values,
                 used_decision_variable_ids,
             },
         })
@@ -103,14 +102,12 @@ impl Evaluate for OneHotConstraint<Created> {
     ) -> crate::Result<Self::SampledOutput> {
         let mut violations = crate::Sampled::default();
         let mut selected_variable = BTreeMap::new();
-        let mut nonzero_values = BTreeMap::new();
 
         for (sample_id, state) in samples.iter() {
-            let (violation, selected, values) =
+            let (violation, selected) =
                 self.evaluate_members(|id| state.entries.get(&id.into_inner()).copied(), atol)?;
             violations.append([*sample_id], violation)?;
             selected_variable.insert(*sample_id, selected);
-            nonzero_values.insert(*sample_id, values);
         }
 
         Ok(OneHotConstraint {
@@ -119,7 +116,6 @@ impl Evaluate for OneHotConstraint<Created> {
                 activation_atol: atol,
                 violations,
                 selected_variable,
-                nonzero_values,
                 used_decision_variable_ids: self.required_ids(),
             },
         })
@@ -151,12 +147,11 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
-    fn total_member_error_includes_the_atol_boundary() {
+    fn maximum_member_error_includes_the_atol_boundary() {
         let constraint = make_one_hot(1, &[1, 2]);
         let atol = ATol::new(0.125).unwrap();
         let outside = f64::from_bits(0.125_f64.to_bits() + 1);
-        let boundary =
-            crate::v1::State::from(HashMap::from([(1, 1.0 + *atol / 2.0), (2, *atol / 2.0)]));
+        let boundary = crate::v1::State::from(HashMap::from([(1, 1.0 + *atol), (2, *atol)]));
 
         let evaluated = constraint.evaluate(&boundary, atol).unwrap();
         assert!(evaluated.is_feasible(atol));

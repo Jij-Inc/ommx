@@ -6,6 +6,26 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### OneHot・SOS1の違反診断 ([#1384](https://github.com/Jij-Inc/ommx/pull/1384))
+
+OneHotとSOS1の違反量を、以前のプレリリース版のL1合計から、条件を満たす状態までの
+L∞距離に変更します。例えばSOS1の `(1, 0.00006, 0.00006)` の違反量は `0.00006` となり、
+許容誤差 `0.0001` で実行可能になります。
+
+```python
+details = solution.one_hot_violation_details(OneHotConstraintID(7))
+# None、またはOneHotViolation.MissingSelection / MultipleSelections / ValueErrors
+excess = solution.sos1_violating_values(Sos1ConstraintID(8))
+# feasibility_atolでそのSOS1制約が実行可能な場合に限り空辞書。
+```
+
+OneHotの診断は未選択・複数選択・値のずれを区別し、全ゼロの候補も表現します。
+SOS1は絶対値が最大の1変数を残し、それ以外の違反値を返します。
+`Solution` と `SampleSet` は保存された変数値から詳細診断を必要時に計算します。
+制約行はスカラーの違反量を保持し、変数値を重複保持しません。
+SampleSetでは同じメソッドに制約IDとサンプルIDを渡します。診断は
+`feasibility_atol` を使い、inactiveな制約、サンプル抽出、v2形式の保存・復元にも対応します。
+
 ### ⚠ Active / inactiveへの整理 ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
 
 モデルの `constraints` はすべてのroleの行を含むようになります。activeな接続済みハンドルには `active_constraints`、保持したinactive行には `inactive_constraints` を使います。`Removed*Constraint` は `Inactive*Constraint`、`relax_*` / `restore_*` は `deactivate_*` / `activate_*` に変更します。`from_components` の入力も `active_*` / `inactive_*` に揃えます。

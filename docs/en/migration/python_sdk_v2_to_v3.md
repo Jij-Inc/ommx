@@ -174,7 +174,15 @@ Indicator result properties and DataFrame columns use `indicator_on` to report w
 
 OneHot and SOS1 result properties rename `active_variable` to `selected_variable`, including per-sample mappings. DataFrame columns become `selected_variable` and `selected_variable.<sample_id>`. This diagnostic describes selection at the evaluated candidate, independently of variable or constraint membership in the Active Formulation. Evaluation behavior is unchanged.
 
-To inspect a violated OneHot or SOS1 constraint, use `solution.constraints[constraint_id].nonzero_values`: a dictionary of member variable IDs to their nonzero evaluated values, for example `{1: 1.0, 2: 1.0}` for a multiple selection. It remains available when `selected_variable` is `None`. Values within the evaluation tolerance are included; only exact zeros are omitted. An empty dictionary identifies an all-zero candidate (infeasible for OneHot, feasible for SOS1 at the default tolerance). `samples.constraints[constraint_id].nonzero_values` maps each sample ID to such a dictionary. These diagnostics are retained for inactive constraints and preserved by sample extraction and v2 serialization.
+Inspect `solution.one_hot_violation_details(constraint_id)` for OneHot. It is `None` exactly when the row is feasible at its retained `feasibility_atol`; otherwise it is a `OneHotViolation` variant:
+
+- `MissingSelection`: all members are within tolerance of zero. `values` includes every member, so an all-zero candidate remains explicit.
+- `MultipleSelections`: at least two members are within tolerance of one. `selected_variables` identifies them; `values` also retains any other member errors.
+- `ValueErrors`: other deviations, with `values`, `target_variable`, and `errors`. The target is one closest OneHot assignment's member to set to one (largest value, ties resolved by largest ID). Errors are absolute changes exceeding tolerance. For `(0.9, 0.2, 0)`, they are approximately `{0: 0.1, 1: 0.2}` at a small tolerance.
+
+For SOS1, `solution.sos1_violating_values(constraint_id)` retains one largest absolute member (ties use the largest ID) and returns the remaining values exceeding `feasibility_atol`. An empty dictionary is equivalent to that SOS1 row being feasible at the retained tolerance. This repair choice does not identify a uniquely intended selection.
+
+For a SampleSet, call `samples.one_hot_violation_details(constraint_id, sample_id)` or `samples.sos1_violating_values(constraint_id, sample_id)`. These methods compute only the requested diagnostic from stored variable values, without extracting a whole Solution. Scalar violations remain stored; detailed diagnostics are neither cached nor duplicated in constraint rows. Both methods include inactive constraints and produce the same results after sample extraction and v2 serialization. Feasibility queries with another tolerance do not change the diagnostic tolerance; variable-domain checks remain separate.
 
 The `min_role` selector for `total_violation()` and `constraints_df` is an ordered minimum, so it can include more than one role:
 
@@ -262,7 +270,7 @@ Use `include=["label", "parameters"]` for a wide table with metadata. For a join
 
 ### Compare feasibility near the tolerance
 
-A threshold is applied to each constraint's violation. For SOS1, leaving at most one nonzero value in `(1, 0.00006, 0.00006)` takes total absolute change `0.00012`. At a tolerance of `0.0001` the row fails, even though each of the two small values is below that threshold. When reconciling reports, use the stored evaluation tolerance and compare the same constraint family. A new query tolerance does not rerun discrete-value canonicalization. See {meth}`~ommx.Solution.total_violation`.
+A threshold is applied to each constraint's violation. OneHot and SOS1 use the minimum maximum member change needed to satisfy the condition (L-infinity distance), replacing the earlier prerelease sum of changes. For SOS1, `(1, 0.00006, 0.00006)` has violation `0.00006` and passes at `atol=0.0001`. For OneHot, `(0.9, 0.2, 0)` has violation `0.2`, while an all-zero candidate has violation `1`. When reconciling reports, use the stored evaluation tolerance and compare the same constraint family. A new query tolerance does not rerun discrete-value canonicalization. See {meth}`~ommx.Solution.total_violation`.
 
 (migration-storage)=
 ## 5. Bring saved models and Artifacts forward

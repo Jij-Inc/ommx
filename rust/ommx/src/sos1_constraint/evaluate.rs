@@ -24,7 +24,7 @@ impl Propagate for Sos1Constraint<Created> {
     ) -> crate::Result<(PropagateOutcome<Self>, crate::v1::State)> {
         let mut fixed_nonzero: Option<VariableID> = None;
         let mut unfixed = BTreeSet::new();
-        let mut fixed_deviation = 0.0;
+        let mut fixed_deviation = 0.0_f64;
 
         for &var_id in &self.variables {
             let Some(&value) = state.entries.get(&var_id.into_inner()) else {
@@ -34,7 +34,7 @@ impl Propagate for Sos1Constraint<Created> {
 
             ensure_sos1_value_is_finite(var_id, value)?;
             if atol.approx_is_zero(value) {
-                fixed_deviation += value.abs();
+                fixed_deviation = fixed_deviation.max(value.abs());
             } else {
                 // Variable is non-zero
                 if let Some(first) = fixed_nonzero {
@@ -87,7 +87,7 @@ impl Evaluate for Sos1Constraint<Created> {
 
     fn evaluate(&self, state: &crate::v1::State, atol: ATol) -> crate::Result<Self::Output> {
         let used_decision_variable_ids = self.required_ids();
-        let (violation, selected_variable, nonzero_values) =
+        let (violation, selected_variable) =
             self.evaluate_members(|id| state.entries.get(&id.into_inner()).copied(), atol)?;
 
         Ok(Sos1Constraint {
@@ -96,7 +96,6 @@ impl Evaluate for Sos1Constraint<Created> {
                 activation_atol: atol,
                 violation,
                 selected_variable,
-                nonzero_values,
                 used_decision_variable_ids,
             },
         })
@@ -109,14 +108,12 @@ impl Evaluate for Sos1Constraint<Created> {
     ) -> crate::Result<Self::SampledOutput> {
         let mut violations = crate::Sampled::default();
         let mut selected_variable = BTreeMap::new();
-        let mut nonzero_values = BTreeMap::new();
 
         for (sample_id, state) in samples.iter() {
-            let (violation, selected, values) =
+            let (violation, selected) =
                 self.evaluate_members(|id| state.entries.get(&id.into_inner()).copied(), atol)?;
             violations.append([*sample_id], violation)?;
             selected_variable.insert(*sample_id, selected);
-            nonzero_values.insert(*sample_id, values);
         }
 
         Ok(Sos1Constraint {
@@ -125,7 +122,6 @@ impl Evaluate for Sos1Constraint<Created> {
                 activation_atol: atol,
                 violations,
                 selected_variable,
-                nonzero_values,
                 used_decision_variable_ids: self.required_ids(),
             },
         })

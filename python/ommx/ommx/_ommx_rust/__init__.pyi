@@ -95,6 +95,7 @@ __all__ = [
     "ObjectivePreparation",
     "OneHotConstraint",
     "OneHotConstraintID",
+    "OneHotViolation",
     "OpenSolve",
     "Optimality",
     "OutputObjective",
@@ -3110,13 +3111,6 @@ class EvaluatedOneHotConstraint(ConstraintView):
         IDs of decision variables used to evaluate this constraint.
         """
     @property
-    def nonzero_values(self) -> builtins.dict[builtins.int, builtins.float]:
-        r"""
-        Strictly nonzero member values keyed by variable ID, even when infeasible.
-        Includes values within the evaluation tolerance; zero values are omitted.
-        An all-zero candidate has an empty dictionary.
-        """
-    @property
     def variables(self) -> builtins.set[builtins.int]:
         r"""
         Member decision variable IDs.
@@ -3187,13 +3181,6 @@ class EvaluatedSos1Constraint(ConstraintView):
     def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
         IDs of decision variables used to evaluate this constraint.
-        """
-    @property
-    def nonzero_values(self) -> builtins.dict[builtins.int, builtins.float]:
-        r"""
-        Strictly nonzero member values keyed by variable ID, even when infeasible.
-        Includes values within the evaluation tolerance; zero values are omitted.
-        An all-zero candidate has an empty dictionary.
         """
     @property
     def variables(self) -> builtins.set[builtins.int]:
@@ -10593,6 +10580,75 @@ class OneHotConstraintID(ConstraintIDBase):
         IDs are immutable, including when nested in copied containers.
         """
 
+class OneHotViolation:
+    r"""
+    A OneHot violation at the result's feasibility_atol. Each variant retains
+    all member values, including zeros. Feasible rows return None instead.
+    """
+    @typing.final
+    class MissingSelection(OneHotViolation):
+        r"""
+        All members are within tolerance of zero, but the row is infeasible.
+        """
+
+        __match_args__ = ("values",)
+        @property
+        def values(self) -> builtins.dict[builtins.int, builtins.float]: ...
+        def __new__(
+            cls, values: typing.Mapping[builtins.int, builtins.float]
+        ) -> OneHotViolation.MissingSelection: ...
+
+    @typing.final
+    class MultipleSelections(OneHotViolation):
+        r"""
+        The row is infeasible and at least two members are within tolerance of one.
+        Other value errors can coexist and remain visible in values.
+        """
+
+        __match_args__ = (
+            "selected_variables",
+            "values",
+        )
+        @property
+        def selected_variables(self) -> builtins.set[builtins.int]: ...
+        @property
+        def values(self) -> builtins.dict[builtins.int, builtins.float]: ...
+        def __new__(
+            cls,
+            selected_variables: builtins.set[builtins.int],
+            values: typing.Mapping[builtins.int, builtins.float],
+        ) -> OneHotViolation.MultipleSelections: ...
+
+    @typing.final
+    class ValueErrors(OneHotViolation):
+        r"""
+        Other value deviations from a closest OneHot assignment.
+        The target is the largest member value, breaking ties by largest ID.
+        Errors are absolute changes exceeding feasibility_atol: distance to one
+        for the target, distance to zero for the other members. The target is one
+        possible repair choice, not a uniquely intended selection.
+        """
+
+        __match_args__ = (
+            "target_variable",
+            "errors",
+            "values",
+        )
+        @property
+        def target_variable(self) -> builtins.int: ...
+        @property
+        def errors(self) -> builtins.dict[builtins.int, builtins.float]: ...
+        @property
+        def values(self) -> builtins.dict[builtins.int, builtins.float]: ...
+        def __new__(
+            cls,
+            target_variable: builtins.int,
+            errors: typing.Mapping[builtins.int, builtins.float],
+            values: typing.Mapping[builtins.int, builtins.float],
+        ) -> OneHotViolation.ValueErrors: ...
+
+    ...
+
 @typing.final
 class OpenSolve:
     r"""
@@ -12994,6 +13050,33 @@ class SampleSet:
     def get_user_annotations(
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def one_hot_violation_details(
+        self, constraint_id: OneHotConstraintID | builtins.int, sample_id: builtins.int
+    ) -> typing.Optional[OneHotViolation]:
+        r"""
+        Explain a OneHot violation from stored member values, computed on demand.
+
+        Returns OneHotViolation.MissingSelection, MultipleSelections, or ValueErrors,
+        or None exactly when this row is feasible at feasibility_atol. Includes
+        inactive constraints regardless of role. Details are not cached and
+        feasibility queries with another tolerance do not change the diagnostic.
+        Raises RuntimeError for an unknown OneHot constraint ID.
+        Only the requested sample is inspected; an unknown sample raises KeyError.
+        """
+    def sos1_violating_values(
+        self, constraint_id: Sos1ConstraintID | builtins.int, sample_id: builtins.int
+    ) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Explain an SOS1 violation from stored member values, computed on demand.
+
+        Retains one member of largest absolute value (ties retain the largest ID)
+        and returns the other values exceeding feasibility_atol in absolute value.
+        Empty exactly when this row is feasible at that tolerance. The retained
+        member is one possible repair choice, not a uniquely intended selection.
+        Includes inactive constraints regardless of role; results are not cached.
+        Raises RuntimeError for an unknown SOS1 constraint ID.
+        Only the requested sample is inspected; an unknown sample raises KeyError.
+        """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> SampleSet:
         r"""
@@ -13705,15 +13788,6 @@ class SampledOneHotConstraint(ConstraintView):
         IDs of decision variables used to evaluate this constraint.
         """
     @property
-    def nonzero_values(
-        self,
-    ) -> builtins.dict[builtins.int, builtins.dict[builtins.int, builtins.float]]:
-        r"""
-        Strictly nonzero member values keyed by sample ID, then variable ID.
-        Includes values within the evaluation tolerance; zero values are omitted.
-        All-zero samples have an empty dictionary.
-        """
-    @property
     def variables(self) -> builtins.set[builtins.int]:
         r"""
         Member decision variable IDs.
@@ -13789,15 +13863,6 @@ class SampledSos1Constraint(ConstraintView):
     def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
         IDs of decision variables used to evaluate this constraint.
-        """
-    @property
-    def nonzero_values(
-        self,
-    ) -> builtins.dict[builtins.int, builtins.dict[builtins.int, builtins.float]]:
-        r"""
-        Strictly nonzero member values keyed by sample ID, then variable ID.
-        Includes values within the evaluation tolerance; zero values are omitted.
-        All-zero samples have an empty dictionary.
         """
     @property
     def variables(self) -> builtins.set[builtins.int]:
@@ -14467,6 +14532,31 @@ class Solution:
     def get_user_annotations(
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def one_hot_violation_details(
+        self, constraint_id: OneHotConstraintID | builtins.int
+    ) -> typing.Optional[OneHotViolation]:
+        r"""
+        Explain a OneHot violation from stored member values, computed on demand.
+
+        Returns OneHotViolation.MissingSelection, MultipleSelections, or ValueErrors,
+        or None exactly when this row is feasible at feasibility_atol. Includes
+        inactive constraints regardless of role. Details are not cached and
+        feasibility queries with another tolerance do not change the diagnostic.
+        Raises RuntimeError for an unknown OneHot constraint ID.
+        """
+    def sos1_violating_values(
+        self, constraint_id: Sos1ConstraintID | builtins.int
+    ) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Explain an SOS1 violation from stored member values, computed on demand.
+
+        Retains one member of largest absolute value (ties retain the largest ID)
+        and returns the other values exceeding feasibility_atol in absolute value.
+        Empty exactly when this row is feasible at that tolerance. The retained
+        member is one possible repair choice, not a uniquely intended selection.
+        Includes inactive constraints regardless of role; results are not cached.
+        Raises RuntimeError for an unknown SOS1 constraint ID.
+        """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> Solution:
         r"""
@@ -14847,8 +14937,8 @@ class Solution:
 
         - Equality: `abs(f(x))`; inequality: `max(0, f(x))`.
         - Indicator: the inner violation when `indicator_on` is true, otherwise zero.
-        - OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.
-        - SOS1: `min_i sum_{j != i} abs(x_j)`.
+        - OneHot: `min_i max(abs(x_i - 1), max_{j != i} abs(x_j))`.
+        - SOS1: `min_i max_{j != i} abs(x_j)` (zero for a singleton).
 
         The default ``FEASIBILITY_CHECK`` selects the same constraints as
         {attr}`~ommx.Solution.feasible`. ``ACTIVE`` selects the same constraints as

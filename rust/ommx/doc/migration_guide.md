@@ -206,12 +206,28 @@ Use [`InstanceClassClause::with_allowed_indicator_trigger_values`](crate::Instan
 to set those values independently (`{1}` by default); values other than 0 and 1
 are rejected.
 
-OneHot and SOS1 measure the minimum sum of absolute changes needed to satisfy their
-structural condition. Every constraint is feasible exactly when its violation is
-at most `atol`. For OneHot and SOS1, tolerance now applies to the total change,
-rather than to each member independently. Bounds and kinds remain separate.
+OneHot and SOS1 measure the minimum maximum absolute change needed to satisfy their
+structural condition (L-infinity distance). For OneHot this is
+`min_i max(|x_i - 1|, max_{j != i} |x_j|)`; for SOS1 it is the second-largest
+absolute member value, or zero for a singleton. Every constraint is feasible
+exactly when its violation is at most `atol`. Small member deviations no longer
+accumulate as they did with the earlier prerelease L1 metric. Bounds and kinds remain separate.
 Input canonicalization precedes constraint evaluation and does not change the
 definition of the metric on the values supplied to the constraint.
+
+[`Solution::one_hot_violation_details`](crate::Solution::one_hot_violation_details)
+returns `None` exactly when the row is feasible at its retained `feasibility_atol`.
+Otherwise [`OneHotViolation`](crate::OneHotViolation) distinguishes missing selection,
+multiple selections, and value errors, retaining all member values including zeros.
+[`Solution::sos1_violating_values`](crate::Solution::sos1_violating_values)
+returns values exceeding that tolerance after retaining one largest absolute member;
+an empty map means the SOS1 row is feasible at that tolerance. Ties retain the largest ID.
+Details are computed on demand from the host variable table, without caching or
+duplicating values in constraint rows. Scalar violations remain stored.
+[`SampleSet::one_hot_violation_details`](crate::SampleSet::one_hot_violation_details)
+and [`SampleSet::sos1_violating_values`](crate::SampleSet::sos1_violating_values)
+inspect only the requested constraint and sample. Diagnostics include inactive
+rows and remain available after sample extraction and v2 serialization.
 
 SampleSet feasibility and best-feasible selection also check variable bounds
 and kinds using the saved tolerance, matching the extracted Solution. Variable

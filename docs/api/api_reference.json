@@ -10974,28 +10974,6 @@
               "is_readonly": true
             },
             {
-              "name": "nonzero_values",
-              "doc": "Strictly nonzero member values keyed by variable ID, even when infeasible.\nIncludes values within the evaluation tolerance; zero values are omitted.\nAn all-zero candidate has an empty dictionary.",
-              "type_": {
-                "display": "dict[int, float]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "float",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "parameters",
               "doc": "Modeling parameters.",
               "type_": {
@@ -11284,28 +11262,6 @@
                 "children": [
                   {
                     "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "nonzero_values",
-              "doc": "Strictly nonzero member values keyed by variable ID, even when infeasible.\nIncludes values within the evaluation tolerance; zero values are omitted.\nAn all-zero candidate has an empty dictionary.",
-              "type_": {
-                "display": "dict[int, float]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "float",
                     "link_target": null,
                     "children": []
                   }
@@ -26118,6 +26074,15 @@
         },
         {
           "kind": "Class",
+          "name": "OneHotViolation",
+          "doc": "A OneHot violation at the result's feasibility_atol. Each variant retains\nall member values, including zeros. Feasible rows return None instead.",
+          "bases": [],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Optimality",
           "doc": "Optimality status of a solution",
           "bases": [],
@@ -34348,6 +34313,63 @@
               "deprecated": null
             },
             {
+              "name": "one_hot_violation_details",
+              "doc": "Explain a OneHot violation from stored member values, computed on demand.\n\nReturns OneHotViolation.MissingSelection, MultipleSelections, or ValueErrors,\nor None exactly when this row is feasible at feasibility_atol. Includes\ninactive constraints regardless of role. Details are not cached and\nfeasibility queries with another tolerance do not change the diagnostic.\nRaises RuntimeError for an unknown OneHot constraint ID.\nOnly the requested sample is inspected; an unknown sample raises KeyError.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint_id",
+                      "type_": {
+                        "display": "_ommx_rust.OneHotConstraintID | int",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "OneHotConstraintID",
+                            "link_target": {
+                              "fqn": "ommx.OneHotConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "sample_id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Optional[OneHotViolation]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "OneHotViolation",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "replace_annotations",
               "doc": "",
               "signatures": [
@@ -34396,6 +34418,68 @@
                     "children": [
                       {
                         "display": "int",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "sos1_violating_values",
+              "doc": "Explain an SOS1 violation from stored member values, computed on demand.\n\nRetains one member of largest absolute value (ties retain the largest ID)\nand returns the other values exceeding feasibility_atol in absolute value.\nEmpty exactly when this row is feasible at that tolerance. The retained\nmember is one possible repair choice, not a uniquely intended selection.\nIncludes inactive constraints regardless of role; results are not cached.\nRaises RuntimeError for an unknown SOS1 constraint ID.\nOnly the requested sample is inspected; an unknown sample raises KeyError.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint_id",
+                      "type_": {
+                        "display": "_ommx_rust.Sos1ConstraintID | int",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sos1ConstraintID",
+                            "link_target": {
+                              "fqn": "ommx.Sos1ConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "sample_id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "dict[int, float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "float",
                         "link_target": null,
                         "children": []
                       }
@@ -37028,39 +37112,6 @@
               "is_readonly": true
             },
             {
-              "name": "nonzero_values",
-              "doc": "Strictly nonzero member values keyed by sample ID, then variable ID.\nIncludes values within the evaluation tolerance; zero values are omitted.\nAll-zero samples have an empty dictionary.",
-              "type_": {
-                "display": "dict[int, dict[int, float]]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "dict[int, float]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "float",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "parameters",
               "doc": "Modeling parameters.",
               "type_": {
@@ -37379,39 +37430,6 @@
                     "display": "str",
                     "link_target": null,
                     "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "nonzero_values",
-              "doc": "Strictly nonzero member values keyed by sample ID, then variable ID.\nIncludes values within the evaluation tolerance; zero values are omitted.\nAll-zero samples have an empty dictionary.",
-              "type_": {
-                "display": "dict[int, dict[int, float]]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "dict[int, float]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "float",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
                   }
                 ]
               },
@@ -38700,6 +38718,54 @@
               "deprecated": null
             },
             {
+              "name": "one_hot_violation_details",
+              "doc": "Explain a OneHot violation from stored member values, computed on demand.\n\nReturns OneHotViolation.MissingSelection, MultipleSelections, or ValueErrors,\nor None exactly when this row is feasible at feasibility_atol. Includes\ninactive constraints regardless of role. Details are not cached and\nfeasibility queries with another tolerance do not change the diagnostic.\nRaises RuntimeError for an unknown OneHot constraint ID.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint_id",
+                      "type_": {
+                        "display": "_ommx_rust.OneHotConstraintID | int",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "OneHotConstraintID",
+                            "link_target": {
+                              "fqn": "ommx.OneHotConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Optional[OneHotViolation]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "OneHotViolation",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "replace_annotations",
               "doc": "",
               "signatures": [
@@ -38794,6 +38860,59 @@
               "deprecated": null
             },
             {
+              "name": "sos1_violating_values",
+              "doc": "Explain an SOS1 violation from stored member values, computed on demand.\n\nRetains one member of largest absolute value (ties retain the largest ID)\nand returns the other values exceeding feasibility_atol in absolute value.\nEmpty exactly when this row is feasible at that tolerance. The retained\nmember is one possible repair choice, not a uniquely intended selection.\nIncludes inactive constraints regardless of role; results are not cached.\nRaises RuntimeError for an unknown SOS1 constraint ID.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint_id",
+                      "type_": {
+                        "display": "_ommx_rust.Sos1ConstraintID | int",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sos1ConstraintID",
+                            "link_target": {
+                              "fqn": "ommx.Sos1ConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "dict[int, float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "to_v1_bytes",
               "doc": "Serialize for compatibility with older OMMX SDKs using the v1 wire format.\n\nUse `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.\nThis compatibility format cannot represent v3 features such as native\nIndicator constraints. Raises `RuntimeError` if Indicator, OneHot, or\nSOS1 results are retained, including satisfied and inactive constraints,\nor if any inactive constraint skips feasibility checks.\nUse `to_v2_bytes()` to preserve these features.\n\nFor results that can be exported, v1 recomputes feasibility at the SDK\ndefault tolerance. Use v2 to preserve the evaluation tolerance.",
               "signatures": [
@@ -38827,7 +38946,7 @@
             },
             {
               "name": "total_violation",
-              "doc": "Sum the nonnegative scalar violations selected by min_role.\n\n- Equality: `abs(f(x))`; inequality: `max(0, f(x))`.\n- Indicator: the inner violation when `indicator_on` is true, otherwise zero.\n- OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.\n- SOS1: `min_i sum_{j != i} abs(x_j)`.\n\nThe default ``FEASIBILITY_CHECK`` selects the same constraints as\n{attr}`~ommx.Solution.feasible`. ``ACTIVE`` selects the same constraints as\n{attr}`~ommx.Solution.feasible_relaxed`; ``EVALUATION_ONLY`` includes all rows.\nThis sum is a diagnostic metric, not a feasibility predicate.\nVariable bound and kind violations\nare not added. Values use the evaluated state after discrete-value\ncanonicalization. Lowering need not preserve the metric: a retained\noriginal and its generated constraints each contribute.\n\nUse {meth}`constraint_violation` for individual values, also available in\nthe `violation` column of {meth}`constraints_df` for every constraint kind.",
+              "doc": "Sum the nonnegative scalar violations selected by min_role.\n\n- Equality: `abs(f(x))`; inequality: `max(0, f(x))`.\n- Indicator: the inner violation when `indicator_on` is true, otherwise zero.\n- OneHot: `min_i max(abs(x_i - 1), max_{j != i} abs(x_j))`.\n- SOS1: `min_i max_{j != i} abs(x_j)` (zero for a singleton).\n\nThe default ``FEASIBILITY_CHECK`` selects the same constraints as\n{attr}`~ommx.Solution.feasible`. ``ACTIVE`` selects the same constraints as\n{attr}`~ommx.Solution.feasible_relaxed`; ``EVALUATION_ONLY`` includes all rows.\nThis sum is a diagnostic metric, not a feasibility predicate.\nVariable bound and kind violations\nare not added. Values use the evaluated state after discrete-value\ncanonicalization. Lowering need not preserve the metric: a retained\noriginal and its generated constraints each contribute.\n\nUse {meth}`constraint_violation` for individual values, also available in\nthe `violation` column of {meth}`constraints_df` for every constraint kind.",
               "signatures": [
                 {
                   "parameters": [
@@ -48599,6 +48718,7 @@
     "ommx.ObjectivePreparation": "ommx",
     "ommx.OneHotConstraint": "ommx",
     "ommx.OneHotConstraintID": "ommx",
+    "ommx.OneHotViolation": "ommx",
     "ommx.Optimality": "ommx",
     "ommx.OutputObjective": "ommx",
     "ommx.Parameter": "ommx",

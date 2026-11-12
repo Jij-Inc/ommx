@@ -263,10 +263,10 @@ def test_total_violation_indicator(indicator_on, equality, inactive, value):
     [
         ([0, 0, 0], 1),
         ([0, 1, 0], 0),
-        ([1, 1, 1], 2),
-        ([0.5, 0.5], 1),
-        ([-1, 2], 2),
-        ([0.5, 0.5, 0.5], 1.5),
+        ([1, 1, 1], 1),
+        ([0.5, 0.5], 0.5),
+        ([-1, 2], 1),
+        ([0.5, 0.5, 0.5], 0.5),
         ([1, 1e-8], 1e-8),
     ],
 )
@@ -305,10 +305,10 @@ def test_one_hot_violation(values, violation):
         ([0, 0, 0], 0),
         ([3, 0, 0], 0),
         ([3, -2, 0], 2),
-        ([3, -5, 1, 4, -6], 13),
-        ([4, -7, 1, 6, -9], 18),
-        ([0.5, -0.5, 0, 0.5, -0.5], 1.5),
-        ([1e20, 1, -2], 3),
+        ([3, -5, 1, 4, -6], 5),
+        ([4, -7, 1, 6, -9], 7),
+        ([0.5, -0.5, 0, 0.5, -0.5], 0.5),
+        ([1e20, 1, -2], 2),
         ([1, 1e-8], 1e-8),
     ],
 )
@@ -409,18 +409,18 @@ def test_total_is_sum_of_individual_and_dataframe_violations():
     ] == [
         2,
         1,
-        2,
-        2,
+        1,
+        1,
     ]
     assert solution.constraint_violation(one_hot_row) == 2
     assert sum(solution.constraint_violation(row) for row in sos1_rows) == 2
     # Generated rows and retained inactive originals both contribute.
-    assert solution.total_violation() == 11
+    assert solution.total_violation() == 9
     dataframe_total_violation = sum(
         solution.constraints_df(kind=kind)["violation"].sum() for kind in kinds
     )
     assert isinstance(dataframe_total_violation, Real)
-    assert dataframe_total_violation == 11
+    assert dataframe_total_violation == 9
     assert solution.constraints[
         ConstraintID(0)
     ].violation() == solution.constraint_violation(ConstraintID(0))
@@ -441,11 +441,11 @@ def test_lowering_may_change_total_violation():
         sense=Sense.Minimize,
     )
     state = {0: 0.5, 1: 0.5}
-    assert instance.evaluate(state).total_violation() == 1
+    assert instance.evaluate(state).total_violation() == 0.5
     row = instance.convert_one_hot_to_constraint(0)
     lowered = instance.evaluate(state)
     assert lowered.constraint_violation(row) == 0
-    assert lowered.constraint_violation(OneHotConstraintID(0)) == 1
+    assert lowered.constraint_violation(OneHotConstraintID(0)) == 0.5
     # Inactive native constraints and generated regular constraints both contribute.
     assert instance.evaluate({0: 1, 1: 1}).total_violation() == 2
 
@@ -483,7 +483,7 @@ def test_feasible_sos1_can_have_positive_violation_within_tolerance():
 
 @pytest.mark.parametrize("atol", [1e-4, 1e-8])
 @pytest.mark.parametrize("lowered", [False, True])
-def test_sos1_feasibility_uses_total_member_error_across_evaluation_paths(
+def test_sos1_feasibility_uses_maximum_member_error_across_evaluation_paths(
     atol, lowered
 ):
     xs = [DecisionVariable.continuous(i, lower=-2, upper=2) for i in range(3)]
@@ -509,7 +509,7 @@ def test_sos1_feasibility_uses_total_member_error_across_evaluation_paths(
         SampleSet.from_v2_bytes(samples.to_v2_bytes()).get(7),
     ]:
         violation = result.constraint_violation(Sos1ConstraintID(0))
-        assert violation == pytest.approx(1.5 * atol)
+        assert violation == pytest.approx(0.75 * atol)
         regular_total = sum(
             c.violation()
             for c in (
@@ -521,9 +521,9 @@ def test_sos1_feasibility_uses_total_member_error_across_evaluation_paths(
         assert result.total_violation() == pytest.approx(violation + regular_total)
         row = result.constraints_df(kind=ConstraintKind.Sos1).loc[Sos1ConstraintID(0)]
         assert row["violation"] == violation
-        assert not row["feasible"]
-        assert not result.feasible
-        assert result.feasible_relaxed == lowered
+        assert row["feasible"]
+        assert result.feasible
+        assert result.feasible_relaxed
 
 
 @pytest.mark.parametrize("atol", [1e-4, 1e-8])
@@ -538,7 +538,7 @@ def test_partial_evaluation_cannot_discard_small_sos1_member_contributions(atol)
     )
     fixed = {1: 0.75 * atol, 2: 0.75 * atol}
     original = instance.evaluate({0: 1, **fixed}, atol=atol)
-    assert not original.feasible
+    assert original.feasible
     with pytest.raises(RuntimeError, match="without changing constraint feasibility"):
         instance.partial_evaluate(fixed, atol=atol)
     assert (
