@@ -97,13 +97,13 @@ impl AbsDiffEq for Instance {
             return false;
         }
 
-        let self_used_ids = self.used_decision_variable_ids();
-        let other_used_ids = other.used_decision_variable_ids();
-        if self_used_ids != other_used_ids {
+        let self_active_ids = self.active_decision_variable_ids();
+        let other_active_ids = other.active_decision_variable_ids();
+        if self_active_ids != other_active_ids {
             return false;
         }
 
-        // Output-only variables are not solver-used, but their definitions and
+        // Output-only variables are not active, but their definitions and
         // state-population rules still affect evaluation. Follow dependent RHS
         // expressions transitively and require the two population environments
         // to agree. This is deliberately a sufficient, conservative comparison:
@@ -155,11 +155,11 @@ impl AbsDiffEq for Instance {
                         return false;
                     }
                 }
-                DecisionVariableRole::Used | DecisionVariableRole::Irrelevant => {}
+                DecisionVariableRole::Active | DecisionVariableRole::Irrelevant => {}
             }
         }
 
-        let mut compared_ids = self_used_ids;
+        let mut compared_ids = self_active_ids;
         compared_ids.extend(self_output_ids);
         for id in compared_ids {
             let Some(self_var) = self.decision_variables.get(&id) else {
@@ -174,9 +174,9 @@ impl AbsDiffEq for Instance {
         }
 
         // Compare constraints
-        // Note that `removed_constraints` are not considered in the comparison
-        for (id, c_self) in self.constraints() {
-            match other.constraints().get(id) {
+        // Note that `inactive_constraints` are not considered in the comparison
+        for (id, c_self) in self.active_constraints() {
+            match other.active_constraints().get(id) {
                 Some(c_other) => {
                     if !c_self.abs_diff_eq(c_other, epsilon) {
                         return false;
@@ -245,7 +245,7 @@ mod tests {
                 .objective(Function::Zero)
                 .decision_variables(BTreeMap::from([(id, DecisionVariable::binary())]))
                 .fixed_decision_variable_values(BTreeMap::from([(id, value)]))
-                .constraints(BTreeMap::new())
+                .active_constraints(BTreeMap::new())
                 .build()
                 .unwrap();
             instance.output_objective = Some(OutputObjective::new(
@@ -344,7 +344,7 @@ mod tests {
                     (free, DecisionVariable::binary()),
                     (dependent, DecisionVariable::binary()),
                 ]))
-                .constraints(BTreeMap::new())
+                .active_constraints(BTreeMap::new())
                 .decision_variable_dependency(
                     AcyclicAssignments::new([(dependent, dependency)]).unwrap(),
                 )
@@ -374,7 +374,7 @@ mod tests {
                 .objective(Function::Zero)
                 .decision_variables(BTreeMap::from([(id, DecisionVariable::binary())]))
                 .fixed_decision_variable_values(BTreeMap::from([(id, 1.0)]))
-                .constraints(BTreeMap::new())
+                .active_constraints(BTreeMap::new())
                 .build()
                 .unwrap();
             instance.output_objective = Some(OutputObjective::new(Sense::Minimize, output, true));

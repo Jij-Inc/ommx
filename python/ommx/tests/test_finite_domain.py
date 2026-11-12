@@ -73,7 +73,7 @@ def test_finite_domain_evaluation_and_wire_roundtrip():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=Instance.MINIMIZE,
     )
 
@@ -117,7 +117,7 @@ def test_finite_domain_is_visible_in_dataframes():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=Instance.MINIMIZE,
     )
 

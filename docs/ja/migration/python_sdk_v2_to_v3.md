@@ -54,20 +54,20 @@ x = model.new_binary("x")
 y = model.new_binary("y")
 model.objective = x + y
 limit = model.add_constraint(x + y <= 1, "limit")
-assert model.constraints[limit.constraint_id].name == "limit"
+assert model.active_constraints[limit.constraint_id].name == "limit"
 ```
 
 整数・連続・半整数・半連続・有限集合を値域とする変数にも、それぞれ `new_integer`、`new_continuous`、`new_semi_integer`、`new_semi_continuous`、`new_finite_domain` があります。`Instance` と `ParametricInstance` では、`add_constraint`、`add_indicator_constraint`、`add_one_hot_constraint`、`add_sos1_constraint` が各制約の番号を割り当てます。
 
-外部のアプリケーションがモデル内の変数0や制約7をその番号で参照する必要がある場合は、**その番号を維持します**。変数は作成時にIDを指定します。制約はv2の `constraints=[(x <= 1).set_id(7)]` を、{meth}`~ommx.Instance.from_components` に渡す `constraints={7: x <= 1}` に置き換えます。モデルに属していない制約はIDを持ちません。一つのモデルでは削除済みを含めて全種類の制約が番号を共有し、構築時や読込み時に重複を拒否します。
+外部のアプリケーションがモデル内の変数0や制約7をその番号で参照する必要がある場合は、**その番号を維持します**。変数は作成時にIDを指定します。制約はv2の `constraints=[(x <= 1).set_id(7)]` を、{meth}`~ommx.Instance.from_components` に渡す `active_constraints={7: x <= 1}` に置き換えます。モデルに属していない制約はIDを持ちません。一つのモデルではinactiveを含めて全種類の制約が番号を共有し、構築時や読込み時に重複を拒否します。
 
 (42-constraint-accessors-on-instance--parametricinstance--solution-return-dicts)=
 (typed-constraint-ids-and-live-collections)=
 ### 編集する行を選ぶ
 
-通常制約7は `model.constraints[ConstraintID(7)]` で参照します。全種類を含むコレクションでは、検索キーに制約の種類を示す型付きIDが必要です。通常制約だけに絞った `model.constraints.of_kind(ConstraintKind.Regular)[7]` なら整数も使えます。反復すると型付きIDが得られます。IDと行の両方を使う場合は `.items()` を呼びます。
+通常制約7は `model.active_constraints[ConstraintID(7)]` で参照します。全種類を含むコレクションでは、検索キーに制約の種類を示す型付きIDが必要です。通常制約だけに絞った `model.active_constraints.of_kind(ConstraintKind.Regular)[7]` なら整数も使えます。反復すると型付きIDが得られます。IDと行の両方を使う場合は `.items()` を呼びます。
 
-モデルから取得した有効な行は、モデルに接続されたハンドルです。`row.set_name("limit")` はモデル上の名前を更新します。独立したコピーが必要なら `row.detach()` を呼びます。v2の `add_name` と `add_description` は `set_name` と `set_description` に置き換えます。パラメータ全体の置換には `set_parameters`、指定したキーだけの更新には `add_parameters` を使います。変数の固定値は変数定義をコピーしてもモデル側に残るため、`model.fixed_decision_variables()` から取得します。詳しくは {class}`~ommx.ConstraintCollection` と {class}`~ommx.DecisionVariable` を参照してください。
+モデルから取得した有効な行は、モデルに接続されたハンドルです。`row.set_name("limit")` はモデル上の名前を更新します。独立したコピーが必要なら `row.detach()` を呼びます。v2の `add_name` と `add_description` は `set_name` と `set_description` に置き換えます。パラメータ全体の置換には `set_parameters`、指定したキーだけの更新には `add_parameters` を使います。変数の固定値は変数定義をコピーしてもモデル側に残るため、`model.fixed_decision_variables()` から取得します。詳しくは {class}`~ommx.ActiveConstraintCollection` と {class}`~ommx.DecisionVariable` を参照してください。
 
 (migration-constraint-metadata)=
 ### メタデータの編集先を確認する
@@ -85,16 +85,20 @@ x = model.new_binary("x")
 live = model.add_constraint(x <= 1, "original")
 local = live.detach()
 local.set_name("display")
-assert model.constraints[live.constraint_id].name == "original"
+assert model.active_constraints[live.constraint_id].name == "original"
 live.set_name("capacity")
-assert model.constraints[live.constraint_id].name == "capacity"
+assert model.active_constraints[live.constraint_id].name == "capacity"
 ```
 
-`dict(model.constraints)` で辞書を作っても、値は引き続きモデルに接続されています。独立させたい有効な行ごとに `detach()` を呼んでください。切り離した制約のsetterは呼出し元を変更してコピーを返すため、一つのオブジェクトに複数の変更を加えるときは、そのオブジェクトに対して個別に呼びます。
+`dict(model.active_constraints)` で辞書を作っても、値は引き続きモデルに接続されています。独立させたい有効な行ごとに `detach()` を呼んでください。切り離した制約のsetterは呼出し元を変更してコピーを返すため、一つのオブジェクトに複数の変更を加えるときは、そのオブジェクトに対して個別に呼びます。
 
 ### 変数の役割を読む処理を置き換える
 
-一変数の役割を判定するなら {meth}`~ommx.Instance.decision_variable_role`、複数の変数を帳票にまとめるなら `decision_variables_df()` の `state_role`・`substituted_value` 列を使います。Adapterでソルバーに渡す変数だけが必要なら `used_decision_variables` を使います。固定値や従属変数を候補の評価用に保持している場合、これらの問いの答えは異なります。
+一変数の役割を判定するなら {meth}`~ommx.Instance.decision_variable_role`、複数の変数を帳票にまとめるなら `decision_variables_df()` の `state_role`・`substituted_value` 列を使います。Adapterでソルバーに渡す変数だけが必要なら `active_decision_variables` を使います。固定値や従属変数を候補の評価用に保持している場合、これらの問いの答えは異なります。
+
+`used_decision_variables` は `active_decision_variables`、`DecisionVariableRole.Used` は `DecisionVariableRole.Active` に置き換えます。`state_role` の値も `"active"` になります。AdapterはInstanceのactiveな変数とactiveな制約をActive Formulationとして使います。activeな変数集合は、現在の目的関数とactive制約の参照関係からInstanceが導出します。行ごとの `used_decision_variable_ids` やDataFrameの `used_ids` は、その行が参照する変数を表すため、inactive行でも引き続き使います。
+
+Preparationの選択も `IntegerEncodingPreparation.log_encode_all_active_integers()` に揃え、`log_encode_all_used_integers()` を置き換えます。
 
 ### 数式と制約の意味を引き継ぐ
 
@@ -154,6 +158,36 @@ v2の `sample_qubo_sa` が返したのは生のサンプルです。v3のAdapter
 (migration-results)=
 ## 4. 候補を評価し、結果を取り出す
 
+### Roleで検査対象を選ぶ
+
+`relax_constraint` / `restore_constraint` を `deactivate_constraint` / `activate_constraint` に、`RemovedConstraint` を `InactiveConstraint` に置き換えます。Indicator、OneHot、SOS1でも同じ命名を使います。無効化しても行と理由は保持され、`skip_feasibility_check=False` が既定値です。skipを指定した行も数値評価は行い、評価エラーも通常どおり伝播します。
+
+`Instance.constraints` と `ParametricInstance.constraints` はすべてのroleを含むようになります。型付きIDが識別するのは制約の種類であり、roleではありません。検索結果の共通型は `ConstraintView` で、具体的な型はその時点のactive／inactiveへの所属で決まります。型付きの接続されたハンドルには `active_constraints`、inactiveのスナップショットには `inactive_constraints` を使います。`Solution.constraints` と `SampleSet.constraints` は引き続き評価済みの全行を含みます。
+
+`Instance` と `ParametricInstance` では、`constraint_names` を `active_constraint_names`、`extract_constraints(name)` を `extract_active_constraints(name)` に変更します。対象は引き続きactiveな制約だけで、返り値の型も変わりません。`Solution` と `SampleSet` では `constraint_names` と `extract_constraints` を維持します。
+
+`from_components` の `constraints=` は `active_constraints=` に変更します。同様に `active_indicator_constraints=`、`active_one_hot_constraints=`、`active_sos1_constraints=` を使います。初期状態からinactiveにする行には、対応する `inactive_*` 引数と `Inactive*Constraint` ラッパーを使います。
+
+各行の `role` propertyは `ConstraintRole` です。`EVALUATION_ONLY` は数値評価に使い、`FEASIBILITY_CHECK` はさらに通常の実行可能性判定に使い、`ACTIVE` はさらにActive Formulationにも含めます。roleは参加範囲を表し、評価が実施済みかどうかは表しません。**inactive** は最初の2つのroleの総称で、`inactive_constraints` は両方を含みます。inactive行のroleは、`skip_feasibility_check=False` なら `FEASIBILITY_CHECK`、`True` なら `EVALUATION_ONLY` です。
+
+Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` を使い、指示変数が評価時の許容誤差内で設定した `trigger_value` に一致するかどうかを表します。発火値は0または1で、既定値は1です。これは評価した候補点についての情報であり、制約のroleとは独立です。
+
+OneHotとSOS1の評価結果のpropertyは、サンプルごとの対応を返すものも含めて `active_variable` から `selected_variable` に変更します。DataFrame列も `selected_variable` と `selected_variable.<sample_id>` になります。評価した候補点での選択を表す情報であり、変数や制約がActive Formulationに属するかどうかとは独立です。評価の動作は変わりません。
+
+`total_violation()` と `constraints_df` の `min_role` は次の順序における下限なので、複数のroleを含められます。
+
+| `min_role` | 含む制約 |
+| --- | --- |
+| `ConstraintRole.ACTIVE` | activeのみ |
+| `ConstraintRole.FEASIBILITY_CHECK` | activeと、`skip_feasibility_check=False` のinactive |
+| `ConstraintRole.EVALUATION_ONLY` | 保持したすべての制約 |
+
+順序は `EVALUATION_ONLY < FEASIBILITY_CHECK < ACTIVE` です。指定した下限以上の行を含むため、`FEASIBILITY_CHECK` の行を除外して `EVALUATION_ONLY` の行を含める指定はありません。
+
+`solution.feasible` と `samples.feasible` はpropertyとして読み、roleが `FEASIBILITY_CHECK` または `ACTIVE` の制約を判定します。`feasible_relaxed` はactive制約のみを検査します。SampleSetの `best_feasible` と `best_feasible_id` はpropertyを維持し、`feasible_ids()` は引数なしのメソッドです。実行可能性の判定とサンプル選択は `min_role` を取りません。`total_violation()` の既定値は `FEASIBILITY_CHECK` で、`feasible` と同じ制約集合を対象とします。`ACTIVE` を指定すると `feasible_relaxed` と同じ制約集合になります。`constraints_df` の既定値は `EVALUATION_ONLY` です。実行可能性は各行の許容誤差と変数の定義域を検査するため、合計が厳密にゼロかどうかから判定しないでください。
+
+v1のwire schemaは拡張しません。保持する行のどれかが `skip_feasibility_check=True` の場合、v1への書き出しは失敗します。この状態を保存するにはv2を使ってください。既存のv1出力制限も引き続き適用されます。
+
 (migration-compare-model)=
 (constraint-violation-migration)=
 ### 集計に必要なのは符号付きの値か、違反量か
@@ -190,11 +224,11 @@ assert result.get_constraint_value(limit.constraint_id) == -1.0
 
 {meth}`~ommx.Solution.extract_constraints` は全種類の制約を検索し、添字タプルをキーとして非負の違反量を返します。同じ名前に対して添字が重複すると、種類が違っていても曖昧になります。通常制約の符号や余裕を使っていた集計では、上の例のように `get_constraint_value` で式の値を読んでください。型付きIDで違反量を調べる場合は `constraint_violation` を使います。評価済みの行で `row.is_feasible(atol=result.feasibility_atol)` を呼ぶと、結果と同じ許容誤差で判定できます。候補全体の実行可能性には変数の値域も影響するため、制約違反量の合計がゼロでも実行不可能な場合があります。
 
-通常制約の違反量は、等式なら残差の絶対値、不等式なら上限を超えた量です。特殊制約にも種類ごとの違反量があります。`total_violation()` は、保持された削除済み制約も含めて各違反量を足します。変換で行を追加した場合、この合計は変換前と一致するとは限りません。定義と許容誤差は {meth}`~ommx.Solution.total_violation` を参照してください。`evaluate()` で必要な変数が不足した場合の例外処理は `ValueError` に更新します。`partial_evaluate()` には一部の変数だけを渡せます。
+通常制約の違反量は、等式なら残差の絶対値、不等式なら上限を超えた量です。特殊制約にも種類ごとの違反量があります。`total_violation()` は、`feasible` が検査する制約集合について各違反量を足します。`min_role=ConstraintRole.ACTIVE` を指定すると `feasible_relaxed` と同じ制約集合になります。変換で行を追加した場合、この合計は変換前と一致するとは限りません。定義と許容誤差は {meth}`~ommx.Solution.total_violation` を参照してください。`evaluate()` で必要な変数が不足した場合の例外処理は `ValueError` に更新します。`partial_evaluate()` には一部の変数だけを渡せます。
 
 ### 表とサンプル集計を更新する
 
-`*_df` はメソッドとして呼びます。たとえば `solution.constraints_df` は `solution.constraints_df(kind=ConstraintKind.Regular)` に置き換えます。制約表のインデックスには種類別のIDオブジェクトが入るため、整数をキーにしていた表結合も見直してください。モデルの表では `removed=True` で有効な行と保持された削除済みの行を両方取得します。結果には保持された削除済み制約も含まれ、参照すると評価時点の行のコピーを返します。制約のコンテキスト、パラメータ、由来、削除理由を読む表でも `kind=` が必要です。
+`*_df` はメソッドとして呼びます。たとえば `solution.constraints_df` は `solution.constraints_df(kind=ConstraintKind.Regular)` に置き換えます。制約表のインデックスには種類別のIDオブジェクトが入るため、整数をキーにしていた表結合も見直してください。モデルと結果の `constraints_df(kind=...)` は、既定ですべてのroleの行を含みます。activeだけを読むには `min_role=ConstraintRole.ACTIVE` を渡します。結果のコレクションは、参照すると評価時点の行のコピーを返します。制約のコンテキスト、パラメータ、由来、無効化理由を読む表でも `kind=` が必要です。
 
 複数サンプルでは `samples.summary` で目的値と全体の実行可能性を、`samples.constraints_df(kind=...)` で制約別の結果を取得します。`samples.sample_ids()` は集合を返します。リストを受け取るコードには `samples.sample_ids_list` を使ってください。使用例は {class}`~ommx.Solution` と {class}`~ommx.SampleSet` にあります。
 
@@ -222,7 +256,7 @@ report = rows.join(owners.rename(index=id_map))
 assert report.loc[limit.constraint_id, "owner"] == "planning"
 ```
 
-ラベルとパラメータを列に含めるなら `include=["label", "parameters"]`、キーと値の組を1行ずつ結合するなら `constraint_parameters_df(kind=...)` を使います。変換履歴は `constraint_provenance_df(kind=...)` に由来のステップごとに記録されます。モデル側の `removed=True` は有効な行も含むので、削除済み制約だけの旧帳票を再現するには `removed_reason` が欠損していない行を選んでください。
+ラベルとパラメータを列に含めるなら `include=["label", "parameters"]`、キーと値の組を1行ずつ結合するなら `constraint_parameters_df(kind=...)` を使います。変換履歴は `constraint_provenance_df(kind=...)` に由来のステップごとに記録されます。`role` 列は常に含まれます。削除済み制約だけの旧帳票を再現するには `ConstraintRole.ACTIVE` 以外を選びます。理由とそのパラメータを列に追加するには `include=["inactive_reason"]` を、縦長の表には `constraint_inactive_reasons_df(kind=...)` を使います。
 
 ### 許容誤差付近で実行可能性を照合する
 
@@ -241,7 +275,7 @@ SDKの版とprotobufの形式には別々の番号があります。**SDK 2.9.4*
 
 2.9.4でもモデルと結果のバイト列に注釈が保存されます。v3では `title` などの専用プロパティでメタデータを、`add_user_annotation` で利用者定義のキーを設定するため、`annotations` の辞書に直接書き込んでいた箇所を更新してください。
 
-`to_v1_bytes()` は、SDK 2.xなどの旧OMMX SDKへデータを渡すための互換シリアライズ方式です。v1形式で表現できるデータだけを書き出せます。V3で導入されたIndicator・OneHot・SOS1などの特殊制約は表現できないため、シリアライズ時に `RuntimeError` になります。これは `Instance`、`ParametricInstance`、`Solution`、`SampleSet` に共通で、通常制約への変換後にremovedとして残る制約も対象です。出力用の目的関数を明示したモデルも書き出せません。これらの機能を保持するには `to_v2_bytes()` を使ってください。
+`to_v1_bytes()` は、SDK 2.xなどの旧OMMX SDKへデータを渡すための互換シリアライズ方式です。v1形式で表現できるデータだけを書き出せます。V3で導入されたIndicator・OneHot・SOS1などの特殊制約は表現できないため、シリアライズ時に `RuntimeError` になります。これは `Instance`、`ParametricInstance`、`Solution`、`SampleSet` に共通で、通常制約への変換後にinactiveとして残る制約も対象です。出力用の目的関数を明示したモデルも書き出せません。これらの機能を保持するには `to_v2_bytes()` を使ってください。
 
 書き出しに成功しても、受信側SDKがその表現を扱えるか確認してください。たとえば2.9.4のスキーマには有限集合を値域とする変数がありますが、2.xのSDKはその変数を含むモデルの読込みを拒否します。書き出せる結果については、v1はSDK既定の許容誤差で実行可能性を再計算し、v2は評価時の許容誤差を保持します。既存のv1データの読込みは変わりません。
 
@@ -314,12 +348,12 @@ Local Registryに書き込まずにアーカイブの内容を調べるには {m
 | `Artifact.load_archive` | {meth}`Artifact.import_archive <ommx.artifact.Artifact.import_archive>` / {meth}`Artifact.inspect_archive <ommx.artifact.Artifact.inspect_archive>` | {ref}`migration-artifact-archives` |
 | `Constraint.id` / `set_id` / `next_constraint_id` | {meth}`add_constraint <ommx.Instance.add_constraint>`。外部の制約番号を維持するときは {meth}`from_components <ommx.Instance.from_components>` | {ref}`2 <migration-build>` |
 | `constraint_hints` / `OneHot` / `Sos1` | {class}`OneHotConstraint <ommx.OneHotConstraint>` / {class}`Sos1Constraint <ommx.Sos1Constraint>` | {ref}`2 <migration-build>` |
-| `constraints_df` / `removed_constraints_df` | {meth}`constraints_df(kind=...) <ommx.Instance.constraints_df>` / {meth}`constraints_df(kind=..., removed=True) <ommx.Instance.constraints_df>` | {ref}`migration-constraint-tables` |
+| `constraints_df` / `removed_constraints_df` | {meth}`constraints_df(kind=..., min_role=...) <ommx.Instance.constraints_df>`。inactiveのみの帳票では `role` 列で絞り込む | {ref}`migration-constraint-tables` |
 | `decision_variable_analysis()` | {meth}`decision_variable_roles() <ommx.Instance.decision_variable_roles>` / {meth}`fixed_decision_variables() <ommx.Instance.fixed_decision_variables>` | {ref}`migration-constraint-metadata` |
 | `DecisionVariable.substituted_value` | {meth}`model.fixed_decision_variables() <ommx.Instance.fixed_decision_variables>` | {ref}`2 <migration-build>` |
 | `evaluated.feasible` / `sampled.feasible` | {meth}`evaluated.is_feasible(atol=...) <ommx.EvaluatedConstraint.is_feasible>` / {meth}`sampled.feasible(atol=...) <ommx.SampledConstraint.feasible>` | {ref}`4 <migration-results>` |
 | `extract_constraints(name)` | 違反量は {meth}`extract_constraints <ommx.Solution.extract_constraints>`、通常制約の式の値は {meth}`get_constraint_value <ommx.Solution.get_constraint_value>` | {ref}`4 <migration-results>` |
-| `get_constraint_by_id` / `get_removed_constraint_by_id` | {attr}`constraints[ConstraintID(n)] <ommx.Instance.constraints>` / {attr}`removed_constraints[ConstraintID(n)] <ommx.Instance.removed_constraints>` | {ref}`2 <migration-build>` |
+| `get_constraint_by_id` / `get_removed_constraint_by_id` | {attr}`active_constraints[ConstraintID(n)] <ommx.Instance.active_constraints>` / {attr}`inactive_constraints[ConstraintID(n)] <ommx.Instance.inactive_constraints>` | {ref}`2 <migration-build>` |
 | `Linear.from_object` / `Linear.equals_to` | 式または {meth}`Linear.single_term <ommx.Linear.single_term>` / {meth}`almost_equal <ommx.Linear.almost_equal>` | {ref}`2 <migration-build>` |
 | `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` | {meth}`Linear.terms() <ommx.Linear.terms>` / {meth}`Quadratic.terms() <ommx.Quadratic.terms>` / {meth}`Polynomial.terms() <ommx.Polynomial.terms>` | {ref}`2 <migration-build>` |
 | `ommx.v1` / `ommx.v1.*_pb2` | {doc}`ommx </api/index>` | {ref}`1 <migration-imports>` |
@@ -338,17 +372,17 @@ v3の各プレリリースでの変更経緯は[Python SDK 3.0のリリースノ
 ## Indicator の発火値
 
 `IndicatorConstraint` と `Constraint.with_indicator` に
-`activate_on_zero=True` を指定すると、二値の制御変数が 0 のときに本体を強制します。
-既定値は従来どおり 1 で発火します。この属性は attached・removed・evaluated・sampled
+`trigger_value=0` を指定すると、二値の制御変数が 0 のときに本体を強制します。
+既定値は `trigger_value=1` で、0・1以外の値は拒否します。この整数の属性は attached・inactive・evaluated・sampled
 の各行と Indicator の DataFrame にも保持されます。
 
 `InstanceClassClause.indicator_body_polynomial_requirements` は従来どおり
 `Equality` から `PolynomialRequirement` への対応です。
-`allowed_indicator_activation_values={0, 1}` を独立に指定すると、同じ本体条件で
+`allowed_indicator_trigger_values={0, 1}` を独立に指定すると、同じ本体条件で
 両方の発火値を許可します。既定値は `{1}`、0 発火のみなら `{0}`、空集合なら
 すべての Indicator を拒否します。指定できる値は 0 と 1 だけです。
 本体条件の辞書が空の場合も、発火値の指定にかかわらずすべての Indicator を拒否します。
 
 PySCIPOpt と Big-M 変換は両方の発火値に対応します。
-v2 保存形式では、保持している Indicator に 0 発火が含まれる場合、専用の required
-feature を宣言します。旧 reader は発火条件を誤解釈せず、読み込みを拒否します。
+v2 保存形式では、保持している Indicator に `trigger_value=0` が含まれる場合、専用の required
+feature を宣言します。この機能に未対応の reader は発火条件を誤解釈せず、読み込みを拒否します。

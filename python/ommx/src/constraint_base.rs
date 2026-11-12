@@ -17,10 +17,10 @@ use std::collections::HashMap;
 /// {class}`~ommx.Sos1ConstraintID`. An ID carries its family and an unsigned
 /// 64-bit number. IDs from different families are unequal, even if their
 /// numbers coincide. Within one Instance, constraint numbers must still be
-/// unique across all active and removed families.
+/// unique across all active and inactive families.
 ///
 /// APIs whose argument already fixes a family promote integer inputs to that
-/// family's ID: for example, ``constraints={1: constraint}`` in
+/// family's ID: for example, ``active_constraints={1: constraint}`` in
 /// {meth}`~ommx.Instance.from_components`, or
 /// ``instance.constraints.of_kind(ConstraintKind.Regular)[1]``. They reject IDs of another
 /// family. Such mapping inputs reject ``1`` and ``ConstraintID(1)`` together
@@ -48,35 +48,47 @@ use std::collections::HashMap;
 /// **Supporting additional families**
 ///
 /// New special-constraint families are additive API extensions. Collections,
-/// including removed and result collections, expose the open common interfaces
-/// ``Mapping[ConstraintIDBase, ConstraintView]``; their known concrete ID
-/// overloads retain precise row types. The currently supported families are
+/// including inactive and result collections, expose the open common interfaces
+/// ``Mapping[ConstraintIDBase, ConstraintView]``. Filtered active/inactive and
+/// evaluated/sampled mappings retain precise row overloads for known ID families.
+/// Model ``constraints`` combines active and inactive rows, so even concrete IDs
+/// return the common ``ConstraintView`` type; role must be checked at runtime. The currently supported families are
 /// not an exhaustive list of future possibilities.
 ///
-/// A solver adapter or transformation must reject families it cannot handle.
-/// Silently skipping their constraints can relax the optimization problem.
+/// A solver adapter or transformation must reject active constraint families it
+/// cannot handle. Silently skipping their constraints can relax the optimization
+/// problem. Inactive constraints belong to the retained interpretation context
+/// and are not part of the Active Formulation consumed here.
 /// Keep this check even if an earlier applicability check normally excludes
 /// unsupported kinds. For example, a consumer requiring regular rows can
-/// validate the complete collection before processing it:
+/// validate the complete active collection before processing it:
 ///
 /// >>> from ommx import ConstraintKind, ConstraintID, Instance, OneHotConstraint
 /// >>> def regular_rows(model):
 /// ...     rows = []
-/// ...     for cid in model.constraints:
+/// ...     for cid in model.active_constraints:
 /// ...         if not isinstance(cid, ConstraintID):
 /// ...             raise NotImplementedError("Unsupported constraint family")
-/// ...         rows.append(model.constraints[cid])
+/// ...         rows.append(model.active_constraints[cid])
 /// ...     return rows
 /// >>> model = Instance.minimize()
 /// >>> x = model.new_binary("x")
 /// >>> y = model.new_binary("y")
 /// >>> rule = model.add_constraint(x + y <= 1)
 /// >>> assert regular_rows(model) == [rule]
-/// >>> _ = model.add_one_hot_constraint(OneHotConstraint(variables=[x, y]))
+/// >>> special = model.add_one_hot_constraint(OneHotConstraint(variables=[x, y]))
+/// >>> special_id = special.constraint_id
 /// >>> regular_rows(model)
 /// Traceback (most recent call last):
 /// ...
 /// NotImplementedError: Unsupported constraint family
+///
+/// After lowering, the original one-hot constraint remains inactive for
+/// evaluation. The consumer accepts the generated active regular constraint:
+///
+/// >>> converted = model.convert_all_one_hots_to_constraints()
+/// >>> assert special_id in model.inactive_constraints
+/// >>> assert [row.constraint_id for row in regular_rows(model)] == [rule.constraint_id, *converted]
 ///
 /// Handle additional concrete ID types explicitly when supported and retain
 /// the rejecting fallback. Receiving a new family in an older consumer should
@@ -102,7 +114,7 @@ impl ConstraintIDBase {
 /// row type before using family-specific mathematical operations, and reject
 /// unsupported families rather than dropping their constraints. This interface
 /// does not imply whether the row is attached or an owned result snapshot.
-/// See {class}`~ommx.ConstraintCollection` for the ownership and iteration
+/// See {class}`~ommx.ActiveConstraintCollection` for the ownership and iteration
 /// contracts and {class}`~ommx.ConstraintIDBase` for explicit family dispatch.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(subclass)]
@@ -112,6 +124,13 @@ pub struct ConstraintView;
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl ConstraintView {
+    /// The row's current participation state, independent of its family.
+    #[getter]
+    fn role(&self) -> PyResult<crate::ConstraintRole> {
+        Err(PyNotImplementedError::new_err(
+            "Constraint family must implement role",
+        ))
+    }
     #[getter]
     fn name(&self) -> PyResult<Option<String>> {
         Err(PyNotImplementedError::new_err(

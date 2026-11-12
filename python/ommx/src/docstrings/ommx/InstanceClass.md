@@ -14,7 +14,7 @@ union of continuous quadratic problems and mixed-integer linear problems does
 not automatically include mixed-integer quadratic problems. An empty list of
 clauses accepts no Instance.
 
-A clause specifies the allowed kinds of used variables, the objective's
+A clause specifies the allowed kinds of active variables, the objective's
 polynomial representation and degree, the relations and polynomial requirements
 of regular constraints and Indicator bodies, whether active OneHot and SOS1
 constraints are allowed, and the optimization direction. Its label identifies
@@ -101,11 +101,11 @@ Alternatively, add a clause that accepts the dedicated OneHot representation:
 
 **The active representation determines membership**
 
-Variable-kind checks use {attr}`~ommx.Instance.used_decision_variables`: variables
+Variable-kind checks use {attr}`~ommx.Instance.active_decision_variables`: variables
 referenced by the active objective and active constraints, including special
 constraints. Fixed, dependent, and irrelevant variables are excluded, as are
-variables referenced only by removed constraints, named functions, or the output
-objective. Removed constraints do not contribute their relations, degrees, or
+variables referenced only by inactive constraints, named functions, or the output
+objective. Inactive constraints do not contribute their relations, degrees, or
 special-constraint kinds. A lowered Instance can therefore retain the original
 special constraints for evaluation while matching a class that disallows them
 as active constraints.
@@ -146,12 +146,12 @@ recommended policies, and the distinction between automatic and explicit
 Preparation, see {class}`~ommx.adapter.SolverAdapter` and
 {class}`~ommx.adapter.SamplerAdapter`.
 
-**Indicator activation conditions**
+**Indicator trigger values**
 
-`InstanceClassClause.allowed_indicator_activation_values` specifies the allowed
+`InstanceClassClause.allowed_indicator_trigger_values` specifies the allowed
 trigger values independently of `indicator_body_polynomial_requirements`.
 The latter maps `Equality` to polynomial requirements shared by all admitted
-activation values. The default activation set is `{1}`; an empty activation
+trigger values. The default trigger set is `{1}`; an empty trigger
 set or an empty body map rejects all Indicators. Values other than 0 and 1
 are rejected when constructing the clause.
 
@@ -162,16 +162,16 @@ are rejected when constructing the clause.
 ...     allowed_variable_kinds={Kind.Binary},
 ...     allowed_senses={Sense.Minimize},
 ...     objective_polynomial_requirement=PolynomialRequirement.at_most(1),
-...     allowed_indicator_activation_values={0, 1},
+...     allowed_indicator_trigger_values={0, 1},
 ...     indicator_body_polynomial_requirements={
 ...         Equality.EqualToZero: PolynomialRequirement.at_most(1),
 ...     },
 ... )
->>> assert clause.allowed_indicator_activation_values == {0, 1}
+>>> assert clause.allowed_indicator_trigger_values == {0, 1}
 
 ```
 
-An unsupported trigger value produces `InstanceClassMismatch.IndicatorActivationNotAllowed`,
-with `activation_value` and `allowed_activation_values`. Body-relation and degree
-requirements are checked independently, so their diagnostics can accompany an
-activation mismatch. Membership checking does not transform the Instance.
+An unsupported trigger value produces `InstanceClassMismatch.IndicatorTriggerNotAllowed`,
+with `trigger_value` and `allowed_trigger_values`. Body-relation and degree
+requirements are checked independently, so their diagnostics can accompany a
+trigger-value mismatch. Membership checking does not transform the Instance.

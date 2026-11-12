@@ -42,7 +42,7 @@ def test_declares_quadratic_mip_input_class():
         relation: PolynomialRequirement.at_most(1)
         for relation in (Equality.EqualToZero, Equality.LessThanOrEqualToZero)
     }
-    assert clause.allowed_indicator_activation_values == {0, 1}
+    assert clause.allowed_indicator_trigger_values == {0, 1}
     assert not clause.allows_one_hot
     assert clause.allows_sos1
     assert clause.allowed_senses == {Sense.Minimize, Sense.Maximize}
@@ -56,12 +56,12 @@ def test_input_class_accepts_complete_quadratic_mip_boundary(sense):
     instance = Instance.from_components(
         decision_variables=[b, x, y],
         objective=x * x + y * y,
-        constraints={0: x * x <= 9, 1: y * y == 1},
-        indicator_constraints={
+        active_constraints={0: x * x <= 9, 1: y * y == 1},
+        active_indicator_constraints={
             10: (y <= 2).with_indicator(b),
             11: (y == 1).with_indicator(b),
         },
-        sos1_constraints={20: Sos1Constraint(variables=[x, y])},
+        active_sos1_constraints={20: Sos1Constraint(variables=[x, y])},
         sense=sense,
     )
     before = instance.to_v2_bytes()
@@ -78,7 +78,7 @@ def test_error_polynomial_objective():
     ommx_instance = Instance.from_components(
         decision_variables=[DecisionVariable.continuous(1)],
         objective=Polynomial(terms={(1, 1, 1): 2.3}),
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     with pytest.raises(AdapterNotApplicableError) as e:
@@ -96,7 +96,7 @@ def test_error_non_polynomial_objective():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=abs(Function(x)),
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 
@@ -112,7 +112,7 @@ def test_rejects_inapplicable_input_before_backend_construction(monkeypatch):
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x * x * x,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 
@@ -131,7 +131,7 @@ def test_error_nonlinear_constraint():
     ommx_instance = Instance.from_components(
         decision_variables=[DecisionVariable.continuous(1)],
         objective=0,
-        constraints={
+        active_constraints={
             0: Constraint(
                 function=Polynomial(terms={(1, 1, 1): 2.3}),
                 equality=Equality.EqualToZero,
@@ -157,8 +157,8 @@ def test_rejects_quadratic_indicator_body_without_mutating_input():
     instance = Instance.from_components(
         decision_variables=[b, x],
         objective=x,
-        constraints={},
-        indicator_constraints={0: (x * x <= 1).with_indicator(b)},
+        active_constraints={},
+        active_indicator_constraints={0: (x * x <= 1).with_indicator(b)},
         sense=Sense.Minimize,
     )
     before = instance.to_v2_bytes()
@@ -190,7 +190,7 @@ def test_rejects_unsupported_variable_kinds(variable, kind):
     instance = Instance.from_components(
         decision_variables=[variable],
         objective=variable,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 
@@ -204,13 +204,13 @@ def test_rejects_unsupported_variable_kinds(variable, kind):
     assert mismatch.variable_ids == {0}
 
 
-def test_accepts_unused_unsupported_variable_kind_without_mutating_input():
-    used = DecisionVariable.binary(0)
-    unused = DecisionVariable.semi_integer(1, lower=1, upper=3)
+def test_accepts_non_active_unsupported_variable_kind_without_mutating_input():
+    active = DecisionVariable.binary(0)
+    non_active = DecisionVariable.semi_integer(1, lower=1, upper=3)
     instance = Instance.from_components(
-        decision_variables=[used, unused],
-        objective=used,
-        constraints={},
+        decision_variables=[active, non_active],
+        objective=active,
+        active_constraints={},
         sense=Sense.Minimize,
     )
     before = instance.to_v2_bytes()
@@ -227,8 +227,8 @@ def test_rejects_one_hot_without_implicit_lowering():
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
-        constraints={},
-        one_hot_constraints={0: OneHotConstraint(variables=[x, y])},
+        active_constraints={},
+        active_one_hot_constraints={0: OneHotConstraint(variables=[x, y])},
         sense=Sense.Minimize,
     )
     before = instance.to_v2_bytes()
@@ -249,7 +249,7 @@ def test_error_not_optimized_model():
     instance = Instance.from_components(
         decision_variables=[],
         objective=0,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     with pytest.raises(OMMXPySCIPOptAdapterError) as e:
@@ -263,7 +263,7 @@ def test_error_no_best_solution(has_variable):
     instance = Instance.from_components(
         decision_variables=[x] if has_variable else [],
         objective=x if has_variable else 0,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     adapter = OMMXPySCIPOptAdapter(instance)
@@ -288,7 +288,7 @@ def test_error_infeasible_model():
     ommx_instance = Instance.from_components(
         decision_variables=[x],
         objective=0,
-        constraints={
+        active_constraints={
             0: Constraint(
                 function=x,
                 equality=Equality.EqualToZero,

@@ -1040,8 +1040,8 @@ mod tests {
                 (variable_1, crate::DecisionVariable::binary()),
                 (variable_2, crate::DecisionVariable::binary()),
             ]))
-            .constraints(std::collections::BTreeMap::new())
-            .one_hot_constraints(std::collections::BTreeMap::from([(
+            .active_constraints(std::collections::BTreeMap::new())
+            .active_one_hot_constraints(std::collections::BTreeMap::from([(
                 one_hot_id,
                 crate::OneHotConstraint::new(std::collections::BTreeSet::from([
                     variable_1, variable_2,
@@ -1358,7 +1358,7 @@ mod tests {
 
         let descriptor = registry.store_layer_blob(
             media_types::v1_solution(),
-            &solution.to_v1_bytes().unwrap(),
+            &solution.to_v1_bytes()?,
             HashMap::from([
                 (
                     format!("{}.solver", crate::annotation_keys::SOLUTION_NAMESPACE),

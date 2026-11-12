@@ -14,10 +14,10 @@ from ommx import (
     AttachedIndicatorConstraint,
     AttachedOneHotConstraint,
     AttachedSos1Constraint,
-    RemovedConstraint,
-    RemovedIndicatorConstraint,
-    RemovedOneHotConstraint,
-    RemovedSos1Constraint,
+    InactiveConstraint,
+    InactiveIndicatorConstraint,
+    InactiveOneHotConstraint,
+    InactiveSos1Constraint,
     EvaluatedConstraint,
     EvaluatedIndicatorConstraint,
     EvaluatedOneHotConstraint,
@@ -27,7 +27,7 @@ from ommx import (
     SampledOneHotConstraint,
     SampledSos1Constraint,
 )
-from test_live_constraint_collections import make_model, remove_all
+from test_live_constraint_collections import make_model, deactivate_all
 
 
 class Missing:
@@ -37,23 +37,23 @@ class Missing:
 def check_open_key(
     model: Instance, key: ConstraintIDBase, default: ConstraintView
 ) -> None:
-    assert_type(model.constraints.get(key), ConstraintView | None)
-    assert_type(model.constraints.get(key, Missing()), ConstraintView | Missing)
-    assert_type(model.constraints.get(key, default), ConstraintView)
+    assert_type(model.active_constraints.get(key), ConstraintView | None)
+    assert_type(model.active_constraints.get(key, Missing()), ConstraintView | Missing)
+    assert_type(model.active_constraints.get(key, default), ConstraintView)
     # A concrete row unioned with its base remains assignable to that base.
-    value: ConstraintView = model.constraints.get(ConstraintID(5), default)
+    value: ConstraintView = model.active_constraints.get(ConstraintID(5), default)
     assert isinstance(value, ConstraintView)
-    mapping: Mapping[ConstraintIDBase, ConstraintView] = model.constraints
+    mapping: Mapping[ConstraintIDBase, ConstraintView] = model.active_constraints
     assert_type(mapping.get(key, Missing()), ConstraintView | Missing)
-    assert mapping.get(key, default) == model.constraints.get(key, default)
+    assert mapping.get(key, default) == model.active_constraints.get(key, default)
 
 
 def test_get_types():
     model = make_model(Instance)
-    active = model.constraints
+    active = model.active_constraints
     evaluated = model.evaluate({0: 1, 1: 0}).constraints
     sampled = model.evaluate_samples({9: {0: 1, 1: 0}}).constraints
-    removed = remove_all(make_model(Instance))
+    inactive = deactivate_all(make_model(Instance))
     check_open_key(model, ConstraintID(5), active[ConstraintID(5)])
     assert_type(active.get(ConstraintID(5)), AttachedConstraint | None)
     assert_type(active.get(ConstraintID(5), None), AttachedConstraint | None)
@@ -81,31 +81,33 @@ def test_get_types():
     assert_type(
         active.get(Sos1ConstraintID(999), Missing()), AttachedSos1Constraint | Missing
     )
-    assert_type(removed.get(ConstraintID(5)), RemovedConstraint | None)
-    assert_type(removed.get(ConstraintID(5), None), RemovedConstraint | None)
-    assert_type(removed.get(ConstraintID(999), Missing()), RemovedConstraint | Missing)
+    assert_type(inactive.get(ConstraintID(5)), InactiveConstraint | None)
+    assert_type(inactive.get(ConstraintID(5), None), InactiveConstraint | None)
     assert_type(
-        removed.get(IndicatorConstraintID(6)), RemovedIndicatorConstraint | None
+        inactive.get(ConstraintID(999), Missing()), InactiveConstraint | Missing
     )
     assert_type(
-        removed.get(IndicatorConstraintID(6), None), RemovedIndicatorConstraint | None
+        inactive.get(IndicatorConstraintID(6)), InactiveIndicatorConstraint | None
     )
     assert_type(
-        removed.get(IndicatorConstraintID(999), Missing()),
-        RemovedIndicatorConstraint | Missing,
-    )
-    assert_type(removed.get(OneHotConstraintID(7)), RemovedOneHotConstraint | None)
-    assert_type(
-        removed.get(OneHotConstraintID(7), None), RemovedOneHotConstraint | None
+        inactive.get(IndicatorConstraintID(6), None), InactiveIndicatorConstraint | None
     )
     assert_type(
-        removed.get(OneHotConstraintID(999), Missing()),
-        RemovedOneHotConstraint | Missing,
+        inactive.get(IndicatorConstraintID(999), Missing()),
+        InactiveIndicatorConstraint | Missing,
     )
-    assert_type(removed.get(Sos1ConstraintID(8)), RemovedSos1Constraint | None)
-    assert_type(removed.get(Sos1ConstraintID(8), None), RemovedSos1Constraint | None)
+    assert_type(inactive.get(OneHotConstraintID(7)), InactiveOneHotConstraint | None)
     assert_type(
-        removed.get(Sos1ConstraintID(999), Missing()), RemovedSos1Constraint | Missing
+        inactive.get(OneHotConstraintID(7), None), InactiveOneHotConstraint | None
+    )
+    assert_type(
+        inactive.get(OneHotConstraintID(999), Missing()),
+        InactiveOneHotConstraint | Missing,
+    )
+    assert_type(inactive.get(Sos1ConstraintID(8)), InactiveSos1Constraint | None)
+    assert_type(inactive.get(Sos1ConstraintID(8), None), InactiveSos1Constraint | None)
+    assert_type(
+        inactive.get(Sos1ConstraintID(999), Missing()), InactiveSos1Constraint | Missing
     )
     assert_type(evaluated.get(ConstraintID(5)), EvaluatedConstraint | None)
     assert_type(evaluated.get(ConstraintID(5), None), EvaluatedConstraint | None)

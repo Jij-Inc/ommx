@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct SampledConstraint(
     pub ommx::SampledConstraint,
     pub ommx::ConstraintContext,
-    pub Option<ommx::RemovedReason>,
+    pub Option<ommx::InactiveConstraintMetadata>,
 );
 crate::constraint_base::constraint_subclass!(
     SampledConstraint,

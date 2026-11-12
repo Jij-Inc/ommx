@@ -654,7 +654,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     native ``addConsIndicator`` and ``addConsSOS1`` operations. A nonconstant
     equality indicator becomes two inequality indicators. A constant body is
     simplified: a satisfied body needs no row, while an unsatisfied body forces
-    its indicator to the inactive value. Both activation values are supported.
+    its indicator to the OFF value. Both trigger values are supported.
     OneHot constraints are lowered to regular equalities by the recommended
     preparation policy.
 
@@ -743,7 +743,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     >>> assert source.active_special_constraint_kinds == {
     ...     ConstraintKind.Indicator, ConstraintKind.Sos1,
     ... }
-    >>> assert not source.removed_constraints
+    >>> assert not source.inactive_constraints
 
     The selected values are ``enabled = option_a = option_c = 1`` and
     ``option_b = 0``. The :class:`ommx_highs_adapter.OMMXHighsAdapter`
@@ -766,7 +766,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     >>> assert solution.feasible
     >>> assert abs(solution.objective - 10.0) < 1e-6
     >>> assert choice_model.active_special_constraint_kinds == {ConstraintKind.OneHot}
-    >>> assert not choice_model.removed_constraints
+    >>> assert not choice_model.inactive_constraints
 
     **SOS1 with continuous variables**
 
@@ -829,7 +829,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 regular_constraint_polynomial_requirements=(
                     _QUADRATIC_REGULAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS
                 ),
-                allowed_indicator_activation_values={0, 1},
+                allowed_indicator_trigger_values={0, 1},
                 indicator_body_polynomial_requirements=(
                     _LINEAR_INDICATOR_BODY_POLYNOMIAL_REQUIREMENTS
                 ),
@@ -955,7 +955,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 >>> instance = Instance.from_components(
                 ...     decision_variables=[x],
                 ...     objective=x,
-                ...     constraints={0: x >= 4},
+                ...     active_constraints={0: x >= 4},
                 ...     sense=Sense.Maximize,
                 ... )
 
@@ -975,7 +975,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 >>> instance = Instance.from_components(
                 ...     decision_variables=[x],
                 ...     objective=x,
-                ...     constraints={},
+                ...     active_constraints={},
                 ...     sense=Sense.Maximize,
                 ... )
 
@@ -1057,7 +1057,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             >>> instance = Instance.from_components(
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
+            ...     active_constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
             ...     sense=Sense.Maximize,
             ... )
 
@@ -1110,7 +1110,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             >>> ommx_instance = Instance.from_components(
             ...     decision_variables=[x1],
             ...     objective=x1,
-            ...     constraints={},
+            ...     active_constraints={},
             ...     sense=Sense.Minimize,
             ... )
             >>> adapter = OMMXPySCIPOptAdapter(ommx_instance)
@@ -1158,7 +1158,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             return State(
                 entries={
                     var.id: sol[varname_map[str(var.id)]]
-                    for var in self.instance.used_decision_variables
+                    for var in self.instance.active_decision_variables
                 }
             )
         except Exception:
@@ -1167,7 +1167,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
 
     def _set_decision_variables(self):
-        for var in self.instance.used_decision_variables:
+        for var in self.instance.active_decision_variables:
             if var.kind == Kind.Binary:
                 self.model.addVar(name=str(var.id), vtype="B")
             elif var.kind == Kind.Integer:
@@ -1246,7 +1246,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
 
     def _set_constraints(self):
-        for cid in self.instance.constraints:
+        for cid in self.instance.active_constraints:
             if isinstance(cid, ConstraintID):
                 self._set_regular_constraint(cid)
             elif isinstance(cid, Sos1ConstraintID):
@@ -1259,13 +1259,13 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 )
 
     def _set_sos1_constraint(self, sos1_id: Sos1ConstraintID):
-        sos1 = self.instance.constraints[sos1_id]
+        sos1 = self.instance.active_constraints[sos1_id]
         name = f"sos1_{sos1_id}"
         vars = [self.varname_map[str(v)] for v in sos1.variables]
         self.model.addConsSOS1(vars, name=name)
 
     def _set_regular_constraint(self, cid: ConstraintID):
-        constraint = self.instance.constraints[cid]
+        constraint = self.instance.active_constraints[cid]
         # Handle constraint function based on its type
         f = constraint.function
         degree = f.degree()
@@ -1293,7 +1293,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         self.model.addCons(constr_expr, name=str(cid))
 
     def _set_indicator_constraint(self, ind_id: IndicatorConstraintID):
-        indicator = self.instance.constraints[ind_id]
+        indicator = self.instance.active_constraints[ind_id]
         f = indicator.function
         degree = f.degree()
         if degree == 0:
@@ -1310,10 +1310,10 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             if is_feasible:
                 return  # Always feasible, skip
             # If infeasible when indicator is ON, add indicator constraint
-            # that forces the indicator to its inactive value
+            # that forces the indicator to its OFF value
             binvar = self.varname_map[str(indicator.indicator_variable_id)]
             self.model.addCons(
-                binvar == int(indicator.activate_on_zero),
+                binvar == 1 - indicator.trigger_value,
                 name=f"ind_{ind_id}_forced_off",
             )
             return
@@ -1331,20 +1331,20 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             self.model.addConsIndicator(
                 expr <= 0,
                 binvar=binvar,
-                activeone=not indicator.activate_on_zero,
+                activeone=indicator.trigger_value == 1,
                 name=f"ind_{ind_id}_le",
             )
             self.model.addConsIndicator(
                 -expr <= 0,
                 binvar=binvar,
-                activeone=not indicator.activate_on_zero,
+                activeone=indicator.trigger_value == 1,
                 name=f"ind_{ind_id}_ge",
             )
         elif indicator.equality == Equality.LessThanOrEqualToZero:
             self.model.addConsIndicator(
                 expr <= 0,
                 binvar=binvar,
-                activeone=not indicator.activate_on_zero,
+                activeone=indicator.trigger_value == 1,
                 name=f"ind_{ind_id}",
             )
         else:
@@ -1394,7 +1394,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             # auxiliary must describe that same complete initial point.
             objective_state = {
                 var.id: values.get(str(var.id), 0.0)
-                for var in self.instance.used_decision_variables
+                for var in self.instance.active_decision_variables
             }
             values[_OBJECTIVE_AUXILIARY_NAME] = self.instance.objective.evaluate(
                 objective_state

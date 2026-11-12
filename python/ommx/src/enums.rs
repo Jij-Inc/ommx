@@ -1,10 +1,10 @@
 // These selectors are nominal values, not a closed Python Enum. Keep the Rust
 // domain value inside the wrapper so future SDK kinds survive generic queries.
 macro_rules! open_kind {
-    ($(#[$doc:meta])* $name:ident, $core:ty, $code:expr; $( $variant:ident => $core_variant:ident ),+ $(,)?) => {
+    ($(#[$doc:meta])* $name:ident, $core:ty, $code:expr $(, module=$module:literal)?; $( $variant:ident => $core_variant:ident ),+ $(,)? $(; $($extra:item)*)?) => {
         $(#[$doc])*
-        #[pyo3_stub_gen::derive::gen_stub_pyclass]
-        #[pyclass(from_py_object, frozen)]
+        #[pyo3_stub_gen::derive::gen_stub_pyclass(module = "ommx._ommx_rust")]
+        #[pyclass(from_py_object, frozen $(, module=$module)?)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $name($core);
 
@@ -18,6 +18,7 @@ macro_rules! open_kind {
         #[pyo3_stub_gen::derive::gen_stub_pymethods]
         #[pymethods]
         impl $name {
+            $($($extra)*)?
             fn __hash__(&self) -> isize {
                 let code: fn($core) -> i32 = $code;
                 code(self.0) as isize
@@ -105,15 +106,15 @@ class Kind:
 ///
 /// | Role | Meaning | Value for candidate evaluation |
 /// | --- | --- | --- |
-/// | `Used` | Referenced by the current objective or active constraints | Supplied by the caller |
-/// | `Fixed` | A retained, non-used variable with a recorded fixed value | Restored from that value |
-/// | `Dependent` | Neither used nor fixed; represented by an expression in other variables | Computed from that expression |
-/// | `Irrelevant` | Neither used, fixed, nor dependent | Supplied by the caller, or filled with a default when omitted |
+/// | `Active` | Belongs to the current Active Formulation | Supplied by the caller |
+/// | `Fixed` | A retained variable outside the Active Formulation with a recorded fixed value | Restored from that value |
+/// | `Dependent` | Neither active nor fixed; represented by an expression in other variables | Computed from that expression |
+/// | `Irrelevant` | Neither active, fixed, nor dependent | Supplied by the caller, or filled with a default when omitted |
 ///
 /// Active constraints include regular and special constraints, including an
 /// Indicator's controlling Binary variable. References only from named functions,
-/// removed constraints, output objectives, or dependency right-hand sides do not
-/// make a variable used. Being irrelevant to solver input does not mean its value
+/// inactive constraints, output objectives, or dependency right-hand sides do not
+/// make a variable active. Being irrelevant to solver input does not mean its value
 /// cannot affect reporting.
 ///
 /// {meth}`~ommx.Instance.populate_state` explains reconstruction, defaults,
@@ -122,13 +123,13 @@ class Kind:
 #[pyclass(from_py_object, eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DecisionVariableRole {
-    /// Used by the objective or active constraints passed to solvers
-    Used = 1,
-    /// Fixed by the instance-owned fixed-value table and not used by solver input
+    /// Belongs to the Active Formulation through its objective or active constraints
+    Active = 1,
+    /// Fixed by the instance-owned fixed-value table and outside the Active Formulation
     Fixed = 2,
     /// Defined by decision_variable_dependency
     Dependent = 3,
-    /// Not used, fixed, or dependent
+    /// Not active, fixed, or dependent
     Irrelevant = 4,
 }
 
@@ -141,7 +142,7 @@ impl DecisionVariableRole {
 
     fn __repr__(&self) -> &'static str {
         match self {
-            DecisionVariableRole::Used => "DecisionVariableRole.Used",
+            DecisionVariableRole::Active => "DecisionVariableRole.Active",
             DecisionVariableRole::Fixed => "DecisionVariableRole.Fixed",
             DecisionVariableRole::Dependent => "DecisionVariableRole.Dependent",
             DecisionVariableRole::Irrelevant => "DecisionVariableRole.Irrelevant",
@@ -150,7 +151,7 @@ impl DecisionVariableRole {
 
     fn __str__(&self) -> &'static str {
         match self {
-            DecisionVariableRole::Used => "used",
+            DecisionVariableRole::Active => "active",
             DecisionVariableRole::Fixed => "fixed",
             DecisionVariableRole::Dependent => "dependent",
             DecisionVariableRole::Irrelevant => "irrelevant",
@@ -161,7 +162,7 @@ impl DecisionVariableRole {
 impl From<ommx::DecisionVariableRole> for DecisionVariableRole {
     fn from(role: ommx::DecisionVariableRole) -> Self {
         match role {
-            ommx::DecisionVariableRole::Used => DecisionVariableRole::Used,
+            ommx::DecisionVariableRole::Active => DecisionVariableRole::Active,
             ommx::DecisionVariableRole::Fixed => DecisionVariableRole::Fixed,
             ommx::DecisionVariableRole::Dependent => DecisionVariableRole::Dependent,
             ommx::DecisionVariableRole::Irrelevant => DecisionVariableRole::Irrelevant,
@@ -172,7 +173,7 @@ impl From<ommx::DecisionVariableRole> for DecisionVariableRole {
 impl From<DecisionVariableRole> for ommx::DecisionVariableRole {
     fn from(role: DecisionVariableRole) -> Self {
         match role {
-            DecisionVariableRole::Used => ommx::DecisionVariableRole::Used,
+            DecisionVariableRole::Active => ommx::DecisionVariableRole::Active,
             DecisionVariableRole::Fixed => ommx::DecisionVariableRole::Fixed,
             DecisionVariableRole::Dependent => ommx::DecisionVariableRole::Dependent,
             DecisionVariableRole::Irrelevant => ommx::DecisionVariableRole::Irrelevant,
@@ -473,5 +474,48 @@ impl From<Relaxation> for ommx::v1::Relaxation {
             Relaxation::Unspecified => ommx::v1::Relaxation::Unspecified,
             Relaxation::LpRelaxed => ommx::v1::Relaxation::LpRelaxed,
         }
+    }
+}
+
+open_kind!(
+    /// A constraint's role in evaluation, feasibility, and the Active Formulation.
+    ///
+    /// EVALUATION_ONLY < FEASIBILITY_CHECK < ACTIVE. A min_role query
+    /// includes rows whose role is at least the requested value.
+    /// EVALUATION_ONLY rows are evaluated without affecting normal feasibility;
+    /// FEASIBILITY_CHECK rows also participate in that judgment; ACTIVE rows
+    /// additionally belong to the Active Formulation. The first two roles are
+    /// inactive. skip_feasibility_check selects between them.
+    /// Roles describe participation, not whether evaluation has already occurred.
+    ConstraintRole, ommx::ConstraintRole, |value| value as i32, module="ommx";
+    EVALUATION_ONLY => EvaluationOnly,
+    FEASIBILITY_CHECK => FeasibilityCheck,
+    ACTIVE => Active,
+    ;
+    fn __lt__(&self, other: Self) -> bool { self.0 < other.0 }
+    fn __le__(&self, other: Self) -> bool { self.0 <= other.0 }
+    fn __gt__(&self, other: Self) -> bool { self.0 > other.0 }
+    fn __ge__(&self, other: Self) -> bool { self.0 >= other.0 }
+);
+
+/// Pickle reconstruction through a named constant on its public class.
+type NamedConstantPickle<'py> = (
+    Bound<'py, PyAny>,
+    (Bound<'py, pyo3::types::PyType>, &'static str),
+);
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl ConstraintRole {
+    fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<NamedConstantPickle<'py>> {
+        let name = match self.0 {
+            ommx::ConstraintRole::Active => "ACTIVE",
+            ommx::ConstraintRole::FeasibilityCheck => "FEASIBILITY_CHECK",
+            ommx::ConstraintRole::EvaluationOnly => "EVALUATION_ONLY",
+        };
+        Ok((
+            py.import("builtins")?.getattr("getattr")?,
+            (py.get_type::<Self>(), name),
+        ))
     }
 }

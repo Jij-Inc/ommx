@@ -2,6 +2,10 @@ version: v2
 breaking:
   use:
     - FILE
+  # ommx.v2 is pre-release; enable compatibility checks for its first stable release.
+  # The released ommx.v1 schema remains subject to all FILE compatibility rules.
+  ignore:
+    - ommx/v2
 lint:
   use:
     - DEFAULT

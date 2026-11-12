@@ -5,11 +5,13 @@ use anyhow::Result;
 impl SampleSet {
     /// Serialize to v1, rejecting native special constraints.
     ///
-    /// Indicator, OneHot, and SOS1 constraints (including removed rows) return an
+    /// Indicator, OneHot, and SOS1 constraints (including inactive rows) return an
     /// error. Use [`Self::to_v2_bytes`] to preserve them. Feasibility is recomputed from
     /// retained regular constraints and variable values at [`ATol::default`],
     /// as on v1 import. Use the same default on write and read, or use
     /// [`Self::to_v2_bytes`] to preserve the original tolerance and constraints.
+    /// A true `skip_feasibility_check` flag also returns an error because v1
+    /// cannot represent that policy. Use v2 to preserve it.
     pub fn to_v1_bytes(&self) -> crate::Result<Vec<u8>> {
         let v1_sample_set = v1::SampleSet::try_from(self.clone())?;
         Ok(v1_sample_set.encode_to_vec())
@@ -39,13 +41,21 @@ impl From<SampleSet> for v2::SampleSet {
                 .indicator_constraints
                 .inner()
                 .values()
-                .any(|c| c.activate_on_zero),
+                .any(|c| c.trigger_value == crate::IndicatorTriggerValue::Zero),
             !value.one_hot_constraints.is_empty(),
             !value.sos1_constraints.is_empty(),
             value
                 .decision_variables
                 .values()
                 .any(|variable| *variable.kind() == crate::Kind::FiniteDomain),
+            value
+                .constraints
+                .inactive_metadata()
+                .values()
+                .chain(value.indicator_constraints.inactive_metadata().values())
+                .chain(value.one_hot_constraints.inactive_metadata().values())
+                .chain(value.sos1_constraints.inactive_metadata().values())
+                .any(|metadata| metadata.skip_feasibility_check),
         );
 
         let SampleSet {

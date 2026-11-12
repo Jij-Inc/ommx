@@ -9,22 +9,22 @@ use std::collections::{BTreeMap, BTreeSet};
 ///
 /// The role is derived from the current instance structure:
 ///
-/// - [`DecisionVariableRole::Used`] means the variable appears in the objective
+/// - [`DecisionVariableRole::Active`] means the variable appears in the objective
 ///   function or in an active constraint family that affects solver input.
 /// - [`DecisionVariableRole::Fixed`] means the variable has a table-owned fixed
-///   value and is not solver-used.
+///   value and is not active.
 /// - [`DecisionVariableRole::Dependent`] means the variable is defined by
-///   `decision_variable_dependency` and is neither solver-used nor fixed.
+///   `decision_variable_dependency` and is neither active nor fixed.
 /// - [`DecisionVariableRole::Irrelevant`] is the remaining case.
 ///
-/// Named functions and decision-variable dependency RHS expressions are
-/// intentionally not solver-used.
+/// References occurring only in named functions or decision-variable dependency
+/// RHS expressions do not make a variable active.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum DecisionVariableRole {
-    Used,
+    Active,
     Fixed,
     Dependent,
     Irrelevant,
@@ -33,7 +33,7 @@ pub enum DecisionVariableRole {
 impl DecisionVariableRole {
     pub fn as_str(self) -> &'static str {
         match self {
-            DecisionVariableRole::Used => "used",
+            DecisionVariableRole::Active => "active",
             DecisionVariableRole::Fixed => "fixed",
             DecisionVariableRole::Dependent => "dependent",
             DecisionVariableRole::Irrelevant => "irrelevant",
@@ -47,7 +47,7 @@ impl std::fmt::Display for DecisionVariableRole {
     }
 }
 
-/// Reverse-usage entry for one used decision variable.
+/// Reverse-usage entry for one active decision variable.
 ///
 /// A variable has an entry here only when it appears in the objective or an
 /// active constraint family that contributes to solver input. Fixed,
@@ -92,7 +92,7 @@ impl DecisionVariableUsageEntry {
         &self.used_in_sos1_constraints
     }
 
-    pub fn is_used_by_solver(&self) -> bool {
+    pub fn is_active(&self) -> bool {
         self.used_in_objective
             || !self.used_in_regular_constraints.is_empty()
             || !self.used_in_indicator_constraints.is_empty()
@@ -103,20 +103,20 @@ impl DecisionVariableUsageEntry {
 
 /// Reverse-usage view tied to the lifetime of an [`Instance`].
 ///
-/// The usage index contains only variables that are used by solver input. The
+/// The usage index contains only variables in the Active Formulation. The
 /// borrowed [`Instance`] remains the source of truth for decision-variable
 /// classification such as fixed, dependent, and irrelevant.
 #[derive(Debug, Clone)]
 pub struct DecisionVariableUsage<'a> {
     instance: &'a Instance,
-    by_used_variable: BTreeMap<VariableID, DecisionVariableUsageEntry>,
+    by_active_variable: BTreeMap<VariableID, DecisionVariableUsageEntry>,
 }
 
 impl<'a> DecisionVariableUsage<'a> {
     fn new(instance: &'a Instance) -> Self {
         Self {
             instance,
-            by_used_variable: collect_decision_variable_usage(
+            by_active_variable: collect_decision_variable_usage(
                 instance,
                 &SolverUseExcept::default(),
             ),
@@ -127,12 +127,12 @@ impl<'a> DecisionVariableUsage<'a> {
         self.instance
     }
 
-    pub fn by_used_variable(&self) -> &BTreeMap<VariableID, DecisionVariableUsageEntry> {
-        &self.by_used_variable
+    pub fn by_active_variable(&self) -> &BTreeMap<VariableID, DecisionVariableUsageEntry> {
+        &self.by_active_variable
     }
 
     pub fn get(&self, id: VariableID) -> Option<&DecisionVariableUsageEntry> {
-        self.by_used_variable.get(&id)
+        self.by_active_variable.get(&id)
     }
 
     pub fn role(&self, id: VariableID) -> Option<DecisionVariableRole> {
@@ -143,12 +143,12 @@ impl<'a> DecisionVariableUsage<'a> {
         self.instance.decision_variable_roles()
     }
 
-    pub fn used(&self) -> VariableIDSet {
-        self.by_used_variable.keys().copied().collect()
+    pub fn active(&self) -> VariableIDSet {
+        self.by_active_variable.keys().copied().collect()
     }
 
     pub fn used_in_objective(&self) -> VariableIDSet {
-        self.by_used_variable
+        self.by_active_variable
             .iter()
             .filter_map(|(id, usage)| usage.used_in_objective.then_some(*id))
             .collect()
@@ -156,28 +156,28 @@ impl<'a> DecisionVariableUsage<'a> {
 
     /// Variables used in active regular constraints, keyed by constraint ID.
     pub fn used_in_constraints(&self) -> BTreeMap<ConstraintID, VariableIDSet> {
-        invert_usage_map(&self.by_used_variable, |usage| {
+        invert_usage_map(&self.by_active_variable, |usage| {
             &usage.used_in_regular_constraints
         })
     }
 
     /// Variables used in active indicator constraints, keyed by constraint ID.
     pub fn used_in_indicator_constraints(&self) -> BTreeMap<IndicatorConstraintID, VariableIDSet> {
-        invert_usage_map(&self.by_used_variable, |usage| {
+        invert_usage_map(&self.by_active_variable, |usage| {
             &usage.used_in_indicator_constraints
         })
     }
 
     /// Variables used in active one-hot constraints, keyed by constraint ID.
     pub fn used_in_one_hot_constraints(&self) -> BTreeMap<OneHotConstraintID, VariableIDSet> {
-        invert_usage_map(&self.by_used_variable, |usage| {
+        invert_usage_map(&self.by_active_variable, |usage| {
             &usage.used_in_one_hot_constraints
         })
     }
 
     /// Variables used in active SOS1 constraints, keyed by constraint ID.
     pub fn used_in_sos1_constraints(&self) -> BTreeMap<Sos1ConstraintID, VariableIDSet> {
-        invert_usage_map(&self.by_used_variable, |usage| {
+        invert_usage_map(&self.by_active_variable, |usage| {
             &usage.used_in_sos1_constraints
         })
     }
@@ -194,64 +194,64 @@ impl<'a> DecisionVariableUsage<'a> {
         self.instance.irrelevant_decision_variable_ids()
     }
 
-    pub fn used_decision_variables(&self) -> BTreeMap<VariableID, &'a DecisionVariable> {
-        self.by_used_variable
+    pub fn active_decision_variables(&self) -> BTreeMap<VariableID, &'a DecisionVariable> {
+        self.by_active_variable
             .keys()
             .map(|id| {
                 let dv = self
                     .instance
                     .decision_variables()
                     .get(id)
-                    .expect("used variable ID must be defined in decision_variables");
+                    .expect("active variable ID must be defined in decision_variables");
                 (*id, dv)
             })
             .collect()
     }
 
-    pub fn used_binary(&self) -> Bounds {
-        self.used_by_kind(Kind::Binary)
+    pub fn active_binary(&self) -> Bounds {
+        self.active_by_kind(Kind::Binary)
     }
 
-    pub fn used_integer(&self) -> Bounds {
-        self.used_by_kind(Kind::Integer)
+    pub fn active_integer(&self) -> Bounds {
+        self.active_by_kind(Kind::Integer)
     }
 
-    pub fn used_continuous(&self) -> Bounds {
-        self.used_by_kind(Kind::Continuous)
+    pub fn active_continuous(&self) -> Bounds {
+        self.active_by_kind(Kind::Continuous)
     }
 
-    pub fn used_semi_integer(&self) -> Bounds {
-        self.used_by_kind(Kind::SemiInteger)
+    pub fn active_semi_integer(&self) -> Bounds {
+        self.active_by_kind(Kind::SemiInteger)
     }
 
-    pub fn used_semi_continuous(&self) -> Bounds {
-        self.used_by_kind(Kind::SemiContinuous)
+    pub fn active_semi_continuous(&self) -> Bounds {
+        self.active_by_kind(Kind::SemiContinuous)
     }
 
-    /// Used variables with explicitly enumerated finite domains.
-    pub fn used_finite_domain(&self) -> BTreeMap<VariableID, &FiniteDomain> {
-        self.by_used_variable
+    /// Active variables with explicitly enumerated finite domains.
+    pub fn active_finite_domain(&self) -> BTreeMap<VariableID, &FiniteDomain> {
+        self.by_active_variable
             .keys()
             .filter_map(|id| {
                 let variable = self
                     .instance
                     .decision_variables()
                     .get(id)
-                    .expect("used variable ID must be defined in decision_variables");
+                    .expect("active variable ID must be defined in decision_variables");
                 variable.finite_domain().map(|domain| (*id, domain))
             })
             .collect()
     }
 
-    fn used_by_kind(&self, kind: Kind) -> Bounds {
-        self.by_used_variable
+    fn active_by_kind(&self, kind: Kind) -> Bounds {
+        self.by_active_variable
             .keys()
             .filter_map(|id| {
                 let dv = self
                     .instance
                     .decision_variables()
                     .get(id)
-                    .expect("used variable ID must be defined in decision_variables");
+                    .expect("active variable ID must be defined in decision_variables");
                 (dv.kind() == kind).then_some((*id, dv.bound()))
             })
             .collect()
@@ -290,19 +290,19 @@ trait SolverUseVisitor {
 fn traverse_active_solver_uses(instance: &Instance, visitor: &mut impl SolverUseVisitor) {
     visitor.visit_objective(instance.objective().required_ids());
 
-    for (constraint_id, constraint) in instance.constraints() {
+    for (constraint_id, constraint) in instance.active_constraints() {
         visitor.visit_regular_constraint(*constraint_id, constraint.function().required_ids());
     }
 
-    for (constraint_id, constraint) in instance.indicator_constraints() {
+    for (constraint_id, constraint) in instance.active_indicator_constraints() {
         visitor.visit_indicator_constraint(*constraint_id, constraint.required_ids());
     }
 
-    for (constraint_id, constraint) in instance.one_hot_constraints() {
+    for (constraint_id, constraint) in instance.active_one_hot_constraints() {
         visitor.visit_one_hot_constraint(*constraint_id, constraint.required_ids());
     }
 
-    for (constraint_id, constraint) in instance.sos1_constraints() {
+    for (constraint_id, constraint) in instance.active_sos1_constraints() {
         visitor.visit_sos1_constraint(*constraint_id, constraint.required_ids());
     }
 }
@@ -387,7 +387,7 @@ impl<V: SolverUseVisitor> SolverUseVisitor for Except<'_, V> {
 
 #[derive(Default)]
 struct DecisionVariableUsageVisitor {
-    by_used_variable: BTreeMap<VariableID, DecisionVariableUsageEntry>,
+    by_active_variable: BTreeMap<VariableID, DecisionVariableUsageEntry>,
 }
 
 impl DecisionVariableUsageVisitor {
@@ -397,7 +397,7 @@ impl DecisionVariableUsageVisitor {
         mut update: impl FnMut(&mut DecisionVariableUsageEntry),
     ) {
         for id in required_ids {
-            update(usage_entry_mut(&mut self.by_used_variable, id));
+            update(usage_entry_mut(&mut self.by_active_variable, id));
         }
     }
 }
@@ -449,13 +449,13 @@ impl SolverUseVisitor for DecisionVariableUsageVisitor {
 }
 
 #[derive(Default)]
-struct UsedDecisionVariableVisitor {
-    used: VariableIDSet,
+struct ActiveDecisionVariableVisitor {
+    active: VariableIDSet,
 }
 
-impl SolverUseVisitor for UsedDecisionVariableVisitor {
+impl SolverUseVisitor for ActiveDecisionVariableVisitor {
     fn visit_objective(&mut self, required_ids: VariableIDSet) {
-        self.used.extend(required_ids);
+        self.active.extend(required_ids);
     }
 
     fn visit_regular_constraint(
@@ -463,7 +463,7 @@ impl SolverUseVisitor for UsedDecisionVariableVisitor {
         _constraint_id: ConstraintID,
         required_ids: VariableIDSet,
     ) {
-        self.used.extend(required_ids);
+        self.active.extend(required_ids);
     }
 
     fn visit_indicator_constraint(
@@ -471,7 +471,7 @@ impl SolverUseVisitor for UsedDecisionVariableVisitor {
         _constraint_id: IndicatorConstraintID,
         required_ids: VariableIDSet,
     ) {
-        self.used.extend(required_ids);
+        self.active.extend(required_ids);
     }
 
     fn visit_one_hot_constraint(
@@ -479,7 +479,7 @@ impl SolverUseVisitor for UsedDecisionVariableVisitor {
         _constraint_id: OneHotConstraintID,
         required_ids: VariableIDSet,
     ) {
-        self.used.extend(required_ids);
+        self.active.extend(required_ids);
     }
 
     fn visit_sos1_constraint(
@@ -487,7 +487,7 @@ impl SolverUseVisitor for UsedDecisionVariableVisitor {
         _constraint_id: Sos1ConstraintID,
         required_ids: VariableIDSet,
     ) {
-        self.used.extend(required_ids);
+        self.active.extend(required_ids);
     }
 }
 
@@ -497,18 +497,18 @@ fn collect_decision_variable_usage(
 ) -> BTreeMap<VariableID, DecisionVariableUsageEntry> {
     let mut visitor = Except::new(except, DecisionVariableUsageVisitor::default());
     traverse_active_solver_uses(instance, &mut visitor);
-    visitor.into_inner().by_used_variable
+    visitor.into_inner().by_active_variable
 }
 
-/// Collect solver-used decision variables, except for complete active roots
+/// Collect active decision variables, except for complete active roots
 /// explicitly named by the caller.
-pub fn used_decision_variable_ids_except(
+pub fn active_decision_variable_ids_except(
     instance: &Instance,
     except: &SolverUseExcept,
 ) -> VariableIDSet {
-    let mut visitor = Except::new(except, UsedDecisionVariableVisitor::default());
+    let mut visitor = Except::new(except, ActiveDecisionVariableVisitor::default());
     traverse_active_solver_uses(instance, &mut visitor);
-    visitor.into_inner().used
+    visitor.into_inner().active
 }
 
 impl Instance {
@@ -535,49 +535,49 @@ impl Instance {
     /// or SOS1 constraints, including an Indicator's controlling variable.
     ///
     /// References occurring only in the output objective, named functions,
-    /// removed constraints, or dependency right-hand sides do not contribute
+    /// inactive constraints, or dependency right-hand sides do not contribute
     /// to this set. This is a solver-input view, not permission to delete the
     /// other model data: evaluate the returned state with the same instance
     /// using [`Self::evaluate`] to reconstruct fixed and dependent values and
-    /// evaluate the output objective and removed constraints.
+    /// evaluate the output objective and inactive constraints.
     /// Omitted irrelevant variables are filled with defaults, not optimized
     /// values. To choose their values for reporting, include them explicitly in
     /// the returned state; see [`Self::populate_state`].
     ///
-    /// See [`Self::used_decision_variables`] for the corresponding definitions
+    /// See [`Self::active_decision_variables`] for the corresponding definitions
     /// and [`Self::decision_variable_usage`] to inspect where an ID is used.
-    pub fn used_decision_variable_ids(&self) -> VariableIDSet {
-        used_decision_variable_ids_except(self, &SolverUseExcept::default())
+    pub fn active_decision_variable_ids(&self) -> VariableIDSet {
+        active_decision_variable_ids_except(self, &SolverUseExcept::default())
     }
 
-    /// Return the decision variables in [`Self::used_decision_variable_ids`], keyed by ID.
+    /// Return the decision variables in [`Self::active_decision_variable_ids`], keyed by ID.
     ///
     /// Use these definitions to create the backend variables for this instance,
     /// rather than iterating over every row in [`Self::decision_variables`].
     /// Preparation can change this set, so query the instance that will actually
-    /// be sent to the solver. See [`Self::used_decision_variable_ids`] for the
+    /// be sent to the solver. See [`Self::active_decision_variable_ids`] for the
     /// included references and result-evaluation guidance.
-    pub fn used_decision_variables(&self) -> BTreeMap<VariableID, &DecisionVariable> {
-        let used_ids = self.used_decision_variable_ids();
+    pub fn active_decision_variables(&self) -> BTreeMap<VariableID, &DecisionVariable> {
+        let active_ids = self.active_decision_variable_ids();
         self.decision_variables
             .iter()
-            .filter(|(id, _)| used_ids.contains(id))
+            .filter(|(id, _)| active_ids.contains(id))
             .map(|(id, dv)| (*id, dv))
             .collect()
     }
 
     pub fn decision_variable_role(&self, id: VariableID) -> Option<DecisionVariableRole> {
-        let used = self.used_decision_variable_ids();
+        let active = self.active_decision_variable_ids();
         self.decision_variables
             .get(&id)
-            .map(|_| self.decision_variable_role_with_used(id, &used))
+            .map(|_| self.decision_variable_role_with_active(id, &active))
     }
 
     pub fn decision_variable_roles(&self) -> BTreeMap<VariableID, DecisionVariableRole> {
-        let used = self.used_decision_variable_ids();
+        let active = self.active_decision_variable_ids();
         self.decision_variables
             .keys()
-            .map(|id| (*id, self.decision_variable_role_with_used(*id, &used)))
+            .map(|id| (*id, self.decision_variable_role_with_active(*id, &active)))
             .collect()
     }
 
@@ -610,13 +610,13 @@ impl Instance {
             .collect()
     }
 
-    fn decision_variable_role_with_used(
+    fn decision_variable_role_with_active(
         &self,
         id: VariableID,
-        used: &VariableIDSet,
+        active: &VariableIDSet,
     ) -> DecisionVariableRole {
-        if used.contains(&id) {
-            DecisionVariableRole::Used
+        if active.contains(&id) {
+            DecisionVariableRole::Active
         } else if self.fixed_decision_variable_values().contains_key(&id) {
             DecisionVariableRole::Fixed
         } else if self.decision_variable_dependency.get(&id).is_some() {
@@ -642,7 +642,7 @@ fn write_usage_display(
     usage: &DecisionVariableUsage<'_>,
 ) -> std::fmt::Result {
     writeln!(f, "DecisionVariableUsage {{")?;
-    writeln!(f, "  Used Variables: {}", usage.by_used_variable.len())?;
+    writeln!(f, "  Active Variables: {}", usage.by_active_variable.len())?;
 
     let used_in_objective = usage.used_in_objective();
     if !used_in_objective.is_empty() {
@@ -771,7 +771,7 @@ mod tests {
                     VariableID::from(3),
                     Equality::LessThanOrEqualToZero,
                     crate::Function::from(linear!(4)),
-                    false,
+                    crate::IndicatorTriggerValue::One,
                 ),
                 Default::default(),
             )
@@ -789,14 +789,14 @@ mod tests {
             )
             .unwrap();
 
-        let ordinary = instance.used_decision_variable_ids();
-        assert_eq!(ordinary, instance.decision_variable_usage().used());
+        let ordinary = instance.active_decision_variable_ids();
+        assert_eq!(ordinary, instance.decision_variable_usage().active());
         assert_eq!(ordinary, (0..=6).map(VariableID::from).collect());
 
         // Excluding one active root does not hide a variable also used by a
         // retained root.
         assert_eq!(
-            used_decision_variable_ids_except(
+            active_decision_variable_ids_except(
                 &instance,
                 &SolverUseExcept {
                     regular_constraints: BTreeSet::from([ConstraintID::from(1)]),
@@ -817,7 +817,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            used_decision_variable_ids_except(&instance, &all_constraints),
+            active_decision_variable_ids_except(&instance, &all_constraints),
             VariableIDSet::from([VariableID::from(0)]),
         );
 
@@ -825,7 +825,63 @@ mod tests {
             objective: true,
             ..all_constraints
         };
-        assert!(used_decision_variable_ids_except(&instance, &all_roots).is_empty());
+        assert!(active_decision_variable_ids_except(&instance, &all_roots).is_empty());
+
+        for skip_feasibility_check in [false, true] {
+            let mut retained = instance.clone();
+            for id in [ConstraintID::from(0), ConstraintID::from(1)] {
+                retained
+                    .deactivate_constraint(id, "retain".into(), [], skip_feasibility_check)
+                    .unwrap();
+            }
+            retained
+                .deactivate_indicator_constraint(
+                    indicator_id,
+                    "retain".into(),
+                    [],
+                    skip_feasibility_check,
+                )
+                .unwrap();
+            retained
+                .deactivate_one_hot_constraint(
+                    one_hot_id,
+                    "retain".into(),
+                    [],
+                    skip_feasibility_check,
+                )
+                .unwrap();
+            retained
+                .deactivate_sos1_constraint(sos1_id, "retain".into(), [], skip_feasibility_check)
+                .unwrap();
+
+            // Retained interpretation context does not keep a variable active,
+            // regardless of whether its inactive constraints are checked.
+            let active = VariableIDSet::from([VariableID::from(0)]);
+            assert_eq!(retained.active_decision_variable_ids(), active);
+            assert_eq!(retained.required_ids(), active);
+            assert_eq!(retained.decision_variable_usage().active(), active);
+            assert_eq!(retained.stats().decision_variables.by_usage.active, 1);
+            for id in 1..=6 {
+                assert_eq!(
+                    retained.decision_variable_role(VariableID::from(id)),
+                    Some(DecisionVariableRole::Irrelevant),
+                );
+            }
+
+            for id in [ConstraintID::from(0), ConstraintID::from(1)] {
+                retained.activate_constraint(id).unwrap();
+            }
+            retained
+                .activate_indicator_constraint(indicator_id)
+                .unwrap();
+            retained.activate_one_hot_constraint(one_hot_id).unwrap();
+            retained.activate_sos1_constraint(sos1_id).unwrap();
+            assert_eq!(retained.active_decision_variable_ids(), ordinary);
+            assert!(retained
+                .decision_variable_roles()
+                .values()
+                .all(|role| *role == DecisionVariableRole::Active));
+        }
     }
 
     #[test]
@@ -922,7 +978,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(crate::Function::from(linear!(1) + linear!(2))) // objective uses x_1 and x_2
             .decision_variables(decision_variables)
-            .constraints(btreemap! {})
+            .active_constraints(btreemap! {})
             .decision_variable_dependency(dependency)
             .build()
             .unwrap();
@@ -964,7 +1020,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(linear!(1).into())
             .decision_variables(decision_variables)
-            .constraints(btreemap! {})
+            .active_constraints(btreemap! {})
             .named_functions(btreemap! {
                 NamedFunctionID::from(7) => named_function,
             })
@@ -974,7 +1030,7 @@ mod tests {
         let usage = instance.decision_variable_usage();
         assert_eq!(
             usage.role(VariableID::from(1)),
-            Some(DecisionVariableRole::Used)
+            Some(DecisionVariableRole::Active)
         );
         assert_eq!(
             usage.role(VariableID::from(2)),
@@ -984,45 +1040,45 @@ mod tests {
     }
 
     proptest! {
-        // Used binary, integer, continuous, semi_integer, semi_continuous, and finite sets
-        // are disjoint and their union is equal to all used variables.
+        // Active binary, integer, continuous, semi_integer, semi_continuous, and finite sets
+        // are disjoint and their union is equal to all active variables.
         #[test]
-        fn test_used_kind_partition(instance in Instance::arbitrary()) {
+        fn test_active_kind_partition(instance in Instance::arbitrary()) {
             let usage = instance.decision_variable_usage();
-            let used = usage.used();
+            let active = usage.active();
             prop_assert_eq!(
-                used.len(),
-                usage.used_binary().len() + usage.used_integer().len() + usage.used_continuous().len()
-                + usage.used_semi_integer().len() + usage.used_semi_continuous().len()
-                + usage.used_finite_domain().len()
+                active.len(),
+                usage.active_binary().len() + usage.active_integer().len() + usage.active_continuous().len()
+                + usage.active_semi_integer().len() + usage.active_semi_continuous().len()
+                + usage.active_finite_domain().len()
             );
-            let mut by_kind_all: VariableIDSet = usage.used_binary().keys().cloned().collect();
+            let mut by_kind_all: VariableIDSet = usage.active_binary().keys().cloned().collect();
 
-            by_kind_all.extend(usage.used_integer().keys());
-            by_kind_all.extend(usage.used_continuous().keys());
-            by_kind_all.extend(usage.used_semi_integer().keys());
-            by_kind_all.extend(usage.used_semi_continuous().keys());
-            by_kind_all.extend(usage.used_finite_domain().keys());
-            prop_assert_eq!(&by_kind_all, &used);
+            by_kind_all.extend(usage.active_integer().keys());
+            by_kind_all.extend(usage.active_continuous().keys());
+            by_kind_all.extend(usage.active_semi_integer().keys());
+            by_kind_all.extend(usage.active_semi_continuous().keys());
+            by_kind_all.extend(usage.active_finite_domain().keys());
+            prop_assert_eq!(&by_kind_all, &active);
         }
 
-        // Used, fixed, dependent, and irrelevant roles are disjoint, and their union is equal to all.
+        // Active, fixed, dependent, and irrelevant roles are disjoint, and their union is equal to all.
         #[test]
         fn test_role_partition(instance in Instance::arbitrary()) {
             let usage = instance.decision_variable_usage();
-            let used = usage.used();
+            let active = usage.active();
             let all: VariableIDSet = instance.decision_variables().keys().copied().collect();
             let fixed = usage.fixed();
             let dependent = usage.dependent();
             let irrelevant = usage.irrelevant();
-            prop_assert_eq!(&used, &instance.used_decision_variable_ids());
+            prop_assert_eq!(&active, &instance.active_decision_variable_ids());
             prop_assert_eq!(
                 all.len(),
-                used.len() + fixed.len() + dependent.len() + irrelevant.len(),
-                "all: {}, used: {}, fixed: {}, dependent: {}, irrelevant: {}",
-                all.len(), used.len(), fixed.len(), dependent.len(), irrelevant.len()
+                active.len() + fixed.len() + dependent.len() + irrelevant.len(),
+                "all: {}, active: {}, fixed: {}, dependent: {}, irrelevant: {}",
+                all.len(), active.len(), fixed.len(), dependent.len(), irrelevant.len()
             );
-            let mut role_all = used.clone();
+            let mut role_all = active.clone();
             role_all.extend(fixed.keys());
             role_all.extend(dependent);
             role_all.extend(irrelevant);

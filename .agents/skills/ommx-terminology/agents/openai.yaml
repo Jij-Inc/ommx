@@ -1,0 +1,4 @@
+interface:
+  display_name: "OMMX Terminology"
+  short_description: "Choose consistent OMMX domain and API terms"
+  default_prompt: "Use $ommx-terminology to choose or review names for OMMX APIs and explain their domain meanings."

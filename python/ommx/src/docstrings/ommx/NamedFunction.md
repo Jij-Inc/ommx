@@ -18,7 +18,7 @@ an additional measurement of the same candidate.
 ...     sense=Sense.Minimize,
 ...     objective=x[0] + 2 * x[1],
 ...     decision_variables=x,
-...     constraints={0: sum(x) == 1},
+...     active_constraints={0: sum(x) == 1},
 ...     named_functions=[distance],
 ... )
 >>> solution = instance.evaluate({x[0].id: 1, x[1].id: 0})
@@ -72,8 +72,8 @@ metrics does not change the objective-based ordering or the selection made by
 
 **Supply values for variables used only in reporting**
 
-Appearing only in a named function does not make a variable used by the current
-objective or active constraints. If it also has no fixed value or dependency,
+Appearing only in a named function does not make a variable active in the current
+formulation. If it also has no fixed value or dependency,
 the variable is irrelevant to that current problem. When its value is omitted,
 {meth}`~ommx.Instance.populate_state` supplies a default before the named
 function is evaluated. That default is not a recovered value of the candidate.
@@ -84,7 +84,7 @@ function is evaluated. That default is not a recovered value of the candidate.
 ...     sense=Sense.Minimize,
 ...     objective=0,
 ...     decision_variables=[recorded],
-...     constraints={},
+...     active_constraints={},
 ...     named_functions=[NamedFunction(id=0, function=recorded, name="recorded")],
 ... )
 >>> omitted = reporting.evaluate({})

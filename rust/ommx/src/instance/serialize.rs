@@ -9,7 +9,8 @@ impl Instance {
     ///
     /// `ommx.v1.Instance` cannot represent the presence of an
     /// [`Instance::output_objective`], even when it currently matches the
-    /// active objective.
+    /// active objective. It also cannot represent `skip_feasibility_check=true`
+    /// on any inactive constraint; use v2 to preserve that policy.
     ///
     /// ```
     /// use ommx::{linear, DecisionVariable, Function, Instance, Sense, VariableID};
@@ -22,7 +23,7 @@ impl Instance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// assert!(instance.convert_active_objective(Sense::Minimize));
@@ -53,7 +54,7 @@ impl Instance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// assert!(instance.convert_active_objective(Sense::Minimize));
@@ -92,7 +93,8 @@ impl ParametricInstance {
     ///
     /// `ommx.v1.ParametricInstance` cannot represent the presence of a
     /// [`ParametricInstance::output_objective`], even when it currently matches
-    /// the active objective.
+    /// the active objective. It also cannot represent `skip_feasibility_check=true`
+    /// on any inactive constraint; use v2 to preserve that policy.
     ///
     /// ```
     /// use ommx::{linear, DecisionVariable, Function, Instance, ParametricInstance, Sense, VariableID};
@@ -105,7 +107,7 @@ impl ParametricInstance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// assert!(source.convert_active_objective(Sense::Minimize));
@@ -137,7 +139,7 @@ impl ParametricInstance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// assert!(source.convert_active_objective(Sense::Minimize));
@@ -170,21 +172,42 @@ impl From<Instance> for v2::Instance {
         let mut required_features = crate::v2_io::required_features(
             created_collection_has_payload(&value.indicator_constraint_collection),
             value
-                .indicator_constraints()
+                .indicator_constraint_collection
                 .values()
-                .chain(
-                    value
-                        .removed_indicator_constraints()
-                        .values()
-                        .map(|(c, _)| c),
-                )
-                .any(|c| c.activate_on_zero),
+                .any(|c| c.trigger_value == crate::IndicatorTriggerValue::Zero),
             created_collection_has_payload(&value.one_hot_constraint_collection),
             created_collection_has_payload(&value.sos1_constraint_collection),
             value
                 .decision_variables
                 .values()
                 .any(|variable| variable.kind() == crate::Kind::FiniteDomain),
+            value
+                .constraint_collection
+                .inactive()
+                .values()
+                .map(|(_, metadata)| metadata)
+                .chain(
+                    value
+                        .indicator_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                )
+                .chain(
+                    value
+                        .one_hot_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                )
+                .chain(
+                    value
+                        .sos1_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                )
+                .any(|metadata| metadata.skip_feasibility_check),
         );
         if value.output_objective.is_some() {
             required_features.push(v2::Feature::OutputObjective as i32);
@@ -242,21 +265,42 @@ impl From<ParametricInstance> for v2::ParametricInstance {
         let mut required_features = crate::v2_io::required_features(
             created_collection_has_payload(&value.indicator_constraint_collection),
             value
-                .indicator_constraints()
+                .indicator_constraint_collection
                 .values()
-                .chain(
-                    value
-                        .removed_indicator_constraints()
-                        .values()
-                        .map(|(c, _)| c),
-                )
-                .any(|c| c.activate_on_zero),
+                .any(|c| c.trigger_value == crate::IndicatorTriggerValue::Zero),
             created_collection_has_payload(&value.one_hot_constraint_collection),
             created_collection_has_payload(&value.sos1_constraint_collection),
             value
                 .decision_variables
                 .values()
                 .any(|variable| variable.kind() == crate::Kind::FiniteDomain),
+            value
+                .constraint_collection
+                .inactive()
+                .values()
+                .map(|(_, metadata)| metadata)
+                .chain(
+                    value
+                        .indicator_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                )
+                .chain(
+                    value
+                        .one_hot_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                )
+                .chain(
+                    value
+                        .sos1_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                )
+                .any(|metadata| metadata.skip_feasibility_check),
         );
         if value.output_objective.is_some() {
             required_features.push(v2::Feature::OutputObjective as i32);
@@ -300,7 +344,7 @@ impl From<ParametricInstance> for v2::ParametricInstance {
 }
 
 fn created_collection_has_payload<T: ConstraintType>(collection: &ConstraintCollection<T>) -> bool {
-    !collection.active().is_empty() || !collection.removed().is_empty()
+    !collection.active().is_empty() || !collection.inactive().is_empty()
 }
 
 fn decision_variable_dependency_to_v2_map(
@@ -345,7 +389,7 @@ mod tests {
                 VariableID::from(1),
                 DecisionVariable::continuous(),
             )]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 
@@ -389,23 +433,23 @@ mod tests {
                 (variable_1, DecisionVariable::binary()),
                 (variable_2, DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::new())
-            .indicator_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(BTreeMap::from([(
                 indicator_id,
                 IndicatorConstraint::new(
                     variable_1,
                     Equality::LessThanOrEqualToZero,
                     Function::Zero,
-                    false,
+                    crate::IndicatorTriggerValue::One,
                 ),
             )]))
             .indicator_constraint_context(indicator_context)
-            .one_hot_constraints(BTreeMap::from([(
+            .active_one_hot_constraints(BTreeMap::from([(
                 one_hot_id,
                 OneHotConstraint::new(BTreeSet::from([variable_1, variable_2])).unwrap(),
             )]))
             .one_hot_constraint_context(one_hot_context)
-            .sos1_constraints(BTreeMap::from([(
+            .active_sos1_constraints(BTreeMap::from([(
                 sos1_id,
                 Sos1Constraint::new(BTreeSet::from([variable_1, variable_2])).unwrap(),
             )]))
@@ -430,7 +474,7 @@ mod tests {
                 VariableID::from(1),
                 DecisionVariable::new_finite_domain(vec![0.1, 0.5, 1.0]).unwrap(),
             )]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap()
     }
@@ -443,7 +487,7 @@ mod tests {
                 (VariableID::from(1), DecisionVariable::binary()),
                 (VariableID::from(2), DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         assert!(instance.convert_active_objective(Sense::Minimize));
@@ -462,7 +506,7 @@ mod tests {
                 DecisionVariable::binary(),
             )]))
             .parameters(ParameterTable::from_ids(BTreeSet::from([parameter_id])))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         instance.output_objective = Some(OutputObjective::new(
@@ -783,7 +827,7 @@ mod tests {
             .get_mut(&20)
             .unwrap();
         one_hot.variables = vec![999];
-        one_hot.active_variable = Some(999);
+        one_hot.selected_variable = Some(999);
         one_hot.used_decision_variable_ids.clear();
 
         let err = crate::Solution::try_from(proto).unwrap_err();
@@ -916,7 +960,7 @@ mod tests {
             .parameters(
                 ParameterTable::new(BTreeSet::from([parameter_id]), parameter_labels).unwrap(),
             )
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 
@@ -950,7 +994,7 @@ mod tests {
             .parameters(
                 ParameterTable::new(BTreeSet::from([parameter_id]), parameter_labels).unwrap(),
             )
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 
@@ -965,16 +1009,16 @@ mod tests {
         fn v2_round_trip_preserves_both_activation_conditions(
             instance in Instance::arbitrary_with(crate::InstanceParameters::full_v3()),
             active_zero in any::<bool>(),
-            removed_zero in any::<bool>(),
+            inactive_zero in any::<bool>(),
         ) {
-            // Sample the activation dimension independently for active and removed rows.
+            // Sample the activation dimension independently for active and inactive rows.
             // The existing full_v3 generator supplies the other root invariants.
             let mut proto: v2::Instance = instance.into();
             let rows = proto.indicator_constraints.as_mut().unwrap();
-            for row in rows.active.values_mut() { row.activate_on_zero = active_zero; }
-            for row in rows.removed.values_mut() { row.activate_on_zero = removed_zero; }
-            if active_zero || removed_zero {
-                proto.required_features.push(v2::Feature::IndicatorActivateOnZero as i32);
+            for row in rows.active.values_mut() { row.trigger_value = Some(u32::from(!active_zero)); }
+            for row in rows.inactive.values_mut() { row.trigger_value = Some(u32::from(!inactive_zero)); }
+            if active_zero || inactive_zero {
+                proto.required_features.push(v2::Feature::IndicatorTriggerValue as i32);
             }
             let source: Instance = proto.parse(&()).unwrap();
             let restored = Instance::from_v2_bytes(&source.to_v2_bytes()).unwrap();
@@ -992,5 +1036,305 @@ mod tests {
             let restored = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
             prop_assert_eq!(restored, instance);
         }
+    }
+}
+
+#[cfg(test)]
+mod role_wire_tests {
+    use super::*;
+    use crate::{
+        ConstraintCollection, ConstraintRole as R, EvaluatedCollection, SampleID, SampleSet,
+        Sampled, Solution,
+    };
+    use std::collections::BTreeMap;
+
+    fn inactive_fixture(family: usize, skip: bool) -> Instance {
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([
+                (0.into(), DecisionVariable::binary()),
+                (1.into(), DecisionVariable::binary()),
+            ]))
+            .active_constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let mut wire = v2::Instance::from(instance);
+        let metadata = BTreeMap::from([(
+            10,
+            v2::InactiveConstraintMetadata {
+                reason: "model.static_condition".into(),
+                parameters: BTreeMap::from([("condition".into(), "false".into())]),
+                skip_feasibility_check: skip,
+            },
+        )]);
+        let contexts = BTreeMap::from([(
+            10,
+            v2::ConstraintContext {
+                label: Some(v2::ModelingLabel {
+                    name: Some("retained_condition".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )]);
+        let positive = Function::from(crate::Coefficient::try_from(1.0).unwrap());
+        match family {
+            0 => {
+                wire.regular_constraints = Some(v2::RegularConstraintCollection {
+                    inactive: BTreeMap::from([(
+                        10,
+                        Constraint::less_than_or_equal_to_zero(positive).into(),
+                    )]),
+                    inactive_metadata: metadata,
+                    contexts,
+                    ..Default::default()
+                });
+            }
+            1 => {
+                wire.required_features
+                    .push(v2::Feature::ConstraintIndicator as i32);
+                wire.indicator_constraints = Some(v2::IndicatorConstraintCollection {
+                    inactive: BTreeMap::from([(
+                        10,
+                        crate::IndicatorConstraint::new(
+                            0.into(),
+                            crate::Equality::LessThanOrEqualToZero,
+                            positive,
+                            crate::IndicatorTriggerValue::One,
+                        )
+                        .into(),
+                    )]),
+                    inactive_metadata: metadata,
+                    contexts,
+                    ..Default::default()
+                });
+            }
+            2 => {
+                wire.required_features
+                    .push(v2::Feature::ConstraintOneHot as i32);
+                wire.one_hot_constraints = Some(v2::OneHotConstraintCollection {
+                    inactive: BTreeMap::from([(
+                        10,
+                        crate::OneHotConstraint::new([0.into(), 1.into()].into())
+                            .unwrap()
+                            .into(),
+                    )]),
+                    inactive_metadata: metadata,
+                    contexts,
+                    ..Default::default()
+                });
+            }
+            3 => {
+                wire.required_features
+                    .push(v2::Feature::ConstraintSos1 as i32);
+                wire.sos1_constraints = Some(v2::Sos1ConstraintCollection {
+                    inactive: BTreeMap::from([(
+                        10,
+                        crate::Sos1Constraint::new([0.into(), 1.into()].into())
+                            .unwrap()
+                            .into(),
+                    )]),
+                    inactive_metadata: metadata,
+                    contexts,
+                    ..Default::default()
+                });
+            }
+            _ => unreachable!(),
+        }
+        if skip {
+            wire.required_features
+                .push(v2::Feature::ConstraintSkipFeasibilityCheck as i32);
+        }
+        wire.parse(&()).unwrap()
+    }
+
+    fn assert_skip_feature(features: &[i32], skip: bool) {
+        assert_eq!(
+            features.contains(&(v2::Feature::ConstraintSkipFeasibilityCheck as i32)),
+            skip
+        );
+    }
+
+    #[test]
+    fn inactive_policy_survives_every_root_and_family() {
+        for family in 0..4 {
+            for skip in [false, true] {
+                let instance = inactive_fixture(family, skip);
+                let parametric = ParametricInstance::from(instance.clone());
+                let state = v1::State::from_iter([(0, 1.0), (1, 1.0)]);
+                let solution = instance.evaluate(&state, crate::ATol::default()).unwrap();
+                let samples = instance
+                    .evaluate_samples(
+                        &Sampled::from((SampleID::from(7), state)),
+                        crate::ATol::default(),
+                    )
+                    .unwrap();
+                assert_eq!(solution.feasible(), skip);
+                assert!(solution.total_violation(R::EvaluationOnly) > 0.0);
+                assert!(solution.feasible_relaxed());
+                assert_eq!(samples.feasible()[&7.into()], skip);
+                assert!(samples.feasible_relaxed()[&7.into()]);
+                assert!(
+                    samples
+                        .get(7.into())
+                        .unwrap()
+                        .total_violation(R::EvaluationOnly)
+                        > 0.0
+                );
+
+                let instance_wire = v2::Instance::from(instance.clone());
+                let parametric_wire = v2::ParametricInstance::from(parametric.clone());
+                let solution_wire = v2::Solution::from(solution.clone());
+                let samples_wire = v2::SampleSet::from(samples.clone());
+                for features in [
+                    &instance_wire.required_features,
+                    &parametric_wire.required_features,
+                    &solution_wire.required_features,
+                    &samples_wire.required_features,
+                ] {
+                    assert_skip_feature(features, skip);
+                }
+                // Explicit all-state queries above must not alter canonical wire judgments.
+                assert_eq!(solution_wire.feasible, skip);
+                assert_eq!(samples_wire.feasible[&7], skip);
+                assert_eq!(
+                    Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap(),
+                    instance
+                );
+                assert_eq!(
+                    ParametricInstance::from_v2_bytes(&parametric.to_v2_bytes()).unwrap(),
+                    parametric
+                );
+                assert_eq!(
+                    Solution::from_v2_bytes(&solution.to_v2_bytes()).unwrap(),
+                    solution
+                );
+                let restored_samples = SampleSet::from_v2_bytes(&samples.to_v2_bytes()).unwrap();
+                assert_eq!(restored_samples.to_v2_bytes(), samples.to_v2_bytes());
+                assert_eq!(restored_samples.get(7.into()).unwrap(), solution);
+
+                if skip {
+                    for result in [
+                        instance.to_v1_bytes(),
+                        parametric.to_v1_bytes(),
+                        solution.to_v1_bytes(),
+                        samples.to_v1_bytes(),
+                    ] {
+                        let error = result.unwrap_err();
+                        assert!(
+                            error.to_string().contains("skip_feasibility_check=True"),
+                            "{error:#}"
+                        );
+                    }
+                } else if family == 0 {
+                    let legacy = Instance::from_v1_bytes(&instance.to_v1_bytes().unwrap()).unwrap();
+                    assert!(
+                        !legacy.inactive_constraints()[&10.into()]
+                            .1
+                            .skip_feasibility_check
+                    );
+                    assert!(parametric.to_v1_bytes().is_ok());
+                    assert!(solution.to_v1_bytes().is_ok());
+                    assert!(samples.to_v1_bytes().is_ok());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn direct_v1_collection_conversions_reject_skipped_rows() {
+        let instance = inactive_fixture(0, true);
+        let collection: ConstraintCollection<Constraint> = instance.constraint_collection().clone();
+        let result: crate::Result<(Vec<v1::Constraint>, Vec<v1::RemovedConstraint>)> =
+            collection.try_into();
+        assert!(result.is_err());
+        let state = v1::State::from_iter([(0, 1.0), (1, 1.0)]);
+        let solution = instance.evaluate(&state, crate::ATol::default()).unwrap();
+        let evaluated: EvaluatedCollection<Constraint> = solution.evaluated_constraints().clone();
+        let result: crate::Result<Vec<v1::EvaluatedConstraint>> = evaluated.try_into();
+        assert!(result.is_err());
+        let samples = instance
+            .evaluate_samples(
+                &Sampled::from((SampleID::from(7), state)),
+                crate::ATol::default(),
+            )
+            .unwrap();
+        assert!(samples
+            .constraints()
+            .clone()
+            .into_v1(crate::ATol::default())
+            .is_err());
+    }
+
+    #[test]
+    fn legacy_metadata_encoding_defaults_to_checked_inactive() {
+        // The old message carried only fields 1 and 2. Verify those exact bytes
+        // remain readable after the source-level message/field renames.
+        #[derive(Clone, PartialEq, prost::Message)]
+        struct LegacyInactiveReason {
+            #[prost(string, tag = "1")]
+            reason: String,
+            #[prost(btree_map = "string, string", tag = "2")]
+            parameters: BTreeMap<String, String>,
+        }
+        let legacy = LegacyInactiveReason {
+            reason: "preprocess".into(),
+            parameters: BTreeMap::from([("rule".into(), "redundant".into())]),
+        };
+        let metadata =
+            v2::InactiveConstraintMetadata::decode(legacy.encode_to_vec().as_slice()).unwrap();
+        assert_eq!(metadata.reason, legacy.reason);
+        assert_eq!(metadata.parameters, legacy.parameters);
+        assert!(!metadata.skip_feasibility_check);
+
+        #[derive(Clone, PartialEq, prost::Message)]
+        struct LegacyRegularConstraintCollection {
+            #[prost(btree_map = "uint64, message", tag = "1")]
+            active: BTreeMap<u64, v2::RegularConstraint>,
+            #[prost(btree_map = "uint64, message", tag = "2")]
+            inactive: BTreeMap<u64, v2::RegularConstraint>,
+            #[prost(btree_map = "uint64, message", tag = "3")]
+            inactive_metadatas: BTreeMap<u64, LegacyInactiveReason>,
+            #[prost(btree_map = "uint64, message", tag = "4")]
+            contexts: BTreeMap<u64, v2::ConstraintContext>,
+        }
+        let old_collection = LegacyRegularConstraintCollection {
+            active: BTreeMap::new(),
+            inactive: BTreeMap::from([(
+                10,
+                v2::RegularConstraint {
+                    equality: v1::Equality::LessThanOrEqualToZero as i32,
+                    function: Some(
+                        Function::from(crate::Coefficient::try_from(1.0).unwrap()).into(),
+                    ),
+                },
+            )]),
+            inactive_metadatas: BTreeMap::from([(10, legacy)]),
+            contexts: BTreeMap::from([(
+                10,
+                v2::ConstraintContext {
+                    label: Some(v2::ModelingLabel {
+                        name: Some("legacy_constraint".into()),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )]),
+        };
+        let collection =
+            v2::RegularConstraintCollection::decode(old_collection.encode_to_vec().as_slice())
+                .unwrap()
+                .parse(&())
+                .unwrap();
+        assert!(collection.active().is_empty());
+        let (_, metadata) = &collection.inactive()[&10.into()];
+        assert_eq!(metadata.reason, "preprocess");
+        assert_eq!(metadata.parameters["rule"], "redundant");
+        assert_eq!(metadata.role(), R::FeasibilityCheck);
+        assert_eq!(
+            collection.context().name(10.into()),
+            Some("legacy_constraint")
+        );
     }
 }

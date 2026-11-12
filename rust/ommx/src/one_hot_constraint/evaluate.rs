@@ -81,7 +81,7 @@ impl Evaluate for OneHotConstraint<Created> {
 
     fn evaluate(&self, state: &crate::v1::State, atol: ATol) -> crate::Result<Self::Output> {
         let used_decision_variable_ids = self.required_ids();
-        let (violation, active_variable) =
+        let (violation, selected_variable) =
             self.evaluate_members(|id| state.entries.get(&id.into_inner()).copied(), atol)?;
 
         Ok(OneHotConstraint {
@@ -89,7 +89,7 @@ impl Evaluate for OneHotConstraint<Created> {
             stage: OneHotEvaluatedData {
                 activation_atol: atol,
                 violation,
-                active_variable,
+                selected_variable,
                 used_decision_variable_ids,
             },
         })
@@ -101,13 +101,13 @@ impl Evaluate for OneHotConstraint<Created> {
         atol: ATol,
     ) -> crate::Result<Self::SampledOutput> {
         let mut violations = crate::Sampled::default();
-        let mut active_variable = BTreeMap::new();
+        let mut selected_variable = BTreeMap::new();
 
         for (sample_id, state) in samples.iter() {
-            let (violation, av) =
+            let (violation, selected) =
                 self.evaluate_members(|id| state.entries.get(&id.into_inner()).copied(), atol)?;
             violations.append([*sample_id], violation)?;
-            active_variable.insert(*sample_id, av);
+            selected_variable.insert(*sample_id, selected);
         }
 
         Ok(OneHotConstraint {
@@ -115,7 +115,7 @@ impl Evaluate for OneHotConstraint<Created> {
             stage: OneHotSampledData {
                 activation_atol: atol,
                 violations,
-                active_variable,
+                selected_variable,
                 used_decision_variable_ids: self.required_ids(),
             },
         })
@@ -156,7 +156,7 @@ mod tests {
 
         let evaluated = constraint.evaluate(&boundary, atol).unwrap();
         assert!(evaluated.is_feasible(atol));
-        assert_eq!(evaluated.stage.active_variable, Some(VariableID::from(1)));
+        assert_eq!(evaluated.stage.selected_variable, Some(VariableID::from(1)));
         assert_eq!(evaluated.violation(), *atol);
 
         let outside_state = crate::v1::State::from(HashMap::from([(1, 1.0), (2, outside)]));
@@ -172,11 +172,11 @@ mod tests {
         let sampled = constraint.evaluate_samples(&samples, atol).unwrap();
         assert!(sampled.is_feasible_for(boundary_sample_id, atol).unwrap());
         assert_eq!(
-            sampled.stage.active_variable[&boundary_sample_id],
+            sampled.stage.selected_variable[&boundary_sample_id],
             Some(VariableID::from(1))
         );
         assert!(!sampled.is_feasible_for(outside_sample_id, atol).unwrap());
-        assert_eq!(sampled.stage.active_variable[&outside_sample_id], None);
+        assert_eq!(sampled.stage.selected_variable[&outside_sample_id], None);
 
         let zero_boundary = crate::v1::State::from(HashMap::from([(2, *atol)]));
         let (outcome, additional) = constraint.clone().propagate(&zero_boundary, atol).unwrap();
@@ -204,7 +204,7 @@ mod tests {
         let atol = ATol::new(2.0).unwrap();
         let evaluated = constraint.evaluate(&state, atol).unwrap();
         assert!(evaluated.is_feasible(atol));
-        assert_eq!(evaluated.stage.active_variable, Some(2.into()));
+        assert_eq!(evaluated.stage.selected_variable, Some(2.into()));
         let (outcome, _) = constraint.propagate(&state, atol).unwrap();
         assert!(matches!(outcome, PropagateOutcome::Consumed(_)));
     }
@@ -212,11 +212,11 @@ mod tests {
     #[test]
     fn test_evaluate_feasible() {
         let c = make_one_hot(1, &[1, 2, 3]);
-        // x1=0, x2=1, x3=0 → feasible, active=x2
+        // x1=0, x2=1, x3=0 → feasible, selected=x2
         let state = crate::v1::State::from(HashMap::from([(1, 0.0), (2, 1.0), (3, 0.0)]));
         let result = c.evaluate(&state, ATol::default()).unwrap();
         assert!(result.is_feasible(crate::ATol::default()));
-        assert_eq!(result.stage.active_variable, Some(VariableID::from(2)));
+        assert_eq!(result.stage.selected_variable, Some(VariableID::from(2)));
     }
 
     #[test]
@@ -226,7 +226,7 @@ mod tests {
         let state = crate::v1::State::from(HashMap::from([(1, 1.0), (2, 1.0), (3, 0.0)]));
         let result = c.evaluate(&state, ATol::default()).unwrap();
         assert!(!result.is_feasible(crate::ATol::default()));
-        assert_eq!(result.stage.active_variable, None);
+        assert_eq!(result.stage.selected_variable, None);
     }
 
     #[test]
@@ -236,7 +236,7 @@ mod tests {
         let state = crate::v1::State::from(HashMap::from([(1, 0.0), (2, 0.0), (3, 0.0)]));
         let result = c.evaluate(&state, ATol::default()).unwrap();
         assert!(!result.is_feasible(crate::ATol::default()));
-        assert_eq!(result.stage.active_variable, None);
+        assert_eq!(result.stage.selected_variable, None);
     }
 
     #[test]
@@ -280,7 +280,7 @@ mod tests {
         let c = make_one_hot(1, &[1, 2, 3]);
 
         let mut samples = crate::Sampled::<crate::v1::State>::default();
-        // Sample 0: x1=1, x2=0, x3=0 → feasible, active=x1
+        // Sample 0: x1=1, x2=0, x3=0 → feasible, selected=x1
         samples
             .append(
                 [crate::SampleID::from(0)],
@@ -312,9 +312,12 @@ mod tests {
         assert!(!result.is_feasible_for(s1, crate::ATol::default()).unwrap());
         assert!(!result.is_feasible_for(s2, crate::ATol::default()).unwrap());
 
-        assert_eq!(result.stage.active_variable[&s0], Some(VariableID::from(1)));
-        assert_eq!(result.stage.active_variable[&s1], None);
-        assert_eq!(result.stage.active_variable[&s2], None);
+        assert_eq!(
+            result.stage.selected_variable[&s0],
+            Some(VariableID::from(1))
+        );
+        assert_eq!(result.stage.selected_variable[&s1], None);
+        assert_eq!(result.stage.selected_variable[&s2], None);
     }
 
     // === Propagate tests ===

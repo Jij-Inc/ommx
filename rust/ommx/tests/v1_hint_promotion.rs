@@ -199,7 +199,7 @@ fn public_loader_promotes_valid_hints_from_real_v1_bytes() {
     assert!(one_hot_outcome.error().is_none());
     let one_hot_constraint_id = one_hot_outcome.one_hot_constraint_id().unwrap();
     assert!(instance
-        .one_hot_constraints()
+        .active_one_hot_constraints()
         .contains_key(&one_hot_constraint_id));
 
     let sos1_outcome = &report.sos1_outcomes()[0];
@@ -208,16 +208,18 @@ fn public_loader_promotes_valid_hints_from_real_v1_bytes() {
     assert!(sos1_outcome.error().is_none());
     let sos1_promotion = sos1_outcome.sos1_constraint_id().unwrap();
     assert!(instance
-        .removed_constraints()
+        .inactive_constraints()
         .contains_key(&ConstraintID::from(SOS1_SOURCE_ID)));
-    assert!(instance.sos1_constraints().contains_key(&sos1_promotion));
-
-    assert!(instance.constraints().is_empty());
     assert!(instance
-        .removed_constraints()
+        .active_sos1_constraints()
+        .contains_key(&sos1_promotion));
+
+    assert!(instance.active_constraints().is_empty());
+    assert!(instance
+        .inactive_constraints()
         .contains_key(&ConstraintID::from(ONE_HOT_SOURCE_ID)));
     assert!(instance
-        .removed_constraints()
+        .inactive_constraints()
         .contains_key(&ConstraintID::from(SOS1_SOURCE_ID)));
 }
 
@@ -253,9 +255,9 @@ fn invalid_hints_do_not_block_independent_valid_promotions() {
     assert!(invalid_sos1_outcome.error().is_some());
     assert!(report.sos1_outcomes()[1].is_promoted());
 
-    assert_eq!(instance.one_hot_constraints().len(), 1);
-    assert_eq!(instance.sos1_constraints().len(), 1);
-    assert!(instance.constraints().is_empty());
+    assert_eq!(instance.active_one_hot_constraints().len(), 1);
+    assert_eq!(instance.active_sos1_constraints().len(), 1);
+    assert!(instance.active_constraints().is_empty());
 }
 
 #[test]
@@ -265,16 +267,16 @@ fn ordinary_v1_loader_still_ignores_valid_hints() {
 
     let instance = Instance::from_v1_bytes(&bytes).unwrap();
 
-    assert_eq!(instance.constraints().len(), 2);
+    assert_eq!(instance.active_constraints().len(), 2);
     assert!(instance
-        .constraints()
+        .active_constraints()
         .contains_key(&ConstraintID::from(ONE_HOT_SOURCE_ID)));
     assert!(instance
-        .constraints()
+        .active_constraints()
         .contains_key(&ConstraintID::from(SOS1_SOURCE_ID)));
-    assert!(instance.removed_constraints().is_empty());
-    assert!(instance.one_hot_constraints().is_empty());
-    assert!(instance.sos1_constraints().is_empty());
+    assert!(instance.inactive_constraints().is_empty());
+    assert!(instance.active_one_hot_constraints().is_empty());
+    assert!(instance.active_sos1_constraints().is_empty());
 }
 
 #[test]
@@ -366,9 +368,9 @@ fn individual_hint_requests_remain_independently_applicable() {
     let mut one_hot_only = source_instance();
     let one_hot_results = one_hot_only.promote_one_hot(&one_hot_request);
     assert!(one_hot_results[&ConstraintID::from(ONE_HOT_SOURCE_ID)].is_ok());
-    assert_eq!(one_hot_only.one_hot_constraints().len(), 1);
+    assert_eq!(one_hot_only.active_one_hot_constraints().len(), 1);
     assert!(one_hot_only
-        .constraints()
+        .active_constraints()
         .contains_key(&ConstraintID::from(SOS1_SOURCE_ID)));
 
     let mut sos1_only = source_instance();
@@ -387,9 +389,9 @@ fn individual_hint_requests_remain_independently_applicable() {
         .expect("one request has one aligned result")
         .1
         .unwrap();
-    assert_eq!(sos1_only.sos1_constraints().len(), 1);
+    assert_eq!(sos1_only.active_sos1_constraints().len(), 1);
     assert!(sos1_only
-        .constraints()
+        .active_constraints()
         .contains_key(&ConstraintID::from(ONE_HOT_SOURCE_ID)));
 }
 
@@ -413,15 +415,15 @@ fn repeated_valid_one_hot_hints_share_one_promotion_and_ignore_advisory_members(
         .one_hot_constraint_id()
         .unwrap();
     assert_eq!(first_id, second_id);
-    assert_eq!(instance.one_hot_constraints().len(), 1);
+    assert_eq!(instance.active_one_hot_constraints().len(), 1);
     assert_eq!(
-        instance.one_hot_constraints()[&first_id].variables,
+        instance.active_one_hot_constraints()[&first_id].variables,
         [VariableID::from(0), VariableID::from(1)]
             .into_iter()
             .collect()
     );
     assert!(!instance
-        .constraints()
+        .active_constraints()
         .contains_key(&ConstraintID::from(ONE_HOT_SOURCE_ID)));
 }
 
@@ -484,8 +486,8 @@ fn repeated_invalid_one_hot_hints_retain_owned_errors_for_each_occurrence() {
     assert!(first_error.to_string().contains("was not found"));
     assert!(second_error.to_string().contains("was not found"));
     assert!(std::sync::Arc::ptr_eq(&first_error, &second_error));
-    assert_eq!(instance.constraints().len(), 2);
-    assert!(instance.one_hot_constraints().is_empty());
+    assert_eq!(instance.active_constraints().len(), 2);
+    assert!(instance.active_one_hot_constraints().is_empty());
 }
 
 #[test]
@@ -498,13 +500,13 @@ fn equality_row_overlap_rejects_sos1_claim_without_poisoning_one_hot() {
 
     assert!(report.one_hot_outcomes()[0].is_promoted());
     assert!(!report.sos1_outcomes()[0].is_promoted());
-    assert_eq!(instance.one_hot_constraints().len(), 1);
-    assert!(instance.sos1_constraints().is_empty());
+    assert_eq!(instance.active_one_hot_constraints().len(), 1);
+    assert!(instance.active_sos1_constraints().is_empty());
     assert!(!instance
-        .constraints()
+        .active_constraints()
         .contains_key(&ConstraintID::from(ONE_HOT_SOURCE_ID)));
     assert!(instance
-        .constraints()
+        .active_constraints()
         .contains_key(&ConstraintID::from(SOS1_SOURCE_ID)));
 }
 
@@ -518,13 +520,13 @@ fn inequality_row_overlap_rejects_one_hot_claim_without_poisoning_sos1() {
 
     assert!(!report.one_hot_outcomes()[0].is_promoted());
     assert!(report.sos1_outcomes()[0].is_promoted());
-    assert!(instance.one_hot_constraints().is_empty());
-    assert_eq!(instance.sos1_constraints().len(), 1);
+    assert!(instance.active_one_hot_constraints().is_empty());
+    assert_eq!(instance.active_sos1_constraints().len(), 1);
     assert!(instance
-        .constraints()
+        .active_constraints()
         .contains_key(&ConstraintID::from(ONE_HOT_SOURCE_ID)));
     assert!(!instance
-        .constraints()
+        .active_constraints()
         .contains_key(&ConstraintID::from(SOS1_SOURCE_ID)));
 }
 
@@ -543,18 +545,18 @@ fn one_hot_and_sos1_promotions_may_share_an_ordinary_member() {
     assert!(!report.has_rejections());
     assert!(report.one_hot_outcomes()[0].is_promoted());
     assert!(report.sos1_outcomes()[0].is_promoted());
-    assert_eq!(instance.one_hot_constraints().len(), 1);
-    assert_eq!(instance.sos1_constraints().len(), 1);
-    assert!(instance.constraints().is_empty());
+    assert_eq!(instance.active_one_hot_constraints().len(), 1);
+    assert_eq!(instance.active_sos1_constraints().len(), 1);
+    assert!(instance.active_constraints().is_empty());
 
     let one_hot_id = report.one_hot_outcomes()[0]
         .one_hot_constraint_id()
         .unwrap();
     let sos1_promotion = report.sos1_outcomes()[0].sos1_constraint_id().unwrap();
-    assert!(instance.one_hot_constraints()[&one_hot_id]
+    assert!(instance.active_one_hot_constraints()[&one_hot_id]
         .variables
         .contains(&VariableID::from(0)));
-    assert!(instance.sos1_constraints()[&sos1_promotion]
+    assert!(instance.active_sos1_constraints()[&sos1_promotion]
         .variables
         .contains(&VariableID::from(0)));
 }
@@ -580,11 +582,15 @@ fn one_hot_source_usage_rejects_an_overlapping_sos1_fresh_selector() {
         .unwrap()
         .to_string()
         .contains("active solver input"));
-    assert_eq!(instance.one_hot_constraints().len(), 1);
-    assert!(instance.sos1_constraints().is_empty());
-    assert!(!instance.constraints().contains_key(&ConstraintID::from(50)));
+    assert_eq!(instance.active_one_hot_constraints().len(), 1);
+    assert!(instance.active_sos1_constraints().is_empty());
+    assert!(!instance
+        .active_constraints()
+        .contains_key(&ConstraintID::from(50)));
     for id in [100, 101, 102] {
-        assert!(instance.constraints().contains_key(&ConstraintID::from(id)));
+        assert!(instance
+            .active_constraints()
+            .contains_key(&ConstraintID::from(id)));
     }
 }
 
@@ -605,7 +611,9 @@ fn disjoint_one_hot_and_fresh_selector_sos1_effects_apply_together() {
     assert!(!report.has_rejections());
     assert!(report.one_hot_outcomes()[0].is_promoted());
     let sos1_promotion = report.sos1_outcomes()[0].sos1_constraint_id().unwrap();
-    assert!(instance.sos1_constraints().contains_key(&sos1_promotion));
+    assert!(instance
+        .active_sos1_constraints()
+        .contains_key(&sos1_promotion));
     let state = instance
         .populate_state(
             ommx::v1::State::from_iter([(0, 0.0), (1, -2.0), (11, 1.0), (12, 0.0)]),
@@ -617,12 +625,12 @@ fn disjoint_one_hot_and_fresh_selector_sos1_effects_apply_together() {
         .decision_variable_dependency()
         .get(&VariableID::from(10))
         .is_some());
-    assert_eq!(instance.one_hot_constraints().len(), 1);
-    assert_eq!(instance.sos1_constraints().len(), 1);
-    assert!(instance.constraints().is_empty());
+    assert_eq!(instance.active_one_hot_constraints().len(), 1);
+    assert_eq!(instance.active_sos1_constraints().len(), 1);
+    assert!(instance.active_constraints().is_empty());
     for id in [50, 100, 101, 102] {
         assert!(instance
-            .removed_constraints()
+            .inactive_constraints()
             .contains_key(&ConstraintID::from(id)));
     }
 }
@@ -652,21 +660,27 @@ fn sos1_outcomes_remain_aligned_across_conversion_rejections() {
     let last_promotion = outcomes[2].sos1_constraint_id().unwrap();
     assert_ne!(first_promotion, last_promotion);
     assert_eq!(
-        &instance.sos1_constraints()[&first_promotion].variables,
+        &instance.active_sos1_constraints()[&first_promotion].variables,
         &[VariableID::from(4), VariableID::from(5)]
             .into_iter()
             .collect()
     );
     assert_eq!(
-        &instance.sos1_constraints()[&last_promotion].variables,
+        &instance.active_sos1_constraints()[&last_promotion].variables,
         &[VariableID::from(0), VariableID::from(1)]
             .into_iter()
             .collect()
     );
-    assert_eq!(instance.sos1_constraints().len(), 2);
-    assert!(instance.constraints().contains_key(&ConstraintID::from(21)));
-    assert!(!instance.constraints().contains_key(&ConstraintID::from(20)));
-    assert!(!instance.constraints().contains_key(&ConstraintID::from(22)));
+    assert_eq!(instance.active_sos1_constraints().len(), 2);
+    assert!(instance
+        .active_constraints()
+        .contains_key(&ConstraintID::from(21)));
+    assert!(!instance
+        .active_constraints()
+        .contains_key(&ConstraintID::from(20)));
+    assert!(!instance
+        .active_constraints()
+        .contains_key(&ConstraintID::from(22)));
 }
 
 #[test]
@@ -695,11 +709,11 @@ fn equivalent_sos1_hints_share_one_promotion_without_losing_wire_order() {
         assert_eq!(outcome.sos1_constraint_id(), Some(target));
     }
     assert!(instance
-        .removed_constraints()
+        .inactive_constraints()
         .contains_key(&ConstraintID::from(SOS1_SOURCE_ID)));
-    assert_eq!(instance.sos1_constraints().len(), 1);
+    assert_eq!(instance.active_sos1_constraints().len(), 1);
     assert!(report.one_hot_outcomes()[0].is_promoted());
-    assert!(instance.constraints().is_empty());
+    assert!(instance.active_constraints().is_empty());
 }
 
 #[test]
@@ -752,9 +766,9 @@ fn different_claims_for_one_cardinality_are_rejected_regardless_of_order() {
             report.sos1_outcomes()[0].error().unwrap(),
             report.sos1_outcomes()[1].error().unwrap()
         ));
-        assert_eq!(instance.sos1_constraints().len(), 1);
+        assert_eq!(instance.active_sos1_constraints().len(), 1);
         assert!(report.sos1_outcomes()[hints.len()].is_promoted());
-        assert_eq!(instance.constraints().len(), 3);
+        assert_eq!(instance.active_constraints().len(), 3);
         assert!(report.one_hot_outcomes()[0].is_promoted());
     }
 }
@@ -786,9 +800,9 @@ fn equivalent_fresh_claims_ignore_member_and_link_wire_order() {
         assert_eq!(outcome.hint(), hint);
         assert_eq!(outcome.sos1_constraint_id(), Some(target));
     }
-    assert_eq!(instance.sos1_constraints().len(), 1);
+    assert_eq!(instance.active_sos1_constraints().len(), 1);
     assert_eq!(instance.decision_variable_dependency().len(), 1);
-    assert_eq!(instance.removed_constraints().len(), 3);
+    assert_eq!(instance.inactive_constraints().len(), 3);
 }
 
 #[test]
@@ -803,9 +817,9 @@ fn a_conversion_failure_does_not_poison_the_same_cardinality_id() {
     assert_eq!(report.sos1_outcomes().len(), 2);
     assert!(!report.sos1_outcomes()[0].is_promoted());
     assert!(report.sos1_outcomes()[1].is_promoted());
-    assert_eq!(instance.sos1_constraints().len(), 1);
+    assert_eq!(instance.active_sos1_constraints().len(), 1);
     assert!(!instance
-        .constraints()
+        .active_constraints()
         .contains_key(&ConstraintID::from(SOS1_SOURCE_ID)));
 }
 
@@ -833,8 +847,8 @@ fn duplicate_sos1_rejections_share_the_original_error_chain() {
         report.sos1_outcomes()[0].error().unwrap(),
         report.sos1_outcomes()[1].error().unwrap()
     ));
-    assert!(instance.sos1_constraints().is_empty());
-    assert_eq!(instance.constraints().len(), 2);
+    assert!(instance.active_sos1_constraints().is_empty());
+    assert_eq!(instance.active_constraints().len(), 2);
 }
 
 proptest! {
@@ -872,7 +886,7 @@ proptest! {
             prop_assert_eq!(outcome.hint(), hint);
             prop_assert_eq!(outcome.is_promoted(), outcome.error().is_none());
             if let Some(id) = outcome.one_hot_constraint_id() {
-                prop_assert!(actual.one_hot_constraints().contains_key(&id));
+                prop_assert!(actual.active_one_hot_constraints().contains_key(&id));
             }
         }
         for (index, (outcome, hint)) in report.sos1_outcomes().iter().zip(&sos1_hints).enumerate() {
@@ -880,7 +894,7 @@ proptest! {
             prop_assert_eq!(outcome.hint(), hint);
             prop_assert_eq!(outcome.is_promoted(), outcome.error().is_none());
             if let Some(id) = outcome.sos1_constraint_id() {
-                prop_assert!(actual.sos1_constraints().contains_key(&id));
+                prop_assert!(actual.active_sos1_constraints().contains_key(&id));
             }
         }
         prop_assert_eq!(Instance::from_v2_bytes(&actual.to_v2_bytes()).unwrap(), actual);

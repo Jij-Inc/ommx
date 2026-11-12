@@ -14,11 +14,11 @@ decision_variables:
   by_usage:
     used_in_objective: 1
     used_in_constraints: 3
-    used: 3
+    active: 3
     fixed: 0
     dependent: 0
     irrelevant: 0
 constraints:
   total: 3
   active: 2
-  removed: 1
+  inactive: 1

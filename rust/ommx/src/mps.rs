@@ -114,7 +114,7 @@ pub fn load(path: impl AsRef<Path>) -> crate::Result<crate::Instance> {
 /// Limitation
 /// ----------
 /// Only the model family described by [`format()`] is supported. See it for
-/// detailed information about required lowering, information loss, removed
+/// detailed information about required lowering, information loss, inactive
 /// constraints handling, and variable filtering behavior.
 // Note: the caller's output path is intentionally not recorded as a span
 // field to avoid leaking local directory structure through exported telemetry.

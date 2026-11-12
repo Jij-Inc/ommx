@@ -1,17 +1,18 @@
-A condition enforced when a controlling Binary variable equals its activation value.
+A condition enforced when a controlling Binary variable equals its trigger value.
 
 For a Binary variable $z$, an Indicator requires $f(x)\leq0$ or $f(x)=0$
-when $z=1$ by default. With `activate_on_zero=True`, it is enforced when $z=0$.
+when $z=1$ by default. With `trigger_value=0`, it is enforced when $z=0$.
+Only 0 and 1 are valid trigger values.
 At the other binary value, the Indicator is satisfied regardless of the body's
 value; variable domains and other constraints still apply. This is a one-way
-implication: a satisfied body does not force the trigger to its activation value.
+implication: a satisfied body does not force the variable to its trigger value.
 
 Construct one from a regular constraint with {meth}`~ommx.Constraint.with_indicator`,
 or pass `indicator_variable`, `function`, and `equality` to this class.
 The controlling variable accepts a variable ID, a standalone
 {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.
 These accepted forms are exposed as the `VariableIDLike` type alias.
-Its ID and activation condition are stored. The enclosing Instance validates that the referenced
+Its ID and trigger value are stored. The enclosing Instance validates that the referenced
 variables exist and that the controlling variable is Binary when inserting it.
 
 **Construct and evaluate a conditional limit**
@@ -26,6 +27,7 @@ The following model limits the amount to five only when the facility is enabled:
 >>> instance.objective = amount
 >>> condition = (amount <= 5).with_indicator(enabled)
 >>> assert condition.indicator_variable_id == enabled.id
+>>> assert condition.trigger_value == 1
 >>> assert condition.equality == Equality.LessThanOrEqualToZero
 >>> attached = instance.add_indicator_constraint(condition)
 >>> cid = attached.constraint_id
@@ -34,44 +36,47 @@ The following model limits the amount to five only when the facility is enabled:
 >>> on = instance.evaluate({enabled.id: 1, amount.id: 5})
 >>> violated = instance.evaluate({enabled.id: 1, amount.id: 6})
 >>> assert off.feasible and on.feasible and not violated.feasible
->>> assert not off.constraints_df(kind=ConstraintKind.Indicator).loc[
-...     cid, "indicator_active"
-... ]
->>> assert on.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_active"]
+>>> assert not off.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_on"]
+>>> assert on.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_on"]
 
 ```
 
-Pass `activate_on_zero=True` to enforce the body when the trigger is zero:
+Pass `trigger_value=0` to enforce the body when the controlling variable is zero:
 
 ```pycon
->>> disabled_limit = (amount <= 5).with_indicator(enabled, activate_on_zero=True)
->>> assert disabled_limit.activate_on_zero
+>>> disabled_limit = (amount <= 5).with_indicator(enabled, trigger_value=0)
+>>> assert disabled_limit.trigger_value == 0
 
 ```
 
-The constructor accepts the same keyword. Attached, removed, evaluated, and
-sampled rows expose `activate_on_zero`; Indicator DataFrames retain it as a
-column. It describes the constraint, independently of whether a particular
-candidate activates it.
+The constructor accepts the same keyword. Attached, inactive, evaluated, and
+sampled rows expose the integer `trigger_value`; Indicator DataFrames retain it
+as a column. This is the constraint's configuration, independently of its ON/OFF
+state at a particular candidate.
 
-The `indicator_active` column distinguishes an inactive condition from an active
-condition whose body is satisfied. Indicator results do not have a dual variable.
+The `indicator_on` column records whether the controlling variable equals its
+trigger value, using the evaluation tolerance. It distinguishes an OFF
+Indicator from an ON Indicator whose body is satisfied. This is independent of
+`role`, which records whether the constraint belongs to the current
+formulation and its default feasibility participation. An active constraint can
+have its Indicator OFF; an inactive constraint can have its Indicator ON.
+Indicator results do not have a dual variable.
 See {meth}`~ommx.Solution.constraints_df` for the precise columns and violation
 semantics, and {meth}`~ommx.Instance.evaluate` for numerical tolerances and invalid
-activation values.
+controlling-variable values.
 
 **Identity, transformation, and solver use**
 
 {meth}`~ommx.Instance.add_indicator_constraint` returns an attached handle. The
 constructor above creates an independent value; context changes on it do not
 edit a constraint already inserted into a host. Alternatively, provide explicit
-IDs through the `indicator_constraints` mapping of
+IDs through the `active_indicator_constraints` mapping of
 {meth}`~ommx.Instance.from_components`. Constraint numbers must be distinct
-across all active and removed families, as described by {class}`~ommx.Instance`.
+across all active and inactive families, as described by {class}`~ommx.Instance`.
 
-{meth}`~ommx.Instance.relax_indicator_constraint` moves a condition out of the
+{meth}`~ommx.Instance.deactivate_indicator_constraint` moves a condition out of the
 active formulation while retaining it for evaluation.
-{meth}`~ommx.Instance.restore_indicator_constraint` makes it active again, subject
+{meth}`~ommx.Instance.activate_indicator_constraint` makes it active again, subject
 to the current variable dependencies and fixed values.
 
 A backend may receive this structure directly or require regular constraints.

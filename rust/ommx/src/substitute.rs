@@ -26,7 +26,7 @@ pub use error::SubstitutionError;
 /// The target owns the rewrite boundary. Functions, polynomials, and individual
 /// named functions rewrite their expressions. [`crate::Instance`] and
 /// [`crate::ParametricInstance`] rewrite the Active Formulation and update
-/// reconstruction rules, preserving named-function expressions, removed
+/// reconstruction rules, preserving named-function expressions, inactive
 /// constraints, and existing output objectives as Interpretation Context.
 /// Named functions are evaluated after restoring substituted variables.
 /// An affected active objective is retained for output evaluation when no

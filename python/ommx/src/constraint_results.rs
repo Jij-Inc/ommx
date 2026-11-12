@@ -13,7 +13,10 @@ macro_rules! constraint_result_context {
     ($name:ident) => {
         impl $name {
             /// Copy the owning result's lifecycle metadata into this snapshot.
-            pub fn with_removed_reason(mut self, reason: Option<ommx::RemovedReason>) -> Self {
+            pub fn with_inactive_reason(
+                mut self,
+                reason: Option<ommx::InactiveConstraintMetadata>,
+            ) -> Self {
                 self.2 = reason;
                 self
             }
@@ -22,6 +25,14 @@ macro_rules! constraint_result_context {
         #[pyo3_stub_gen::derive::gen_stub_pymethods]
         #[pymethods]
         impl $name {
+            #[getter]
+            pub fn role(&self) -> crate::ConstraintRole {
+                self.2
+                    .as_ref()
+                    .map_or(ommx::ConstraintRole::Active, |metadata| metadata.role())
+                    .into()
+            }
+
             /// Modeling name, if supplied.
             #[getter]
             pub fn name(&self) -> Option<String> {
@@ -57,15 +68,15 @@ macro_rules! constraint_result_context {
                 crate::provenance_list(&self.1)
             }
 
-            /// Reason this constraint was removed before evaluation, or None.
+            /// Reason this constraint was deactivated before evaluation, or None.
             #[getter]
-            pub fn removed_reason(&self) -> Option<String> {
+            pub fn inactive_reason(&self) -> Option<String> {
                 self.2.as_ref().map(|r| r.reason.clone())
             }
 
-            /// Parameters of the removal reason; empty for an active constraint.
+            /// Parameters of the inactivation reason; empty for an active constraint.
             #[getter]
-            pub fn removed_reason_parameters(&self) -> std::collections::HashMap<String, String> {
+            pub fn inactive_reason_parameters(&self) -> std::collections::HashMap<String, String> {
                 self.2
                     .as_ref()
                     .map(|r| {
@@ -86,7 +97,11 @@ macro_rules! result_class {
         #[pyo3_stub_gen::derive::gen_stub_pyclass]
         #[pyclass(eq, extends = ConstraintView)]
         #[derive(PartialEq)]
-        pub struct $name($inner, ommx::ConstraintContext, Option<ommx::RemovedReason>);
+        pub struct $name(
+            $inner,
+            ommx::ConstraintContext,
+            Option<ommx::InactiveConstraintMetadata>,
+        );
         crate::constraint_base::constraint_subclass!($name, crate::constraint_base::ConstraintView);
 
         impl $name {
@@ -212,16 +227,16 @@ sampled_methods!(SampledSos1Constraint, violations);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl EvaluatedIndicatorConstraint {
-    /// Decision variable that activates this constraint.
+    /// Binary decision variable controlling when the body is enforced.
     #[getter]
     pub fn indicator_variable_id(&self) -> u64 {
         self.0.indicator_variable.into_inner()
     }
 
-    /// Whether zero activates the body instead of one.
+    /// Binary value (0 or 1) at which the body is enforced.
     #[getter]
-    pub fn activate_on_zero(&self) -> bool {
-        self.0.activate_on_zero
+    pub fn trigger_value(&self) -> u8 {
+        self.0.trigger_value.into()
     }
 
     /// Equality of the inner constraint.
@@ -236,10 +251,10 @@ impl EvaluatedIndicatorConstraint {
         self.0.stage.evaluated_value
     }
 
-    /// Whether the indicator was active at evaluation time.
+    /// Whether the indicator was ON at evaluation time, independently of role.
     #[getter]
-    pub fn indicator_active(&self) -> bool {
-        self.0.stage.indicator_active
+    pub fn indicator_on(&self) -> bool {
+        self.0.stage.indicator_on
     }
 }
 
@@ -254,8 +269,8 @@ impl EvaluatedOneHotConstraint {
 
     /// Retained selected-variable diagnostic, using activation_atol.
     #[getter]
-    pub fn active_variable(&self) -> Option<u64> {
-        self.0.stage.active_variable.map(|id| id.into_inner())
+    pub fn selected_variable(&self) -> Option<u64> {
+        self.0.stage.selected_variable.map(|id| id.into_inner())
     }
 }
 
@@ -270,24 +285,24 @@ impl EvaluatedSos1Constraint {
 
     /// Retained selected-variable diagnostic, using activation_atol.
     #[getter]
-    pub fn active_variable(&self) -> Option<u64> {
-        self.0.stage.active_variable.map(|id| id.into_inner())
+    pub fn selected_variable(&self) -> Option<u64> {
+        self.0.stage.selected_variable.map(|id| id.into_inner())
     }
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SampledIndicatorConstraint {
-    /// Decision variable that activates this constraint.
+    /// Binary decision variable controlling when the body is enforced.
     #[getter]
     pub fn indicator_variable_id(&self) -> u64 {
         self.0.indicator_variable.into_inner()
     }
 
-    /// Whether zero activates the body instead of one.
+    /// Binary value (0 or 1) at which the body is enforced.
     #[getter]
-    pub fn activate_on_zero(&self) -> bool {
-        self.0.activate_on_zero
+    pub fn trigger_value(&self) -> u8 {
+        self.0.trigger_value.into()
     }
 
     /// Equality of the inner constraint.
@@ -307,14 +322,14 @@ impl SampledIndicatorConstraint {
             .collect()
     }
 
-    /// Activation diagnostics keyed by sample ID.
+    /// Indicator ON/OFF diagnostics keyed by sample ID, independently of role.
     #[getter]
-    pub fn indicator_active(&self) -> BTreeMap<u64, bool> {
+    pub fn indicator_on(&self) -> BTreeMap<u64, bool> {
         self.0
             .stage
-            .indicator_active
+            .indicator_on
             .iter()
-            .map(|(id, active)| (id.into_inner(), *active))
+            .map(|(id, on)| (id.into_inner(), *on))
             .collect()
     }
 }
@@ -330,12 +345,12 @@ impl SampledOneHotConstraint {
 
     /// Retained selected-variable diagnostics keyed by sample ID, using activation_atol.
     #[getter]
-    pub fn active_variable(&self) -> BTreeMap<u64, Option<u64>> {
+    pub fn selected_variable(&self) -> BTreeMap<u64, Option<u64>> {
         self.0
             .stage
-            .active_variable
+            .selected_variable
             .iter()
-            .map(|(id, active)| (id.into_inner(), active.map(|v| v.into_inner())))
+            .map(|(id, selected)| (id.into_inner(), selected.map(|v| v.into_inner())))
             .collect()
     }
 }
@@ -351,12 +366,12 @@ impl SampledSos1Constraint {
 
     /// Retained selected-variable diagnostics keyed by sample ID, using activation_atol.
     #[getter]
-    pub fn active_variable(&self) -> BTreeMap<u64, Option<u64>> {
+    pub fn selected_variable(&self) -> BTreeMap<u64, Option<u64>> {
         self.0
             .stage
-            .active_variable
+            .selected_variable
             .iter()
-            .map(|(id, active)| (id.into_inner(), active.map(|v| v.into_inner())))
+            .map(|(id, selected)| (id.into_inner(), selected.map(|v| v.into_inner())))
             .collect()
     }
 }

@@ -115,7 +115,7 @@ pub enum SolutionError {
 ///   IDs.
 /// - The keys of the evaluated constraint collections are the table-owned
 ///   constraint IDs for each constraint family. Their numeric values are unique
-///   across all families, including removed constraints.
+///   across all families, including inactive constraints.
 /// - [`Self::evaluated_named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; evaluated named-function rows do not carry IDs.
 /// - [`Self::decision_variables`] contains all variable IDs referenced in
@@ -124,10 +124,10 @@ pub enum SolutionError {
 /// - Evaluated special-constraint structural variables are defined in
 ///   [`Self::decision_variables`]. Indicator variables and one-hot variables
 ///   must be binary; one-hot and SOS1 variable sets must be non-empty, and
-///   `active_variable` values must belong to their structural variable set.
+///   `selected_variable` values must belong to their structural variable set.
 /// - Evaluated special-constraint stage fields are consistent with
-///   [`Self::decision_variables`]: `indicator_active` reflects the indicator
-///   variable value, and one-hot/SOS1 `active_variable` plus scalar violation reflect
+///   [`Self::decision_variables`]: `indicator_on` reflects the indicator
+///   variable value, and one-hot/SOS1 `selected_variable` plus scalar violation reflect
 ///   the structural variable values under `feasibility_atol`.
 /// - `feasibility_atol` is the absolute tolerance used to interpret
 ///   decision-variable feasibility and to validate serialized per-constraint
@@ -136,7 +136,7 @@ pub enum SolutionError {
 /// Note
 /// -----
 /// - [`Self::optimality`] is determined by the solver, not validated by this struct.
-/// - [`Self::relaxation`] is a record of operations, not validated by this struct.
+/// - [`Self::metadata`] is a record of operations, not validated by this struct.
 #[derive(Debug, Clone, PartialEq, Getters)]
 pub struct Solution {
     #[getset(get = "pub")]
@@ -261,7 +261,7 @@ fn validate_all_solution_constraint_used_ids(
 }
 
 impl Solution {
-    /// Unique constraint names across every family, including retained removed rows.
+    /// Unique constraint names across every family, including retained inactive rows.
     ///
     /// Searches the same rows as `extract_constraints`. Unnamed constraints are
     /// excluded; explicitly empty names are included. Duplicate names are
@@ -345,7 +345,8 @@ impl Solution {
             .all(|dv| dv.is_valid(self.feasibility_atol))
     }
 
-    /// Check if all constraints are feasible
+    /// Check whether every `FeasibilityCheck` and `Active` constraint is feasible.
+    /// Inactive skipped constraints remain evaluated but do not participate.
     ///
     /// Note: This only checks constraints, not decision variable bounds/kinds.
     /// - To check both constraints and decision variables, use [`feasible()`](Self::feasible)
@@ -364,16 +365,16 @@ impl Solution {
                 .is_feasible(self.feasibility_atol)
     }
 
-    /// Check if all constraints and decision variables are feasible
+    /// Check `FeasibilityCheck` and `Active` constraints, and all decision variable domains.
     ///
-    /// This is the most comprehensive feasibility check, verifying:
-    /// - All constraints are satisfied (via [`feasible_constraints()`](Self::feasible_constraints))
+    /// This checks:
+    /// - `FeasibilityCheck` and `Active` constraints are satisfied (via [`feasible_constraints()`](Self::feasible_constraints))
     /// - All decision variables satisfy their bounds and kinds (via [`feasible_decision_variables()`](Self::feasible_decision_variables))
     pub fn feasible(&self) -> bool {
         self.feasible_constraints() && self.feasible_decision_variables()
     }
 
-    /// Check if all constraints are feasible in the relaxed problem
+    /// Check whether every active constraint is feasible.
     ///
     /// Note: This only checks constraints, not decision variable bounds/kinds.
     /// - To check both constraints and decision variables, use [`feasible_relaxed()`](Self::feasible_relaxed)
@@ -392,44 +393,47 @@ impl Solution {
                 .is_feasible_relaxed(self.feasibility_atol)
     }
 
-    /// Check if all constraints and decision variables are feasible in the relaxed problem
+    /// Check active constraints and all decision variable domains.
     ///
     /// This checks:
-    /// - Relaxed constraints are satisfied (via [`feasible_constraints_relaxed()`](Self::feasible_constraints_relaxed))
+    /// - Active constraints are satisfied (via [`feasible_constraints_relaxed()`](Self::feasible_constraints_relaxed))
     /// - All decision variables satisfy their bounds and kinds (via [`feasible_decision_variables()`](Self::feasible_decision_variables))
     pub fn feasible_relaxed(&self) -> bool {
         self.feasible_constraints_relaxed() && self.feasible_decision_variables()
     }
 
-    /// Sum the nonnegative scalar violation of every constraint.
+    /// Sum nonnegative scalar violations at or above `min_role`.
     ///
-    /// Includes all regular and special constraints, including removed constraints:
+    /// `FeasibilityCheck` selects the same constraints as [`Self::feasible_constraints`];
+    /// `Active` selects the same constraints as [`Self::feasible_constraints_relaxed`].
+    /// `EvaluationOnly` includes every constraint, including those excluded from feasibility:
     /// - Equality: `|f(x)|`; inequality: `max(0, f(x))`.
-    /// - Indicator: the inner constraint's violation when active, otherwise zero.
+    /// - Indicator: the inner constraint's violation when `indicator_on`, otherwise zero.
     /// - One-hot: `min_i (|x_i - 1| + Σ_{j != i} |x_j|)`.
     /// - SOS1: `min_i Σ_{j != i} |x_j|`.
     ///
     /// Residuals are not rounded to zero by the feasibility tolerance. Decision
-    /// variable kind and bound violations are not separately added. Zero implies
-    /// [`Self::feasible_constraints`], but a feasible constraint can have a small
-    /// positive violation within tolerance. Values are computed from the evaluated
+    /// variable kind and bound violations are not separately added. Each selected
+    /// constraint is judged separately; the sum is not compared to a tolerance.
+    /// A feasible constraint may have a positive violation within tolerance. Values are computed from the evaluated
     /// decision variables, including any discrete-value canonicalization.
     ///
-    /// Lowering need not preserve this metric. When both a removed original and
-    /// its generated regular constraints are retained, all of them contribute.
-    pub fn total_violation(&self) -> f64 {
-        self.constraint_violations().sum()
+    /// Lowering need not preserve this metric. When both an inactive original and
+    /// its generated regular constraints are selected, all of them contribute.
+    pub fn total_violation(&self, min_role: crate::ConstraintRole) -> f64 {
+        self.constraint_violations(min_role).sum()
     }
 
     /// Get a regular constraint's scalar violation, or `None` for an unknown ID.
-    /// Includes removed constraints; see [`Self::total_violation`] for semantics.
+    /// Includes inactive constraints; see [`Self::total_violation`] for semantics.
     pub fn constraint_violation(&self, id: ConstraintID) -> Option<f64> {
         self.evaluated_constraints.get(&id).map(|c| c.violation())
     }
 
     /// Get an indicator constraint's violation, or `None` for an unknown ID.
-    /// The value is zero when inactive and the inner residual's violation otherwise.
-    /// Includes removed constraints.
+    /// The value is zero when the indicator variable disables the row, and the
+    /// inner residual's violation otherwise, independently of role.
+    /// Includes inactive constraints.
     pub fn indicator_constraint_violation(&self, id: crate::IndicatorConstraintID) -> Option<f64> {
         self.evaluated_indicator_constraints
             .get(&id)
@@ -440,7 +444,7 @@ impl Solution {
     ///
     /// This is `min_i (|x_i - 1| + Σ_{j != i} |x_j|)`, the minimum sum of
     /// absolute changes needed to make the member values one-hot. Includes
-    /// removed constraints. A positive value can be feasible within tolerance.
+    /// inactive constraints. A positive value can be feasible within tolerance.
     pub fn one_hot_constraint_violation(&self, id: crate::OneHotConstraintID) -> Option<f64> {
         self.evaluated_one_hot_constraints
             .get(&id)
@@ -450,7 +454,7 @@ impl Solution {
     /// Get an SOS1 constraint's violation, or `None` for an unknown ID.
     ///
     /// This is `min_i Σ_{j != i} |x_j|`, the minimum sum of absolute changes
-    /// needed to leave at most one nonzero member. Includes removed constraints.
+    /// needed to leave at most one nonzero member. Includes inactive constraints.
     /// A positive value can be feasible within tolerance.
     pub fn sos1_constraint_violation(&self, id: crate::Sos1ConstraintID) -> Option<f64> {
         self.evaluated_sos1_constraints
@@ -458,24 +462,27 @@ impl Solution {
             .map(|c| c.violation())
     }
 
-    fn constraint_violations(&self) -> impl Iterator<Item = f64> + '_ {
+    fn constraint_violations(
+        &self,
+        min_role: crate::ConstraintRole,
+    ) -> impl Iterator<Item = f64> + '_ {
         self.evaluated_constraints
-            .values()
-            .map(|c| c.violation())
+            .selected(min_role)
+            .map(|(_, c)| c.violation())
             .chain(
                 self.evaluated_indicator_constraints
-                    .values()
-                    .map(|c| c.violation()),
+                    .selected(min_role)
+                    .map(|(_, c)| c.violation()),
             )
             .chain(
                 self.evaluated_one_hot_constraints
-                    .values()
-                    .map(|c| c.violation()),
+                    .selected(min_role)
+                    .map(|(_, c)| c.violation()),
             )
             .chain(
                 self.evaluated_sos1_constraints
-                    .values()
-                    .map(|c| c.violation()),
+                    .selected(min_role)
+                    .map(|(_, c)| c.violation()),
             )
     }
 
@@ -580,7 +587,7 @@ impl Solution {
 
     /// Extract nonnegative constraint violations by name, keyed by subscripts.
     ///
-    /// Searches every constraint family, including retained removed constraints.
+    /// Searches every constraint family, including retained inactive constraints.
     /// Parameters and descriptions are ignored, as in decision-variable extraction.
     /// For a regular constraint this returns its violation, not its signed function
     /// value; use [`Self::get_constraint_value`] when the latter is needed.
@@ -894,13 +901,13 @@ fn validate_solution_one_hot_constraint_structure(
         }
         if constraint
             .stage
-            .active_variable
+            .selected_variable
             .is_some_and(|variable_id| !constraint.variables.contains(&variable_id))
         {
             return Err(SolutionError::InvalidConstraintStructure {
                 constraint_family: "one-hot",
                 constraint_id: format!("{id:?}"),
-                message: "active_variable must be a member of variables".to_string(),
+                message: "selected_variable must be a member of variables".to_string(),
             });
         }
     }
@@ -925,13 +932,13 @@ fn validate_solution_sos1_constraint_structure(
         }
         if constraint
             .stage
-            .active_variable
+            .selected_variable
             .is_some_and(|variable_id| !constraint.variables.contains(&variable_id))
         {
             return Err(SolutionError::InvalidConstraintStructure {
                 constraint_family: "SOS1",
                 constraint_id: format!("{id:?}"),
-                message: "active_variable must be a member of variables".to_string(),
+                message: "selected_variable must be a member of variables".to_string(),
             });
         }
     }
@@ -987,21 +994,17 @@ fn validate_solution_indicator_stage_values(
             constraint_id: format!("{id:?}"),
             message,
         })?;
-        let computed_indicator_active = atol.approx_eq(
+        let computed_indicator_on = atol.approx_eq(
             *variable.value(),
-            if constraint.activate_on_zero {
-                0.0
-            } else {
-                1.0
-            },
+            f64::from(u8::from(constraint.trigger_value)),
         );
-        if constraint.stage.indicator_active != computed_indicator_active {
+        if constraint.stage.indicator_on != computed_indicator_on {
             return Err(SolutionError::InvalidConstraintStructure {
                 constraint_family: "indicator",
                 constraint_id: format!("{id:?}"),
                 message: format!(
-                    "indicator_active={} does not match indicator variable {:?} value {}",
-                    constraint.stage.indicator_active,
+                    "indicator_on={} does not match indicator variable {:?} value {}",
+                    constraint.stage.indicator_on,
                     constraint.indicator_variable,
                     variable.value(),
                 ),
@@ -1018,7 +1021,7 @@ fn validate_solution_one_hot_stage_values(
 ) -> Result<(), SolutionError> {
     for (id, constraint) in one_hot_constraints.inner() {
         let provided_violation = constraint.violation();
-        let (computed_violation, computed_active_variable) = constraint
+        let (computed_violation, computed_selected_variable) = constraint
             .evaluate_members(
                 |variable_id| {
                     decision_variables
@@ -1038,11 +1041,11 @@ fn validate_solution_one_hot_stage_values(
                 message: format!("violation={provided_violation} does not match decision-variable values; computed={computed_violation}"),
             });
         }
-        let provided_active_variable = constraint.stage.active_variable;
-        if provided_active_variable != computed_active_variable {
+        let provided_selected_variable = constraint.stage.selected_variable;
+        if provided_selected_variable != computed_selected_variable {
             return Err(SolutionError::InvalidConstraintStructure {
                 constraint_family: "one-hot", constraint_id: format!("{id:?}"),
-                message: format!("active_variable={provided_active_variable:?} does not match decision-variable values; computed={computed_active_variable:?}"),
+                message: format!("selected_variable={provided_selected_variable:?} does not match decision-variable values; computed={computed_selected_variable:?}"),
             });
         }
     }
@@ -1056,7 +1059,7 @@ fn validate_solution_sos1_stage_values(
 ) -> Result<(), SolutionError> {
     for (id, constraint) in sos1_constraints.inner() {
         let provided_violation = constraint.violation();
-        let (computed_violation, computed_active_variable) = constraint
+        let (computed_violation, computed_selected_variable) = constraint
             .evaluate_members(
                 |variable_id| {
                     decision_variables
@@ -1076,11 +1079,11 @@ fn validate_solution_sos1_stage_values(
                 message: format!("violation={provided_violation} does not match decision-variable values; computed={computed_violation}"),
             });
         }
-        let provided_active_variable = constraint.stage.active_variable;
-        if provided_active_variable != computed_active_variable {
+        let provided_selected_variable = constraint.stage.selected_variable;
+        if provided_selected_variable != computed_selected_variable {
             return Err(SolutionError::InvalidConstraintStructure {
                 constraint_family: "SOS1", constraint_id: format!("{id:?}"),
-                message: format!("active_variable={provided_active_variable:?} does not match decision-variable values; computed={computed_active_variable:?}"),
+                message: format!("selected_variable={provided_selected_variable:?} does not match decision-variable values; computed={computed_selected_variable:?}"),
             });
         }
     }
@@ -1122,7 +1125,7 @@ impl SolutionBuilder {
     ) -> Self {
         self.evaluated_constraints = Some(
             EvaluatedCollection::new(evaluated_constraints, BTreeMap::new())
-                .expect("empty removed reasons cannot reference unknown constraints"),
+                .expect("empty inactive metadata cannot reference unknown constraints"),
         );
         self
     }
@@ -1155,7 +1158,7 @@ impl SolutionBuilder {
     ) -> Self {
         self.evaluated_indicator_constraints =
             EvaluatedCollection::new(evaluated_indicator_constraints, BTreeMap::new())
-                .expect("empty removed reasons cannot reference unknown constraints");
+                .expect("empty inactive metadata cannot reference unknown constraints");
         self
     }
 
@@ -1347,11 +1350,11 @@ impl SolutionBuilder {
     /// existing table rows are enforced. It does not revalidate host-level
     /// cross references. The caller must ensure:
     /// - `decision_variables` is keyed by the intended [`VariableID`] for each row
-    /// - Constraint numbers are unique across all families, including removed rows
+    /// - Constraint numbers are unique across all families, including inactive rows
     /// - All `used_decision_variable_ids` in constraints and evaluated named
     ///   functions exist in `decision_variables`
     /// - Special-constraint violations and activation decisions are consistent
-    ///   with `decision_variables`; their `activation_atol` equals `feasibility_atol`
+    ///   with `decision_variables`; their retained evaluation tolerance equals `feasibility_atol`
     ///
     /// Use [`Self::build`] for validated construction.
     /// This method is useful when invariants are guaranteed by construction,
@@ -1421,12 +1424,12 @@ mod tests {
             let instance = crate::Instance::builder()
                 .sense(Sense::Minimize)
                 .objective(Function::Zero)
-                .constraints(BTreeMap::new())
+                .active_constraints(BTreeMap::new())
                 .decision_variables(ids.iter().map(|id| (*id, crate::DecisionVariable::binary())).collect())
-                .one_hot_constraints(BTreeMap::from([(
+                .active_one_hot_constraints(BTreeMap::from([(
                     crate::OneHotConstraintID::from(0), crate::OneHotConstraint::new(ids.clone()).unwrap(),
                 )]))
-                .sos1_constraints(BTreeMap::from([(
+                .active_sos1_constraints(BTreeMap::from([(
                     crate::Sos1ConstraintID::from(1), crate::Sos1Constraint::new(ids).unwrap(),
                 )]))
                 .build().unwrap();
@@ -1452,16 +1455,13 @@ mod tests {
             for result in [solution, restored, samples.get(7.into()).unwrap(), restored_samples.get(7.into()).unwrap()] {
                 prop_assert_eq!(result.one_hot_constraint_violation(0.into()), Some(one_hot));
                 prop_assert_eq!(result.sos1_constraint_violation(1.into()), Some(sos1));
-                prop_assert_eq!(result.total_violation(), one_hot + sos1);
+                prop_assert_eq!(result.total_violation(Default::default()), one_hot + sos1);
                 prop_assert!(one_hot >= 0.0 && sos1 >= 0.0);
                 if one_hot == 0.0 {
                     prop_assert!(result.evaluated_one_hot_constraints()[&0.into()].is_feasible(atol));
                 }
                 if sos1 == 0.0 {
                     prop_assert!(result.evaluated_sos1_constraints()[&1.into()].is_feasible(atol));
-                }
-                if result.total_violation() == 0.0 {
-                    prop_assert!(result.feasible_constraints());
                 }
             }
         }
@@ -1481,24 +1481,24 @@ mod tests {
                     .map(|&id| (id, DecisionVariable::binary()))
                     .collect(),
             )
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 0.into(),
                 Constraint::equal_to_zero(Function::from(crate::coeff!(-2.0))),
             )]))
-            .indicator_constraints(BTreeMap::from([(
+            .active_indicator_constraints(BTreeMap::from([(
                 1.into(),
                 IndicatorConstraint::new(
                     0.into(),
                     Equality::EqualToZero,
                     Function::from(crate::coeff!(-3.0)),
-                    false,
+                    crate::IndicatorTriggerValue::One,
                 ),
             )]))
-            .one_hot_constraints(BTreeMap::from([(
+            .active_one_hot_constraints(BTreeMap::from([(
                 2.into(),
                 OneHotConstraint::new(variables.clone()).unwrap(),
             )]))
-            .sos1_constraints(BTreeMap::from([(
+            .active_sos1_constraints(BTreeMap::from([(
                 3.into(),
                 Sos1Constraint::new(variables).unwrap(),
             )]))
@@ -1527,9 +1527,9 @@ mod tests {
             .set_sos1_constraint_context(3.into(), context(3))
             .unwrap();
         let names = BTreeSet::from(["c".to_owned()]);
-        assert_eq!(instance.constraint_names(), names);
+        assert_eq!(instance.active_constraint_names(), names);
         let parametric: crate::ParametricInstance = instance.clone().into();
-        assert_eq!(parametric.constraint_names(), names);
+        assert_eq!(parametric.active_constraint_names(), names);
         assert_eq!(
             parametric.decision_variable_names(),
             instance.decision_variable_names()
@@ -1603,24 +1603,24 @@ mod tests {
                     .map(|&id| (id, DecisionVariable::binary()))
                     .collect(),
             )
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 ConstraintID::from(0),
                 Constraint::equal_to_zero(Function::from(crate::coeff!(2.5))),
             )]))
-            .indicator_constraints(BTreeMap::from([(
+            .active_indicator_constraints(BTreeMap::from([(
                 crate::IndicatorConstraintID::from(1),
                 IndicatorConstraint::new(
                     VariableID::from(0),
                     Equality::LessThanOrEqualToZero,
                     Function::from(crate::coeff!(1.5)),
-                    false,
+                    crate::IndicatorTriggerValue::One,
                 ),
             )]))
-            .one_hot_constraints(BTreeMap::from([(
+            .active_one_hot_constraints(BTreeMap::from([(
                 crate::OneHotConstraintID::from(2),
                 OneHotConstraint::new(variables.clone()).unwrap(),
             )]))
-            .sos1_constraints(BTreeMap::from([(
+            .active_sos1_constraints(BTreeMap::from([(
                 crate::Sos1ConstraintID::from(3),
                 Sos1Constraint::new(variables).unwrap(),
             )]))
@@ -1641,7 +1641,11 @@ mod tests {
                     .collect(),
             };
             let solution = instance.evaluate(&state, ATol::default()).unwrap();
-            assert_eq!(solution.total_violation(), l1, "{state:?}");
+            assert_eq!(
+                solution.total_violation(Default::default()),
+                l1,
+                "{state:?}"
+            );
 
             let sampled = instance
                 .evaluate_samples(
@@ -1653,10 +1657,10 @@ mod tests {
                 .unwrap();
             let restored = Solution::from_v2_bytes(&solution.to_v2_bytes()).unwrap();
             for derived in [sampled, restored] {
-                assert_eq!(derived.total_violation(), l1);
+                assert_eq!(derived.total_violation(Default::default()), l1);
             }
 
-            fn removed<T: crate::constraint_type::ConstraintType>(
+            fn inactive<T: crate::constraint_type::ConstraintType>(
                 collection: &EvaluatedCollection<T>,
             ) -> EvaluatedCollection<T>
             where
@@ -1669,7 +1673,8 @@ mod tests {
                         .map(|&id| {
                             (
                                 id,
-                                crate::RemovedReason {
+                                crate::InactiveConstraintMetadata {
+                                    skip_feasibility_check: false,
                                     reason: "test relaxation".into(),
                                     parameters: Default::default(),
                                 },
@@ -1679,24 +1684,24 @@ mod tests {
                 )
                 .unwrap()
             }
-            let removed_solution = Solution::builder()
+            let inactive_solution = Solution::builder()
                 .sense(Sense::Minimize)
                 .objective(0.0)
                 .decision_variables(solution.decision_variables().clone())
-                .evaluated_constraints_collection(removed(&solution.evaluated_constraints))
-                .evaluated_indicator_constraints_collection(removed(
+                .evaluated_constraints_collection(inactive(&solution.evaluated_constraints))
+                .evaluated_indicator_constraints_collection(inactive(
                     &solution.evaluated_indicator_constraints,
                 ))
-                .evaluated_one_hot_constraints_collection(removed(
+                .evaluated_one_hot_constraints_collection(inactive(
                     &solution.evaluated_one_hot_constraints,
                 ))
-                .evaluated_sos1_constraints_collection(removed(
+                .evaluated_sos1_constraints_collection(inactive(
                     &solution.evaluated_sos1_constraints,
                 ))
                 .build()
                 .unwrap();
-            assert!(removed_solution.feasible_constraints_relaxed());
-            assert_eq!(removed_solution.total_violation(), l1);
+            assert!(inactive_solution.feasible_constraints_relaxed());
+            assert_eq!(inactive_solution.total_violation(Default::default()), l1);
         }
     }
 
@@ -1735,7 +1740,7 @@ mod tests {
         };
 
         // L1: |0.0001| + max(0, -1.0) = 0.0001 + 0 = 0.0001
-        assert_eq!(solution.total_violation(), 0.0001);
+        assert_eq!(solution.total_violation(Default::default()), 0.0001);
     }
 
     #[test]
@@ -1781,7 +1786,7 @@ mod tests {
         };
 
         // L1: |2.5| + max(0, 1.5) + max(0, -0.5) = 2.5 + 1.5 + 0 = 4.0
-        assert_eq!(solution.total_violation(), 4.0);
+        assert_eq!(solution.total_violation(Default::default()), 4.0);
     }
 
     #[test]
@@ -1798,7 +1803,7 @@ mod tests {
                 .unwrap()
         };
 
-        assert_eq!(solution.total_violation(), 0.0);
+        assert_eq!(solution.total_violation(Default::default()), 0.0);
     }
 
     #[test]
@@ -1827,7 +1832,7 @@ mod tests {
         };
 
         // L1: |-3.0| = 3.0
-        assert_eq!(solution.total_violation(), 3.0);
+        assert_eq!(solution.total_violation(Default::default()), 3.0);
     }
 
     #[test]
@@ -2045,7 +2050,7 @@ mod tests {
             let restored = Solution::from_v2_bytes(&result.to_v2_bytes()).unwrap();
             for result in [result, restored] {
                 assert_eq!(result.feasible(), expected);
-                assert_eq!(result.total_violation(), 0.0625);
+                assert_eq!(result.total_violation(Default::default()), 0.0625);
                 assert_eq!(result.feasibility_atol(), atol);
             }
         }
@@ -2059,7 +2064,7 @@ mod tests {
             stage: crate::one_hot_constraint::OneHotEvaluatedData {
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
-                active_variable: None,
+                selected_variable: None,
                 used_decision_variable_ids: BTreeSet::new(),
             },
         };
@@ -2233,12 +2238,12 @@ mod tests {
         let indicator_id = crate::IndicatorConstraintID::from(3);
         let indicator = crate::indicator_constraint::EvaluatedIndicatorConstraint {
             indicator_variable: structural_id,
-            activate_on_zero: false,
+            trigger_value: crate::IndicatorTriggerValue::One,
             equality: crate::Equality::EqualToZero,
             stage: crate::indicator_constraint::IndicatorEvaluatedData {
                 evaluated_value: 0.0,
                 activation_atol: crate::ATol::default(),
-                indicator_active: true,
+                indicator_on: true,
                 used_decision_variable_ids: BTreeSet::from([missing_id]),
             },
         };
@@ -2266,7 +2271,7 @@ mod tests {
             stage: crate::one_hot_constraint::OneHotEvaluatedData {
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
-                active_variable: Some(structural_id),
+                selected_variable: Some(structural_id),
                 used_decision_variable_ids: BTreeSet::from([missing_id]),
             },
         };
@@ -2297,7 +2302,7 @@ mod tests {
             stage: crate::sos1_constraint::Sos1EvaluatedData {
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
-                active_variable: Some(structural_id),
+                selected_variable: Some(structural_id),
                 used_decision_variable_ids: BTreeSet::from([missing_id]),
             },
         };

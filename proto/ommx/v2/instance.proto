@@ -27,7 +27,7 @@ message OutputObjective {
   //
   // This compares objective orderings over candidate states of the active
   // formulation. It does not assert feasibility or optimality with respect to
-  // removed constraints.
+  // inactive constraints.
   //
   // `false` is conservative: it means that such a proof is not available,
   // not that the reconstructed state is known to be suboptimal.

@@ -68,7 +68,7 @@ fn main() -> Result<()> {
         "Decision variables: {}",
         instance.decision_variables().len()
     );
-    println!("Constraints: {}", instance.constraints().len());
+    println!("Constraints: {}", instance.active_constraints().len());
     println!("Objective: {:?}", instance.objective());
 
     // Display decision variable modeling labels

@@ -6,12 +6,36 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### ⚠ Active / inactiveへの整理 ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
+
+モデルの `constraints` はすべてのroleの行を含むようになります。activeな接続済みハンドルには `active_constraints`、保持したinactive行には `inactive_constraints` を使います。`Removed*Constraint` は `Inactive*Constraint`、`relax_*` / `restore_*` は `deactivate_*` / `activate_*` に変更します。`from_components` の入力も `active_*` / `inactive_*` に揃えます。
+
+`Instance` と `ParametricInstance` では、`constraint_names` を `active_constraint_names`、`extract_constraints(name)` を `extract_active_constraints(name)` に変更します。activeな制約だけを対象とする動作と返り値の型は変わりません。`Solution` と `SampleSet` では既存の名前を維持します。
+
+各制約は `ConstraintRole` 型の `role` propertyを持ちます。`EVALUATION_ONLY` は数値評価に使い、`FEASIBILITY_CHECK` はさらに通常の実行可能性判定に使い、`ACTIVE` はさらにActive Formulationにも含めます。inactive行のroleは既定で `FEASIBILITY_CHECK`、`skip_feasibility_check=True` を指定すると `EVALUATION_ONLY` になります。inactiveはこの2つのroleの総称です。roleは制約をどこまで利用するかを表し、評価段階とは独立です。
+
+`Solution.feasible` と `SampleSet.feasible` はpropertyのまま維持し、roleが `FEASIBILITY_CHECK` または `ACTIVE` の制約を判定します。`feasible_relaxed` もpropertyのまま、active制約のみを判定します。どちらも変数の定義域を検査します。SampleSetの `best_feasible` と `best_feasible_id` もpropertyを維持し、`feasible_ids()` は引数なしのメソッドです。実行可能性の判定とサンプル選択には `min_role` を渡しません。
+
+`total_violation()` と `constraints_df` では、`EVALUATION_ONLY < FEASIBILITY_CHECK < ACTIVE` の順序で `min_role` 以上の行を対象とします。違反量合計の既定値は `FEASIBILITY_CHECK` で、`feasible` が検査する制約集合と一致します。`ACTIVE` を指定すると `feasible_relaxed` と同じ制約集合になります。`constraints_df` は `removed=` をこの下限引数に置き換え、既定値の `EVALUATION_ONLY` では全行を返し、常に `role` 列を含みます。理由には `include=["inactive_reason"]` を指定します。
+
+v1のschemaは拡張せず、skipがtrueのデータのv1出力は失敗します。この状態を保存するにはv2を使ってください。APIの対応表は[移行ガイド](../migration/python_sdk_v2_to_v3.md)にあります。
+
+protobuf形式の `ommx.v2` はまだ正式リリース前で、Python SDKのバージョンとは別です。今回の更新では、過去のプレリリース版v2データとの互換性を保証しません。フィールド番号・型・構造は変更されることがあり、番号が同じでも互換性を保証するものではありません。未対応の意味的拡張を拒否する `required_features` の仕組みは維持します。
+
+Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` に揃えます。評価した候補点でのIndicatorのON/OFFを表し、制約のroleとは独立です。
+
+Indicatorの設定はboolの `activate_on_zero` から、`trigger_value=0` または既定値の `trigger_value=1` に変更します。整数のpropertyとDataFrame列は本体を適用する条件を表し、評価結果のboolは引き続き `indicator_on` で表します。Instance classの節では `allowed_indicator_trigger_values` を使い、許可しない発火値は `IndicatorTriggerNotAllowed` の `trigger_value` と `allowed_trigger_values` で報告します。
+
+OneHot/SOS1の評価結果のpropertyは、サンプルごとの対応を返すものも含めて `active_variable` から `selected_variable` に変更します。DataFrame列も `selected_variable` と `selected_variable.<sample_id>` になります。候補点での選択を表す情報であり、変数や制約がActive Formulationに属するかどうかとは独立です。評価の動作は変わりません。
+
+Active Formulationの変数も明示的に `active_decision_variables` と `DecisionVariableRole.Active` で表します。`state_role` の値は `"active"` です。Adapterはactiveな変数と制約を使い、行ごとの `used_ids` は参照関係を表す名前として維持します。
+
 ### 特殊制約の結果が欠落するv1書き出しを拒否 ([#1380](https://github.com/Jij-Inc/ommx/pull/1380))
 
 `to_v1_bytes()` は旧OMMX SDK向けの互換シリアライズ方式です。V3の機能のうちv1形式で表現できないものには `to_v2_bytes()` を使います。
 `Solution.to_v1_bytes()` と `SampleSet.to_v1_bytes()` は、Indicator・OneHot・SOS1の結果が残っている場合に `RuntimeError` を送出します。
-非発火・成立済みの条件やremovedの制約も対象です。これらを保持するには `to_v2_bytes()` を使ってください。
-通常制約だけの結果のv1書き出しと、既存v1データの読込みは変わりません。
+非発火・成立済みの条件やinactiveの制約も対象です。これらを保持するには `to_v2_bytes()` を使ってください。
+通常制約だけの結果は、他のv1出力制限を満たす場合に引き続き書き出せます。既存v1データの読込みは変わりません。
 `from_v1_bytes()` は、数学的な意味を保ちながら旧データを可能な限り補完・正規化する互換読込みとして説明を揃えました。
 現実装の制限も明示し、ヒーリングの拡充は [#1381](https://github.com/Jij-Inc/ommx/issues/1381) で別途扱います。
 形式を指定したシリアライズについては[移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
@@ -29,7 +53,7 @@ Python SDK 2.6.xから、例外の種類と発生するタイミングが変わ�
 `solve()`、`solve_without_preparation()`、または `decode()` の呼び出しで
 `InfeasibleDetected` を捕捉するように変更してください。
 
-HiGHSでは、使用される決定変数がないモデルも内部の固定変数を使って求解します。
+HiGHSでは、activeな決定変数がないモデルも内部の固定変数を使って求解します。
 この補助変数はデコード後のOMMX状態には含まれません。実行可能な定数制約も
 ソルバーの行として保持され、そのHiGHS双対値は対応するOMMX制約IDに紐付けられます。
 
@@ -155,13 +179,13 @@ SCIP の目的関数用補助変数にも、指定した初期値から計算し
 目的関数の項が増える前に書き換えます。非循環の置換は、置換同士の依存関係を
 先に解決し、各多項式の項を一度走査してまとめて処理します。
 
-penaltyによって除去される制約には、エンコード後の式が保存されます。
+penaltyによって無効化される制約には、エンコード後の式が保存されます。
 制約の評価値と元の出力目的値は、決定変数の復元を通じて保持されます。
 詳しくは {meth}`~ommx.Instance.prepare` を参照してください。
 
 ### ⚠ 全種類の制約でIDの番号を一意にする ([#1309](https://github.com/Jij-Inc/ommx/pull/1309))
 
-`Instance`・`ParametricInstance`内では、removedを含む通常制約・Indicator・OneHot・SOS1の
+`Instance`・`ParametricInstance`内では、inactiveを含む通常制約・Indicator・OneHot・SOS1の
 全種類を通じてIDの番号が一意になります。自動追加や変換もこの共通空間から採番し、
 評価後の`Solution`・`SampleSet`でもIDを維持します。
 
@@ -183,7 +207,7 @@ frame = solution.constraints_df(kind="regular")
 ```
 
 コレクションは所有元を保持し、型付きIDで参照された行だけを取得します。整数キーは拒否します。
-モデルの値はAttachedハンドル、結果の値は削除済み制約の情報も含む個別のスナップショットです。
+モデルの値はAttachedハンドル、結果の値はinactive制約の情報も含む個別のスナップショットです。
 種類別プロパティは `.constraints` と `.removed_constraints` に統合し、
 `get_constraint_by_id`・`get_removed_constraint_by_id`と結果の`constraint_ids`は
 添字アクセスと列挙へ置き換えます。モデルの独立したコピーが必要ならAttachedの行を`.detach()`します。
@@ -212,19 +236,21 @@ IDの型は `ConstraintID`、`IndicatorConstraintID`、`OneHotConstraintID`、
 特殊制約の種類が追加されても公開返り値型を変えず、具体的なIDによる添字アクセスでは
 具体型を返します。ソルバー側は未対応種類を黙って除外せず、明示的に拒否します。
 
-Attachedの行は所有元の同一性と型付きIDで比較し、Removedと結果の行は
+Attachedの行は所有元の同一性と型付きIDで比較し、Inactiveと結果の行は
 スナップショットのデータとメタデータで比較します。コレクションとそのビューも
 この比較に従います。型付きIDは `copy`・`deepcopy` に対応し、`.get()` は
 具体的な行の型と代わりの値の型を保持します。不正な検索キーへのエラーは、
 内部enumの抽出失敗を列挙せず、必要な型付きIDの指定方法を示します。
 
-`extract_constraints(name)`は全種類を検索します。`Instance`・`ParametricInstance`では
-添字タプルからAttachedオブジェクトへの辞書、`Solution`・`SampleSet`では違反量への辞書を
+`Instance`・`ParametricInstance` の `extract_active_constraints(name)` は全種類のactiveな
+制約を検索し、添字タプルからAttachedオブジェクトへの辞書を返します。
+`Solution`・`SampleSet` の `extract_constraints(name)` は全種類を検索し、違反量への辞書を
 返します。**通常制約も符号付きの式の値から非負の違反量に変わります。** 決定変数の
 抽出と同様にparametersは無視し、種類をまたぐ添字の重複は`ValueError`にします。
 
-全4種類の所有元に`constraint_names: set[str]`を追加し、`extract_constraints`と同じ
-対象の名前を列挙できます。`ParametricInstance.decision_variable_names`も追加しました。
+`Instance`・`ParametricInstance` は `active_constraint_names: set[str]`、`Solution`・`SampleSet`
+は `constraint_names: set[str]` で、対応する抽出メソッドと同じ対象の名前を列挙できます。
+`ParametricInstance.decision_variable_names`も追加しました。
 未設定の名前とパラメータ名は除外し、同名は1件にまとめます。
 
 ### 🆕 変数の名前と添字から State を作成 ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
@@ -622,7 +648,7 @@ formulationの検証に失敗すると
 {class}`~ommx.Sos1BigMPromotionBatchRejectedError`となり、`Instance`は
 変更されません。戻り値の{class}`~ommx.Sos1BigMPromotion`はbatch全体のReportで、
 `promoted` Mapから新しいSOS1 IDを取得できます。member、selectorの復元、
-removed rowの情報はInstanceから参照できます。
+inactive rowの情報はInstanceから参照できます。
 
 ### 🆕 区間で定義する決定変数の逐次作成 ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
 
@@ -773,7 +799,7 @@ Function、polynomial、constraint、named function、`Instance` のevaluation A
 RustからPythonへの共通error boundaryを直接使います。呼び出し側が渡したstateの不足・
 未知のID・不正な値と、回復可能なdependent-variable assertionは`ValueError`になります。
 Functionとpolynomialを直接partial evaluationする場合は`CoefficientError`を保持し、
-`Instance`が所有するdependencyの正規化と{attr}`removed constraint <ommx.Instance.removed_constraints>`の復元で発生した
+`Instance`が所有するdependencyの正規化とinactive制約の再有効化で発生した
 coefficient failureは`RuntimeError`にfallbackします。
 
 Decision variableの追加とsubstitution、`Function.content_factor`、OneHot/SOS1の
@@ -840,7 +866,7 @@ source instanceを `INPUT_CLASS` に属するinputへ変換する操作を `Prep
 （[#1111](https://github.com/Jij-Inc/ommx/issues/1111)）。
 
 `INPUT_CLASS` は、{class}`~ommx.InstanceClassClause` の有限和である
-{class}`~ommx.InstanceClass` です。各clauseには、使用中の変数kind、目的関数と制約の
+{class}`~ommx.InstanceClass` です。各clauseには、activeな変数kind、目的関数と制約の
 次数、通常制約とIndicator制約のrelation、OneHot / SOS1制約の有無、最適化senseを
 指定できます。例えば、線形目的関数と線形制約だけを受け入れるclassを記述できます。
 指定できる条件の詳細は {class}`~ommx.InstanceClassClause` を参照してください。
@@ -1311,9 +1337,9 @@ assert state.entries == {1: 2.0, 2: 3.0, 5: 6.0, 10: 5.0, 99: 4.0}
 
 ### ⚠ `Instance` 上の決定変数 role query ([#946](https://github.com/Jij-Inc/ommx/pull/946))
 
-Python SDK では `DecisionVariableUsage` と `DecisionVariableUsageEntry` オブジェクトを公開しない形に整理しました。Adapter が solver input の変数を必要とする場合は {attr}`~ommx.Instance.used_decision_variables` を使い、state role は所有者である Instance から {meth}`~ommx.Instance.decision_variable_role`、{meth}`~ommx.Instance.decision_variable_roles`、{meth}`~ommx.Instance.fixed_decision_variables`、{meth}`~ommx.Instance.dependent_decision_variable_ids`、{meth}`~ommx.Instance.irrelevant_decision_variable_ids` で直接取得してください。
+Python SDK では `DecisionVariableUsage` と `DecisionVariableUsageEntry` オブジェクトを公開しない形に整理しました。Adapter が solver input の変数を必要とする場合は {attr}`~ommx.Instance.active_decision_variables` を使い、state role は所有者である Instance から {meth}`~ommx.Instance.decision_variable_role`、{meth}`~ommx.Instance.decision_variable_roles`、{meth}`~ommx.Instance.fixed_decision_variables`、{meth}`~ommx.Instance.dependent_decision_variable_ids`、{meth}`~ommx.Instance.irrelevant_decision_variable_ids` で直接取得してください。
 
-{meth}`~ommx.Instance.decision_variables_df` は引き続き `state_role` column を含むため、DataFrame ベースの workflow では別の usage object を作らずに `used`、`fixed`、`dependent`、`irrelevant` の分類を確認できます。
+{meth}`~ommx.Instance.decision_variables_df` は引き続き `state_role` column を含むため、DataFrame ベースの workflow では別の usage object を作らずに `active`、`fixed`、`dependent`、`irrelevant` の分類を確認できます。
 
 ### ⚠ 固定された決定変数の値は Instance が所有するようになりました ([#959](https://github.com/Jij-Inc/ommx/pull/959))
 
@@ -1740,7 +1766,7 @@ b = f.evaluate_bound({1: Bound(0.0, 2.0)})
 
 ### ⚠ `Constraint.id` フィールドの削除 ([#806](https://github.com/Jij-Inc/ommx/pull/806))
 
-{class}`~ommx.Constraint` およびその派生型 ({class}`~ommx.IndicatorConstraint` / {class}`~ommx.OneHotConstraint` / {class}`~ommx.Sos1Constraint` / {class}`~ommx.EvaluatedConstraint` / {class}`~ommx.SampledConstraint` / {class}`~ommx.RemovedConstraint`) から `id` フィールド（および `.id` getter、`set_id()`、`id=` コンストラクタ引数）が削除されました。制約IDは {meth}`Instance.from_components <ommx.Instance.from_components>` に渡す `dict[int, Constraint]` のキーとしてのみ保持されます。
+{class}`~ommx.Constraint` およびその派生型 ({class}`~ommx.IndicatorConstraint` / {class}`~ommx.OneHotConstraint` / {class}`~ommx.Sos1Constraint` / {class}`~ommx.EvaluatedConstraint` / {class}`~ommx.SampledConstraint` / `RemovedConstraint`) から `id` フィールド（および `.id` getter、`set_id()`、`id=` コンストラクタ引数）が削除されました。制約IDは {meth}`Instance.from_components <ommx.Instance.from_components>` に渡す `dict[int, Constraint]` のキーとしてのみ保持されます。
 
 ```python
 # Before (2.5.1)
@@ -1762,7 +1788,7 @@ Instance.from_components(..., constraints={5: c}, ...)
 - {class}`~ommx.OneHotConstraint` — 従来 `ConstraintHints.OneHot` として扱われていた one-hot 制約
 - {class}`~ommx.Sos1Constraint` — 従来 `ConstraintHints.Sos1` として扱われていた SOS1 制約
 
-具体的な使い方と評価結果の参照については {class}`~ommx.IndicatorConstraint`・{class}`~ommx.OneHotConstraint`・{class}`~ommx.Sos1Constraint`、Indicator 制約を含む active / removed の扱いについては [候補を評価して結果を判断する](../book/evaluate_and_interpret.md) を参照してください。
+具体的な使い方と評価結果の参照については {class}`~ommx.IndicatorConstraint`・{class}`~ommx.OneHotConstraint`・{class}`~ommx.Sos1Constraint`、Indicator 制約を含む active / inactive の扱いについては [候補を評価して結果を判断する](../book/evaluate_and_interpret.md) を参照してください。
 
 これに伴い旧 API である `ConstraintHints` / `OneHot` / `Sos1` クラス、`Instance.constraint_hints` プロパティ、PySCIPOpt Adapter の `use_sos1` フラグは削除されています。
 

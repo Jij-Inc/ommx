@@ -190,7 +190,7 @@ and reviewed headings; do not revive that parser to infer page identities.
 
 ## Annotation review examples
 
-- An early used-variable explanation may require understanding removed
+- An early active-variable explanation may require understanding inactive
   constraints or output objectives even when it links to their owner. Check
   whether that owner requires knowledge taught later in the unfinished page.
 - Ordinary variable-domain knowledge must not automatically grant knowledge of

@@ -60,17 +60,17 @@ impl Parse for crate::v1::Solution {
             crate::v1::instance::Sense::Maximize => Some(crate::Sense::Maximize),
         };
 
-        // Parse evaluated constraints and extract removed reasons + context
+        // Parse evaluated constraints and extract inactive metadata + context
         let mut evaluated_constraints = std::collections::BTreeMap::default();
-        let mut removed_reasons = std::collections::BTreeMap::default();
+        let mut inactive_metadata = std::collections::BTreeMap::default();
         let mut constraint_context =
             crate::ConstraintContextStore::<crate::ConstraintID>::default();
         for ec in self.evaluated_constraints {
-            let (id, parsed_constraint, context, removed_reason): (
+            let (id, parsed_constraint, context, row_inactive_metadata): (
                 crate::ConstraintID,
                 crate::EvaluatedConstraint,
                 crate::ConstraintContext,
-                Option<crate::RemovedReason>,
+                Option<crate::InactiveConstraintMetadata>,
             ) = ec.parse_as(&(), message, "evaluated_constraints")?;
             if evaluated_constraints.contains_key(&id) {
                 return Err(ParseError::new(SolutionError::InvalidConstraintStructure {
@@ -80,8 +80,8 @@ impl Parse for crate::v1::Solution {
                 })
                 .context(message, "evaluated_constraints"));
             }
-            if let Some(reason) = removed_reason {
-                removed_reasons.insert(id, reason);
+            if let Some(reason) = row_inactive_metadata {
+                inactive_metadata.insert(id, reason);
             }
             constraint_context.insert(id, context);
             evaluated_constraints.insert(id, parsed_constraint);
@@ -185,7 +185,7 @@ impl Parse for crate::v1::Solution {
 
         let evaluated_constraints = crate::constraint_type::EvaluatedCollection::with_context(
             evaluated_constraints,
-            removed_reasons,
+            inactive_metadata,
             constraint_context,
         )
         .map_err(|e| invalid_solution_sidecar(e, message, "evaluated_constraints"))?;
@@ -445,12 +445,37 @@ impl TryFrom<v2::Solution> for Solution {
 /// Convert to v1 only when no native special constraints are retained.
 ///
 /// Indicator, OneHot, and SOS1 results cannot be represented in v1, including
-/// removed constraints. Use `to_v2_bytes()` to preserve them. Since v1 cannot
+/// inactive constraints. Skipped constraints also cannot be represented.
+/// Use `to_v2_bytes()` to preserve them. Since v1 cannot
 /// store a tolerance, feasibility is recomputed at [`ATol::default`].
 impl TryFrom<Solution> for crate::v1::Solution {
     type Error = crate::Error;
 
     fn try_from(solution: Solution) -> crate::Result<Self> {
+        crate::v1_io::validate_inactive_metadata(
+            solution
+                .evaluated_constraints
+                .inactive_metadata()
+                .values()
+                .chain(
+                    solution
+                        .evaluated_indicator_constraints
+                        .inactive_metadata()
+                        .values(),
+                )
+                .chain(
+                    solution
+                        .evaluated_one_hot_constraints
+                        .inactive_metadata()
+                        .values(),
+                )
+                .chain(
+                    solution
+                        .evaluated_sos1_constraints
+                        .inactive_metadata()
+                        .values(),
+                ),
+        )?;
         if !solution.evaluated_indicator_constraints.is_empty() {
             crate::bail!(
                 "Indicator constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
@@ -494,7 +519,7 @@ impl TryFrom<Solution> for crate::v1::Solution {
             crate::v1::State { entries }
         };
         let evaluated_constraints: Vec<crate::v1::EvaluatedConstraint> =
-            evaluated_constraints.into();
+            evaluated_constraints.try_into()?;
         let evaluated_named_functions: Vec<crate::v1::EvaluatedNamedFunction> =
             evaluated_named_functions.into();
         let decision_variables: Vec<crate::v1::DecisionVariable> = (&decision_variables).into();
@@ -554,12 +579,12 @@ mod tests {
             EvaluatedDecisionVariable::new(variable_id, DecisionVariable::binary(), 1.0).unwrap();
         let constraint = crate::indicator_constraint::EvaluatedIndicatorConstraint {
             indicator_variable: variable_id,
-            activate_on_zero: false,
+            trigger_value: crate::IndicatorTriggerValue::One,
             equality: crate::Equality::EqualToZero,
             stage: crate::indicator_constraint::IndicatorEvaluatedData {
                 evaluated_value: 0.0,
                 activation_atol: crate::ATol::default(),
-                indicator_active: true,
+                indicator_on: true,
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
@@ -589,7 +614,7 @@ mod tests {
             stage: crate::one_hot_constraint::OneHotEvaluatedData {
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
-                active_variable: Some(variable_id),
+                selected_variable: Some(variable_id),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
@@ -621,7 +646,7 @@ mod tests {
             stage: crate::sos1_constraint::Sos1EvaluatedData {
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
-                active_variable: None,
+                selected_variable: None,
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
@@ -852,7 +877,7 @@ mod tests {
             .get_mut(&1)
             .unwrap();
         row.variables = vec![2];
-        row.active_variable = Some(2);
+        row.selected_variable = Some(2);
 
         let error = Solution::try_from(proto).unwrap_err();
 
@@ -1419,7 +1444,7 @@ mod tests {
             id: 7,
             equality: v1::Equality::EqualToZero as i32,
             evaluated_value: 0.0,
-            removed_reason: Some("removed first row".to_string()),
+            removed_reason: Some("inactive first row".to_string()),
             ..Default::default()
         };
         let second = v1::EvaluatedConstraint {
@@ -1539,7 +1564,7 @@ mod tests {
 
         // SAFETY: the inputs above satisfy Solution invariants (one DV,
         // one evaluated constraint over that DV, one named function over
-        // that DV, value 1.0 satisfies the equality, no removed reasons).
+        // that DV, value 1.0 satisfies the equality, no inactive metadata).
         let solution = unsafe {
             Solution::builder()
                 .objective(1.0)
@@ -1632,7 +1657,7 @@ mod tests {
             .unwrap();
         indicator_row.evaluated_value = *atol;
         indicator_row.feasible = true;
-        indicator_row.indicator_active = true;
+        indicator_row.indicator_on = true;
         Solution::try_from(indicator).unwrap();
 
         let mut one_hot = v2_solution_with_one_hot_constraint();
@@ -1708,7 +1733,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v2_solution_parse_rejects_indicator_active_mismatching_variable_value() {
+    fn test_v2_solution_parse_rejects_indicator_on_mismatching_variable_value() {
         use crate::{
             indicator_constraint::{EvaluatedIndicatorConstraint, IndicatorEvaluatedData},
             DecisionVariable, EvaluatedDecisionVariable, IndicatorConstraintID, Sense, VariableID,
@@ -1720,12 +1745,12 @@ mod tests {
             EvaluatedDecisionVariable::new(var_id, DecisionVariable::binary(), 1.0).unwrap();
         let indicator = EvaluatedIndicatorConstraint {
             indicator_variable: var_id,
-            activate_on_zero: false,
+            trigger_value: crate::IndicatorTriggerValue::One,
             equality: crate::Equality::EqualToZero,
             stage: IndicatorEvaluatedData {
                 evaluated_value: 0.0,
                 activation_atol: crate::ATol::default(),
-                indicator_active: true,
+                indicator_on: true,
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1749,12 +1774,12 @@ mod tests {
             .entries
             .get_mut(&1)
             .unwrap();
-        row.indicator_active = false;
+        row.indicator_on = false;
         row.feasible = true;
 
         let err = Solution::try_from(proto).unwrap_err();
         assert!(
-            err.to_string().contains("indicator_active=false")
+            err.to_string().contains("indicator_on=false")
                 && err
                     .to_string()
                     .contains("does not match indicator variable"),
@@ -1763,7 +1788,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v2_solution_parse_rejects_inactive_infeasible_indicator() {
+    fn test_v2_solution_parse_rejects_infeasible_indicator_off() {
         use crate::{
             indicator_constraint::{EvaluatedIndicatorConstraint, IndicatorEvaluatedData},
             DecisionVariable, EvaluatedDecisionVariable, IndicatorConstraintID, Sense, VariableID,
@@ -1775,12 +1800,12 @@ mod tests {
             EvaluatedDecisionVariable::new(var_id, DecisionVariable::binary(), 0.0).unwrap();
         let indicator = EvaluatedIndicatorConstraint {
             indicator_variable: var_id,
-            activate_on_zero: false,
+            trigger_value: crate::IndicatorTriggerValue::One,
             equality: crate::Equality::EqualToZero,
             stage: IndicatorEvaluatedData {
                 evaluated_value: 1.0,
                 activation_atol: crate::ATol::default(),
-                indicator_active: false,
+                indicator_on: false,
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1804,7 +1829,7 @@ mod tests {
             .entries
             .get_mut(&1)
             .unwrap();
-        row.indicator_active = false;
+        row.indicator_on = false;
         row.feasible = false;
 
         let err = Solution::try_from(proto).unwrap_err();
@@ -1816,7 +1841,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v2_solution_parse_rejects_one_hot_active_variable_mismatching_values() {
+    fn test_v2_solution_parse_rejects_one_hot_selected_variable_mismatching_values() {
         use crate::{
             one_hot_constraint::{EvaluatedOneHotConstraint, OneHotEvaluatedData},
             DecisionVariable, EvaluatedDecisionVariable, OneHotConstraintID, Sense, VariableID,
@@ -1831,7 +1856,7 @@ mod tests {
             stage: OneHotEvaluatedData {
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
-                active_variable: Some(var_id),
+                selected_variable: Some(var_id),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1869,12 +1894,12 @@ mod tests {
             .entries
             .get_mut(&1)
             .unwrap();
-        row.active_variable = Some(2);
+        row.selected_variable = Some(2);
 
         let err = Solution::try_from(proto).unwrap_err();
         assert!(
             err.to_string()
-                .contains("active_variable=Some(VariableID(2))")
+                .contains("selected_variable=Some(VariableID(2))")
                 && err
                     .to_string()
                     .contains("does not match decision-variable values"),
@@ -1883,7 +1908,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v2_solution_parse_rejects_feasible_one_hot_without_active_variable() {
+    fn test_v2_solution_parse_rejects_feasible_one_hot_without_selected_variable() {
         use crate::{
             one_hot_constraint::{EvaluatedOneHotConstraint, OneHotEvaluatedData},
             DecisionVariable, EvaluatedDecisionVariable, OneHotConstraintID, Sense, VariableID,
@@ -1898,7 +1923,7 @@ mod tests {
             stage: OneHotEvaluatedData {
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
-                active_variable: Some(var_id),
+                selected_variable: Some(var_id),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1926,12 +1951,12 @@ mod tests {
             .get_mut(&1)
             .unwrap();
         row.feasible = true;
-        row.active_variable = None;
+        row.selected_variable = None;
 
         let err = Solution::try_from(proto).unwrap_err();
         assert!(
             err.to_string()
-                .contains("feasible must be true exactly when active_variable is set"),
+                .contains("feasible must be true exactly when selected_variable is set"),
             "unexpected error: {err}"
         );
     }

@@ -14,34 +14,38 @@ from ommx import (
 @pytest.mark.parametrize(
     "family", ["indicator-one", "indicator-zero", "one-hot", "sos1"]
 )
-@pytest.mark.parametrize("removed", [False, True])
+@pytest.mark.parametrize("inactive", [False, True])
 @pytest.mark.parametrize("z_value", [0, 1])
 @pytest.mark.parametrize("x_value", [0, 1])
-def test_v1_rejects_special_results_and_preserves_v2(family, removed, z_value, x_value):
+def test_v1_rejects_special_results_and_preserves_v2(
+    family, inactive, z_value, x_value
+):
     z = DecisionVariable.binary(0)
     x = DecisionVariable.binary(1)
     instance = Instance.from_components(
         sense=Sense.Minimize,
         objective=0,
         decision_variables=[z, x],
-        constraints={},
+        active_constraints={},
     )
     if family.startswith("indicator"):
         instance.add_indicator_constraint(
-            (x == 0).with_indicator(z, activate_on_zero=family == "indicator-zero")
+            (x == 0).with_indicator(
+                z, trigger_value=0 if family == "indicator-zero" else 1
+            )
         )
         expected_family = "Indicator"
-        if removed:
+        if inactive:
             instance.convert_all_indicators_to_constraints()
     elif family == "one-hot":
         instance.add_one_hot_constraint(OneHotConstraint(variables=[0, 1]))
         expected_family = "One-hot"
-        if removed:
+        if inactive:
             instance.convert_all_one_hots_to_constraints()
     else:
         instance.add_sos1_constraint(Sos1Constraint(variables=[0, 1]))
         expected_family = "SOS1"
-        if removed:
+        if inactive:
             instance.convert_all_sos1_to_constraints()
 
     state = {0: z_value, 1: x_value}
@@ -64,7 +68,7 @@ def test_v1_still_exports_regular_results(with_constraint):
         sense=Sense.Minimize,
         objective=x,
         decision_variables=[x],
-        constraints={0: x == 0} if with_constraint else {},
+        active_constraints={0: x == 0} if with_constraint else {},
     )
     solution = instance.evaluate({0: 1})
     samples = instance.evaluate_samples({7: {0: 1}})

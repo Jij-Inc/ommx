@@ -23,14 +23,14 @@ impl Instance {
         max_terms: usize,
         atol: ATol,
     ) -> crate::Result<Bounds> {
-        let rows = self.constraints().keys().copied().collect();
+        let rows = self.active_constraints().keys().copied().collect();
         self.tighten_bounds_simultaneously_once_using_constraints(&rows, max_terms, atol)
     }
 
     /// Apply one simultaneous bound-tightening pass using selected regular constraints.
     ///
     /// `constraint_ids` contains active regular constraint IDs. Unknown and
-    /// removed IDs are errors; an empty set applies no updates. Non-affine
+    /// inactive IDs are errors; an empty set applies no updates. Non-affine
     /// selected rows are skipped, as in [`Self::tighten_bounds_simultaneously_once`].
     /// All eligible variables in the selected rows may have their bounds tightened.
     /// Only compact polynomial functions convertible with [`Function::as_linear`]
@@ -119,7 +119,7 @@ fn infer_bounds_simultaneously_once(
         .collect();
     let mut updates = std::collections::BTreeMap::new();
     for &row_id in rows {
-        let row = instance.constraints().get(&row_id).ok_or_else(
+        let row = instance.active_constraints().get(&row_id).ok_or_else(
             || crate::error!({ ?row_id }, "Bound tightening constraint {row_id:?} is not active"),
         )?;
         let function = row.function();
@@ -579,7 +579,7 @@ mod tests {
     }
 
     #[test]
-    fn unknown_and_removed_selected_constraints_are_atomic_errors() {
+    fn unknown_and_inactive_selected_constraints_are_atomic_errors() {
         let mut problem = instance(
             vec![continuous(-10.0, 10.0)],
             vec![
@@ -588,7 +588,7 @@ mod tests {
             ],
         );
         problem
-            .relax_constraint(1.into(), "test".to_string(), [])
+            .deactivate_constraint(1.into(), "test".to_string(), [], false)
             .unwrap();
         let original = problem.clone();
         for invalid in [1_u64, 999] {
@@ -752,7 +752,7 @@ mod tests {
     }
 
     #[test]
-    fn ignores_nonlinear_and_removed_rows_but_uses_a_finite_candidate() {
+    fn ignores_nonlinear_and_inactive_rows_but_uses_a_finite_candidate() {
         let mut problem = instance(
             vec![continuous(-10.0, 10.0)],
             vec![
@@ -764,7 +764,7 @@ mod tests {
             ],
         );
         problem
-            .relax_constraint(1.into(), "test".to_string(), [])
+            .deactivate_constraint(1.into(), "test".to_string(), [], false)
             .unwrap();
         let original = problem.clone();
         let atol = ATol::default();
@@ -1031,7 +1031,7 @@ mod tests {
             .decision_variable_dependency(
                 crate::AcyclicAssignments::new([(1.into(), Function::from(linear!(2)))]).unwrap(),
             )
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 0.into(),
                 Constraint::less_than_or_equal_to_zero(linear!(2).into()),
             )]))

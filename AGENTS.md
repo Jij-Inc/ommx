@@ -46,7 +46,7 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 ### v3 Development (current)
 
 - **Python SDK**: v3.0.0 alpha — all top-level `ommx` SDK domain classes are direct Rust re-exports via PyO3, protobuf Python dependency removed
-- **Rust SDK**: v3 Stage Pattern — constraints are generic over lifecycle stages (`Created`, `Removed`, `Evaluated`, `Sampled`)
+- **Rust SDK**: v3 Stage Pattern — constraints are generic over evaluation stages (`Created`, `Evaluated`, `Sampled`); collections own active/inactive membership and inactive metadata
 
 ### Versioning
 - Rust SDK and Python SDK versions are managed independently.
@@ -98,6 +98,10 @@ Run `task -l` to see all available commands.
 1. **Design Correctness Over Compatibility**: Unless the user explicitly requests compatibility, do not preserve obsolete APIs, layouts, or behavior for backward compatibility. Choose the best current design and update all affected code, docs, and tests accordingly.
 2. **Scope by Design Boundary**: Do not minimize changes for their own sake. Make the full coherent change required by the design, while still avoiding unrelated churn.
 3. **Extensible Constraint Families**: Adding a special-constraint family must be an additive API extension, not a breaking change to existing heterogeneous constraint queries. Expose extensible common types for IDs and rows instead of a closed union of all current families; keep concrete return types for family-specific lookups. Consumers must explicitly reject families they do not support. Silently skipping an unknown constraint changes the feasible region and can relax the optimization problem. Internal enums may enumerate current families, but public APIs must not promise that consumers can exhaustively enumerate every future family. Review both this extension contract and rejection paths when adding or changing constraint APIs.
+
+### Domain Terminology
+- When adding, renaming, or explaining OMMX domain concepts or public APIs, use `.agents/skills/ommx-terminology/SKILL.md`.
+- Keep formulation membership, feasibility participation, candidate diagnostics, and variable references distinct; apply the policy to the affected scope.
 
 ### Python SDK Development
 - Top-level `ommx` is the public Python API surface re-exported from `ommx._ommx_rust`.

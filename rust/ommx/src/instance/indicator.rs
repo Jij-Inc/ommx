@@ -1,6 +1,8 @@
 use super::Instance;
 use crate::{
-    constraint::{ConstraintContext, ConstraintID, Equality, Provenance, RemovedReason},
+    constraint::{
+        ConstraintContext, ConstraintID, Equality, InactiveConstraintMetadata, Provenance,
+    },
     indicator_constraint::IndicatorConstraintID,
     ATol, Bounds, Coefficient, Constraint, Evaluate, Kind, Linear, LinearMonomial,
 };
@@ -71,7 +73,7 @@ impl Instance {
     /// not canonicalize an approximate solver value near either endpoint.
     ///
     /// The original indicator constraint is moved to
-    /// [`Instance::removed_indicator_constraints`] with
+    /// [`Instance::inactive_indicator_constraints`] with
     /// `reason = "ommx.Instance.convert_indicator_to_constraint"` and a
     /// `constraint_ids` parameter listing the new regular constraint IDs
     /// (comma-separated in insertion order; empty when nothing is emitted).
@@ -221,9 +223,13 @@ impl Instance {
             let f = (function.clone()
                 + Linear::single_term(
                     LinearMonomial::Variable(indicator_variable),
-                    if ic.activate_on_zero { -u } else { u },
+                    if ic.trigger_value == crate::IndicatorTriggerValue::Zero {
+                        -u
+                    } else {
+                        u
+                    },
                 ))?;
-            let f = if ic.activate_on_zero {
+            let f = if ic.trigger_value == crate::IndicatorTriggerValue::Zero {
                 f
             } else {
                 (f + Linear::from(-u))?
@@ -237,9 +243,13 @@ impl Instance {
             let f = (-function.clone()
                 + Linear::single_term(
                     LinearMonomial::Variable(indicator_variable),
-                    if ic.activate_on_zero { l } else { neg_l },
+                    if ic.trigger_value == crate::IndicatorTriggerValue::Zero {
+                        l
+                    } else {
+                        neg_l
+                    },
                 ))?;
-            let f = if ic.activate_on_zero {
+            let f = if ic.trigger_value == crate::IndicatorTriggerValue::Zero {
                 f
             } else {
                 (f + Linear::from(l))?
@@ -274,9 +284,10 @@ impl Instance {
             .join(",");
         parameters.insert("constraint_ids".to_string(), constraint_ids_str);
         self.indicator_constraint_collection
-            .relax(
+            .deactivate(
                 id,
-                RemovedReason {
+                InactiveConstraintMetadata {
+                    skip_feasibility_check: false,
                     reason: "ommx.Instance.convert_indicator_to_constraint".to_string(),
                     parameters,
                 },
@@ -330,7 +341,12 @@ mod tests {
         let x = DecisionVariable::new(Kind::Continuous, x_bound, crate::ATol::default()).unwrap();
         let y = DecisionVariable::binary();
 
-        let ic = IndicatorConstraint::new(VariableID::from(10), equality, function, false);
+        let ic = IndicatorConstraint::new(
+            VariableID::from(10),
+            equality,
+            function,
+            crate::IndicatorTriggerValue::One,
+        );
 
         Instance::builder()
             .sense(Sense::Minimize)
@@ -339,8 +355,8 @@ mod tests {
                 VariableID::from(1) => x,
                 VariableID::from(10) => y,
             })
-            .constraints(BTreeMap::new())
-            .indicator_constraints(BTreeMap::from([(IndicatorConstraintID::from(7), ic)]))
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(BTreeMap::from([(IndicatorConstraintID::from(7), ic)]))
             .build()
             .unwrap()
     }
@@ -361,7 +377,7 @@ mod tests {
             .unwrap();
         assert_eq!(new_ids.len(), 1);
 
-        let c = instance.constraints().get(&new_ids[0]).unwrap();
+        let c = instance.active_constraints().get(&new_ids[0]).unwrap();
         assert_eq!(c.equality, Equality::LessThanOrEqualToZero);
         let expected = Function::from(
             ((linear!(1)
@@ -384,12 +400,12 @@ mod tests {
             )]
         );
 
-        // Original indicator moved to removed with expected reason + constraint_ids.
-        assert!(instance.indicator_constraints().is_empty());
+        // Original indicator moved to inactive with expected reason + constraint_ids.
+        assert!(instance.active_indicator_constraints().is_empty());
         let (_, reason) = instance
-            .removed_indicator_constraints()
+            .inactive_indicator_constraints()
             .get(&IndicatorConstraintID::from(7))
-            .expect("indicator retained as removed");
+            .expect("indicator retained as inactive");
         assert_eq!(
             reason.reason,
             "ommx.Instance.convert_indicator_to_constraint"
@@ -414,7 +430,7 @@ mod tests {
         assert_eq!(new_ids.len(), 2);
 
         // Upper: (x - 2) + 3 y - 3 = x + 3 y - 5
-        let upper = instance.constraints().get(&new_ids[0]).unwrap();
+        let upper = instance.active_constraints().get(&new_ids[0]).unwrap();
         assert_eq!(upper.equality, Equality::LessThanOrEqualToZero);
         let expected_upper = Function::from(
             ((linear!(1)
@@ -429,7 +445,7 @@ mod tests {
         assert_abs_diff_eq!(upper.function(), &expected_upper);
 
         // Lower: -(x - 2) - (-2) y + (-2) = -x + 2 + 2 y - 2 = -x + 2 y
-        let lower = instance.constraints().get(&new_ids[1]).unwrap();
+        let lower = instance.active_constraints().get(&new_ids[1]).unwrap();
         assert_eq!(lower.equality, Equality::LessThanOrEqualToZero);
         let expected_lower = Function::from(
             Linear::single_term(LinearMonomial::Variable(VariableID::from(1)), coeff!(-1.0))
@@ -456,7 +472,7 @@ mod tests {
 
         let state = State::from_iter([(1, 1e-8), (10, 1.0)]);
         let evaluated = instance
-            .constraints()
+            .active_constraints()
             .get(&new_ids[0])
             .unwrap()
             .evaluate(&state, atol)
@@ -467,14 +483,14 @@ mod tests {
     #[test]
     fn redundant_side_is_skipped() {
         // y=1 → x - 10 <= 0 with x in [0, 5]: upper = -5 <= 0, so constraint is
-        // always satisfied by bounds. No big-M emitted; indicator simply relaxed.
+        // always satisfied by bounds. No big-M emitted; indicator simply deactivated.
         let f = Function::from(linear!(1) + coeff!(-10.0));
         let mut instance = single_indicator_instance(
             Bound::new(0.0, 5.0).unwrap(),
             Equality::LessThanOrEqualToZero,
             f,
         );
-        let before_constraints = instance.constraints().clone();
+        let before_constraints = instance.active_constraints().clone();
 
         let new_ids = instance
             .convert_indicator_to_constraint(IndicatorConstraintID::from(7), ATol::default())
@@ -484,12 +500,12 @@ mod tests {
             "redundant indicator should emit nothing"
         );
         assert_eq!(
-            instance.constraints(),
+            instance.active_constraints(),
             &before_constraints,
             "no new constraints added for redundant indicator"
         );
         let (_, reason) = instance
-            .removed_indicator_constraints()
+            .inactive_indicator_constraints()
             .get(&IndicatorConstraintID::from(7))
             .unwrap();
         assert_eq!(
@@ -509,7 +525,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1)),
-            false,
+            crate::IndicatorTriggerValue::One,
         );
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
@@ -518,13 +534,13 @@ mod tests {
                 VariableID::from(1) => x,
                 VariableID::from(10) => y,
             })
-            .constraints(BTreeMap::new())
-            .indicator_constraints(BTreeMap::from([(IndicatorConstraintID::from(7), ic)]))
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(BTreeMap::from([(IndicatorConstraintID::from(7), ic)]))
             .build()
             .unwrap();
         let before_vars = instance.decision_variables.clone();
-        let before_constraints = instance.constraints().clone();
-        let before_indicators = instance.indicator_constraints().clone();
+        let before_constraints = instance.active_constraints().clone();
+        let before_indicators = instance.active_indicator_constraints().clone();
 
         let err = instance
             .convert_indicator_to_constraint(IndicatorConstraintID::from(7), ATol::default())
@@ -532,8 +548,8 @@ mod tests {
         assert!(err.to_string().contains("non-finite"));
 
         assert_eq!(instance.decision_variables, before_vars);
-        assert_eq!(instance.constraints(), &before_constraints);
-        assert_eq!(instance.indicator_constraints(), &before_indicators);
+        assert_eq!(instance.active_constraints(), &before_constraints);
+        assert_eq!(instance.active_indicator_constraints(), &before_indicators);
     }
 
     #[test]
@@ -550,17 +566,17 @@ mod tests {
         .unwrap();
         let mut instance =
             single_indicator_instance(Bound::new(0.0, 1.0).unwrap(), Equality::EqualToZero, f);
-        let before_constraints = instance.constraints().clone();
-        let before_indicators = instance.indicator_constraints().clone();
+        let before_constraints = instance.active_constraints().clone();
+        let before_indicators = instance.active_indicator_constraints().clone();
 
         let err = instance
             .convert_indicator_to_constraint(IndicatorConstraintID::from(7), ATol::default())
             .unwrap_err();
         assert!(err.to_string().contains("Coefficient must be finite"));
 
-        assert_eq!(instance.constraints(), &before_constraints);
-        assert_eq!(instance.indicator_constraints(), &before_indicators);
-        assert!(instance.removed_indicator_constraints().is_empty());
+        assert_eq!(instance.active_constraints(), &before_constraints);
+        assert_eq!(instance.active_indicator_constraints(), &before_indicators);
+        assert!(instance.inactive_indicator_constraints().is_empty());
     }
 
     #[test]
@@ -588,7 +604,7 @@ mod tests {
                 coeff!(-1.0),
             )) + coeff!(0.5))
             .unwrap(),
-            false,
+            crate::IndicatorTriggerValue::One,
         );
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
@@ -597,11 +613,11 @@ mod tests {
                 VariableID::from(1) => x_semi,
                 VariableID::from(10) => y,
             })
-            .constraints(BTreeMap::new())
-            .indicator_constraints(BTreeMap::from([(IndicatorConstraintID::from(7), ic)]))
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(BTreeMap::from([(IndicatorConstraintID::from(7), ic)]))
             .build()
             .unwrap();
-        let before_constraints = instance.constraints().clone();
+        let before_constraints = instance.active_constraints().clone();
 
         let err = instance
             .convert_indicator_to_constraint(IndicatorConstraintID::from(7), ATol::default())
@@ -613,9 +629,9 @@ mod tests {
         );
         // No mutation on error.
         assert!(instance
-            .indicator_constraints()
+            .active_indicator_constraints()
             .contains_key(&IndicatorConstraintID::from(7)));
-        assert_eq!(instance.constraints(), &before_constraints);
+        assert_eq!(instance.active_constraints(), &before_constraints);
     }
 
     #[test]
@@ -626,16 +642,16 @@ mod tests {
             Equality::LessThanOrEqualToZero,
             f,
         );
-        let before_indicators = instance.indicator_constraints().clone();
-        let before_constraints = instance.constraints().clone();
+        let before_indicators = instance.active_indicator_constraints().clone();
+        let before_constraints = instance.active_constraints().clone();
 
         let err = instance
             .convert_indicator_to_constraint(IndicatorConstraintID::from(999), ATol::default())
             .unwrap_err();
         assert!(err.to_string().contains("999"));
 
-        assert_eq!(instance.indicator_constraints(), &before_indicators);
-        assert_eq!(instance.constraints(), &before_constraints);
+        assert_eq!(instance.active_indicator_constraints(), &before_indicators);
+        assert_eq!(instance.active_constraints(), &before_constraints);
     }
 
     #[test]
@@ -655,10 +671,14 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             f(),
-            false,
+            crate::IndicatorTriggerValue::One,
         );
-        let ic_eq =
-            IndicatorConstraint::new(VariableID::from(10), Equality::EqualToZero, f(), false);
+        let ic_eq = IndicatorConstraint::new(
+            VariableID::from(10),
+            Equality::EqualToZero,
+            f(),
+            crate::IndicatorTriggerValue::One,
+        );
 
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
@@ -667,8 +687,8 @@ mod tests {
                 VariableID::from(1) => x,
                 VariableID::from(10) => y,
             })
-            .constraints(BTreeMap::new())
-            .indicator_constraints(BTreeMap::from([
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(BTreeMap::from([
                 (IndicatorConstraintID::from(1), ic_le),
                 (IndicatorConstraintID::from(2), ic_eq),
             ]))
@@ -681,8 +701,8 @@ mod tests {
         assert_eq!(result.len(), 2);
         assert_eq!(result[&IndicatorConstraintID::from(1)].len(), 1);
         assert_eq!(result[&IndicatorConstraintID::from(2)].len(), 2);
-        assert!(instance.indicator_constraints().is_empty());
-        assert_eq!(instance.removed_indicator_constraints().len(), 2);
+        assert!(instance.active_indicator_constraints().is_empty());
+        assert_eq!(instance.inactive_indicator_constraints().len(), 2);
     }
 
     #[test]
@@ -702,13 +722,13 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-2.0)),
-            false,
+            crate::IndicatorTriggerValue::One,
         );
         let ic_bad = IndicatorConstraint::new(
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(2)),
-            false,
+            crate::IndicatorTriggerValue::One,
         );
 
         let mut instance = Instance::builder()
@@ -719,41 +739,42 @@ mod tests {
                 VariableID::from(2) => x2,
                 VariableID::from(10) => y,
             })
-            .constraints(BTreeMap::new())
-            .indicator_constraints(BTreeMap::from([
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(BTreeMap::from([
                 (IndicatorConstraintID::from(1), ic_ok),
                 (IndicatorConstraintID::from(2), ic_bad),
             ]))
             .build()
             .unwrap();
-        let before_indicators = instance.indicator_constraints().clone();
-        let before_constraints = instance.constraints().clone();
+        let before_indicators = instance.active_indicator_constraints().clone();
+        let before_constraints = instance.active_constraints().clone();
 
         let err = instance
             .convert_all_indicators_to_constraints(ATol::default())
             .unwrap_err();
         assert!(err.to_string().contains("non-finite"));
 
-        assert_eq!(instance.indicator_constraints(), &before_indicators);
-        assert_eq!(instance.constraints(), &before_constraints);
-        assert!(instance.removed_indicator_constraints().is_empty());
+        assert_eq!(instance.active_indicator_constraints(), &before_indicators);
+        assert_eq!(instance.active_constraints(), &before_constraints);
+        assert!(instance.inactive_indicator_constraints().is_empty());
     }
 
     fn indicator_instance_with_constraint_id(
         regular_id: u64,
-        regular_is_removed: bool,
+        regular_is_inactive: bool,
         indicators: BTreeMap<IndicatorConstraintID, IndicatorConstraint>,
     ) -> Instance {
         let constraint_id = ConstraintID::from(regular_id);
         let constraint = Constraint::equal_to_zero(Function::Zero);
-        let (constraints, removed_constraints) = if regular_is_removed {
+        let (constraints, inactive_constraints) = if regular_is_inactive {
             (
                 BTreeMap::new(),
                 BTreeMap::from([(
                     constraint_id,
                     (
                         constraint,
-                        RemovedReason {
+                        InactiveConstraintMetadata {
+                            skip_feasibility_check: false,
                             reason: "test".to_string(),
                             parameters: Default::default(),
                         },
@@ -777,9 +798,9 @@ mod tests {
                 ).unwrap(),
                 VariableID::from(10) => DecisionVariable::binary(),
             })
-            .constraints(constraints)
-            .removed_constraints(removed_constraints)
-            .indicator_constraints(indicators)
+            .active_constraints(constraints)
+            .inactive_constraints(inactive_constraints)
+            .active_indicator_constraints(indicators)
             .build()
             .unwrap()
     }
@@ -791,7 +812,7 @@ mod tests {
             VariableID::from(10),
             Equality::EqualToZero,
             Function::from(linear!(1)),
-            false,
+            crate::IndicatorTriggerValue::One,
         );
         let mut instance = indicator_instance_with_constraint_id(
             u64::MAX - 1,
@@ -814,7 +835,7 @@ mod tests {
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1)),
-            false,
+            crate::IndicatorTriggerValue::One,
         );
         let mut instance = indicator_instance_with_constraint_id(
             u64::MAX - 1,
@@ -835,18 +856,18 @@ mod tests {
     }
 
     #[test]
-    fn conversion_rejects_exhausted_active_and_removed_constraint_ids_without_mutation() {
+    fn conversion_rejects_exhausted_active_and_inactive_constraint_ids_without_mutation() {
         let id = IndicatorConstraintID::from(7);
-        for regular_is_removed in [false, true] {
+        for regular_is_inactive in [false, true] {
             let indicator = IndicatorConstraint::new(
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
                 Function::from(linear!(1)),
-                false,
+                crate::IndicatorTriggerValue::One,
             );
             let mut instance = indicator_instance_with_constraint_id(
                 u64::MAX,
-                regular_is_removed,
+                regular_is_inactive,
                 BTreeMap::from([(id, indicator)]),
             );
             let before = instance.clone();
@@ -867,7 +888,7 @@ mod tests {
             VariableID::from(10),
             Equality::EqualToZero,
             Function::from(linear!(1)),
-            false,
+            crate::IndicatorTriggerValue::One,
         );
         let mut instance = indicator_instance_with_constraint_id(
             u64::MAX - 2,
@@ -886,8 +907,8 @@ mod tests {
                 ConstraintID::from(u64::MAX)
             ],
         );
-        assert!(instance.indicator_constraints().is_empty());
-        assert!(instance.removed_indicator_constraints().contains_key(&id));
+        assert!(instance.active_indicator_constraints().is_empty());
+        assert!(instance.inactive_indicator_constraints().contains_key(&id));
     }
 
     #[test]
@@ -897,23 +918,23 @@ mod tests {
             VariableID::from(10),
             Equality::EqualToZero,
             Function::Zero,
-            false,
+            crate::IndicatorTriggerValue::One,
         );
         let mut instance = indicator_instance_with_constraint_id(
             u64::MAX,
             false,
             BTreeMap::from([(id, indicator)]),
         );
-        let before_constraints = instance.constraints().clone();
+        let before_constraints = instance.active_constraints().clone();
 
         let generated = instance
             .convert_indicator_to_constraint(id, ATol::default())
             .unwrap();
 
         assert!(generated.is_empty());
-        assert_eq!(instance.constraints(), &before_constraints);
-        assert!(instance.indicator_constraints().is_empty());
-        assert!(instance.removed_indicator_constraints().contains_key(&id));
+        assert_eq!(instance.active_constraints(), &before_constraints);
+        assert!(instance.active_indicator_constraints().is_empty());
+        assert!(instance.inactive_indicator_constraints().contains_key(&id));
     }
 
     #[test]

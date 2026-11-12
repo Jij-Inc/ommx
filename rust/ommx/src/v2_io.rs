@@ -15,17 +15,18 @@ use crate::{
 
 pub fn required_features(
     has_indicator_constraints: bool,
-    has_zero_activated_indicators: bool,
+    has_zero_triggered_indicators: bool,
     has_one_hot_constraints: bool,
     has_sos1_constraints: bool,
     has_finite_domain_variables: bool,
+    has_skipped_constraints: bool,
 ) -> Vec<i32> {
     let mut features = Vec::new();
     if has_indicator_constraints {
         features.push(Feature::ConstraintIndicator as i32);
     }
-    if has_zero_activated_indicators {
-        features.push(Feature::IndicatorActivateOnZero as i32);
+    if has_zero_triggered_indicators {
+        features.push(Feature::IndicatorTriggerValue as i32);
     }
     if has_one_hot_constraints {
         features.push(Feature::ConstraintOneHot as i32);
@@ -35,6 +36,9 @@ pub fn required_features(
     }
     if has_finite_domain_variables {
         features.push(Feature::DecisionVariableFiniteDomain as i32);
+    }
+    if has_skipped_constraints {
+        features.push(Feature::ConstraintSkipFeasibilityCheck as i32);
     }
     features
 }
@@ -177,8 +181,8 @@ pub fn sample_bool_map_from_v2(map: BTreeMap<u64, bool>) -> BTreeMap<SampleID, b
         .collect()
 }
 
-pub fn sampled_active_variable_map_from_v2(
-    map: BTreeMap<u64, crate::v2::SampledActiveVariable>,
+pub fn sampled_selected_variable_map_from_v2(
+    map: BTreeMap<u64, crate::v2::SampledSelectedVariable>,
 ) -> BTreeMap<SampleID, Option<VariableID>> {
     map.into_iter()
         .map(|(sample_id, value)| {
@@ -230,7 +234,8 @@ mod required_features_tests {
                 Feature::ConstraintSos1 as i32,
                 Feature::OutputObjective as i32,
                 Feature::DecisionVariableFiniteDomain as i32,
-                Feature::IndicatorActivateOnZero as i32,
+                Feature::ConstraintSkipFeasibilityCheck as i32,
+                Feature::IndicatorTriggerValue as i32,
             ],
             "test.Message",
         )

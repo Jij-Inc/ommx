@@ -599,7 +599,7 @@ class OMMXHighsAdapter(SolverAdapter):
     >>> assert source.active_special_constraint_kinds == {
     ...     ConstraintKind.Indicator, ConstraintKind.Sos1,
     ... }
-    >>> assert not source.removed_constraints
+    >>> assert not source.inactive_constraints
 
     All variables here are Binary with finite bounds, so the recommended
     lowering can construct the required linear rows. An arbitrary model need
@@ -901,7 +901,7 @@ class OMMXHighsAdapter(SolverAdapter):
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(p[i] * x[i] for i in range(6)),
-        ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
+        ...     active_constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
         ...     sense=Sense.Maximize,
         ... )
         >>>
@@ -920,7 +920,7 @@ class OMMXHighsAdapter(SolverAdapter):
         >>> instance = Instance.from_components(
         ...     decision_variables=[x],
         ...     objective=x,
-        ...     constraints={0: x >= 4},  # Impossible: x ≤ 3 and x ≥ 4
+        ...     active_constraints={0: x >= 4},  # Impossible: x ≤ 3 and x ≥ 4
         ...     sense=Sense.Maximize,
         ... )
         >>> OMMXHighsAdapter.solve(instance)  # doctest: +IGNORE_EXCEPTION_DETAIL
@@ -942,7 +942,7 @@ class OMMXHighsAdapter(SolverAdapter):
         # >>> instance = Instance.from_components(
         # ...     decision_variables=[x],
         # ...     objective=x,
-        # ...     constraints={},
+        # ...     active_constraints={},
         # ...     sense=Sense.Maximize,
         # ... )
 
@@ -1062,7 +1062,7 @@ class OMMXHighsAdapter(SolverAdapter):
         >>> instance = Instance.from_components(
         ...     decision_variables=[x],
         ...     objective=x,
-        ...     constraints={},
+        ...     active_constraints={},
         ...     sense=Sense.Maximize,
         ... )
         >>>
@@ -1129,7 +1129,7 @@ class OMMXHighsAdapter(SolverAdapter):
         >>> instance = Instance.from_components(
         ...     decision_variables=[x1],
         ...     objective=x1,
-        ...     constraints={},
+        ...     active_constraints={},
         ...     sense=Sense.Minimize,
         ... )
         >>> adapter = OMMXHighsAdapter(instance)
@@ -1157,12 +1157,12 @@ class OMMXHighsAdapter(SolverAdapter):
         return State(
             entries={
                 var.id: solution.col_value[i]
-                for i, var in enumerate(self.instance.used_decision_variables)
+                for i, var in enumerate(self.instance.active_decision_variables)
             }
         )
 
     def _set_decision_variables(self):
-        variables = self.instance.used_decision_variables
+        variables = self.instance.active_decision_variables
         num_cols = len(variables)
         if num_cols == 0:
             # HiGHS reports ModelEmpty without checking rows when there are no
@@ -1264,12 +1264,12 @@ class OMMXHighsAdapter(SolverAdapter):
 
     def _set_constraints(self):
         self._constraint_rows: dict[ConstraintID, int] = {}
-        for cid in self.instance.constraints:
+        for cid in self.instance.active_constraints:
             if not isinstance(cid, ConstraintID):
                 raise OMMXHighsAdapterError(
                     f"Unsupported constraint family: {type(cid).__name__} (id: {cid})"
                 )
-            constr = self.instance.constraints[cid]
+            constr = self.instance.active_constraints[cid]
             function = constr.function
             const_expr = self._linear_expr_conversion(function)
             row_index = self.model.getNumRow()

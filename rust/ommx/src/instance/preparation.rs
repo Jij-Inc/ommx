@@ -35,7 +35,7 @@ pub struct ObjectivePreparation {
 /// [`Self::max_integer_range`] and [`Self::atol`].
 ///
 /// [`Self::slack_upper_bound`] selects the required postcondition. `None`
-/// requires the constraint to become an equality or be removed as trivially
+/// requires the constraint to become an equality or be deactivated as trivially
 /// satisfied, so [`ExactIntegerSlackUnavailable`] is propagated. `Some(value)`
 /// permits the constraint to remain an inequality: only that signal selects
 /// [`Instance::add_integer_slack_to_inequality`] with `value`. The latter
@@ -61,15 +61,15 @@ pub struct IntegerSlackPreparation {
     pub slack_upper_bound: Option<u64>,
 }
 
-/// Preparation of currently used Integer decision variables.
+/// Preparation of active Integer decision variables.
 ///
 /// Exactly one encoding owner operation is selected. Validation and mutation
 /// semantics remain owned by that operation.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IntegerEncodingPreparation {
-    /// Invoke [`Instance::log_encode_all_used_integers`].
-    LogEncodeAllUsedIntegers {
+    /// Invoke [`Instance::log_encode_all_active_integers`].
+    LogEncodeAllActiveIntegers {
         /// Absolute tolerance passed to the owner operation.
         atol: ATol,
     },
@@ -148,7 +148,7 @@ pub struct PreparationPolicy {
     pub objective: Option<ObjectivePreparation>,
     /// Optional Integer slack phase. `None` does not introduce Integer slack.
     pub integer_slack: Option<IntegerSlackPreparation>,
-    /// Optional used-Integer encoding phase.
+    /// Optional active-Integer encoding phase.
     pub integer_encoding: Option<IntegerEncodingPreparation>,
     /// Optional fixed-weight penalty phase.
     pub fixed_penalty: Option<FixedPenaltyPreparation>,
@@ -184,7 +184,7 @@ impl PreparationPolicy {
     /// assert_eq!(slack.slack_upper_bound, Some(31));
     /// assert!(matches!(
     ///     policy.integer_encoding,
-    ///     Some(IntegerEncodingPreparation::LogEncodeAllUsedIntegers { .. }),
+    ///     Some(IntegerEncodingPreparation::LogEncodeAllActiveIntegers { .. }),
     /// ));
     /// assert!(matches!(
     ///     policy.fixed_penalty,
@@ -245,7 +245,7 @@ impl PreparationPolicy {
                 atol: ATol::default(),
                 slack_upper_bound: Some(31),
             }),
-            integer_encoding: Some(IntegerEncodingPreparation::LogEncodeAllUsedIntegers {
+            integer_encoding: Some(IntegerEncodingPreparation::LogEncodeAllActiveIntegers {
                 atol: ATol::default(),
             }),
             fixed_penalty: Some(
@@ -305,7 +305,7 @@ impl PreparationStep for ObjectivePreparation {
 impl PreparationStep for IntegerSlackPreparation {
     fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
         let inequality_ids = instance
-            .constraints()
+            .active_constraints()
             .iter()
             .filter_map(|(&id, constraint)| {
                 (constraint.equality == Equality::LessThanOrEqualToZero).then_some(id)
@@ -339,8 +339,8 @@ impl PreparationStep for IntegerSlackPreparation {
 impl PreparationStep for IntegerEncodingPreparation {
     fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
         match self {
-            Self::LogEncodeAllUsedIntegers { atol } => {
-                instance.log_encode_all_used_integers(*atol)?;
+            Self::LogEncodeAllActiveIntegers { atol } => {
+                instance.log_encode_all_active_integers(*atol)?;
             }
         }
         Ok(())
@@ -466,7 +466,7 @@ impl Instance {
     ///     .sense(Sense::Maximize)
     ///     .objective(Function::from(linear!(1)))
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-    ///     .constraints(BTreeMap::from([(
+    ///     .active_constraints(BTreeMap::from([(
     ///         ConstraintID::from(1),
     ///         Constraint::equal_to_zero(constraint),
     ///     )]))
@@ -677,16 +677,16 @@ mod tests {
         assert_eq!(output.sense(), Sense::Minimize);
         assert_eq!(output.function(), &objective);
         assert!(!output.preserves_optimality());
-        // Encoding now precedes penalty removal. The removed row contains the
+        // Encoding now precedes penalty deactivation. The inactive row contains the
         // encoded function, whose value must still be the original constraint.
-        let removed = instance.removed_constraints()[&constraint_id].0.function();
+        let inactive = instance.inactive_constraints()[&constraint_id].0.function();
         for low in [0.0, 1.0] {
             for high in [0.0, 1.0] {
                 let state = crate::v1::State::from_iter([(2, low), (3, high)]);
                 let decoded = low + 2.0 * high;
                 let source_state = crate::v1::State::from_iter([(1, decoded)]);
                 assert_eq!(
-                    removed.evaluate(&state, ATol::default()).unwrap(),
+                    inactive.evaluate(&state, ATol::default()).unwrap(),
                     constraint_function
                         .evaluate(&source_state, ATol::default())
                         .unwrap()
@@ -714,7 +714,7 @@ mod tests {
     }
 
     #[test]
-    fn encoding_failure_precedes_penalty_removal() {
+    fn encoding_failure_precedes_penalty_deactivation() {
         let variable = VariableID::from(1);
         let mut instance = Instance::new(
             Sense::Minimize,
@@ -927,7 +927,7 @@ mod tests {
             .sense(Sense::Maximize)
             .objective(Function::from(linear!(1)))
             .decision_variables(variables)
-            .constraints(BTreeMap::from([
+            .active_constraints(BTreeMap::from([
                 (
                     converted_id,
                     Constraint::less_than_or_equal_to_zero(converted_function),
@@ -937,7 +937,7 @@ mod tests {
                     Constraint::less_than_or_equal_to_zero(infeasible_function),
                 ),
             ]))
-            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(3), one_hot)]))
+            .active_one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(3), one_hot)]))
             .build()
             .unwrap();
         let target = unconstrained_class(
@@ -969,9 +969,9 @@ mod tests {
                 if *id == infeasible_id && *bound == Bound::new(1.0, 1.5).unwrap()
         ));
         assert_eq!(instance.sense(), Sense::Minimize);
-        assert_eq!(instance.removed_one_hot_constraints().len(), 1);
+        assert_eq!(instance.inactive_one_hot_constraints().len(), 1);
         assert_eq!(
-            instance.constraints()[&converted_id].equality,
+            instance.active_constraints()[&converted_id].equality,
             Equality::EqualToZero
         );
     }

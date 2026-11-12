@@ -1,52 +1,52 @@
 # serializer version: 1
 # name: test_constraints_df_default
   '''
-                        equality    type   used_ids     name subscripts description
+                        equality    type   used_ids     name subscripts description                   role
   regular_constraint_id
-  ConstraintID(10)            =0  Linear  {0, 1, 2}  balance         []        <NA>
+  ConstraintID(10)            =0  Linear  {0, 1, 2}  balance         []        <NA>  ConstraintRole.ACTIVE
   '''
 # ---
 # name: test_constraints_df_include_empty
   '''
-                        equality    type   used_ids
+                        equality    type   used_ids                   role
   regular_constraint_id
-  ConstraintID(10)            =0  Linear  {0, 1, 2}
+  ConstraintID(10)            =0  Linear  {0, 1, 2}  ConstraintRole.ACTIVE
   '''
 # ---
 # name: test_decision_variables_df_default
   '''
         kind  lower  upper values name subscripts description parameters.role parameters.shard substituted_value state_role
   id
-  0   Binary    0.0    1.0   <NA>   x0        [0]  variable 0         primary                0              <NA>       used
-  1   Binary    0.0    1.0   <NA>   x1        [1]  variable 1         primary                1              <NA>       used
-  2   Binary    0.0    1.0   <NA>   x2        [2]  variable 2         primary                2              <NA>       used
+  0   Binary    0.0    1.0   <NA>   x0        [0]  variable 0         primary                0              <NA>     active
+  1   Binary    0.0    1.0   <NA>   x1        [1]  variable 1         primary                1              <NA>     active
+  2   Binary    0.0    1.0   <NA>   x2        [2]  variable 2         primary                2              <NA>     active
   '''
 # ---
 # name: test_decision_variables_df_include_empty
   '''
         kind  lower  upper values substituted_value state_role
   id
-  0   Binary    0.0    1.0   <NA>              <NA>       used
-  1   Binary    0.0    1.0   <NA>              <NA>       used
-  2   Binary    0.0    1.0   <NA>              <NA>       used
+  0   Binary    0.0    1.0   <NA>              <NA>     active
+  1   Binary    0.0    1.0   <NA>              <NA>     active
+  2   Binary    0.0    1.0   <NA>              <NA>     active
   '''
 # ---
 # name: test_decision_variables_df_include_label_only
   '''
         kind  lower  upper values name subscripts description substituted_value state_role
   id
-  0   Binary    0.0    1.0   <NA>   x0        [0]  variable 0              <NA>       used
-  1   Binary    0.0    1.0   <NA>   x1        [1]  variable 1              <NA>       used
-  2   Binary    0.0    1.0   <NA>   x2        [2]  variable 2              <NA>       used
+  0   Binary    0.0    1.0   <NA>   x0        [0]  variable 0              <NA>     active
+  1   Binary    0.0    1.0   <NA>   x1        [1]  variable 1              <NA>     active
+  2   Binary    0.0    1.0   <NA>   x2        [2]  variable 2              <NA>     active
   '''
 # ---
 # name: test_decision_variables_df_include_parameters_only
   '''
         kind  lower  upper values parameters.role parameters.shard substituted_value state_role
   id
-  0   Binary    0.0    1.0   <NA>         primary                0              <NA>       used
-  1   Binary    0.0    1.0   <NA>         primary                1              <NA>       used
-  2   Binary    0.0    1.0   <NA>         primary                2              <NA>       used
+  0   Binary    0.0    1.0   <NA>         primary                0              <NA>     active
+  1   Binary    0.0    1.0   <NA>         primary                1              <NA>     active
+  2   Binary    0.0    1.0   <NA>         primary                2              <NA>     active
   '''
 # ---
 # name: test_sample_set_decision_variables_df_include_empty

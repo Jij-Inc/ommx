@@ -13,7 +13,7 @@ impl Instance {
             .sense(sense)
             .objective(objective)
             .decision_variables(decision_variables)
-            .constraints(constraints)
+            .active_constraints(constraints)
             .build()
     }
 }
@@ -31,7 +31,7 @@ impl ParametricInstance {
             .objective(objective)
             .decision_variables(decision_variables)
             .parameters(parameters)
-            .constraints(constraints)
+            .active_constraints(constraints)
             .build()
     }
 }
@@ -138,7 +138,7 @@ mod tests {
         assert_eq!(*parametric_instance.sense(), Sense::Maximize);
         assert_eq!(parametric_instance.decision_variables().len(), 2);
         assert_eq!(parametric_instance.parameters().len(), 2);
-        assert_eq!(parametric_instance.constraints().len(), 2);
+        assert_eq!(parametric_instance.active_constraints().len(), 2);
     }
 
     #[test]

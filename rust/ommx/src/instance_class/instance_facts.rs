@@ -40,13 +40,13 @@ impl ConstraintFacts {
 /// Membership facts for an indicator's activation condition and body.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IndicatorConstraintFacts {
-    activate_on_zero: bool,
+    trigger_value: crate::IndicatorTriggerValue,
     body: ConstraintFacts,
 }
 
 impl IndicatorConstraintFacts {
-    pub fn activate_on_zero(&self) -> bool {
-        self.activate_on_zero
+    pub fn trigger_value(&self) -> crate::IndicatorTriggerValue {
+        self.trigger_value
     }
     #[cfg(test)]
     pub fn relation(&self) -> Equality {
@@ -65,13 +65,13 @@ impl IndicatorConstraintFacts {
 ///
 /// This private value is diagnostic evidence for instance-class membership,
 /// not another mutable source of truth. It includes the objective and every
-/// active constraint family, and groups only used decision variables by
-/// [`Kind`]. Fixed, dependent, irrelevant, removed-constraint-only, and
+/// active constraint family, and groups only active decision variables by
+/// [`Kind`]. Fixed, dependent, irrelevant, inactive-constraint-only, and
 /// named-function-only variables are excluded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstanceFacts {
     sense: Sense,
-    used_variables_by_kind: BTreeMap<Kind, VariableIDSet>,
+    active_variables_by_kind: BTreeMap<Kind, VariableIDSet>,
     objective_classification: FunctionClassification,
     regular_constraints: BTreeMap<ConstraintID, ConstraintFacts>,
     indicator_constraints: BTreeMap<IndicatorConstraintID, IndicatorConstraintFacts>,
@@ -84,13 +84,13 @@ impl InstanceFacts {
         self.sense
     }
 
-    pub fn used_variables_by_kind(&self) -> &BTreeMap<Kind, VariableIDSet> {
-        &self.used_variables_by_kind
+    pub fn active_variables_by_kind(&self) -> &BTreeMap<Kind, VariableIDSet> {
+        &self.active_variables_by_kind
     }
 
     #[cfg(test)]
-    pub fn used_variable_ids(&self) -> VariableIDSet {
-        self.used_variables_by_kind
+    pub fn active_variable_ids(&self) -> VariableIDSet {
+        self.active_variables_by_kind
             .values()
             .flat_map(|ids| ids.iter().copied())
             .collect()
@@ -121,9 +121,9 @@ impl InstanceFacts {
 
 impl From<&Instance> for InstanceFacts {
     fn from(instance: &Instance) -> Self {
-        let mut used_variables_by_kind = BTreeMap::<Kind, VariableIDSet>::new();
-        for (id, variable) in instance.used_decision_variables() {
-            used_variables_by_kind
+        let mut active_variables_by_kind = BTreeMap::<Kind, VariableIDSet>::new();
+        for (id, variable) in instance.active_decision_variables() {
+            active_variables_by_kind
                 .entry(variable.kind())
                 .or_default()
                 .insert(id);
@@ -131,10 +131,10 @@ impl From<&Instance> for InstanceFacts {
 
         Self {
             sense: instance.sense(),
-            used_variables_by_kind,
+            active_variables_by_kind,
             objective_classification: instance.objective().into(),
             regular_constraints: instance
-                .constraints()
+                .active_constraints()
                 .iter()
                 .map(|(id, constraint)| {
                     (
@@ -147,13 +147,13 @@ impl From<&Instance> for InstanceFacts {
                 })
                 .collect(),
             indicator_constraints: instance
-                .indicator_constraints()
+                .active_indicator_constraints()
                 .iter()
                 .map(|(id, constraint)| {
                     (
                         *id,
                         IndicatorConstraintFacts {
-                            activate_on_zero: constraint.activate_on_zero,
+                            trigger_value: constraint.trigger_value,
                             body: ConstraintFacts {
                                 relation: constraint.equality,
                                 classification: constraint.function().into(),
@@ -162,8 +162,12 @@ impl From<&Instance> for InstanceFacts {
                     )
                 })
                 .collect(),
-            one_hot_constraint_ids: instance.one_hot_constraints().keys().copied().collect(),
-            sos1_constraint_ids: instance.sos1_constraints().keys().copied().collect(),
+            one_hot_constraint_ids: instance
+                .active_one_hot_constraints()
+                .keys()
+                .copied()
+                .collect(),
+            sos1_constraint_ids: instance.active_sos1_constraints().keys().copied().collect(),
         }
     }
 }
@@ -189,19 +193,19 @@ mod tests {
                 facts.objective_classification(),
                 FunctionClassification::from(instance.objective())
             );
-            prop_assert_eq!(facts.used_variable_ids(), instance.used_decision_variable_ids());
-            for (id, variable) in instance.used_decision_variables() {
+            prop_assert_eq!(facts.active_variable_ids(), instance.active_decision_variable_ids());
+            for (id, variable) in instance.active_decision_variables() {
                 prop_assert!(facts
-                    .used_variables_by_kind()
+                    .active_variables_by_kind()
                     .get(&variable.kind())
                     .is_some_and(|ids| ids.contains(&id)));
             }
 
             prop_assert_eq!(
                 facts.regular_constraints().keys().copied().collect::<BTreeSet<_>>(),
-                instance.constraints().keys().copied().collect::<BTreeSet<_>>()
+                instance.active_constraints().keys().copied().collect::<BTreeSet<_>>()
             );
-            for (id, constraint) in instance.constraints() {
+            for (id, constraint) in instance.active_constraints() {
                 let fact = facts.regular_constraints().get(id).unwrap();
                 prop_assert_eq!(fact.relation(), constraint.equality);
                 prop_assert_eq!(
@@ -212,9 +216,9 @@ mod tests {
 
             prop_assert_eq!(
                 facts.indicator_constraints().keys().copied().collect::<BTreeSet<_>>(),
-                instance.indicator_constraints().keys().copied().collect::<BTreeSet<_>>()
+                instance.active_indicator_constraints().keys().copied().collect::<BTreeSet<_>>()
             );
-            for (id, constraint) in instance.indicator_constraints() {
+            for (id, constraint) in instance.active_indicator_constraints() {
                 let fact = facts.indicator_constraints().get(id).unwrap();
                 prop_assert_eq!(fact.relation(), constraint.equality);
                 prop_assert_eq!(
@@ -225,11 +229,11 @@ mod tests {
 
             prop_assert_eq!(
                 facts.one_hot_constraint_ids(),
-                &instance.one_hot_constraints().keys().copied().collect()
+                &instance.active_one_hot_constraints().keys().copied().collect()
             );
             prop_assert_eq!(
                 facts.sos1_constraint_ids(),
-                &instance.sos1_constraints().keys().copied().collect()
+                &instance.active_sos1_constraints().keys().copied().collect()
             );
         }
     }
@@ -246,8 +250,8 @@ mod tests {
                 (x, DecisionVariable::binary()),
                 (y, DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::new())
-            .one_hot_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_one_hot_constraints(BTreeMap::from([(
                 one_hot_id,
                 OneHotConstraint::new(BTreeSet::from([x, y])).unwrap(),
             )]))
@@ -271,7 +275,7 @@ mod tests {
                 classification: FunctionClassification::Polynomial(1.into()),
             })
         );
-        assert_eq!(after.used_variable_ids(), before.used_variable_ids());
+        assert_eq!(after.active_variable_ids(), before.active_variable_ids());
     }
 
     #[test]
@@ -281,8 +285,9 @@ mod tests {
         let dependent = VariableID::from(3);
         let dependency_source = VariableID::from(4);
         let named_only = VariableID::from(5);
-        let removed_only = VariableID::from(6);
-        let removed_reason = crate::constraint::RemovedReason {
+        let inactive_only = VariableID::from(6);
+        let inactive_metadata = crate::constraint::InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         };
@@ -295,15 +300,15 @@ mod tests {
                 (dependent, DecisionVariable::semi_continuous()),
                 (dependency_source, DecisionVariable::integer()),
                 (named_only, DecisionVariable::continuous()),
-                (removed_only, DecisionVariable::semi_integer()),
+                (inactive_only, DecisionVariable::semi_integer()),
             ]))
             .fixed_decision_variable_values(BTreeMap::from([(fixed, 0.0)]))
-            .constraints(BTreeMap::new())
-            .removed_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .inactive_constraints(BTreeMap::from([(
                 ConstraintID::from(10),
                 (
-                    Constraint::equal_to_zero(Function::from(linear!(removed_only))),
-                    removed_reason,
+                    Constraint::equal_to_zero(Function::from(linear!(inactive_only))),
+                    inactive_metadata,
                 ),
             )]))
             .named_functions(BTreeMap::from([(
@@ -323,9 +328,9 @@ mod tests {
             .unwrap();
 
         let facts = InstanceFacts::from(&instance);
-        assert_eq!(facts.used_variable_ids(), BTreeSet::from([used]));
+        assert_eq!(facts.active_variable_ids(), BTreeSet::from([used]));
         assert_eq!(
-            facts.used_variables_by_kind(),
+            facts.active_variables_by_kind(),
             &BTreeMap::from([(Kind::Binary, BTreeSet::from([used]))])
         );
         assert!(facts.regular_constraints().is_empty());

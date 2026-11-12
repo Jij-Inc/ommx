@@ -84,7 +84,7 @@ pub fn package(path: &Path) -> Result<()> {
         );
 
         let nvars = instance.decision_variables().len();
-        let ncons = instance.constraints().len();
+        let ncons = instance.active_constraints().len();
 
         tracing::info!(
             "Packaged '{name}': {} variables, {} constraints",

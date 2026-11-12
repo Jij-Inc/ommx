@@ -75,8 +75,8 @@ impl Instance {
             Some(self.objective.clone().substitute_acyclic(acyclic)?)
         };
 
-        // Removed constraints are intentionally not rewritten here; they are
-        // normalized through `restore_constraint` when reactivated.
+        // Inactive constraints are intentionally not rewritten here; they are
+        // normalized through `activate_constraint` when reactivated.
         let mut constraint_replacements = BTreeMap::new();
         for (&constraint_id, constraint) in self.constraint_collection.active() {
             if !constraint
@@ -180,7 +180,7 @@ impl Instance {
 /// # Postconditions
 ///
 /// Substitution rewrites the Active Formulation and composes reconstruction
-/// rules. Named functions, removed constraints, and an existing output objective
+/// rules. Named functions, inactive constraints, and an existing output objective
 /// retain their source expressions. If the active objective is affected and no
 /// output objective exists, its previous function and sense are retained.
 /// Evaluation reconstructs the substituted variables before evaluating these
@@ -205,7 +205,7 @@ impl Instance {
 ///         (original, DecisionVariable::binary()),
 ///         (replacement, DecisionVariable::binary()),
 ///     ]))
-///     .constraints(BTreeMap::new())
+///     .active_constraints(BTreeMap::new())
 ///     .build()
 ///     .unwrap();
 /// assert!(instance.convert_active_objective(Sense::Minimize));
@@ -436,17 +436,18 @@ mod tests {
                 (VariableID::from(3), DecisionVariable::binary()),
             ]))
             .decision_variable_dependency(crate::assign! { 1 <- linear!(0) + coeff!(1.0) })
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 ConstraintID::from(4),
                 Constraint::less_than_or_equal_to_zero(Function::from(linear!(0) + coeff!(-1.0))),
             )]))
-            .removed_constraints(BTreeMap::from([(
+            .inactive_constraints(BTreeMap::from([(
                 ConstraintID::from(5),
                 (
                     Constraint::less_than_or_equal_to_zero(Function::from(
                         linear!(0) + coeff!(-1.0),
                     )),
-                    crate::constraint::RemovedReason {
+                    crate::constraint::InactiveConstraintMetadata {
+                        skip_feasibility_check: false,
                         reason: "retained source".into(),
                         ..Default::default()
                     },
@@ -507,8 +508,8 @@ mod tests {
             );
             assert_eq!(encoded.constraint_context(), original.constraint_context());
             assert_eq!(
-                encoded.removed_constraints(),
-                original.removed_constraints()
+                encoded.inactive_constraints(),
+                original.inactive_constraints()
             );
             assert_eq!(
                 encoded.output_objective().unwrap().function(),
@@ -518,7 +519,7 @@ mod tests {
                 .decision_variable_dependency()
                 .get(&dependent)
                 .is_some());
-            let ids: Vec<_> = encoded.used_decision_variable_ids().into_iter().collect();
+            let ids: Vec<_> = encoded.active_decision_variable_ids().into_iter().collect();
             assert_eq!(ids.len(), 2);
             for mask in 0..4 {
                 let state = crate::v1::State::from_iter(
@@ -617,7 +618,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
             .decision_variables(BTreeMap::from([(id, DecisionVariable::continuous())]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
         let acyclic = crate::AcyclicAssignments::new([(id, Function::from(linear!(999)))]).unwrap();
@@ -780,7 +781,7 @@ mod tests {
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
                 Function::from(linear!(1) + coeff!(-5.0)),
-                false,
+                crate::IndicatorTriggerValue::One,
             ),
         );
 
@@ -788,8 +789,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(objective)
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
-            .indicator_constraints(indicator_constraints)
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(indicator_constraints)
             .build()
             .unwrap();
 
@@ -803,7 +804,7 @@ mod tests {
         let result = instance.substitute_acyclic(&assignments).unwrap();
 
         // Indicator constraint should still exist with substituted function
-        assert_eq!(result.indicator_constraints().len(), 1);
+        assert_eq!(result.active_indicator_constraints().len(), 1);
     }
 
     #[test]
@@ -822,7 +823,7 @@ mod tests {
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
                 Function::from(linear!(1) + coeff!(-5.0)),
-                false,
+                crate::IndicatorTriggerValue::One,
             ),
         );
 
@@ -830,8 +831,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(objective)
             .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
-            .indicator_constraints(indicator_constraints)
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(indicator_constraints)
             .build()
             .unwrap();
 

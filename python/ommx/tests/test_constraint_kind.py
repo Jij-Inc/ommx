@@ -22,14 +22,14 @@ from test_live_constraint_collections import make_model
 
 def generic_family(model: Instance, kind: ConstraintKind[ConstraintIDBase]) -> None:
     assert_type(
-        model.constraints.of_kind(kind),
+        model.active_constraints.of_kind(kind),
         ConstraintFamilyView[ConstraintIDBase, ConstraintView],
     )
 
 
 def test_unparameterized_kind_returns_common_row():
     def first_row(model: Instance, kind: ConstraintKind) -> ConstraintView:
-        rows = model.constraints.of_kind(kind)
+        rows = model.active_constraints.of_kind(kind)
         assert_type(rows, ConstraintFamilyView[ConstraintIDBase, ConstraintView])
         return assert_type(next(iter(rows.values())), ConstraintView)
 
@@ -83,6 +83,6 @@ def test_kind_constructors_are_unavailable():
 def test_strings_are_not_family_selectors():
     model = make_model(Instance)
     with pytest.raises(TypeError, match="ConstraintKind"):
-        model.constraints.of_kind("sos1")  # type: ignore[call-overload]
+        model.active_constraints.of_kind("sos1")  # type: ignore[call-overload]
     with pytest.raises(TypeError, match="ConstraintKind"):
         model.constraints_df(kind="sos1")  # type: ignore[arg-type]

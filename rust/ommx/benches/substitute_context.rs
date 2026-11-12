@@ -5,7 +5,7 @@
 //! in each public helper by comparing the same fixed input across commits.
 //! Boundary: Rust free helpers on Instance and ParametricInstance, not their
 //! consuming trait methods and not the owner-specific integer-encoding path.
-//! Input: 4,096 unrelated NamedFunctions OR removed constraints, measured separately.
+//! Input: 4,096 unrelated NamedFunctions OR inactive constraints, measured separately.
 //! Two variables, one active objective, one assignment, and expression sizes stay
 //! fixed. Both roots and all three helpers have distinct entry paths, so retain
 //! one input per root/helper/table combination rather than three sizes of each.
@@ -28,15 +28,15 @@
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use ommx::{
-    linear, AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Function, Instance,
-    NamedFunction, NamedFunctionID, ParametricInstance, RemovedReason, Sense, Substitute,
-    VariableID,
+    linear, AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Function,
+    InactiveConstraintMetadata, Instance, NamedFunction, NamedFunctionID, ParametricInstance,
+    Sense, Substitute, VariableID,
 };
 use std::collections::BTreeMap;
 
 fn instance(count: usize, named_functions: bool) -> Instance {
     let mut names = BTreeMap::new();
-    let mut removed = BTreeMap::new();
+    let mut inactive = BTreeMap::new();
     for id in 0..count as u64 {
         if named_functions {
             names.insert(
@@ -46,13 +46,14 @@ fn instance(count: usize, named_functions: bool) -> Instance {
                 },
             );
         } else {
-            removed.insert(
+            inactive.insert(
                 ConstraintID::from(id),
                 (
                     Constraint::equal_to_zero(Function::from(linear!(1))),
-                    RemovedReason {
+                    InactiveConstraintMetadata {
                         reason: "ommx.bench.substitute.context".into(),
                         parameters: Default::default(),
+                        skip_feasibility_check: false,
                     },
                 ),
             );
@@ -65,8 +66,8 @@ fn instance(count: usize, named_functions: bool) -> Instance {
             (VariableID::from(0), DecisionVariable::continuous()),
             (VariableID::from(1), DecisionVariable::continuous()),
         ]))
-        .constraints(BTreeMap::new())
-        .removed_constraints(removed)
+        .active_constraints(BTreeMap::new())
+        .inactive_constraints(inactive)
         .named_functions(names)
         .build()
         .unwrap()
@@ -110,7 +111,7 @@ fn benchmark_owner<T: Substitute<Output = T> + Clone>(
 }
 
 fn substitute_context(c: &mut Criterion) {
-    for (context, named) in [("named-functions", true), ("removed-constraints", false)] {
+    for (context, named) in [("named-functions", true), ("inactive-constraints", false)] {
         benchmark_owner(c, &format!("substitute-context/instance/{context}"), |n| {
             instance(n, named)
         });

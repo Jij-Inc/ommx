@@ -50,7 +50,12 @@ fn every_family_uses_the_same_inclusive_scalar_threshold() {
                     },
                 };
                 assert_contract::<Constraint>(&constraint, &state, atol);
-                let indicator = IndicatorConstraint::new(0.into(), equality, function, false);
+                let indicator = IndicatorConstraint::new(
+                    0.into(),
+                    equality,
+                    function,
+                    crate::IndicatorTriggerValue::One,
+                );
                 assert_contract::<IndicatorConstraint>(&indicator, &state, atol);
                 let mut off = state.clone();
                 off.entries.insert(0, 0.0);
@@ -82,8 +87,8 @@ fn small_member_errors_accumulate_without_input_canonicalization() {
         assert_eq!(sos1_result.violation(), 1.5 * tolerance);
         assert!(!one_hot_result.is_feasible(atol));
         assert!(!sos1_result.is_feasible(atol));
-        assert_eq!(one_hot_result.stage.active_variable, None);
-        assert_eq!(sos1_result.stage.active_variable, None);
+        assert_eq!(one_hot_result.stage.selected_variable, None);
+        assert_eq!(sos1_result.stage.selected_variable, None);
         assert_contract::<OneHotConstraint>(&one_hot, &state, atol);
         assert_contract::<Sos1Constraint>(&sos1, &state, atol);
     }
@@ -173,8 +178,8 @@ fn wire_consumers_can_read_feasibility_and_its_tolerance_without_sdk_evaluation(
                 .map(|id| (id.into(), crate::DecisionVariable::continuous()))
                 .collect(),
         )
-        .constraints(BTreeMap::new())
-        .sos1_constraints(BTreeMap::from([(
+        .active_constraints(BTreeMap::new())
+        .active_sos1_constraints(BTreeMap::from([(
             0.into(),
             Sos1Constraint::new((0..3).map(Into::into).collect()).unwrap(),
         )]))
@@ -227,8 +232,8 @@ fn partial_evaluation_preserves_instance_invariants_and_failure_is_atomic() {
                 .map(|id| (id.into(), crate::DecisionVariable::continuous()))
                 .collect(),
         )
-        .constraints(BTreeMap::new())
-        .sos1_constraints(BTreeMap::from([(
+        .active_constraints(BTreeMap::new())
+        .active_sos1_constraints(BTreeMap::from([(
             0.into(),
             Sos1Constraint::new((0..3).map(Into::into).collect()).unwrap(),
         )]))
@@ -260,7 +265,7 @@ fn partial_evaluation_preserves_instance_invariants_and_failure_is_atomic() {
     let restored = crate::Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
     let state = State::from_iter([(0, 1.0), (1, 0.09375)]);
     let result = restored.evaluate(&state, atol).unwrap();
-    assert_eq!(result.total_violation(), 0.09375);
+    assert_eq!(result.total_violation(Default::default()), 0.09375);
     assert!(result.feasible());
 }
 
@@ -296,7 +301,7 @@ fn activation_decisions_retain_their_conditions_across_queries_and_extraction() 
         crate::Equality::EqualToZero,
         (crate::Function::from(crate::linear!(1)) + crate::Function::from(crate::linear!(2)))
             .unwrap(),
-        false
+        crate::IndicatorTriggerValue::One
     ));
     check!(OneHotConstraint::new([0.into(), 1.into(), 2.into()].into()).unwrap());
     check!(Sos1Constraint::new([0.into(), 1.into(), 2.into()].into()).unwrap());
@@ -307,25 +312,25 @@ fn hosts_reject_activation_conditions_the_current_wire_format_cannot_represent()
     let instance = crate::Instance::builder()
         .sense(crate::Sense::Minimize)
         .objective(crate::Function::Zero)
-        .constraints(BTreeMap::new())
+        .active_constraints(BTreeMap::new())
         .decision_variables(BTreeMap::from([(
             0.into(),
             crate::DecisionVariable::binary(),
         )]))
-        .indicator_constraints(BTreeMap::from([(
+        .active_indicator_constraints(BTreeMap::from([(
             0.into(),
             IndicatorConstraint::new(
                 0.into(),
                 crate::Equality::EqualToZero,
                 crate::Function::Zero,
-                false,
+                crate::IndicatorTriggerValue::One,
             ),
         )]))
-        .one_hot_constraints(BTreeMap::from([(
+        .active_one_hot_constraints(BTreeMap::from([(
             1.into(),
             OneHotConstraint::new([0.into()].into()).unwrap(),
         )]))
-        .sos1_constraints(BTreeMap::from([(
+        .active_sos1_constraints(BTreeMap::from([(
             2.into(),
             Sos1Constraint::new([0.into()].into()).unwrap(),
         )]))
@@ -416,9 +421,9 @@ fn sample_feasibility_matches_extracted_solutions_including_variable_domains() {
         let instance = crate::Instance::builder()
             .sense(crate::Sense::Minimize)
             .objective(crate::Function::from(crate::linear!(0)))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .decision_variables(BTreeMap::from([(0.into(), variable)]))
-            .sos1_constraints(BTreeMap::from([(
+            .active_sos1_constraints(BTreeMap::from([(
                 0.into(),
                 Sos1Constraint::new([0.into()].into()).unwrap(),
             )]))
@@ -447,8 +452,8 @@ fn sample_feasibility_matches_extracted_solutions_including_variable_domains() {
             for (id, state, feasible) in [(0, &invalid_state, false), (1, &valid_state, true)] {
                 let single = instance.evaluate(state, atol).unwrap();
                 let extracted = result.get(id.into()).unwrap();
-                assert_eq!(single.total_violation(), 0.0);
-                assert_eq!(extracted.total_violation(), 0.0);
+                assert_eq!(single.total_violation(Default::default()), 0.0);
+                assert_eq!(extracted.total_violation(Default::default()), 0.0);
                 assert_eq!(single.feasible(), feasible);
                 assert_eq!(extracted.feasible(), feasible);
                 assert_eq!(result.is_sample_feasible(id.into()), Some(feasible));

@@ -176,7 +176,7 @@ impl PyStubType for ConstraintFamilyInput {
 ///
 /// Each host (`Instance` / `ParametricInstance` / `Solution` / `SampleSet`)
 /// passes its own accessor names because the underlying collection types
-/// differ — `ConstraintCollection` for Instance/ParametricInstance,
+/// differ — `ActiveConstraintCollection` for Instance/ParametricInstance,
 /// `EvaluatedConstraintCollection` for Solution, `SampledConstraintCollection`
 /// for SampleSet. Centralising the match shape here avoids drift when adding a
 /// new constraint kind.

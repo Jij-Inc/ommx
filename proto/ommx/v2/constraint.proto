@@ -25,16 +25,19 @@ message ConstraintContext {
   repeated Provenance provenance = 2;
 }
 
-// Why a constraint row was removed or relaxed by preprocessing.
-message RemovedReason {
+// Why a constraint row is inactive and whether it participates in default feasibility checks.
+message InactiveConstraintMetadata {
   string reason = 1;
   map<string, string> parameters = 2;
+  // Exclude this inactive row from the default feasibility judgment.
+  // The row remains evaluable and can be selected explicitly for diagnostics.
+  bool skip_feasibility_check = 3;
 }
 
 // Regular scalar constraint row.
 //
-// The enclosing collection owns ConstraintID, modeling context, active/removed
-// placement, and removed reasons.
+// The enclosing collection owns ConstraintID, modeling context, active/inactive
+// placement, and inactive metadata.
 message RegularConstraint {
   ommx.v1.Equality equality = 1;
   ommx.v1.Function function = 2;
@@ -45,8 +48,8 @@ message IndicatorConstraint {
   uint64 indicator_variable = 1;
   ommx.v1.Equality equality = 2;
   ommx.v1.Function function = 3;
-  // False activates at one (including legacy payloads); true activates at zero.
-  bool activate_on_zero = 4;
+  // The binary value that turns the indicator ON. Must be 0 or 1; absent means 1.
+  optional uint32 trigger_value = 4;
 }
 
 // One-hot constraint row.
@@ -62,32 +65,32 @@ message Sos1Constraint {
 // Regular constraint collection at the definition stage.
 message RegularConstraintCollection {
   map<uint64, RegularConstraint> active = 1;
-  map<uint64, RegularConstraint> removed = 2;
-  map<uint64, RemovedReason> removed_reasons = 3;
+  map<uint64, RegularConstraint> inactive = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 3;
   map<uint64, ConstraintContext> contexts = 4;
 }
 
 // Indicator constraint collection at the definition stage.
 message IndicatorConstraintCollection {
   map<uint64, IndicatorConstraint> active = 1;
-  map<uint64, IndicatorConstraint> removed = 2;
-  map<uint64, RemovedReason> removed_reasons = 3;
+  map<uint64, IndicatorConstraint> inactive = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 3;
   map<uint64, ConstraintContext> contexts = 4;
 }
 
 // One-hot constraint collection at the definition stage.
 message OneHotConstraintCollection {
   map<uint64, OneHotConstraint> active = 1;
-  map<uint64, OneHotConstraint> removed = 2;
-  map<uint64, RemovedReason> removed_reasons = 3;
+  map<uint64, OneHotConstraint> inactive = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 3;
   map<uint64, ConstraintContext> contexts = 4;
 }
 
 // SOS1 constraint collection at the definition stage.
 message Sos1ConstraintCollection {
   map<uint64, Sos1Constraint> active = 1;
-  map<uint64, Sos1Constraint> removed = 2;
-  map<uint64, RemovedReason> removed_reasons = 3;
+  map<uint64, Sos1Constraint> inactive = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 3;
   map<uint64, ConstraintContext> contexts = 4;
 }
 
@@ -106,16 +109,21 @@ message EvaluatedIndicatorConstraint {
   ommx.v1.Equality equality = 2;
   double evaluated_value = 3;
   bool feasible = 4;
-  bool indicator_active = 5;
+  // Whether the indicator variable matches its configured trigger_value at this state,
+  // independently of the constraint's role.
+  bool indicator_on = 5;
   repeated uint64 used_decision_variable_ids = 6;
-  bool activate_on_zero = 7;
+  // The binary value that turns the indicator ON. Must be 0 or 1; absent means 1.
+  optional uint32 trigger_value = 7;
 }
 
 // Evaluated one-hot constraint row.
 message EvaluatedOneHotConstraint {
   repeated uint64 variables = 1;
   bool feasible = 2;
-  optional uint64 active_variable = 3;
+  // Member selected at the evaluation tolerance; unset when infeasible.
+  // This diagnostic is independent of Active Formulation membership.
+  optional uint64 selected_variable = 3;
   repeated uint64 used_decision_variable_ids = 4;
 }
 
@@ -123,40 +131,43 @@ message EvaluatedOneHotConstraint {
 message EvaluatedSos1Constraint {
   repeated uint64 variables = 1;
   bool feasible = 2;
-  optional uint64 active_variable = 3;
+  // Member selected at the evaluation tolerance; unset when infeasible or all
+  // members are approximately zero.
+  // This diagnostic is independent of Active Formulation membership.
+  optional uint64 selected_variable = 3;
   repeated uint64 used_decision_variable_ids = 4;
 }
 
 // Evaluated regular constraint collection.
 message EvaluatedRegularConstraintCollection {
   map<uint64, EvaluatedRegularConstraint> entries = 1;
-  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 2;
   map<uint64, ConstraintContext> contexts = 3;
 }
 
 // Evaluated indicator constraint collection.
 message EvaluatedIndicatorConstraintCollection {
   map<uint64, EvaluatedIndicatorConstraint> entries = 1;
-  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 2;
   map<uint64, ConstraintContext> contexts = 3;
 }
 
 // Evaluated one-hot constraint collection.
 message EvaluatedOneHotConstraintCollection {
   map<uint64, EvaluatedOneHotConstraint> entries = 1;
-  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 2;
   map<uint64, ConstraintContext> contexts = 3;
 }
 
 // Evaluated SOS1 constraint collection.
 message EvaluatedSos1ConstraintCollection {
   map<uint64, EvaluatedSos1Constraint> entries = 1;
-  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 2;
   map<uint64, ConstraintContext> contexts = 3;
 }
 
-// Map value used when a present sample can have no active variable.
-message SampledActiveVariable {
+// Map value used when a present sample can have no selected variable.
+message SampledSelectedVariable {
   optional uint64 variable_id = 1;
 }
 
@@ -175,16 +186,19 @@ message SampledIndicatorConstraint {
   ommx.v1.Equality equality = 2;
   ommx.v1.SampledValues evaluated_values = 3;
   map<uint64, bool> feasible = 4;
-  map<uint64, bool> indicator_active = 5;
+  // Whether the indicator variable matches its configured trigger_value at each sample,
+  // independently of the constraint's role.
+  map<uint64, bool> indicator_on = 5;
   repeated uint64 used_decision_variable_ids = 6;
-  bool activate_on_zero = 7;
+  // The binary value that turns the indicator ON. Must be 0 or 1; absent means 1.
+  optional uint32 trigger_value = 7;
 }
 
 // Sampled one-hot constraint row.
 message SampledOneHotConstraint {
   repeated uint64 variables = 1;
   map<uint64, bool> feasible = 2;
-  map<uint64, SampledActiveVariable> active_variable = 3;
+  map<uint64, SampledSelectedVariable> selected_variable = 3;
   repeated uint64 used_decision_variable_ids = 4;
 }
 
@@ -192,34 +206,34 @@ message SampledOneHotConstraint {
 message SampledSos1Constraint {
   repeated uint64 variables = 1;
   map<uint64, bool> feasible = 2;
-  map<uint64, SampledActiveVariable> active_variable = 3;
+  map<uint64, SampledSelectedVariable> selected_variable = 3;
   repeated uint64 used_decision_variable_ids = 4;
 }
 
 // Sampled regular constraint collection.
 message SampledRegularConstraintCollection {
   map<uint64, SampledRegularConstraint> entries = 1;
-  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 2;
   map<uint64, ConstraintContext> contexts = 3;
 }
 
 // Sampled indicator constraint collection.
 message SampledIndicatorConstraintCollection {
   map<uint64, SampledIndicatorConstraint> entries = 1;
-  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 2;
   map<uint64, ConstraintContext> contexts = 3;
 }
 
 // Sampled one-hot constraint collection.
 message SampledOneHotConstraintCollection {
   map<uint64, SampledOneHotConstraint> entries = 1;
-  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 2;
   map<uint64, ConstraintContext> contexts = 3;
 }
 
 // Sampled SOS1 constraint collection.
 message SampledSos1ConstraintCollection {
   map<uint64, SampledSos1Constraint> entries = 1;
-  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, InactiveConstraintMetadata> inactive_metadata = 2;
   map<uint64, ConstraintContext> contexts = 3;
 }

@@ -27,14 +27,14 @@ impl IndicatorConstraint {
     /// Create a new indicator constraint.
     ///
     /// By default, `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).
-    /// Set `activate_on_zero=True` to activate the body at zero instead.
+    /// Set `trigger_value=0` to enforce the body at zero instead.
     ///
     /// **Args:**
     ///
     /// - `indicator_variable`: A variable ID or decision-variable object that
-    ///   activates this constraint. Only its ID is stored; the enclosing host
+    ///   controls this constraint. Only its ID is stored; the enclosing host
     ///   requires the referenced variable to be binary when the constraint is inserted.
-    /// - `activate_on_zero`: If true, activate at zero instead of one (default false).
+    /// - `trigger_value`: Binary value (0 or 1) at which the body is enforced (default 1).
     /// - `function`: The constraint function
     /// - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
     /// - `name`: Optional name for the constraint
@@ -42,22 +42,22 @@ impl IndicatorConstraint {
     /// - `description`: Optional description
     /// - `parameters`: Optional key-value parameters
     #[new]
-    #[pyo3(signature = (*, indicator_variable, function, equality, activate_on_zero=false, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
+    #[pyo3(signature = (*, indicator_variable, function, equality, trigger_value=1, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
     fn new(
         indicator_variable: VariableIDInput,
         function: Function,
         equality: Equality,
-        activate_on_zero: bool,
+        trigger_value: u32,
         name: Option<String>,
         subscripts: Vec<i64>,
         description: Option<String>,
         parameters: HashMap<String, String>,
-    ) -> PyResult<Self> {
+    ) -> crate::error::OmmxPyResult<Self> {
         let ic = ommx::IndicatorConstraint::new(
             indicator_variable.0,
             equality.into(),
             function.0,
-            activate_on_zero,
+            trigger_value.try_into()?,
         );
         let context = ommx::ConstraintContext {
             label: ommx::ModelingLabel {
@@ -76,10 +76,10 @@ impl IndicatorConstraint {
         self.0.indicator_variable.into_inner()
     }
 
-    /// Whether zero activates the body instead of one.
+    /// Binary value (0 or 1) at which the body is enforced.
     #[getter]
-    pub fn activate_on_zero(&self) -> bool {
-        self.0.activate_on_zero
+    pub fn trigger_value(&self) -> u8 {
+        self.0.trigger_value.into()
     }
 
     #[getter]
@@ -149,37 +149,59 @@ impl IndicatorConstraint {
     }
 }
 
-/// A removed indicator constraint together with the reason it was removed.
+/// An inactive indicator constraint together with the reason it was deactivated.
 #[gen_stub_pyclass]
 #[pyclass(from_py_object, eq, extends = ConstraintView)]
 #[derive(Clone, PartialEq)]
-pub struct RemovedIndicatorConstraint {
+pub struct InactiveIndicatorConstraint {
     pub constraint: ommx::IndicatorConstraint,
     pub context: ommx::ConstraintContext,
-    pub removed_reason: ommx::RemovedReason,
+    pub inactive_reason: ommx::InactiveConstraintMetadata,
 }
 crate::constraint_base::constraint_subclass!(
-    RemovedIndicatorConstraint,
+    InactiveIndicatorConstraint,
     crate::constraint_base::ConstraintView
 );
 
-impl RemovedIndicatorConstraint {
+impl InactiveIndicatorConstraint {
     pub fn from_parts(
         constraint: ommx::IndicatorConstraint,
         context: ommx::ConstraintContext,
-        removed_reason: ommx::RemovedReason,
+        inactive_reason: ommx::InactiveConstraintMetadata,
     ) -> Self {
         Self {
             constraint,
             context,
-            removed_reason,
+            inactive_reason,
         }
     }
 }
 
 #[gen_stub_pymethods]
 #[pymethods]
-impl RemovedIndicatorConstraint {
+impl InactiveIndicatorConstraint {
+    #[new]
+    #[pyo3(signature = (constraint, inactive_reason, inactive_reason_parameters=None, *, skip_feasibility_check=false))]
+    pub fn new(
+        constraint: IndicatorConstraint,
+        inactive_reason: String,
+        inactive_reason_parameters: Option<HashMap<String, String>>,
+        skip_feasibility_check: bool,
+    ) -> Self {
+        Self::from_parts(
+            constraint.0,
+            constraint.1,
+            ommx::InactiveConstraintMetadata {
+                reason: inactive_reason,
+                parameters: inactive_reason_parameters
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+                skip_feasibility_check,
+            },
+        )
+    }
+
     #[getter]
     pub fn name(&self) -> Option<String> {
         self.context.label.name.clone()
@@ -220,10 +242,10 @@ impl RemovedIndicatorConstraint {
         self.constraint.indicator_variable.into_inner()
     }
 
-    /// Whether zero activates the body instead of one.
+    /// Binary value (0 or 1) at which the body is enforced.
     #[getter]
-    pub fn activate_on_zero(&self) -> bool {
-        self.constraint.activate_on_zero
+    pub fn trigger_value(&self) -> u8 {
+        self.constraint.trigger_value.into()
     }
 
     #[getter]
@@ -237,13 +259,23 @@ impl RemovedIndicatorConstraint {
     }
 
     #[getter]
-    pub fn removed_reason(&self) -> String {
-        self.removed_reason.reason.clone()
+    pub fn role(&self) -> crate::ConstraintRole {
+        self.inactive_reason.role().into()
     }
 
     #[getter]
-    pub fn removed_reason_parameters(&self) -> HashMap<String, String> {
-        self.removed_reason
+    pub fn skip_feasibility_check(&self) -> bool {
+        self.inactive_reason.skip_feasibility_check
+    }
+
+    #[getter]
+    pub fn inactive_reason(&self) -> String {
+        self.inactive_reason.reason.clone()
+    }
+
+    #[getter]
+    pub fn inactive_reason_parameters(&self) -> HashMap<String, String> {
+        self.inactive_reason
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -252,18 +284,21 @@ impl RemovedIndicatorConstraint {
 
     fn __repr__(&self) -> String {
         let mut extras: Vec<String> = self
-            .removed_reason
+            .inactive_reason
             .parameters
             .iter()
             .map(|(k, v)| format!("{k}={v}"))
             .collect();
         extras.sort();
-        let mut head = format!("{}, reason={}", self.constraint, self.removed_reason.reason);
+        let mut head = format!(
+            "{}, reason={}",
+            self.constraint, self.inactive_reason.reason
+        );
         if !extras.is_empty() {
             head.push_str(", ");
             head.push_str(&extras.join(", "));
         }
-        format!("RemovedIndicatorConstraint({head})")
+        format!("InactiveIndicatorConstraint({head})")
     }
 }
 
@@ -308,10 +343,10 @@ fn lookup_indicator(
     inst: &ommx::Instance,
     id: ommx::IndicatorConstraintID,
 ) -> PyResult<&ommx::IndicatorConstraint> {
-    inst.indicator_constraints()
+    inst.active_indicator_constraints()
         .get(&id)
         .or_else(|| {
-            inst.removed_indicator_constraints()
+            inst.inactive_indicator_constraints()
                 .get(&id)
                 .map(|(c, _)| c)
         })
@@ -327,10 +362,10 @@ fn lookup_indicator_parametric(
     inst: &ommx::ParametricInstance,
     id: ommx::IndicatorConstraintID,
 ) -> PyResult<&ommx::IndicatorConstraint> {
-    inst.indicator_constraints()
+    inst.active_indicator_constraints()
         .get(&id)
         .or_else(|| {
-            inst.removed_indicator_constraints()
+            inst.inactive_indicator_constraints()
                 .get(&id)
                 .map(|(c, _)| c)
         })
@@ -385,15 +420,17 @@ impl AttachedIndicatorConstraint {
         }
     }
 
-    /// Whether zero activates the body instead of one.
+    /// Binary value (0 or 1) at which the body is enforced.
     #[getter]
-    pub fn activate_on_zero(&self, py: Python<'_>) -> PyResult<bool> {
+    pub fn trigger_value(&self, py: Python<'_>) -> PyResult<u8> {
         match &self.host {
-            ConstraintHost::Instance(p) => {
-                Ok(lookup_indicator(&p.borrow(py).inner, self.id)?.activate_on_zero)
-            }
+            ConstraintHost::Instance(p) => Ok(lookup_indicator(&p.borrow(py).inner, self.id)?
+                .trigger_value
+                .into()),
             ConstraintHost::Parametric(p) => {
-                Ok(lookup_indicator_parametric(&p.borrow(py).inner, self.id)?.activate_on_zero)
+                Ok(lookup_indicator_parametric(&p.borrow(py).inner, self.id)?
+                    .trigger_value
+                    .into())
             }
         }
     }
@@ -493,5 +530,7 @@ crate::attached_constraint_context_methods!(
     AttachedIndicatorConstraint,
     ommx::IndicatorConstraintID,
     indicator_constraint_context,
-    set_indicator_constraint_context
+    set_indicator_constraint_context,
+    active_indicator_constraints,
+    indicator_constraint_collection
 );

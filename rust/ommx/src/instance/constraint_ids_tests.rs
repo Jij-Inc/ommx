@@ -10,19 +10,24 @@ fn mixed() -> Instance {
         .sense(Sense::Minimize)
         .objective(Function::Zero)
         .decision_variables(BTreeMap::from([(0.into(), DecisionVariable::binary())]))
-        .constraints(BTreeMap::from([(
+        .active_constraints(BTreeMap::from([(
             0.into(),
             Constraint::equal_to_zero(Function::Zero),
         )]))
-        .indicator_constraints(BTreeMap::from([(
+        .active_indicator_constraints(BTreeMap::from([(
             1.into(),
-            IndicatorConstraint::new(0.into(), Equality::EqualToZero, Function::Zero, false),
+            IndicatorConstraint::new(
+                0.into(),
+                Equality::EqualToZero,
+                Function::Zero,
+                crate::IndicatorTriggerValue::One,
+            ),
         )]))
-        .one_hot_constraints(BTreeMap::from([(
+        .active_one_hot_constraints(BTreeMap::from([(
             2.into(),
             OneHotConstraint::new(BTreeSet::from([0.into()])).unwrap(),
         )]))
-        .sos1_constraints(BTreeMap::from([(
+        .active_sos1_constraints(BTreeMap::from([(
             3.into(),
             Sos1Constraint::new(BTreeSet::from([0.into()])).unwrap(),
         )]))
@@ -30,17 +35,18 @@ fn mixed() -> Instance {
         .unwrap()
 }
 
-fn change_wire_id(wire: &mut v2::Instance, family: usize, number: u64, removed: bool) {
+fn change_wire_id(wire: &mut v2::Instance, family: usize, number: u64, inactive: bool) {
     macro_rules! change {
         ($field:ident) => {{
             let collection = wire.$field.as_mut().unwrap();
             let old = family as u64;
             let row = collection.active.remove(&old).unwrap();
-            if removed {
-                collection.removed.insert(number, row);
-                collection.removed_reasons.insert(
+            if inactive {
+                collection.inactive.insert(number, row);
+                collection.inactive_metadata.insert(
                     number,
-                    v2::RemovedReason {
+                    v2::InactiveConstraintMetadata {
+                        skip_feasibility_check: false,
                         reason: "test".into(),
                         ..Default::default()
                     },
@@ -67,19 +73,19 @@ fn protobuf_rejects_every_cross_family_and_lifecycle_collision() {
     let families = ["regular", "indicator", "one-hot", "SOS1"];
     for first in 0..4 {
         for second in first + 1..4 {
-            for first_removed in [false, true] {
-                for second_removed in [false, true] {
+            for first_inactive in [false, true] {
+                for second_inactive in [false, true] {
                     let mut wire: v2::Instance = mixed().into();
-                    change_wire_id(&mut wire, first, 42, first_removed);
-                    change_wire_id(&mut wire, second, 42, second_removed);
+                    change_wire_id(&mut wire, first, 42, first_inactive);
+                    change_wire_id(&mut wire, second, 42, second_inactive);
                     let error = Instance::from_v2_bytes(&wire.encode_to_vec()).unwrap_err();
                     let message = format!("{error:#}");
                     assert!(message.contains("42"), "{message}");
-                    for (family, removed) in [(first, first_removed), (second, second_removed)] {
+                    for (family, inactive) in [(first, first_inactive), (second, second_inactive)] {
                         assert!(
                             message.contains(&format!(
                                 "{} {}",
-                                if removed { "removed" } else { "active" },
+                                if inactive { "inactive" } else { "active" },
                                 families[family]
                             )),
                             "{message}"
@@ -109,7 +115,12 @@ fn protobuf_rejects_every_cross_family_and_lifecycle_collision() {
 fn builders_reject_cross_family_ids() {
     let indicator = BTreeMap::from([(
         0.into(),
-        IndicatorConstraint::new(0.into(), Equality::EqualToZero, Function::Zero, false),
+        IndicatorConstraint::new(
+            0.into(),
+            Equality::EqualToZero,
+            Function::Zero,
+            crate::IndicatorTriggerValue::One,
+        ),
     )]);
     let regular = BTreeMap::from([(0.into(), Constraint::equal_to_zero(Function::Zero))]);
     let variables = BTreeMap::from([(0.into(), DecisionVariable::binary())]);
@@ -117,8 +128,8 @@ fn builders_reject_cross_family_ids() {
         .sense(Sense::Minimize)
         .objective(Function::Zero)
         .decision_variables(variables.clone())
-        .constraints(regular.clone())
-        .indicator_constraints(indicator.clone())
+        .active_constraints(regular.clone())
+        .active_indicator_constraints(indicator.clone())
         .build()
         .unwrap_err()
         .to_string()
@@ -128,8 +139,8 @@ fn builders_reject_cross_family_ids() {
         .objective(Function::Zero)
         .parameters(ParameterTable::default())
         .decision_variables(variables)
-        .constraints(regular)
-        .indicator_constraints(indicator)
+        .active_constraints(regular)
+        .active_indicator_constraints(indicator)
         .build()
         .unwrap_err()
         .to_string()
@@ -143,7 +154,7 @@ fn additions_and_transformations_allocate_across_all_families() {
     let regular = instance.convert_one_hot_to_constraint(2.into()).unwrap();
     assert_eq!(regular, 4.into());
     assert!(instance
-        .removed_one_hot_constraints()
+        .inactive_one_hot_constraints()
         .contains_key(&2.into()));
     let promoted = instance.promote_one_hot(&BTreeSet::from([regular]));
     let one_hot = *promoted[&regular].as_ref().unwrap();
@@ -196,7 +207,7 @@ fn explicit_insertions_reject_other_families_before_any_mutation() {
 }
 
 #[test]
-fn removed_special_maximum_exhausts_all_model_allocators_atomically() {
+fn inactive_special_maximum_exhausts_all_model_allocators_atomically() {
     let mut wire: v2::Instance = mixed().into();
     change_wire_id(&mut wire, 3, u64::MAX, true);
     let mut instance = Instance::try_from(wire).unwrap();
@@ -209,7 +220,12 @@ fn removed_special_maximum_exhausts_all_model_allocators_atomically() {
         .is_err());
     assert!(instance
         .add_indicator_constraint(
-            IndicatorConstraint::new(0.into(), Equality::EqualToZero, Function::Zero, false),
+            IndicatorConstraint::new(
+                0.into(),
+                Equality::EqualToZero,
+                Function::Zero,
+                crate::IndicatorTriggerValue::One
+            ),
             Default::default()
         )
         .is_err());
@@ -229,7 +245,7 @@ fn removed_special_maximum_exhausts_all_model_allocators_atomically() {
     assert_eq!(instance, before);
 
     // Activating the indicator would generate a regular row. Propagation must
-    // also respect numbers reserved by a removed constraint of another family.
+    // also respect numbers reserved by an inactive constraint of another family.
     assert!(instance
         .partial_evaluate(&v1::State::from_iter([(0, 1.0)]), ATol::default())
         .is_err());
@@ -237,7 +253,7 @@ fn removed_special_maximum_exhausts_all_model_allocators_atomically() {
 }
 
 #[test]
-fn batch_capacity_includes_removed_constraints_of_other_families() {
+fn batch_capacity_includes_inactive_constraints_of_other_families() {
     let mut wire: v2::Instance = mixed().into();
     change_wire_id(&mut wire, 3, u64::MAX - 2, true);
     let mut instance = Instance::try_from(wire).unwrap();
@@ -281,14 +297,14 @@ proptest! {
 }
 
 #[test]
-fn result_builders_and_protobuf_reject_duplicate_numbers_including_removed() {
+fn result_builders_and_protobuf_reject_duplicate_numbers_including_inactive() {
     for first in 0..4 {
         for second in first + 1..4 {
-            for first_removed in [false, true] {
-                for second_removed in [false, true] {
+            for first_inactive in [false, true] {
+                for second_inactive in [false, true] {
                     let mut wire: v2::Instance = mixed().into();
-                    change_wire_id(&mut wire, first, first as u64, first_removed);
-                    change_wire_id(&mut wire, second, second as u64, second_removed);
+                    change_wire_id(&mut wire, first, first as u64, first_inactive);
+                    change_wire_id(&mut wire, second, second as u64, second_inactive);
                     let instance = Instance::try_from(wire).unwrap();
                     let state = v1::State::from_iter([(0, 1.0)]);
                     let solution = instance.evaluate(&state, ATol::default()).unwrap();
@@ -306,8 +322,8 @@ fn result_builders_and_protobuf_reject_duplicate_numbers_including_removed() {
                             let new = first as u64;
                             let row = collection.entries.remove(&old).unwrap();
                             collection.entries.insert(new, row);
-                            if let Some(reason) = collection.removed_reasons.remove(&old) {
-                                collection.removed_reasons.insert(new, reason);
+                            if let Some(reason) = collection.inactive_metadata.remove(&old) {
+                                collection.inactive_metadata.insert(new, reason);
                             }
                             if let Some(context) = collection.contexts.remove(&old) {
                                 collection.contexts.insert(new, context);

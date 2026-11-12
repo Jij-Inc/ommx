@@ -1,15 +1,15 @@
 // Benchmark contracts for Instance::reduce_binary_power.
 //
-// Removed-constraint family
+// Inactive-constraint family
 // - Purpose: persistent scaling guardrail.
-// - Regression: whole-Instance rollback cloning makes untouched removed state O(N).
+// - Regression: whole-Instance rollback cloning makes untouched inactive state O(N).
 // - Origin: https://github.com/Jij-Inc/ommx/issues/1031 and
 //   https://github.com/Jij-Inc/ommx/issues/1044.
 // - Measured boundary: Rust SDK Instance::reduce_binary_power.
-// - Independent variable: removed regular constraint count N; all other shape
+// - Independent variable: inactive regular constraint count N; all other shape
 //   dimensions, including the two decision variables, stay fixed.
 // - Cost model/evidence: fixed binary-ID discovery plus one objective rewrite;
-//   removed rows are not inspected, so the CodSpeed simulation same-run
+//   inactive rows are not inspected, so the CodSpeed simulation same-run
 //   cross-size exponent should be p ~= 0.
 //
 // Active-constraint family
@@ -21,7 +21,7 @@
 //   expression size, and the single objective rewrite stay fixed.
 // - Cost model/evidence: inspect N active rows without rewriting them, so p ~= 1.
 //   This exponent is a complexity guardrail, not evidence about constant-factor
-//   whole-owner cloning; use the removed family or same-input run comparisons
+//   whole-owner cloning; use the inactive family or same-input run comparisons
 //   for that regression.
 //
 // Input rationale: 1,000/8,000/32,000 expose the dominant term while keeping
@@ -32,15 +32,15 @@ use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
 };
 use ommx::{
-    linear, quadratic, Constraint, ConstraintID, DecisionVariable, Function, Instance,
-    RemovedReason, Sense, VariableID,
+    linear, quadratic, Constraint, ConstraintID, DecisionVariable, Function,
+    InactiveConstraintMetadata, Instance, Sense, VariableID,
 };
 use std::collections::BTreeMap;
 
 /// An instance whose objective has a single binary-power term to reduce
-/// (`x0^2`), plus `num_removed` unrelated removed regular constraints that
+/// (`x0^2`), plus `num_inactive` unrelated inactive regular constraints that
 /// `reduce_binary_power` must neither inspect nor rewrite.
-fn instance_with_removed_constraints(num_removed: usize) -> Instance {
+fn instance_with_inactive_constraints(num_inactive: usize) -> Instance {
     let decision_variables = BTreeMap::from([
         (VariableID::from(0), DecisionVariable::binary()),
         (VariableID::from(1), DecisionVariable::continuous()),
@@ -48,17 +48,18 @@ fn instance_with_removed_constraints(num_removed: usize) -> Instance {
 
     let objective = Function::Quadratic(quadratic!(0, 0).into());
 
-    let removed_reason = RemovedReason {
-        reason: "ommx.bench.reduce_binary_power.removed_regular_constraints".to_string(),
+    let inactive_metadata = InactiveConstraintMetadata {
+        skip_feasibility_check: false,
+        reason: "ommx.bench.reduce_binary_power.inactive_regular_constraints".to_string(),
         parameters: Default::default(),
     };
-    let removed_constraints = (1..=num_removed as u64)
+    let inactive_constraints = (1..=num_inactive as u64)
         .map(|id| {
             (
                 ConstraintID::from(id),
                 (
                     Constraint::equal_to_zero(Function::from(linear!(1))),
-                    removed_reason.clone(),
+                    inactive_metadata.clone(),
                 ),
             )
         })
@@ -68,8 +69,8 @@ fn instance_with_removed_constraints(num_removed: usize) -> Instance {
         .sense(Sense::Minimize)
         .objective(objective)
         .decision_variables(decision_variables)
-        .constraints(BTreeMap::new())
-        .removed_constraints(removed_constraints)
+        .active_constraints(BTreeMap::new())
+        .inactive_constraints(inactive_constraints)
         .build()
         .unwrap()
 }
@@ -99,22 +100,22 @@ fn instance_with_active_constraints(num_active: usize) -> Instance {
         .sense(Sense::Minimize)
         .objective(objective)
         .decision_variables(decision_variables)
-        .constraints(constraints)
+        .active_constraints(constraints)
         .build()
         .unwrap()
 }
 
-fn reduce_binary_power_removed_constraints(c: &mut Criterion) {
+fn reduce_binary_power_inactive_constraints(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
-    let mut group = c.benchmark_group("reduce-binary-power-removed-constraints");
+    let mut group = c.benchmark_group("reduce-binary-power-inactive-constraints");
     group.plot_config(plot_config);
 
-    for num_removed in [1_000, 8_000, 32_000] {
-        let instance = instance_with_removed_constraints(num_removed);
+    for num_inactive in [1_000, 8_000, 32_000] {
+        let instance = instance_with_inactive_constraints(num_inactive);
         group.bench_with_input(
             BenchmarkId::new(
-                "reduce-binary-power-removed-constraints",
-                num_removed.to_string(),
+                "reduce-binary-power-inactive-constraints",
+                num_inactive.to_string(),
             ),
             &instance,
             |b, instance| {
@@ -162,7 +163,7 @@ fn reduce_binary_power_active_constraints(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    reduce_binary_power_removed_constraints,
+    reduce_binary_power_inactive_constraints,
     reduce_binary_power_active_constraints,
 );
 criterion_main!(benches);

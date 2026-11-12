@@ -32,14 +32,14 @@ def sos1_instance_setup():
     return Instance.from_components(
         decision_variables=x + y + [z],
         objective=objective,
-        constraints={
+        active_constraints={
             1: binary_constraint,
             2: big_m1,
             3: big_m2,
             4: big_m3,
             5: independent_constraint,
         },
-        sos1_constraints={0: sos1},
+        active_sos1_constraints={0: sos1},
         sense=Sense.Minimize,
     )
 

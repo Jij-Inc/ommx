@@ -42,7 +42,7 @@ def test_default_atol_constraint_evaluation():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,  # minimize x
-        constraints={1: constraint},
+        active_constraints={1: constraint},
         sense=Sense.Minimize,
     )
 
@@ -85,7 +85,7 @@ def test_constraint_boundary_matches_scalar_sample_and_v2_validation():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={1: x == 0, 2: x <= 0},
+        active_constraints={1: x == 0, 2: x <= 0},
         sense=Sense.Minimize,
     )
     atol = 0.125
@@ -140,7 +140,7 @@ def test_bound_membership_matches_inequality_residual_feasibility():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={1: x <= upper, 2: x >= lower},
+        active_constraints={1: x <= upper, 2: x >= lower},
         sense=Sense.Minimize,
     )
 
@@ -215,7 +215,7 @@ def test_instance_evaluate_with_custom_atol():
     instance = Instance.from_components(
         decision_variables=[x1],
         objective=x1,
-        constraints={1: constraint},
+        active_constraints={1: constraint},
         sense=Sense.Minimize,
     )
 

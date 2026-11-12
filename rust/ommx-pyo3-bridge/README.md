@@ -152,7 +152,7 @@ fn compile_regular() -> Instance {
             (7.into(), DecisionVariable::binary()),
             (8.into(), DecisionVariable::binary()),
         ]))
-        .constraints(BTreeMap::from([(
+        .active_constraints(BTreeMap::from([(
             23.into(),
             Constraint::equal_to_zero(equality.into()),
         )]))
@@ -268,7 +268,7 @@ represented in v1 cause an export error. Domain `Solution` and `SampleSet` only
 export over ProtobufV2. Callers choosing ProtobufV1 must first use
 `ommx::v1::Solution::try_from(solution)` or
 `ommx::v1::SampleSet::try_from(sample_set)` to construct a raw v1 message;
-these conversions reject retained special constraints, including removed rows.
+these conversions reject retained special constraints, including inactive rows.
 All four domain roots export over ProtobufV2.
 
 For callers that already hold complete raw `ommx::v1` roots, ProtobufV1 also

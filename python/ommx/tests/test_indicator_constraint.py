@@ -1,5 +1,6 @@
 """Tests for IndicatorConstraint Big-M conversion to regular constraints."""
 
+from ommx import ConstraintRole
 from ommx import ConstraintKind
 
 from ommx import IndicatorConstraintID
@@ -29,16 +30,71 @@ def _instance(ic: IndicatorConstraint, x_lower: float = 0.0, x_upper: float = 5.
     return Instance.from_components(
         decision_variables=[x, y],
         objective=x,
-        constraints={},
-        indicator_constraints={7: ic},
+        active_constraints={},
+        active_indicator_constraints={7: ic},
         sense=Sense.Minimize,
     )
+
+
+@pytest.mark.parametrize(
+    "role",
+    [
+        ConstraintRole.ACTIVE,
+        ConstraintRole.FEASIBILITY_CHECK,
+        ConstraintRole.EVALUATION_ONLY,
+    ],
+)
+@pytest.mark.parametrize("trigger_value", [0, 1])
+def test_indicator_on_is_independent_of_constraint_role(role, trigger_value):
+    y = DecisionVariable.binary(1)
+    instance = _instance(
+        IndicatorConstraint(
+            indicator_variable=y,
+            function=DecisionVariable.continuous(0, lower=0, upper=5) - 2,
+            equality=Equality.LessThanOrEqualToZero,
+            trigger_value=trigger_value,
+        )
+    )
+    cid = IndicatorConstraintID(7)
+    skipped = role == ConstraintRole.EVALUATION_ONLY
+    if role != ConstraintRole.ACTIVE:
+        instance.deactivate_indicator_constraint(
+            cid, "retain for evaluation", skip_feasibility_check=skipped
+        )
+
+    states = {4: {0: 3, 1: 0}, 9: {0: 3, 1: 1}}
+    for sample_id, state in states.items():
+        on = state[1] == trigger_value
+        solution = instance.evaluate(state)
+        row = solution.constraints[cid]
+        assert row.role == role
+        assert row.trigger_value == trigger_value
+        assert row.indicator_on is on
+        assert row.evaluated_value == 1
+        assert solution.feasible is (not on or skipped)
+        frame = solution.constraints_df(kind=ConstraintKind.Indicator)
+        assert bool(frame.loc[cid, "indicator_on"]) is on
+        assert frame.loc[cid, "role"] == role
+
+    samples = instance.evaluate_samples(states)
+    sampled_row = samples.constraints[cid]
+    assert sampled_row.role == role
+    assert sampled_row.trigger_value == trigger_value
+    assert sampled_row.indicator_on == {4: trigger_value == 0, 9: trigger_value == 1}
+    assert samples.feasible == {
+        4: trigger_value != 0 or skipped,
+        9: trigger_value != 1 or skipped,
+    }
+    frame = samples.constraints_df(kind=ConstraintKind.Indicator)
+    assert bool(frame.loc[cid, "indicator_on.4"]) is (trigger_value == 0)
+    assert bool(frame.loc[cid, "indicator_on.9"]) is (trigger_value == 1)
+    assert frame.loc[cid, "role"] == role
 
 
 def test_convert_inequality_emits_only_upper_big_m():
     """`y=1 → x - 2 <= 0` with x in [0, 5]: upper = 3 > 0, lower side irrelevant.
     Expect exactly one new constraint `x + 3 y - 5 <= 0` and the original indicator
-    recorded on the removed side."""
+    recorded on the inactive side."""
     y = DecisionVariable.binary(1)
     ic = IndicatorConstraint(
         indicator_variable=y,
@@ -51,11 +107,11 @@ def test_convert_inequality_emits_only_upper_big_m():
     assert len(new_ids) == 1
 
     assert not any(
-        isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
+        isinstance(cid, IndicatorConstraintID) for cid in instance.active_constraints
     )
-    removed = instance.removed_constraints[IndicatorConstraintID(7)]
-    assert removed.removed_reason == "ommx.Instance.convert_indicator_to_constraint"
-    assert removed.removed_reason_parameters["constraint_ids"] == "8"
+    inactive = instance.inactive_constraints[IndicatorConstraintID(7)]
+    assert inactive.inactive_reason == "ommx.Instance.convert_indicator_to_constraint"
+    assert inactive.inactive_reason_parameters["constraint_ids"] == "8"
 
 
 def test_convert_equality_emits_both_sides():
@@ -71,10 +127,10 @@ def test_convert_equality_emits_both_sides():
     new_ids = instance.convert_indicator_to_constraint(7)
     assert len(new_ids) == 2
     assert not any(
-        isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
+        isinstance(cid, IndicatorConstraintID) for cid in instance.active_constraints
     )
-    removed = instance.removed_constraints[IndicatorConstraintID(7)]
-    assert removed.removed_reason_parameters["constraint_ids"] == "8,9"
+    inactive = instance.inactive_constraints[IndicatorConstraintID(7)]
+    assert inactive.inactive_reason_parameters["constraint_ids"] == "8,9"
 
 
 def test_convert_equality_uses_explicit_atol_for_composed_body():
@@ -89,7 +145,7 @@ def test_convert_equality_uses_explicit_atol_for_composed_body():
 
     new_ids = instance.convert_indicator_to_constraint(7, atol=1e-6)
     assert len(new_ids) == 1
-    assert instance.constraints[new_ids[0]].function.evaluate(
+    assert instance.active_constraints[new_ids[0]].function.evaluate(
         {0: 1e-8, 1: 1.0}, atol=1e-6
     ) == pytest.approx(0.5)
 
@@ -97,7 +153,7 @@ def test_convert_equality_uses_explicit_atol_for_composed_body():
 def test_redundant_indicator_emits_no_constraint():
     """`y=1 → x - 10 <= 0` with x in [0, 5]: upper = -5 <= 0, so the constraint is
     already implied by the variable bounds. Conversion emits nothing but still
-    moves the indicator to the removed side."""
+    moves the indicator to the inactive side."""
     y = DecisionVariable.binary(1)
     ic = IndicatorConstraint(
         indicator_variable=y,
@@ -108,9 +164,9 @@ def test_redundant_indicator_emits_no_constraint():
 
     new_ids = instance.convert_indicator_to_constraint(7)
     assert new_ids == []
-    assert instance.constraints == {}
-    removed = instance.removed_constraints[IndicatorConstraintID(7)]
-    assert removed.removed_reason_parameters["constraint_ids"] == ""
+    assert instance.active_constraints == {}
+    inactive = instance.inactive_constraints[IndicatorConstraintID(7)]
+    assert inactive.inactive_reason_parameters["constraint_ids"] == ""
 
 
 def test_infinite_bound_is_rejected_without_mutation():
@@ -127,8 +183,8 @@ def test_infinite_bound_is_rejected_without_mutation():
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x,
-        constraints={},
-        indicator_constraints={7: ic},
+        active_constraints={},
+        active_indicator_constraints={7: ic},
         sense=Sense.Minimize,
     )
 
@@ -136,11 +192,13 @@ def test_infinite_bound_is_rejected_without_mutation():
         instance.convert_indicator_to_constraint(7)
 
     assert IndicatorConstraintID(7) in (
-        cid for cid in instance.constraints if isinstance(cid, IndicatorConstraintID)
+        cid
+        for cid in instance.active_constraints
+        if isinstance(cid, IndicatorConstraintID)
     )
-    assert set(instance.constraints) == {IndicatorConstraintID(7)}
+    assert set(instance.active_constraints) == {IndicatorConstraintID(7)}
     assert not any(
-        isinstance(cid, IndicatorConstraintID) for cid in instance.removed_constraints
+        isinstance(cid, IndicatorConstraintID) for cid in instance.inactive_constraints
     )
 
 
@@ -163,8 +221,8 @@ def test_convert_all_is_atomic_on_error():
     instance = Instance.from_components(
         decision_variables=[x_bounded, x_unbounded, y],
         objective=x_bounded,
-        constraints={},
-        indicator_constraints={1: ic_ok, 2: ic_bad},
+        active_constraints={},
+        active_indicator_constraints={1: ic_ok, 2: ic_bad},
         sense=Sense.Minimize,
     )
 
@@ -173,23 +231,27 @@ def test_convert_all_is_atomic_on_error():
 
     # Nothing was applied.
     assert set(
-        (cid for cid in instance.constraints if isinstance(cid, IndicatorConstraintID))
+        (
+            cid
+            for cid in instance.active_constraints
+            if isinstance(cid, IndicatorConstraintID)
+        )
     ) == {
         IndicatorConstraintID(1),
         IndicatorConstraintID(2),
     }
-    assert set(instance.constraints) == {
+    assert set(instance.active_constraints) == {
         IndicatorConstraintID(1),
         IndicatorConstraintID(2),
     }
     assert not any(
-        isinstance(cid, IndicatorConstraintID) for cid in instance.removed_constraints
+        isinstance(cid, IndicatorConstraintID) for cid in instance.inactive_constraints
     )
 
 
-def test_removed_indicator_constraints_df_surfaces_reason_and_ids(snapshot):
-    """`constraints_df(kind=ConstraintKind.Indicator, removed=True)` surfaces the
-    reason and comma-joined new-constraint IDs on removed rows."""
+def test_inactive_indicator_constraints_df_surfaces_reason_and_ids(snapshot):
+    """`constraints_df(kind=ConstraintKind.Indicator, min_role=ConstraintRole.EVALUATION_ONLY)` surfaces the
+    reason and comma-joined new-constraint IDs on inactive rows."""
     y = DecisionVariable.binary(1)
     ic = IndicatorConstraint(
         indicator_variable=y,
@@ -199,6 +261,12 @@ def test_removed_indicator_constraints_df_surfaces_reason_and_ids(snapshot):
     instance = _instance(ic)
     instance.convert_indicator_to_constraint(7)
     assert (
-        _df_snap(instance.constraints_df(kind=ConstraintKind.Indicator, removed=True))
+        _df_snap(
+            instance.constraints_df(
+                kind=ConstraintKind.Indicator,
+                min_role=ConstraintRole.EVALUATION_ONLY,
+                include=["label", "parameters", "inactive_reason"],
+            )
+        )
         == snapshot
     )

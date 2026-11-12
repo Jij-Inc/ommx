@@ -29,7 +29,7 @@ def _empty_instance() -> Instance:
             DecisionVariable.binary(1),  # indicator variable
             DecisionVariable.binary(2),
         ],
-        constraints={},
+        active_constraints={},
     )
 
 
@@ -42,7 +42,7 @@ def _empty_parametric_instance() -> ParametricInstance:
             DecisionVariable.binary(1),
             DecisionVariable.binary(2),
         ],
-        constraints={},
+        active_constraints={},
         parameters=[Parameter(id=100, name="alpha")],
     )
 
@@ -125,7 +125,7 @@ def test_setter_writes_through_to_instance():
     attached.set_description("updated")
     attached.set_parameters({"a": "1"})
 
-    fresh = instance.constraints[cid]
+    fresh = instance.active_constraints[cid]
     assert fresh.name == "demand"
     assert fresh.subscripts == [1, 2]
     assert fresh.description == "updated"
@@ -137,7 +137,7 @@ def test_two_handles_share_state():
     same data."""
     instance = _empty_instance()
     a = instance.add_indicator_constraint(_make_indicator(name="balance"))
-    b = instance.constraints[a.constraint_id]
+    b = instance.active_constraints[a.constraint_id]
 
     a.set_name("demand")
     assert b.name == "demand"
@@ -150,8 +150,8 @@ def test_indicator_constraints_getter_returns_attached():
     b = instance.add_indicator_constraint(_make_indicator(name="c2"))
 
     constraints = {
-        cid: instance.constraints[cid]
-        for cid in instance.constraints
+        cid: instance.active_constraints[cid]
+        for cid in instance.active_constraints
         if isinstance(cid, IndicatorConstraintID)
     }
     assert set(constraints.keys()) == {a.constraint_id, b.constraint_id}
@@ -198,7 +198,7 @@ def test_add_rejects_undefined_indicator_variable():
         instance.add_indicator_constraint(bad)
 
     assert not any(
-        isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
+        isinstance(cid, IndicatorConstraintID) for cid in instance.active_constraints
     )
 
 
@@ -245,7 +245,7 @@ def test_setter_writes_through_on_parametric_host():
     attached.set_name("demand")
     attached.set_subscripts([1, 2, 3])
 
-    fresh = parametric.constraints[cid]
+    fresh = parametric.active_constraints[cid]
     assert fresh.name == "demand"
     assert fresh.subscripts == [1, 2, 3]
 
@@ -283,12 +283,12 @@ def test_add_indicator_rejects_parameter_in_indicator_variable_position():
         parametric.add_indicator_constraint(bad)
 
     assert not any(
-        isinstance(cid, IndicatorConstraintID) for cid in parametric.constraints
+        isinstance(cid, IndicatorConstraintID) for cid in parametric.active_constraints
     )
 
 
 def test_parametric_from_components_preserves_indicator_id():
-    """`ParametricInstance.from_components(indicator_constraints={5: ic, 10: ic2})`
+    """`ParametricInstance.from_components(active_indicator_constraints={5: ic, 10: ic2})`
     must round-trip the user-supplied dict keys, matching `Instance.from_components`.
     Earlier draft of the drain loop used `add_indicator_constraint` (which picks
     its own id) and silently renumbered to 0, 1; this test pins the contract."""
@@ -299,9 +299,9 @@ def test_parametric_from_components_preserves_indicator_id():
             DecisionVariable.binary(0),
             DecisionVariable.binary(1),
         ],
-        constraints={},
+        active_constraints={},
         parameters=[Parameter(id=100, name="alpha")],
-        indicator_constraints={
+        active_indicator_constraints={
             5: IndicatorConstraint(
                 indicator_variable=DecisionVariable.binary(1),
                 function=Function.from_linear(Linear({0: 1.0}, 0.0)),
@@ -320,15 +320,15 @@ def test_parametric_from_components_preserves_indicator_id():
     assert set(
         {
             cid
-            for cid in parametric.constraints
+            for cid in parametric.active_constraints
             if isinstance(cid, IndicatorConstraintID)
         }
     ) == {
         IndicatorConstraintID(5),
         IndicatorConstraintID(10),
     }
-    assert parametric.constraints[IndicatorConstraintID(5)].name == "ic_at_5"
-    assert parametric.constraints[IndicatorConstraintID(10)].name == "ic_at_10"
+    assert parametric.active_constraints[IndicatorConstraintID(5)].name == "ic_at_5"
+    assert parametric.active_constraints[IndicatorConstraintID(10)].name == "ic_at_10"
 
 
 def test_add_indicator_rejects_non_binary_indicator_variable():
@@ -346,7 +346,7 @@ def test_add_indicator_rejects_non_binary_indicator_variable():
             DecisionVariable.integer(1, lower=0, upper=5),
             DecisionVariable.binary(2),
         ],
-        constraints={},
+        active_constraints={},
     )
     bad = IndicatorConstraint(
         # The reference object claims binary, but the enclosing instance's
@@ -360,5 +360,5 @@ def test_add_indicator_rejects_non_binary_indicator_variable():
         instance.add_indicator_constraint(bad)
 
     assert not any(
-        isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
+        isinstance(cid, IndicatorConstraintID) for cid in instance.active_constraints
     )

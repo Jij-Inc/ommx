@@ -69,7 +69,7 @@ def instance_with_objective(variable: DecisionVariable, objective: Any) -> Insta
         sense=Sense.Minimize,
         objective=objective,
         decision_variables=[variable],
-        constraints={},
+        active_constraints={},
     )
 
 
@@ -207,8 +207,8 @@ def test_mismatch_variants_preserve_all_structured_payloads() -> None:
         sense=Sense.Maximize,
         objective=x * y,
         decision_variables=[x, y],
-        constraints={10: y * y == 0, 11: y <= 0},
-        indicator_constraints={
+        active_constraints={10: y * y == 0, 11: y <= 0},
+        active_indicator_constraints={
             20: IndicatorConstraint(
                 indicator_variable=x,
                 function=y * y,
@@ -220,8 +220,8 @@ def test_mismatch_variants_preserve_all_structured_payloads() -> None:
                 equality=Equality.LessThanOrEqualToZero,
             ),
         },
-        one_hot_constraints={30: OneHotConstraint(variables=[x])},
-        sos1_constraints={40: Sos1Constraint(variables=[y])},
+        active_one_hot_constraints={30: OneHotConstraint(variables=[x])},
+        active_sos1_constraints={40: Sos1Constraint(variables=[y])},
     )
     limited = clause(
         "limited",
@@ -323,8 +323,8 @@ def test_non_polynomial_mismatches_preserve_function_location() -> None:
         sense=Sense.Minimize,
         objective=absolute_x,
         decision_variables=[x],
-        constraints={10: absolute_x == 0},
-        indicator_constraints={
+        active_constraints={10: absolute_x == 0},
+        active_indicator_constraints={
             20: IndicatorConstraint(
                 indicator_variable=x,
                 function=absolute_x,
@@ -373,8 +373,8 @@ def test_membership_is_recomputed_after_explicit_lowering() -> None:
         sense=Sense.Minimize,
         objective=x,
         decision_variables=[x],
-        constraints={},
-        one_hot_constraints={30: OneHotConstraint(variables=[x])},
+        active_constraints={},
+        active_one_hot_constraints={30: OneHotConstraint(variables=[x])},
     )
     prepared_input_class = InstanceClass(
         [
@@ -393,7 +393,11 @@ def test_membership_is_recomputed_after_explicit_lowering() -> None:
     assert instance.active_special_constraint_kinds == {ConstraintKind.OneHot}
     assert instance.lower_special_constraints(set()) == set()
     assert set(
-        (cid for cid in instance.constraints if isinstance(cid, OneHotConstraintID))
+        (
+            cid
+            for cid in instance.active_constraints
+            if isinstance(cid, OneHotConstraintID)
+        )
     ) == {OneHotConstraintID(30)}
 
     lowered = instance.lower_special_constraints({ConstraintKind.OneHot})

@@ -48,7 +48,7 @@ def test_integration_milp():
     ommx_instance = Instance.from_components(
         decision_variables=[x1, x2],
         objective=-x1 - x2,
-        constraints={0: 3 * x1 - x2 <= 6, 1: -x1 + 3 * x2 <= 6},
+        active_constraints={0: 3 * x1 - x2 <= 6, 1: -x1 + 3 * x2 <= 6},
         sense=Sense.Minimize,
     )
 
@@ -61,13 +61,32 @@ def test_integration_milp():
     assert ommx_state.entries[2] == pytest.approx(3)
 
 
+@pytest.mark.parametrize("relax, expected", [(False, 0.0), (True, 0.5)])
+def test_integer_relaxation_preserves_constraints(relax: bool, expected: float):
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        active_constraints={0: x <= 0.5},
+        sense=Sense.Maximize,
+    )
+
+    adapter = OMMXPythonMIPAdapter(instance, relax=relax)
+    model = adapter.solver_input
+    model.optimize()
+
+    assert model.num_int == (0 if relax else 1)
+    assert len(model.constrs) == 1
+    assert adapter.decode_to_state(model).entries[0] == pytest.approx(expected)
+
+
 def test_solution_optimality():
     x = DecisionVariable.integer(1, lower=0, upper=5)
     y = DecisionVariable.integer(2, lower=0, upper=5)
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
 
@@ -80,7 +99,7 @@ def test_solution_optimality_is_not_transported_through_fixed_penalty():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={7: x == 1},
+        active_constraints={7: x == 1},
         sense=Sense.Minimize,
     )
     instance.to_qubo(uniform_penalty_weight=0.0)
@@ -96,7 +115,7 @@ def test_output_objective_omits_active_formulation_dual_values():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={0: x <= 1},
+        active_constraints={0: x <= 1},
         sense=Sense.Maximize,
     )
     assert instance.convert_active_objective(Sense.Minimize)
@@ -114,13 +133,13 @@ def test_partial_evaluate():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1] + x[2],
-        constraints={0: x[0] + x[1] + x[2] <= 1},  # one-hot constraint
+        active_constraints={0: x[0] + x[1] + x[2] <= 1},  # one-hot constraint
         sense=Sense.Minimize,
     )
-    assert instance.used_decision_variables == x
+    assert instance.active_decision_variables == x
     partial = instance.partial_evaluate({0: 1})
     # x[0] is no longer present in the problem
-    assert partial.used_decision_variables == x[1:]
+    assert partial.active_decision_variables == x[1:]
 
     solution = OMMXPythonMIPAdapter.solve(partial)
     assert [var.value for var in solution.decision_variables] == [1, 0, 0]
@@ -140,12 +159,12 @@ def test_relax_constraint():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints={0: x[0] + 2 * x[1] <= 1, 1: x[1] + x[2] <= 1},
+        active_constraints={0: x[0] + 2 * x[1] <= 1, 1: x[1] + x[2] <= 1},
         sense=Sense.Minimize,
     )
 
-    assert instance.used_decision_variables == x
-    instance.relax_constraint(1, "relax")
+    assert instance.active_decision_variables == x
+    instance.deactivate_constraint(1, "relax")
     # id for x[2] is listed as irrelevant
     assert instance.irrelevant_decision_variable_ids() == {x[2].id}
 
@@ -181,7 +200,7 @@ def test_integration_timelimit():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(v[i] * x[i] for i in range(n)),
-        constraints={0: constraint},
+        active_constraints={0: constraint},
         sense=Sense.Maximize,
     )
     adapter = OMMXPythonMIPAdapter(instance)
@@ -203,7 +222,7 @@ def test_infeasible_problem():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={0: x >= 4},
+        active_constraints={0: x >= 4},
         sense=Sense.Maximize,
     )
     adapter = OMMXPythonMIPAdapter(instance)
@@ -220,7 +239,7 @@ def test_unbounded_problem():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
     adapter = OMMXPythonMIPAdapter(instance)
@@ -236,7 +255,7 @@ def test_decode_before_optimize():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     adapter = OMMXPythonMIPAdapter(instance)

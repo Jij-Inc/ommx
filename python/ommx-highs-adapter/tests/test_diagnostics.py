@@ -21,7 +21,7 @@ def _mip_instance() -> Instance:
     return Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
 
@@ -33,7 +33,7 @@ def _knapsack_instance() -> Instance:
     return Instance.from_components(
         decision_variables=x,
         objective=sum(values[i] * x[i] for i in range(30)),
-        constraints={
+        active_constraints={
             0: cast(Constraint, sum(weights[i] * x[i] for i in range(30)) <= 60)
         },
         sense=Sense.Maximize,
@@ -45,7 +45,7 @@ def _infeasible_instance() -> Instance:
     return Instance.from_components(
         decision_variables=[x],
         objective=0,
-        constraints={0: x == 0, 1: x == 1},
+        active_constraints={0: x == 0, 1: x == 1},
         sense=Sense.Minimize,
     )
 

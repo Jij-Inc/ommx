@@ -230,12 +230,12 @@ class SolverAdapter(ABC):
     The :class:`ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter` Reference includes
     a complete custom-policy example from model construction to strict solve.
 
-    When encoding OMMX decision variables, use
-    ``ommx_instance.used_decision_variables`` rather than the complete decision
-    variable table. Backend-only auxiliary variables may be added separately.
-    Preserve the correspondence between each used OMMX variable ID and its
-    backend representation. Decoding must recover a value for every used OMMX
-    variable, construct a :class:`ommx.State`, and evaluate it against an
+    Encode the Instance's Active Formulation: its objective and sense,
+    ``ommx_instance.active_decision_variables`` and their domains, and
+    ``ommx_instance.active_constraints``. Backend-only auxiliary variables may
+    be added separately. Preserve the correspondence between each active OMMX
+    variable ID and its backend representation. Decoding must recover a value
+    for every active OMMX variable, construct a :class:`ommx.State`, and evaluate it against an
     unchanged :class:`ommx.Instance` snapshot that is mathematically identical
     to the exact input encoded for the backend. The Instance owns population of
     fixed, dependent, and irrelevant variables and construction of the final
@@ -260,7 +260,7 @@ class SolverAdapter(ABC):
     ...     def __init__(self, instance):
     ...         self.require_applicable(instance)
     ...         self.instance = instance
-    ...         self.variables = list(instance.used_decision_variables)
+    ...         self.variables = list(instance.active_decision_variables)
     ...
     ...     @property
     ...     def solver_input(self):
@@ -282,7 +282,7 @@ class SolverAdapter(ABC):
     ...             bits.append(min(allowed, key=lambda b: cost * b))
     ...         return adapter.decode(bits)
     >>> x, y = DecisionVariable.binary(3), DecisionVariable.binary(17)
-    >>> problem = Instance.from_components(decision_variables=[x, y], constraints={},
+    >>> problem = Instance.from_components(decision_variables=[x, y], active_constraints={},
     ...     objective=x - 2*y, sense=Sense.Minimize)
     >>> solution = BinaryCostAdapter.solve(problem)
     >>> assert solution.feasible and solution.state.entries == {3: 0, 17: 1}
@@ -397,12 +397,12 @@ class SamplerAdapter(SolverAdapter):
     An abstract interface for OMMX Sampler Adapters, defining how samplers should be used with OMMX.
 
     The exact-input, easy-API preparation, strict preparation-free API, and
-    used-variable contracts of :class:`SolverAdapter` also apply to sampler
+    active-variable contracts of :class:`SolverAdapter` also apply to sampler
     adapters. A sampler whose
     backend labels are the OMMX variable IDs may preserve that identity directly;
     other representations need an explicit correspondence. In either case, each
     decoded sample must contain a value for every variable in
-    ``ommx_instance.used_decision_variables`` before ``evaluate_samples`` is
+    ``ommx_instance.active_decision_variables`` before ``evaluate_samples`` is
     called against an unchanged :class:`ommx.Instance` snapshot mathematically
     identical to the encoded exact input. Backend formats that omit a
     zero-interaction variable therefore need an adapter-owned decoding default
@@ -417,7 +417,7 @@ class SamplerAdapter(SolverAdapter):
     >>> from ommx import DecisionVariable, Instance, Samples, Sense
     >>> x, y = DecisionVariable.binary(3), DecisionVariable.binary(17)
     >>> instance = Instance.from_components(decision_variables=[x, y],
-    ...     constraints={}, objective=x - 2*y, sense=Sense.Minimize)
+    ...     active_constraints={}, objective=x - 2*y, sense=Sense.Minimize)
     >>> columns = [17, 3]  # IDs in the order returned by this backend
     >>> samples = Samples({})
     >>> next_id = 0
@@ -428,7 +428,7 @@ class SamplerAdapter(SolverAdapter):
     >>> assert result.num_samples() == 3 and result.best_feasible.objective == -2
 
     The `OpenJij implementation <https://github.com/Jij-Inc/ommx/tree/main/python/ommx-openjij-adapter/ommx_openjij_adapter>`_
-    shows these three hooks together, including how to supply values for used
+    shows these three hooks together, including how to supply values for active
     variables absent from the backend response. The
     :class:`ommx_openjij_adapter.OMMXOpenJijSAAdapter` Reference illustrates
     preparation, sampling, and selecting a result on an actual backend.

@@ -53,8 +53,10 @@ pub enum Feature {
     OutputObjective = 4,
     /// The payload contains a decision variable with an explicitly enumerated finite domain.
     DecisionVariableFiniteDomain = 5,
-    /// An indicator row (including removed/evaluated/sampled rows) activates at zero.
-    IndicatorActivateOnZero = 6,
+    /// An indicator row (including inactive/evaluated/sampled rows) has trigger_value = 0.
+    IndicatorTriggerValue = 6,
+    /// The payload contains an inactive constraint excluded from default feasibility.
+    ConstraintSkipFeasibilityCheck = 7,
 }
 impl Feature {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -69,7 +71,8 @@ impl Feature {
             Feature::ConstraintSos1 => "FEATURE_CONSTRAINT_SOS1",
             Feature::OutputObjective => "FEATURE_OUTPUT_OBJECTIVE",
             Feature::DecisionVariableFiniteDomain => "FEATURE_DECISION_VARIABLE_FINITE_DOMAIN",
-            Feature::IndicatorActivateOnZero => "FEATURE_INDICATOR_ACTIVATE_ON_ZERO",
+            Feature::IndicatorTriggerValue => "FEATURE_INDICATOR_TRIGGER_VALUE",
+            Feature::ConstraintSkipFeasibilityCheck => "FEATURE_CONSTRAINT_SKIP_FEASIBILITY_CHECK",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -81,7 +84,10 @@ impl Feature {
             "FEATURE_CONSTRAINT_SOS1" => Some(Self::ConstraintSos1),
             "FEATURE_OUTPUT_OBJECTIVE" => Some(Self::OutputObjective),
             "FEATURE_DECISION_VARIABLE_FINITE_DOMAIN" => Some(Self::DecisionVariableFiniteDomain),
-            "FEATURE_INDICATOR_ACTIVATE_ON_ZERO" => Some(Self::IndicatorActivateOnZero),
+            "FEATURE_INDICATOR_TRIGGER_VALUE" => Some(Self::IndicatorTriggerValue),
+            "FEATURE_CONSTRAINT_SKIP_FEASIBILITY_CHECK" => {
+                Some(Self::ConstraintSkipFeasibilityCheck)
+            }
             _ => None,
         }
     }
@@ -121,11 +127,11 @@ pub struct ConstraintContext {
     #[prost(message, repeated, tag = "2")]
     pub provenance: ::prost::alloc::vec::Vec<Provenance>,
 }
-/// Why a constraint row was removed or relaxed by preprocessing.
+/// Why a constraint row is inactive and whether it participates in default feasibility checks.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct RemovedReason {
+pub struct InactiveConstraintMetadata {
     #[prost(string, tag = "1")]
     pub reason: ::prost::alloc::string::String,
     #[prost(btree_map = "string, string", tag = "2")]
@@ -133,11 +139,15 @@ pub struct RemovedReason {
         ::prost::alloc::string::String,
         ::prost::alloc::string::String,
     >,
+    /// Exclude this inactive row from the default feasibility judgment.
+    /// The row remains evaluable and can be selected explicitly for diagnostics.
+    #[prost(bool, tag = "3")]
+    pub skip_feasibility_check: bool,
 }
 /// Regular scalar constraint row.
 ///
-/// The enclosing collection owns ConstraintID, modeling context, active/removed
-/// placement, and removed reasons.
+/// The enclosing collection owns ConstraintID, modeling context, active/inactive
+/// placement, and inactive metadata.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -158,9 +168,9 @@ pub struct IndicatorConstraint {
     pub equality: i32,
     #[prost(message, optional, tag = "3")]
     pub function: ::core::option::Option<super::v1::Function>,
-    /// False activates at one (including legacy payloads); true activates at zero.
-    #[prost(bool, tag = "4")]
-    pub activate_on_zero: bool,
+    /// The binary value that turns the indicator ON. Must be 0 or 1; absent means 1.
+    #[prost(uint32, optional, tag = "4")]
+    pub trigger_value: ::core::option::Option<u32>,
 }
 /// One-hot constraint row.
 #[non_exhaustive]
@@ -186,9 +196,9 @@ pub struct RegularConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub active: ::prost::alloc::collections::BTreeMap<u64, RegularConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed: ::prost::alloc::collections::BTreeMap<u64, RegularConstraint>,
+    pub inactive: ::prost::alloc::collections::BTreeMap<u64, RegularConstraint>,
     #[prost(btree_map = "uint64, message", tag = "3")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "4")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -200,9 +210,9 @@ pub struct IndicatorConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub active: ::prost::alloc::collections::BTreeMap<u64, IndicatorConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed: ::prost::alloc::collections::BTreeMap<u64, IndicatorConstraint>,
+    pub inactive: ::prost::alloc::collections::BTreeMap<u64, IndicatorConstraint>,
     #[prost(btree_map = "uint64, message", tag = "3")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "4")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -214,9 +224,9 @@ pub struct OneHotConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub active: ::prost::alloc::collections::BTreeMap<u64, OneHotConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed: ::prost::alloc::collections::BTreeMap<u64, OneHotConstraint>,
+    pub inactive: ::prost::alloc::collections::BTreeMap<u64, OneHotConstraint>,
     #[prost(btree_map = "uint64, message", tag = "3")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "4")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -228,9 +238,9 @@ pub struct Sos1ConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub active: ::prost::alloc::collections::BTreeMap<u64, Sos1Constraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed: ::prost::alloc::collections::BTreeMap<u64, Sos1Constraint>,
+    pub inactive: ::prost::alloc::collections::BTreeMap<u64, Sos1Constraint>,
     #[prost(btree_map = "uint64, message", tag = "3")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "4")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -263,12 +273,15 @@ pub struct EvaluatedIndicatorConstraint {
     pub evaluated_value: f64,
     #[prost(bool, tag = "4")]
     pub feasible: bool,
+    /// Whether the indicator variable matches its configured trigger_value at this state,
+    /// independently of the constraint's role.
     #[prost(bool, tag = "5")]
-    pub indicator_active: bool,
+    pub indicator_on: bool,
     #[prost(uint64, repeated, tag = "6")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
-    #[prost(bool, tag = "7")]
-    pub activate_on_zero: bool,
+    /// The binary value that turns the indicator ON. Must be 0 or 1; absent means 1.
+    #[prost(uint32, optional, tag = "7")]
+    pub trigger_value: ::core::option::Option<u32>,
 }
 /// Evaluated one-hot constraint row.
 #[non_exhaustive]
@@ -279,8 +292,10 @@ pub struct EvaluatedOneHotConstraint {
     pub variables: ::prost::alloc::vec::Vec<u64>,
     #[prost(bool, tag = "2")]
     pub feasible: bool,
+    /// Member selected at the evaluation tolerance; unset when infeasible.
+    /// This diagnostic is independent of Active Formulation membership.
     #[prost(uint64, optional, tag = "3")]
-    pub active_variable: ::core::option::Option<u64>,
+    pub selected_variable: ::core::option::Option<u64>,
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
 }
@@ -293,8 +308,11 @@ pub struct EvaluatedSos1Constraint {
     pub variables: ::prost::alloc::vec::Vec<u64>,
     #[prost(bool, tag = "2")]
     pub feasible: bool,
+    /// Member selected at the evaluation tolerance; unset when infeasible or all
+    /// members are approximately zero.
+    /// This diagnostic is independent of Active Formulation membership.
     #[prost(uint64, optional, tag = "3")]
-    pub active_variable: ::core::option::Option<u64>,
+    pub selected_variable: ::core::option::Option<u64>,
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
 }
@@ -306,7 +324,7 @@ pub struct EvaluatedRegularConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub entries: ::prost::alloc::collections::BTreeMap<u64, EvaluatedRegularConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -318,7 +336,7 @@ pub struct EvaluatedIndicatorConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub entries: ::prost::alloc::collections::BTreeMap<u64, EvaluatedIndicatorConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -330,7 +348,7 @@ pub struct EvaluatedOneHotConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub entries: ::prost::alloc::collections::BTreeMap<u64, EvaluatedOneHotConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -342,15 +360,15 @@ pub struct EvaluatedSos1ConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub entries: ::prost::alloc::collections::BTreeMap<u64, EvaluatedSos1Constraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
-/// Map value used when a present sample can have no active variable.
+/// Map value used when a present sample can have no selected variable.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SampledActiveVariable {
+pub struct SampledSelectedVariable {
     #[prost(uint64, optional, tag = "1")]
     pub variable_id: ::core::option::Option<u64>,
 }
@@ -383,12 +401,15 @@ pub struct SampledIndicatorConstraint {
     pub evaluated_values: ::core::option::Option<super::v1::SampledValues>,
     #[prost(btree_map = "uint64, bool", tag = "4")]
     pub feasible: ::prost::alloc::collections::BTreeMap<u64, bool>,
+    /// Whether the indicator variable matches its configured trigger_value at each sample,
+    /// independently of the constraint's role.
     #[prost(btree_map = "uint64, bool", tag = "5")]
-    pub indicator_active: ::prost::alloc::collections::BTreeMap<u64, bool>,
+    pub indicator_on: ::prost::alloc::collections::BTreeMap<u64, bool>,
     #[prost(uint64, repeated, tag = "6")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
-    #[prost(bool, tag = "7")]
-    pub activate_on_zero: bool,
+    /// The binary value that turns the indicator ON. Must be 0 or 1; absent means 1.
+    #[prost(uint32, optional, tag = "7")]
+    pub trigger_value: ::core::option::Option<u32>,
 }
 /// Sampled one-hot constraint row.
 #[non_exhaustive]
@@ -400,7 +421,7 @@ pub struct SampledOneHotConstraint {
     #[prost(btree_map = "uint64, bool", tag = "2")]
     pub feasible: ::prost::alloc::collections::BTreeMap<u64, bool>,
     #[prost(btree_map = "uint64, message", tag = "3")]
-    pub active_variable: ::prost::alloc::collections::BTreeMap<u64, SampledActiveVariable>,
+    pub selected_variable: ::prost::alloc::collections::BTreeMap<u64, SampledSelectedVariable>,
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
 }
@@ -414,7 +435,7 @@ pub struct SampledSos1Constraint {
     #[prost(btree_map = "uint64, bool", tag = "2")]
     pub feasible: ::prost::alloc::collections::BTreeMap<u64, bool>,
     #[prost(btree_map = "uint64, message", tag = "3")]
-    pub active_variable: ::prost::alloc::collections::BTreeMap<u64, SampledActiveVariable>,
+    pub selected_variable: ::prost::alloc::collections::BTreeMap<u64, SampledSelectedVariable>,
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
 }
@@ -426,7 +447,7 @@ pub struct SampledRegularConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub entries: ::prost::alloc::collections::BTreeMap<u64, SampledRegularConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -438,7 +459,7 @@ pub struct SampledIndicatorConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub entries: ::prost::alloc::collections::BTreeMap<u64, SampledIndicatorConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -450,7 +471,7 @@ pub struct SampledOneHotConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub entries: ::prost::alloc::collections::BTreeMap<u64, SampledOneHotConstraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -462,7 +483,7 @@ pub struct SampledSos1ConstraintCollection {
     #[prost(btree_map = "uint64, message", tag = "1")]
     pub entries: ::prost::alloc::collections::BTreeMap<u64, SampledSos1Constraint>,
     #[prost(btree_map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    pub inactive_metadata: ::prost::alloc::collections::BTreeMap<u64, InactiveConstraintMetadata>,
     #[prost(btree_map = "uint64, message", tag = "3")]
     pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
@@ -635,7 +656,7 @@ pub struct OutputObjective {
     ///
     /// This compares objective orderings over candidate states of the active
     /// formulation. It does not assert feasibility or optimality with respect to
-    /// removed constraints.
+    /// inactive constraints.
     ///
     /// `false` is conservative: it means that such a proof is not available,
     /// not that the reconstructed state is known to be suboptimal.

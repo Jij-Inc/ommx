@@ -130,7 +130,7 @@ class OMMXInstanceBuilder:
         return Instance.from_components(
             decision_variables=self.decision_variables(),
             objective=self.objective(),
-            constraints=self.constraints(),
+            active_constraints=self.constraints(),
             sense=self.sense(),
         )
 

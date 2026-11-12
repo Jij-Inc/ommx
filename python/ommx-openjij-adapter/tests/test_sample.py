@@ -21,7 +21,7 @@ def binary_no_constraint_minimize():
     instance = Instance.from_components(
         decision_variables=[x0, x1],
         objective=x0 + x1,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     ans = {(0,): 0.0, (1,): 0.0}
@@ -34,7 +34,7 @@ def binary_no_constraint_maximize():
     instance = Instance.from_components(
         decision_variables=[x0, x1],
         objective=x0 + x1,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
     ans = {(0,): 1.0, (1,): 1.0}
@@ -49,7 +49,7 @@ def binary_equality():
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
         objective=x0 + 2 * x1 + 3 * x2,
-        constraints={0: x1 * x2 == 0},
+        active_constraints={0: x1 * x2 == 0},
         sense=Sense.Maximize,
     )
 
@@ -66,7 +66,7 @@ def binary_inequality():
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
         objective=x0 + 2 * x1 + 3 * x2,
-        constraints={0: x0 + x1 + x2 <= 2},
+        active_constraints={0: x0 + x1 + x2 <= 2},
         sense=Sense.Maximize,
     )
 
@@ -82,7 +82,7 @@ def integer_equality():
     instance = Instance.from_components(
         decision_variables=[x0, x1],
         objective=x0 + 2 * x1,
-        constraints={0: x0 + x1 == 0},
+        active_constraints={0: x0 + x1 == 0},
         sense=Sense.Maximize,
     )
 
@@ -98,7 +98,7 @@ def integer_inequality():
     instance = Instance.from_components(
         decision_variables=[x0, x1],
         objective=x0 + 2 * x1,
-        constraints={0: x0 + x1 <= 0},
+        active_constraints={0: x0 + x1 <= 0},
         sense=Sense.Maximize,
     )
 
@@ -114,7 +114,7 @@ def hubo_binary_no_constraint_minimize():
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
         objective=x0 + x1 + x2 + x0 * x1 * x2,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     ans = {(0,): 0.0, (1,): 0.0, (2,): 0.0}
@@ -128,7 +128,7 @@ def hubo_binary_no_constraint_maximize():
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
         objective=x0 + x0 * x1 * x2,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
     ans = {(0,): 1.0, (1,): 1.0, (2,): 1.0}
@@ -143,7 +143,7 @@ def hubo_binary_equality():
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
         objective=x0 + 2 * x1 + 3 * x2 + x0 * x1 * x2,
-        constraints={0: x1 * x2 == 0},
+        active_constraints={0: x1 * x2 == 0},
         sense=Sense.Maximize,
     )
 
@@ -160,7 +160,7 @@ def hubo_binary_inequality():
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
         objective=x0 + 2 * x1 + 3 * x2 + x0 * x1 * x2,
-        constraints={0: x0 + x1 + x2 <= 2},
+        active_constraints={0: x0 + x1 + x2 <= 2},
         sense=Sense.Maximize,
     )
 
@@ -257,7 +257,7 @@ def test_easy_sample_restores_maximization_output_without_mutating_input():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=3 * x + 2,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
     before = instance.to_v2_bytes()
@@ -300,7 +300,7 @@ def test_sample_restores_variable_and_offset_for_constant_objective():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=7,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     adapter = OMMXOpenJijSAAdapter(instance)
@@ -317,7 +317,7 @@ def test_decode_to_sampleset_uses_instance_variables():
     instance = Instance.from_components(
         decision_variables=[x0, x2],
         objective=x0 + x2,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     response = SimpleNamespace(
@@ -351,7 +351,7 @@ def test_decode_to_sampleset_uses_instance_variables():
         ),
     ],
 )
-def test_prepared_instance_evaluation_populates_variable_removed_with_trivial_inequality(
+def test_prepared_instance_evaluation_populates_variable_non_active_after_trivial_inequality(
     variable,
     constraint,
     expected_value,
@@ -359,7 +359,7 @@ def test_prepared_instance_evaluation_populates_variable_removed_with_trivial_in
     instance = Instance.from_components(
         decision_variables=[variable],
         objective=0,
-        constraints={7: constraint(variable)},
+        active_constraints={7: constraint(variable)},
         sense=Sense.Minimize,
     )
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
@@ -367,7 +367,7 @@ def test_prepared_instance_evaluation_populates_variable_removed_with_trivial_in
         input_class,
         OMMXOpenJijSAAdapter.recommended_preparation_policy(),
     )
-    assert instance.used_decision_variables == []
+    assert instance.active_decision_variables == []
 
     sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=1, seed=999)
     solution = sample_set.get(0)
@@ -381,8 +381,8 @@ def test_prepared_instance_evaluation_restores_integer_sos1():
     instance = Instance.from_components(
         decision_variables=[integer, binary],
         objective=integer + binary,
-        constraints={},
-        sos1_constraints={30: Sos1Constraint(variables=[integer, binary])},
+        active_constraints={},
+        active_sos1_constraints={30: Sos1Constraint(variables=[integer, binary])},
         sense=Sense.Minimize,
     )
 

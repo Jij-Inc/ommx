@@ -8,9 +8,9 @@ roles are called **Active Formulation** and **Interpretation Context**.
 
 - {attr}`~ommx.Instance.objective` and {attr}`~ommx.Instance.sense` define
   what is minimized or maximized.
-- {attr}`~ommx.Instance.used_decision_variables` supplies the variables and
+- {attr}`~ommx.Instance.active_decision_variables` supplies the variables and
   their domains.
-- {attr}`~ommx.Instance.constraints` supplies all active regular and special
+- {attr}`~ommx.Instance.active_constraints` supplies all active regular and special
   constraints.
 
 Regular constraints have the form ``f(x) == 0`` or ``f(x) <= 0``;
@@ -24,7 +24,7 @@ the separate question of which representations a solver adapter accepts.
 
 **Interpretation Context** is the information retained to recover variable
 values and evaluate or explain results in terms of the user's input. It includes
-fixed values, decision-variable dependencies, {attr}`~ommx.Instance.removed_constraints`,
+fixed values, decision-variable dependencies, {attr}`~ommx.Instance.inactive_constraints`,
 an {attr}`~ommx.Instance.output_objective`, {class}`~ommx.NamedFunction` expressions,
 and relevant modeling labels and transformation provenance.
 
@@ -33,7 +33,7 @@ not separate SDK types or disjoint copies of the model. A retained variable
 definition can serve both roles. Interpretation Context need not contain an
 independent, complete copy of the original problem.
 
-**Implementation contract:** {attr}`~ommx.Instance.used_decision_variables`
+**Implementation contract:** {attr}`~ommx.Instance.active_decision_variables`
 must contain exactly the variables referenced by the active objective and
 every active constraint family, including structural uses such as an
 Indicator's controlling variable. {meth}`~ommx.Instance.required_ids` returns
@@ -41,8 +41,9 @@ the same set of IDs. References occurring only in Interpretation Context must
 not contribute to this set. Maintaining this correspondence is the
 responsibility of the Instance implementation: construction, successful
 mutations and transformations, and extensions with new constraint families
-must preserve it. Solver adapters may rely on this contract when creating
-backend variables.
+must preserve it. Adapters use `active_decision_variables` and `active_constraints`
+as the variables and constraints of this formulation. The Instance derives the
+active variable set; adapters do not need to collect variable references themselves.
 
 **Transformation principle**
 
@@ -54,7 +55,7 @@ on the same Instance, or on the returned transformed Instance. For example:
   the expressions needed to reconstruct the encoded values. Named functions
   keep their original expressions and use those reconstructed values.
 - {meth}`~ommx.Instance.partial_evaluate` fixes variables and simplifies active
-  expressions. Named functions and existing removed constraints retain their
+  expressions. Named functions and existing inactive constraints retain their
   expressions and use the saved fixed values during evaluation.
 - {meth}`~ommx.Instance.lower_special_constraints` retains source constraints
   and records the provenance of generated constraints.
@@ -67,7 +68,7 @@ on the same Instance, or on the returned transformed Instance. For example:
 An expression being evaluable by OMMX does not by itself make it a target of an
 Active Formulation rewrite. Interpretation Context can nevertheless require
 updates: {meth}`~ommx.ParametricInstance.with_parameters` specializes
-parameter-bearing expressions in both roles, including removed constraints,
+parameter-bearing expressions in both roles, including inactive constraints,
 output objectives, named functions, and dependency expressions.
 
 Operations that explicitly change the user's problem or output semantics have
@@ -129,7 +130,7 @@ constraints refer to variables defined in that Instance.
 >>> assembled = Instance.from_components(
 ...     decision_variables=[a],
 ...     objective=a,
-...     constraints={7: a <= 1},
+...     active_constraints={7: a <= 1},
 ...     sense=Sense.Maximize,
 ... )
 >>> assert ConstraintID(7) in assembled.constraints
@@ -181,11 +182,11 @@ names and subscripts to retrieve values for application-level analysis.
 **Constraint identity and access**
 
 Constraint numbers are unique across all families in one Instance,
-including removed constraints. Their numbering is separate from variable
+including inactive constraints. Their numbering is separate from variable
 IDs. Supply distinct numbers across the regular and special-constraint
 mappings passed to {meth}`~ommx.Instance.from_components`.
 The Instance allocates new constraint numbers above the maximum across all
-active and removed families. Lowering and promotion allocate fresh numbers
+active and inactive families. Lowering and promotion allocate fresh numbers
 for generated constraints while retained originals keep their IDs.
 {class}`~ommx.ParametricInstance` follows the same rule, and evaluation
 preserves those IDs in {class}`~ommx.Solution` and {class}`~ommx.SampleSet`.
@@ -193,13 +194,14 @@ Protobuf input with cross-family duplicate numbers is rejected without
 automatic renumbering, including data from earlier v3 beta versions that
 used separate number spaces.
 
-{attr}`~ommx.Instance.constraints` is a live collection of all active
-families. A typed ID identifies both the family and the number. Bare
-integers are rejected by this heterogeneous collection even though
-constraint numbers are globally unique within the Instance. Obtaining
+{attr}`~ommx.Instance.constraints` is a live collection of all constraint
+families and roles. A typed ID identifies the family and the number,
+but not role. Bare integers are rejected by this heterogeneous collection
+even though constraint numbers are globally unique within the Instance. Obtaining
 the collection does not collect rows; each row is fetched when accessed.
-{attr}`~ommx.Instance.removed_constraints` exposes retained constraints
-that are no longer active.
+{attr}`~ommx.Instance.active_constraints` exposes active attached handles;
+{attr}`~ommx.Instance.inactive_constraints` exposes snapshots of retained
+inactive constraints.
 
 ```pycon
 >>> from ommx import ConstraintKind, ConstraintID, Instance
@@ -214,7 +216,8 @@ that are no longer active.
 
 Use {meth}`~ommx.Instance.constraints_df` with an explicit ``kind``, such
 as ``kind=ConstraintKind.Regular``, to collect one family into a DataFrame. Collection
-lookup and iteration contracts belong to {class}`~ommx.ConstraintCollection`.
+lookup and iteration contracts belong to {class}`~ommx.ConstraintCollection`
+and {class}`~ommx.ActiveConstraintCollection`.
 
 **Edit the Instance through attached handles**
 
@@ -234,13 +237,13 @@ replace their fields; ``add_subscripts`` appends indices and
 >>> labeled.objective = choice
 >>> rule = labeled.add_constraint(choice <= 1, "limit")
 >>> variable = labeled.attached_decision_variable(choice.id)
->>> constraint = labeled.constraints[rule.constraint_id]
+>>> constraint = labeled.active_constraints[rule.constraint_id]
 >>> variable.set_name("selected")
 >>> variable.set_subscripts([0])
 >>> variable.set_description("Whether product 0 is selected")
 >>> constraint.set_name("selection_limit")
 >>> assert labeled.attached_decision_variable(choice.id).name == "selected"
->>> assert labeled.constraints[rule.constraint_id].name == "selection_limit"
+>>> assert labeled.active_constraints[rule.constraint_id].name == "selection_limit"
 
 ```
 
@@ -264,8 +267,8 @@ Instance.
 **Retained variables and output evaluation**
 
 {attr}`~ommx.Instance.decision_variables` contains every retained variable.
-{attr}`~ommx.Instance.used_decision_variables` selects variables used in
-the current objective or active constraints. Fixed and dependent variables
+{attr}`~ommx.Instance.active_decision_variables` selects the variables of
+the Active Formulation. Fixed and dependent variables
 remain defined so that evaluation can reconstruct their values, although
 the solver no longer chooses those values directly.
 
@@ -277,17 +280,17 @@ the solver no longer chooses those values directly.
 >>> original.objective = x + y
 >>> fixed = original.partial_evaluate({x.id: 1})
 >>> assert {v.id for v in fixed.decision_variables} == {x.id, y.id}
->>> assert {v.id for v in fixed.used_decision_variables} == {y.id}
+>>> assert {v.id for v in fixed.active_decision_variables} == {y.id}
 >>> assert fixed.evaluate({y.id: 0}).state.entries == {x.id: 1.0, y.id: 0.0}
 
 ```
 
 Interpretation Context also includes information used only to interpret results:
-{class}`~ommx.NamedFunction` expressions for reporting metrics, removed
+{class}`~ommx.NamedFunction` expressions for reporting metrics, inactive
 constraints for checking original conditions, and an
 {class}`~ommx.OutputObjective` separate from the current solver-facing
 objective. A variable appearing only in this information is not thereby
-a used variable. {meth}`~ommx.Instance.populate_state` restores fixed and
+an active variable. {meth}`~ommx.Instance.populate_state` restores fixed and
 dependent values before evaluation. An otherwise irrelevant variable is
 assigned a default when omitted; that default is not a reconstructed
 candidate value. Supply its value explicitly when it matters to the output.
@@ -307,7 +310,7 @@ been fixed:
 >>> instance = Instance.from_components(
 ...     decision_variables=[x],
 ...     objective=3 * x,
-...     constraints={},
+...     active_constraints={},
 ...     sense=Sense.Maximize,
 ... )
 >>> assert instance.convert_active_objective(Sense.Minimize)
@@ -315,7 +318,7 @@ been fixed:
 >>> assert fixed.sense == Sense.Minimize
 >>> assert fixed.objective.evaluate({}) == -3.0
 >>> assert fixed.required_ids() == set()
->>> assert fixed.used_decision_variables == []
+>>> assert fixed.active_decision_variables == []
 >>> assert fixed.populate_state({}).entries == {0: 1.0}
 >>> solution = fixed.evaluate({})
 >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)

@@ -10,7 +10,7 @@ impl Instance {
     /// Rewrites the active objective, active regular and indicator constraint
     /// bodies: these belong to the Active Formulation defined on [`Instance`].
     /// Interpretation Context expressions are left unchanged: named functions,
-    /// decision-variable dependency right-hand sides, removed constraints, and
+    /// decision-variable dependency right-hand sides, inactive constraints, and
     /// an existing output objective.
     /// One-hot and SOS1 constraints contain variable sets rather than expression
     /// bodies and do not require this rewrite.
@@ -38,7 +38,7 @@ impl Instance {
     ///         VariableID::from(1),
     ///         DecisionVariable::binary(),
     ///     )]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// let original = instance.objective().clone();
@@ -112,7 +112,10 @@ mod tests {
 
     #[test]
     fn reduction_preserves_indicator_activation() {
-        for activate_on_zero in [false, true] {
+        for trigger_value in [
+            crate::IndicatorTriggerValue::One,
+            crate::IndicatorTriggerValue::Zero,
+        ] {
             for equality in [Equality::EqualToZero, Equality::LessThanOrEqualToZero] {
                 let source = Instance::builder()
                     .sense(Sense::Minimize)
@@ -121,29 +124,29 @@ mod tests {
                         (0.into(), DecisionVariable::binary()),
                         (1.into(), DecisionVariable::binary()),
                     ]))
-                    .constraints(BTreeMap::new())
-                    .indicator_constraints(BTreeMap::from([(
+                    .active_constraints(BTreeMap::new())
+                    .active_indicator_constraints(BTreeMap::from([(
                         7.into(),
                         IndicatorConstraint::new(
                             0.into(),
                             equality,
                             Function::from(quadratic!(1, 1)),
-                            activate_on_zero,
+                            trigger_value,
                         ),
                     )]))
                     .build()
                     .unwrap();
                 let mut reduced = source.clone();
                 assert!(reduced.reduce_binary_power().unwrap());
-                let row = &reduced.indicator_constraints()[&7.into()];
-                assert_eq!(row.activate_on_zero, activate_on_zero);
+                let row = &reduced.active_indicator_constraints()[&7.into()];
+                assert_eq!(row.trigger_value, trigger_value);
                 assert_eq!(row.equality, equality);
                 // Reduction preserves the storage variant; its polynomial degree becomes one.
                 assert_eq!(row.function().degree(), Some(1.into()));
                 for z in [0.0, 1.0] {
                     for x in [0.0, 1.0] {
                         let state = v1::State::from_iter([(0, z), (1, x)]);
-                        let expected = z != if activate_on_zero { 0.0 } else { 1.0 } || x == 0.0;
+                        let expected = z != f64::from(u8::from(trigger_value)) || x == 0.0;
                         assert_eq!(
                             source.evaluate(&state, ATol::default()).unwrap().feasible(),
                             expected
@@ -224,7 +227,7 @@ mod tests {
             Function::Quadratic(((quadratic!(1) + quadratic!(2)).unwrap() + coeff!(-5.0)).unwrap());
         assert_eq!(
             instance
-                .constraints()
+                .active_constraints()
                 .get(&ConstraintID::from(1))
                 .unwrap()
                 .function(),
@@ -333,13 +336,13 @@ mod tests {
         let mut instance =
             Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
         let before_objective = instance.objective().clone();
-        let before_constraints = instance.constraints().clone();
+        let before_constraints = instance.active_constraints().clone();
 
         let err = instance.reduce_binary_power().unwrap_err();
 
         assert_eq!(err, crate::CoefficientError::Infinite);
         assert_eq!(instance.objective(), &before_objective);
-        assert_eq!(instance.constraints(), &before_constraints);
+        assert_eq!(instance.active_constraints(), &before_constraints);
         assert!(instance.output_objective().is_none());
     }
 
@@ -347,7 +350,8 @@ mod tests {
     // are retained for output evaluation and variable reconstruction.
     fn instance_with_expression_owners(functions: [Function; 5]) -> Instance {
         let [objective, regular, indicator, named, dependency] = functions;
-        let reason = crate::constraint::RemovedReason {
+        let reason = crate::constraint::InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "retained for diagnostics".into(),
             ..Default::default()
         };
@@ -359,17 +363,17 @@ mod tests {
                 (VariableID::from(2), DecisionVariable::continuous()),
                 (VariableID::from(3), DecisionVariable::continuous()),
             ]))
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 ConstraintID::from(10),
                 Constraint::equal_to_zero(regular),
             )]))
-            .indicator_constraints(BTreeMap::from([(
+            .active_indicator_constraints(BTreeMap::from([(
                 crate::IndicatorConstraintID::from(11),
                 crate::IndicatorConstraint::new(
                     VariableID::from(1),
                     Equality::LessThanOrEqualToZero,
                     indicator,
-                    false,
+                    crate::IndicatorTriggerValue::One,
                 ),
             )]))
             .named_functions(BTreeMap::from([(
@@ -379,21 +383,21 @@ mod tests {
             .decision_variable_dependency(
                 AcyclicAssignments::new([(VariableID::from(3), dependency)]).unwrap(),
             )
-            .removed_constraints(BTreeMap::from([(
+            .inactive_constraints(BTreeMap::from([(
                 ConstraintID::from(13),
                 (
                     Constraint::equal_to_zero(Function::from(quadratic!(1, 1))),
                     reason.clone(),
                 ),
             )]))
-            .removed_indicator_constraints(BTreeMap::from([(
+            .inactive_indicator_constraints(BTreeMap::from([(
                 crate::IndicatorConstraintID::from(14),
                 (
                     crate::IndicatorConstraint::new(
                         VariableID::from(1),
                         Equality::EqualToZero,
                         Function::from(quadratic!(1, 1)),
-                        false,
+                        crate::IndicatorTriggerValue::One,
                     ),
                     reason,
                 ),
@@ -426,8 +430,8 @@ mod tests {
     fn owned_functions(instance: &Instance) -> [&Function; 5] {
         [
             instance.objective(),
-            instance.constraints()[&ConstraintID::from(10)].function(),
-            &instance.indicator_constraints()[&crate::IndicatorConstraintID::from(11)]
+            instance.active_constraints()[&ConstraintID::from(10)].function(),
+            &instance.active_indicator_constraints()[&crate::IndicatorConstraintID::from(11)]
                 .stage
                 .function,
             &instance.named_functions()[&NamedFunctionID::from(12)].function,
@@ -468,10 +472,13 @@ mod tests {
                 instance.named_function_labels(),
                 before.named_function_labels()
             );
-            assert_eq!(instance.removed_constraints(), before.removed_constraints());
             assert_eq!(
-                instance.removed_indicator_constraints(),
-                before.removed_indicator_constraints()
+                instance.inactive_constraints(),
+                before.inactive_constraints()
+            );
+            assert_eq!(
+                instance.inactive_indicator_constraints(),
+                before.inactive_indicator_constraints()
             );
             assert_eq!(instance.output_objective().is_some(), owner == 0);
             assert!(!instance.reduce_binary_power().unwrap());
@@ -566,10 +573,13 @@ mod tests {
                 instance.decision_variable_dependency(),
                 before.decision_variable_dependency()
             );
-            assert_eq!(instance.removed_constraints(), before.removed_constraints());
             assert_eq!(
-                instance.removed_indicator_constraints(),
-                before.removed_indicator_constraints()
+                instance.inactive_constraints(),
+                before.inactive_constraints()
+            );
+            assert_eq!(
+                instance.inactive_indicator_constraints(),
+                before.inactive_indicator_constraints()
             );
             if !active_changes {
                 assert_eq!(instance, before);
@@ -586,8 +596,8 @@ mod tests {
             let _first = instance.reduce_binary_power().unwrap();
             prop_assert_eq!(instance.named_function_table(), before.named_function_table());
             prop_assert_eq!(instance.decision_variable_dependency(), before.decision_variable_dependency());
-            prop_assert_eq!(instance.removed_constraints(), before.removed_constraints());
-            prop_assert_eq!(instance.removed_indicator_constraints(), before.removed_indicator_constraints());
+            prop_assert_eq!(instance.inactive_constraints(), before.inactive_constraints());
+            prop_assert_eq!(instance.inactive_indicator_constraints(), before.inactive_indicator_constraints());
             prop_assert_eq!(instance.one_hot_constraint_collection(), before.one_hot_constraint_collection());
             prop_assert_eq!(instance.sos1_constraint_collection(), before.sos1_constraint_collection());
             if before.output_objective().is_some() {

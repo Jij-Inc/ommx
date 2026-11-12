@@ -92,12 +92,12 @@ impl Instance {
         let usage = self.decision_variable_usage();
 
         (
-            arbitrary_integer_state(&usage.used_binary(), 1),
-            arbitrary_integer_state(&usage.used_integer(), 100),
-            arbitrary_semi_integer_state(&usage.used_semi_integer(), 100),
-            arbitrary_continuous_state(&usage.used_continuous(), 100.0),
-            arbitrary_semi_continuous_state(&usage.used_semi_continuous(), 100.0),
-            arbitrary_finite_state(&usage.used_finite_domain()),
+            arbitrary_integer_state(&usage.active_binary(), 1),
+            arbitrary_integer_state(&usage.active_integer(), 100),
+            arbitrary_semi_integer_state(&usage.active_semi_integer(), 100),
+            arbitrary_continuous_state(&usage.active_continuous(), 100.0),
+            arbitrary_semi_continuous_state(&usage.active_semi_continuous(), 100.0),
+            arbitrary_finite_state(&usage.active_finite_domain()),
         )
             .prop_map(
                 |(binary, integer, semi_integer, continuous, semi_continuous, finite)| {
@@ -162,7 +162,7 @@ impl InstanceParameters {
     /// The objective, regular constraints, and named functions use the default
     /// [`crate::Function`] strategy, including composed expressions, and
     /// decision variables are sampled from their strategies. The V3-specific structure —
-    /// fixed and dependent variables, removed constraints, indicator,
+    /// fixed and dependent variables, inactive constraints, indicator,
     /// one-hot, and SOS1 families, parameters, description, and annotations
     /// plus an output objective with an active-independent function and no
     /// optimality-preservation guarantee — is injected deterministically, so
@@ -170,7 +170,8 @@ impl InstanceParameters {
     /// (smoke coverage) rather
     /// than sampled. Every generated instance contains all V3 features;
     /// feature-absent combinations are covered by the narrower spaces such
-    /// as [`Self::regular_only`].
+    /// as [`Self::regular_only`]. The inactive skip policy is independently
+    /// sampled as a boolean for each of the four constraint families.
     pub fn full_v3() -> Self {
         Self {
             space: InstanceSpace::FullV3,
@@ -193,7 +194,7 @@ impl InstanceParameters {
     }
 
     /// Parameters for the regular-constraint subspace: no special constraint
-    /// families, no removed constraints, and no fixed or dependent variables.
+    /// families, no inactive constraints, and no fixed or dependent variables.
     /// Function-valued components still use the full composed-function space;
     /// this constructor restricts instance structure, not function algebra.
     pub fn regular_only() -> Self {
@@ -312,8 +313,9 @@ fn next_constraint_id(constraints: &BTreeMap<ConstraintID, Constraint>) -> Const
         .unwrap_or_else(|| ConstraintID::from(0))
 }
 
-fn arbitrary_removed_reason() -> crate::constraint::RemovedReason {
-    crate::constraint::RemovedReason {
+fn arbitrary_inactive_metadata() -> crate::constraint::InactiveConstraintMetadata {
+    crate::constraint::InactiveConstraintMetadata {
+        skip_feasibility_check: false,
         reason: "arbitrary".to_string(),
         parameters: Default::default(),
     }
@@ -369,6 +371,7 @@ impl Arbitrary for Instance {
                         Just(full_v3_ids),
                         arbitrary_decision_variables(unique_ids, kinds.clone()),
                         Sense::arbitrary(),
+                        any::<[bool; 4]>(),
                     )
                         .prop_map(
                             move |(
@@ -378,6 +381,7 @@ impl Arbitrary for Instance {
                                 full_v3_ids,
                                 decision_variables,
                                 sense,
+                                skip_checks,
                             )| {
                                 let mut decision_variables = decision_variables;
                                 let mut variable_labels = VariableLabelStore::default();
@@ -385,12 +389,12 @@ impl Arbitrary for Instance {
                                     crate::named_function::NamedFunctionLabelStore::default();
                                 let mut constraint_context =
                                     ConstraintContextStore::<ConstraintID>::default();
-                                let mut removed_constraints = BTreeMap::new();
+                                let mut inactive_constraints = BTreeMap::new();
                                 let mut fixed_decision_variable_values = BTreeMap::new();
                                 let mut decision_variable_dependency =
                                     AcyclicAssignments::default();
                                 let mut indicator_constraints = BTreeMap::new();
-                                let mut removed_indicator_constraints = BTreeMap::new();
+                                let mut inactive_indicator_constraints = BTreeMap::new();
                                 let mut indicator_constraint_context =
                                     ConstraintContextStore::<IndicatorConstraintID>::default();
                                 let mut one_hot_constraints = BTreeMap::new();
@@ -419,15 +423,15 @@ impl Arbitrary for Instance {
                                     let fixed_id = ids[0];
                                     let dependent_id = ids[1];
                                     let indicator_var = ids[2];
-                                    let indicator_removed_var = ids[3];
+                                    let indicator_inactive_var = ids[3];
                                     let indicator_body_var = ids[4];
-                                    let removed_indicator_body_var = ids[5];
+                                    let inactive_indicator_body_var = ids[5];
                                     let one_hot_active_a = ids[6];
                                     let one_hot_active_b = ids[7];
-                                    let one_hot_removed_a = ids[8];
-                                    let one_hot_removed_b = ids[9];
+                                    let one_hot_inactive_a = ids[8];
+                                    let one_hot_inactive_b = ids[9];
                                     let sos1_active_var = ids[10];
-                                    let sos1_removed_var = ids[11];
+                                    let sos1_inactive_var = ids[11];
 
                                     decision_variables.insert(fixed_id, DecisionVariable::binary());
                                     fixed_decision_variable_values.insert(fixed_id, 0.0);
@@ -442,29 +446,29 @@ impl Arbitrary for Instance {
 
                                     for id in [
                                         indicator_var,
-                                        indicator_removed_var,
+                                        indicator_inactive_var,
                                         indicator_body_var,
-                                        removed_indicator_body_var,
+                                        inactive_indicator_body_var,
                                         one_hot_active_a,
                                         one_hot_active_b,
-                                        one_hot_removed_a,
-                                        one_hot_removed_b,
+                                        one_hot_inactive_a,
+                                        one_hot_inactive_b,
                                         sos1_active_var,
-                                        sos1_removed_var,
+                                        sos1_inactive_var,
                                     ] {
                                         decision_variables.insert(id, DecisionVariable::binary());
                                     }
 
-                                    let removed_id = ConstraintID::from(first_extra_id);
-                                    removed_constraints.insert(
-                                        removed_id,
+                                    let inactive_id = ConstraintID::from(first_extra_id);
+                                    inactive_constraints.insert(
+                                        inactive_id,
                                         (
                                             Constraint::equal_to_zero(Function::Zero),
-                                            arbitrary_removed_reason(),
+                                            arbitrary_inactive_metadata(),
                                         ),
                                     );
                                     constraint_context
-                                        .set_name(removed_id, "arbitrary_removed_constraint");
+                                        .set_name(inactive_id, "arbitrary_inactive_constraint");
 
                                     let indicator_id =
                                         IndicatorConstraintID::from(first_extra_id + 1);
@@ -476,31 +480,31 @@ impl Arbitrary for Instance {
                                             Function::from(
                                                 linear!(indicator_body_var.into_inner()),
                                             ),
-                                            false,
+                                            crate::IndicatorTriggerValue::One,
                                         ),
                                     );
                                     indicator_constraint_context
                                         .set_name(indicator_id, "arbitrary_indicator");
 
-                                    let removed_indicator_id =
+                                    let inactive_indicator_id =
                                         IndicatorConstraintID::from(first_extra_id + 2);
-                                    removed_indicator_constraints.insert(
-                                        removed_indicator_id,
+                                    inactive_indicator_constraints.insert(
+                                        inactive_indicator_id,
                                         (
                                             IndicatorConstraint::new(
-                                                indicator_removed_var,
+                                                indicator_inactive_var,
                                                 Equality::EqualToZero,
                                                 Function::from(linear!(
-                                                    removed_indicator_body_var.into_inner()
+                                                    inactive_indicator_body_var.into_inner()
                                                 )),
-                                                false,
+                                                crate::IndicatorTriggerValue::One,
                                             ),
-                                            arbitrary_removed_reason(),
+                                            arbitrary_inactive_metadata(),
                                         ),
                                     );
                                     indicator_constraint_context.set_name(
-                                        removed_indicator_id,
-                                        "arbitrary_removed_indicator",
+                                        inactive_indicator_id,
+                                        "arbitrary_inactive_indicator",
                                     );
 
                                     let one_hot_id = OneHotConstraintID::from(first_extra_id + 3);
@@ -515,18 +519,20 @@ impl Arbitrary for Instance {
                                     one_hot_constraint_context
                                         .set_name(one_hot_id, "arbitrary_one_hot");
 
-                                    let removed_one_hot_id =
+                                    let inactive_one_hot_id =
                                         OneHotConstraintID::from(first_extra_id + 4);
                                     one_hot_constraints.insert(
-                                        removed_one_hot_id,
+                                        inactive_one_hot_id,
                                         OneHotConstraint::new(BTreeSet::from([
-                                            one_hot_removed_a,
-                                            one_hot_removed_b,
+                                            one_hot_inactive_a,
+                                            one_hot_inactive_b,
                                         ]))
                                         .expect("one-hot set is non-empty"),
                                     );
-                                    one_hot_constraint_context
-                                        .set_name(removed_one_hot_id, "arbitrary_removed_one_hot");
+                                    one_hot_constraint_context.set_name(
+                                        inactive_one_hot_id,
+                                        "arbitrary_inactive_one_hot",
+                                    );
 
                                     // The SOS1 sets deliberately share one
                                     // variable with the one-hot sets so the
@@ -544,18 +550,18 @@ impl Arbitrary for Instance {
                                     );
                                     sos1_constraint_context.set_name(sos1_id, "arbitrary_sos1");
 
-                                    let removed_sos1_id =
+                                    let inactive_sos1_id =
                                         Sos1ConstraintID::from(first_extra_id + 6);
                                     sos1_constraints.insert(
-                                        removed_sos1_id,
+                                        inactive_sos1_id,
                                         Sos1Constraint::new(BTreeSet::from([
-                                            sos1_removed_var,
-                                            one_hot_removed_b,
+                                            sos1_inactive_var,
+                                            one_hot_inactive_b,
                                         ]))
                                         .expect("SOS1 set is non-empty"),
                                     );
                                     sos1_constraint_context
-                                        .set_name(removed_sos1_id, "arbitrary_removed_sos1");
+                                        .set_name(inactive_sos1_id, "arbitrary_inactive_sos1");
                                 }
 
                                 let mut instance = Instance::builder()
@@ -564,15 +570,15 @@ impl Arbitrary for Instance {
                                     .decision_variables(decision_variables)
                                     .variable_labels(variable_labels)
                                     .fixed_decision_variable_values(fixed_decision_variable_values)
-                                    .constraints(constraints)
+                                    .active_constraints(constraints)
                                     .constraint_context(constraint_context)
-                                    .removed_constraints(removed_constraints)
-                                    .indicator_constraints(indicator_constraints)
+                                    .inactive_constraints(inactive_constraints)
+                                    .active_indicator_constraints(indicator_constraints)
                                     .indicator_constraint_context(indicator_constraint_context)
-                                    .removed_indicator_constraints(removed_indicator_constraints)
-                                    .one_hot_constraints(one_hot_constraints)
+                                    .inactive_indicator_constraints(inactive_indicator_constraints)
+                                    .active_one_hot_constraints(one_hot_constraints)
                                     .one_hot_constraint_context(one_hot_constraint_context)
-                                    .sos1_constraints(sos1_constraints)
+                                    .active_sos1_constraints(sos1_constraints)
                                     .sos1_constraint_context(sos1_constraint_context)
                                     .named_functions(named_functions)
                                     .named_function_labels(named_function_labels)
@@ -585,12 +591,65 @@ impl Arbitrary for Instance {
                                         .convert_one_hot_to_constraint(OneHotConstraintID::from(
                                             first_extra_id + 4,
                                         ))
-                                        .expect("arbitrary removed one-hot conversion must work");
+                                        .expect("arbitrary inactive one-hot conversion must work");
                                     instance
                                         .convert_sos1_to_constraints(Sos1ConstraintID::from(
                                             first_extra_id + 6,
                                         ))
-                                        .expect("arbitrary removed SOS1 conversion must work");
+                                        .expect("arbitrary inactive SOS1 conversion must work");
+                                    // Sample each family's check policy independently through the owner.
+                                    for id in instance
+                                        .inactive_constraints()
+                                        .keys()
+                                        .copied()
+                                        .collect::<Vec<_>>()
+                                    {
+                                        instance
+                                            .set_constraint_skip_feasibility_check(
+                                                id,
+                                                skip_checks[0],
+                                            )
+                                            .unwrap();
+                                    }
+                                    for id in instance
+                                        .inactive_indicator_constraints()
+                                        .keys()
+                                        .copied()
+                                        .collect::<Vec<_>>()
+                                    {
+                                        instance
+                                            .set_indicator_constraint_skip_feasibility_check(
+                                                id,
+                                                skip_checks[1],
+                                            )
+                                            .unwrap();
+                                    }
+                                    for id in instance
+                                        .inactive_one_hot_constraints()
+                                        .keys()
+                                        .copied()
+                                        .collect::<Vec<_>>()
+                                    {
+                                        instance
+                                            .set_one_hot_constraint_skip_feasibility_check(
+                                                id,
+                                                skip_checks[2],
+                                            )
+                                            .unwrap();
+                                    }
+                                    for id in instance
+                                        .inactive_sos1_constraints()
+                                        .keys()
+                                        .copied()
+                                        .collect::<Vec<_>>()
+                                    {
+                                        instance
+                                            .set_sos1_constraint_skip_feasibility_check(
+                                                id,
+                                                skip_checks[3],
+                                            )
+                                            .unwrap();
+                                    }
                                     let mut parameters = v1::Parameters {
                                         entries: HashMap::new(),
                                     };
@@ -649,42 +708,42 @@ mod tests {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for c in instance.constraints().values() {
+            for c in instance.active_constraints().values() {
                 for id in c.function().required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for (c, _) in instance.removed_constraints().values() {
+            for (c, _) in instance.inactive_constraints().values() {
                 for id in c.required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for c in instance.indicator_constraints().values() {
+            for c in instance.active_indicator_constraints().values() {
                 for id in c.required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for (c, _) in instance.removed_indicator_constraints().values() {
+            for (c, _) in instance.inactive_indicator_constraints().values() {
                 for id in c.required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for c in instance.one_hot_constraints().values() {
+            for c in instance.active_one_hot_constraints().values() {
                 for id in c.required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for (c, _) in instance.removed_one_hot_constraints().values() {
+            for (c, _) in instance.inactive_one_hot_constraints().values() {
                 for id in c.required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for c in instance.sos1_constraints().values() {
+            for c in instance.active_sos1_constraints().values() {
                 for id in c.required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for (c, _) in instance.removed_sos1_constraints().values() {
+            for (c, _) in instance.inactive_sos1_constraints().values() {
                 for id in c.required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
@@ -709,13 +768,13 @@ mod tests {
         fn full_v3_space_exercises_v3_instance_state(instance in Instance::arbitrary()) {
             prop_assert!(!instance.fixed_decision_variable_values().is_empty());
             prop_assert!(!instance.decision_variable_dependency().is_empty());
-            prop_assert!(!instance.removed_constraints().is_empty());
-            prop_assert!(!instance.indicator_constraints().is_empty());
-            prop_assert!(!instance.removed_indicator_constraints().is_empty());
-            prop_assert!(!instance.one_hot_constraints().is_empty());
-            prop_assert!(!instance.removed_one_hot_constraints().is_empty());
-            prop_assert!(!instance.sos1_constraints().is_empty());
-            prop_assert!(!instance.removed_sos1_constraints().is_empty());
+            prop_assert!(!instance.inactive_constraints().is_empty());
+            prop_assert!(!instance.active_indicator_constraints().is_empty());
+            prop_assert!(!instance.inactive_indicator_constraints().is_empty());
+            prop_assert!(!instance.active_one_hot_constraints().is_empty());
+            prop_assert!(!instance.inactive_one_hot_constraints().is_empty());
+            prop_assert!(!instance.active_sos1_constraints().is_empty());
+            prop_assert!(!instance.inactive_sos1_constraints().is_empty());
             prop_assert!(instance.parameters.is_some());
             prop_assert!(instance.description.is_some());
             prop_assert!(!instance.annotations.is_empty());
@@ -723,21 +782,21 @@ mod tests {
             prop_assert!(!output.preserves_optimality());
             let output_only_ids = output.function().required_ids();
             prop_assert!(!output_only_ids.is_empty());
-            let solver_used_ids = instance.used_decision_variable_ids();
+            let active_ids = instance.active_decision_variable_ids();
             let usage = instance.decision_variable_usage();
             for id in output_only_ids {
-                prop_assert!(!solver_used_ids.contains(&id));
+                prop_assert!(!active_ids.contains(&id));
                 prop_assert!(usage.get(id).is_none());
             }
             prop_assert!(
                 instance
-                    .indicator_constraints()
+                    .active_indicator_constraints()
                     .values()
                     .any(|constraint| !constraint.function().required_ids().is_empty())
             );
             prop_assert!(
                 instance
-                    .removed_indicator_constraints()
+                    .inactive_indicator_constraints()
                     .values()
                     .any(|(constraint, _)| !constraint.function().required_ids().is_empty())
             );

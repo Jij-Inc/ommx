@@ -24,8 +24,8 @@ def test_indicator_constraint_le():
     instance = Instance.from_components(
         decision_variables=[b, x],
         objective=x,
-        constraints={},
-        indicator_constraints={0: ic},
+        active_constraints={},
+        active_indicator_constraints={0: ic},
         sense=Sense.Maximize,
     )
 
@@ -46,8 +46,8 @@ def test_indicator_constraint_forced_on():
     instance = Instance.from_components(
         decision_variables=[b, x],
         objective=x,
-        constraints={0: b >= 1},  # Force b = 1
-        indicator_constraints={1: ic},
+        active_constraints={0: b >= 1},  # Force b = 1
+        active_indicator_constraints={1: ic},
         sense=Sense.Maximize,
     )
 
@@ -68,8 +68,8 @@ def test_indicator_constraint_eq():
     instance = Instance.from_components(
         decision_variables=[b, x],
         objective=x,
-        constraints={0: b >= 1},  # Force b = 1
-        indicator_constraints={1: ic},
+        active_constraints={0: b >= 1},  # Force b = 1
+        active_indicator_constraints={1: ic},
         sense=Sense.Maximize,
     )
 
@@ -94,8 +94,8 @@ def test_indicator_constraint_multiple():
         decision_variables=[b1, b2, x],
         objective=x,
         # At least one indicator must be on
-        constraints={0: b1 + b2 >= 1},
-        indicator_constraints={10: ic1, 11: ic2},
+        active_constraints={0: b1 + b2 >= 1},
+        active_indicator_constraints={10: ic1, 11: ic2},
         sense=Sense.Maximize,
     )
 
@@ -109,23 +109,23 @@ def test_indicator_constraint_multiple():
 @pytest.mark.parametrize(
     "equality", [Equality.EqualToZero, Equality.LessThanOrEqualToZero]
 )
-@pytest.mark.parametrize("active", [False, True])
+@pytest.mark.parametrize("indicator_on", [False, True])
 @pytest.mark.parametrize("sense", [Sense.Minimize, Sense.Maximize])
-def test_both_activation_values(zero, equality, active, sense):
+def test_both_trigger_values(zero, equality, indicator_on, sense):
     z = DecisionVariable.binary(0)
     x = DecisionVariable.continuous(1, lower=0, upper=10)
-    value = int(not zero) if active else int(zero)
+    value = int(not zero) if indicator_on else int(zero)
     instance = Instance.from_components(
         sense=sense,
         objective=x,
         decision_variables=[z, x],
-        constraints={0: z == value},
-        indicator_constraints={
+        active_constraints={0: z == value},
+        active_indicator_constraints={
             1: IndicatorConstraint(
                 indicator_variable=z,
                 function=x - 3,
                 equality=equality,
-                activate_on_zero=zero,
+                trigger_value=int(not zero),
             )
         },
     )
@@ -133,7 +133,8 @@ def test_both_activation_values(zero, equality, active, sense):
     solution = OMMXPySCIPOptAdapter.solve_without_preparation(instance)
     expected = (
         3
-        if active and (equality == Equality.EqualToZero or sense == Sense.Maximize)
+        if indicator_on
+        and (equality == Equality.EqualToZero or sense == Sense.Maximize)
         else (0 if sense == Sense.Minimize else 10)
     )
     assert solution.objective == pytest.approx(expected)
@@ -145,21 +146,21 @@ def test_both_activation_values(zero, equality, active, sense):
     "equality", [Equality.EqualToZero, Equality.LessThanOrEqualToZero]
 )
 @pytest.mark.parametrize("residual", [-1.0, 0.0, 1.0])
-def test_constant_body_uses_inactive_value(zero, equality, residual):
+def test_constant_body_uses_indicator_off_value(zero, equality, residual):
     z = DecisionVariable.binary(0)
     body_feasible = residual == 0 if equality == Equality.EqualToZero else residual <= 0
-    # Prefer the active trigger: a feasible constant permits it, an infeasible one forbids it.
+    # Prefer the ON trigger: a feasible constant permits it, an infeasible one forbids it.
     instance = Instance.from_components(
         sense=Sense.Minimize if zero else Sense.Maximize,
         objective=z,
         decision_variables=[z],
-        constraints={},
-        indicator_constraints={
+        active_constraints={},
+        active_indicator_constraints={
             0: IndicatorConstraint(
                 indicator_variable=z,
                 function=Function.from_scalar(residual),
                 equality=equality,
-                activate_on_zero=zero,
+                trigger_value=int(not zero),
             )
         },
     )

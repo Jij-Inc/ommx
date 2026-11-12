@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    constraint::{ConstraintContext, RemovedReason},
+    constraint::{ConstraintContext, InactiveConstraintMetadata},
     constraint_type::ConstraintCollection,
     parse::{as_variable_id, Parse, ParseError, RawParseError},
     v1::{self},
@@ -29,20 +29,20 @@ fn validate_fixed_decision_variable_partition(
     decision_variable_dependency: &AcyclicAssignments,
     fixed_decision_variable_values: &BTreeMap<VariableID, f64>,
 ) -> Result<(), ParseError> {
-    let mut used: VariableIDSet = objective.required_ids();
+    let mut active: VariableIDSet = objective.required_ids();
     for constraint in constraints.values() {
-        used.extend(constraint.required_ids());
+        active.extend(constraint.required_ids());
     }
     let fixed: VariableIDSet = fixed_decision_variable_values.keys().copied().collect();
     let dependent: VariableIDSet = decision_variable_dependency.keys().collect();
 
-    if let Some(id) = used.intersection(&dependent).next() {
+    if let Some(id) = active.intersection(&dependent).next() {
         return Err(ParseError::new(crate::error!(
             "Dependent variable cannot be used in objectives or constraints: {id:?}"
         ))
         .context(message, "decision_variables"));
     }
-    if let Some(id) = used.intersection(&fixed).next() {
+    if let Some(id) = active.intersection(&fixed).next() {
         return Err(ParseError::new(crate::error!(
             "Fixed variable {id:?} cannot be used in objectives or constraints"
         ))
@@ -112,7 +112,7 @@ fn validate_created_constraint_references<T: crate::ConstraintType>(
 ) -> Result<(), ParseError> {
     for constraint in collection.active().values().chain(
         collection
-            .removed()
+            .inactive()
             .values()
             .map(|(constraint, _)| constraint),
     ) {
@@ -128,7 +128,7 @@ fn validate_created_constraint_references<T: crate::ConstraintType>(
     Ok(())
 }
 
-fn active_used_ids_from_created_collection<T: crate::ConstraintType>(
+fn variable_ids_from_active_collection<T: crate::ConstraintType>(
     collection: &ConstraintCollection<T>,
 ) -> VariableIDSet {
     collection
@@ -139,7 +139,7 @@ fn active_used_ids_from_created_collection<T: crate::ConstraintType>(
 }
 
 fn validate_fixed_dependent_partition_from_sets(
-    used: &VariableIDSet,
+    active: &VariableIDSet,
     fixed_values: &BTreeMap<VariableID, f64>,
     decision_variable_dependency: &AcyclicAssignments,
     message: &'static str,
@@ -147,13 +147,13 @@ fn validate_fixed_dependent_partition_from_sets(
     let fixed: VariableIDSet = fixed_values.keys().copied().collect();
     let dependent: VariableIDSet = decision_variable_dependency.keys().collect();
 
-    if let Some(id) = used.intersection(&dependent).next() {
+    if let Some(id) = active.intersection(&dependent).next() {
         return Err(ParseError::new(crate::error!(
             "Dependent variable cannot be used in objectives or constraints: {id:?}"
         ))
         .context(message, "decision_variables"));
     }
-    if let Some(id) = used.intersection(&fixed).next() {
+    if let Some(id) = active.intersection(&fixed).next() {
         return Err(ParseError::new(crate::error!(
             "Fixed variable {id:?} cannot be used in objectives or constraints"
         ))
@@ -177,11 +177,12 @@ fn validate_structural_special_constraints(
     sos1_constraints: &ConstraintCollection<crate::Sos1Constraint>,
     message: &'static str,
 ) -> Result<(), ParseError> {
-    for indicator in indicator_constraints
-        .active()
-        .values()
-        .chain(indicator_constraints.removed().values().map(|(row, _)| row))
-    {
+    for indicator in indicator_constraints.active().values().chain(
+        indicator_constraints
+            .inactive()
+            .values()
+            .map(|(row, _)| row),
+    ) {
         let id = indicator.indicator_variable;
         let Some(variable) = decision_variables.get(&id) else {
             let detail = if parameter_ids.is_some_and(|ids| ids.contains(&id)) {
@@ -205,7 +206,7 @@ fn validate_structural_special_constraints(
     for one_hot in one_hot_constraints
         .active()
         .values()
-        .chain(one_hot_constraints.removed().values().map(|(row, _)| row))
+        .chain(one_hot_constraints.inactive().values().map(|(row, _)| row))
     {
         for id in &one_hot.variables {
             let Some(variable) = decision_variables.get(id) else {
@@ -231,7 +232,7 @@ fn validate_structural_special_constraints(
     for sos1 in sos1_constraints
         .active()
         .values()
-        .chain(sos1_constraints.removed().values().map(|(row, _)| row))
+        .chain(sos1_constraints.inactive().values().map(|(row, _)| row))
     {
         for id in &sos1.variables {
             if !decision_variables.contains_key(id) {
@@ -352,19 +353,21 @@ impl Parse for v1::Instance {
             }
         }
         // `parse_as` for `Vec<v1::RemovedConstraint>` returns the active constraints
-        // joined with context + removed reason. Strip context into the SoA store
-        // so the collection-level `(active, removed)` shape stays uniform.
-        let removed_constraints_with_context: BTreeMap<
+        // joined with context + inactive reason. Strip context into the SoA store
+        // so the collection-level `(active, inactive)` shape stays uniform.
+        let inactive_constraints_with_context: BTreeMap<
             ConstraintID,
-            (Constraint, ConstraintContext, RemovedReason),
+            (Constraint, ConstraintContext, InactiveConstraintMetadata),
         > = self
             .removed_constraints
             .parse_as(&constraints, message, "removed_constraints")?;
-        let mut removed_constraints: BTreeMap<ConstraintID, (Constraint, RemovedReason)> =
-            BTreeMap::new();
-        for (id, (c, context, reason)) in removed_constraints_with_context {
+        let mut inactive_constraints: BTreeMap<
+            ConstraintID,
+            (Constraint, InactiveConstraintMetadata),
+        > = BTreeMap::new();
+        for (id, (c, context, reason)) in inactive_constraints_with_context {
             constraint_context.insert(id, context);
-            removed_constraints.insert(id, (c, reason));
+            inactive_constraints.insert(id, (c, reason));
         }
 
         let (named_functions, named_function_labels): (
@@ -420,7 +423,7 @@ impl Parse for v1::Instance {
             decision_variables,
             constraint_collection: ConstraintCollection::with_context(
                 constraints,
-                removed_constraints,
+                inactive_constraints,
                 constraint_context,
             )
             .map_err(|e| ParseError::new(e).context(message, "constraints"))?,
@@ -574,21 +577,19 @@ impl Parse for v2::Instance {
             }
         }
 
-        let mut used = objective.required_ids();
-        used.extend(active_used_ids_from_created_collection(
-            &constraint_collection,
-        ));
-        used.extend(active_used_ids_from_created_collection(
+        let mut active = objective.required_ids();
+        active.extend(variable_ids_from_active_collection(&constraint_collection));
+        active.extend(variable_ids_from_active_collection(
             &indicator_constraint_collection,
         ));
-        used.extend(active_used_ids_from_created_collection(
+        active.extend(variable_ids_from_active_collection(
             &one_hot_constraint_collection,
         ));
-        used.extend(active_used_ids_from_created_collection(
+        active.extend(variable_ids_from_active_collection(
             &sos1_constraint_collection,
         ));
         validate_fixed_dependent_partition_from_sets(
-            &used,
+            &active,
             decision_variables.fixed_values(),
             &decision_variable_dependency,
             message,
@@ -628,14 +629,42 @@ impl TryFrom<Instance> for v1::Instance {
     type Error = crate::Error;
 
     fn try_from(value: Instance) -> crate::Result<Self> {
+        crate::v1_io::validate_inactive_metadata(
+            value
+                .constraint_collection
+                .inactive()
+                .values()
+                .map(|(_, metadata)| metadata)
+                .chain(
+                    value
+                        .indicator_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                )
+                .chain(
+                    value
+                        .one_hot_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                )
+                .chain(
+                    value
+                        .sos1_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                ),
+        )?;
         if value.output_objective.is_some() {
             crate::bail!(
                 "ommx.v1.Instance cannot represent Instance.output_objective; use the v2 format"
             );
         }
         let decision_variables: Vec<v1::DecisionVariable> = (&value.decision_variables).into();
-        let (constraints, removed_constraints): (Vec<v1::Constraint>, Vec<v1::RemovedConstraint>) =
-            value.constraint_collection.into();
+        let (constraints, inactive_constraints): (Vec<v1::Constraint>, Vec<v1::RemovedConstraint>) =
+            value.constraint_collection.try_into()?;
         let named_functions: Vec<v1::NamedFunction> = value.named_functions.into();
         let decision_variable_dependency = value
             .decision_variable_dependency
@@ -645,21 +674,21 @@ impl TryFrom<Instance> for v1::Instance {
         // Special constraint types do not have a v1 proto representation yet.
         // Serialization is not supported when these collections are non-empty.
         if !value.indicator_constraint_collection.active().is_empty()
-            || !value.indicator_constraint_collection.removed().is_empty()
+            || !value.indicator_constraint_collection.inactive().is_empty()
         {
             crate::bail!(
                 "Indicator constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
             );
         }
         if !value.one_hot_constraint_collection.active().is_empty()
-            || !value.one_hot_constraint_collection.removed().is_empty()
+            || !value.one_hot_constraint_collection.inactive().is_empty()
         {
             crate::bail!(
                 "One-hot constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
             );
         }
         if !value.sos1_constraint_collection.active().is_empty()
-            || !value.sos1_constraint_collection.removed().is_empty()
+            || !value.sos1_constraint_collection.inactive().is_empty()
         {
             crate::bail!(
                 "SOS1 constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
@@ -671,7 +700,7 @@ impl TryFrom<Instance> for v1::Instance {
             objective: Some(value.objective.into()),
             constraints,
             named_functions,
-            removed_constraints,
+            removed_constraints: inactive_constraints,
             decision_variable_dependency,
             parameters: value.parameters,
             description: value.description,
@@ -754,19 +783,21 @@ impl Parse for v1::ParametricInstance {
             }
         }
 
-        // Drain removed-constraint context into the SoA store, then keep
-        // (active, removed) tuples without context for the collection.
-        let removed_constraints_with_context: BTreeMap<
+        // Drain inactive-constraint context into the SoA store, then keep
+        // (active, inactive) tuples without context for the collection.
+        let inactive_constraints_with_context: BTreeMap<
             ConstraintID,
-            (Constraint, ConstraintContext, RemovedReason),
+            (Constraint, ConstraintContext, InactiveConstraintMetadata),
         > = self
             .removed_constraints
             .parse_as(&constraints, message, "removed_constraints")?;
-        let mut removed_constraints: BTreeMap<ConstraintID, (Constraint, RemovedReason)> =
-            BTreeMap::new();
-        for (id, (c, context, reason)) in removed_constraints_with_context {
+        let mut inactive_constraints: BTreeMap<
+            ConstraintID,
+            (Constraint, InactiveConstraintMetadata),
+        > = BTreeMap::new();
+        for (id, (c, context, reason)) in inactive_constraints_with_context {
             constraint_context.insert(id, context);
-            removed_constraints.insert(id, (c, reason));
+            inactive_constraints.insert(id, (c, reason));
         }
 
         let (named_functions, named_function_labels): (
@@ -823,7 +854,7 @@ impl Parse for v1::ParametricInstance {
             parameters,
             constraint_collection: ConstraintCollection::with_context(
                 constraints,
-                removed_constraints,
+                inactive_constraints,
                 constraint_context,
             )
             .map_err(|e| ParseError::new(e).context(message, "constraints"))?,
@@ -985,21 +1016,19 @@ impl Parse for v2::ParametricInstance {
             }
         }
 
-        let mut used = objective.required_ids();
-        used.extend(active_used_ids_from_created_collection(
-            &constraint_collection,
-        ));
-        used.extend(active_used_ids_from_created_collection(
+        let mut active = objective.required_ids();
+        active.extend(variable_ids_from_active_collection(&constraint_collection));
+        active.extend(variable_ids_from_active_collection(
             &indicator_constraint_collection,
         ));
-        used.extend(active_used_ids_from_created_collection(
+        active.extend(variable_ids_from_active_collection(
             &one_hot_constraint_collection,
         ));
-        used.extend(active_used_ids_from_created_collection(
+        active.extend(variable_ids_from_active_collection(
             &sos1_constraint_collection,
         ));
         validate_fixed_dependent_partition_from_sets(
-            &used,
+            &active,
             decision_variables.fixed_values(),
             &decision_variable_dependency,
             message,
@@ -1039,6 +1068,34 @@ impl TryFrom<ParametricInstance> for v1::ParametricInstance {
     type Error = crate::Error;
 
     fn try_from(value: ParametricInstance) -> crate::Result<Self> {
+        crate::v1_io::validate_inactive_metadata(
+            value
+                .constraint_collection
+                .inactive()
+                .values()
+                .map(|(_, metadata)| metadata)
+                .chain(
+                    value
+                        .indicator_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                )
+                .chain(
+                    value
+                        .one_hot_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                )
+                .chain(
+                    value
+                        .sos1_constraint_collection
+                        .inactive()
+                        .values()
+                        .map(|(_, metadata)| metadata),
+                ),
+        )?;
         if value.output_objective.is_some() {
             crate::bail!(
                 "ommx.v1.ParametricInstance cannot represent ParametricInstance.output_objective; use the v2 format"
@@ -1061,31 +1118,31 @@ impl TryFrom<ParametricInstance> for v1::ParametricInstance {
         } = value;
         // Special constraint types do not have a v1 proto representation yet.
         if !indicator_constraint_collection.active().is_empty()
-            || !indicator_constraint_collection.removed().is_empty()
+            || !indicator_constraint_collection.inactive().is_empty()
         {
             crate::bail!(
                 "Indicator constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
             );
         }
         if !one_hot_constraint_collection.active().is_empty()
-            || !one_hot_constraint_collection.removed().is_empty()
+            || !one_hot_constraint_collection.inactive().is_empty()
         {
             crate::bail!(
                 "One-hot constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
             );
         }
         if !sos1_constraint_collection.active().is_empty()
-            || !sos1_constraint_collection.removed().is_empty()
+            || !sos1_constraint_collection.inactive().is_empty()
         {
             crate::bail!(
                 "SOS1 constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
             );
         }
         let v1_decision_variables: Vec<v1::DecisionVariable> = (&decision_variables).into();
-        let (v1_constraints, v1_removed_constraints): (
+        let (v1_constraints, v1_inactive_constraints): (
             Vec<v1::Constraint>,
             Vec<v1::RemovedConstraint>,
-        ) = constraint_collection.into();
+        ) = constraint_collection.try_into()?;
         let v1_named_functions: Vec<v1::NamedFunction> = named_functions.into();
         Ok(Self {
             description,
@@ -1095,7 +1152,7 @@ impl TryFrom<ParametricInstance> for v1::ParametricInstance {
             parameters: parameters.into_v1_parameters(),
             constraints: v1_constraints,
             named_functions: v1_named_functions,
-            removed_constraints: v1_removed_constraints,
+            removed_constraints: v1_inactive_constraints,
             decision_variable_dependency: decision_variable_dependency
                 .into_iter()
                 .map(|(id, dep)| (id.into(), dep.into()))
@@ -1122,7 +1179,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::from([(id, DecisionVariable::binary())]))
             .parameters(crate::ParameterTable::default())
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap()
     }
@@ -1135,7 +1192,7 @@ mod tests {
                 (VariableID::from(0), DecisionVariable::binary()),
                 (VariableID::from(1), DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap()
     }
@@ -1225,16 +1282,16 @@ mod tests {
         }
     }
 
-    fn removed_constraint_to_v1(
+    fn inactive_constraint_to_v1(
         id: ConstraintID,
         constraint: Constraint,
         context: ConstraintContext,
-        removed_reason: RemovedReason,
+        inactive_metadata: InactiveConstraintMetadata,
     ) -> v1::RemovedConstraint {
         v1::RemovedConstraint {
             constraint: Some(constraint_to_v1(id, constraint, context)),
-            removed_reason: removed_reason.reason,
-            removed_reason_parameters: removed_reason.parameters.into_iter().collect(),
+            removed_reason: inactive_metadata.reason,
+            removed_reason_parameters: inactive_metadata.parameters.into_iter().collect(),
         }
     }
 
@@ -1302,18 +1359,19 @@ mod tests {
         ]
     }
 
-    fn removed_constraints_for_hint_tests() -> Vec<v1::RemovedConstraint> {
-        vec![removed_constraint_to_v1(
+    fn inactive_constraints_for_hint_tests() -> Vec<v1::RemovedConstraint> {
+        vec![inactive_constraint_to_v1(
             ConstraintID::from(20),
             Constraint::equal_to_zero(Function::Zero),
             ConstraintContext {
                 label: crate::ModelingLabel {
-                    name: Some("removed_source".to_string()),
+                    name: Some("inactive_source".to_string()),
                     ..Default::default()
                 },
                 ..Default::default()
             },
-            RemovedReason {
+            InactiveConstraintMetadata {
+                skip_feasibility_check: false,
                 reason: "test".to_string(),
                 parameters: Default::default(),
             },
@@ -1355,7 +1413,7 @@ mod tests {
             objective: Some(crate::Function::Zero.into()),
             decision_variables: decision_variables_for_hint_tests(),
             constraints: constraints_for_hint_tests(),
-            removed_constraints: removed_constraints_for_hint_tests(),
+            removed_constraints: inactive_constraints_for_hint_tests(),
             constraint_hints: Some(adversarial_constraint_hints()),
             ..Default::default()
         };
@@ -1366,9 +1424,9 @@ mod tests {
         let parsed = Instance::from_v1_bytes(&v1_instance.encode_to_vec()).unwrap();
 
         assert_eq!(parsed, expected);
-        assert_eq!(parsed.constraints().len(), 3);
-        assert!(parsed.one_hot_constraints().is_empty());
-        assert!(parsed.sos1_constraints().is_empty());
+        assert_eq!(parsed.active_constraints().len(), 3);
+        assert!(parsed.active_one_hot_constraints().is_empty());
+        assert!(parsed.active_sos1_constraints().is_empty());
         assert!(parsed.active_special_constraint_kinds().is_empty());
         for (id, expected_name) in [
             (1, "one_hot_source"),
@@ -1376,14 +1434,14 @@ mod tests {
             (11, "sos1_big_m_source"),
         ] {
             let id = ConstraintID::from(id);
-            assert!(parsed.constraints().contains_key(&id));
+            assert!(parsed.active_constraints().contains_key(&id));
             assert_eq!(parsed.constraint_context().name(id), Some(expected_name));
         }
-        let removed_id = ConstraintID::from(20);
-        assert!(parsed.removed_constraints().contains_key(&removed_id));
+        let inactive_id = ConstraintID::from(20);
+        assert!(parsed.inactive_constraints().contains_key(&inactive_id));
         assert_eq!(
-            parsed.constraint_context().name(removed_id),
-            Some("removed_source")
+            parsed.constraint_context().name(inactive_id),
+            Some("inactive_source")
         );
 
         let roundtripped = Instance::from_v1_bytes(&parsed.to_v1_bytes().unwrap()).unwrap();
@@ -1417,8 +1475,8 @@ mod tests {
 
         let parsed = Instance::from_v1_bytes(&v1_instance.encode_to_vec()).unwrap();
 
-        assert_eq!(parsed.constraints().get(&source_id), Some(&source));
-        assert!(parsed.one_hot_constraints().is_empty());
+        assert_eq!(parsed.active_constraints().get(&source_id), Some(&source));
+        assert!(parsed.active_one_hot_constraints().is_empty());
         assert!(parsed.active_special_constraint_kinds().is_empty());
     }
 
@@ -1450,8 +1508,8 @@ mod tests {
 
         let parsed = Instance::from_v1_bytes(&v1_instance.encode_to_vec()).unwrap();
 
-        assert_eq!(parsed.constraints().get(&source_id), Some(&source));
-        assert!(parsed.sos1_constraints().is_empty());
+        assert_eq!(parsed.active_constraints().get(&source_id), Some(&source));
+        assert!(parsed.active_sos1_constraints().is_empty());
         assert!(parsed.active_special_constraint_kinds().is_empty());
     }
 
@@ -1462,7 +1520,7 @@ mod tests {
             objective: Some(crate::Function::Zero.into()),
             decision_variables: decision_variables_for_hint_tests(),
             constraints: constraints_for_hint_tests(),
-            removed_constraints: removed_constraints_for_hint_tests(),
+            removed_constraints: inactive_constraints_for_hint_tests(),
             constraint_hints: Some(adversarial_constraint_hints()),
             ..Default::default()
         };
@@ -1476,23 +1534,23 @@ mod tests {
                 .unwrap();
 
         assert_eq!(parsed, expected);
-        assert_eq!(parsed.constraints().len(), 3);
-        assert!(parsed.one_hot_constraints().is_empty());
-        assert!(parsed.sos1_constraints().is_empty());
+        assert_eq!(parsed.active_constraints().len(), 3);
+        assert!(parsed.active_one_hot_constraints().is_empty());
+        assert!(parsed.active_sos1_constraints().is_empty());
         for (id, expected_name) in [
             (1, "one_hot_source"),
             (10, "sos1_cardinality_source"),
             (11, "sos1_big_m_source"),
         ] {
             let id = ConstraintID::from(id);
-            assert!(parsed.constraints().contains_key(&id));
+            assert!(parsed.active_constraints().contains_key(&id));
             assert_eq!(parsed.constraint_context().name(id), Some(expected_name));
         }
-        let removed_id = ConstraintID::from(20);
-        assert!(parsed.removed_constraints().contains_key(&removed_id));
+        let inactive_id = ConstraintID::from(20);
+        assert!(parsed.inactive_constraints().contains_key(&inactive_id));
         assert_eq!(
-            parsed.constraint_context().name(removed_id),
-            Some("removed_source")
+            parsed.constraint_context().name(inactive_id),
+            Some("inactive_source")
         );
 
         let roundtripped =
@@ -1827,15 +1885,20 @@ mod tests {
         };
         use std::collections::HashMap;
 
-        // Create a v1::ParametricInstance with duplicate constraint IDs in constraints and removed_constraints
+        // Create a v1::ParametricInstance with duplicate constraint IDs in constraints and inactive_constraints
         let cid = ConstraintID::from(1);
         let constraint = Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(1.0)));
-        let removed_reason = crate::constraint::RemovedReason {
+        let inactive_metadata = crate::constraint::InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         };
-        let removed_constraint =
-            removed_constraint_to_v1(cid, constraint.clone(), Default::default(), removed_reason);
+        let inactive_constraint = inactive_constraint_to_v1(
+            cid,
+            constraint.clone(),
+            Default::default(),
+            inactive_metadata,
+        );
 
         let v1_parametric_instance = v1::ParametricInstance {
             sense: v1::instance::Sense::Minimize as i32,
@@ -1852,14 +1915,14 @@ mod tests {
             }],
             constraints: vec![constraint_to_v1(cid, constraint, Default::default())],
             named_functions: vec![],
-            removed_constraints: vec![removed_constraint],
+            removed_constraints: vec![inactive_constraint],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
             description: None,
             ..Default::default()
         };
 
-        // This should fail because constraint ID 1 appears in both constraints and removed_constraints
+        // This should fail because constraint ID 1 appears in both constraints and inactive_constraints
         let result = v1_parametric_instance.parse(&());
         insta::assert_snapshot!(result.unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
@@ -1875,15 +1938,20 @@ mod tests {
         };
         use std::collections::HashMap;
 
-        // Create a v1::Instance with duplicate constraint IDs in constraints and removed_constraints
+        // Create a v1::Instance with duplicate constraint IDs in constraints and inactive_constraints
         let cid = ConstraintID::from(1);
         let constraint = Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(1.0)));
-        let removed_reason = crate::constraint::RemovedReason {
+        let inactive_metadata = crate::constraint::InactiveConstraintMetadata {
+            skip_feasibility_check: false,
             reason: "test".to_string(),
             parameters: Default::default(),
         };
-        let removed_constraint =
-            removed_constraint_to_v1(cid, constraint.clone(), Default::default(), removed_reason);
+        let inactive_constraint = inactive_constraint_to_v1(
+            cid,
+            constraint.clone(),
+            Default::default(),
+            inactive_metadata,
+        );
 
         let v1_instance = v1::Instance {
             sense: v1::instance::Sense::Minimize as i32,
@@ -1895,7 +1963,7 @@ mod tests {
             )],
             constraints: vec![constraint_to_v1(cid, constraint, Default::default())],
             named_functions: vec![],
-            removed_constraints: vec![removed_constraint],
+            removed_constraints: vec![inactive_constraint],
             decision_variable_dependency: HashMap::new(),
             parameters: None,
             description: None,
@@ -1903,7 +1971,7 @@ mod tests {
             ..Default::default()
         };
 
-        // This should fail because constraint ID 1 appears in both constraints and removed_constraints
+        // This should fail because constraint ID 1 appears in both constraints and inactive_constraints
         let result = v1_instance.parse(&());
         insta::assert_snapshot!(result.unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
@@ -2241,7 +2309,7 @@ mod tests {
             .decision_variables(maplit::btreemap! {
                 VariableID::from(1) => DecisionVariable::binary(),
             })
-            .constraints(Default::default())
+            .active_constraints(Default::default())
             .build()
             .unwrap();
         let mut proto = crate::v2::Instance::from(instance);
@@ -2298,7 +2366,7 @@ mod tests {
                 var_id => DecisionVariable::binary(),
             })
             .parameters(ParameterTable::default())
-            .constraints(maplit::btreemap! {
+            .active_constraints(maplit::btreemap! {
                 cid => Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(-1.0))),
             })
             .build()
@@ -2362,7 +2430,7 @@ mod tests {
             .decision_variables(maplit::btreemap! {
                 var_id => DecisionVariable::binary(),
             })
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 

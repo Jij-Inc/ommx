@@ -75,7 +75,7 @@ Distinguish **sampled dimensions** from **constant injected structure**.
 - Hand-rolled resource allocation inside a generator (fresh variable IDs,
   next constraint ID) must match the domain's own allocator semantics.
   Compare against the owner's allocation function (e.g.
-  `ConstraintCollection::unused_id` considers active **and** removed rows);
+  `ConstraintCollection::unused_id` considers active **and** inactive rows);
   prefer calling the domain allocator over re-implementing it.
 - When the generator mutates the value after `build()` (conversions, direct
   field writes), re-check which invariants that post-processing can bypass.

@@ -18,8 +18,8 @@ pub use arbitrary::*;
 use derive_more::{Deref, From};
 use fnv::FnvHashSet;
 pub use stage::{
-    Created, CreatedData, Evaluated, EvaluatedData, RemovedReason, Sampled as SampledStage,
-    SampledData, Stage,
+    ConstraintRole, Created, CreatedData, Evaluated, EvaluatedData, InactiveConstraintMetadata,
+    Sampled as SampledStage, SampledData, Stage,
 };
 // The sampled lifecycle marker is re-exported as `SampledStage` to avoid a
 // name collision with `crate::Sampled<T>` (the sampled-values container).
@@ -45,7 +45,7 @@ impl Equality {
         crate::constraint_type::violation_is_feasible(self.violation(evaluated_value), atol)
     }
 
-    /// Residual metric shared by regular constraints and active indicators.
+    /// Residual metric shared by regular constraints and indicators that are ON.
     pub(crate) fn violation(self, evaluated_value: f64) -> f64 {
         if !evaluated_value.is_finite() {
             return f64::INFINITY;
@@ -254,11 +254,12 @@ impl Parse for crate::v2::ConstraintContext {
     }
 }
 
-impl From<crate::v2::RemovedReason> for RemovedReason {
-    fn from(reason: crate::v2::RemovedReason) -> Self {
+impl From<crate::v2::InactiveConstraintMetadata> for InactiveConstraintMetadata {
+    fn from(reason: crate::v2::InactiveConstraintMetadata) -> Self {
         Self {
             reason: reason.reason,
             parameters: reason.parameters.into_iter().collect(),
+            skip_feasibility_check: reason.skip_feasibility_check,
         }
     }
 }

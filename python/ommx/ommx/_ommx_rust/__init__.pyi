@@ -20,6 +20,7 @@ from ommx._typing import _C_co, _K, _T, _V_co
 from typing import TypeAlias
 
 __all__ = [
+    "ActiveConstraintCollection",
     "AnonymousArtifactRef",
     "ArchiveDescriptor",
     "ArchiveManifest",
@@ -41,6 +42,7 @@ __all__ = [
     "ConstraintID",
     "ConstraintIDBase",
     "ConstraintKind",
+    "ConstraintRole",
     "ConstraintView",
     "DecisionVariable",
     "DecisionVariableRole",
@@ -65,6 +67,11 @@ __all__ = [
     "GcMissingBlob",
     "GcReport",
     "GcRoot",
+    "InactiveConstraint",
+    "InactiveConstraintCollection",
+    "InactiveIndicatorConstraint",
+    "InactiveOneHotConstraint",
+    "InactiveSos1Constraint",
     "IndicatorConstraint",
     "IndicatorConstraintID",
     "InfeasibleDetected",
@@ -108,11 +115,6 @@ __all__ = [
     "RemoteArtifactError",
     "RemoteArtifactNotFoundError",
     "RemoteArtifactTransportError",
-    "RemovedConstraint",
-    "RemovedConstraintCollection",
-    "RemovedIndicatorConstraint",
-    "RemovedOneHotConstraint",
-    "RemovedSos1Constraint",
     "Rng",
     "Run",
     "SampleSet",
@@ -196,6 +198,206 @@ VariableIDLike: TypeAlias = builtins.int | DecisionVariable | AttachedDecisionVa
 r"""
 A variable ID or decision-variable object. APIs using this type consume only the OMMX variable identity, not kind or bound metadata.
 """
+
+@typing.final
+class ActiveConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
+    r"""
+    Live, read-only mapping of all active constraint families in a model.
+
+    Obtained from {attr}`~ommx.Instance.active_constraints` or
+    {attr}`~ommx.ParametricInstance.active_constraints`. The collection keeps its owner
+    alive and observes subsequent owner mutations. Obtaining it does not collect
+    constraint rows; indexing fetches the selected row from the owner's current
+    state. Active model rows are attached handles whose label setters update that
+    owner.
+
+    >>> from ommx import ConstraintID, Instance
+    >>> model = Instance.minimize()
+    >>> x = model.new_binary("x")
+    >>> rule = model.add_constraint(x <= 1, "limit")
+    >>> rows = model.active_constraints
+    >>> cid = rule.constraint_id
+    >>> rows[cid].set_name("capacity")
+    >>> assert model.active_constraints[cid].name == "capacity"
+    >>> assert rows.get(ConstraintID(99)) is None
+    >>> assert rows.get(ConstraintID(99), "missing") == "missing"
+
+    **Typed keys and row ownership**
+
+    Mixed-family lookups require typed IDs, even though constraint numbers are
+    unique across all families in an Instance. Bare integers raise ``TypeError``;
+    a missing typed ID raises ``KeyError``. ``get(id)`` returns ``None`` for a
+    missing typed ID, or the supplied default in ``get(id, default)``. Indexing and
+    ``get`` preserve the concrete row type for a known concrete ID; the latter's
+    return type also includes the default's type. See {class}`~ommx.ConstraintIDBase`
+    for ID families, integer promotion, and the extension contract.
+
+    The collection cannot be changed by item assignment or deletion. Change the
+    model through its owner methods. Related collections use the same lookup and
+    iteration rules but have different row ownership:
+
+    | Collection | Included constraints | Returned rows |
+    | --- | --- | --- |
+    | {class}`~ommx.ActiveConstraintCollection` | Active model constraints | Attached handles |
+    | {class}`~ommx.InactiveConstraintCollection` | Retained inactive model constraints | Independent snapshots |
+    | {class}`~ommx.EvaluatedConstraintCollection` | Active and retained inactive constraints in a Solution | Independent evaluated snapshots |
+    | {class}`~ommx.SampledConstraintCollection` | Active and retained inactive constraints in a SampleSet | Independent sampled snapshots |
+
+    Attached handles compare equal when they refer to the same owner object and
+    typed ID. Handles from different owners are unequal even if the models contain
+    identical data. Inactive and result snapshots compare their stored data, including
+    metadata and inactivity reasons. Mapping equality and membership in ``values()`` or
+    ``items()`` use those row equality rules.
+
+    **Live views and iteration**
+
+    ``keys()``, ``values()``, and ``items()`` are live views. ``iter(rows)`` snapshots
+    typed IDs immediately; iterators over the standard Python views snapshot them on
+    the first ``next()``. Within the currently supported families, IDs follow family
+    order (regular, indicator, one-hot, SOS1), then numeric order. Values are fetched
+    as they are visited. If a snapshotted key is removed before its value is fetched,
+    that access raises ``KeyError``.
+
+    >>> ids_before_addition = iter(rows)
+    >>> keys = rows.keys()
+    >>> added = model.add_constraint(x >= 0, "lower")
+    >>> assert list(ids_before_addition) == [cid]
+    >>> assert list(keys) == [cid, added.constraint_id]
+    >>> assert rows == dict(rows)
+
+    ``dict(rows)`` materializes a mapping at that time; its active model values are
+    still attached handles. To inspect just one family, use ``of_kind`` and
+    {class}`~ommx.ConstraintFamilyView`. To collect a table, use the owner's
+    ``constraints_df(kind=..., min_role=ConstraintRole.ACTIVE)``. Its typed
+    index matches this collection's keys for the selected family. The default
+    ``min_role=ConstraintRole.EVALUATION_ONLY`` includes all active and
+    inactive rows, including those skipped by default feasibility checks.
+
+    ```pycon
+    >>> from ommx import ConstraintRole, ConstraintKind
+    >>> model.deactivate_constraint(cid, "retain for reporting")
+    >>> table = model.constraints_df(
+    ...     kind=ConstraintKind.Regular,
+    ...     min_role=ConstraintRole.ACTIVE,
+    ... )
+    >>> assert set(table.index) == set(rows.of_kind(ConstraintKind.Regular))
+    >>> assert cid not in table.index
+    >>> assert cid in model.constraints_df(kind=ConstraintKind.Regular).index
+
+    ```
+    """
+    def __len__(self) -> builtins.int: ...
+    def __contains__(self, key: builtins.object) -> builtins.bool: ...
+    def __iter__(self) -> typing.Iterator[ConstraintIDBase]:
+        r"""
+        Iterate a snapshot of typed IDs; constraint rows are not collected.
+        """
+    def keys(self) -> typing.KeysView[ConstraintIDBase]:
+        r"""
+        Live key view. Iteration order is family order, then numeric ID.
+        """
+    def values(self) -> typing.ValuesView[ConstraintView]:
+        r"""
+        Live value view; each row is fetched when visited.
+        """
+    def items(self) -> typing.ItemsView[ConstraintIDBase, ConstraintView]:
+        r"""
+        Live item view; each row is fetched when visited.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __eq__(self, other: typing.Any) -> typing.Any: ...
+    @typing.overload
+    def __getitem__(self, key: ConstraintID) -> AttachedConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: IndicatorConstraintID) -> AttachedIndicatorConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: OneHotConstraintID) -> AttachedOneHotConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: Sos1ConstraintID) -> AttachedSos1Constraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintID, default: None = None
+    ) -> AttachedConstraint | None: ...
+    @typing.overload
+    def get(self, key: ConstraintID, default: _T) -> AttachedConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: None = None
+    ) -> AttachedIndicatorConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: _T
+    ) -> AttachedIndicatorConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: None = None
+    ) -> AttachedOneHotConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: _T
+    ) -> AttachedOneHotConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: None = None
+    ) -> AttachedSos1Constraint | None: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: _T
+    ) -> AttachedSos1Constraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintIDBase, default: None = None
+    ) -> ConstraintView | None: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    @typing.overload
+    def of_kind(
+        self, kind: ConstraintKind[ConstraintID]
+    ) -> ConstraintFamilyView[ConstraintID, AttachedConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: ConstraintKind[IndicatorConstraintID]
+    ) -> ConstraintFamilyView[IndicatorConstraintID, AttachedIndicatorConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: ConstraintKind[OneHotConstraintID]
+    ) -> ConstraintFamilyView[OneHotConstraintID, AttachedOneHotConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: ConstraintKind[Sos1ConstraintID]
+    ) -> ConstraintFamilyView[Sos1ConstraintID, AttachedSos1Constraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: ConstraintKind[_K]
+    ) -> ConstraintFamilyView[_K, ConstraintView]: ...
 
 @typing.final
 class AnonymousArtifactRef:
@@ -1122,6 +1324,11 @@ class AttachedConstraint(ConstraintView):
     @property
     def equality(self) -> Equality: ...
     @property
+    def role(self) -> ConstraintRole:
+        r"""
+        Current role of this owner-backed row.
+        """
+    @property
     def name(self) -> typing.Optional[builtins.str]: ...
     @property
     def subscripts(self) -> builtins.list[builtins.int]: ...
@@ -1349,9 +1556,9 @@ class AttachedIndicatorConstraint(ConstraintView):
         The parent host this constraint lives in.
         """
     @property
-    def activate_on_zero(self) -> builtins.bool:
+    def trigger_value(self) -> builtins.int:
         r"""
-        Whether zero activates the body instead of one.
+        Binary value (0 or 1) at which the body is enforced.
         """
     @property
     def indicator_variable_id(self) -> builtins.int: ...
@@ -1359,6 +1566,11 @@ class AttachedIndicatorConstraint(ConstraintView):
     def function(self) -> Function: ...
     @property
     def equality(self) -> Equality: ...
+    @property
+    def role(self) -> ConstraintRole:
+        r"""
+        Current role of this owner-backed row.
+        """
     @property
     def name(self) -> typing.Optional[builtins.str]: ...
     @property
@@ -1438,6 +1650,11 @@ class AttachedOneHotConstraint(ConstraintView):
     @property
     def variables(self) -> builtins.list[builtins.int]: ...
     @property
+    def role(self) -> ConstraintRole:
+        r"""
+        Current role of this owner-backed row.
+        """
+    @property
     def name(self) -> typing.Optional[builtins.str]: ...
     @property
     def subscripts(self) -> builtins.list[builtins.int]: ...
@@ -1508,6 +1725,11 @@ class AttachedSos1Constraint(ConstraintView):
     def instance(self) -> typing.Any: ...
     @property
     def variables(self) -> builtins.list[builtins.int]: ...
+    @property
+    def role(self) -> ConstraintRole:
+        r"""
+        Current role of this owner-backed row.
+        """
     @property
     def name(self) -> typing.Optional[builtins.str]: ...
     @property
@@ -1798,16 +2020,13 @@ class Constraint:
         Returns self for method chaining
         """
     def with_indicator(
-        self,
-        indicator_variable: VariableIDLike,
-        *,
-        activate_on_zero: builtins.bool = False,
+        self, indicator_variable: VariableIDLike, *, trigger_value: builtins.int = 1
     ) -> IndicatorConstraint:
         r"""
         Create an indicator constraint from this constraint.
 
-        Returns `indicator_variable = 1 → this constraint`, or activation at zero
-        when `activate_on_zero=True`.
+        Returns `indicator_variable = trigger_value → this constraint`.
+        The trigger value must be 0 or 1 and defaults to 1.
         `indicator_variable` may be a variable ID or a decision-variable object.
         Only its ID is stored; the enclosing host requires the referenced variable
         to be binary when the constraint is inserted.
@@ -1819,77 +2038,11 @@ class Constraint:
 @typing.final
 class ConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
     r"""
-    Live, read-only mapping of all active constraint families in a model.
-
-    Obtained from {attr}`~ommx.Instance.constraints` or
-    {attr}`~ommx.ParametricInstance.constraints`. The collection keeps its owner
-    alive and observes subsequent owner mutations. Obtaining it does not collect
-    constraint rows; indexing fetches the selected row from the owner's current
-    state. Active model rows are attached handles whose label setters update that
-    owner.
-
-    >>> from ommx import ConstraintID, Instance
-    >>> model = Instance.minimize()
-    >>> x = model.new_binary("x")
-    >>> rule = model.add_constraint(x <= 1, "limit")
-    >>> rows = model.constraints
-    >>> cid = rule.constraint_id
-    >>> rows[cid].set_name("capacity")
-    >>> assert model.constraints[cid].name == "capacity"
-    >>> assert rows.get(ConstraintID(99)) is None
-    >>> assert rows.get(ConstraintID(99), "missing") == "missing"
-
-    **Typed keys and row ownership**
-
-    Mixed-family lookups require typed IDs, even though constraint numbers are
-    unique across all families in an Instance. Bare integers raise ``TypeError``;
-    a missing typed ID raises ``KeyError``. ``get(id)`` returns ``None`` for a
-    missing typed ID, or the supplied default in ``get(id, default)``. Indexing and
-    ``get`` preserve the concrete row type for a known concrete ID; the latter's
-    return type also includes the default's type. See {class}`~ommx.ConstraintIDBase`
-    for ID families, integer promotion, and the extension contract.
-
-    The collection cannot be changed by item assignment or deletion. Change the
-    model through its owner methods. Related collections use the same lookup and
-    iteration rules but have different row ownership:
-
-    | Collection | Included constraints | Returned rows |
-    | --- | --- | --- |
-    | {class}`~ommx.ConstraintCollection` | Active model constraints | Attached handles |
-    | {class}`~ommx.RemovedConstraintCollection` | Retained removed model constraints | Independent snapshots |
-    | {class}`~ommx.EvaluatedConstraintCollection` | Active and retained removed constraints in a Solution | Independent evaluated snapshots |
-    | {class}`~ommx.SampledConstraintCollection` | Active and retained removed constraints in a SampleSet | Independent sampled snapshots |
-
-    Attached handles compare equal when they refer to the same owner object and
-    typed ID. Handles from different owners are unequal even if the models contain
-    identical data. Removed and result snapshots compare their stored data, including
-    metadata and removal reasons. Mapping equality and membership in ``values()`` or
-    ``items()`` use those row equality rules.
-
-    **Live views and iteration**
-
-    ``keys()``, ``values()``, and ``items()`` are live views. ``iter(rows)`` snapshots
-    typed IDs immediately; iterators over the standard Python views snapshot them on
-    the first ``next()``. Within the currently supported families, IDs follow family
-    order (regular, indicator, one-hot, SOS1), then numeric order. Values are fetched
-    as they are visited. If a snapshotted key is removed before its value is fetched,
-    that access raises ``KeyError``.
-
-    >>> ids_before_addition = iter(rows)
-    >>> keys = rows.keys()
-    >>> added = model.add_constraint(x >= 0, "lower")
-    >>> assert list(ids_before_addition) == [cid]
-    >>> assert list(keys) == [cid, added.constraint_id]
-    >>> assert rows == dict(rows)
-
-    ``dict(rows)`` materializes a mapping at that time; its active model values are
-    still attached handles. To inspect just one family, use ``of_kind`` and
-    {class}`~ommx.ConstraintFamilyView`. To collect a table, use the owner's
-    ``constraints_df(kind=...)``. Its typed index matches the selected family's keys;
-    on models, ``removed=True`` includes both active and retained removed rows.
+    Live mapping of all retained constraints. IDs do not determine role.
     """
     def __len__(self) -> builtins.int: ...
     def __contains__(self, key: builtins.object) -> builtins.bool: ...
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
     def __iter__(self) -> typing.Iterator[ConstraintIDBase]:
         r"""
         Iterate a snapshot of typed IDs; constraint rows are not collected.
@@ -1909,94 +2062,13 @@ class ConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
     def __repr__(self) -> builtins.str: ...
     def __eq__(self, other: typing.Any) -> typing.Any: ...
     @typing.overload
-    def __getitem__(self, key: ConstraintID) -> AttachedConstraint:
-        r"""
-        Fetch the constraint identified by a typed ID from the current owner.
-        """
-    @typing.overload
-    def __getitem__(self, key: IndicatorConstraintID) -> AttachedIndicatorConstraint:
-        r"""
-        Fetch the constraint identified by a typed ID from the current owner.
-        """
-    @typing.overload
-    def __getitem__(self, key: OneHotConstraintID) -> AttachedOneHotConstraint:
-        r"""
-        Fetch the constraint identified by a typed ID from the current owner.
-        """
-    @typing.overload
-    def __getitem__(self, key: Sos1ConstraintID) -> AttachedSos1Constraint:
-        r"""
-        Fetch the constraint identified by a typed ID from the current owner.
-        """
-    @typing.overload
-    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
-    @typing.overload
-    def get(
-        self, key: ConstraintID, default: None = None
-    ) -> AttachedConstraint | None: ...
-    @typing.overload
-    def get(self, key: ConstraintID, default: _T) -> AttachedConstraint | _T: ...
-    @typing.overload
-    def get(
-        self, key: IndicatorConstraintID, default: None = None
-    ) -> AttachedIndicatorConstraint | None: ...
-    @typing.overload
-    def get(
-        self, key: IndicatorConstraintID, default: _T
-    ) -> AttachedIndicatorConstraint | _T: ...
-    @typing.overload
-    def get(
-        self, key: OneHotConstraintID, default: None = None
-    ) -> AttachedOneHotConstraint | None: ...
-    @typing.overload
-    def get(
-        self, key: OneHotConstraintID, default: _T
-    ) -> AttachedOneHotConstraint | _T: ...
-    @typing.overload
-    def get(
-        self, key: Sos1ConstraintID, default: None = None
-    ) -> AttachedSos1Constraint | None: ...
-    @typing.overload
-    def get(
-        self, key: Sos1ConstraintID, default: _T
-    ) -> AttachedSos1Constraint | _T: ...
-    @typing.overload
     def get(
         self, key: ConstraintIDBase, default: None = None
     ) -> ConstraintView | None: ...
     @typing.overload
     def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
     @typing.overload
-    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
-    @typing.overload
-    def of_kind(
-        self, kind: ConstraintKind[ConstraintID]
-    ) -> ConstraintFamilyView[ConstraintID, AttachedConstraint]:
-        r"""
-        Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
-        """
-    @typing.overload
-    def of_kind(
-        self, kind: ConstraintKind[IndicatorConstraintID]
-    ) -> ConstraintFamilyView[IndicatorConstraintID, AttachedIndicatorConstraint]:
-        r"""
-        Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
-        """
-    @typing.overload
-    def of_kind(
-        self, kind: ConstraintKind[OneHotConstraintID]
-    ) -> ConstraintFamilyView[OneHotConstraintID, AttachedOneHotConstraint]:
-        r"""
-        Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
-        """
-    @typing.overload
-    def of_kind(
-        self, kind: ConstraintKind[Sos1ConstraintID]
-    ) -> ConstraintFamilyView[Sos1ConstraintID, AttachedSos1Constraint]:
-        r"""
-        Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
-        """
-    @typing.overload
+    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...
     def of_kind(
         self, kind: ConstraintKind[_K]
     ) -> ConstraintFamilyView[_K, ConstraintView]: ...
@@ -2009,34 +2081,36 @@ class ConstraintFamilyView(typing.Mapping[_K, _V_co]):
     The selected family fixes the key type. Indexing, ``get``, and membership accept
     integers as well as that family's typed IDs; an ID of another family raises
     ``TypeError``. Iteration and dictionary keys retain typed IDs. A known
-    ``ConstraintKind`` constant selects the concrete key and row types for static type checking.
+    ``ConstraintKind`` constant fixes the key type. Filtered active/inactive and result
+    collections also preserve the concrete row type. The all-state model ``constraints``
+    view returns ``ConstraintView`` because a family ID does not encode role.
 
     >>> from ommx import ConstraintKind, ConstraintID, Instance
     >>> model = Instance.minimize()
     >>> x = model.new_binary("x")
     >>> rule = model.add_constraint(x <= 1, "limit")
-    >>> regular = model.constraints.of_kind(ConstraintKind.Regular)
+    >>> regular = model.active_constraints.of_kind(ConstraintKind.Regular)
     >>> assert rule.constraint_id == ConstraintID(0)
     >>> assert regular[0] == regular[ConstraintID(0)]
     >>> assert list(regular) == [ConstraintID(0)]
     >>> assert 0 in regular
     >>> assert regular.get(99) is None
     >>> regular[0].set_name("capacity")
-    >>> assert model.constraints[ConstraintID(0)].name == "capacity"
+    >>> assert model.active_constraints[ConstraintID(0)].name == "capacity"
 
     Pass a {class}`~ommx.ConstraintKind` selector, as in ``constraints_df(kind=...)``.
     A string such as ``"sos1"`` raises ``TypeError``. See
     {class}`~ommx.EvaluatedConstraintCollection` for the current ID and result-type table.
 
     The view retains its owner without collecting rows. It follows the row ownership,
-    equality, and iterator snapshot rules of {class}`~ommx.ConstraintCollection`:
-    active model rows are attached handles, while removed and result rows are
+    equality, and iterator snapshot rules of {class}`~ommx.ActiveConstraintCollection`:
+    active model rows are attached handles, while inactive and result rows are
     independent snapshots. This applies to Instance and ParametricInstance active
-    and removed collections, and to Solution and SampleSet result collections.
+    and inactive collections, and to Solution and SampleSet result collections.
 
     Filtering is an inspection operation. Selecting one family does not establish
-    that a solver or transformation supports every constraint in the model. A
-    consumer must inspect all constraints and reject unsupported families; see
+    that a solver or transformation supports the complete Active Formulation. Such
+    consumers must inspect all active constraints and reject unsupported families; see
     {class}`~ommx.ConstraintIDBase`.
     """
     def __len__(self) -> builtins.int:
@@ -2121,10 +2195,10 @@ class ConstraintIDBase:
     {class}`~ommx.Sos1ConstraintID`. An ID carries its family and an unsigned
     64-bit number. IDs from different families are unequal, even if their
     numbers coincide. Within one Instance, constraint numbers must still be
-    unique across all active and removed families.
+    unique across all active and inactive families.
 
     APIs whose argument already fixes a family promote integer inputs to that
-    family's ID: for example, ``constraints={1: constraint}`` in
+    family's ID: for example, ``active_constraints={1: constraint}`` in
     {meth}`~ommx.Instance.from_components`, or
     ``instance.constraints.of_kind(ConstraintKind.Regular)[1]``. They reject IDs of another
     family. Such mapping inputs reject ``1`` and ``ConstraintID(1)`` together
@@ -2152,35 +2226,47 @@ class ConstraintIDBase:
     **Supporting additional families**
 
     New special-constraint families are additive API extensions. Collections,
-    including removed and result collections, expose the open common interfaces
-    ``Mapping[ConstraintIDBase, ConstraintView]``; their known concrete ID
-    overloads retain precise row types. The currently supported families are
+    including inactive and result collections, expose the open common interfaces
+    ``Mapping[ConstraintIDBase, ConstraintView]``. Filtered active/inactive and
+    evaluated/sampled mappings retain precise row overloads for known ID families.
+    Model ``constraints`` combines active and inactive rows, so even concrete IDs
+    return the common ``ConstraintView`` type; role must be checked at runtime. The currently supported families are
     not an exhaustive list of future possibilities.
 
-    A solver adapter or transformation must reject families it cannot handle.
-    Silently skipping their constraints can relax the optimization problem.
+    A solver adapter or transformation must reject active constraint families it
+    cannot handle. Silently skipping their constraints can relax the optimization
+    problem. Inactive constraints belong to the retained interpretation context
+    and are not part of the Active Formulation consumed here.
     Keep this check even if an earlier applicability check normally excludes
     unsupported kinds. For example, a consumer requiring regular rows can
-    validate the complete collection before processing it:
+    validate the complete active collection before processing it:
 
     >>> from ommx import ConstraintKind, ConstraintID, Instance, OneHotConstraint
     >>> def regular_rows(model):
     ...     rows = []
-    ...     for cid in model.constraints:
+    ...     for cid in model.active_constraints:
     ...         if not isinstance(cid, ConstraintID):
     ...             raise NotImplementedError("Unsupported constraint family")
-    ...         rows.append(model.constraints[cid])
+    ...         rows.append(model.active_constraints[cid])
     ...     return rows
     >>> model = Instance.minimize()
     >>> x = model.new_binary("x")
     >>> y = model.new_binary("y")
     >>> rule = model.add_constraint(x + y <= 1)
     >>> assert regular_rows(model) == [rule]
-    >>> _ = model.add_one_hot_constraint(OneHotConstraint(variables=[x, y]))
+    >>> special = model.add_one_hot_constraint(OneHotConstraint(variables=[x, y]))
+    >>> special_id = special.constraint_id
     >>> regular_rows(model)
     Traceback (most recent call last):
     ...
     NotImplementedError: Unsupported constraint family
+
+    After lowering, the original one-hot constraint remains inactive for
+    evaluation. The consumer accepts the generated active regular constraint:
+
+    >>> converted = model.convert_all_one_hots_to_constraints()
+    >>> assert special_id in model.inactive_constraints
+    >>> assert [row.constraint_id for row in regular_rows(model)] == [rule.constraint_id, *converted]
 
     Handle additional concrete ID types explicitly when supported and retain
     the rejecting fallback. Receiving a new family in an older consumer should
@@ -2207,6 +2293,34 @@ class ConstraintKind(typing.Generic[_C_co]):
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
+@typing.final
+class ConstraintRole:
+    r"""
+    A constraint's role in evaluation, feasibility, and the Active Formulation.
+
+    EVALUATION_ONLY < FEASIBILITY_CHECK < ACTIVE. A min_role query
+    includes rows whose role is at least the requested value.
+    EVALUATION_ONLY rows are evaluated without affecting normal feasibility;
+    FEASIBILITY_CHECK rows also participate in that judgment; ACTIVE rows
+    additionally belong to the Active Formulation. The first two roles are
+    inactive. skip_feasibility_check selects between them.
+    Roles describe participation, not whether evaluation has already occurred.
+    """
+
+    EVALUATION_ONLY: ConstraintRole
+    FEASIBILITY_CHECK: ConstraintRole
+    ACTIVE: ConstraintRole
+    def __lt__(self, other: ConstraintRole) -> builtins.bool: ...
+    def __le__(self, other: ConstraintRole) -> builtins.bool: ...
+    def __gt__(self, other: ConstraintRole) -> builtins.bool: ...
+    def __ge__(self, other: ConstraintRole) -> builtins.bool: ...
+    def __hash__(self) -> builtins.int: ...
+    def __int__(self) -> builtins.int: ...
+    def __eq__(self, other: builtins.object) -> builtins.bool: ...
+    def __ne__(self, other: builtins.object) -> builtins.bool: ...
+    def __repr__(self) -> builtins.str: ...
+    def __reduce__(self) -> tuple[typing.Any, tuple[type, builtins.str]]: ...
+
 class ConstraintView:
     r"""
     Common metadata interface for rows fetched from constraint collections.
@@ -2215,9 +2329,14 @@ class ConstraintView:
     row type before using family-specific mathematical operations, and reject
     unsupported families rather than dropping their constraints. This interface
     does not imply whether the row is attached or an owned result snapshot.
-    See {class}`~ommx.ConstraintCollection` for the ownership and iteration
+    See {class}`~ommx.ActiveConstraintCollection` for the ownership and iteration
     contracts and {class}`~ommx.ConstraintIDBase` for explicit family dispatch.
     """
+    @property
+    def role(self) -> ConstraintRole:
+        r"""
+        The row's current participation state, independent of its family.
+        """
     @property
     def name(self) -> typing.Optional[builtins.str]: ...
     @property
@@ -2547,6 +2666,8 @@ class EvaluatedConstraint(ConstraintView):
         Get the used decision variable IDs
         """
     @property
+    def role(self) -> ConstraintRole: ...
+    @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
         Modeling name, if supplied.
@@ -2572,14 +2693,14 @@ class EvaluatedConstraint(ConstraintView):
         Transformation lineage, preserving the source constraint family.
         """
     @property
-    def removed_reason(self) -> typing.Optional[builtins.str]:
+    def inactive_reason(self) -> typing.Optional[builtins.str]:
         r"""
-        Reason this constraint was removed before evaluation, or None.
+        Reason this constraint was deactivated before evaluation, or None.
         """
     @property
-    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+    def inactive_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
-        Parameters of the removal reason; empty for an active constraint.
+        Parameters of the inactivation reason; empty for an active constraint.
         """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def is_feasible(self, *, atol: builtins.float) -> builtins.bool:
@@ -2604,11 +2725,11 @@ class EvaluatedConstraint(ConstraintView):
 @typing.final
 class EvaluatedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
     r"""
-    Live mapping of a Solution's constraint results, including retained removed rows.
+    Live mapping of a Solution's constraint results, including retained inactive rows.
 
     Obtained from {attr}`~ommx.Solution.constraints`. The collection keeps its
     Solution alive and fetches each row on access. Each row is an independent
-    snapshot containing labels, provenance, removal reasons, and evaluation
+    snapshot containing labels, provenance, inactivation reasons, and evaluation
     diagnostics. Editing a fetched snapshot does not update the Solution. Use an
     owner method such as {meth}`~ommx.Solution.set_dual_variable` to update the result;
     subsequent collection access observes that update.
@@ -2618,11 +2739,11 @@ class EvaluatedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintV
     >>> x = model.new_binary("x")
     >>> upper = model.add_constraint(x <= 1, "upper")
     >>> lower = model.add_constraint(x >= 0, "lower")
-    >>> model.relax_constraint(lower.constraint_id, "inspect later")
+    >>> model.deactivate_constraint(lower.constraint_id, "inspect later")
     >>> solution = model.evaluate({x.id: 0})
     >>> rows = solution.constraints
     >>> assert lower.constraint_id in rows
-    >>> assert rows[lower.constraint_id].removed_reason == "inspect later"
+    >>> assert rows[lower.constraint_id].inactive_reason == "inspect later"
     >>> snapshot = rows[upper.constraint_id]
     >>> solution.set_dual_variable(upper.constraint_id, 3.0)
     >>> assert snapshot.dual_variable is None
@@ -2645,12 +2766,12 @@ class EvaluatedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintV
     | ``ConstraintKind.Sos1`` | {class}`~ommx.Sos1ConstraintID` | {class}`~ommx.EvaluatedSos1Constraint` | {class}`~ommx.SampledSos1Constraint` |
 
     For the mixed-family typed-key contract, ``get``, live views, iteration timing,
-    and snapshot equality, see {class}`~ommx.ConstraintCollection`. Filter without
+    and snapshot equality, see {class}`~ommx.ActiveConstraintCollection`. Filter without
     collecting rows using ``of_kind`` and {class}`~ommx.ConstraintFamilyView`.
     {meth}`~ommx.Solution.constraints_df` collects one family as a DataFrame;
-    retained removed constraints remain included. Its ``kind`` argument is required,
+    retained inactive constraints remain included. Its ``kind`` argument is required,
     as it is for ``constraint_context_df``, ``constraint_parameters_df``,
-    ``constraint_provenance_df``, and ``constraint_removed_reasons_df`` on all owners.
+    ``constraint_provenance_df``, and ``constraint_inactive_reasons_df`` on all owners.
 
     For multiple candidates, {class}`~ommx.SampledConstraintCollection` returns
     sampled rows. Their ``violations`` and ``feasible(atol=...)`` are keyed by sample
@@ -2829,6 +2950,8 @@ class EvaluatedIndicatorConstraint(ConstraintView):
     An owned evaluated indicator result. Fetched by typed ID from the owning result's constraints collection.
     """
     @property
+    def role(self) -> ConstraintRole: ...
+    @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
         Modeling name, if supplied.
@@ -2854,14 +2977,14 @@ class EvaluatedIndicatorConstraint(ConstraintView):
         Transformation lineage, preserving the source constraint family.
         """
     @property
-    def removed_reason(self) -> typing.Optional[builtins.str]:
+    def inactive_reason(self) -> typing.Optional[builtins.str]:
         r"""
-        Reason this constraint was removed before evaluation, or None.
+        Reason this constraint was deactivated before evaluation, or None.
         """
     @property
-    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+    def inactive_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
-        Parameters of the removal reason; empty for an active constraint.
+        Parameters of the inactivation reason; empty for an active constraint.
         """
     @property
     def activation_atol(self) -> builtins.float:
@@ -2876,12 +2999,12 @@ class EvaluatedIndicatorConstraint(ConstraintView):
     @property
     def indicator_variable_id(self) -> builtins.int:
         r"""
-        Decision variable that activates this constraint.
+        Binary decision variable controlling when the body is enforced.
         """
     @property
-    def activate_on_zero(self) -> builtins.bool:
+    def trigger_value(self) -> builtins.int:
         r"""
-        Whether zero activates the body instead of one.
+        Binary value (0 or 1) at which the body is enforced.
         """
     @property
     def equality(self) -> Equality:
@@ -2894,9 +3017,9 @@ class EvaluatedIndicatorConstraint(ConstraintView):
         Inner residual at the evaluated state.
         """
     @property
-    def indicator_active(self) -> builtins.bool:
+    def indicator_on(self) -> builtins.bool:
         r"""
-        Whether the indicator was active at evaluation time.
+        Whether the indicator was ON at evaluation time, independently of role.
         """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def violation(self) -> builtins.float:
@@ -2940,6 +3063,8 @@ class EvaluatedOneHotConstraint(ConstraintView):
     An owned evaluated one-hot result. Fetched by typed ID from the owning result's constraints collection.
     """
     @property
+    def role(self) -> ConstraintRole: ...
+    @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
         Modeling name, if supplied.
@@ -2965,14 +3090,14 @@ class EvaluatedOneHotConstraint(ConstraintView):
         Transformation lineage, preserving the source constraint family.
         """
     @property
-    def removed_reason(self) -> typing.Optional[builtins.str]:
+    def inactive_reason(self) -> typing.Optional[builtins.str]:
         r"""
-        Reason this constraint was removed before evaluation, or None.
+        Reason this constraint was deactivated before evaluation, or None.
         """
     @property
-    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+    def inactive_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
-        Parameters of the removal reason; empty for an active constraint.
+        Parameters of the inactivation reason; empty for an active constraint.
         """
     @property
     def activation_atol(self) -> builtins.float:
@@ -2990,7 +3115,7 @@ class EvaluatedOneHotConstraint(ConstraintView):
         Member decision variable IDs.
         """
     @property
-    def active_variable(self) -> typing.Optional[builtins.int]:
+    def selected_variable(self) -> typing.Optional[builtins.int]:
         r"""
         Retained selected-variable diagnostic, using activation_atol.
         """
@@ -3010,6 +3135,8 @@ class EvaluatedSos1Constraint(ConstraintView):
     An owned evaluated SOS1 result. Fetched by typed ID from the owning result's constraints collection.
     """
     @property
+    def role(self) -> ConstraintRole: ...
+    @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
         Modeling name, if supplied.
@@ -3035,14 +3162,14 @@ class EvaluatedSos1Constraint(ConstraintView):
         Transformation lineage, preserving the source constraint family.
         """
     @property
-    def removed_reason(self) -> typing.Optional[builtins.str]:
+    def inactive_reason(self) -> typing.Optional[builtins.str]:
         r"""
-        Reason this constraint was removed before evaluation, or None.
+        Reason this constraint was deactivated before evaluation, or None.
         """
     @property
-    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+    def inactive_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
-        Parameters of the removal reason; empty for an active constraint.
+        Parameters of the inactivation reason; empty for an active constraint.
         """
     @property
     def activation_atol(self) -> builtins.float:
@@ -3060,7 +3187,7 @@ class EvaluatedSos1Constraint(ConstraintView):
         Member decision variable IDs.
         """
     @property
-    def active_variable(self) -> typing.Optional[builtins.int]:
+    def selected_variable(self) -> typing.Optional[builtins.int]:
         r"""
         Retained selected-variable diagnostic, using activation_atol.
         """
@@ -3965,7 +4092,7 @@ class FixedPenaltyPreparation:
     one-sided penalty $\max(0, g_i(x))^2$.
 
     On success, every active regular constraint moves to
-    {attr}`~ommx.Instance.removed_constraints`, while existing removed
+    {attr}`~ommx.Instance.inactive_constraints`, while existing inactive
     constraints are preserved. When at least one active regular constraint is
     converted, the entry output semantics are preserved in
     {attr}`~ommx.Instance.output_objective` for solution and sample evaluation
@@ -3993,7 +4120,7 @@ class FixedPenaltyPreparation:
         ``atol`` is used by the owner operation to accept a penalty magnitude
         down to ``-atol`` and normalize a tolerated negative value to zero. Every
         weight must be finite.
-        Removed constraints record
+        Inactive constraints record
         ``reason="ommx.Instance.penalty_method_with_fixed_weights"`` with no
         reason parameters.
         """
@@ -4015,7 +4142,7 @@ class FixedPenaltyPreparation:
         `-atol` and normalize a tolerated negative value to zero. When at least one active
         regular constraint is converted, the weight must be finite. With no active
         constraint of any family, the owner operation is an identity and does not inspect
-        the weight. Removed constraints record
+        the weight. Inactive constraints record
         `reason="ommx.Instance.uniform_penalty_method_with_fixed_weight"` with no reason
         parameters. The class documentation defines atomicity, retained output semantics,
         and rejection of active special constraints.
@@ -4723,22 +4850,367 @@ class GcRoot:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class InactiveConstraint(ConstraintView):
+    r"""
+    InactiveConstraint wrapper for Python.
+
+    Holds the inner `Constraint`, a snapshot of its context, and the inactivation
+    reason. As with [`Constraint`], the context snapshot does not propagate
+    back to the originating instance — it is read-only context for inspection.
+    """
+    @property
+    def constraint(self) -> Constraint: ...
+    @property
+    def role(self) -> ConstraintRole: ...
+    @property
+    def skip_feasibility_check(self) -> builtins.bool: ...
+    @property
+    def inactive_reason(self) -> builtins.str: ...
+    @property
+    def inactive_reason_parameters(
+        self,
+    ) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def equality(self) -> Equality:
+        r"""
+        Get the equality type from the underlying constraint
+        """
+    @property
+    def function(self) -> Function:
+        r"""
+        Get the function from the underlying constraint
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Get the description from the underlying constraint
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Get the subscripts from the underlying constraint
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Get the parameters from the underlying constraint
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Get the provenance chain from the underlying constraint.
+
+        See {attr}`~ommx.Constraint.provenance` for semantics.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls,
+        constraint: Constraint,
+        inactive_reason: builtins.str,
+        inactive_reason_parameters: typing.Optional[
+            typing.Mapping[builtins.str, builtins.str]
+        ] = None,
+        *,
+        skip_feasibility_check: builtins.bool = False,
+    ) -> InactiveConstraint: ...
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> InactiveConstraint: ...
+    def __deepcopy__(self, _memo: typing.Any) -> InactiveConstraint: ...
+
+@typing.final
+class InactiveConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
+    r"""
+    Live mapping of all inactive constraint families in a model.
+
+    Obtained from {attr}`~ommx.Instance.inactive_constraints` or
+    {attr}`~ommx.ParametricInstance.inactive_constraints`. Each access returns an
+    independent snapshot, including labels, provenance, and inactivity reasons.
+    Changing that snapshot does not update its owner; a later lookup reads the
+    owner's current state.
+
+    Both `ConstraintRole.FEASIBILITY_CHECK` and
+    `ConstraintRole.EVALUATION_ONLY` belong to this collection. Both are
+    excluded from the active formulation and still evaluated numerically.
+    Deactivation can follow relaxation, an equivalent
+    lowering, or another transformation; the collection's presence does not identify
+    which guarantee holds. See {attr}`~ommx.Instance.inactive_constraints` for their
+    evaluation semantics and {meth}`~ommx.Instance.deactivate_constraint` for a complete
+    relax, inspect, evaluate, and restore example.
+
+    The collection keeps its owner alive. The typed-key, ``get``, live-view,
+    iteration, and snapshot equality rules are documented in
+    {class}`~ommx.ActiveConstraintCollection`. Use ``of_kind`` and
+    {class}`~ommx.ConstraintFamilyView` to inspect one family. A model's
+    ``constraints_df(kind=..., min_role=ConstraintRole.EVALUATION_ONLY)`` includes both active and inactive rows.
+    """
+    def __len__(self) -> builtins.int: ...
+    def __contains__(self, key: builtins.object) -> builtins.bool: ...
+    def __iter__(self) -> typing.Iterator[ConstraintIDBase]:
+        r"""
+        Iterate a snapshot of typed IDs; constraint rows are not collected.
+        """
+    def keys(self) -> typing.KeysView[ConstraintIDBase]:
+        r"""
+        Live key view. Iteration order is family order, then numeric ID.
+        """
+    def values(self) -> typing.ValuesView[ConstraintView]:
+        r"""
+        Live value view; each row is fetched when visited.
+        """
+    def items(self) -> typing.ItemsView[ConstraintIDBase, ConstraintView]:
+        r"""
+        Live item view; each row is fetched when visited.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __eq__(self, other: typing.Any) -> typing.Any: ...
+    @typing.overload
+    def __getitem__(self, key: ConstraintID) -> InactiveConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: IndicatorConstraintID) -> InactiveIndicatorConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: OneHotConstraintID) -> InactiveOneHotConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: Sos1ConstraintID) -> InactiveSos1Constraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintID, default: None = None
+    ) -> InactiveConstraint | None: ...
+    @typing.overload
+    def get(self, key: ConstraintID, default: _T) -> InactiveConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: None = None
+    ) -> InactiveIndicatorConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: _T
+    ) -> InactiveIndicatorConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: None = None
+    ) -> InactiveOneHotConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: _T
+    ) -> InactiveOneHotConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: None = None
+    ) -> InactiveSos1Constraint | None: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: _T
+    ) -> InactiveSos1Constraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintIDBase, default: None = None
+    ) -> ConstraintView | None: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    @typing.overload
+    def of_kind(
+        self, kind: ConstraintKind[ConstraintID]
+    ) -> ConstraintFamilyView[ConstraintID, InactiveConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: ConstraintKind[IndicatorConstraintID]
+    ) -> ConstraintFamilyView[IndicatorConstraintID, InactiveIndicatorConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: ConstraintKind[OneHotConstraintID]
+    ) -> ConstraintFamilyView[OneHotConstraintID, InactiveOneHotConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: ConstraintKind[Sos1ConstraintID]
+    ) -> ConstraintFamilyView[Sos1ConstraintID, InactiveSos1Constraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: ConstraintKind[_K]
+    ) -> ConstraintFamilyView[_K, ConstraintView]: ...
+
+@typing.final
+class InactiveIndicatorConstraint(ConstraintView):
+    r"""
+    An inactive indicator constraint together with the reason it was deactivated.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def provenance(self) -> builtins.list[Provenance]: ...
+    @property
+    def constraint(self) -> IndicatorConstraint: ...
+    @property
+    def indicator_variable_id(self) -> builtins.int: ...
+    @property
+    def trigger_value(self) -> builtins.int:
+        r"""
+        Binary value (0 or 1) at which the body is enforced.
+        """
+    @property
+    def equality(self) -> Equality: ...
+    @property
+    def function(self) -> Function: ...
+    @property
+    def role(self) -> ConstraintRole: ...
+    @property
+    def skip_feasibility_check(self) -> builtins.bool: ...
+    @property
+    def inactive_reason(self) -> builtins.str: ...
+    @property
+    def inactive_reason_parameters(
+        self,
+    ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls,
+        constraint: IndicatorConstraint,
+        inactive_reason: builtins.str,
+        inactive_reason_parameters: typing.Optional[
+            typing.Mapping[builtins.str, builtins.str]
+        ] = None,
+        *,
+        skip_feasibility_check: builtins.bool = False,
+    ) -> InactiveIndicatorConstraint: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class InactiveOneHotConstraint(ConstraintView):
+    r"""
+    An inactive one-hot constraint together with the reason it was deactivated.
+    """
+    @property
+    def constraint(self) -> OneHotConstraint: ...
+    @property
+    def variables(self) -> builtins.list[builtins.int]: ...
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def provenance(self) -> builtins.list[Provenance]: ...
+    @property
+    def role(self) -> ConstraintRole: ...
+    @property
+    def skip_feasibility_check(self) -> builtins.bool: ...
+    @property
+    def inactive_reason(self) -> builtins.str: ...
+    @property
+    def inactive_reason_parameters(
+        self,
+    ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls,
+        constraint: OneHotConstraint,
+        inactive_reason: builtins.str,
+        inactive_reason_parameters: typing.Optional[
+            typing.Mapping[builtins.str, builtins.str]
+        ] = None,
+        *,
+        skip_feasibility_check: builtins.bool = False,
+    ) -> InactiveOneHotConstraint: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class InactiveSos1Constraint(ConstraintView):
+    r"""
+    An inactive SOS1 constraint together with the reason it was deactivated.
+    """
+    @property
+    def constraint(self) -> Sos1Constraint: ...
+    @property
+    def variables(self) -> builtins.list[builtins.int]: ...
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def provenance(self) -> builtins.list[Provenance]: ...
+    @property
+    def role(self) -> ConstraintRole: ...
+    @property
+    def skip_feasibility_check(self) -> builtins.bool: ...
+    @property
+    def inactive_reason(self) -> builtins.str: ...
+    @property
+    def inactive_reason_parameters(
+        self,
+    ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls,
+        constraint: Sos1Constraint,
+        inactive_reason: builtins.str,
+        inactive_reason_parameters: typing.Optional[
+            typing.Mapping[builtins.str, builtins.str]
+        ] = None,
+        *,
+        skip_feasibility_check: builtins.bool = False,
+    ) -> InactiveSos1Constraint: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class IndicatorConstraint:
     r"""
-    A condition enforced when a controlling Binary variable equals its activation value.
+    A condition enforced when a controlling Binary variable equals its trigger value.
 
     For a Binary variable $z$, an Indicator requires $f(x)\leq0$ or $f(x)=0$
-    when $z=1$ by default. With `activate_on_zero=True`, it is enforced when $z=0$.
+    when $z=1$ by default. With `trigger_value=0`, it is enforced when $z=0$.
+    Only 0 and 1 are valid trigger values.
     At the other binary value, the Indicator is satisfied regardless of the body's
     value; variable domains and other constraints still apply. This is a one-way
-    implication: a satisfied body does not force the trigger to its activation value.
+    implication: a satisfied body does not force the variable to its trigger value.
 
     Construct one from a regular constraint with {meth}`~ommx.Constraint.with_indicator`,
     or pass `indicator_variable`, `function`, and `equality` to this class.
     The controlling variable accepts a variable ID, a standalone
     {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.
     These accepted forms are exposed as the `VariableIDLike` type alias.
-    Its ID and activation condition are stored. The enclosing Instance validates that the referenced
+    Its ID and trigger value are stored. The enclosing Instance validates that the referenced
     variables exist and that the controlling variable is Binary when inserting it.
 
     **Construct and evaluate a conditional limit**
@@ -4753,6 +5225,7 @@ class IndicatorConstraint:
     >>> instance.objective = amount
     >>> condition = (amount <= 5).with_indicator(enabled)
     >>> assert condition.indicator_variable_id == enabled.id
+    >>> assert condition.trigger_value == 1
     >>> assert condition.equality == Equality.LessThanOrEqualToZero
     >>> attached = instance.add_indicator_constraint(condition)
     >>> cid = attached.constraint_id
@@ -4761,44 +5234,47 @@ class IndicatorConstraint:
     >>> on = instance.evaluate({enabled.id: 1, amount.id: 5})
     >>> violated = instance.evaluate({enabled.id: 1, amount.id: 6})
     >>> assert off.feasible and on.feasible and not violated.feasible
-    >>> assert not off.constraints_df(kind=ConstraintKind.Indicator).loc[
-    ...     cid, "indicator_active"
-    ... ]
-    >>> assert on.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_active"]
+    >>> assert not off.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_on"]
+    >>> assert on.constraints_df(kind=ConstraintKind.Indicator).loc[cid, "indicator_on"]
 
     ```
 
-    Pass `activate_on_zero=True` to enforce the body when the trigger is zero:
+    Pass `trigger_value=0` to enforce the body when the controlling variable is zero:
 
     ```pycon
-    >>> disabled_limit = (amount <= 5).with_indicator(enabled, activate_on_zero=True)
-    >>> assert disabled_limit.activate_on_zero
+    >>> disabled_limit = (amount <= 5).with_indicator(enabled, trigger_value=0)
+    >>> assert disabled_limit.trigger_value == 0
 
     ```
 
-    The constructor accepts the same keyword. Attached, removed, evaluated, and
-    sampled rows expose `activate_on_zero`; Indicator DataFrames retain it as a
-    column. It describes the constraint, independently of whether a particular
-    candidate activates it.
+    The constructor accepts the same keyword. Attached, inactive, evaluated, and
+    sampled rows expose the integer `trigger_value`; Indicator DataFrames retain it
+    as a column. This is the constraint's configuration, independently of its ON/OFF
+    state at a particular candidate.
 
-    The `indicator_active` column distinguishes an inactive condition from an active
-    condition whose body is satisfied. Indicator results do not have a dual variable.
+    The `indicator_on` column records whether the controlling variable equals its
+    trigger value, using the evaluation tolerance. It distinguishes an OFF
+    Indicator from an ON Indicator whose body is satisfied. This is independent of
+    `role`, which records whether the constraint belongs to the current
+    formulation and its default feasibility participation. An active constraint can
+    have its Indicator OFF; an inactive constraint can have its Indicator ON.
+    Indicator results do not have a dual variable.
     See {meth}`~ommx.Solution.constraints_df` for the precise columns and violation
     semantics, and {meth}`~ommx.Instance.evaluate` for numerical tolerances and invalid
-    activation values.
+    controlling-variable values.
 
     **Identity, transformation, and solver use**
 
     {meth}`~ommx.Instance.add_indicator_constraint` returns an attached handle. The
     constructor above creates an independent value; context changes on it do not
     edit a constraint already inserted into a host. Alternatively, provide explicit
-    IDs through the `indicator_constraints` mapping of
+    IDs through the `active_indicator_constraints` mapping of
     {meth}`~ommx.Instance.from_components`. Constraint numbers must be distinct
-    across all active and removed families, as described by {class}`~ommx.Instance`.
+    across all active and inactive families, as described by {class}`~ommx.Instance`.
 
-    {meth}`~ommx.Instance.relax_indicator_constraint` moves a condition out of the
+    {meth}`~ommx.Instance.deactivate_indicator_constraint` moves a condition out of the
     active formulation while retaining it for evaluation.
-    {meth}`~ommx.Instance.restore_indicator_constraint` makes it active again, subject
+    {meth}`~ommx.Instance.activate_indicator_constraint` makes it active again, subject
     to the current variable dependencies and fixed values.
 
     A backend may receive this structure directly or require regular constraints.
@@ -4810,9 +5286,9 @@ class IndicatorConstraint:
     @property
     def indicator_variable_id(self) -> builtins.int: ...
     @property
-    def activate_on_zero(self) -> builtins.bool:
+    def trigger_value(self) -> builtins.int:
         r"""
-        Whether zero activates the body instead of one.
+        Binary value (0 or 1) at which the body is enforced.
         """
     @property
     def function(self) -> Function: ...
@@ -4832,7 +5308,7 @@ class IndicatorConstraint:
         indicator_variable: VariableIDLike,
         function: ToFunction,
         equality: Equality,
-        activate_on_zero: builtins.bool = False,
+        trigger_value: builtins.int = 1,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
@@ -4842,14 +5318,14 @@ class IndicatorConstraint:
         Create a new indicator constraint.
 
         By default, `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).
-        Set `activate_on_zero=True` to activate the body at zero instead.
+        Set `trigger_value=0` to enforce the body at zero instead.
 
         **Args:**
 
         - `indicator_variable`: A variable ID or decision-variable object that
-          activates this constraint. Only its ID is stored; the enclosing host
+          controls this constraint. Only its ID is stored; the enclosing host
           requires the referenced variable to be binary when the constraint is inserted.
-        - `activate_on_zero`: If true, activate at zero instead of one (default false).
+        - `trigger_value`: Binary value (0 or 1) at which the body is enforced (default 1).
         - `function`: The constraint function
         - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
         - `name`: Optional name for the constraint
@@ -4943,9 +5419,9 @@ class Instance:
 
     - {attr}`~ommx.Instance.objective` and {attr}`~ommx.Instance.sense` define
       what is minimized or maximized.
-    - {attr}`~ommx.Instance.used_decision_variables` supplies the variables and
+    - {attr}`~ommx.Instance.active_decision_variables` supplies the variables and
       their domains.
-    - {attr}`~ommx.Instance.constraints` supplies all active regular and special
+    - {attr}`~ommx.Instance.active_constraints` supplies all active regular and special
       constraints.
 
     Regular constraints have the form ``f(x) == 0`` or ``f(x) <= 0``;
@@ -4959,7 +5435,7 @@ class Instance:
 
     **Interpretation Context** is the information retained to recover variable
     values and evaluate or explain results in terms of the user's input. It includes
-    fixed values, decision-variable dependencies, {attr}`~ommx.Instance.removed_constraints`,
+    fixed values, decision-variable dependencies, {attr}`~ommx.Instance.inactive_constraints`,
     an {attr}`~ommx.Instance.output_objective`, {class}`~ommx.NamedFunction` expressions,
     and relevant modeling labels and transformation provenance.
 
@@ -4968,7 +5444,7 @@ class Instance:
     definition can serve both roles. Interpretation Context need not contain an
     independent, complete copy of the original problem.
 
-    **Implementation contract:** {attr}`~ommx.Instance.used_decision_variables`
+    **Implementation contract:** {attr}`~ommx.Instance.active_decision_variables`
     must contain exactly the variables referenced by the active objective and
     every active constraint family, including structural uses such as an
     Indicator's controlling variable. {meth}`~ommx.Instance.required_ids` returns
@@ -4976,8 +5452,9 @@ class Instance:
     not contribute to this set. Maintaining this correspondence is the
     responsibility of the Instance implementation: construction, successful
     mutations and transformations, and extensions with new constraint families
-    must preserve it. Solver adapters may rely on this contract when creating
-    backend variables.
+    must preserve it. Adapters use `active_decision_variables` and `active_constraints`
+    as the variables and constraints of this formulation. The Instance derives the
+    active variable set; adapters do not need to collect variable references themselves.
 
     **Transformation principle**
 
@@ -4989,7 +5466,7 @@ class Instance:
       the expressions needed to reconstruct the encoded values. Named functions
       keep their original expressions and use those reconstructed values.
     - {meth}`~ommx.Instance.partial_evaluate` fixes variables and simplifies active
-      expressions. Named functions and existing removed constraints retain their
+      expressions. Named functions and existing inactive constraints retain their
       expressions and use the saved fixed values during evaluation.
     - {meth}`~ommx.Instance.lower_special_constraints` retains source constraints
       and records the provenance of generated constraints.
@@ -5002,7 +5479,7 @@ class Instance:
     An expression being evaluable by OMMX does not by itself make it a target of an
     Active Formulation rewrite. Interpretation Context can nevertheless require
     updates: {meth}`~ommx.ParametricInstance.with_parameters` specializes
-    parameter-bearing expressions in both roles, including removed constraints,
+    parameter-bearing expressions in both roles, including inactive constraints,
     output objectives, named functions, and dependency expressions.
 
     Operations that explicitly change the user's problem or output semantics have
@@ -5064,7 +5541,7 @@ class Instance:
     >>> assembled = Instance.from_components(
     ...     decision_variables=[a],
     ...     objective=a,
-    ...     constraints={7: a <= 1},
+    ...     active_constraints={7: a <= 1},
     ...     sense=Sense.Maximize,
     ... )
     >>> assert ConstraintID(7) in assembled.constraints
@@ -5116,11 +5593,11 @@ class Instance:
     **Constraint identity and access**
 
     Constraint numbers are unique across all families in one Instance,
-    including removed constraints. Their numbering is separate from variable
+    including inactive constraints. Their numbering is separate from variable
     IDs. Supply distinct numbers across the regular and special-constraint
     mappings passed to {meth}`~ommx.Instance.from_components`.
     The Instance allocates new constraint numbers above the maximum across all
-    active and removed families. Lowering and promotion allocate fresh numbers
+    active and inactive families. Lowering and promotion allocate fresh numbers
     for generated constraints while retained originals keep their IDs.
     {class}`~ommx.ParametricInstance` follows the same rule, and evaluation
     preserves those IDs in {class}`~ommx.Solution` and {class}`~ommx.SampleSet`.
@@ -5128,13 +5605,14 @@ class Instance:
     automatic renumbering, including data from earlier v3 beta versions that
     used separate number spaces.
 
-    {attr}`~ommx.Instance.constraints` is a live collection of all active
-    families. A typed ID identifies both the family and the number. Bare
-    integers are rejected by this heterogeneous collection even though
-    constraint numbers are globally unique within the Instance. Obtaining
+    {attr}`~ommx.Instance.constraints` is a live collection of all constraint
+    families and roles. A typed ID identifies the family and the number,
+    but not role. Bare integers are rejected by this heterogeneous collection
+    even though constraint numbers are globally unique within the Instance. Obtaining
     the collection does not collect rows; each row is fetched when accessed.
-    {attr}`~ommx.Instance.removed_constraints` exposes retained constraints
-    that are no longer active.
+    {attr}`~ommx.Instance.active_constraints` exposes active attached handles;
+    {attr}`~ommx.Instance.inactive_constraints` exposes snapshots of retained
+    inactive constraints.
 
     ```pycon
     >>> from ommx import ConstraintKind, ConstraintID, Instance
@@ -5149,7 +5627,8 @@ class Instance:
 
     Use {meth}`~ommx.Instance.constraints_df` with an explicit ``kind``, such
     as ``kind=ConstraintKind.Regular``, to collect one family into a DataFrame. Collection
-    lookup and iteration contracts belong to {class}`~ommx.ConstraintCollection`.
+    lookup and iteration contracts belong to {class}`~ommx.ConstraintCollection`
+    and {class}`~ommx.ActiveConstraintCollection`.
 
     **Edit the Instance through attached handles**
 
@@ -5169,13 +5648,13 @@ class Instance:
     >>> labeled.objective = choice
     >>> rule = labeled.add_constraint(choice <= 1, "limit")
     >>> variable = labeled.attached_decision_variable(choice.id)
-    >>> constraint = labeled.constraints[rule.constraint_id]
+    >>> constraint = labeled.active_constraints[rule.constraint_id]
     >>> variable.set_name("selected")
     >>> variable.set_subscripts([0])
     >>> variable.set_description("Whether product 0 is selected")
     >>> constraint.set_name("selection_limit")
     >>> assert labeled.attached_decision_variable(choice.id).name == "selected"
-    >>> assert labeled.constraints[rule.constraint_id].name == "selection_limit"
+    >>> assert labeled.active_constraints[rule.constraint_id].name == "selection_limit"
 
     ```
 
@@ -5199,8 +5678,8 @@ class Instance:
     **Retained variables and output evaluation**
 
     {attr}`~ommx.Instance.decision_variables` contains every retained variable.
-    {attr}`~ommx.Instance.used_decision_variables` selects variables used in
-    the current objective or active constraints. Fixed and dependent variables
+    {attr}`~ommx.Instance.active_decision_variables` selects the variables of
+    the Active Formulation. Fixed and dependent variables
     remain defined so that evaluation can reconstruct their values, although
     the solver no longer chooses those values directly.
 
@@ -5212,17 +5691,17 @@ class Instance:
     >>> original.objective = x + y
     >>> fixed = original.partial_evaluate({x.id: 1})
     >>> assert {v.id for v in fixed.decision_variables} == {x.id, y.id}
-    >>> assert {v.id for v in fixed.used_decision_variables} == {y.id}
+    >>> assert {v.id for v in fixed.active_decision_variables} == {y.id}
     >>> assert fixed.evaluate({y.id: 0}).state.entries == {x.id: 1.0, y.id: 0.0}
 
     ```
 
     Interpretation Context also includes information used only to interpret results:
-    {class}`~ommx.NamedFunction` expressions for reporting metrics, removed
+    {class}`~ommx.NamedFunction` expressions for reporting metrics, inactive
     constraints for checking original conditions, and an
     {class}`~ommx.OutputObjective` separate from the current solver-facing
     objective. A variable appearing only in this information is not thereby
-    a used variable. {meth}`~ommx.Instance.populate_state` restores fixed and
+    an active variable. {meth}`~ommx.Instance.populate_state` restores fixed and
     dependent values before evaluation. An otherwise irrelevant variable is
     assigned a default when omitted; that default is not a reconstructed
     candidate value. Supply its value explicitly when it matters to the output.
@@ -5242,7 +5721,7 @@ class Instance:
     >>> instance = Instance.from_components(
     ...     decision_variables=[x],
     ...     objective=3 * x,
-    ...     constraints={},
+    ...     active_constraints={},
     ...     sense=Sense.Maximize,
     ... )
     >>> assert instance.convert_active_objective(Sense.Minimize)
@@ -5250,7 +5729,7 @@ class Instance:
     >>> assert fixed.sense == Sense.Minimize
     >>> assert fixed.objective.evaluate({}) == -3.0
     >>> assert fixed.required_ids() == set()
-    >>> assert fixed.used_decision_variables == []
+    >>> assert fixed.active_decision_variables == []
     >>> assert fixed.populate_state({}).entries == {0: 1.0}
     >>> solution = fixed.evaluate({})
     >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)
@@ -5300,12 +5779,12 @@ class Instance:
     @created.setter
     def created(self, value: datetime.datetime) -> None: ...
     @property
-    def constraint_names(self) -> builtins.set[builtins.str]:
+    def active_constraint_names(self) -> builtins.set[builtins.str]:
         r"""
         Unique names across all constraint families, as a set of strings.
 
         Only active constraints are included.
-        The scope matches `extract_constraints`. Unnamed constraints are excluded;
+        The scope matches `extract_active_constraints`. Unnamed constraints are excluded;
         an explicitly empty name is included. Duplicate names appear once, even
         when extraction would reject duplicate subscripts.
         Each access returns a fresh set; editing it does not change this owner.
@@ -5322,7 +5801,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
         >>> assert instance.sense == Sense.Minimize
@@ -5340,7 +5819,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
         >>> assert instance.objective.evaluate({0: 1}) == -1.0
@@ -5371,7 +5850,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=3 * x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.output_objective is None
         >>> assert instance.convert_active_objective(Sense.Minimize)
@@ -5413,14 +5892,22 @@ class Instance:
     @property
     def constraints(self) -> ConstraintCollection:
         r"""
-        Live mapping of all active constraint families, keyed by typed IDs.
-        The view retains this owner and fetches each constraint on demand.
+        Live lookup of every retained constraint, including active and inactive rows.
+
+        IDs determine the constraint family, not its role. Active rows are
+        attached handles; inactive rows are independent snapshots. Inspect the
+        returned row's role, or use active_constraints for attached rows.
+        """
+    @property
+    def active_constraints(self) -> ActiveConstraintCollection:
+        r"""
+        Live mapping of active constraints, with attached rows for each family.
         """
     @property
     def active_constraint_kinds(self) -> builtins.set[ConstraintKind[ConstraintIDBase]]:
         r"""
         All active constraint families, including {attr}`~ommx.ConstraintKind.Regular`.
-        Removed constraints are excluded. This is independent of adapter support.
+        Inactive constraints are excluded. This is independent of adapter support.
         """
     @property
     def active_special_constraint_kinds(
@@ -5430,65 +5917,67 @@ class Instance:
         The kinds of active special constraints this instance currently uses.
 
         Returns the set of {class}`~ommx.ConstraintKind` values corresponding
-        to non-empty active (non-removed) special constraint collections. An
+        to non-empty active special constraint collections. An
         empty set means the instance has no active special constraints.
         """
     @property
-    def removed_constraints(self) -> RemovedConstraintCollection:
+    def inactive_constraints(self) -> InactiveConstraintCollection:
         r"""
         Live mapping of retained constraints that are no longer active.
 
-        Active constraints in {attr}`~ommx.Instance.constraints` belong to the
-        **Active Formulation**. Removed constraints are retained as **Interpretation
+        Active constraints in {attr}`~ommx.Instance.active_constraints` belong to the
+        **Active Formulation**. Inactive constraints are retained as **Interpretation
         Context**, as defined on {class}`~ommx.Instance`, and remain available for evaluation
         and inspection, but are not imposed as active conditions. Both collections
         include regular constraints and supported special-constraint families, currently
         Indicator, OneHot, and SOS1, keyed by their typed IDs.
 
-        The returned {class}`~ommx.RemovedConstraintCollection` keeps this Instance alive
+        The returned {class}`~ommx.InactiveConstraintCollection` keeps this Instance alive
         and observes subsequent owner changes. Each lookup returns an independent
-        snapshot with labels, provenance, and the removal reason; editing a snapshot
+        snapshot with labels, provenance, and the inactivity reason; editing a snapshot
         does not change the Instance. See that class for lookup and iteration semantics.
 
-        **Removal records a change, not its mathematical guarantee**
+        **Deactivation records a change, not its mathematical guarantee**
 
-        Different operations retain removed constraints for different reasons:
+        Different operations retain inactive constraints for different reasons:
 
         | Operation | Active formulation | Retained information |
         | --- | --- | --- |
-        | {meth}`~ommx.Instance.relax_constraint` or {meth}`~ommx.Instance.relax_indicator_constraint` | Omits the selected condition | The condition and caller-supplied removal reason |
+        | {meth}`~ommx.Instance.deactivate_constraint` or {meth}`~ommx.Instance.deactivate_indicator_constraint` | Omits the selected condition | The condition and caller-supplied inactivity reason |
         | Special-constraint lowering, such as {meth}`~ommx.Instance.convert_one_hot_to_constraint` | Represents the condition using regular constraints | The original special constraint; generated constraints carry provenance |
         | {meth}`~ommx.Instance.penalty_method` | Replaces regular constraints with weighted objective terms | The constraints to check independently of the penalized objective |
-        | Removal of trivial constraints during preprocessing | Omits conditions found unnecessary by that operation | The removed conditions and their reasons |
+        | Deactivation of trivial constraints during preprocessing | Omits conditions found unnecessary by that operation | The inactive conditions and their reasons |
 
-        The presence of removed constraints alone therefore does not establish
+        The presence of inactive constraints alone therefore does not establish
         equivalence, relaxation, or preservation of optimal solutions. Read the owning
         transformation's applicability and guarantee; in particular, a finite penalty
         weight does not by itself guarantee that the selected candidate satisfies the
-        removed constraints.
+        inactive constraints.
 
         **Evaluation and inspection**
 
         {meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Instance.evaluate_samples`
-        evaluate both active and removed constraints after restoring and completing
+        evaluate both active and inactive constraints after restoring and completing
         variable values through {meth}`~ommx.Instance.populate_state`.
-        {attr}`~ommx.Solution.feasible` includes all retained constraints;
-        {attr}`~ommx.Solution.feasible_relaxed` excludes removed constraints. Both also
+        {attr}`~ommx.Solution.feasible` checks constraints with roles `ACTIVE` or
+        `FEASIBILITY_CHECK`; `EVALUATION_ONLY` constraints are excluded from the judgment but remain evaluated
+        and available for inspection.
+        {attr}`~ommx.Solution.feasible_relaxed` excludes inactive constraints. Both also
         check every retained variable's kind and bounds. The corresponding
         {attr}`~ommx.SampleSet.feasible` and {attr}`~ommx.SampleSet.feasible_relaxed`
-        properties return these judgments by sample ID.
+        queries return these judgments by sample ID.
 
-        A variable used only in removed constraints may be irrelevant to the active
+        A variable used only in inactive constraints may be irrelevant to the active
         formulation. If omitted, its default is used for evaluation. Supply its actual
         value when checking a particular candidate; the default is not a recovered
         solver choice.
 
-        For a table of active and removed rows, use
-        {meth}`~ommx.Instance.constraints_df` with `removed=True` and an explicit
+        For a table of active and inactive rows, use
+        {meth}`~ommx.Instance.constraints_df` with `min_role=ConstraintRole.EVALUATION_ONLY` and an explicit
         `kind`. On a Solution, use {meth}`~ommx.Solution.constraints_df` with
-        `include=("removed_reason",)` to inspect removal reasons alongside evaluated
+        `include=("inactive_reason",)` to inspect inactivity reasons alongside evaluated
         values and violations. The complete relax, evaluate, inspect, and restore
-        example is in {meth}`~ommx.Instance.relax_constraint`.
+        example is in {meth}`~ommx.Instance.deactivate_constraint`.
         """
     @property
     def named_functions(self) -> builtins.list[NamedFunction]:
@@ -5498,9 +5987,9 @@ class Instance:
     @property
     def description(self) -> typing.Optional[InstanceDescription]: ...
     @property
-    def used_decision_variables(self) -> builtins.list[DecisionVariable]:
+    def active_decision_variables(self) -> builtins.list[DecisionVariable]:
         r"""
-        Decision variables used by the mathematical solver input.
+        Decision variables and their domains in the current Active Formulation.
 
         This property implements the Active Formulation contract of
         {class}`~ommx.Instance`: it contains exactly the variables referenced by
@@ -5508,14 +5997,14 @@ class Instance:
 
         This list contains the variables referenced by the objective or by an
         active regular, Indicator, OneHot, or SOS1 constraint. Variables
-        referenced only by the output objective, named functions, removed
+        referenced only by the output objective, named functions, inactive
         constraints, or the right-hand side of a decision-variable dependency
         are excluded. Fixed, dependent, and irrelevant variables are also
         excluded; {meth}`~ommx.Instance.evaluate` and
         {meth}`~ommx.Instance.evaluate_samples` populate their output values from
         stored values, dependencies, or defaults respectively.
         See {meth}`~ommx.Instance.populate_state` for the complete reconstruction
-        and default rules and examples of retained versus used variables.
+        and default rules and examples of retained versus active variables.
         """
     def replace_annotations(
         self, annotations: typing.Mapping[builtins.str, builtins.str]
@@ -5589,7 +6078,7 @@ class Instance:
         Apply one simultaneous bound-tightening pass using selected regular constraints.
 
         ``constraint_ids`` is a set of active regular constraint IDs. Unknown
-        and removed IDs are errors; an empty set applies no updates. Selected
+        and inactive IDs are errors; an empty set applies no updates. Selected
         non-affine rows are skipped. All eligible variables in the selected
         rows may have their bounds tightened.
         Only compact polynomial functions of degree at most one are used;
@@ -5645,7 +6134,7 @@ class Instance:
         >>> x = DecisionVariable.continuous(0)
         >>> instance = Instance.from_components(
         ...     decision_variables=[x], objective=0, sense=Sense.Minimize,
-        ...     constraints={100: 2 * x <= 6, 101: x >= -2},
+        ...     active_constraints={100: 2 * x <= 6, 101: x >= -2},
         ... )
         >>> changed = instance.tighten_bounds_simultaneously_once_using_constraints(
         ...     {ConstraintID(100)}, max_terms=64, atol=0.125,
@@ -5682,26 +6171,50 @@ class Instance:
         sense: Sense,
         objective: ToFunction,
         decision_variables: typing.Sequence[DecisionVariable],
-        constraints: typing.Mapping[ConstraintID, Constraint]
+        active_constraints: typing.Mapping[ConstraintID, Constraint]
         | typing.Mapping[builtins.int, Constraint]
         | typing.Mapping[ConstraintID | builtins.int, Constraint],
-        indicator_constraints: typing.Optional[
+        active_indicator_constraints: typing.Optional[
             typing.Mapping[IndicatorConstraintID, IndicatorConstraint]
             | typing.Mapping[builtins.int, IndicatorConstraint]
             | typing.Mapping[IndicatorConstraintID | builtins.int, IndicatorConstraint]
         ] = None,
-        one_hot_constraints: typing.Optional[
+        active_one_hot_constraints: typing.Optional[
             typing.Mapping[OneHotConstraintID, OneHotConstraint]
             | typing.Mapping[builtins.int, OneHotConstraint]
             | typing.Mapping[OneHotConstraintID | builtins.int, OneHotConstraint]
         ] = None,
-        sos1_constraints: typing.Optional[
+        active_sos1_constraints: typing.Optional[
             typing.Mapping[Sos1ConstraintID, Sos1Constraint]
             | typing.Mapping[builtins.int, Sos1Constraint]
             | typing.Mapping[Sos1ConstraintID | builtins.int, Sos1Constraint]
         ] = None,
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
+        inactive_constraints: typing.Optional[
+            typing.Mapping[ConstraintID, InactiveConstraint]
+            | typing.Mapping[builtins.int, InactiveConstraint]
+            | typing.Mapping[ConstraintID | builtins.int, InactiveConstraint]
+        ] = None,
+        inactive_indicator_constraints: typing.Optional[
+            typing.Mapping[IndicatorConstraintID, InactiveIndicatorConstraint]
+            | typing.Mapping[builtins.int, InactiveIndicatorConstraint]
+            | typing.Mapping[
+                IndicatorConstraintID | builtins.int, InactiveIndicatorConstraint
+            ]
+        ] = None,
+        inactive_one_hot_constraints: typing.Optional[
+            typing.Mapping[OneHotConstraintID, InactiveOneHotConstraint]
+            | typing.Mapping[builtins.int, InactiveOneHotConstraint]
+            | typing.Mapping[
+                OneHotConstraintID | builtins.int, InactiveOneHotConstraint
+            ]
+        ] = None,
+        inactive_sos1_constraints: typing.Optional[
+            typing.Mapping[Sos1ConstraintID, InactiveSos1Constraint]
+            | typing.Mapping[builtins.int, InactiveSos1Constraint]
+            | typing.Mapping[Sos1ConstraintID | builtins.int, InactiveSos1Constraint]
+        ] = None,
     ) -> Instance:
         r"""
         Create an instance from its components.
@@ -5715,7 +6228,7 @@ class Instance:
         - `sense`: Optimization sense (minimize or maximize)
         - `objective`: Objective function
         - `decision_variables`: List of decision variables
-        - `constraints`: Mapping from regular constraint IDs to constraints
+        - `active_constraints`: Mapping from regular constraint IDs to active constraints
         - `named_functions`: Optional list of named functions
         - `description`: Optional instance description
 
@@ -6025,15 +6538,15 @@ class Instance:
 
         Raises {class}`KeyError` if no variable with `variable_id` exists.
         """
-    def extract_constraints(
+    def extract_active_constraints(
         self, name: builtins.str
     ) -> builtins.dict[builtins.tuple[builtins.int, ...], ConstraintView]:
         r"""
         Extract active constraints of every family by name, keyed by subscript tuples.
 
-        Values are attached handles, just as in `constraints`: edits update this
+        Values are attached handles, just as in `active_constraints`: edits update this
         model. The returned dictionary snapshots the matching keys; it does not
-        track later label or membership changes. Removed constraints are excluded.
+        track later label or membership changes. Inactive constraints are excluded.
         Parameters and descriptions do not participate in matching.
 
         Raises KeyError if no active constraint has this name, and ValueError if
@@ -6164,15 +6677,15 @@ class Instance:
         ...     ConstraintKind.OneHot,
         ... }
         >>> assert instance.active_special_constraint_kinds == {ConstraintKind.Sos1}
-        >>> assert original.constraint_id not in instance.constraints
-        >>> removed = instance.removed_constraints[original.constraint_id]
-        >>> assert removed.removed_reason == "ommx.Instance.convert_one_hot_to_constraint"
-        >>> assert removed.removed_reason_parameters == {"constraint_id": "2"}
+        >>> assert original.constraint_id not in instance.active_constraints
+        >>> inactive = instance.inactive_constraints[original.constraint_id]
+        >>> assert inactive.inactive_reason == "ommx.Instance.convert_one_hot_to_constraint"
+        >>> assert inactive.inactive_reason_parameters == {"constraint_id": "2"}
         >>> generated = instance.constraints[ConstraintID(2)]
         >>> assert generated.provenance[-1].kind == ProvenanceKind.OneHotConstraint
         >>> assert generated.provenance[-1].original_id == OneHotConstraintID(0)
-        >>> rows = instance.constraints_df(kind=ConstraintKind.OneHot, removed=True)
-        >>> assert rows.loc[original.constraint_id, "removed_reason"] == removed.removed_reason
+        >>> rows = instance.constraints_df(kind=ConstraintKind.OneHot, include=("inactive_reason",))
+        >>> assert rows.loc[original.constraint_id, "inactive_reason"] == inactive.inactive_reason
         >>> assert instance.evaluate(
         ...     {choices[0].id: 1, choices[1].id: 0, choices[2].id: 0}
         ... ).feasible
@@ -6181,9 +6694,9 @@ class Instance:
 
         ```
 
-        `removed=True` includes active and removed rows for the selected family and adds
-        the removal-reason columns. Each generated regular constraint records its source
-        through {attr}`~ommx.Constraint.provenance`; removed rows record generated IDs in
+        The default includes all active and inactive rows. `include=("inactive_reason",)` adds
+        the inactivation-reason columns. Each generated regular constraint records its source
+        through {attr}`~ommx.Constraint.provenance`; inactive rows record generated IDs in
         their reason parameters. The single-constraint conversion APIs define the
         family-specific parameter names and ordering. See
         {meth}`~ommx.Instance.convert_one_hot_to_constraint`,
@@ -6192,7 +6705,7 @@ class Instance:
         preconditions, complete examples, and per-operation mutation guarantees.
 
         After evaluation, {meth}`~ommx.Solution.constraints_df` accepts
-        `include=("removed_reason",)` to show those reasons alongside violations. The
+        `include=("inactive_reason",)` to show those reasons alongside violations. The
         same family selection is available for {class}`~ommx.SampleSet`.
         """
     def to_v1_bytes(self) -> bytes:
@@ -6206,13 +6719,14 @@ class Instance:
         # Errors
 
         Raises `RuntimeError` if an output objective or any Indicator, OneHot,
-        or SOS1 constraint is present, including removed constraints. Use
+        or SOS1 constraint is present, including inactive constraints, or if any
+        inactive constraint skips feasibility checks. Use
         `to_v2_bytes()` to preserve these features.
 
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
         >>> assert instance.convert_active_objective(Sense.Maximize)
@@ -6234,7 +6748,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=3 * x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
         >>> restored = Instance.from_v2_bytes(instance.to_v2_bytes())
@@ -6320,7 +6834,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
         >>> fixed = instance.partial_evaluate({0: 1})
@@ -6344,7 +6858,7 @@ class Instance:
 
         - The active sense is {attr}`~ommx.Sense.Minimize`.
         - There are no active regular, Indicator, OneHot, or SOS1 constraints.
-          Removed constraints do not prevent formatting and are not exported.
+          Inactive constraints do not prevent formatting and are not exported.
         - Every variable referenced by the active objective has Binary kind.
           Other variables retained by the instance do not prevent formatting.
         - The active objective is stored as an expanded polynomial. Composed
@@ -6380,7 +6894,7 @@ class Instance:
 
         The coefficients describe the active objective. They do not carry
         {attr}`~ommx.Instance.output_objective`,
-        removed constraints, or value-recovery rules. Keep the instance and use
+        inactive constraints, or value-recovery rules. Keep the instance and use
         {meth}`~ommx.Instance.evaluate` or {meth}`~ommx.Instance.evaluate_samples`
         to interpret candidates with its output semantics. Backend energy can
         differ from the objective reported by those methods.
@@ -6388,7 +6902,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=3 * x + 5, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=3 * x + 5, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
         >>> qubo, offset = instance.as_qubo_format()
@@ -6415,7 +6929,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=3 * x + 5, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=3 * x + 5, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
         >>> hubo, offset = instance.as_hubo_format()
@@ -6446,7 +6960,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Maximize
         ... )
         >>> explicit = copy.copy(instance)
         >>> policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
@@ -6465,7 +6979,7 @@ class Instance:
         Mutually exclusive penalty options raise ``ValueError`` before mutating the instance.
 
         >>> unchanged = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Maximize
         ... )
         >>> before = unchanged.to_v2_bytes()
         >>> try:
@@ -6499,7 +7013,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Maximize
         ... )
         >>> explicit = copy.copy(instance)
         >>> policy = PreparationPolicy.for_hubo(uniform_penalty_weight=2.0)
@@ -6518,7 +7032,7 @@ class Instance:
         Mutually exclusive penalty options raise ``ValueError`` before mutating the instance.
 
         >>> unchanged = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Maximize
         ... )
         >>> before = unchanged.to_v2_bytes()
         >>> try:
@@ -6540,7 +7054,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
         >>> restored = instance.as_parametric_instance().with_parameters({})
@@ -6564,7 +7078,9 @@ class Instance:
         where $\lambda_i$ and $\rho_j$ are the penalty weight parameters for each constraint.
         If you want to use single weight parameter, use {meth}`~ommx.Instance.uniform_penalty_method` instead.
 
-        The removed constraints are stored in {attr}`~ommx.ParametricInstance.removed_constraints`.
+        The penalized constraints become inactive and remain in the all-state
+        {attr}`~ommx.ParametricInstance.constraints` mapping. The active formulation
+        is unconstrained; FEASIBILITY_CHECK rows still participate in feasibility.
 
         > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
         > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
@@ -6574,17 +7090,19 @@ class Instance:
 
         Penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
 
-        >>> from ommx import ConstraintKind, ConstraintID
-        >>> from ommx import ConstraintKind, DecisionVariable, Instance, Optimality, Sense
+        >>> from ommx import ConstraintRole, ConstraintID
+        >>> from ommx import DecisionVariable, Instance, Optimality, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Minimize
         ... )
         >>> parametric = instance.penalty_method()
         >>> parameters = {parameter.id: 2.0 for parameter in parametric.parameters}
         >>> prepared = parametric.with_parameters(parameters)
-        >>> assert parametric.constraints == {}
-        >>> assert ConstraintID(7) in parametric.removed_constraints
+        >>> assert parametric.active_constraints == {}
+        >>> assert set(parametric.constraints) == {ConstraintID(7)}
+        >>> assert parametric.constraints[ConstraintID(7)].role == ConstraintRole.FEASIBILITY_CHECK
+        >>> assert ConstraintID(7) in parametric.inactive_constraints
         >>> assert prepared.objective.evaluate({0: 0}) == 2.0
         >>> solution = prepared.evaluate({0: 0})
         >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
@@ -6604,7 +7122,7 @@ class Instance:
 
         where $\lambda$ is the uniform penalty weight parameter for all constraints.
 
-        The removed constraints are stored in {attr}`~ommx.ParametricInstance.removed_constraints`.
+        The inactive constraints are stored in {attr}`~ommx.ParametricInstance.inactive_constraints`.
 
         > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
         > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
@@ -6614,17 +7132,19 @@ class Instance:
 
         Uniform-penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
 
-        >>> from ommx import ConstraintKind, ConstraintID
-        >>> from ommx import ConstraintKind, DecisionVariable, Instance, Optimality, Sense
+        >>> from ommx import ConstraintRole, ConstraintID
+        >>> from ommx import DecisionVariable, Instance, Optimality, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Minimize
         ... )
         >>> parametric = instance.uniform_penalty_method()
         >>> parameter_id = parametric.parameters[0].id
         >>> prepared = parametric.with_parameters({parameter_id: 2.0})
-        >>> assert parametric.constraints == {}
-        >>> assert ConstraintID(7) in parametric.removed_constraints
+        >>> assert parametric.active_constraints == {}
+        >>> assert set(parametric.constraints) == {ConstraintID(7)}
+        >>> assert parametric.constraints[ConstraintID(7)].role == ConstraintRole.FEASIBILITY_CHECK
+        >>> assert ConstraintID(7) in parametric.inactive_constraints
         >>> assert prepared.objective.evaluate({0: 0}) == 2.0
         >>> solution = prepared.evaluate({0: 0})
         >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
@@ -6646,7 +7166,7 @@ class Instance:
         candidate from a file and identifies violated constraints.
 
         Evaluate a solver's returned candidate with the transformed Instance
-        used for that solve. Its recorded dependencies, removed constraints,
+        used for that solve. Its recorded dependencies, inactive constraints,
         and output objective are needed to reconstruct and interpret the result.
 
         # Postconditions
@@ -6658,7 +7178,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=3 * x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
         >>> fixed = instance.partial_evaluate({0: 1})
@@ -6670,7 +7190,7 @@ class Instance:
         Evaluation raises ``ValueError`` when an active required ID is missing.
 
         >>> required = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Minimize
         ... )
         >>> try:
         ...     required.evaluate({})
@@ -6691,8 +7211,8 @@ class Instance:
 
         Accepts a {class}`~ommx.State`, an ID-to-value mapping, or an iterable of ID/value
         pairs. The returned State contains exactly the decision-variable IDs retained by
-        this Instance. Supply every variable used by its current objective and active
-        constraints; missing used values are errors, not opportunities to choose defaults.
+        this Instance. Supply every active variable; missing active values are errors,
+        not opportunities to choose defaults.
 
         Use {meth}`~ommx.Instance.evaluate` to populate a candidate and then evaluate its
         objective, variable domains, and constraints, or
@@ -6714,17 +7234,17 @@ class Instance:
         >>> _ = original.add_constraint(x * y == 0)
         >>> fixed = original.partial_evaluate({x.id: 1})
         >>> assert {v.id for v in fixed.decision_variables} == {x.id, y.id}
-        >>> assert {v.id for v in fixed.used_decision_variables} == {y.id}
+        >>> assert {v.id for v in fixed.active_decision_variables} == {y.id}
         >>> assert fixed.decision_variable_role(x.id) == DecisionVariableRole.Fixed
         >>> assert fixed.fixed_decision_variables() == {x.id: 1.0}
         >>> assert fixed.populate_state({y.id: 0}).entries == {x.id: 1.0, y.id: 0.0}
         >>> assert fixed.evaluate({y.id: 0}).objective == 1.0
-        >>> assert original.decision_variable_role(x.id) == DecisionVariableRole.Used
+        >>> assert original.decision_variable_role(x.id) == DecisionVariableRole.Active
 
         ```
 
         {attr}`~ommx.Instance.decision_variables` contains all retained variables.
-        {attr}`~ommx.Instance.used_decision_variables` selects solver-input variables,
+        {attr}`~ommx.Instance.active_decision_variables` selects solver-input variables,
         including variables in active special constraints and an Indicator's controlling
         Binary variable. Roles belong to an Instance and can change after transformation;
         they are independent of the variable's Binary, Integer, or other kind. See
@@ -6744,7 +7264,7 @@ class Instance:
         >>> encoded.substitute({count.id: 2 * flag})
         >>> assert encoded.decision_variable_roles() == {
         ...     count.id: DecisionVariableRole.Dependent,
-        ...     flag.id: DecisionVariableRole.Used,
+        ...     flag.id: DecisionVariableRole.Active,
         ... }
         >>> assert encoded.dependent_decision_variable_ids() == {count.id}
         >>> assert encoded.populate_state({flag.id: 1}).entries == {count.id: 2.0, flag.id: 1.0}
@@ -6760,7 +7280,7 @@ class Instance:
 
         **Irrelevant values and defaults**
 
-        An irrelevant variable is neither used, fixed, nor dependent. Its value is not
+        An irrelevant variable is neither active, fixed, nor dependent. Its value is not
         determined by optimization or reconstruction. When omitted, Binary, Integer, and
         Continuous variables receive the value in their bound nearest to zero;
         SemiInteger and SemiContinuous variables receive zero. The latter kinds allow
@@ -6776,7 +7296,10 @@ class Instance:
         ...     DecisionVariable.semi_continuous(4, lower=2, upper=5),
         ... ]
         >>> reporting = Instance.from_components(
-        ...     decision_variables=variables, objective=0, constraints={}, sense=Sense.Minimize
+        ...     decision_variables=variables,
+        ...     objective=0,
+        ...     active_constraints={},
+        ...     sense=Sense.Minimize,
         ... )
         >>> assert reporting.irrelevant_decision_variable_ids() == {0, 1, 2, 3, 4}
         >>> assert reporting.decision_variable_role(1) == DecisionVariableRole.Irrelevant
@@ -6785,8 +7308,8 @@ class Instance:
 
         ```
 
-        A reference only from a named function, removed constraint, output objective, or
-        dependency right-hand side does not make a variable used. If such a variable is
+        A reference only from a named function, inactive constraint, output objective, or
+        dependency right-hand side does not make a variable active. If such a variable is
         irrelevant, omitting its value means these expressions use its default. Supply the
         value explicitly when checking a particular candidate; the default is neither a
         solver-selected value nor a reconstruction of that candidate.
@@ -6825,7 +7348,7 @@ class Instance:
         ```
 
         `atol` defaults to the value returned by {func}`~ommx.get_default_atol`.
-        Missing used IDs, unknown IDs,
+        Missing active IDs, unknown IDs,
         non-finite supplied values, and inconsistent fixed or dependent assertions raise
         `ValueError`. Invalid finite values can remain in the populated state: use
         {meth}`~ommx.Instance.evaluate` to inspect kind, bound, and constraint feasibility.
@@ -6841,7 +7364,7 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=[reward],
         ...     objective=3 * reward,
-        ...     constraints={},
+        ...     active_constraints={},
         ...     sense=Sense.Maximize,
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
@@ -6862,7 +7385,7 @@ class Instance:
         them into active expressions. Use this to study a configuration or optimize
         the remaining variables under chosen conditions.
 
-        Named functions and existing removed constraints retain their original
+        Named functions and existing inactive constraints retain their original
         expressions as Interpretation Context. The new Instance stores fixed values
         and normalizes dependencies; {meth}`~ommx.Instance.evaluate` and
         {meth}`~ommx.Instance.evaluate_samples` populate those values before evaluating
@@ -6890,7 +7413,7 @@ class Instance:
         >>> assert original_candidate.feasible and original_candidate.objective == 0.0
         >>> assert conditioned_candidate.feasible and conditioned_candidate.objective == 1.0
         >>> assert conditioned_candidate.state.entries[x.id] == 1.0
-        >>> assert {v.id for v in source.used_decision_variables} == {x.id}
+        >>> assert {v.id for v in source.active_decision_variables} == {x.id}
 
         ```
 
@@ -6914,7 +7437,7 @@ class Instance:
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=3 * x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
         >>> fixed = instance.partial_evaluate({0: 1.0000005}, atol=1e-6)
@@ -6952,7 +7475,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=3 * x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
         >>> fixed = instance.partial_evaluate({0: 1})
@@ -6965,8 +7488,8 @@ class Instance:
         r"""
         Generate a random state for this instance using the provided random number generator.
 
-        This method generates random values only for variables that are actually used in the
-        objective function or constraints, as determined by decision variable usage.
+        This method generates random values only for the Active Formulation's
+        decision variables, as exposed by {attr}`~ommx.Instance.active_decision_variables`.
         Generated values respect the bounds of each variable type.
 
         **Args:**
@@ -6974,25 +7497,25 @@ class Instance:
 
         **Returns:**
         A randomly generated state that satisfies the variable bounds of this instance.
-        Only contains values for variables that are used in the problem.
+        Only contains values for active decision variables.
 
         # Examples
 
-        Generate random state only for used variables
+        Generate random state only for active variables
 
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Rng, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(5)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=x[0] + x[1],
-        ...     constraints={},
+        ...     active_constraints={},
         ...     sense=Sense.Maximize,
         ... )
 
         >>> rng = Rng()
         >>> state = instance.random_state(rng)
 
-        Only used variables have values
+        Only active variables have values
 
         >>> set(state.entries.keys())
         {0, 1}
@@ -7039,7 +7562,7 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints={0: sum(x) <= 2},
+        ...     active_constraints={0: sum(x) <= 2},
         ...     sense=Sense.Maximize,
         ... )
 
@@ -7048,22 +7571,31 @@ class Instance:
         >>> samples.num_samples()
         5
         """
-    def relax_constraint(
+    def deactivate_constraint(
         self,
         constraint_id: ConstraintID | builtins.int,
         reason: builtins.str,
+        *,
+        skip_feasibility_check: builtins.bool = False,
         **parameters: str,
     ) -> None:
         r"""
-        Move an active regular constraint to the retained removed collection.
+        Move an active regular constraint to the inactive collection.
 
         The Instance is changed in place. `constraint_id` accepts a {class}`~ommx.ConstraintID`
-        or its integer value. `reason` records why the condition was removed, and
+        or its integer value. `reason` records why the condition was deactivated, and
         additional keyword arguments record string-valued reason parameters. The
         constraint keeps its ID, labels, and provenance.
 
-        Removed constraints no longer restrict the active formulation, but
-        {meth}`~ommx.Instance.evaluate` still checks them. Here the relaxed formulation
+        Deactivation assigns the `FEASIBILITY_CHECK` role by default. Set
+        `skip_feasibility_check=True` to assign `EVALUATION_ONLY`, excluding the row from
+        normal feasibility and default total-violation queries. The row is still
+        evaluated; total-violation and DataFrame queries with `min_role=EVALUATION_ONLY`
+        include it.
+
+        Inactive constraints no longer restrict the active formulation, but
+        {meth}`~ommx.Instance.evaluate` still evaluates them and includes
+        `FEASIBILITY_CHECK` rows in normal feasibility. Here the relaxed formulation
         allows `x=1`, while the retained `x <= 0` condition rejects it:
 
         ```pycon
@@ -7073,99 +7605,103 @@ class Instance:
         >>> instance.objective = x
         >>> limit = instance.add_constraint(x <= 0, "limit")
         >>> limit_id = limit.constraint_id
-        >>> instance.relax_constraint(limit_id, "example.relax_limit", purpose="inspection")
-        >>> assert limit_id not in instance.constraints
-        >>> removed = instance.removed_constraints[limit_id]
-        >>> assert removed.removed_reason == "example.relax_limit"
-        >>> assert removed.removed_reason_parameters == {"purpose": "inspection"}
+        >>> instance.deactivate_constraint(limit_id, "example.relax_limit", purpose="inspection")
+        >>> assert limit_id not in instance.active_constraints
+        >>> inactive = instance.inactive_constraints[limit_id]
+        >>> assert inactive.inactive_reason == "example.relax_limit"
+        >>> assert inactive.inactive_reason_parameters == {"purpose": "inspection"}
         >>> solution = instance.evaluate({x.id: 1})
         >>> assert solution.feasible_relaxed
         >>> assert not solution.feasible
 
         ```
 
-        Inspect the removal reason on the model and the evaluated violation on the
+        Inspect the inactivity reason on the model and the evaluated violation on the
         result. Use `kind=ConstraintKind.Regular` for regular constraints. The same table
         APIs accept `ConstraintKind.Indicator`, `ConstraintKind.OneHot`, and `ConstraintKind.Sos1`
         for the corresponding special families.
 
         ```pycon
-        >>> model_rows = instance.constraints_df(kind=ConstraintKind.Regular, removed=True)
-        >>> assert model_rows.loc[limit_id, "removed_reason"] == "example.relax_limit"
-        >>> result_rows = solution.constraints_df(
-        ...     kind=ConstraintKind.Regular, include=("removed_reason",)
+        >>> model_rows = instance.constraints_df(
+        ...     kind=ConstraintKind.Regular, include=("inactive_reason",)
         ... )
-        >>> assert result_rows.loc[limit_id, "removed_reason"] == "example.relax_limit"
-        >>> assert result_rows.loc[limit_id, "removed_reason.purpose"] == "inspection"
+        >>> assert model_rows.loc[limit_id, "inactive_reason"] == "example.relax_limit"
+        >>> result_rows = solution.constraints_df(
+        ...     kind=ConstraintKind.Regular, include=("inactive_reason",)
+        ... )
+        >>> assert result_rows.loc[limit_id, "inactive_reason"] == "example.relax_limit"
+        >>> assert result_rows.loc[limit_id, "inactive_reason.purpose"] == "inspection"
         >>> assert result_rows.loc[limit_id, "violation"] == 1.0
-        >>> instance.restore_constraint(limit_id)
+        >>> instance.activate_constraint(limit_id)
         >>> assert limit_id in instance.constraints
-        >>> assert limit_id not in instance.removed_constraints
+        >>> assert limit_id not in instance.inactive_constraints
         >>> assert not instance.evaluate({x.id: 1}).feasible_relaxed
 
         ```
 
-        {meth}`~ommx.Instance.restore_constraint` makes the retained constraint active
+        {meth}`~ommx.Instance.activate_constraint` makes the retained constraint active
         again, using the Instance's current fixed values and variable dependencies.
         It does not undo other transformations, remove generated variables or
         constraints, or revert objective changes. The already-created Solution above
         continues to describe its earlier evaluation.
 
         Raises `RuntimeError` if the ID does not identify an active regular constraint.
-        Use {meth}`~ommx.Instance.relax_indicator_constraint` for an Indicator constraint.
-        See {attr}`~ommx.Instance.removed_constraints` for other operations that retain
-        removed constraints and for the distinction between removal and relaxation.
+        Use {meth}`~ommx.Instance.deactivate_indicator_constraint` for an Indicator constraint.
+        See {attr}`~ommx.Instance.inactive_constraints` for other operations that retain
+        inactive constraints and for the distinction between deactivation and relaxation.
         """
-    def restore_constraint(self, constraint_id: ConstraintID | builtins.int) -> None:
+    def activate_constraint(self, constraint_id: ConstraintID | builtins.int) -> None:
         r"""
-        Make a retained removed regular constraint active again.
+        Make a retained inactive regular constraint active again.
 
         Applies the Instance's current variable dependencies and fixed values
-        before restoring the row, and removes its removal reason. The ID,
+        before restoring the row, and clears its inactivation reason. The ID,
         labels, and provenance are retained. The argument accepts a
         {class}`~ommx.ConstraintID` or its integer value.
 
         This restores one condition, not the state before a transformation:
         generated variables or constraints and objective changes remain.
-        See {meth}`~ommx.Instance.relax_constraint` for a complete round trip.
-        Raises RuntimeError if the ID is not a removed regular constraint or
+        See {meth}`~ommx.Instance.deactivate_constraint` for a complete round trip.
+        Raises RuntimeError if the ID is not an inactive regular constraint or
         its expression cannot be normalized for the current Instance. Failure
-        leaves the row removed.
+        leaves the row inactive.
         """
-    def relax_indicator_constraint(
+    def deactivate_indicator_constraint(
         self,
         constraint_id: IndicatorConstraintID | builtins.int,
         reason: builtins.str,
+        *,
+        skip_feasibility_check: builtins.bool = False,
         **parameters: str,
     ) -> None:
         r"""
-        Relax an indicator constraint by moving it from active to removed.
+        Deactivate an indicator constraint, retaining it with a reason.
 
         Accepts an {class}`~ommx.IndicatorConstraintID` or its integer value.
         Records the supplied reason and string-valued keyword parameters,
         preserving the constraint's ID, labels, and provenance. Raises
         RuntimeError if the ID does not identify an active Indicator constraint.
         Evaluation still checks the retained condition; see
-        {attr}`~ommx.Instance.removed_constraints` for feasibility semantics and
-        {meth}`~ommx.Instance.relax_constraint` for the equivalent regular-
+        {attr}`~ommx.Instance.inactive_constraints` for feasibility semantics and
+        {meth}`~ommx.Instance.deactivate_constraint` for the equivalent regular-
         constraint workflow. Restore with
-        {meth}`~ommx.Instance.restore_indicator_constraint`.
+        {meth}`~ommx.Instance.activate_indicator_constraint`.
         """
-    def restore_indicator_constraint(
+    def activate_indicator_constraint(
         self, constraint_id: IndicatorConstraintID | builtins.int
     ) -> None:
         r"""
-        Restore a removed indicator constraint back to active.
+        Activate an inactive indicator constraint.
 
         Accepts an {class}`~ommx.IndicatorConstraintID` or its integer value.
         Applies current fixed values and dependencies to the constraint body,
-        preserving its ID, labels, and provenance and clearing the removal
+        preserving its ID, labels, and provenance and clearing the inactivation
         reason. This does not undo generated constraints, auxiliary variables,
         or objective changes from other transformations.
 
-        Raises RuntimeError if the ID is not a removed Indicator constraint,
+        Raises RuntimeError if the ID is not an inactive Indicator constraint,
         its controlling variable has been fixed or substituted, or its body
-        cannot be normalized. Failure leaves the row removed.
+        cannot be normalized. Failure leaves the row inactive.
         """
     def convert_one_hot_to_constraint(
         self, one_hot_id: OneHotConstraintID | builtins.int
@@ -7176,7 +7712,7 @@ class Instance:
         A one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the
         linear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality
         as a new regular constraint and moves the one-hot constraint into
-        {attr}`~ommx.Instance.removed_constraints` with
+        {attr}`~ommx.Instance.inactive_constraints` with
         ``reason="ommx.Instance.convert_one_hot_to_constraint"`` and a
         ``constraint_id`` parameter pointing to the new regular constraint.
         The generated regular constraint preserves the original one-hot context
@@ -7196,15 +7732,17 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints={},
-        ...     one_hot_constraints={1: OneHotConstraint(variables=x)},
+        ...     active_constraints={},
+        ...     active_one_hot_constraints={1: OneHotConstraint(variables=x)},
         ...     sense=Sense.Minimize,
         ... )
         >>> new_id = instance.convert_one_hot_to_constraint(1)
-        >>> instance.constraints
+        >>> instance.active_constraints
         {ConstraintID(2): Constraint(x0 + x1 + x2 - 1 == 0)}
-        >>> instance.removed_constraints
-        {OneHotConstraintID(1): RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=2)}
+        >>> instance.inactive_constraints
+        {OneHotConstraintID(1): InactiveOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=2)}
+        >>> assert len(instance.constraints) == 2
+        >>> assert set(instance.constraints) == set(instance.active_constraints) | set(instance.inactive_constraints)
         """
     def convert_all_one_hots_to_constraints(self) -> builtins.list[ConstraintID]:
         r"""
@@ -7226,8 +7764,8 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints={},
-        ...     one_hot_constraints={
+        ...     active_constraints={},
+        ...     active_one_hot_constraints={
         ...         1: OneHotConstraint(variables=x[:2]),
         ...         2: OneHotConstraint(variables=x[2:]),
         ...     },
@@ -7235,8 +7773,10 @@ class Instance:
         ... )
         >>> instance.convert_all_one_hots_to_constraints()
         [ConstraintID(3), ConstraintID(4)]
-        >>> instance.constraints
+        >>> instance.active_constraints
         {ConstraintID(3): Constraint(x0 + x1 - 1 == 0), ConstraintID(4): Constraint(x2 + x3 - 1 == 0)}
+        >>> assert len(instance.constraints) == 4
+        >>> assert set(instance.constraints) == set(instance.active_constraints) | set(instance.inactive_constraints)
         """
     def convert_sos1_to_constraints(
         self, sos1_id: Sos1ConstraintID | builtins.int
@@ -7275,7 +7815,7 @@ class Instance:
         mutation. Any error leaves the Instance unchanged.
 
         On success, the original SOS1 constraint is moved to
-        {attr}`~ommx.Instance.removed_constraints` with
+        {attr}`~ommx.Instance.inactive_constraints` with
         ``reason="ommx.Instance.convert_sos1_to_constraints"`` and a
         comma-separated ``constraint_ids`` parameter in returned order. Every
         generated regular constraint records a {class}`~ommx.Provenance` entry
@@ -7290,16 +7830,18 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints={},
-        ...     sos1_constraints={1: Sos1Constraint(variables=x)},
+        ...     active_constraints={},
+        ...     active_sos1_constraints={1: Sos1Constraint(variables=x)},
         ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_sos1_to_constraints(1)
         [ConstraintID(2)]
-        >>> instance.constraints
+        >>> instance.active_constraints
         {ConstraintID(2): Constraint(x0 + x1 + x2 - 1 <= 0)}
-        >>> instance.removed_constraints
-        {Sos1ConstraintID(1): RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=2)}
+        >>> instance.inactive_constraints
+        {Sos1ConstraintID(1): InactiveSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=2)}
+        >>> assert len(instance.constraints) == 2
+        >>> assert set(instance.constraints) == set(instance.active_constraints) | set(instance.inactive_constraints)
         """
     def convert_all_sos1_to_constraints(
         self,
@@ -7322,8 +7864,8 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints={},
-        ...     sos1_constraints={
+        ...     active_constraints={},
+        ...     active_sos1_constraints={
         ...         1: Sos1Constraint(variables=x[:2]),
         ...         2: Sos1Constraint(variables=x[2:]),
         ...     },
@@ -7331,8 +7873,10 @@ class Instance:
         ... )
         >>> instance.convert_all_sos1_to_constraints()
         {Sos1ConstraintID(1): [ConstraintID(3)], Sos1ConstraintID(2): [ConstraintID(4)]}
-        >>> instance.constraints
+        >>> instance.active_constraints
         {ConstraintID(3): Constraint(x0 + x1 - 1 <= 0), ConstraintID(4): Constraint(x2 + x3 - 1 <= 0)}
+        >>> assert len(instance.constraints) == 4
+        >>> assert set(instance.constraints) == set(instance.active_constraints) | set(instance.inactive_constraints)
         """
     def convert_indicator_to_constraint(
         self,
@@ -7353,7 +7897,7 @@ class Instance:
         where $u \geq \sup f(x)$ and $l \leq \inf f(x)$ are the upper and lower
         bounds of $f$ over the decision variables' domains.
 
-        With `activate_on_zero=True`, the sides are `f(x) - u y <= 0` and
+        With `trigger_value=0`, the sides are `f(x) - u y <= 0` and
         `-f(x) + l y <= 0`; the same side-emission rules apply.
 
         Side emission:
@@ -7389,7 +7933,7 @@ class Instance:
         approximate solver value near 0 or 1.
 
         On success, the original indicator constraint is moved to
-        {attr}`~ommx.Instance.removed_constraints` with
+        {attr}`~ommx.Instance.inactive_constraints` with
         ``reason="ommx.Instance.convert_indicator_to_constraint"`` and a
         comma-separated ``constraint_ids`` parameter in returned order (empty
         when no side is emitted). Every generated regular constraint records a
@@ -7413,14 +7957,16 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=[x, y],
         ...     objective=x,
-        ...     constraints={},
-        ...     indicator_constraints={1: ic},
+        ...     active_constraints={},
+        ...     active_indicator_constraints={1: ic},
         ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_indicator_to_constraint(1)
         [ConstraintID(2)]
-        >>> instance.constraints
+        >>> instance.active_constraints
         {ConstraintID(2): Constraint(x0 + 3*x1 - 5 <= 0)}
+        >>> assert len(instance.constraints) == 2
+        >>> assert set(instance.constraints) == set(instance.active_constraints) | set(instance.inactive_constraints)
         """
     def convert_all_indicators_to_constraints(
         self, *, atol: typing.Optional[builtins.float] = None
@@ -7457,7 +8003,7 @@ class Instance:
 
         **Args:**
         - `decision_variable_ids`: The IDs of the integer decision variables to log-encode.
-          If not specified (or empty), all used integer variables are log-encoded.
+          If not specified (or empty), all active integer variables are log-encoded.
         - `atol`: Optional absolute tolerance used when normalizing integer
           bounds before encoding. If None, uses the default tolerance.
 
@@ -7468,7 +8014,7 @@ class Instance:
         # Postconditions
 
         Encoding rewrites the Active Formulation and records variable reconstruction
-        rules. Named functions and removed constraints keep their original expressions.
+        rules. Named functions and inactive constraints keep their original expressions.
         Fixed and dependent variables cannot be encoded again.
         An existing output objective is preserved; if the active objective is affected
         and no output objective exists, its previous function and sense are retained.
@@ -7477,7 +8023,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.integer(0, lower=0, upper=3)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> instance.log_encode({0})
         >>> encoded_ids = instance.required_ids()
@@ -7509,7 +8055,7 @@ class Instance:
 
         **Args:**
         - `decision_variable_ids`: The IDs of the integer decision variables to unary-encode.
-          If not specified (or empty), all used integer variables are unary-encoded.
+          If not specified (or empty), all active integer variables are unary-encoded.
         - `max_range`: Maximum allowed `upper - lower` range for each encoded
           variable. This also bounds the number of auxiliary binary variables
           introduced per integer variable.
@@ -7519,7 +8065,7 @@ class Instance:
         # Postconditions
 
         Encoding rewrites the Active Formulation and records variable reconstruction
-        rules. Named functions and removed constraints keep their original expressions.
+        rules. Named functions and inactive constraints keep their original expressions.
         Fixed and dependent variables cannot be encoded again.
         An existing output objective is preserved; if the active objective is affected
         and no output objective exists, its previous function and sense are retained.
@@ -7528,7 +8074,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.integer(0, lower=2, upper=5, name="x")
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> instance.unary_encode({0})
         >>> encoded_ids = instance.required_ids()
@@ -7546,7 +8092,7 @@ class Instance:
         objective and all active constraints. This is the general substitution
         mechanism behind {meth}`~ommx.Instance.log_encode`, exposed so that
         users can implement their own variable representations. Named functions,
-        removed constraints, and an existing output objective retain their expressions
+        inactive constraints, and an existing output objective retain their expressions
         as Interpretation Context. The Instance records the assignments and composes
         existing dependencies; {meth}`~ommx.Instance.evaluate` and
         {meth}`~ommx.Instance.evaluate_samples` reconstruct values before evaluating
@@ -7632,7 +8178,7 @@ class Instance:
         >>> x = DecisionVariable.binary(0)
         >>> b = DecisionVariable.binary(1)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x, b], objective=x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x, b], objective=x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
         >>> instance.substitute({0: b})
@@ -7665,7 +8211,7 @@ class Instance:
           - The bound is feasible everywhere at the selected tolerance, i.e.
             $u \leq \text{atol}$:
             this means this constraint is trivially satisfied,
-            the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,
+            the constraint is moved to {attr}`~ommx.Instance.inactive_constraints`,
             and this method returns without introducing slack variable or raising an error.
 
         # Examples
@@ -7681,7 +8227,7 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints={0: x[0] + 2*x[1] <= 5},
+        ...     active_constraints={0: x[0] + 2*x[1] <= 5},
         ...     sense=Sense.Maximize,
         ... )
 
@@ -7746,7 +8292,7 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints={0: x[0] + 2*x[1] <= 4},
+        ...     active_constraints={0: x[0] + 2*x[1] <= 4},
         ...     sense=Sense.Maximize,
         ... )
 
@@ -7800,7 +8346,7 @@ class Instance:
         """
     def irrelevant_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
-        Return IDs of decision variables not used, fixed, or dependent.
+        Return IDs of decision variables not active, fixed, or dependent.
 
         Values omitted from a candidate receive defaults under
         {meth}`~ommx.Instance.populate_state`. Supply a value explicitly when
@@ -7831,7 +8377,7 @@ class Instance:
                 "by_usage": {
                     "used_in_objective": int,
                     "used_in_constraints": int,
-                    "used": int,
+                    "active": int,
                     "fixed": int,
                     "dependent": int,
                     "irrelevant": int
@@ -7840,7 +8386,7 @@ class Instance:
             "constraints": {
                 "total": int,
                 "active": int,
-                "removed": int
+                "inactive": int
             }
         }
         ```
@@ -7866,7 +8412,7 @@ class Instance:
         *,
         kind: ConstraintKind[ConstraintIDBase],
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
-        removed: builtins.bool = False,
+        min_role: ConstraintRole = ConstraintRole.EVALUATION_ONLY,
     ) -> pandas.DataFrame:
         r"""
         DataFrame of constraints, dispatched on `kind=`.
@@ -7877,15 +8423,14 @@ class Instance:
 
         `include` selects which optional column families to fold in. It
         accepts a sequence of `"label"` / `"parameters"` /
-        `"removed_reason"`; passing `None` (the default) yields the
-        v2-equivalent shape (`label` + `parameters`). `"removed_reason"`
-        is a unit flag that gates both the `removed_reason` column and the
-        `removed_reason.{key}` parameter columns together.
+        `"inactive_reason"`; passing `None` (the default) yields the
+        v2-equivalent shape (`label` + `parameters`). `"inactive_reason"`
+        is a unit flag that gates both the `inactive_reason` column and the
+        `inactive_reason.{key}` parameter columns together.
 
-        `removed=False` (default) returns active constraints only.
-        `removed=True` returns active + removed rows in the same DataFrame
-        and auto-sets `"removed_reason"` so removed rows are
-        distinguishable (active rows have NA in the reason columns).
+        Includes every retained constraint by default. Set min_role to
+        FEASIBILITY_CHECK to exclude EVALUATION_ONLY rows or ACTIVE to select the active formulation.
+        The role column is always present. Reason columns are opt-in.
         """
     def named_functions_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
@@ -7899,7 +8444,7 @@ class Instance:
         r"""
         Constraint context DataFrame (id-indexed wide format).
 
-        One row per constraint id (active + removed) with columns
+        One row per constraint id (active + inactive) with columns
         `name`, `subscripts`, `description`. Index column is
         `{kind}_constraint_id`. `kind` selects which constraint family
         to read, using a {class}`~ommx.ConstraintKind` value.
@@ -7922,11 +8467,11 @@ class Instance:
         One row per (constraint_id, step) pair. Columns:
         `{kind}_constraint_id`, `step`, `source_kind`, `source_id`.
         """
-    def constraint_removed_reasons_df(
+    def constraint_inactive_reasons_df(
         self, *, kind: ConstraintKind[ConstraintIDBase]
     ) -> pandas.DataFrame:
         r"""
-        Removed-constraint reasons DataFrame (long format).
+        Inactive-constraint reasons DataFrame (long format).
 
         One row per (constraint_id, parameter_key) pair, plus one row with
         `key`/`value` set to NA when the reason has no parameters. Columns:
@@ -7966,7 +8511,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=3 * x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
         >>> assert instance.evaluate({0: 1}).objective == 3.0
@@ -7994,7 +8539,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=3 * x, active_constraints={}, sense=Sense.Minimize
         ... )
         >>> assert instance.convert_active_objective(Sense.Maximize)
         >>> assert instance.evaluate({0: 1}).objective == 3.0
@@ -8090,14 +8635,14 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Optimality, Sense
         >>> x = DecisionVariable.binary(0)
         >>> equivalent = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert equivalent.convert_active_objective(Sense.Minimize)
         >>> statuses = (Optimality.Unspecified, Optimality.Optimal, Optimality.NotOptimal)
         >>> for status in statuses:
         ...     assert equivalent.map_active_optimality(status) == status
         >>> penalized = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Minimize
         ... )
         >>> _ = penalized.to_qubo(uniform_penalty_weight=1.0)
         >>> for status in statuses:
@@ -8126,7 +8671,7 @@ class Instance:
         contain variable sets rather than expression bodies and are unchanged.
         These rewrite targets belong to the **Active Formulation** defined on
         {class}`~ommx.Instance`. **Interpretation Context** expressions are left
-        unchanged: named functions, dependency right-hand sides, removed
+        unchanged: named functions, dependency right-hand sides, inactive
         constraints, and an existing output objective.
 
         **Returns:**
@@ -8142,7 +8687,7 @@ class Instance:
         >>> from ommx import ConstraintKind, DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x * x * x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.reduce_binary_power()
         >>> assert instance.objective.evaluate({0: 1}) == 1.0
@@ -8210,7 +8755,7 @@ class Instance:
         and active regular constraint functions must be stored as expanded
         polynomials of degree at most two. Quadratic terms are written using
         ``QUADOBJ`` and ``QCMATRIX`` sections, with the coefficient convention
-        described below. Variables used by the active formulation must have
+        described below. Active variables must have
         Binary, Integer, or Continuous kind. Active Indicator, OneHot, and SOS1
         constraints are rejected; lower them before export if appropriate.
         No preparation is performed automatically.
@@ -8243,17 +8788,17 @@ class Instance:
         # Information boundary
 
         The writer exports the active objective and sense, active regular
-        constraints, and the kinds and bounds of variables used by that model.
+        constraints, and the kinds and bounds of active variables.
         Quadratic coefficients follow the convention above.
-        Unused variables, including those referenced only by output semantics,
-        named functions, or removed constraints, are omitted. Unused variables
-        of unsupported kinds do not prevent export.
+        Variables outside the Active Formulation, including those referenced only by
+        output semantics, named functions, or inactive constraints, are omitted.
+        Their kinds do not prevent export.
 
         ``description.name`` supplies the problem name. Variables and constraints
         use generated names ``OMMX_VAR_<id>`` and ``OMMX_CONSTR_<id>``; their
         modeling names, subscripts, and other labels are not preserved. Other
         Instance information is not exported, including remaining description
-        fields, annotations, parameters, named functions, removed constraints,
+        fields, annotations, parameters, named functions, inactive constraints,
         dependencies, fixed-value recovery, and {attr}`~ommx.Instance.output_objective`.
         MPS is therefore not a round-trip storage format for an OMMX Instance.
         Retain the OMMX instance when its recovery and output semantics are needed
@@ -8288,12 +8833,78 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=x[0] + x[1],
-        ...     constraints={},
+        ...     active_constraints={},
         ...     sense=Sense.Maximize,
         ... )
         >>> profile = instance.logical_memory_profile()
         >>> isinstance(profile, str)
         True
+        """
+    def set_constraint_skip_feasibility_check(
+        self,
+        constraint_id: ConstraintID | builtins.int,
+        skip_feasibility_check: builtins.bool,
+    ) -> None:
+        r"""
+        Set whether an inactive constraint participates in default feasibility checks.
+        """
+    def set_indicator_constraint_skip_feasibility_check(
+        self,
+        constraint_id: IndicatorConstraintID | builtins.int,
+        skip_feasibility_check: builtins.bool,
+    ) -> None:
+        r"""
+        Set whether an inactive constraint participates in default feasibility checks.
+        """
+    def deactivate_one_hot_constraint(
+        self,
+        constraint_id: OneHotConstraintID | builtins.int,
+        reason: builtins.str,
+        *,
+        skip_feasibility_check: builtins.bool = False,
+        **parameters: str,
+    ) -> None:
+        r"""
+        Move an active constraint to inactive, preserving its identity and context.
+        """
+    def activate_one_hot_constraint(
+        self, constraint_id: OneHotConstraintID | builtins.int
+    ) -> None:
+        r"""
+        Activate an inactive constraint.
+        """
+    def set_one_hot_constraint_skip_feasibility_check(
+        self,
+        constraint_id: OneHotConstraintID | builtins.int,
+        skip_feasibility_check: builtins.bool,
+    ) -> None:
+        r"""
+        Set whether an inactive constraint participates in default feasibility checks.
+        """
+    def deactivate_sos1_constraint(
+        self,
+        constraint_id: Sos1ConstraintID | builtins.int,
+        reason: builtins.str,
+        *,
+        skip_feasibility_check: builtins.bool = False,
+        **parameters: str,
+    ) -> None:
+        r"""
+        Move an active constraint to inactive, preserving its identity and context.
+        """
+    def activate_sos1_constraint(
+        self, constraint_id: Sos1ConstraintID | builtins.int
+    ) -> None:
+        r"""
+        Activate an inactive constraint.
+        """
+    def set_sos1_constraint_skip_feasibility_check(
+        self,
+        constraint_id: Sos1ConstraintID | builtins.int,
+        skip_feasibility_check: builtins.bool,
+    ) -> None:
+        r"""
+        Set whether an inactive constraint participates in default feasibility checks.
         """
     def prepare(self, input_class: InstanceClass, policy: PreparationPolicy) -> None:
         r"""
@@ -8314,6 +8925,8 @@ class Instance:
 
         ```pycon
         >>> from ommx import (
+        ...     ConstraintRole,
+        ...     ConstraintID,
         ...     Equality,
         ...     Instance,
         ...     InstanceClass,
@@ -8356,9 +8969,13 @@ class Instance:
         >>> assert set(instance.constraints) == {OneHotConstraintID(0)}
         >>> assert instance.prepare(target, policy) is None
         >>> assert target.contains(instance)
-        >>> assert len(instance.constraints) == 1
+        >>> assert set(instance.active_constraints) == {ConstraintID(1)}
+        >>> assert set(instance.constraints) == {ConstraintID(1), OneHotConstraintID(0)}
+        >>> assert (
+        ...     instance.constraints[OneHotConstraintID(0)].role == ConstraintRole.FEASIBILITY_CHECK
+        ... )
         >>> assert instance.active_special_constraint_kinds == set()
-        >>> assert set(instance.removed_constraints) == {OneHotConstraintID(0)}
+        >>> assert set(instance.inactive_constraints) == {OneHotConstraintID(0)}
         >>> assert instance.constraints_df(kind=ConstraintKind.Regular).shape[0] == 1
         >>> after = instance.evaluate(state)
         >>> assert before.feasible and after.feasible
@@ -8369,7 +8986,8 @@ class Instance:
         ```
 
         The active formulation now contains `x[0] + x[1] == 1`; the original OneHot is
-        retained for evaluation in {attr}`~ommx.Instance.removed_constraints`. The exact
+        retained for evaluation in {attr}`~ommx.Instance.inactive_constraints`. The
+        all-state {attr}`~ommx.Instance.constraints` mapping contains both rows. The exact
         lowering contract is {meth}`~ommx.Instance.convert_one_hot_to_constraint`.
         Agreement for the two candidates above illustrates this operation; checking a
         few candidates does not prove the guarantees of arbitrary transformations.
@@ -8419,7 +9037,10 @@ class Instance:
         ... )
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
+        ...     decision_variables=[x],
+        ...     objective=x,
+        ...     active_constraints={7: x == 1},
+        ...     sense=Sense.Maximize,
         ... )
         >>> policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
         >>> assert instance.prepare(InstanceClass.qubo(), policy) is None
@@ -8483,7 +9104,7 @@ class Instance:
         ...     assert not error.report.is_member
         ...     assert error.report == target.check_membership(blocked)
         ... else:
-        ...     raise AssertionError("an empty policy unexpectedly removed a constraint")
+        ...     raise AssertionError("an empty policy unexpectedly deactivated a constraint")
 
         ```
         """
@@ -8584,7 +9205,7 @@ class Instance:
         ...     sense=Sense.Minimize,
         ...     objective=integer_member,
         ...     decision_variables=[binary_member, integer_member, selector],
-        ...     constraints={
+        ...     active_constraints={
         ...         100: integer_member - 3 * selector <= 0,
         ...         101: -integer_member - 2 * selector <= 0,
         ...         102: binary_member + selector - 1 <= 0,
@@ -8616,7 +9237,7 @@ class Instance:
         >>> assert set(report.promoted) | set(report.rejections) == set(request.selector_claims)
         >>> assert instance.get_decision_variable_by_id(1).bound == Bound(-2, 3)
         >>> assert set(instance.constraints[Sos1ConstraintID(103)].variables) == {0, 1}
-        >>> assert set(instance.removed_constraints) == {
+        >>> assert set(instance.inactive_constraints) == {
         ...     ConstraintID(100),
         ...     ConstraintID(101),
         ...     ConstraintID(102),
@@ -8652,7 +9273,7 @@ class InstanceClass:
     not automatically include mixed-integer quadratic problems. An empty list of
     clauses accepts no Instance.
 
-    A clause specifies the allowed kinds of used variables, the objective's
+    A clause specifies the allowed kinds of active variables, the objective's
     polynomial representation and degree, the relations and polynomial requirements
     of regular constraints and Indicator bodies, whether active OneHot and SOS1
     constraints are allowed, and the optimization direction. Its label identifies
@@ -8739,11 +9360,11 @@ class InstanceClass:
 
     **The active representation determines membership**
 
-    Variable-kind checks use {attr}`~ommx.Instance.used_decision_variables`: variables
+    Variable-kind checks use {attr}`~ommx.Instance.active_decision_variables`: variables
     referenced by the active objective and active constraints, including special
     constraints. Fixed, dependent, and irrelevant variables are excluded, as are
-    variables referenced only by removed constraints, named functions, or the output
-    objective. Removed constraints do not contribute their relations, degrees, or
+    variables referenced only by inactive constraints, named functions, or the output
+    objective. Inactive constraints do not contribute their relations, degrees, or
     special-constraint kinds. A lowered Instance can therefore retain the original
     special constraints for evaluation while matching a class that disallows them
     as active constraints.
@@ -8784,12 +9405,12 @@ class InstanceClass:
     Preparation, see {class}`~ommx.adapter.SolverAdapter` and
     {class}`~ommx.adapter.SamplerAdapter`.
 
-    **Indicator activation conditions**
+    **Indicator trigger values**
 
-    `InstanceClassClause.allowed_indicator_activation_values` specifies the allowed
+    `InstanceClassClause.allowed_indicator_trigger_values` specifies the allowed
     trigger values independently of `indicator_body_polynomial_requirements`.
     The latter maps `Equality` to polynomial requirements shared by all admitted
-    activation values. The default activation set is `{1}`; an empty activation
+    trigger values. The default trigger set is `{1}`; an empty trigger
     set or an empty body map rejects all Indicators. Values other than 0 and 1
     are rejected when constructing the clause.
 
@@ -8800,19 +9421,19 @@ class InstanceClass:
     ...     allowed_variable_kinds={Kind.Binary},
     ...     allowed_senses={Sense.Minimize},
     ...     objective_polynomial_requirement=PolynomialRequirement.at_most(1),
-    ...     allowed_indicator_activation_values={0, 1},
+    ...     allowed_indicator_trigger_values={0, 1},
     ...     indicator_body_polynomial_requirements={
     ...         Equality.EqualToZero: PolynomialRequirement.at_most(1),
     ...     },
     ... )
-    >>> assert clause.allowed_indicator_activation_values == {0, 1}
+    >>> assert clause.allowed_indicator_trigger_values == {0, 1}
 
     ```
 
-    An unsupported trigger value produces `InstanceClassMismatch.IndicatorActivationNotAllowed`,
-    with `activation_value` and `allowed_activation_values`. Body-relation and degree
-    requirements are checked independently, so their diagnostics can accompany an
-    activation mismatch. Membership checking does not transform the Instance.
+    An unsupported trigger value produces `InstanceClassMismatch.IndicatorTriggerNotAllowed`,
+    with `trigger_value` and `allowed_trigger_values`. Body-relation and degree
+    requirements are checked independently, so their diagnostics can accompany a
+    trigger-value mismatch. Membership checking does not transform the Instance.
     """
     @property
     def clauses(self) -> builtins.list[InstanceClassClause]: ...
@@ -8832,23 +9453,23 @@ class InstanceClass:
         >>> from ommx import DecisionVariable, Instance, InstanceClass, Sense
         >>> x = DecisionVariable.binary(0)
         >>> linear = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Minimize
         ... )
         >>> quadratic = Instance.from_components(
-        ...     decision_variables=[x], objective=x * x, constraints={}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x * x, active_constraints={}, sense=Sense.Minimize
         ... )
         >>> cubic = Instance.from_components(
-        ...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x * x * x, active_constraints={}, sense=Sense.Minimize
         ... )
         >>> maximizing = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> continuous = DecisionVariable.continuous(1)
         >>> non_binary = Instance.from_components(
-        ...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize
+        ...     decision_variables=[continuous], objective=continuous, active_constraints={}, sense=Sense.Minimize
         ... )
         >>> constrained = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, active_constraints={0: x == 1}, sense=Sense.Minimize
         ... )
         >>> target = InstanceClass.qubo()
         >>> assert target.contains(linear)
@@ -8871,20 +9492,20 @@ class InstanceClass:
         >>> from ommx import DecisionVariable, Instance, InstanceClass, Sense
         >>> x = DecisionVariable.binary(0)
         >>> linear = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Minimize
         ... )
         >>> cubic = Instance.from_components(
-        ...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x * x * x, active_constraints={}, sense=Sense.Minimize
         ... )
         >>> maximizing = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> continuous = DecisionVariable.continuous(1)
         >>> non_binary = Instance.from_components(
-        ...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize
+        ...     decision_variables=[continuous], objective=continuous, active_constraints={}, sense=Sense.Minimize
         ... )
         >>> constrained = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, active_constraints={0: x == 1}, sense=Sense.Minimize
         ... )
         >>> target = InstanceClass.hubo()
         >>> assert target.contains(linear)
@@ -8920,9 +9541,9 @@ class InstanceClassClause:
     constraint families are not accepted. OneHot and SOS1 are also disabled
     unless their Boolean options are enabled. The objective and constraint
     requirements describe stored polynomials, not a request to expand expressions.
-    Indicator activation values are checked independently of the body map.
-    `allowed_indicator_activation_values` defaults to `{1}` and accepts only 0 and 1.
-    An empty activation set rejects all Indicators, even with a nonempty body map.
+    Indicator trigger values are checked independently of the body map.
+    `allowed_indicator_trigger_values` defaults to `{1}` and accepts only 0 and 1.
+    An empty trigger-value set rejects all Indicators, even with a nonempty body map.
     See {class}`~ommx.InstanceClass` for construction and membership examples.
     """
     @property
@@ -8943,7 +9564,7 @@ class InstanceClassClause:
         self,
     ) -> builtins.dict[Equality, PolynomialRequirement]: ...
     @property
-    def allowed_indicator_activation_values(self) -> builtins.set[builtins.int]:
+    def allowed_indicator_trigger_values(self) -> builtins.set[builtins.int]:
         r"""
         Allowed trigger values (0 and/or 1), independently of body requirements.
         """
@@ -8966,7 +9587,7 @@ class InstanceClassClause:
         indicator_body_polynomial_requirements: typing.Optional[
             typing.Mapping[Equality, PolynomialRequirement]
         ] = None,
-        allowed_indicator_activation_values: typing.Optional[
+        allowed_indicator_trigger_values: typing.Optional[
             builtins.set[builtins.int]
         ] = None,
         allows_one_hot: builtins.bool = False,
@@ -9117,24 +9738,24 @@ class InstanceClassMismatch:
         ) -> InstanceClassMismatch.IndicatorConstraintsNotAllowed: ...
 
     @typing.final
-    class IndicatorActivationNotAllowed(InstanceClassMismatch):
+    class IndicatorTriggerNotAllowed(InstanceClassMismatch):
         __match_args__ = (
-            "activation_value",
+            "trigger_value",
             "constraint_ids",
-            "allowed_activation_values",
+            "allowed_trigger_values",
         )
         @property
-        def activation_value(self) -> builtins.int: ...
+        def trigger_value(self) -> builtins.int: ...
         @property
         def constraint_ids(self) -> builtins.set[IndicatorConstraintID]: ...
         @property
-        def allowed_activation_values(self) -> builtins.set[builtins.int]: ...
+        def allowed_trigger_values(self) -> builtins.set[builtins.int]: ...
         def __new__(
             cls,
-            activation_value: builtins.int,
+            trigger_value: builtins.int,
             constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
-            allowed_activation_values: builtins.set[builtins.int],
-        ) -> InstanceClassMismatch.IndicatorActivationNotAllowed: ...
+            allowed_trigger_values: builtins.set[builtins.int],
+        ) -> InstanceClassMismatch.IndicatorTriggerNotAllowed: ...
 
     @typing.final
     class IndicatorConstraintRelationNotAllowed(InstanceClassMismatch):
@@ -9270,27 +9891,27 @@ class InstanceDescription:
 @typing.final
 class IntegerEncodingPreparation:
     r"""
-    Selection for the used-Integer encoding Preparation phase.
+    Selection for the active-Integer encoding Preparation phase.
 
     Exactly one encoding owner operation is selected. Validation and mutation
     semantics remain owned by that operation.
     """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
-    def log_encode_all_used_integers(
+    def log_encode_all_active_integers(
         *, atol: typing.Optional[builtins.float] = None
     ) -> IntegerEncodingPreparation:
         r"""
-        Select log encoding of every used Integer decision variable.
+        Select log encoding of every active Integer decision variable.
 
         The complete target set is determined from
-        {attr}`~ommx.Instance.used_decision_variables` before mutation and encoded
+        {attr}`~ommx.Instance.active_decision_variables` before mutation and encoded
         together with the same mathematical rule as {meth}`~ommx.Instance.log_encode`.
         ``atol`` normalizes bounds that are within tolerance of integers. On
-        success, no used Integer decision variable remains; irrelevant Integer
+        success, no active Integer decision variable remains; irrelevant Integer
         variables are not encoded.
 
-        A used Integer with a non-finite or otherwise non-encodable bound raises
+        An active Integer with a non-finite or otherwise non-encodable bound raises
         {class}`~ommx.LogEncodingError`. Active SOS1 members cannot be substituted
         and must be lowered first. Any error leaves this phase's input unchanged.
         """
@@ -9302,7 +9923,7 @@ class IntegerSlackPreparation:
 
     Preparation first attempts exact conversion to equality using
     ``max_integer_range`` and ``atol``. ``slack_upper_bound=None`` requires the
-    constraint to become an equality or be removed as trivially satisfied, so
+    constraint to become an equality or be deactivated as trivially satisfied, so
     {class}`~ommx.ExactIntegerSlackError` is propagated. An integer value permits the
     constraint to remain an inequality: only that signal selects the
     inequality-preserving owner operation with this upper bound. The latter is
@@ -9563,7 +10184,7 @@ class NamedFunction:
     ...     sense=Sense.Minimize,
     ...     objective=x[0] + 2 * x[1],
     ...     decision_variables=x,
-    ...     constraints={0: sum(x) == 1},
+    ...     active_constraints={0: sum(x) == 1},
     ...     named_functions=[distance],
     ... )
     >>> solution = instance.evaluate({x[0].id: 1, x[1].id: 0})
@@ -9617,8 +10238,8 @@ class NamedFunction:
 
     **Supply values for variables used only in reporting**
 
-    Appearing only in a named function does not make a variable used by the current
-    objective or active constraints. If it also has no fixed value or dependency,
+    Appearing only in a named function does not make a variable active in the current
+    formulation. If it also has no fixed value or dependency,
     the variable is irrelevant to that current problem. When its value is omitted,
     {meth}`~ommx.Instance.populate_state` supplies a default before the named
     function is evaluated. That default is not a recovered value of the candidate.
@@ -9629,7 +10250,7 @@ class NamedFunction:
     ...     sense=Sense.Minimize,
     ...     objective=0,
     ...     decision_variables=[recorded],
-    ...     constraints={},
+    ...     active_constraints={},
     ...     named_functions=[NamedFunction(id=0, function=recorded, name="recorded")],
     ... )
     >>> omitted = reporting.evaluate({})
@@ -9848,14 +10469,17 @@ class OneHotConstraint:
     Unlike {class}`~ommx.Sos1Constraint`, this condition does not allow selecting
     no member. Numerical evaluation and reported violations use the contracts of
     {meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Solution.constraints_df`.
+    Evaluated and sampled result rows expose `selected_variable` as a
+    candidate-dependent diagnostic, independently of variable or constraint
+    membership in the Active Formulation.
 
     **Identity and lowering**
 
     {meth}`~ommx.Instance.add_one_hot_constraint` returns an attached handle. The
     constructor creates an independent value; context changes on it do not edit a
     constraint already inserted into a host. For explicit IDs, use the
-    `one_hot_constraints` mapping of {meth}`~ommx.Instance.from_components`.
-    Constraint numbers share the active/removed cross-family space described by
+    `active_one_hot_constraints` mapping of {meth}`~ommx.Instance.from_components`.
+    Constraint numbers share the active/inactive cross-family space described by
     {class}`~ommx.Instance`.
 
     {meth}`~ommx.Instance.convert_one_hot_to_constraint` lowers the condition to a
@@ -10242,7 +10866,7 @@ class ParametricInstance:
     >>> family = ParametricInstance.from_components(
     ...     decision_variables=xs, parameters=[capacity],
     ...     objective=3 * xs[0] + 2 * xs[1],
-    ...     constraints={0: xs[0] + xs[1] <= capacity}, sense=Sense.Maximize,
+    ...     active_constraints={0: xs[0] + xs[1] <= capacity}, sense=Sense.Maximize,
     ... )
     >>> one_item = family.with_parameters({capacity.id: 1})
     >>> two_items = family.with_parameters({capacity.id: 2})
@@ -10334,12 +10958,12 @@ class ParametricInstance:
         Each access returns a fresh set; editing it does not change this owner.
         """
     @property
-    def constraint_names(self) -> builtins.set[builtins.str]:
+    def active_constraint_names(self) -> builtins.set[builtins.str]:
         r"""
         Unique names across all constraint families, as a set of strings.
 
         Only active constraints are included.
-        The scope matches `extract_constraints`. Unnamed constraints are excluded;
+        The scope matches `extract_active_constraints`. Unnamed constraints are excluded;
         an explicitly empty name is included. Duplicate names appear once, even
         when extraction would reject duplicate subscripts.
         Each access returns a fresh set; editing it does not change this owner.
@@ -10361,7 +10985,7 @@ class ParametricInstance:
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> source = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert source.as_parametric_instance().output_objective is None
         >>> assert source.convert_active_objective(Sense.Minimize)
@@ -10385,13 +11009,21 @@ class ParametricInstance:
     @property
     def constraints(self) -> ConstraintCollection:
         r"""
-        Live mapping of all active constraint families, keyed by typed IDs.
-        The view retains this owner and fetches each constraint on demand.
+        Live lookup of every retained constraint, including active and inactive rows.
+
+        IDs determine the constraint family, not its role. Active rows are
+        attached handles; inactive rows are independent snapshots. Inspect the
+        returned row's role, or use active_constraints for attached rows.
         """
     @property
-    def removed_constraints(self) -> RemovedConstraintCollection:
+    def active_constraints(self) -> ActiveConstraintCollection:
         r"""
-        Live mapping of all removed constraint families, keyed by typed IDs.
+        Live mapping of active constraints, with attached rows for each family.
+        """
+    @property
+    def inactive_constraints(self) -> InactiveConstraintCollection:
+        r"""
+        Live mapping of all inactive constraint families, keyed by typed IDs.
         The view retains this owner and fetches each constraint on demand.
         """
     @property
@@ -10475,13 +11107,14 @@ class ParametricInstance:
         # Errors
 
         Raises `RuntimeError` if an output objective or any Indicator, OneHot,
-        or SOS1 constraint is present, including removed constraints. Use
+        or SOS1 constraint is present, including inactive constraints, or if any
+        inactive constraint skips feasibility checks. Use
         `to_v2_bytes()` to preserve these features.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
         >>> assert instance.convert_active_objective(Sense.Maximize)
@@ -10504,7 +11137,7 @@ class ParametricInstance:
         >>> from ommx import DecisionVariable, Instance, ParametricInstance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> source = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Minimize
         ... )
         >>> parametric = source.uniform_penalty_method()
         >>> parameter_id = parametric.parameters[0].id
@@ -10523,27 +11156,51 @@ class ParametricInstance:
         sense: Sense,
         objective: ToFunction,
         decision_variables: typing.Sequence[DecisionVariable],
-        constraints: typing.Mapping[ConstraintID, Constraint]
+        active_constraints: typing.Mapping[ConstraintID, Constraint]
         | typing.Mapping[builtins.int, Constraint]
         | typing.Mapping[ConstraintID | builtins.int, Constraint],
         parameters: typing.Sequence[Parameter],
-        indicator_constraints: typing.Optional[
+        active_indicator_constraints: typing.Optional[
             typing.Mapping[IndicatorConstraintID, IndicatorConstraint]
             | typing.Mapping[builtins.int, IndicatorConstraint]
             | typing.Mapping[IndicatorConstraintID | builtins.int, IndicatorConstraint]
         ] = None,
-        one_hot_constraints: typing.Optional[
+        active_one_hot_constraints: typing.Optional[
             typing.Mapping[OneHotConstraintID, OneHotConstraint]
             | typing.Mapping[builtins.int, OneHotConstraint]
             | typing.Mapping[OneHotConstraintID | builtins.int, OneHotConstraint]
         ] = None,
-        sos1_constraints: typing.Optional[
+        active_sos1_constraints: typing.Optional[
             typing.Mapping[Sos1ConstraintID, Sos1Constraint]
             | typing.Mapping[builtins.int, Sos1Constraint]
             | typing.Mapping[Sos1ConstraintID | builtins.int, Sos1Constraint]
         ] = None,
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
+        inactive_constraints: typing.Optional[
+            typing.Mapping[ConstraintID, InactiveConstraint]
+            | typing.Mapping[builtins.int, InactiveConstraint]
+            | typing.Mapping[ConstraintID | builtins.int, InactiveConstraint]
+        ] = None,
+        inactive_indicator_constraints: typing.Optional[
+            typing.Mapping[IndicatorConstraintID, InactiveIndicatorConstraint]
+            | typing.Mapping[builtins.int, InactiveIndicatorConstraint]
+            | typing.Mapping[
+                IndicatorConstraintID | builtins.int, InactiveIndicatorConstraint
+            ]
+        ] = None,
+        inactive_one_hot_constraints: typing.Optional[
+            typing.Mapping[OneHotConstraintID, InactiveOneHotConstraint]
+            | typing.Mapping[builtins.int, InactiveOneHotConstraint]
+            | typing.Mapping[
+                OneHotConstraintID | builtins.int, InactiveOneHotConstraint
+            ]
+        ] = None,
+        inactive_sos1_constraints: typing.Optional[
+            typing.Mapping[Sos1ConstraintID, InactiveSos1Constraint]
+            | typing.Mapping[builtins.int, InactiveSos1Constraint]
+            | typing.Mapping[Sos1ConstraintID | builtins.int, InactiveSos1Constraint]
+        ] = None,
     ) -> ParametricInstance:
         r"""
         Build a parametric instance from its model components.
@@ -10571,7 +11228,7 @@ class ParametricInstance:
         >>> family = ParametricInstance.from_components(
         ...     decision_variables=xs, parameters=profits + weights + [capacity],
         ...     objective=sum(p * x for p, x in zip(profits, xs)),
-        ...     constraints={0: sum(w * x for w, x in zip(weights, xs)) <= capacity},
+        ...     active_constraints={0: sum(w * x for w, x in zip(weights, xs)) <= capacity},
         ...     sense=Sense.Maximize,
         ... )
         >>> values = {p.id: value for p, value in zip(profits, [3, 2])}
@@ -10595,7 +11252,7 @@ class ParametricInstance:
 
         Specializes parameter-bearing expressions in both the **Active Formulation**
         and **Interpretation Context** defined on {class}`~ommx.Instance`, including
-        removed constraints, output objectives, named functions, and dependency
+        inactive constraints, output objectives, named functions, and dependency
         expressions. The returned Instance retains this specialized context.
 
         Provide a dict mapping every declared parameter ID to its numerical value,
@@ -10622,7 +11279,7 @@ class ParametricInstance:
         >>> p, unused = Parameter(1, name="p"), Parameter(2, name="unused")
         >>> family = ParametricInstance.from_components(
         ...     decision_variables=[x], parameters=[p, unused], objective=x + p,
-        ...     constraints={}, sense=Sense.Minimize
+        ...     active_constraints={}, sense=Sense.Minimize
         ... )
         >>> try:
         ...     family.with_parameters({p.id: 3})
@@ -10640,7 +11297,7 @@ class ParametricInstance:
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> source = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, active_constraints={7: x == 1}, sense=Sense.Minimize
         ... )
         >>> parametric = source.uniform_penalty_method()
         >>> parameter_id = parametric.parameters[0].id
@@ -10668,7 +11325,7 @@ class ParametricInstance:
         >>> p = Parameter(100, name="p", parameters={"scenario": "base"})
         >>> model = ParametricInstance.from_components(
         ...     sense=Sense.Minimize, objective=x + p, decision_variables=[x],
-        ...     parameters=[p], constraints={},
+        ...     parameters=[p], active_constraints={},
         ... )
         >>> assert model.format_function(model.objective) == "x + p[scenario=base]"
 
@@ -10703,7 +11360,7 @@ class ParametricInstance:
         >>> p = Parameter(100, name="p")
         >>> model = ParametricInstance.from_components(
         ...     sense=Sense.Minimize, objective=x + p, decision_variables=[x],
-        ...     parameters=[p], constraints={},
+        ...     parameters=[p], active_constraints={},
         ... )
         >>> preview = model.display_function(model.objective)
         >>> assert preview.text == "x + p"
@@ -10721,7 +11378,7 @@ class ParametricInstance:
         expressions may only reference existing decision variable or parameter
         IDs; parameter IDs cannot be assignment targets.
 
-        Named functions, removed constraints, and existing output objectives
+        Named functions, inactive constraints, and existing output objectives
         retain their expressions as Interpretation Context. The recorded
         dependencies reconstruct substituted variables during evaluation after
         {meth}`with_parameters` specializes parameters throughout both the
@@ -10760,7 +11417,7 @@ class ParametricInstance:
         >>> x = DecisionVariable.binary(0)
         >>> b = DecisionVariable.binary(1)
         >>> source = Instance.from_components(
-        ...     decision_variables=[x, b], objective=x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[x, b], objective=x, active_constraints={}, sense=Sense.Maximize
         ... )
         >>> assert source.convert_active_objective(Sense.Minimize)
         >>> parametric = source.as_parametric_instance()
@@ -10790,15 +11447,15 @@ class ParametricInstance:
         Look up the {class}`~ommx.AttachedDecisionVariable` for the given
         id — a write-through handle.
         """
-    def extract_constraints(
+    def extract_active_constraints(
         self, name: builtins.str
     ) -> builtins.dict[builtins.tuple[builtins.int, ...], ConstraintView]:
         r"""
         Extract active constraints of every family by name, keyed by subscript tuples.
 
-        Values are attached handles, just as in `constraints`: edits update this
+        Values are attached handles, just as in `active_constraints`: edits update this
         model. The returned dictionary snapshots the matching keys; it does not
-        track later label or membership changes. Removed constraints are excluded.
+        track later label or membership changes. Inactive constraints are excluded.
         Parameters and descriptions do not participate in matching.
 
         Raises KeyError if no active constraint has this name, and ValueError if
@@ -10873,12 +11530,12 @@ class ParametricInstance:
         *,
         kind: ConstraintKind[ConstraintIDBase],
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
-        removed: builtins.bool = False,
+        min_role: ConstraintRole = ConstraintRole.EVALUATION_ONLY,
     ) -> pandas.DataFrame:
         r"""
         DataFrame of constraints, dispatched on `kind=`. See
         {meth}`ommx.Instance.constraints_df` for column / `kind=` /
-        `include=` / `removed=` semantics.
+        `include=` / `min_role=` semantics.
         """
     def named_functions_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
@@ -10923,11 +11580,11 @@ class ParametricInstance:
         r"""
         Constraint provenance DataFrame (long format).
         """
-    def constraint_removed_reasons_df(
+    def constraint_inactive_reasons_df(
         self, *, kind: ConstraintKind[ConstraintIDBase]
     ) -> pandas.DataFrame:
         r"""
-        Removed-constraint reasons DataFrame (long format).
+        Inactive-constraint reasons DataFrame (long format).
         """
     def variable_labels_df(self) -> pandas.DataFrame:
         r"""
@@ -10939,6 +11596,104 @@ class ParametricInstance:
         """
     def __copy__(self) -> ParametricInstance: ...
     def __deepcopy__(self, _memo: typing.Any) -> ParametricInstance: ...
+    def deactivate_constraint(
+        self,
+        constraint_id: ConstraintID | builtins.int,
+        reason: builtins.str,
+        *,
+        skip_feasibility_check: builtins.bool = False,
+        **parameters: str,
+    ) -> None:
+        r"""
+        Move an active constraint to inactive, preserving its identity and context.
+        """
+    def activate_constraint(self, constraint_id: ConstraintID | builtins.int) -> None:
+        r"""
+        Activate an inactive constraint.
+        """
+    def set_constraint_skip_feasibility_check(
+        self,
+        constraint_id: ConstraintID | builtins.int,
+        skip_feasibility_check: builtins.bool,
+    ) -> None:
+        r"""
+        Set whether an inactive constraint participates in default feasibility checks.
+        """
+    def deactivate_indicator_constraint(
+        self,
+        constraint_id: IndicatorConstraintID | builtins.int,
+        reason: builtins.str,
+        *,
+        skip_feasibility_check: builtins.bool = False,
+        **parameters: str,
+    ) -> None:
+        r"""
+        Move an active constraint to inactive, preserving its identity and context.
+        """
+    def activate_indicator_constraint(
+        self, constraint_id: IndicatorConstraintID | builtins.int
+    ) -> None:
+        r"""
+        Activate an inactive constraint.
+        """
+    def set_indicator_constraint_skip_feasibility_check(
+        self,
+        constraint_id: IndicatorConstraintID | builtins.int,
+        skip_feasibility_check: builtins.bool,
+    ) -> None:
+        r"""
+        Set whether an inactive constraint participates in default feasibility checks.
+        """
+    def deactivate_one_hot_constraint(
+        self,
+        constraint_id: OneHotConstraintID | builtins.int,
+        reason: builtins.str,
+        *,
+        skip_feasibility_check: builtins.bool = False,
+        **parameters: str,
+    ) -> None:
+        r"""
+        Move an active constraint to inactive, preserving its identity and context.
+        """
+    def activate_one_hot_constraint(
+        self, constraint_id: OneHotConstraintID | builtins.int
+    ) -> None:
+        r"""
+        Activate an inactive constraint.
+        """
+    def set_one_hot_constraint_skip_feasibility_check(
+        self,
+        constraint_id: OneHotConstraintID | builtins.int,
+        skip_feasibility_check: builtins.bool,
+    ) -> None:
+        r"""
+        Set whether an inactive constraint participates in default feasibility checks.
+        """
+    def deactivate_sos1_constraint(
+        self,
+        constraint_id: Sos1ConstraintID | builtins.int,
+        reason: builtins.str,
+        *,
+        skip_feasibility_check: builtins.bool = False,
+        **parameters: str,
+    ) -> None:
+        r"""
+        Move an active constraint to inactive, preserving its identity and context.
+        """
+    def activate_sos1_constraint(
+        self, constraint_id: Sos1ConstraintID | builtins.int
+    ) -> None:
+        r"""
+        Activate an inactive constraint.
+        """
+    def set_sos1_constraint_skip_feasibility_check(
+        self,
+        constraint_id: Sos1ConstraintID | builtins.int,
+        skip_feasibility_check: builtins.bool,
+    ) -> None:
+        r"""
+        Set whether an inactive constraint participates in default feasibility checks.
+        """
 
 @typing.final
 class Polynomial:
@@ -11241,7 +11996,7 @@ class PreparationPolicy:
         >>> assert first.special_constraints == expected_special
         >>> assert first.objective == ObjectivePreparation(target=Sense.Minimize)
         >>> assert first.integer_slack == IntegerSlackPreparation(max_integer_range=17, slack_upper_bound=17)
-        >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_used_integers()
+        >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_active_integers()
         >>> assert first.fixed_penalty == expected_penalty
         >>> assert first.binary_power_reduction == BinaryPowerPreparation()
         >>> first.fixed_penalty = None
@@ -11305,7 +12060,7 @@ class PreparationPolicy:
         >>> assert first.special_constraints == expected_special
         >>> assert first.objective == ObjectivePreparation(target=Sense.Minimize)
         >>> assert first.integer_slack == IntegerSlackPreparation(max_integer_range=17, slack_upper_bound=17)
-        >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_used_integers()
+        >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_active_integers()
         >>> assert first.fixed_penalty == FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=1.0)
         >>> assert first.binary_power_reduction is None
         >>> first.fixed_penalty = None
@@ -11562,298 +12317,6 @@ class RemoteArtifactTransportError(RemoteArtifactError):
     ...
 
 @typing.final
-class RemovedConstraint(ConstraintView):
-    r"""
-    RemovedConstraint wrapper for Python.
-
-    Holds the inner `Constraint`, a snapshot of its context, and the removal
-    reason. As with [`Constraint`], the context snapshot does not propagate
-    back to the originating instance — it is read-only context for inspection.
-    """
-    @property
-    def constraint(self) -> Constraint: ...
-    @property
-    def removed_reason(self) -> builtins.str: ...
-    @property
-    def removed_reason_parameters(
-        self,
-    ) -> builtins.dict[builtins.str, builtins.str]: ...
-    @property
-    def name(self) -> typing.Optional[builtins.str]: ...
-    @property
-    def equality(self) -> Equality:
-        r"""
-        Get the equality type from the underlying constraint
-        """
-    @property
-    def function(self) -> Function:
-        r"""
-        Get the function from the underlying constraint
-        """
-    @property
-    def description(self) -> typing.Optional[builtins.str]:
-        r"""
-        Get the description from the underlying constraint
-        """
-    @property
-    def subscripts(self) -> builtins.list[builtins.int]:
-        r"""
-        Get the subscripts from the underlying constraint
-        """
-    @property
-    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
-        r"""
-        Get the parameters from the underlying constraint
-        """
-    @property
-    def provenance(self) -> builtins.list[Provenance]:
-        r"""
-        Get the provenance chain from the underlying constraint.
-
-        See {attr}`~ommx.Constraint.provenance` for semantics.
-        """
-    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
-    def __new__(
-        cls,
-        constraint: Constraint,
-        removed_reason: builtins.str,
-        removed_reason_parameters: typing.Optional[
-            typing.Mapping[builtins.str, builtins.str]
-        ] = None,
-    ) -> RemovedConstraint: ...
-    def __repr__(self) -> builtins.str: ...
-    def __copy__(self) -> RemovedConstraint: ...
-    def __deepcopy__(self, _memo: typing.Any) -> RemovedConstraint: ...
-
-@typing.final
-class RemovedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
-    r"""
-    Live mapping of all retained removed constraint families in a model.
-
-    Obtained from {attr}`~ommx.Instance.removed_constraints` or
-    {attr}`~ommx.ParametricInstance.removed_constraints`. Each access returns an
-    independent snapshot, including labels, provenance, and removal reasons.
-    Changing that snapshot does not update its owner; a later lookup reads the
-    owner's current state.
-
-    Removed constraints are excluded from the active formulation but still checked
-    when candidates are evaluated. Removal can follow relaxation, an equivalent
-    lowering, or another transformation; the collection's presence does not identify
-    which guarantee holds. See {attr}`~ommx.Instance.removed_constraints` for their
-    evaluation semantics and {meth}`~ommx.Instance.relax_constraint` for a complete
-    relax, inspect, evaluate, and restore example.
-
-    The collection keeps its owner alive. The typed-key, ``get``, live-view,
-    iteration, and snapshot equality rules are documented in
-    {class}`~ommx.ConstraintCollection`. Use ``of_kind`` and
-    {class}`~ommx.ConstraintFamilyView` to inspect one family. A model's
-    ``constraints_df(kind=..., removed=True)`` includes both active and removed rows.
-    """
-    def __len__(self) -> builtins.int: ...
-    def __contains__(self, key: builtins.object) -> builtins.bool: ...
-    def __iter__(self) -> typing.Iterator[ConstraintIDBase]:
-        r"""
-        Iterate a snapshot of typed IDs; constraint rows are not collected.
-        """
-    def keys(self) -> typing.KeysView[ConstraintIDBase]:
-        r"""
-        Live key view. Iteration order is family order, then numeric ID.
-        """
-    def values(self) -> typing.ValuesView[ConstraintView]:
-        r"""
-        Live value view; each row is fetched when visited.
-        """
-    def items(self) -> typing.ItemsView[ConstraintIDBase, ConstraintView]:
-        r"""
-        Live item view; each row is fetched when visited.
-        """
-    def __repr__(self) -> builtins.str: ...
-    def __eq__(self, other: typing.Any) -> typing.Any: ...
-    @typing.overload
-    def __getitem__(self, key: ConstraintID) -> RemovedConstraint:
-        r"""
-        Fetch the constraint identified by a typed ID from the current owner.
-        """
-    @typing.overload
-    def __getitem__(self, key: IndicatorConstraintID) -> RemovedIndicatorConstraint:
-        r"""
-        Fetch the constraint identified by a typed ID from the current owner.
-        """
-    @typing.overload
-    def __getitem__(self, key: OneHotConstraintID) -> RemovedOneHotConstraint:
-        r"""
-        Fetch the constraint identified by a typed ID from the current owner.
-        """
-    @typing.overload
-    def __getitem__(self, key: Sos1ConstraintID) -> RemovedSos1Constraint:
-        r"""
-        Fetch the constraint identified by a typed ID from the current owner.
-        """
-    @typing.overload
-    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
-    @typing.overload
-    def get(
-        self, key: ConstraintID, default: None = None
-    ) -> RemovedConstraint | None: ...
-    @typing.overload
-    def get(self, key: ConstraintID, default: _T) -> RemovedConstraint | _T: ...
-    @typing.overload
-    def get(
-        self, key: IndicatorConstraintID, default: None = None
-    ) -> RemovedIndicatorConstraint | None: ...
-    @typing.overload
-    def get(
-        self, key: IndicatorConstraintID, default: _T
-    ) -> RemovedIndicatorConstraint | _T: ...
-    @typing.overload
-    def get(
-        self, key: OneHotConstraintID, default: None = None
-    ) -> RemovedOneHotConstraint | None: ...
-    @typing.overload
-    def get(
-        self, key: OneHotConstraintID, default: _T
-    ) -> RemovedOneHotConstraint | _T: ...
-    @typing.overload
-    def get(
-        self, key: Sos1ConstraintID, default: None = None
-    ) -> RemovedSos1Constraint | None: ...
-    @typing.overload
-    def get(self, key: Sos1ConstraintID, default: _T) -> RemovedSos1Constraint | _T: ...
-    @typing.overload
-    def get(
-        self, key: ConstraintIDBase, default: None = None
-    ) -> ConstraintView | None: ...
-    @typing.overload
-    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
-    @typing.overload
-    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
-    @typing.overload
-    def of_kind(
-        self, kind: ConstraintKind[ConstraintID]
-    ) -> ConstraintFamilyView[ConstraintID, RemovedConstraint]:
-        r"""
-        Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
-        """
-    @typing.overload
-    def of_kind(
-        self, kind: ConstraintKind[IndicatorConstraintID]
-    ) -> ConstraintFamilyView[IndicatorConstraintID, RemovedIndicatorConstraint]:
-        r"""
-        Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
-        """
-    @typing.overload
-    def of_kind(
-        self, kind: ConstraintKind[OneHotConstraintID]
-    ) -> ConstraintFamilyView[OneHotConstraintID, RemovedOneHotConstraint]:
-        r"""
-        Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
-        """
-    @typing.overload
-    def of_kind(
-        self, kind: ConstraintKind[Sos1ConstraintID]
-    ) -> ConstraintFamilyView[Sos1ConstraintID, RemovedSos1Constraint]:
-        r"""
-        Return a live view of one family without collecting rows. Uses the same ConstraintKind selector as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
-        """
-    @typing.overload
-    def of_kind(
-        self, kind: ConstraintKind[_K]
-    ) -> ConstraintFamilyView[_K, ConstraintView]: ...
-
-@typing.final
-class RemovedIndicatorConstraint(ConstraintView):
-    r"""
-    A removed indicator constraint together with the reason it was removed.
-    """
-    @property
-    def name(self) -> typing.Optional[builtins.str]: ...
-    @property
-    def description(self) -> typing.Optional[builtins.str]: ...
-    @property
-    def subscripts(self) -> builtins.list[builtins.int]: ...
-    @property
-    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
-    @property
-    def provenance(self) -> builtins.list[Provenance]: ...
-    @property
-    def constraint(self) -> IndicatorConstraint: ...
-    @property
-    def indicator_variable_id(self) -> builtins.int: ...
-    @property
-    def activate_on_zero(self) -> builtins.bool:
-        r"""
-        Whether zero activates the body instead of one.
-        """
-    @property
-    def equality(self) -> Equality: ...
-    @property
-    def function(self) -> Function: ...
-    @property
-    def removed_reason(self) -> builtins.str: ...
-    @property
-    def removed_reason_parameters(
-        self,
-    ) -> builtins.dict[builtins.str, builtins.str]: ...
-    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class RemovedOneHotConstraint(ConstraintView):
-    r"""
-    A removed one-hot constraint together with the reason it was removed.
-    """
-    @property
-    def constraint(self) -> OneHotConstraint: ...
-    @property
-    def variables(self) -> builtins.list[builtins.int]: ...
-    @property
-    def name(self) -> typing.Optional[builtins.str]: ...
-    @property
-    def subscripts(self) -> builtins.list[builtins.int]: ...
-    @property
-    def description(self) -> typing.Optional[builtins.str]: ...
-    @property
-    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
-    @property
-    def provenance(self) -> builtins.list[Provenance]: ...
-    @property
-    def removed_reason(self) -> builtins.str: ...
-    @property
-    def removed_reason_parameters(
-        self,
-    ) -> builtins.dict[builtins.str, builtins.str]: ...
-    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class RemovedSos1Constraint(ConstraintView):
-    r"""
-    A removed SOS1 constraint together with the reason it was removed.
-    """
-    @property
-    def constraint(self) -> Sos1Constraint: ...
-    @property
-    def variables(self) -> builtins.list[builtins.int]: ...
-    @property
-    def name(self) -> typing.Optional[builtins.str]: ...
-    @property
-    def subscripts(self) -> builtins.list[builtins.int]: ...
-    @property
-    def description(self) -> typing.Optional[builtins.str]: ...
-    @property
-    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
-    @property
-    def provenance(self) -> builtins.list[Provenance]: ...
-    @property
-    def removed_reason(self) -> builtins.str: ...
-    @property
-    def removed_reason_parameters(
-        self,
-    ) -> builtins.dict[builtins.str, builtins.str]: ...
-    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
 class Rng:
     def __new__(cls) -> Rng:
         r"""
@@ -12045,7 +12508,7 @@ class Run:
         ...     decision_variables=x,
         ...     parameters=[capacity],
         ...     objective=sum(value * variable for value, variable in zip(values, x)),
-        ...     constraints={
+        ...     active_constraints={
         ...         0: sum(weight * variable for weight, variable in zip(weights, x)) <= capacity
         ...     },
         ...     sense=Sense.Maximize,
@@ -12168,7 +12631,7 @@ class SampleSet:
     >>> instance = Instance.from_components(
     ...     decision_variables=x,
     ...     objective=x[0] + 2*x[1] + 3*x[2],
-    ...     constraints={0: sum(x) == 1},
+    ...     active_constraints={0: sum(x) == 1},
     ...     sense=Sense.Maximize,
     ... )
 
@@ -12193,7 +12656,7 @@ class SampleSet:
     {attr}`~ommx.SampleSet.summary` shows each sample's objective and feasibility.
     Feasible candidates appear first, ordered by the objective according to
     {attr}`~ommx.SampleSet.sense`. Feasibility checks variable kinds and bounds
-    and all retained constraints, including removed constraints.
+    and constraints with roles ACTIVE or FEASIBILITY_CHECK; EVALUATION_ONLY rows are excluded.
     Retrieve an individual sample as a Solution using its ID:
 
     >>> solution = sample_set.get(sample_id=0)
@@ -12230,7 +12693,7 @@ class SampleSet:
 
     Evaluate candidates with the transformed Instance supplied to the sampler.
     It retains the fixed values and dependencies needed to restore variables,
-    removed constraints to inspect, and any preserved output objective.
+    inactive constraints to inspect, and any preserved output objective.
     Evaluation reports that output objective and sense, which may differ from
     the active solver-facing objective.
 
@@ -12249,8 +12712,8 @@ class SampleSet:
     >>> assert results.best_feasible.optimality == Optimality.Unspecified
 
     Successful value reconstruction, feasibility, and optimality remain separate
-    questions. {attr}`~ommx.SampleSet.feasible` includes retained removed
-    constraints; {attr}`~ommx.SampleSet.feasible_relaxed` excludes them while
+    questions. {attr}`~ommx.SampleSet.feasible` checks constraints with roles ACTIVE or
+    FEASIBILITY_CHECK; {attr}`~ommx.SampleSet.feasible_relaxed` excludes inactive constraints while
     still checking all variable domains. See {class}`~ommx.Solution` for output
     interpretation and {meth}`~ommx.Instance.populate_state` for reconstruction,
     defaults, and normalization. Choosing the best supplied candidate never
@@ -12301,7 +12764,7 @@ class SampleSet:
         r"""
         Unique names across all constraint families, as a set of strings.
 
-        Retained removed constraints are included; no sample ID is needed.
+        Retained inactive constraints are included; no sample ID is needed.
         The scope matches `extract_constraints`. Unnamed constraints are excluded;
         an explicitly empty name is included. Duplicate names appear once, even
         when extraction would reject duplicate subscripts.
@@ -12329,9 +12792,12 @@ class SampleSet:
         r"""
         The best feasible candidate as an independent Solution.
 
-        Selects only candidates satisfying {attr}`~ommx.SampleSet.feasible`,
-        including variable domains and retained removed constraints. Minimization
-        selects the smallest reported objective; maximization selects the largest.
+        Selects only candidates satisfying {attr}`~ommx.SampleSet.feasible`:
+        constraints with roles ACTIVE or FEASIBILITY_CHECK, plus all variable kinds and bounds.
+        EVALUATION_ONLY constraints are excluded. Use
+        {attr}`~ommx.SampleSet.best_feasible_relaxed` for active constraints only.
+        Minimization selects the smallest reported objective; maximization selects
+        the largest.
         Selection does not prove global optimality or change the extracted
         Solution's optimality status.
 
@@ -12359,7 +12825,7 @@ class SampleSet:
         r"""
         The best candidate satisfying relaxed feasibility as an independent Solution.
 
-        Uses {attr}`~ommx.SampleSet.feasible_relaxed`: removed constraints are
+        Uses {attr}`~ommx.SampleSet.feasible_relaxed`: inactive constraints are
         excluded, while all variable kinds and bounds still apply. The selected
         candidate can therefore fail {attr}`~ommx.Solution.feasible`.
         Comparison still uses the reported objective and sense; it does not switch
@@ -12369,7 +12835,10 @@ class SampleSet:
     @property
     def best_feasible_unrelaxed(self) -> Solution:
         r"""
-        Alias for {attr}`~ommx.SampleSet.best_feasible`, including removed constraints.
+        Alias for {attr}`~ommx.SampleSet.best_feasible`.
+
+        Checks constraints with roles ACTIVE or FEASIBILITY_CHECK, plus all variable kinds
+        and bounds. EVALUATION_ONLY constraints are excluded.
         Raises ValueError if there is no feasible sample.
         """
     @property
@@ -12386,7 +12855,8 @@ class SampleSet:
         r"""
         Get feasibility status for all samples, including variable bounds and kinds.
 
-        Includes all retained regular and special constraints, even removed ones.
+        Checks constraints with roles ACTIVE or FEASIBILITY_CHECK across every family.
+        EVALUATION_ONLY constraints are excluded but remain evaluated and inspectable.
         Each value matches {attr}`~ommx.Solution.feasible` on the corresponding
         extracted Solution and uses {attr}`~ommx.SampleSet.feasibility_atol`.
         """
@@ -12395,12 +12865,13 @@ class SampleSet:
         r"""
         Get relaxed feasibility status for all samples.
 
-        Removed constraints are excluded; variable bounds and kinds still apply.
+        Inactive constraints are excluded; variable bounds and kinds still apply.
         """
     @property
     def feasible_unrelaxed(self) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
         Alias for {attr}`~ommx.SampleSet.feasible`, keyed by sample ID.
+        EVALUATION_ONLY constraints are excluded; all variable kinds and bounds apply.
         """
     @property
     def feasibility_atol(self) -> builtins.float:
@@ -12427,7 +12898,7 @@ class SampleSet:
     @property
     def constraints(self) -> SampledConstraintCollection:
         r"""
-        Live mapping of all constraint families, including removed results.
+        Live mapping of all constraint families, including inactive results.
         Typed IDs select the family. Rows are fetched only when indexed.
         """
     @property
@@ -12455,7 +12926,7 @@ class SampleSet:
         >>> instance = Instance.from_components(
         ...     decision_variables=x + y,
         ...     objective=sum(x) + sum(y),
-        ...     constraints={},
+        ...     active_constraints={},
         ...     sense=Sense.Maximize,
         ... )
         >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
@@ -12474,7 +12945,7 @@ class SampleSet:
 
         The index is ``sample_id`` and the columns are ``objective`` and
         ``feasible``. Feasibility matches {attr}`~ommx.SampleSet.feasible`, including
-        variable kinds and bounds and all retained constraints, even removed ones.
+        variable kinds and bounds plus constraints with roles ACTIVE or FEASIBILITY_CHECK.
         Feasible candidates appear first; within each feasibility group, objective
         values are ascending for minimization and descending for maximization,
         according to {attr}`~ommx.SampleSet.sense`.
@@ -12537,8 +13008,9 @@ class SampleSet:
         Use `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.
         This compatibility format cannot represent v3 features such as native
         Indicator constraints. Raises `RuntimeError` if Indicator, OneHot, or
-        SOS1 results are retained, including inactive, satisfied, and removed
-        constraints. Use `to_v2_bytes()` to preserve them.
+        SOS1 results are retained, including satisfied and inactive constraints,
+        or if any inactive constraint skips feasibility checks.
+        Use `to_v2_bytes()` to preserve these features.
 
         For results that can be exported, v1 recomputes feasibility at the SDK
         default tolerance. Use v2 to preserve the evaluation tolerance.
@@ -12555,7 +13027,7 @@ class SampleSet:
 
         ``sample_id`` is the candidate's ID, not its row position in
         {attr}`~ommx.SampleSet.summary`. The independent result contains evaluated
-        values, variable and constraint labels, retained removed constraints,
+        values, variable and constraint labels, retained inactive constraints,
         named functions, reported objective and sense, and the stored tolerance.
         Changing the extracted Solution does not update the SampleSet.
         Raises KeyError if the sample ID does not exist.
@@ -12587,7 +13059,10 @@ class SampleSet:
         """
     def feasible_ids(self) -> builtins.set[builtins.int]: ...
     def feasible_relaxed_ids(self) -> builtins.set[builtins.int]: ...
-    def feasible_unrelaxed_ids(self) -> builtins.set[builtins.int]: ...
+    def feasible_unrelaxed_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        Alias for {meth}`~ommx.SampleSet.feasible_ids`.
+        """
     def extract_decision_variables(
         self, name: builtins.str, sample_id: builtins.int
     ) -> dict:
@@ -12634,7 +13109,7 @@ class SampleSet:
         >>> instance = Instance.from_components(
         ...     decision_variables=x + y,
         ...     objective=sum(x) + sum(y),
-        ...     constraints={},
+        ...     active_constraints={},
         ...     sense=Sense.Maximize,
         ... )
         >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
@@ -12652,7 +13127,7 @@ class SampleSet:
 
         Raises KeyError if the name or sample ID does not exist. Raises
         ValueError if matching constraints share subscripts, including across families.
-        Parameters and descriptions are ignored. Retained removed constraints are
+        Parameters and descriptions are ignored. Retained inactive constraints are
         included. Regular constraints return violations, not signed function values.
         """
     def extract_named_functions(
@@ -12675,7 +13150,7 @@ class SampleSet:
         >>> x = DecisionVariable.binary(0, name="selected")
         >>> cost = NamedFunction(id=10, function=4 * x, name="cost")
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={},
+        ...     decision_variables=[x], objective=x, active_constraints={},
         ...     sense=Sense.Maximize, named_functions=[cost],
         ... )
         >>> results = instance.evaluate_samples({7: {x.id: 0}, 9: {x.id: 1}})
@@ -12720,6 +13195,7 @@ class SampleSet:
         *,
         kind: ConstraintKind[ConstraintIDBase],
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
+        min_role: ConstraintRole = ConstraintRole.EVALUATION_ONLY,
     ) -> pandas.DataFrame:
         r"""
         DataFrame of sampled constraints, dispatched on `kind=`. See
@@ -12728,9 +13204,9 @@ class SampleSet:
         (`value.{sample_id}`, `feasible.{sample_id}`, etc.) on top of
         the kind-specific core columns.
 
-        `SampleSet` has no `removed=` parameter (no active/removed
-        distinction at the sampled stage); reason data is gated by
-        `"removed_reason"` in `include=`.
+        min_role selects rows at or above the given role,
+        defaulting to all rows. Reason data is gated by
+        `"inactive_reason"` in `include=`.
         """
     def named_functions_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
@@ -12760,11 +13236,11 @@ class SampleSet:
         r"""
         Constraint provenance DataFrame (long format).
         """
-    def constraint_removed_reasons_df(
+    def constraint_inactive_reasons_df(
         self, *, kind: ConstraintKind[ConstraintIDBase]
     ) -> pandas.DataFrame:
         r"""
-        Removed-constraint reasons DataFrame (long format).
+        Inactive-constraint reasons DataFrame (long format).
         """
     def variable_labels_df(self) -> pandas.DataFrame:
         r"""
@@ -12798,6 +13274,8 @@ class SampledConstraint(ConstraintView):
         Nonnegative violations keyed by sample ID.
         """
     @property
+    def role(self) -> ConstraintRole: ...
+    @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
         Modeling name, if supplied.
@@ -12823,14 +13301,14 @@ class SampledConstraint(ConstraintView):
         Transformation lineage, preserving the source constraint family.
         """
     @property
-    def removed_reason(self) -> typing.Optional[builtins.str]:
+    def inactive_reason(self) -> typing.Optional[builtins.str]:
         r"""
-        Reason this constraint was removed before evaluation, or None.
+        Reason this constraint was deactivated before evaluation, or None.
         """
     @property
-    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+    def inactive_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
-        Parameters of the removal reason; empty for an active constraint.
+        Parameters of the inactivation reason; empty for an active constraint.
         """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def feasible(
@@ -12845,22 +13323,22 @@ class SampledConstraint(ConstraintView):
 @typing.final
 class SampledConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
     r"""
-    Live mapping of a SampleSet's constraint results, including retained removed rows.
+    Live mapping of a SampleSet's constraint results, including retained inactive rows.
 
     Obtained from {attr}`~ommx.SampleSet.constraints`. Each access returns an
-    independent snapshot with labels, provenance, removal reasons, and sampled
+    independent snapshot with labels, provenance, inactivation reasons, and sampled
     evaluation diagnostics. Changing that snapshot does not update the SampleSet;
     a later lookup reads the owner's current state. The collection keeps its owner
     alive.
 
     The typed-key, ``get``, live-view, iteration, and snapshot equality rules are
-    documented in {class}`~ommx.ConstraintCollection`. See
+    documented in {class}`~ommx.ActiveConstraintCollection`. See
     {class}`~ommx.EvaluatedConstraintCollection` for the current ID and result-type
     table, and {class}`~ommx.ConstraintFamilyView` for ``of_kind`` filtering.
     Sampled rows expose ``violations`` and ``feasible(atol=...)`` keyed by sample ID.
     Use {attr}`~ommx.SampleSet.summary` for per-sample objectives and overall
     feasibility, or {meth}`~ommx.SampleSet.constraints_df` with an explicit ``kind``
-    for a table of one constraint family, including retained removed rows.
+    for a table of one constraint family, including retained inactive rows.
     """
     def __len__(self) -> builtins.int: ...
     def __contains__(self, key: builtins.object) -> builtins.bool: ...
@@ -13027,6 +13505,8 @@ class SampledIndicatorConstraint(ConstraintView):
     An owned sampled indicator result. Fetched by typed ID from the owning result's constraints collection.
     """
     @property
+    def role(self) -> ConstraintRole: ...
+    @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
         Modeling name, if supplied.
@@ -13052,14 +13532,14 @@ class SampledIndicatorConstraint(ConstraintView):
         Transformation lineage, preserving the source constraint family.
         """
     @property
-    def removed_reason(self) -> typing.Optional[builtins.str]:
+    def inactive_reason(self) -> typing.Optional[builtins.str]:
         r"""
-        Reason this constraint was removed before evaluation, or None.
+        Reason this constraint was deactivated before evaluation, or None.
         """
     @property
-    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+    def inactive_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
-        Parameters of the removal reason; empty for an active constraint.
+        Parameters of the inactivation reason; empty for an active constraint.
         """
     @property
     def violations(self) -> builtins.dict[builtins.int, builtins.float]:
@@ -13079,12 +13559,12 @@ class SampledIndicatorConstraint(ConstraintView):
     @property
     def indicator_variable_id(self) -> builtins.int:
         r"""
-        Decision variable that activates this constraint.
+        Binary decision variable controlling when the body is enforced.
         """
     @property
-    def activate_on_zero(self) -> builtins.bool:
+    def trigger_value(self) -> builtins.int:
         r"""
-        Whether zero activates the body instead of one.
+        Binary value (0 or 1) at which the body is enforced.
         """
     @property
     def equality(self) -> Equality:
@@ -13097,9 +13577,9 @@ class SampledIndicatorConstraint(ConstraintView):
         Inner residuals keyed by sample ID.
         """
     @property
-    def indicator_active(self) -> builtins.dict[builtins.int, builtins.bool]:
+    def indicator_on(self) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
-        Activation diagnostics keyed by sample ID.
+        Indicator ON/OFF diagnostics keyed by sample ID, independently of role.
         """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def feasible(
@@ -13159,6 +13639,8 @@ class SampledOneHotConstraint(ConstraintView):
     An owned sampled one-hot result. Fetched by typed ID from the owning result's constraints collection.
     """
     @property
+    def role(self) -> ConstraintRole: ...
+    @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
         Modeling name, if supplied.
@@ -13184,14 +13666,14 @@ class SampledOneHotConstraint(ConstraintView):
         Transformation lineage, preserving the source constraint family.
         """
     @property
-    def removed_reason(self) -> typing.Optional[builtins.str]:
+    def inactive_reason(self) -> typing.Optional[builtins.str]:
         r"""
-        Reason this constraint was removed before evaluation, or None.
+        Reason this constraint was deactivated before evaluation, or None.
         """
     @property
-    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+    def inactive_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
-        Parameters of the removal reason; empty for an active constraint.
+        Parameters of the inactivation reason; empty for an active constraint.
         """
     @property
     def violations(self) -> builtins.dict[builtins.int, builtins.float]:
@@ -13214,7 +13696,7 @@ class SampledOneHotConstraint(ConstraintView):
         Member decision variable IDs.
         """
     @property
-    def active_variable(
+    def selected_variable(
         self,
     ) -> builtins.dict[builtins.int, typing.Optional[builtins.int]]:
         r"""
@@ -13234,6 +13716,8 @@ class SampledSos1Constraint(ConstraintView):
     An owned sampled SOS1 result. Fetched by typed ID from the owning result's constraints collection.
     """
     @property
+    def role(self) -> ConstraintRole: ...
+    @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
         Modeling name, if supplied.
@@ -13259,14 +13743,14 @@ class SampledSos1Constraint(ConstraintView):
         Transformation lineage, preserving the source constraint family.
         """
     @property
-    def removed_reason(self) -> typing.Optional[builtins.str]:
+    def inactive_reason(self) -> typing.Optional[builtins.str]:
         r"""
-        Reason this constraint was removed before evaluation, or None.
+        Reason this constraint was deactivated before evaluation, or None.
         """
     @property
-    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+    def inactive_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
-        Parameters of the removal reason; empty for an active constraint.
+        Parameters of the inactivation reason; empty for an active constraint.
         """
     @property
     def violations(self) -> builtins.dict[builtins.int, builtins.float]:
@@ -13289,7 +13773,7 @@ class SampledSos1Constraint(ConstraintView):
         Member decision variable IDs.
         """
     @property
-    def active_variable(
+    def selected_variable(
         self,
     ) -> builtins.dict[builtins.int, typing.Optional[builtins.int]]:
         r"""
@@ -13604,7 +14088,7 @@ class Solution:
 
     | Property | Meaning | Does not establish |
     | --- | --- | --- |
-    | {attr}`~ommx.Solution.feasible` | Variable domains and all retained constraints are satisfied | No better candidate exists |
+    | {attr}`~ommx.Solution.feasible` | Variable domains and constraints with roles ACTIVE or FEASIBILITY_CHECK are satisfied | No better candidate exists |
     | {attr}`~ommx.Solution.objective` | The candidate's reported objective value | Feasibility or optimality |
     | {attr}`~ommx.Solution.optimality` | Recorded optimality status, for example supplied by an adapter | A proof performed by ``evaluate`` |
 
@@ -13632,7 +14116,7 @@ class Solution:
 
     For queries without pandas, {attr}`~ommx.Solution.constraints` is a live
     {class}`~ommx.EvaluatedConstraintCollection` indexed by typed constraint IDs.
-    It includes active constraints and constraints retained after removal.
+    It includes active constraints and constraints retained after deactivation.
     Each fetched row is an independent snapshot; editing it does not update
     the Solution. Use an owner method such as
     {meth}`~ommx.Solution.set_dual_variable` when changing result data.
@@ -13652,7 +14136,7 @@ class Solution:
 
     Evaluate a solver's returned State with the transformed Instance that was
     supplied to it. That Instance retains the fixed values, dependencies,
-    removed constraints, and output objective needed to interpret the result.
+    inactive constraints, and output objective needed to interpret the result.
     Passing the State directly to the original Instance may lose that context
     or leave required original variables unspecified.
 
@@ -13672,9 +14156,9 @@ class Solution:
     Fixed and dependent values are reconstructed. Otherwise irrelevant variables
     omitted from the candidate receive defaults; a default is not a value found
     by the solver. Supply such a value when it matters to reported metrics.
-    Distinguish successful reconstruction, feasibility including removed
+    Distinguish successful reconstruction, feasibility including inactive
     constraints, and transport of objective or optimality information.
-    {attr}`~ommx.Solution.feasible_relaxed` excludes removed constraints but
+    {attr}`~ommx.Solution.feasible_relaxed` excludes inactive constraints but
     still checks variable domains. Output objective and optimality transport
     follow {attr}`~ommx.Instance.output_objective` and
     {meth}`~ommx.Instance.map_active_optimality`, respectively.
@@ -13742,7 +14226,7 @@ class Solution:
         r"""
         Unique names across all constraint families, as a set of strings.
 
-        Retained removed constraints are included; no sample ID is needed.
+        Retained inactive constraints are included; no sample ID is needed.
         The scope matches `extract_constraints`. Unnamed constraints are excluded;
         an explicitly empty name is included. Duplicate names appear once, even
         when extraction would reject duplicate subscripts.
@@ -13771,28 +14255,22 @@ class Solution:
     @property
     def feasible(self) -> builtins.bool:
         r"""
-        Whether all retained constraints and variable domains are satisfied.
+        Whether constraints with roles ACTIVE or FEASIBILITY_CHECK and every variable domain are satisfied.
 
-        Checks all regular and special constraints, including removed constraints,
-        together with the kind and bounds of every retained variable, using
-        {attr}`~ommx.Solution.feasibility_atol`. This is an alias for
-        {attr}`~ommx.Solution.feasible_unrelaxed`; it does not establish optimality.
-
-        Compatibility: The meaning of this property has changed from Python SDK 1.7.0.
-        Previously, this property represents the feasibility of the remaining constraints only,
-        i.e. excluding relaxed constraints.
-        From Python SDK 1.7.0, this property represents the feasibility of all constraints,
-        including relaxed constraints.
+        EVALUATION_ONLY constraints are excluded from this judgment, but are still
+        evaluated and remain inspectable. Use {attr}`~ommx.Solution.feasible_relaxed`
+        to check only active constraints together with every variable domain.
+        Uses feasibility_atol independently for each constraint and variable.
         """
     @property
     def feasible_relaxed(self) -> builtins.bool:
         r"""
         Whether active constraints and all retained variable domains are satisfied.
 
-        Excludes constraints retained after removal, across all constraint families.
+        Excludes constraints retained after deactivation, across all constraint families.
         Variable kind and bound checks are still applied with
         {attr}`~ommx.Solution.feasibility_atol`. A result can satisfy this property
-        while failing {attr}`~ommx.Solution.feasible` because a removed constraint
+        while failing {attr}`~ommx.Solution.feasible` because an inactive constraint
         is violated.
 
         >>> from ommx import ConstraintKind, Instance
@@ -13800,7 +14278,7 @@ class Solution:
         >>> x = instance.new_binary("x")
         >>> instance.objective = x
         >>> required = instance.add_constraint(x == 1, "required")
-        >>> instance.relax_constraint(required.constraint_id, "manual relaxation")
+        >>> instance.deactivate_constraint(required.constraint_id, "manual relaxation")
         >>> solution = instance.evaluate({x.id: 0})
         >>> assert solution.feasible_relaxed
         >>> assert not solution.feasible
@@ -13809,8 +14287,10 @@ class Solution:
     @property
     def feasible_unrelaxed(self) -> builtins.bool:
         r"""
-        Alias for {attr}`~ommx.Solution.feasible`, including removed constraints
-        and every retained variable's kind and bounds.
+        Alias for {attr}`~ommx.Solution.feasible`.
+
+        Checks constraints with roles ACTIVE or FEASIBILITY_CHECK, plus every retained
+        variable's kind and bounds. EVALUATION_ONLY constraints are excluded.
         """
     @property
     def feasibility_atol(self) -> builtins.float:
@@ -13864,10 +14344,10 @@ class Solution:
     @property
     def constraints(self) -> EvaluatedConstraintCollection:
         r"""
-        Live mapping of all constraint families, including removed results.
+        Live mapping of all constraint families, including inactive results.
 
         Typed IDs select the family. Rows are fetched only when indexed, as
-        independent snapshots with labels, provenance, removal reasons, and
+        independent snapshots with labels, provenance, inactivation reasons, and
         evaluation diagnostics. Changing a snapshot does not update this
         Solution; subsequent lookups read the owner's current result.
         Use {meth}`~ommx.Solution.set_dual_variable` to update a stored regular
@@ -13916,7 +14396,7 @@ class Solution:
         >>> instance = Instance.from_components(
         ...     decision_variables=x + y,
         ...     objective=sum(x) + sum(y),
-        ...     constraints={},
+        ...     active_constraints={},
         ...     sense=Sense.Maximize,
         ... )
         >>> solution = instance.evaluate({i: 1 for i in range(5)})
@@ -13983,8 +14463,9 @@ class Solution:
         Use `to_v2_bytes()` for new storage and exchange with v3 or later SDKs.
         This compatibility format cannot represent v3 features such as native
         Indicator constraints. Raises `RuntimeError` if Indicator, OneHot, or
-        SOS1 results are retained, including inactive, satisfied, and removed
-        constraints. Use `to_v2_bytes()` to preserve them.
+        SOS1 results are retained, including satisfied and inactive constraints,
+        or if any inactive constraint skips feasibility checks.
+        Use `to_v2_bytes()` to preserve these features.
 
         For results that can be exported, v1 recomputes feasibility at the SDK
         default tolerance. Use v2 to preserve the evaluation tolerance.
@@ -14062,7 +14543,7 @@ class Solution:
         >>> instance = Instance.from_components(
         ...     decision_variables=x + y,
         ...     objective=sum(x) + sum(y),
-        ...     constraints={},
+        ...     active_constraints={},
         ...     sense=Sense.Maximize,
         ... )
         >>> solution = instance.evaluate({i: 1 for i in range(5)})
@@ -14084,7 +14565,7 @@ class Solution:
 
         Raises KeyError if no constraint has the requested name. Raises
         ValueError if matching constraints share subscripts, including across families.
-        Parameters and descriptions are ignored. Retained removed constraints are
+        Parameters and descriptions are ignored. Retained inactive constraints are
         included. Regular constraints return violations, not signed function values.
         Indicator violations account for activation, while OneHot and SOS1 use
         their respective metrics; see {meth}`~ommx.Solution.total_violation`.
@@ -14096,10 +14577,10 @@ class Solution:
         subscripts, distinguish them through typed-ID lookup in
         {attr}`~ommx.Solution.constraints` instead of name extraction.
 
-        Related methods on {meth}`~ommx.Instance.extract_constraints` and
-        {meth}`~ommx.ParametricInstance.extract_constraints` return attached
+        Related methods on {meth}`~ommx.Instance.extract_active_constraints` and
+        {meth}`~ommx.ParametricInstance.extract_active_constraints` return attached
         handles for active constraints; {meth}`~ommx.SampleSet.extract_constraints`
-        returns violations for a selected sample, including removed constraints.
+        returns violations for a selected sample, including inactive constraints.
 
         # Examples
 
@@ -14110,7 +14591,7 @@ class Solution:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints={0: c0, 1: c1},
+        ...     active_constraints={0: c0, 1: c1},
         ...     sense=Sense.Maximize,
         ... )
         >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
@@ -14123,9 +14604,9 @@ class Solution:
         >>> named = Instance.minimize()
         >>> x = named.new_binary("x")
         >>> capacity = named.add_constraint(x <= 2, "capacity", subscripts=[0])
-        >>> assert named.constraint_names == {"capacity"}
-        >>> assert named.extract_constraints("capacity")[(0,)] == capacity
-        >>> assert named.as_parametric_instance().extract_constraints("capacity")[(0,)].name == "capacity"
+        >>> assert named.active_constraint_names == {"capacity"}
+        >>> assert named.extract_active_constraints("capacity")[(0,)] == capacity
+        >>> assert named.as_parametric_instance().extract_active_constraints("capacity")[(0,)].name == "capacity"
         >>> solution = named.evaluate({x.id: 0})
         >>> assert solution.extract_constraints("capacity") == {(0,): 0.0}
         >>> assert solution.get_constraint_value(capacity.constraint_id) == -2.0
@@ -14152,7 +14633,7 @@ class Solution:
         >>> x = DecisionVariable.binary(0, name="selected")
         >>> cost = NamedFunction(id=10, function=4 * x, name="cost")
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={},
+        ...     decision_variables=[x], objective=x, active_constraints={},
         ...     sense=Sense.Maximize, named_functions=[cost],
         ... )
         >>> solution = instance.evaluate({x.id: 1})
@@ -14240,6 +14721,7 @@ class Solution:
         *,
         kind: ConstraintKind[ConstraintIDBase],
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
+        min_role: ConstraintRole = ConstraintRole.EVALUATION_ONLY,
     ) -> pandas.DataFrame:
         r"""
         DataFrame of evaluated constraints, including `feasible` and `violation` for every kind.
@@ -14258,15 +14740,15 @@ class Solution:
         {meth}`ommx.Instance.constraints_df` for column / `kind=` /
         `include=` semantics.
 
-        `Solution` has no `removed=` parameter (no active/removed
-        distinction at the evaluated stage); reason data is gated by
-        `"removed_reason"` in `include=`. When the flag is on, rows for
-        constraints removed before evaluation get `removed_reason` /
-        `removed_reason.{key}` columns populated; other rows have NA.
+        min_role selects rows at or above the given role,
+        defaulting to all rows. Reason data is gated by
+        `"inactive_reason"` in `include=`. When the flag is on, rows for
+        constraints deactivated before evaluation get `inactive_reason` /
+        `inactive_reason.{key}` columns populated; other rows have NA.
         The related metadata queries {meth}`~ommx.Solution.constraint_context_df`,
         {meth}`~ommx.Solution.constraint_parameters_df`,
         {meth}`~ommx.Solution.constraint_provenance_df`, and
-        {meth}`~ommx.Solution.constraint_removed_reasons_df` also require ``kind``.
+        {meth}`~ommx.Solution.constraint_inactive_reasons_df` also require ``kind``.
 
         >>> from ommx import ConstraintKind, Instance
         >>> instance = Instance.minimize()
@@ -14309,11 +14791,11 @@ class Solution:
         r"""
         Constraint provenance DataFrame (long format).
         """
-    def constraint_removed_reasons_df(
+    def constraint_inactive_reasons_df(
         self, *, kind: ConstraintKind[ConstraintIDBase]
     ) -> pandas.DataFrame:
         r"""
-        Removed-constraint reasons DataFrame (long format).
+        Inactive-constraint reasons DataFrame (long format).
         """
     def variable_labels_df(self) -> pandas.DataFrame:
         r"""
@@ -14325,18 +14807,21 @@ class Solution:
         """
     def __copy__(self) -> Solution: ...
     def __deepcopy__(self, _memo: typing.Any) -> Solution: ...
-    def total_violation(self) -> builtins.float:
+    def total_violation(
+        self, *, min_role: ConstraintRole = ConstraintRole.FEASIBILITY_CHECK
+    ) -> builtins.float:
         r"""
-        Sum the nonnegative scalar violation of every constraint, including removed constraints.
+        Sum the nonnegative scalar violations selected by min_role.
 
         - Equality: `abs(f(x))`; inequality: `max(0, f(x))`.
-        - Indicator: the inner violation when active, otherwise zero.
+        - Indicator: the inner violation when `indicator_on` is true, otherwise zero.
         - OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.
         - SOS1: `min_i sum_{j != i} abs(x_j)`.
 
-        Each constraint is feasible exactly when its violation is at most the
-        evaluation tolerance. This threshold applies to each constraint separately,
-        not to the total. Zero therefore implies that all constraints are feasible.
+        The default ``FEASIBILITY_CHECK`` selects the same constraints as
+        {attr}`~ommx.Solution.feasible`. ``ACTIVE`` selects the same constraints as
+        {attr}`~ommx.Solution.feasible_relaxed`; ``EVALUATION_ONLY`` includes all rows.
+        This sum is a diagnostic metric, not a feasibility predicate.
         Variable bound and kind violations
         are not added. Values use the evaluated state after discrete-value
         canonicalization. Lowering need not preserve the metric: a retained
@@ -14349,7 +14834,7 @@ class Solution:
         r"""
         Get one constraint's nonnegative scalar violation.
 
-        Uses the definitions in {meth}`total_violation`, including for removed
+        Uses the definitions in {meth}`total_violation`, including for inactive
         constraints. The ID type selects its family. Raises `KeyError` when
         the ID is absent from that constraint family.
         """
@@ -14589,12 +15074,15 @@ class Sos1Constraint:
     ```
 
     See {meth}`~ommx.Instance.evaluate` for numerical evaluation and
-    {meth}`~ommx.Solution.constraints_df` for violation and activation diagnostics.
+    {meth}`~ommx.Solution.constraints_df` for violation and selection diagnostics.
+    Evaluated and sampled result rows expose `selected_variable` as a
+    candidate-dependent diagnostic, independently of variable or constraint
+    membership in the Active Formulation.
     The constructor creates an independent value;
     {meth}`~ommx.Instance.add_sos1_constraint` returns an attached handle.
-    For explicit IDs, use the `sos1_constraints` mapping of
+    For explicit IDs, use the `active_sos1_constraints` mapping of
     {meth}`~ommx.Instance.from_components`. Constraint numbers follow the same
-    cross-family uniqueness rule as regular constraints, including removed rows.
+    cross-family uniqueness rule as regular constraints, including inactive rows.
 
     **Use the structure directly or express it with regular constraints**
 
@@ -14718,7 +15206,7 @@ class SpecialConstraintPreparation:
 
         ``kinds`` is passed unchanged as the set of active special-constraint
         families to lower. See the owner operation and its per-family conversion
-        methods for formulas, prerequisites, generated artifacts, stored removal
+        methods for formulas, prerequisites, generated artifacts, stored inactivation
         reasons and provenance, and failure semantics.
 
         ``atol`` is used when Indicator Function bodies require zero-sensitive
@@ -14817,28 +15305,28 @@ class DecisionVariableRole(enum.Enum):
 
     | Role | Meaning | Value for candidate evaluation |
     | --- | --- | --- |
-    | `Used` | Referenced by the current objective or active constraints | Supplied by the caller |
-    | `Fixed` | A retained, non-used variable with a recorded fixed value | Restored from that value |
-    | `Dependent` | Neither used nor fixed; represented by an expression in other variables | Computed from that expression |
-    | `Irrelevant` | Neither used, fixed, nor dependent | Supplied by the caller, or filled with a default when omitted |
+    | `Active` | Belongs to the current Active Formulation | Supplied by the caller |
+    | `Fixed` | A retained variable outside the Active Formulation with a recorded fixed value | Restored from that value |
+    | `Dependent` | Neither active nor fixed; represented by an expression in other variables | Computed from that expression |
+    | `Irrelevant` | Neither active, fixed, nor dependent | Supplied by the caller, or filled with a default when omitted |
 
     Active constraints include regular and special constraints, including an
     Indicator's controlling Binary variable. References only from named functions,
-    removed constraints, output objectives, or dependency right-hand sides do not
-    make a variable used. Being irrelevant to solver input does not mean its value
+    inactive constraints, output objectives, or dependency right-hand sides do not
+    make a variable active. Being irrelevant to solver input does not mean its value
     cannot affect reporting.
 
     {meth}`~ommx.Instance.populate_state` explains reconstruction, defaults,
     canonicalization, and consistency assertions with executable examples.
     """
 
-    Used = ...
+    Active = ...
     r"""
-    Used by the objective or active constraints passed to solvers
+    Belongs to the Active Formulation through its objective or active constraints
     """
     Fixed = ...
     r"""
-    Fixed by the instance-owned fixed-value table and not used by solver input
+    Fixed by the instance-owned fixed-value table and outside the Active Formulation
     """
     Dependent = ...
     r"""
@@ -14846,7 +15334,7 @@ class DecisionVariableRole(enum.Enum):
     """
     Irrelevant = ...
     r"""
-    Not used, fixed, or dependent
+    Not active, fixed, or dependent
     """
 
     def __hash__(self) -> builtins.int: ...

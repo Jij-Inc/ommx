@@ -47,7 +47,7 @@ def test_input_class_accepts_complete_linear_mip_boundary(sense):
     instance = Instance.from_components(
         decision_variables=[x, y, z],
         objective=x + y + z,
-        constraints={0: x + y == 1, 1: z <= 1},
+        active_constraints={0: x + y == 1, 1: z <= 1},
         sense=sense,
     )
 
@@ -62,7 +62,7 @@ def test_error_nonlinear_objective():
     ommx_instance = Instance.from_components(
         decision_variables=[x],
         objective=2.3 * x * x,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 
@@ -81,7 +81,7 @@ def test_error_non_polynomial_objective():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=abs(Function(x)),
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 
@@ -99,7 +99,7 @@ def test_error_nonlinear_constraint():
     ommx_instance = Instance.from_components(
         decision_variables=[x],
         objective=0,  # constant 0
-        constraints={0: 2.3 * x * x == 0},
+        active_constraints={0: 2.3 * x * x == 0},
         sense=Sense.Minimize,
     )
 
@@ -128,7 +128,7 @@ def test_rejects_unsupported_variable_kinds(variable, kind):
     instance = Instance.from_components(
         decision_variables=[variable],
         objective=variable,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
 
@@ -142,13 +142,13 @@ def test_rejects_unsupported_variable_kinds(variable, kind):
     assert mismatch.variable_ids == {0}
 
 
-def test_accepts_unused_unsupported_variable_kind_without_mutating_input():
-    used = DecisionVariable.binary(0)
-    unused = DecisionVariable.semi_integer(1, lower=1, upper=3)
+def test_accepts_non_active_unsupported_variable_kind_without_mutating_input():
+    active = DecisionVariable.binary(0)
+    non_active = DecisionVariable.semi_integer(1, lower=1, upper=3)
     instance = Instance.from_components(
-        decision_variables=[used, unused],
-        objective=used,
-        constraints={},
+        decision_variables=[active, non_active],
+        objective=active,
+        active_constraints={},
         sense=Sense.Minimize,
     )
     before = instance.to_v2_bytes()
@@ -166,17 +166,17 @@ def test_rejects_special_constraints_without_mutating_input():
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
-        indicator_constraints={
+        active_indicator_constraints={
             10: IndicatorConstraint(
                 indicator_variable=x,
                 function=y - 1,
                 equality=Equality.LessThanOrEqualToZero,
             )
         },
-        one_hot_constraints={20: OneHotConstraint(variables=[x])},
-        sos1_constraints={30: Sos1Constraint(variables=[y])},
+        active_one_hot_constraints={20: OneHotConstraint(variables=[x])},
+        active_sos1_constraints={30: Sos1Constraint(variables=[y])},
     )
     before = instance.to_v2_bytes()
 
@@ -206,17 +206,17 @@ def test_recommended_preparation_reaches_the_highs_input_class():
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
-        indicator_constraints={
+        active_indicator_constraints={
             10: IndicatorConstraint(
                 indicator_variable=x,
                 function=y - 1,
                 equality=Equality.LessThanOrEqualToZero,
             )
         },
-        one_hot_constraints={20: OneHotConstraint(variables=[x])},
-        sos1_constraints={30: Sos1Constraint(variables=[y])},
+        active_one_hot_constraints={20: OneHotConstraint(variables=[x])},
+        active_sos1_constraints={30: Sos1Constraint(variables=[y])},
     )
     input_class = OMMXHighsAdapter.INPUT_CLASS
     assert not input_class.contains(instance)
@@ -238,7 +238,7 @@ def test_error_infeasible_model():
     ommx_instance = Instance.from_components(
         decision_variables=[x],
         objective=0,
-        constraints={
+        active_constraints={
             0: Constraint(
                 function=x,
                 equality=Equality.EqualToZero,

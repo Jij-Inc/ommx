@@ -18,11 +18,40 @@ pub struct Created;
 
 // ===== Common types =====
 
-/// Reason why a constraint was removed/relaxed.
+/// The role of a constraint in evaluation, feasibility, and the Active Formulation.
+///
+/// Queries include a row when its role is at least the requested minimum.
+/// The order is [`Self::EvaluationOnly`] < [`Self::FeasibilityCheck`] < [`Self::Active`].
+/// The default minimum, [`Self::FeasibilityCheck`], includes that role and active rows;
+/// selecting [`Self::EvaluationOnly`] includes every retained row.
+///
+/// Roles describe participation before and after evaluation, not whether an
+/// evaluation or feasibility check has already run. Active/inactive membership
+/// and the inactive row's check policy determine the role. Both
+/// [`Self::EvaluationOnly`] and [`Self::FeasibilityCheck`] are inactive.
+/// This participation order is specific to constraints; it does not define an
+/// ordering of [`crate::DecisionVariableRole`] by participation.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, LogicalMemoryProfile,
+)]
+pub enum ConstraintRole {
+    /// Numerically evaluated for inspection, without affecting aggregate feasibility.
+    EvaluationOnly,
+    /// Included in evaluation and normal feasibility, outside the Active Formulation.
+    #[default]
+    FeasibilityCheck,
+    /// Part of the Active Formulation, and included in evaluation and feasibility.
+    Active,
+}
+
+/// Inactive membership metadata owned by a constraint collection.
+///
+/// This record exists only for inactive rows. The collection owns membership;
+/// the skip flag distinguishes their default feasibility participation.
 #[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
-pub struct RemovedReason {
+pub struct InactiveConstraintMetadata {
     /// Fully qualified, dot-separated path identifying the method, function,
-    /// or application that removed the constraint.
+    /// or application that deactivated the constraint.
     ///
     /// External libraries are expected to mutate constraint collections (e.g.
     /// solver adapters, preprocessing passes), so the convention is to write a
@@ -37,13 +66,27 @@ pub struct RemovedReason {
     pub reason: String,
     /// Arbitrary key-value parameters for debugging.
     pub parameters: FnvHashMap<String, String>,
+    /// Exclude this row from default feasibility queries, while still evaluating it.
+    pub skip_feasibility_check: bool,
 }
 
-impl From<RemovedReason> for crate::v2::RemovedReason {
-    fn from(reason: RemovedReason) -> Self {
+impl InactiveConstraintMetadata {
+    /// The role represented by this inactive membership record.
+    pub fn role(&self) -> ConstraintRole {
+        if self.skip_feasibility_check {
+            ConstraintRole::EvaluationOnly
+        } else {
+            ConstraintRole::FeasibilityCheck
+        }
+    }
+}
+
+impl From<InactiveConstraintMetadata> for crate::v2::InactiveConstraintMetadata {
+    fn from(reason: InactiveConstraintMetadata) -> Self {
         Self {
             reason: reason.reason,
             parameters: reason.parameters.into_iter().collect(),
+            skip_feasibility_check: reason.skip_feasibility_check,
         }
     }
 }

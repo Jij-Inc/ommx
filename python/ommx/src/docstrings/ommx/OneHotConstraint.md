@@ -37,14 +37,17 @@ referenced variable exists and is Binary when inserting the constraint.
 Unlike {class}`~ommx.Sos1Constraint`, this condition does not allow selecting
 no member. Numerical evaluation and reported violations use the contracts of
 {meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Solution.constraints_df`.
+Evaluated and sampled result rows expose `selected_variable` as a
+candidate-dependent diagnostic, independently of variable or constraint
+membership in the Active Formulation.
 
 **Identity and lowering**
 
 {meth}`~ommx.Instance.add_one_hot_constraint` returns an attached handle. The
 constructor creates an independent value; context changes on it do not edit a
 constraint already inserted into a host. For explicit IDs, use the
-`one_hot_constraints` mapping of {meth}`~ommx.Instance.from_components`.
-Constraint numbers share the active/removed cross-family space described by
+`active_one_hot_constraints` mapping of {meth}`~ommx.Instance.from_components`.
+Constraint numbers share the active/inactive cross-family space described by
 {class}`~ommx.Instance`.
 
 {meth}`~ommx.Instance.convert_one_hot_to_constraint` lowers the condition to a

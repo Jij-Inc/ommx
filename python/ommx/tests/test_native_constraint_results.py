@@ -65,18 +65,22 @@ def model():
         sense=Sense.Minimize,
         objective=x + y,
         decision_variables=[x, y],
-        constraints={
+        active_constraints={
             ConstraintID(7): (x + y == 1)
             .set_name("balance")
             .set_parameters({"group": "a"})
         },
-        indicator_constraints={
+        active_indicator_constraints={
             IndicatorConstraintID(8): IndicatorConstraint(
                 indicator_variable=x, function=y - 1, equality=Equality.EqualToZero
             )
         },
-        one_hot_constraints={OneHotConstraintID(9): OneHotConstraint(variables=[x, y])},
-        sos1_constraints={Sos1ConstraintID(10): Sos1Constraint(variables=[x, y])},
+        active_one_hot_constraints={
+            OneHotConstraintID(9): OneHotConstraint(variables=[x, y])
+        },
+        active_sos1_constraints={
+            Sos1ConstraintID(10): Sos1Constraint(variables=[x, y])
+        },
     )
 
 
@@ -108,9 +112,9 @@ def test_reject_wrong_family_before_mutation_and_ambiguous_integer():
         Sos1ConstraintID(7),
     ]:
         with pytest.raises(TypeError):
-            instance.constraints.of_kind(ConstraintKind.Regular)[wrong]
+            instance.active_constraints.of_kind(ConstraintKind.Regular)[wrong]
         with pytest.raises(TypeError):
-            instance.relax_constraint(wrong, "manual")
+            instance.deactivate_constraint(wrong, "manual")
         solution = instance.evaluate({0: 1, 1: 0})
         with pytest.raises(TypeError):
             solution.set_dual_variable(wrong, 1.0)
@@ -161,10 +165,10 @@ def test_all_families_native_dataframe_and_roundtrip(
         }
 
 
-def test_removed_context_provenance_and_owned_snapshots():
+def test_inactive_context_provenance_and_owned_snapshots():
     instance = model()
     generated = instance.convert_one_hot_to_constraint(OneHotConstraintID(9))
-    instance.relax_constraint(ConstraintID(7), "manual", phase="test")
+    instance.deactivate_constraint(ConstraintID(7), "manual", phase="test")
     samples = instance.evaluate_samples({3: {0: 1, 1: 0}})
     for root in [samples, samples.get(3)]:
         rows = root.constraints
@@ -172,13 +176,13 @@ def test_removed_context_provenance_and_owned_snapshots():
             ConstraintID(7),
             generated,
         }
-        removed = rows[ConstraintID(7)]
-        assert removed.name == "balance"
-        assert removed.parameters == {"group": "a"}
-        assert removed.removed_reason == "manual"
-        assert removed.removed_reason_parameters == {"phase": "test"}
+        inactive = rows[ConstraintID(7)]
+        assert inactive.name == "balance"
+        assert inactive.parameters == {"group": "a"}
+        assert inactive.inactive_reason == "manual"
+        assert inactive.inactive_reason_parameters == {"phase": "test"}
         assert rows[generated].provenance[0].original_id == OneHotConstraintID(9)
-        assert root.constraints[OneHotConstraintID(9)].removed_reason is not None
+        assert root.constraints[OneHotConstraintID(9)].inactive_reason is not None
         frame = root.constraint_provenance_df(kind=ConstraintKind.Regular)
         assert frame.iloc[0]["source_id"] == OneHotConstraintID(9)
         assert isinstance(frame.iloc[0]["regular_constraint_id"], ConstraintID)
@@ -218,7 +222,7 @@ from ommx import ConstraintKind, Instance
 instance = Instance.empty()
 x = instance.new_binary("x")
 c = instance.add_constraint(x == 1)
-regular = instance.constraints.of_kind(ConstraintKind.Regular)
+regular = instance.active_constraints.of_kind(ConstraintKind.Regular)
 assert regular[c.constraint_id] == c
 assert list(regular.values()) == [c]
 solution = instance.evaluate({x.id: 1})

@@ -13,13 +13,15 @@
 
 ソルバーの出力にも担当者が作った計画にも、同じ検査を使えます。この上限を満たしたら、ほかの制約と変数の定義域も確認します。すべてを満たす実行可能な計画でも、別の計画のほうがよい目的値を達成する可能性があります。
 
-OMMXは、ソルバーに課す条件から外した制約も保持できます。現在課している制約を **active**、外したあとも保持する制約を **removed** と呼びます。そのため、activeな条件を満たすかと、保持した条件をすべて満たすかを区別して評価できます。整数性やboundといった変数の定義域は、どちらの判定でも考慮します。
+OMMXは、ソルバーに課す条件から外した制約も保持できます。現在課している制約を **active**、外したあとも保持する制約を **inactive** と呼びます。制約のroleは、その制約をどこまで利用するかを表します。`EVALUATION_ONLY` は評価値や違反量を確認するために使い、`FEASIBILITY_CHECK` はさらに実行可能性判定に使い、`ACTIVE` はさらにActive Formulationにも含めます。最初の2つのroleがinactiveです。roleは参加範囲を表し、評価が実施済みかどうかは表しません。
 
-特殊制約を同じ条件を表す通常制約へ置き換えた場合や、制約を目的関数のpenalty項へ変えた場合にも、元の制約をremovedとして保持します。removedは変更の記録であり、それがあることだけでは元の問題を保存する変換かどうかは分かりません。特に有限のpenalty weightでは、元の条件に違反する候補が選ばれる可能性があります。
+`feasible` propertyは、roleが `FEASIBILITY_CHECK` または `ACTIVE` の制約を検査します。inactive制約のroleは既定で `FEASIBILITY_CHECK` となり、`skip_feasibility_check=True` を指定すると `EVALUATION_ONLY` に変わります。値や違反量は引き続き調べられますが、この判定には影響しません。`feasible_relaxed` propertyはactive制約のみを検査します。どちらのpropertyも、整数性やboundといった変数の定義域を検査します。
+
+特殊制約を同じ条件を表す通常制約へ置き換えた場合や、制約を目的関数のpenalty項へ変えた場合にも、元の制約をinactiveとして保持します。inactiveは変更の記録であり、それがあることだけでは元の問題を保存する変換かどうかは分かりません。特に有限のpenalty weightでは、元の条件に違反する候補が選ばれる可能性があります。
 
 返された値と保持された条件を解釈するには、その求解で使った問題を表す変換済みInstanceを使います。ただし、その評価を元の問題についての判定とみなす前に、変換の保証を確認してください。情報が保持されていること自体は、すべての変更が元の実行可能領域や最適解を保存した証明にはなりません。
 
-実行可能性の判定と違反の調べ方は{class}`SolutionのReference <ommx.Solution>`、保持するデータとactiveな制約との関係は{attr}`removed constraintsのReference <ommx.Instance.removed_constraints>`にまとめています。
+実行可能性の判定と違反の調べ方は{class}`SolutionのReference <ommx.Solution>`、保持するデータとactiveな制約との関係は{attr}`inactive constraintsのReference <ommx.Instance.inactive_constraints>`にまとめています。
 
 ## 復元した値と、補った値を区別する
 
@@ -78,7 +80,7 @@ OMMXでは、Adapterに、backendの報告を実際に解いた入力に結び�
 
 低速運転時の上限を通常の不等式へ変換したとします。生産量を $q$、低速運転なら1となる変数を $r$ とすると、通常時の上限100個を使って $q\leq100-40r$ と表せます。候補 $q=65, r=1$ はこの不等式に違反します。生成された制約の来歴をたどると、元の「低速運転時は60個まで」というIndicator制約に対応することが分かります。
 
-OMMXでは、ラベルで数学的対象を識別し、{class}`来歴（Provenance）<ommx.Provenance>`で生成された通常制約から元の特殊制約へたどれます。{attr}`Solutionの制約行 <ommx.Solution.constraints>`にはラベル、来歴、除去理由、評価情報が保持されます。生成元と生成先の調べ方は、{meth}`特殊制約の変換と来歴参照の例 <ommx.Instance.lower_special_constraints>`にあります。
+OMMXでは、ラベルで数学的対象を識別し、{class}`来歴（Provenance）<ommx.Provenance>`で生成された通常制約から元の特殊制約へたどれます。{attr}`Solutionの制約行 <ommx.Solution.constraints>`にはラベル、来歴、無効化理由、評価情報が保持されます。生成元と生成先の調べ方は、{meth}`特殊制約の変換と来歴参照の例 <ommx.Instance.lower_special_constraints>`にあります。
 
 業務のどの宣言や入力データに対応するかは、JijModelingなどのモデラーやアプリケーションが管理する対応と組み合わせて読みます。例えば、制約のラベルから対象の生産ラインや時間帯を特定し、計画の数量・運転モード、設備能力の入力値、要求した納期などを確認します。そのうえで、計画を変えるのか、入力の誤りを直すのか、要求を見直すのかを利用者が判断します。
 

@@ -7,13 +7,14 @@ from typing import Any, overload
 import pytest
 from typing_extensions import assert_type
 
+from ommx import ConstraintRole
 from ommx import (
     ConstraintKind,
     AttachedConstraint,
     AttachedIndicatorConstraint,
     AttachedOneHotConstraint,
     AttachedSos1Constraint,
-    ConstraintCollection,
+    ActiveConstraintCollection,
     ConstraintID,
     ConstraintIDBase,
     ConstraintView,
@@ -25,8 +26,8 @@ from ommx import (
     OneHotConstraint,
     OneHotConstraintID,
     ParametricInstance,
-    RemovedConstraint,
-    RemovedConstraintCollection,
+    InactiveConstraint,
+    InactiveConstraintCollection,
     SampledConstraintCollection,
     Sense,
     Sos1Constraint,
@@ -58,10 +59,10 @@ def make_model(host: type[Instance] | type[ParametricInstance]):
         sense=Sense.Minimize,
         objective=x + y,
         decision_variables=[x, y],
-        constraints={5: x + y == 1},
-        indicator_constraints={6: (y == 1).with_indicator(x)},
-        one_hot_constraints={7: OneHotConstraint(variables=[x, y])},
-        sos1_constraints={8: Sos1Constraint(variables=[x, y])},
+        active_constraints={5: x + y == 1},
+        active_indicator_constraints={6: (y == 1).with_indicator(x)},
+        active_one_hot_constraints={7: OneHotConstraint(variables=[x, y])},
+        active_sos1_constraints={8: Sos1Constraint(variables=[x, y])},
     )
     if host is ParametricInstance:
         kwargs["parameters"] = []
@@ -71,9 +72,9 @@ def make_model(host: type[Instance] | type[ParametricInstance]):
 @pytest.mark.parametrize("host", [Instance, ParametricInstance])
 def test_all_families_share_one_live_mapping(host):
     model = make_model(host)
-    rows = model.constraints
+    rows = model.active_constraints
     assert isinstance(rows, Mapping)
-    assert isinstance(rows, ConstraintCollection)
+    assert isinstance(rows, ActiveConstraintCollection)
     assert rows == rows
     assert len(rows) == 4
     assert set(rows.keys()) == {id_type(NUMBERS[id_type]) for _, id_type, _ in FAMILIES}
@@ -93,7 +94,7 @@ def test_all_families_share_one_live_mapping(host):
 @pytest.mark.parametrize("host", [Instance, ParametricInstance])
 def test_retained_views_observe_additions_and_keep_owner_alive(host):
     model = make_model(host)
-    rows = model.constraints
+    rows = model.active_constraints
     keys, values, items = rows.keys(), rows.values(), rows.items()
     iterator = iter(rows)
     added = model.add_constraint(DecisionVariable.binary(0) <= 1)
@@ -110,36 +111,44 @@ def test_retained_views_observe_additions_and_keep_owner_alive(host):
     assert len(rows) == 5
 
 
-def test_removal_restoration_and_lowering_update_retained_views():
+def test_deactivation_activation_and_lowering_update_retained_views():
     model = make_model(Instance)
-    active, removed = model.constraints, model.removed_constraints
-    assert_type(active, ConstraintCollection)
-    assert_type(removed, RemovedConstraintCollection)
+    active, inactive = model.active_constraints, model.inactive_constraints
+    assert_type(active, ActiveConstraintCollection)
+    assert_type(inactive, InactiveConstraintCollection)
     assert_type(
         active.get(ConstraintID(5)),
         AttachedConstraint | None,
     )
-    model.relax_constraint(5, "manual")
+    model.deactivate_constraint(5, "manual")
     assert ConstraintID(5) not in active
-    assert ConstraintID(5) in removed
-    assert_type(removed[ConstraintID(5)], RemovedConstraint)
-    assert removed[ConstraintID(5)].removed_reason == "manual"
+    assert ConstraintID(5) in inactive
+    assert_type(inactive[ConstraintID(5)], InactiveConstraint)
+    assert inactive[ConstraintID(5)].inactive_reason == "manual"
     with pytest.raises(KeyError) as error:
         active[ConstraintID(5)]
     assert error.value.args == (ConstraintID(5),)
-    model.restore_constraint(5)
+    model.activate_constraint(5)
     assert ConstraintID(5) in active
-    assert ConstraintID(5) not in removed
+    assert ConstraintID(5) not in inactive
     generated = model.convert_one_hot_to_constraint(7)
     assert OneHotConstraintID(7) not in active
-    assert OneHotConstraintID(7) in removed
+    assert OneHotConstraintID(7) in inactive
     assert generated in active
     assert active[generated].provenance[0].original_id == OneHotConstraintID(7)
     for kind, id_type, _ in FAMILIES:
         expected = {key for key in active if isinstance(key, id_type)} | {
-            key for key in removed if isinstance(key, id_type)
+            key for key in inactive if isinstance(key, id_type)
         }
-        assert set(model.constraints_df(kind=kind, removed=True).index) == expected
+        assert (
+            set(
+                model.constraints_df(
+                    kind=kind,
+                    min_role=ConstraintRole.EVALUATION_ONLY,
+                ).index
+            )
+            == expected
+        )
 
 
 def test_result_rows_are_fetched_at_access_time():
@@ -161,11 +170,11 @@ def test_result_rows_are_fetched_at_access_time():
     assert rows[ConstraintID(5)].dual_variable == 3
 
 
-def test_value_iteration_reports_ids_removed_after_iteration_started():
+def test_value_iteration_reports_ids_deactivated_after_iteration_started():
     model = make_model(Instance)
-    items = iter(model.constraints.items())
+    items = iter(model.active_constraints.items())
     assert next(items)[0] == ConstraintID(5)
-    model.relax_indicator_constraint(6, "manual")
+    model.deactivate_indicator_constraint(6, "manual")
     with pytest.raises(KeyError) as error:
         next(items)
     assert error.value.args == (IndicatorConstraintID(6),)
@@ -186,10 +195,10 @@ def test_all_collections_require_typed_keys_and_reject_structural_mutation():
             root.constraints_df("regular")  # type: ignore[call-arg]
     assert not hasattr(samples, "summary_with_constraints")
     collections: list[Mapping[ConstraintIDBase, ConstraintView]] = [
-        model.constraints,
-        model.removed_constraints,
-        make_model(ParametricInstance).constraints,
-        make_model(ParametricInstance).removed_constraints,
+        model.active_constraints,
+        model.inactive_constraints,
+        make_model(ParametricInstance).active_constraints,
+        make_model(ParametricInstance).inactive_constraints,
         samples.constraints,
         samples.get(9).constraints,
     ]
@@ -232,21 +241,21 @@ class FutureConstraintID(ConstraintIDBase):
 @pytest.mark.parametrize("host", [Instance, ParametricInstance])
 def test_attached_equality_uses_owner_and_typed_id(host):
     model, other = make_model(host), make_model(host)
-    rows = model.constraints
-    assert rows == model.constraints
+    rows = model.active_constraints
+    assert rows == model.active_constraints
     assert rows == dict(rows)
     assert dict(rows) == rows
-    assert rows != other.constraints
+    assert rows != other.active_constraints
     for _, id_type, _ in FAMILIES:
         key = id_type(NUMBERS[id_type])
         row = rows[key]
         assert row == rows[key]
-        assert row != other.constraints[key]
+        assert row != other.active_constraints[key]
         assert row != object()
         assert row in rows.values()
         assert (key, row) in rows.items()
         row.set_name("changed through another handle")
-        assert row == model.constraints[key]
+        assert row == model.active_constraints[key]
     assert rows[ConstraintID(5)] != rows[OneHotConstraintID(7)]
     added = model.add_constraint(DecisionVariable.binary(0) <= 1)
     assert rows[ConstraintID(5)] != added
@@ -280,7 +289,7 @@ def test_result_equality_compares_snapshot_data_and_context():
     before = solution.constraints[ConstraintID(5)]
     solution.set_dual_variable(5, 2)
     assert before != solution.constraints[ConstraintID(5)]
-    for row in other.constraints.values():
+    for row in other.active_constraints.values():
         assert isinstance(
             row,
             (
@@ -291,7 +300,7 @@ def test_result_equality_compares_snapshot_data_and_context():
             ),
         )
         row.set_name("different context")
-    for key in model.constraints:
+    for key in model.active_constraints:
         assert (
             model.evaluate(state).constraints[key]
             != other.evaluate(state).constraints[key]
@@ -302,17 +311,17 @@ def test_result_equality_compares_snapshot_data_and_context():
         )
 
 
-def remove_all(model: Instance) -> RemovedConstraintCollection:
-    model.relax_constraint(5, "manual")
-    model.relax_indicator_constraint(6, "manual")
+def deactivate_all(model: Instance) -> InactiveConstraintCollection:
+    model.deactivate_constraint(5, "manual")
+    model.deactivate_indicator_constraint(6, "manual")
     model.convert_one_hot_to_constraint(7)
     model.convert_sos1_to_constraints(8)
-    return model.removed_constraints
+    return model.inactive_constraints
 
 
-def test_removed_equality_compares_snapshot_context_and_reason():
+def test_inactive_equality_compares_snapshot_context_and_reason():
     model, other = make_model(Instance), make_model(Instance)
-    rows, equivalent = remove_all(model), remove_all(other)
+    rows, equivalent = deactivate_all(model), deactivate_all(other)
     assert rows == equivalent
     assert rows == dict(rows)
     for key in rows:
@@ -320,8 +329,8 @@ def test_removed_equality_compares_snapshot_context_and_reason():
         assert rows[key] in rows.values()
         assert (key, rows[key]) in rows.items()
     old = rows[ConstraintID(5)]
-    model.restore_constraint(5)
-    model.relax_constraint(5, "different reason")
+    model.activate_constraint(5)
+    model.deactivate_constraint(5, "different reason")
     assert old != rows[ConstraintID(5)]
     # Result snapshots must also include retained lifecycle metadata.
     state = {0: 1, 1: 0}
@@ -354,8 +363,8 @@ def test_typed_ids_copy_without_losing_the_family(id_type):
 def test_mixed_lookup_errors_explain_typed_ids():
     model = make_model(Instance)
     for rows in [
-        model.constraints,
-        model.removed_constraints,
+        model.active_constraints,
+        model.inactive_constraints,
         model.evaluate({0: 1, 1: 0}).constraints,
         model.evaluate_samples({9: {0: 1, 1: 0}}).constraints,
     ]:
@@ -398,25 +407,25 @@ def test_new_family_requires_explicit_consumer_support():
             rows.get(future, "missing")
 
 
-def test_removed_rows_share_the_open_metadata_interface():
+def test_inactive_rows_share_the_open_metadata_interface():
     model = make_model(Instance)
-    indicator = model.constraints[IndicatorConstraintID(6)]
+    indicator = model.active_constraints[IndicatorConstraintID(6)]
     indicator.set_name("retained indicator")
-    indicator.set_description("metadata survives removal")
+    indicator.set_description("metadata survives deactivation")
     indicator.set_subscripts([2])
     indicator.set_parameters({"group": "test"})
-    model.relax_constraint(5, "manual")
-    model.relax_indicator_constraint(6, "manual")
+    model.deactivate_constraint(5, "manual")
+    model.deactivate_indicator_constraint(6, "manual")
     model.convert_one_hot_to_constraint(7)
     model.convert_sos1_to_constraints(8)
-    assert len(model.removed_constraints) == 4
-    for key, row in model.removed_constraints.items():
+    assert len(model.inactive_constraints) == 4
+    for key, row in model.inactive_constraints.items():
         assert_type(key, ConstraintIDBase)
         assert_type(row, ConstraintView)
         assert isinstance(row, ConstraintView)
         if isinstance(key, IndicatorConstraintID):
             assert row.name == "retained indicator"
-            assert row.description == "metadata survives removal"
+            assert row.description == "metadata survives deactivation"
             assert row.subscripts == [2]
             assert row.parameters == {"group": "test"}
         else:

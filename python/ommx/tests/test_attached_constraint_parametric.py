@@ -26,7 +26,7 @@ def _empty_parametric_instance() -> ParametricInstance:
             DecisionVariable.binary(0),
             DecisionVariable.binary(1),
         ],
-        constraints={},
+        active_constraints={},
         parameters=[Parameter(id=100, name="alpha")],
     )
 
@@ -60,7 +60,7 @@ def test_add_constraint_returns_attached_with_drained_context():
 
 def test_attached_setter_writes_through_to_parametric_instance():
     """Mutations on the AttachedConstraint land in the parent parametric
-    instance and surface via parametric.constraints[id]."""
+    instance and surface via parametric.active_constraints[id]."""
     parametric = _empty_parametric_instance()
     attached = parametric.add_constraint(_make_constraint(name="balance"))
     cid = attached.constraint_id
@@ -70,7 +70,7 @@ def test_attached_setter_writes_through_to_parametric_instance():
     attached.set_description("updated")
     attached.set_parameters({"a": "1", "b": "2"})
 
-    fresh = parametric.constraints[cid]
+    fresh = parametric.active_constraints[cid]
     assert fresh.name == "demand"
     assert fresh.subscripts == [1, 2, 3]
     assert fresh.description == "updated"
@@ -82,7 +82,7 @@ def test_two_attached_handles_share_state_on_parametric():
     observe the same data."""
     parametric = _empty_parametric_instance()
     a = parametric.add_constraint(_make_constraint(name="balance"))
-    b = parametric.constraints[a.constraint_id]
+    b = parametric.active_constraints[a.constraint_id]
 
     a.set_name("demand")
 
@@ -90,12 +90,12 @@ def test_two_attached_handles_share_state_on_parametric():
 
 
 def test_constraints_getter_returns_attached_constraints():
-    """parametric.constraints values are AttachedConstraint, not Constraint."""
+    """parametric.active_constraints values are AttachedConstraint, not Constraint."""
     parametric = _empty_parametric_instance()
     a = parametric.add_constraint(_make_constraint(name="c1"))
     b = parametric.add_constraint(_make_constraint(name="c2"))
 
-    constraints = parametric.constraints
+    constraints = parametric.active_constraints
     assert set(constraints.keys()) == {a.constraint_id, b.constraint_id}
     assert all(isinstance(c, AttachedConstraint) for c in constraints.values())
 
@@ -169,7 +169,7 @@ def test_add_constraint_rejects_undefined_id():
     with pytest.raises(Exception, match="999"):
         parametric.add_constraint(bad)
 
-    assert parametric.constraints == {}
+    assert parametric.active_constraints == {}
 
 
 def test_evaluate_rejected_on_parametric_host():

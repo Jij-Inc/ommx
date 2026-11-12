@@ -88,7 +88,7 @@ no matching cardinality row, illustrating rejection without relying on a solver.
 ...     sense=Sense.Minimize,
 ...     objective=integer_member,
 ...     decision_variables=[binary_member, integer_member, selector],
-...     constraints={
+...     active_constraints={
 ...         100: integer_member - 3 * selector <= 0,
 ...         101: -integer_member - 2 * selector <= 0,
 ...         102: binary_member + selector - 1 <= 0,
@@ -120,7 +120,7 @@ no matching cardinality row, illustrating rejection without relying on a solver.
 >>> assert set(report.promoted) | set(report.rejections) == set(request.selector_claims)
 >>> assert instance.get_decision_variable_by_id(1).bound == Bound(-2, 3)
 >>> assert set(instance.constraints[Sos1ConstraintID(103)].variables) == {0, 1}
->>> assert set(instance.removed_constraints) == {
+>>> assert set(instance.inactive_constraints) == {
 ...     ConstraintID(100),
 ...     ConstraintID(101),
 ...     ConstraintID(102),

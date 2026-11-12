@@ -46,7 +46,7 @@ impl_special_constraint_profile!(
     crate::IndicatorConstraint,
     "IndicatorConstraint" {
         indicator_variable,
-        activate_on_zero,
+        trigger_value,
         equality,
         stage,
     }
@@ -67,7 +67,7 @@ impl_special_constraint_profile!(
 );
 
 macro_rules! impl_constraint_collection_profile {
-    ($constraint_type:ty, $active_name:expr, $removed_name:expr) => {
+    ($constraint_type:ty, $active_name:expr, $inactive_name:expr) => {
         impl LogicalMemoryProfile
             for crate::constraint_type::ConstraintCollection<$constraint_type>
         {
@@ -78,8 +78,8 @@ macro_rules! impl_constraint_collection_profile {
             ) {
                 self.active()
                     .visit_logical_memory(path.with($active_name).as_mut(), visitor);
-                self.removed()
-                    .visit_logical_memory(path.with($removed_name).as_mut(), visitor);
+                self.inactive()
+                    .visit_logical_memory(path.with($inactive_name).as_mut(), visitor);
                 self.context()
                     .visit_logical_memory(path.with("context").as_mut(), visitor);
             }
@@ -87,21 +87,21 @@ macro_rules! impl_constraint_collection_profile {
     };
 }
 
-impl_constraint_collection_profile!(crate::Constraint, "constraints", "removed_constraints");
+impl_constraint_collection_profile!(crate::Constraint, "constraints", "inactive_constraints");
 impl_constraint_collection_profile!(
     crate::IndicatorConstraint,
     "indicator_constraints",
-    "removed_indicator_constraints"
+    "inactive_indicator_constraints"
 );
 impl_constraint_collection_profile!(
     crate::OneHotConstraint,
     "one_hot_constraints",
-    "removed_one_hot_constraints"
+    "inactive_one_hot_constraints"
 );
 impl_constraint_collection_profile!(
     crate::Sos1Constraint,
     "sos1_constraints",
-    "removed_sos1_constraints"
+    "inactive_sos1_constraints"
 );
 
 // `Instance` uses `#[derive(LogicalMemoryProfile)]` on its definition site,
@@ -151,7 +151,7 @@ mod tests {
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
-        Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
+        Instance.constraint_collection;inactive_constraints;BTreeMap[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
@@ -167,8 +167,8 @@ mod tests {
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
+        Instance.indicator_constraint_collection;inactive_indicator_constraints;BTreeMap[stack] 24
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
-        Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
         Instance.named_functions;NamedFunctionTable.entries;BTreeMap[stack] 24
         Instance.named_functions;NamedFunctionTable.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
         Instance.named_functions;NamedFunctionTable.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
@@ -180,8 +180,8 @@ mod tests {
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
+        Instance.one_hot_constraint_collection;inactive_one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
-        Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
         Instance.output_objective;Option[stack] 48
         Instance.parameters;Option[stack] 48
         Instance.sense 1
@@ -190,7 +190,7 @@ mod tests {
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.sos1_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
-        Instance.sos1_constraint_collection;removed_sos1_constraints;BTreeMap[stack] 24
+        Instance.sos1_constraint_collection;inactive_sos1_constraints;BTreeMap[stack] 24
         Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[stack] 24
         "###);
     }
@@ -225,7 +225,7 @@ mod tests {
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
-        Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
+        Instance.constraint_collection;inactive_constraints;BTreeMap[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
@@ -245,8 +245,8 @@ mod tests {
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
+        Instance.indicator_constraint_collection;inactive_indicator_constraints;BTreeMap[stack] 24
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
-        Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
         Instance.named_functions;NamedFunctionTable.entries;BTreeMap[stack] 24
         Instance.named_functions;NamedFunctionTable.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
         Instance.named_functions;NamedFunctionTable.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
@@ -258,8 +258,8 @@ mod tests {
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
+        Instance.one_hot_constraint_collection;inactive_one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
-        Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
         Instance.output_objective;Option[stack] 48
         Instance.parameters;Option[stack] 48
         Instance.sense 1
@@ -268,7 +268,7 @@ mod tests {
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.sos1_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
-        Instance.sos1_constraint_collection;removed_sos1_constraints;BTreeMap[stack] 24
+        Instance.sos1_constraint_collection;inactive_sos1_constraints;BTreeMap[stack] 24
         Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[stack] 24
         "###);
     }
@@ -316,7 +316,7 @@ mod tests {
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
-        Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
+        Instance.constraint_collection;inactive_constraints;BTreeMap[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
@@ -336,8 +336,8 @@ mod tests {
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
+        Instance.indicator_constraint_collection;inactive_indicator_constraints;BTreeMap[stack] 24
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
-        Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
         Instance.named_functions;NamedFunctionTable.entries;BTreeMap[stack] 24
         Instance.named_functions;NamedFunctionTable.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
         Instance.named_functions;NamedFunctionTable.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
@@ -349,8 +349,8 @@ mod tests {
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
+        Instance.one_hot_constraint_collection;inactive_one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
-        Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
         Instance.output_objective;Option[stack] 48
         Instance.parameters;Option[stack] 48
         Instance.sense 1
@@ -359,7 +359,7 @@ mod tests {
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.sos1_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
-        Instance.sos1_constraint_collection;removed_sos1_constraints;BTreeMap[stack] 24
+        Instance.sos1_constraint_collection;inactive_sos1_constraints;BTreeMap[stack] 24
         Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[stack] 24
         "###);
     }
@@ -385,7 +385,7 @@ mod tests {
                     VariableID::from(1),
                     Equality::LessThanOrEqualToZero,
                     Function::Linear((linear!(2) + coeff!(-1.0)).unwrap()),
-                    false,
+                    crate::IndicatorTriggerValue::One,
                 ),
                 crate::ConstraintContext::default(),
             )
@@ -424,7 +424,7 @@ mod tests {
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
-        Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
+        Instance.constraint_collection;inactive_constraints;BTreeMap[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
@@ -444,13 +444,13 @@ mod tests {
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
+        Instance.indicator_constraint_collection;inactive_indicator_constraints;BTreeMap[stack] 24
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[key];IndicatorConstraintID.0 8
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
-        Instance.indicator_constraint_collection;indicator_constraints;IndicatorConstraint.activate_on_zero 1
         Instance.indicator_constraint_collection;indicator_constraints;IndicatorConstraint.equality 1
         Instance.indicator_constraint_collection;indicator_constraints;IndicatorConstraint.indicator_variable;VariableID.0 8
         Instance.indicator_constraint_collection;indicator_constraints;IndicatorConstraint.stage;CreatedData.function;Linear;PolynomialBase.terms 80
-        Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
+        Instance.indicator_constraint_collection;indicator_constraints;IndicatorConstraint.trigger_value 1
         Instance.named_functions;NamedFunctionTable.entries;BTreeMap[stack] 24
         Instance.named_functions;NamedFunctionTable.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
         Instance.named_functions;NamedFunctionTable.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
@@ -462,11 +462,11 @@ mod tests {
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
+        Instance.one_hot_constraint_collection;inactive_one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[key];OneHotConstraintID.0 8
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;one_hot_constraints;OneHotConstraint.variables;BTreeSet[stack] 24
         Instance.one_hot_constraint_collection;one_hot_constraints;OneHotConstraint.variables;VariableID.0 16
-        Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
         Instance.output_objective;Option[stack] 48
         Instance.parameters;Option[stack] 48
         Instance.sense 1
@@ -475,7 +475,7 @@ mod tests {
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.sos1_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
-        Instance.sos1_constraint_collection;removed_sos1_constraints;BTreeMap[stack] 24
+        Instance.sos1_constraint_collection;inactive_sos1_constraints;BTreeMap[stack] 24
         Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[key];Sos1ConstraintID.0 8
         Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[stack] 24
         Instance.sos1_constraint_collection;sos1_constraints;Sos1Constraint.variables;BTreeSet[stack] 24
@@ -540,7 +540,7 @@ mod tests {
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
-        Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
+        Instance.constraint_collection;inactive_constraints;BTreeMap[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
@@ -562,8 +562,8 @@ mod tests {
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
+        Instance.indicator_constraint_collection;inactive_indicator_constraints;BTreeMap[stack] 24
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
-        Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
         Instance.named_functions;NamedFunctionTable.entries;BTreeMap[stack] 24
         Instance.named_functions;NamedFunctionTable.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
         Instance.named_functions;NamedFunctionTable.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
@@ -575,8 +575,8 @@ mod tests {
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
+        Instance.one_hot_constraint_collection;inactive_one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
-        Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
         Instance.output_objective;Option[stack] 48
         Instance.parameters;Option[stack] 48
         Instance.sense 1
@@ -585,7 +585,7 @@ mod tests {
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.sos1_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
-        Instance.sos1_constraint_collection;removed_sos1_constraints;BTreeMap[stack] 24
+        Instance.sos1_constraint_collection;inactive_sos1_constraints;BTreeMap[stack] 24
         Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[stack] 24
         "###);
     }
@@ -633,7 +633,7 @@ mod tests {
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
-        Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
+        Instance.constraint_collection;inactive_constraints;BTreeMap[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
@@ -657,8 +657,8 @@ mod tests {
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
+        Instance.indicator_constraint_collection;inactive_indicator_constraints;BTreeMap[stack] 24
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
-        Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
         Instance.named_functions;NamedFunctionTable.entries;BTreeMap[stack] 24
         Instance.named_functions;NamedFunctionTable.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
         Instance.named_functions;NamedFunctionTable.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
@@ -670,8 +670,8 @@ mod tests {
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
+        Instance.one_hot_constraint_collection;inactive_one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
-        Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
         Instance.output_objective;Option[stack] 48
         Instance.parameters;Parameters.entries 16
         Instance.parameters;Parameters.entries;HashMap[key] 16
@@ -682,7 +682,7 @@ mod tests {
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.sos1_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
-        Instance.sos1_constraint_collection;removed_sos1_constraints;BTreeMap[stack] 24
+        Instance.sos1_constraint_collection;inactive_sos1_constraints;BTreeMap[stack] 24
         Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[stack] 24
         "###);
     }

@@ -119,10 +119,10 @@ impl FromIterator<(Equality, PolynomialRequirement)> for RelationPolynomialRequi
 /// clause. The containing [`InstanceClass`] is the union of its clauses, so a
 /// continuous-QP clause and a MILP clause do not imply MIQP membership.
 ///
-/// Indicator activation values and body requirements are independent: every
-/// admitted activation value uses the same relation-to-polynomial requirements.
-/// Activation values are restricted to 0 and 1 by
-/// [`Self::with_allowed_indicator_activation_values`].
+/// Indicator trigger values and body requirements are independent: every
+/// admitted trigger value uses the same relation-to-polynomial requirements.
+/// Trigger values are restricted to 0 and 1 by
+/// [`Self::with_allowed_indicator_trigger_values`].
 ///
 /// `allowed_variable_kinds` is a set rather than one field per known [`Kind`],
 /// allowing future kinds such as Spin to participate without changing the
@@ -134,7 +134,7 @@ pub struct InstanceClassClause {
     objective_polynomial_requirement: PolynomialRequirement,
     regular_constraints: RelationPolynomialRequirements,
     indicator_constraints: RelationPolynomialRequirements,
-    allowed_indicator_activation_values: BTreeSet<u8>,
+    allowed_indicator_trigger_values: BTreeSet<u8>,
     allows_one_hot: bool,
     allows_sos1: bool,
     allowed_senses: BTreeSet<Sense>,
@@ -157,7 +157,7 @@ impl InstanceClassClause {
             objective_polynomial_requirement,
             regular_constraints: RelationPolynomialRequirements::new(),
             indicator_constraints: RelationPolynomialRequirements::new(),
-            allowed_indicator_activation_values: BTreeSet::from([1]),
+            allowed_indicator_trigger_values: BTreeSet::from([1]),
             allows_one_hot: false,
             allows_sos1: false,
             allowed_senses,
@@ -186,19 +186,19 @@ impl InstanceClassClause {
         self
     }
 
-    /// Set the allowed Indicator activation values, independently of body requirements.
+    /// Set the allowed Indicator trigger values, independently of body requirements.
     ///
     /// The default is `{1}`. An empty set rejects every Indicator; `{0, 1}`
-    /// admits either activation value with the same body requirements.
+    /// admits either trigger value with the same body requirements.
     /// Returns an error if a value is not zero or one.
-    pub fn with_allowed_indicator_activation_values(
+    pub fn with_allowed_indicator_trigger_values(
         mut self,
         values: BTreeSet<u8>,
     ) -> crate::Result<Self> {
         if let Some(value) = values.iter().find(|&&value| value > 1) {
-            crate::bail!("Indicator activation values must be 0 or 1, got {value}");
+            crate::bail!("Indicator trigger values must be 0 or 1, got {value}");
         }
-        self.allowed_indicator_activation_values = values;
+        self.allowed_indicator_trigger_values = values;
         Ok(self)
     }
 
@@ -244,9 +244,9 @@ impl InstanceClassClause {
         self.indicator_constraints.iter()
     }
 
-    /// Indicator activation values admitted independently of body requirements.
-    pub fn allowed_indicator_activation_values(&self) -> &BTreeSet<u8> {
-        &self.allowed_indicator_activation_values
+    /// Indicator trigger values admitted independently of body requirements.
+    pub fn allowed_indicator_trigger_values(&self) -> &BTreeSet<u8> {
+        &self.allowed_indicator_trigger_values
     }
 
     /// Return whether active OneHot constraints are admitted.
@@ -267,7 +267,7 @@ impl InstanceClassClause {
     fn check(&self, clause_index: usize, facts: &InstanceFacts) -> InstanceClassClauseReport {
         let mut mismatches = Vec::new();
 
-        for (kind, variable_ids) in facts.used_variables_by_kind() {
+        for (kind, variable_ids) in facts.active_variables_by_kind() {
             if !self.allowed_variable_kinds.contains(kind) {
                 mismatches.push(InstanceClassMismatch::VariableKindNotAllowed {
                     kind: *kind,
@@ -303,7 +303,7 @@ impl InstanceClassClause {
             &mut mismatches,
             facts.indicator_constraints(),
             &self.indicator_constraints,
-            &self.allowed_indicator_activation_values,
+            &self.allowed_indicator_trigger_values,
         );
 
         if !self.allows_one_hot && !facts.one_hot_constraint_ids().is_empty() {
@@ -394,7 +394,7 @@ fn check_indicator_constraints(
     mismatches: &mut Vec<InstanceClassMismatch>,
     facts: &BTreeMap<IndicatorConstraintID, instance_facts::IndicatorConstraintFacts>,
     allowed: &RelationPolynomialRequirements,
-    allowed_activation_values: &BTreeSet<u8>,
+    allowed_trigger_values: &BTreeSet<u8>,
 ) {
     if facts.is_empty() {
         return;
@@ -405,20 +405,20 @@ fn check_indicator_constraints(
         });
         return;
     }
-    for activation_value in [0, 1] {
-        if allowed_activation_values.contains(&activation_value) {
+    for trigger_value in [0, 1] {
+        if allowed_trigger_values.contains(&trigger_value) {
             continue;
         }
         let constraint_ids: BTreeSet<_> = facts
             .iter()
-            .filter(|(_, fact)| u8::from(!fact.activate_on_zero()) == activation_value)
+            .filter(|(_, fact)| u8::from(fact.trigger_value()) == trigger_value)
             .map(|(id, _)| *id)
             .collect();
         if !constraint_ids.is_empty() {
-            mismatches.push(InstanceClassMismatch::IndicatorActivationNotAllowed {
-                activation_value,
+            mismatches.push(InstanceClassMismatch::IndicatorTriggerNotAllowed {
+                trigger_value,
                 constraint_ids,
-                allowed_activation_values: allowed_activation_values.clone(),
+                allowed_trigger_values: allowed_trigger_values.clone(),
             });
         }
     }
@@ -503,7 +503,7 @@ impl InstanceClass {
     ///         .sense(sense)
     ///         .objective(objective)
     ///         .decision_variables(binary.clone())
-    ///         .constraints(constraints)
+    ///         .active_constraints(constraints)
     ///         .build()
     ///         .unwrap()
     /// };
@@ -531,7 +531,7 @@ impl InstanceClass {
     ///     .sense(Sense::Minimize)
     ///     .objective(Function::from(linear!(1)))
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::continuous())]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     ///
@@ -573,7 +573,7 @@ impl InstanceClass {
     ///         .sense(sense)
     ///         .objective(objective)
     ///         .decision_variables(BTreeMap::from([(variable, decision_variable)]))
-    ///         .constraints(BTreeMap::new())
+    ///         .active_constraints(BTreeMap::new())
     ///         .build()
     ///         .unwrap()
     /// };
@@ -593,7 +593,7 @@ impl InstanceClass {
     ///     .sense(Sense::Minimize)
     ///     .objective(Function::from(linear!(1)))
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-    ///     .constraints(BTreeMap::from([(
+    ///     .active_constraints(BTreeMap::from([(
     ///         ConstraintID::from(1),
     ///         Constraint::equal_to_zero(Function::from(linear!(1))),
     ///     )]))
@@ -694,10 +694,10 @@ pub enum InstanceClassMismatch {
     IndicatorConstraintsNotAllowed {
         constraint_ids: BTreeSet<IndicatorConstraintID>,
     },
-    IndicatorActivationNotAllowed {
-        activation_value: u8,
+    IndicatorTriggerNotAllowed {
+        trigger_value: u8,
         constraint_ids: BTreeSet<IndicatorConstraintID>,
-        allowed_activation_values: BTreeSet<u8>,
+        allowed_trigger_values: BTreeSet<u8>,
     },
     IndicatorConstraintRelationNotAllowed {
         relation: Equality,
@@ -769,8 +769,8 @@ impl std::fmt::Display for InstanceClassMismatch {
             Self::IndicatorConstraintsNotAllowed { constraint_ids } => {
                 write!(f, "indicator constraints {constraint_ids:?} are not allowed")
             }
-            Self::IndicatorActivationNotAllowed { activation_value, constraint_ids, allowed_activation_values } => write!(f,
-                "indicator activation at {activation_value} for IDs {constraint_ids:?} is not allowed; allowed activation values are {allowed_activation_values:?}"),
+            Self::IndicatorTriggerNotAllowed { trigger_value, constraint_ids, allowed_trigger_values } => write!(f,
+                "indicator trigger value {trigger_value} for IDs {constraint_ids:?} is not allowed; allowed trigger values are {allowed_trigger_values:?}"),
             Self::IndicatorConstraintRelationNotAllowed {
                 relation,
                 constraint_ids,
@@ -930,7 +930,7 @@ mod tests {
         };
         let mut clause = InstanceClassClause::new(
             "covering",
-            facts.used_variables_by_kind().keys().copied().collect(),
+            facts.active_variables_by_kind().keys().copied().collect(),
             PolynomialRequirement::AtMost(objective_degree),
             BTreeSet::from([facts.sense()]),
         );
@@ -951,7 +951,7 @@ mod tests {
         }
 
         let mut indicator = BTreeMap::<Equality, Degree>::new();
-        let mut activation_values = BTreeSet::new();
+        let mut trigger_values = BTreeSet::new();
         for fact in facts.indicator_constraints().values() {
             let FunctionClassification::Polynomial(fact_degree) = fact.classification() else {
                 return None;
@@ -962,10 +962,10 @@ mod tests {
                 .or_insert(fact_degree);
         }
         for fact in facts.indicator_constraints().values() {
-            activation_values.insert(u8::from(!fact.activate_on_zero()));
+            trigger_values.insert(u8::from(fact.trigger_value()));
         }
         clause = clause
-            .with_allowed_indicator_activation_values(activation_values)
+            .with_allowed_indicator_trigger_values(trigger_values)
             .unwrap();
         for (relation, degree) in indicator {
             clause =
@@ -1065,17 +1065,22 @@ mod tests {
                 (x, DecisionVariable::binary()),
                 (y, DecisionVariable::continuous()),
             ]))
-            .constraints(BTreeMap::from([
+            .active_constraints(BTreeMap::from([
                 (regular_eq, Constraint::equal_to_zero(quadratic_y())),
                 (
                     regular_le,
                     Constraint::less_than_or_equal_to_zero(Function::from(linear!(y))),
                 ),
             ]))
-            .indicator_constraints(BTreeMap::from([
+            .active_indicator_constraints(BTreeMap::from([
                 (
                     indicator_eq,
-                    IndicatorConstraint::new(x, Equality::EqualToZero, quadratic_y(), false),
+                    IndicatorConstraint::new(
+                        x,
+                        Equality::EqualToZero,
+                        quadratic_y(),
+                        crate::IndicatorTriggerValue::One,
+                    ),
                 ),
                 (
                     indicator_le,
@@ -1083,15 +1088,15 @@ mod tests {
                         x,
                         Equality::LessThanOrEqualToZero,
                         Function::from(linear!(y)),
-                        false,
+                        crate::IndicatorTriggerValue::One,
                     ),
                 ),
             ]))
-            .one_hot_constraints(BTreeMap::from([(
+            .active_one_hot_constraints(BTreeMap::from([(
                 one_hot,
                 OneHotConstraint::new(BTreeSet::from([x])).unwrap(),
             )]))
-            .sos1_constraints(BTreeMap::from([(
+            .active_sos1_constraints(BTreeMap::from([(
                 sos1,
                 Sos1Constraint::new(BTreeSet::from([y])).unwrap(),
             )]))
@@ -1169,13 +1174,18 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(absolute_x())
             .decision_variables(BTreeMap::from([(x, DecisionVariable::binary())]))
-            .constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::from([(
                 regular_id,
                 Constraint::equal_to_zero(absolute_x()),
             )]))
-            .indicator_constraints(BTreeMap::from([(
+            .active_indicator_constraints(BTreeMap::from([(
                 indicator_id,
-                IndicatorConstraint::new(x, Equality::EqualToZero, absolute_x(), false),
+                IndicatorConstraint::new(
+                    x,
+                    Equality::EqualToZero,
+                    absolute_x(),
+                    crate::IndicatorTriggerValue::One,
+                ),
             )]))
             .build()
             .unwrap();
@@ -1238,8 +1248,8 @@ mod tests {
                 (x, DecisionVariable::binary()),
                 (y, DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::new())
-            .one_hot_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_one_hot_constraints(BTreeMap::from([(
                 one_hot_id,
                 OneHotConstraint::new(BTreeSet::from([x, y])).unwrap(),
             )]))
@@ -1338,15 +1348,15 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::from([(0.into(), DecisionVariable::binary())]))
-            .constraints(BTreeMap::new())
-            .indicator_constraints(BTreeMap::from([
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(BTreeMap::from([
                 (
                     0.into(),
                     IndicatorConstraint::new(
                         0.into(),
                         Equality::EqualToZero,
                         Function::Zero,
-                        false,
+                        crate::IndicatorTriggerValue::One,
                     ),
                 ),
                 (
@@ -1355,7 +1365,7 @@ mod tests {
                         0.into(),
                         Equality::EqualToZero,
                         Function::from(linear!(0)),
-                        true,
+                        crate::IndicatorTriggerValue::Zero,
                     ),
                 ),
             ]))
@@ -1369,7 +1379,7 @@ mod tests {
             BTreeMap::from([(Equality::EqualToZero, PolynomialRequirement::at_most(1))])
         );
         assert_eq!(
-            clause.allowed_indicator_activation_values(),
+            clause.allowed_indicator_trigger_values(),
             &BTreeSet::from([0, 1])
         );
         assert!(InstanceClass::from(clause).contains(&instance));

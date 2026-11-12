@@ -43,9 +43,9 @@ Three lifecycle stages are defined:
 | `EvaluatedConstraint` | `Constraint<Evaluated>` | `EvaluatedData { evaluated_value, used_decision_variable_ids, dual_variable }` |
 | `SampledConstraint` | `Constraint<SampledStage>` | `SampledData { evaluated_values, used_decision_variable_ids, dual_variables }` |
 
-Removed constraints are managed at the collection level —
-`ConstraintCollection` stores them as `(Constraint<Created>, RemovedReason)`
-pairs. "Removed" is not itself a stage.
+Inactive constraints are managed at the collection level —
+`ConstraintCollection` stores them as `(Constraint<Created>, InactiveConstraintMetadata)`
+pairs. Activeness is independent of the evaluation stage.
 
 `DecisionVariable`, `IndicatorConstraint<S>`, `OneHotConstraint<S>`,
 `Sos1Constraint<S>`, and `NamedFunction` got the same SoA treatment —
@@ -54,6 +54,70 @@ is queried through narrow per-collection accessors on `Instance` /
 `ParametricInstance` (see [Modeling labels and constraint context](#modeling-labels-and-constraint-context)).
 Decision variables and named functions additionally follow the table-owned ID
 rule: the row data no longer stores its own ID.
+
+## Active decision variables
+
+The Active Formulation consists of active decision variables and their domains,
+active constraints, and the current objective and sense. `Instance` derives its
+active variable set from references in that objective and those constraints;
+adapters consume the resulting set rather than collecting references themselves.
+
+Replace `Instance::used_decision_variables()` with `active_decision_variables()`
+and `used_decision_variable_ids()` with `active_decision_variable_ids()`.
+`DecisionVariableRole::Used` becomes `DecisionVariableRole::Active`, and its
+serialized name is `"active"`. `DecisionVariableUsage` keeps the reference index,
+but its full-set and kind selectors become `active()`, `active_integer()`, and
+the corresponding `active_*` methods. `by_used_variable()` becomes
+`by_active_variable()`, and `is_used_by_solver()` becomes `is_active()`.
+`VariableStatsByUsage::used` is now `active`, including the JSON key.
+`log_encode_all_used_integers()` becomes `log_encode_all_active_integers()`.
+The Preparation variant is likewise
+`IntegerEncodingPreparation::LogEncodeAllActiveIntegers`.
+
+Keep `used_in_objective` and `used_in_*_constraints`: they describe reference
+relationships within the Active Formulation. Row-level
+`used_decision_variable_ids` also keeps its name and reports that row's references,
+including references retained in inactive constraints and named functions.
+
+## Constraint roles
+
+Constraint membership is now explicit: `active_constraints()` returns the solver-facing rows, `inactive_constraints()` returns retained rows, and `constraints()` returns the complete regular-constraint collection. The corresponding special-family accessors use the same prefixes. Builders take `active_constraints(...)` and `inactive_constraints(...)`, with equivalent methods for each family.
+
+On `Instance` and `ParametricInstance`, rename `constraint_names()` to `active_constraint_names()`. This query still selects only active constraints, and its return type is unchanged. `Solution` and `SampleSet` keep `constraint_names()`.
+
+For a standalone `ConstraintCollection`, `Evaluate::required_ids()` includes
+references from all evaluated rows, including inactive and skipped constraints.
+Import `Evaluate` to call this trait method. Use
+`ConstraintCollection::active_decision_variable_ids()` to query references from
+active constraints only. `Instance::required_ids()` still requires only active
+variable values because its evaluation populates the remaining values first.
+
+Replace `relax_*` / `restore_*` with `deactivate_*` / `activate_*`. Inactive membership uses `InactiveConstraintMetadata { reason, parameters, skip_feasibility_check }`. Pass `false` as the final argument to `deactivate_constraint(id, reason, parameters, false)` to retain the previous feasibility behavior. A row with `skip_feasibility_check: true` is still numerically evaluated; only its participation in aggregate queries changes.
+
+Each row has exactly one `ConstraintRole`: `EvaluationOnly` evaluates the row for inspection, `FeasibilityCheck` also includes it in the normal feasibility judgment, and `Active` additionally includes it in the Active Formulation. Both `FeasibilityCheck` (`skip_feasibility_check: false`) and `EvaluationOnly` (`skip_feasibility_check: true`) are inactive; `inactive_constraints()` returns both. Collection `role(&id)` queries return the role regardless of the row's evaluation stage. The role describes its intended use, not whether evaluation or a feasibility check has already run.
+
+Indicator stage data use `indicator_on` to record whether the indicator variable
+matches the configured `trigger_value` within the evaluation tolerance. The
+trigger value is zero or one. This candidate-dependent
+diagnostic is independent of the constraint's role.
+
+OneHot/SOS1 evaluated and sampled stage fields rename `active_variable` to
+`selected_variable`. This candidate-dependent selection diagnostic is independent
+of variable or constraint membership in the Active Formulation. The v2 fields
+use the same name, and `SampledActiveVariable` becomes `SampledSelectedVariable`.
+Protobuf field numbers and evaluation behavior are unchanged.
+
+The `total_violation` query minimum includes every state at or above its value:
+
+| Minimum | Included constraints |
+| --- | --- |
+| `Active` | Active only |
+| `FeasibilityCheck` (default) | `FeasibilityCheck` and `Active` roles |
+| `EvaluationOnly` | Every retained row |
+
+Thus `EvaluationOnly < FeasibilityCheck < Active`, and `min_role` includes every row at or above that level. This inclusion order is specific to `ConstraintRole`; `DecisionVariableRole` does not define the same participation hierarchy. `Solution::feasible()` and `feasible_constraints()` check the `FeasibilityCheck` and `Active` roles without taking a minimum. SampleSet feasibility and feasible-sample selection also retain their signatures without a minimum. `feasible_relaxed()` checks active constraints only. For `total_violation`, pass `Default::default()` (`FeasibilityCheck`) to use the constraints checked by `feasible()`, or `Active` to use those checked by `feasible_relaxed()`. Feasibility applies the tolerance to each row and checks variable domains separately. No exact-zero implication is part of the total-violation contract.
+
+The v1 wire schema is unchanged. Export fails if any retained constraint has `skip_feasibility_check: true`; v2 preserves the flag with a required feature. Existing v1 export restrictions still apply.
 
 ## Result serialization to v1
 
@@ -64,7 +128,8 @@ rule: the row data no longer stores its own ID.
 `.into()` with `.try_into()?`.
 
 These operations reject retained Indicator, OneHot, and SOS1 results, including
-inactive, satisfied, and removed constraints, instead of silently omitting them.
+Indicators that are OFF, satisfied constraints, and inactive rows, instead of
+silently omitting them.
 Big-M lowering retains the original special constraints, so its results also
 require `to_v2_bytes()`. Reading existing v1 payloads is unchanged. For results
 without special constraints, v1 export still recomputes feasibility using the
@@ -116,7 +181,9 @@ assert_eq!(bounds[&id], Bound::new(2.0, 8.0)?);
 `Solution::total_violation_l1()` is renamed to
 [`Solution::total_violation`](crate::Solution::total_violation), and
 `Solution::total_violation_l2()` is removed. The total sums one nonnegative
-scalar per constraint, including removed constraints and all special kinds.
+scalar per selected constraint across all families. Pass `FeasibilityCheck` to
+select the constraints checked by `feasible()`, or `Active` for those checked by
+`feasible_relaxed()`.
 Regular equality and inequality definitions are unchanged.
 
 Query individual values with [`Solution::constraint_violation`](crate::Solution::constraint_violation),
@@ -125,17 +192,21 @@ Query individual values with [`Solution::constraint_violation`](crate::Solution:
 [`Solution::sos1_constraint_violation`](crate::Solution::sos1_constraint_violation),
 passing the corresponding typed ID. Unknown IDs return `None`.
 
-Indicator uses its inner violation when active and zero otherwise.
+Indicator uses its inner violation when `indicator_on` is true and zero otherwise.
 [`IndicatorConstraint::new`](crate::IndicatorConstraint::new) requires an explicit
-`activate_on_zero` argument after the function: `false` activates at one and
-`true` at zero. The field is retained at every stage and in v2 serialization.
-Existing v2 payloads that omit the field still activate at one.
+`trigger_value` argument after the function:
+[`IndicatorTriggerValue::Zero`](crate::IndicatorTriggerValue::Zero) or
+[`IndicatorTriggerValue::One`](crate::IndicatorTriggerValue::One). The enum's
+default is `One`; numeric conversion rejects values other than 0 and 1. The
+field is retained at every stage and in v2 serialization. An omitted v2 trigger
+value means one.
 [`InstanceClassClause::with_indicator_constraint`](crate::InstanceClassClause::with_indicator_constraint)
-sets the body relation and polynomial requirement, shared by all allowed activation values.
-Use [`InstanceClassClause::with_allowed_indicator_activation_values`](crate::InstanceClassClause::with_allowed_indicator_activation_values)
+sets the body relation and polynomial requirement, shared by all allowed trigger values.
+Use [`InstanceClassClause::with_allowed_indicator_trigger_values`](crate::InstanceClassClause::with_allowed_indicator_trigger_values)
 to set those values independently (`{1}` by default); values other than 0 and 1
-are rejected. OneHot and
-SOS1 measure the minimum sum of absolute changes needed to satisfy their
+are rejected.
+
+OneHot and SOS1 measure the minimum sum of absolute changes needed to satisfy their
 structural condition. Every constraint is feasible exactly when its violation is
 at most `atol`. For OneHot and SOS1, tolerance now applies to the total change,
 rather than to each member independently. Bounds and kinds remain separate.
@@ -158,7 +229,7 @@ stage data also store `violation`/`violations` in the SDK.
 
 A retained tolerance-dependent decision must retain its conditions. Indicator,
 OneHot, and SOS1 stage data therefore retain `activation_atol` alongside
-`indicator_active` / `active_variable`. Feasibility queries do not change these
+`indicator_on` / `selected_variable`. Feasibility queries do not change these
 decisions or repeat input canonicalization. Solution/SampleSet retain their
 shared `feasibility_atol`, exposed by an accessor, and pass it to constraint
 queries. The current wire format requires retained activation conditions to
@@ -206,7 +277,7 @@ entirely — look it up via the enclosing `BTreeMap` key.
 constraint.id        // ConstraintID
 
 // ✅ After — IDs live on collection keys
-for (id, constraint) in instance.constraints() {
+for (id, constraint) in instance.active_constraints() {
     // `id: &ConstraintID`, `constraint: &Constraint`
 }
 
@@ -274,7 +345,7 @@ evaluated.stage.dual_variable
 evaluated.stage.used_decision_variable_ids
 ```
 
-`removed_reason` is no longer on evaluated/sampled constraints — it's managed by `EvaluatedCollection` / `SampledCollection` via `collection.removed_reasons()` and `collection.is_removed(&id)`.
+`removed_reason` is no longer on evaluated/sampled constraints — it's managed by `EvaluatedCollection` / `SampledCollection` via `collection.inactive_metadata()` and `collection.is_inactive(&id)`.
 
 **Sampled stage** — same pattern:
 ```rust,ignore
@@ -318,7 +389,7 @@ Constraint::less_than_or_equal_to_zero(function)
 // ✅ Insertion via the host's invariant-safe entry point — picks an
 // unused id, drains the (optional) context into the SoA store,
 // validates required_ids, returns the assigned id. `add_constraint`,
-// `relax_constraint`, and `restore_constraint` all take `&mut self`,
+// `deactivate_constraint`, and `activate_constraint` all take `&mut self`,
 // so `instance` must be a `mut` binding (or accessed via `&mut Instance`).
 let id = instance.add_constraint(
     Constraint::equal_to_zero(function),
@@ -331,12 +402,12 @@ let id = instance.add_constraint(
     },
 )?;
 
-// `relax_constraint` / `restore_constraint` move id between active and
-// removed; context stays in place. There is no `constraint_collection_mut()`
+// `deactivate_constraint` / `activate_constraint` move id between active and
+// inactive; context stays in place. There is no `constraint_collection_mut()`
 // — the raw map mutators on `ConstraintCollection<T>` are `pub(crate)`.
 ```
 
-**Removed constraints** are no longer constructed as `Constraint<Removed>`. They are stored as `(Constraint<Created>, RemovedReason)` tuples in `ConstraintCollection`:
+**Inactive constraints** are no longer constructed as `Constraint<Removed>`. They are stored as `(Constraint<Created>, InactiveConstraintMetadata)` tuples in `ConstraintCollection`:
 ```rust,ignore
 // ❌ Before (v2)
 let removed = RemovedConstraint {
@@ -345,15 +416,16 @@ let removed = RemovedConstraint {
     removed_reason_parameters: Default::default(),
 };
 
-// ✅ After — use Instance::relax_constraint() or store tuples directly
-instance.relax_constraint(id, "reason".to_string(), [])?;
+// ✅ After — use Instance::deactivate_constraint() or store tuples directly
+instance.deactivate_constraint(id, "reason".to_string(), [], false)?;
 
 // Or if constructing directly:
-let removed: (Constraint, RemovedReason) = (
+let inactive: (Constraint, InactiveConstraintMetadata) = (
     constraint,
-    RemovedReason {
+    InactiveConstraintMetadata {
         reason: "reason".to_string(),
         parameters: Default::default(),
+        skip_feasibility_check: false,
     },
 );
 ```
@@ -386,7 +458,7 @@ Constraint {
 
 ### 3. RemovedConstraint Removed
 
-`RemovedConstraint` type alias no longer exists. Removed constraints are stored as `(Constraint<Created>, RemovedReason)` tuples in `ConstraintCollection`.
+`RemovedConstraint` type alias no longer exists. Inactive constraints are stored as `(Constraint<Created>, InactiveConstraintMetadata)` tuples in `ConstraintCollection`.
 
 ```rust,ignore
 // ❌ Before (v2)
@@ -397,7 +469,7 @@ removed.removed_reason              // String
 removed.removed_reason_parameters   // FnvHashMap<String, String>
 
 // ✅ After — access via the tuple; the ID comes from the map key
-let (constraint, reason) = collection.removed().get(&id).unwrap();
+let (constraint, reason) = collection.inactive().get(&id).unwrap();
 // id is the BTreeMap key you looked it up by
 constraint.equality
 constraint.function()
@@ -405,43 +477,43 @@ reason.reason
 reason.parameters
 ```
 
-### 4. RemovedReason Struct
+### 4. InactiveConstraintMetadata Struct
 
 `removed_reason: String` + `removed_reason_parameters: FnvHashMap<String, String>` are consolidated into a single struct:
 
 ```rust,ignore
-pub struct RemovedReason {
+pub struct InactiveConstraintMetadata {
     pub reason: String,
     pub parameters: FnvHashMap<String, String>,
+    pub skip_feasibility_check: bool,
 }
 ```
 
-`RemovedReason` is stored at the collection level, not on individual constraints:
-- `ConstraintCollection.removed()` → `&BTreeMap<ID, (T::Created, RemovedReason)>`
-- `EvaluatedCollection.removed_reasons()` → `&BTreeMap<ID, RemovedReason>`
-- `SampledCollection.removed_reasons()` → `&BTreeMap<ID, RemovedReason>`
+`InactiveConstraintMetadata` is stored at the collection level, not on individual constraints:
+- `ConstraintCollection.inactive()` → `&BTreeMap<ID, (T::Created, InactiveConstraintMetadata)>`
+- `EvaluatedCollection.inactive_metadata()` → `&BTreeMap<ID, InactiveConstraintMetadata>`
+- `SampledCollection.inactive_metadata()` → `&BTreeMap<ID, InactiveConstraintMetadata>`
 
 ### 5. Instance Fields
 
 `Instance.constraints` and `Instance.removed_constraints` fields are replaced by `constraint_collection: ConstraintCollection<Constraint>`.
 
-Accessor methods are preserved for backward compatibility:
+Use explicit active or inactive accessors, or inspect the complete collection:
 ```rust,ignore
-// These still work
-instance.constraints()           // &BTreeMap<ConstraintID, Constraint>
-instance.removed_constraints()   // &BTreeMap<ConstraintID, (Constraint, RemovedReason)>
+instance.active_constraints()    // &BTreeMap<ConstraintID, Constraint>
+instance.inactive_constraints()   // &BTreeMap<ConstraintID, (Constraint, InactiveConstraintMetadata)>
 
-// New: access the full collection
-instance.constraint_collection() // &ConstraintCollection<Constraint>
+// All states
+instance.constraints()           // &ConstraintCollection<Constraint>
 ```
 
 For mutable access, downstream code goes through invariant-safe
 `Instance` / `ParametricInstance` methods (`add_constraint`,
-`insert_constraint`, `relax_constraint`, `restore_constraint`, …) —
+`insert_constraint`, `deactivate_constraint`, `activate_constraint`, …) —
 these validate that every `id` referenced by the constraint exists in
-`decision_variables` and keep the active / removed maps disjoint.
+`decision_variables` and keep the active / inactive maps disjoint.
 Crate-internal transformation code also routes through operation-level
-collection effects rather than raw active / removed / context map mutation.
+collection effects rather than raw active / inactive / context map mutation.
 
 ### 6. getset Removal
 
@@ -600,29 +672,30 @@ pub trait SampledConstraintBehavior: SampledConstraintData {
 ```
 
 These traits do not expose the constraint's ID — it lives on the enclosing
-`BTreeMap` key. `is_removed()` is similarly absent from the traits;
-use `EvaluatedCollection::is_removed(&id)` or
-`SampledCollection::is_removed(&id)` instead.
+`BTreeMap` key. `is_inactive()` is similarly absent from the traits;
+use `EvaluatedCollection::is_inactive(&id)` or
+`SampledCollection::is_inactive(&id)` instead.
 
 ### ConstraintCollection
 
-Generic collection of active + removed constraints, plus the SoA
+Generic collection of active + inactive constraints, plus the SoA
 context store for the kind. Also implements `Evaluate`:
 
 ```rust,ignore
 pub struct ConstraintCollection<T: ConstraintType> {
     active: BTreeMap<T::ID, T::Created>,
-    removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
+    inactive: BTreeMap<T::ID, (T::Created, InactiveConstraintMetadata)>,
     context: ConstraintContextStore<T::ID>,
 }
 
 // Methods (public)
 collection.active()                    // &BTreeMap<T::ID, T::Created>
-collection.removed()                   // &BTreeMap<T::ID, (T::Created, RemovedReason)>
+collection.inactive()                   // &BTreeMap<T::ID, (T::Created, InactiveConstraintMetadata)>
 collection.context()                   // &ConstraintContextStore<T::ID>
+collection.active_decision_variable_ids() // VariableIDSet, active constraints only
 // There is no public split-into-maps operation. Mutation and conversion go
 // through Instance / ParametricInstance methods so invariants
-// (active/removed disjointness, variable-id validity, and context ownership)
+// (active/inactive disjointness, variable-id validity, and context ownership)
 // are enforced. Crate-internal transformations use operation-level row
 // effects rather than raw map mutation.
 
@@ -630,10 +703,10 @@ collection.context()                   // &ConstraintContextStore<T::ID>
 collection.evaluate(state, atol)           // EvaluatedCollection<T>
 collection.evaluate_samples(samples, atol) // SampledCollection<T>
 collection.partial_evaluate(state, atol)   // only active constraints
-collection.required_ids()                  // VariableIDSet
+collection.required_ids()                  // VariableIDSet, all evaluated rows
 ```
 
-Removed constraints are just `Created` constraints paired with a `RemovedReason`. The `Removed` stage type no longer exists.
+Inactive constraints are just `Created` constraints paired with an `InactiveConstraintMetadata`. The `Removed` stage type no longer exists.
 
 ### EvaluatedCollection / SampledCollection
 
@@ -642,22 +715,22 @@ Generic wrappers for evaluation results, used in `Solution` and `SampleSet`. Eac
 ```rust,ignore
 pub struct EvaluatedCollection<T: ConstraintType> {
     constraints: BTreeMap<T::ID, T::Evaluated>,
-    removed_reasons: BTreeMap<T::ID, RemovedReason>,
+    inactive_metadata: BTreeMap<T::ID, InactiveConstraintMetadata>,
     context: ConstraintContextStore<T::ID>,
 }
 
 pub struct SampledCollection<T: ConstraintType> {
     constraints: BTreeMap<T::ID, T::Sampled>,
-    removed_reasons: BTreeMap<T::ID, RemovedReason>,
+    inactive_metadata: BTreeMap<T::ID, InactiveConstraintMetadata>,
     context: ConstraintContextStore<T::ID>,
 }
 
 // Both Deref to BTreeMap<T::ID, T::Evaluated/Sampled> for backward-compatible access
-// and provide feasibility / removal / context accessors:
-collection.is_feasible(atol)               // all constraints feasible
-collection.is_feasible_relaxed(atol)       // all non-removed constraints feasible
-collection.is_removed(&id)             // check if a constraint was removed
-collection.removed_reasons()           // &BTreeMap<T::ID, RemovedReason>
+// and provide feasibility / inactivity / context accessors:
+collection.is_feasible(atol) // FeasibilityCheck and Active constraints feasible
+collection.is_feasible_relaxed(atol) // active constraints feasible
+collection.is_inactive(&id)             // check if a constraint is inactive
+collection.inactive_metadata()           // &BTreeMap<T::ID, InactiveConstraintMetadata>
 collection.context()                   // &ConstraintContextStore<T::ID>
 ```
 
@@ -866,7 +939,7 @@ dependency backwards.
 Legacy v1 protobuf `substituted_value` fields are still accepted on parse, but
 the parser drains them into the same table before constructing the domain
 model. The host builder rejects states where a fixed variable is also
-solver-used or dependent, and `ParametricInstance` additionally rejects
+active or dependent, and `ParametricInstance` additionally rejects
 decision-variable / parameter ID collisions; these host-level invariants cannot
 be checked by an individual `DecisionVariable` or by the table alone.
 
@@ -897,7 +970,7 @@ let irrelevant = instance.irrelevant_decision_variable_ids();
 Use [`Instance::decision_variable_usage`](crate::Instance::decision_variable_usage)
 when you still need the reverse usage index for variables that appear in
 the active objective or active constraints, including special constraints.
-References only in named functions, removed constraints, the output objective,
+References only in named functions, inactive constraints, the output objective,
 or dependency right-hand sides do not contribute to this index. The direct role
 helpers are the preferred replacement for migration code that only needs fixed /
 dependent / irrelevant classification.
@@ -1090,12 +1163,12 @@ let air05_annotations = annotations.get("air05");
 - [ ] Update `constraint.function` → `constraint.function()` or `constraint.stage.function`
 - [ ] Update `constraint.name` reads — context is no longer on the constraint struct. Query the host's SoA store: `instance.constraint_context().name(id)` (and `subscripts`, `parameters`, `description`, `provenance`); use `collect_for(id) -> ConstraintContext` for an owned snapshot.
 - [ ] Update `evaluated.evaluated_value()` → `evaluated.stage.evaluated_value` (and other getset methods)
-- [ ] Update `RemovedConstraint` construction → `(Constraint, RemovedReason)` tuple
-- [ ] Update `removed.constraint.xxx` → `removed.0.xxx` (tuple access)
-- [ ] Update `removed_reason` / `removed_reason_parameters` → `RemovedReason { reason, parameters }`
-- [ ] Update `evaluated.removed_reason()` → `collection.removed_reasons().get(&id)`
+- [ ] Update `RemovedConstraint` construction → `(Constraint, InactiveConstraintMetadata)` tuple
+- [ ] Update `removed.constraint.xxx` → `inactive.0.xxx` (tuple access)
+- [ ] Update `removed_reason` / `removed_reason_parameters` → `InactiveConstraintMetadata { reason, parameters, skip_feasibility_check }`
+- [ ] Update `evaluated.removed_reason()` → `collection.inactive_metadata().get(&id)`
 - [ ] Update struct literals to use `stage: CreatedData { ... }` / `EvaluatedData { ... }` / etc.
-- [ ] Update `self.constraints` / `self.removed_constraints` → `self.constraint_collection.active()` / `.removed()`
+- [ ] Update `self.constraints` / `self.removed_constraints` → `self.constraint_collection.active()` / `.inactive()`
 - [ ] Remove any `getset` usage for constraint types
 - [ ] Update any `InstanceError` / `MpsParseError` / `QplibParseError` / `StateValidationError` / `LogEncodingError` / `UnknownSampleIDError` matches → propagate ordinary failures, or downcast to `LogEncodingUnavailable` / another signal type only for an intentional recovery path
 - [ ] Replace `Result<T, UnknownSampleIDError>` key-lookup methods with `Option<T>` on the call site

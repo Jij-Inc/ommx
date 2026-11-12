@@ -15,6 +15,10 @@ When a change adds or modifies a fallible public API, public signal type,
 owner here. Let that skill decide whether the failure needs a signal and how it
 crosses the PyO3 boundary.
 
+When adding, renaming, or changing the meaning of OMMX domain terms, use
+[OMMX Terminology](../ommx-terminology/SKILL.md) to align names with the domain
+operation. Keep the terminology policy there rather than duplicating it here.
+
 ## Mandatory Design Order
 
 For any change that affects mutation authority, table/collection APIs, access
@@ -97,7 +101,7 @@ important than the local code shape.
 
 Prefer evidence that scales past reviewer enumeration:
 
-- Cross-table semantic invariants (referenced IDs exist, active/removed
+- Cross-table semantic invariants (referenced IDs exist, active/inactive
   disjointness, sidecar key coverage) belong in owner-level validation helpers
   that `Arbitrary`-based proptests assert as postconditions. Then new builders,
   parsers, unchecked constructors, and restore paths are covered automatically
@@ -145,24 +149,24 @@ Review evidence must include:
   and solution/sample projection belong to `Instance`, `ParametricInstance`,
   `Solution`, or `SampleSet`, not to the row collection.
 - Let tables and collections expose only storage effects they can validate
-  locally: preserving row identity, keeping active/removed membership
-  disjoint, replacing known rows, moving active rows to removed with a reason,
+  locally: preserving row identity, keeping active/inactive membership
+  disjoint, replacing known rows, deactivating rows with inactive metadata,
   restoring a host-normalized row, inserting a row with its sidecar, or
   materializing rows together with owned labels/context. A callback that lets a
   caller compute semantic changes inside the collection is a review risk.
 - For v1/protobuf conversion, define `From`/`Into` at the smallest owner that
   has complete information. Use table/collection conversions when rows and
-  labels/context/removed reasons are owned together; use the root object when
+  labels/context/inactive metadata are owned together; use the root object when
   conversion needs cross-table facts. Do not add row-level conversions that
-  default labels, contexts, removed reasons, fixed values, or sample facts for a
+  default labels, contexts, inactive metadata, fixed values, or sample facts for a
   later layer to overwrite.
 - Treat default-fill-then-overlay conversion as a sign that the conversion
   boundary is wrong. Move the conversion to the layer that already has the
   missing information.
-- Check every stage and family touched by the change: created, removed,
-  evaluated, sampled, regular constraints, indicator constraints, one-hot, and
-  SOS1. A boundary fix that preserves sidecars for only one family or lifecycle
-  can still leave a parallel escape hatch.
+- Check every evaluation stage (created, evaluated, sampled), membership state
+  (active, inactive), and family (regular, indicator, one-hot, SOS1) touched by
+  the change. A boundary fix that preserves sidecars for only one family,
+  stage, or membership state can still leave a parallel escape hatch.
 
 ## Recurring OMMX Review Checks
 
@@ -178,7 +182,7 @@ A new entry must name its intended graduation target.
 - For fallible mutation paths, check atomicity before side effects. Build fallible derived values before inserting constraints, clear stale cached outputs before retryable operations, and validate reserved IDs before registry or storage writes.
 - For numeric consistency checks, handle boundary and invalid values explicitly. Absolute tolerances are inclusive unless the API documents otherwise, and NaN/Inf must not pass through `(a - b).abs() > atol` style comparisons silently. Graduation target: a shared tolerance-comparison helper plus a clippy `disallowed-methods` rule against raw tolerance comparisons.
 - For public API changes, check all user-facing surfaces together: Rust docs, Python docs, migration guides, stubs, examples, DataFrame flags, docstrings, and Python magic-method return contracts.
-- For public Rust structs, check whether the struct-level Rustdoc states the invariants that the type owns: valid IDs, active/removed disjointness, sidecar key coverage, non-empty sets, finite/non-zero numeric values, reserved annotation namespaces, or host-level serialization requirements. If callers can construct or mutate the struct, the docs should name the intended constructors or owner APIs that preserve those invariants. Graduation target: enable `#![warn(missing_docs)]` on the crate so presence is machine-checked; invariant content remains a review concern.
+- For public Rust structs, check whether the struct-level Rustdoc states the invariants that the type owns: valid IDs, active/inactive disjointness, sidecar key coverage, non-empty sets, finite/non-zero numeric values, reserved annotation namespaces, or host-level serialization requirements. If callers can construct or mutate the struct, the docs should name the intended constructors or owner APIs that preserve those invariants. Graduation target: enable `#![warn(missing_docs)]` on the crate so presence is machine-checked; invariant content remains a review concern.
 - For `LogicalMemoryProfile`, prefer `#[derive(LogicalMemoryProfile)]` for
   local Rust data types, including newtypes, tuple structs, and fieldless enums.
   Hand-written impls on ordinary data shapes are a review risk because new

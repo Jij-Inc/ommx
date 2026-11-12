@@ -78,9 +78,9 @@ def test_milp():
     assert linear_terms[2] == -3
 
     # Check the constraints
-    assert len(ommx_instance.constraints) == 3
+    assert len(ommx_instance.active_constraints) == 3
 
-    constraint1 = ommx_instance.constraints.of_kind(ConstraintKind.Regular)[0]
+    constraint1 = ommx_instance.active_constraints.of_kind(ConstraintKind.Regular)[0]
     assert constraint1.equality == Equality.EqualToZero
     assert constraint1.function.degree() == 1
     assert constraint1.function.constant_term == 6
@@ -89,7 +89,7 @@ def test_milp():
     assert constraint1_terms[0] == 4
     assert constraint1_terms[1] == -5
 
-    constraint2 = ommx_instance.constraints.of_kind(ConstraintKind.Regular)[1]
+    constraint2 = ommx_instance.active_constraints.of_kind(ConstraintKind.Regular)[1]
     assert constraint2.equality == Equality.LessThanOrEqualToZero
     assert constraint2.function.degree() == 1
     assert constraint2.function.constant_term == -9
@@ -98,7 +98,7 @@ def test_milp():
     assert constraint2_terms[0] == -7
     assert constraint2_terms[2] == 8
 
-    constraint3 = ommx_instance.constraints.of_kind(ConstraintKind.Regular)[2]
+    constraint3 = ommx_instance.active_constraints.of_kind(ConstraintKind.Regular)[2]
     assert constraint3.equality == Equality.LessThanOrEqualToZero
     assert constraint3.function.degree() == 1
     assert constraint3.function.constant_term == -12
@@ -160,9 +160,9 @@ def test_no_objective_model():
     assert ommx_instance.objective.num_terms() == 0  # Zero function has 0 terms
 
     # Check the constraints
-    assert len(ommx_instance.constraints) == 2
+    assert len(ommx_instance.active_constraints) == 2
 
-    constraint1 = ommx_instance.constraints.of_kind(ConstraintKind.Regular)[0]
+    constraint1 = ommx_instance.active_constraints.of_kind(ConstraintKind.Regular)[0]
     assert constraint1.equality == Equality.EqualToZero
     assert constraint1.function.degree() == 1
     assert constraint1.function.constant_term == -5
@@ -171,7 +171,7 @@ def test_no_objective_model():
     assert constraint1_terms[0] == 1
     assert constraint1_terms[1] == 2
 
-    constraint2 = ommx_instance.constraints.of_kind(ConstraintKind.Regular)[1]
+    constraint2 = ommx_instance.active_constraints.of_kind(ConstraintKind.Regular)[1]
     assert constraint2.equality == Equality.EqualToZero
     assert constraint2.function.degree() == 1
     assert constraint2.function.constant_term == -10

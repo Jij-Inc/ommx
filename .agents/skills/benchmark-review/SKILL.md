@@ -222,7 +222,7 @@ quadratic regression.
 
 ### Instance partial evaluation
 
-Treat the removed-constraint `Instance::partial_evaluate` benchmark from issue
+Treat the inactive-constraint `Instance::partial_evaluate` benchmark from issue
 #1027 and PR #1028 as a regression-shaped guardrail. Its cost model separates
 semantic evaluation from transaction overhead:
 
@@ -235,7 +235,8 @@ T ~= fixed_value_state
    + commit_swap_and_drop
 ```
 
-Use a removed-regular-constraints-only shape to keep active semantic work small.
+Use a shape containing only inactive regular constraints to keep active semantic
+work small.
 When diagnosing it, dominance by `Instance::clone`, fixed-value registration,
 or old-instance drop identifies transaction overhead rather than constraint
 rewriting.

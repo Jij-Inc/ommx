@@ -99,7 +99,7 @@ pub type NamedFunctionLabel = crate::ModelingLabel;
 /// (`NamedFunction`, `EvaluatedNamedFunction`, or `SampledNamedFunction`), and
 /// [`NamedFunctionLabelStore`] owns `name`, `subscripts`, `parameters`, and
 /// `description`. This mirrors `ConstraintCollection` for named functions,
-/// without active/removed state.
+/// without active/inactive state.
 ///
 /// Mathematically, this table is the named-expression component
 /// `N = {named_function_id -> expression row}` of an enclosing root object.

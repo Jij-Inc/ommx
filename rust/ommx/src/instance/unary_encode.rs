@@ -75,7 +75,7 @@ impl Instance {
     /// # Postconditions
     ///
     /// Encoding rewrites the Active Formulation and records reconstruction
-    /// rules. Named functions, removed constraints, and existing output
+    /// rules. Named functions, inactive constraints, and existing output
     /// objectives keep their expressions in Interpretation Context. Evaluation
     /// restores the original variables before evaluating those expressions.
     ///
@@ -97,7 +97,7 @@ impl Instance {
     ///     .sense(Sense::Maximize)
     ///     .objective(Function::from(linear!(0)))
     ///     .decision_variables(BTreeMap::from([(variable, integer)]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// let original = instance.objective().clone();
@@ -258,7 +258,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::from([(id, var)]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .fixed_decision_variable_values(BTreeMap::from([(id, 1.0)]))
             .build()
             .unwrap()
@@ -290,19 +290,19 @@ mod tests {
         let mut ids = BTreeSet::new();
         ids.extend(
             instance
-                .indicator_constraints()
+                .active_indicator_constraints()
                 .values()
                 .map(|constraint| constraint.indicator_variable),
         );
         ids.extend(
             instance
-                .one_hot_constraints()
+                .active_one_hot_constraints()
                 .values()
                 .flat_map(|constraint| constraint.variables.iter().copied()),
         );
         ids.extend(
             instance
-                .sos1_constraints()
+                .active_sos1_constraints()
                 .values()
                 .flat_map(|constraint| constraint.variables.iter().copied()),
         );
@@ -313,7 +313,7 @@ mod tests {
         let special_variables = active_special_constraint_variables(instance);
         instance
             .decision_variable_usage()
-            .used_integer()
+            .active_integer()
             .into_iter()
             .filter_map(|(id, bound)| {
                 if special_variables.contains(&id) {
@@ -328,7 +328,7 @@ mod tests {
     fn arbitrary_unary_encode_case() -> BoxedStrategy<(Instance, UnaryEncodeTarget, State)> {
         Instance::arbitrary_with(polynomial_full_v3_parameters())
             .prop_filter_map(
-                "instance must contain an encodable used integer variable",
+                "instance must contain an encodable active integer variable",
                 |instance| {
                     let targets = unary_encode_targets(&instance, MAX_PROPTEST_UNARY_WIDTH);
                     (!targets.is_empty()).then_some((instance, targets))
@@ -411,26 +411,28 @@ mod tests {
             actual.feasible_constraints_relaxed()
         );
         prop_assert_eq!(
-            expected.evaluated_constraints().removed_reasons(),
-            actual.evaluated_constraints().removed_reasons()
+            expected.evaluated_constraints().inactive_metadata(),
+            actual.evaluated_constraints().inactive_metadata()
         );
         prop_assert_eq!(
-            expected.evaluated_indicator_constraints().removed_reasons(),
-            actual.evaluated_indicator_constraints().removed_reasons()
+            expected
+                .evaluated_indicator_constraints()
+                .inactive_metadata(),
+            actual.evaluated_indicator_constraints().inactive_metadata()
         );
         prop_assert_eq!(
-            expected.evaluated_one_hot_constraints().removed_reasons(),
-            actual.evaluated_one_hot_constraints().removed_reasons()
+            expected.evaluated_one_hot_constraints().inactive_metadata(),
+            actual.evaluated_one_hot_constraints().inactive_metadata()
         );
         prop_assert_eq!(
-            expected.evaluated_sos1_constraints().removed_reasons(),
-            actual.evaluated_sos1_constraints().removed_reasons()
+            expected.evaluated_sos1_constraints().inactive_metadata(),
+            actual.evaluated_sos1_constraints().inactive_metadata()
         );
 
         for (id, expected_constraint) in expected.evaluated_constraints().iter() {
             if expected
                 .evaluated_constraints()
-                .removed_reasons()
+                .inactive_metadata()
                 .contains_key(id)
             {
                 continue;
@@ -450,7 +452,7 @@ mod tests {
         for (id, expected_constraint) in expected.evaluated_indicator_constraints().iter() {
             if expected
                 .evaluated_indicator_constraints()
-                .removed_reasons()
+                .inactive_metadata()
                 .contains_key(id)
             {
                 continue;
@@ -466,15 +468,15 @@ mod tests {
                 actual_constraint.is_feasible(actual.feasibility_atol())
             );
             prop_assert_eq!(
-                expected_constraint.stage.indicator_active,
-                actual_constraint.stage.indicator_active
+                expected_constraint.stage.indicator_on,
+                actual_constraint.stage.indicator_on
             );
         }
 
         for (id, expected_constraint) in expected.evaluated_one_hot_constraints().iter() {
             if expected
                 .evaluated_one_hot_constraints()
-                .removed_reasons()
+                .inactive_metadata()
                 .contains_key(id)
             {
                 continue;
@@ -485,15 +487,15 @@ mod tests {
                 actual_constraint.is_feasible(actual.feasibility_atol())
             );
             prop_assert_eq!(
-                expected_constraint.stage.active_variable,
-                actual_constraint.stage.active_variable
+                expected_constraint.stage.selected_variable,
+                actual_constraint.stage.selected_variable
             );
         }
 
         for (id, expected_constraint) in expected.evaluated_sos1_constraints().iter() {
             if expected
                 .evaluated_sos1_constraints()
-                .removed_reasons()
+                .inactive_metadata()
                 .contains_key(id)
             {
                 continue;
@@ -504,8 +506,8 @@ mod tests {
                 actual_constraint.is_feasible(actual.feasibility_atol())
             );
             prop_assert_eq!(
-                expected_constraint.stage.active_variable,
-                actual_constraint.stage.active_variable
+                expected_constraint.stage.selected_variable,
+                actual_constraint.stage.selected_variable
             );
         }
 
@@ -695,7 +697,7 @@ mod tests {
                 .sense(Sense::Maximize)
                 .objective(Function::from(crate::linear!(0)))
                 .decision_variables(BTreeMap::from([(id, variable)]))
-                .constraints(BTreeMap::new())
+                .active_constraints(BTreeMap::new())
                 .build()
                 .unwrap()
         };
@@ -729,10 +731,10 @@ mod tests {
             with_output.decision_variable_role(id),
             Some(DecisionVariableRole::Dependent)
         );
-        assert!(!with_output.used_decision_variable_ids().contains(&id));
+        assert!(!with_output.active_decision_variable_ids().contains(&id));
         let state = State::from_iter(
             with_output
-                .used_decision_variable_ids()
+                .active_decision_variable_ids()
                 .into_iter()
                 .map(|id| (id.into_inner(), 0.0)),
         );
@@ -755,7 +757,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::from([(id, variable)]))
-            .constraints(BTreeMap::from([(ConstraintID::from(0), constraint)]))
+            .active_constraints(BTreeMap::from([(ConstraintID::from(0), constraint)]))
             .build()
             .unwrap();
 
@@ -887,14 +889,14 @@ mod tests {
                     .unwrap(),
                 ),
             ]))
-            .constraints(BTreeMap::new())
-            .indicator_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_indicator_constraints(BTreeMap::from([(
                 IndicatorConstraintID::from(0),
                 IndicatorConstraint::new(
                     indicator_id,
                     Equality::LessThanOrEqualToZero,
                     Function::from(crate::linear!(1)),
-                    false,
+                    crate::IndicatorTriggerValue::One,
                 ),
             )]))
             .build()
@@ -926,8 +928,8 @@ mod tests {
                 (id0, DecisionVariable::binary()),
                 (id1, DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::new())
-            .one_hot_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_one_hot_constraints(BTreeMap::from([(
                 OneHotConstraintID::from(0),
                 OneHotConstraint::new(BTreeSet::from([id0, id1])).unwrap(),
             )]))
@@ -964,7 +966,7 @@ mod tests {
                 ),
                 (VariableID::from(u64::MAX), DecisionVariable::binary()),
             ]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 
@@ -995,8 +997,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(crate::linear!(0)))
             .decision_variables(BTreeMap::from([(id, var)]))
-            .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([(
+            .active_constraints(BTreeMap::new())
+            .active_sos1_constraints(BTreeMap::from([(
                 Sos1ConstraintID::from(0),
                 Sos1Constraint::new(BTreeSet::from([id])).unwrap(),
             )]))
@@ -1037,7 +1039,7 @@ mod tests {
                 (crate::linear!(0) + crate::linear!(1)).unwrap(),
             ))
             .decision_variables(BTreeMap::from([(id0, var0), (id1, var1)]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 
@@ -1068,7 +1070,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(crate::linear!(0)))
             .decision_variables(BTreeMap::from([(id0, var0)]))
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 

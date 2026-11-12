@@ -6,14 +6,39 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### ⚠ Active and inactive constraints ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
+
+Model `constraints` now contains rows of every role. Use `active_constraints` for active attached handles and `inactive_constraints` for retained inactive rows. Rename `Removed*Constraint` to `Inactive*Constraint`, `relax_*` / `restore_*` to `deactivate_*` / `activate_*`, and `from_components` inputs to `active_*` / `inactive_*`.
+
+On `Instance` and `ParametricInstance`, `constraint_names` becomes `active_constraint_names` and `extract_constraints(name)` becomes `extract_active_constraints(name)`. Their active-only scope and return types are unchanged. `Solution` and `SampleSet` keep their existing names.
+
+Each constraint exposes a `role` property of type `ConstraintRole`. `EVALUATION_ONLY` participates in numerical evaluation; `FEASIBILITY_CHECK` additionally participates in normal feasibility; `ACTIVE` additionally belongs to the Active Formulation. Inactive rows have role `FEASIBILITY_CHECK` by default and `EVALUATION_ONLY` when `skip_feasibility_check=True`. Inactive is the umbrella term for these two roles. Roles describe how a constraint is used, independently of its evaluation stage.
+
+`Solution.feasible` and `SampleSet.feasible` remain properties and check constraints with the `FEASIBILITY_CHECK` or `ACTIVE` role. `feasible_relaxed` remains a property checking active constraints only. Both check variable domains. SampleSet's `best_feasible` and `best_feasible_id` also remain properties; `feasible_ids()` remains a method without arguments. Feasibility queries and sample selection do not take `min_role`.
+
+For `total_violation()` and `constraints_df`, the order is `EVALUATION_ONLY < FEASIBILITY_CHECK < ACTIVE`; `min_role` includes rows at or above the minimum. The default total violation uses `FEASIBILITY_CHECK`, matching the constraints checked by `feasible`; `ACTIVE` matches `feasible_relaxed`. `constraints_df` replaces `removed=` with this selector, defaults to `EVALUATION_ONLY` to include all rows, and always includes `role`. Request `include=["inactive_reason"]` for reasons.
+
+The v1 schema is unchanged and v1 export rejects a true skip flag; use v2 to preserve it. See the [migration guide](../migration/python_sdk_v2_to_v3.md) for the full API mapping.
+
+The `ommx.v2` protobuf format is still pre-release; its version is separate from the Python SDK version. This update does not guarantee compatibility with earlier pre-release v2 data. Field numbers, types, and structure may change, and unchanged field numbers are not a compatibility commitment. `required_features` remains the mechanism for rejecting unsupported semantic extensions.
+
+Indicator result properties and DataFrame columns now use `indicator_on` for the indicator's ON/OFF state at the evaluated candidate, independently of constraint role.
+
+Indicator configuration uses `trigger_value=0` or `trigger_value=1` (the default), replacing the boolean `activate_on_zero`. The integer property and DataFrame column describe when the body applies; `indicator_on` remains the evaluated boolean result. Instance-class clauses use `allowed_indicator_trigger_values`, and unsupported values are reported by `IndicatorTriggerNotAllowed` with `trigger_value` and `allowed_trigger_values`.
+
+OneHot/SOS1 result properties rename `active_variable` to `selected_variable`, including per-sample mappings. DataFrame columns use `selected_variable` and `selected_variable.<sample_id>`. This reports selection at a candidate, independently of variable or constraint membership in the Active Formulation. Evaluation behavior is unchanged.
+
+The Active Formulation also names its variables explicitly: use `active_decision_variables` and `DecisionVariableRole.Active`. The `state_role` value is `"active"`. Adapters consume active variables and active constraints; row-level `used_ids` retain their reference meaning.
+
 ### Reject v1 exports that would discard special-constraint results ([#1380](https://github.com/Jij-Inc/ommx/pull/1380))
 
 `to_v1_bytes()` is a compatibility serialization format for older OMMX SDKs;
 v3 features that cannot be represented in v1 require `to_v2_bytes()`.
 `Solution.to_v1_bytes()` and `SampleSet.to_v1_bytes()` now raise `RuntimeError`
-when Indicator, OneHot, or SOS1 results are retained, including inactive,
-satisfied, and removed constraints. Use `to_v2_bytes()` to preserve them.
-Regular-only v1 exports and existing v1 readers retain their behavior.
+when Indicator, OneHot, or SOS1 results are retained, including Indicators that
+are OFF, satisfied constraints, and inactive rows. Use `to_v2_bytes()` to preserve them.
+Regular-only v1 exports remain available when they satisfy the other v1 export
+restrictions; existing v1 readers retain their behavior.
 `from_v1_bytes()` is documented as compatibility import that aims to recover
 legacy data without changing its mathematical meaning. Current recovery limits
 are explicit; implementation improvements are tracked separately in
@@ -33,7 +58,7 @@ handlers for `OMMXHighsAdapterError` or `OMMXPySCIPOptAdapterError` around
 construction for this case with an `InfeasibleDetected` handler around
 `solve()`, `solve_without_preparation()`, or `decode()`.
 
-HiGHS also solves models with no used decision variables using an internal
+HiGHS also solves models with no active decision variables using an internal
 fixed variable, which does not appear in the decoded OMMX state. Feasible
 constant rows are retained and their HiGHS dual values are mapped back to the
 corresponding OMMX constraint IDs.
@@ -132,7 +157,7 @@ assert not instance.evaluate({x.id: 0.4}).feasible
 
 The value set must be non-empty and contain unique, finite numbers. OMMX
 preserves the exact set through evaluation, sampling, and v1/v2 serialization.
-The bounds give its minimum and maximum. MPS export rejects a solver-used
+The bounds give its minimum and maximum. MPS export rejects an active
 finite-domain variable because bounds cannot represent an arbitrary set of allowed values.
 See {meth}`~ommx.DecisionVariable.finite_domain` for the domain and DataFrame representation.
 
@@ -168,14 +193,14 @@ before fixed penalties. `to_qubo()` and `to_hubo()` use this order, so constrain
 are rewritten before their squares expand the objective. Acyclic substitution
 resolves assignment dependencies and visits each polynomial's terms once.
 
-Constraints removed by the penalty phase now store their encoded expressions.
+Constraints deactivated by the penalty phase now store their encoded expressions.
 Their evaluated values and the original output objective are preserved through
 decision-variable reconstruction. See {meth}`~ommx.Instance.prepare`.
 
 ### ⚠ Unique constraint numbers across families ([#1309](https://github.com/Jij-Inc/ommx/pull/1309))
 
 Constraint numbers are now unique across regular, Indicator, OneHot, and SOS1
-constraints, including removed constraints, within each `Instance` or
+constraints, including inactive constraints, within each `Instance` or
 `ParametricInstance`. Automatic additions and transformations allocate from this
 shared space. Evaluation preserves the identities in `Solution` and `SampleSet`.
 
@@ -198,7 +223,7 @@ frame = solution.constraints_df(kind="regular")
 
 Collections retain their owner and fetch a row only when indexed by a typed ID.
 Integer keys are rejected. Model values are attached handles; result values are
-individual snapshots including retained removed constraints and their metadata.
+individual snapshots including retained inactive constraints and their metadata.
 The family-specific model properties are consolidated into `.constraints` and
 `.removed_constraints`; `get_constraint_by_id`, `get_removed_constraint_by_id`,
 and result `constraint_ids` are replaced by indexing and iteration. Use `.detach()`
@@ -231,20 +256,23 @@ types, so adding a special-constraint family does not change their public
 return types. Concrete-ID indexing keeps precise overloads. Solver consumers
 explicitly reject unsupported families instead of silently omitting constraints.
 
-Attached rows compare by owner identity and typed ID; removed and result rows
+Attached rows compare by owner identity and typed ID; inactive and result rows
 compare their snapshot data and metadata. Collections and their views use that
 row equality. Typed IDs support `copy` and `deepcopy`, and `.get()` preserves
 both the concrete row type and the default value's type. Invalid lookup keys
 report the required typed-ID input without exposing internal enum extraction.
 
-`extract_constraints(name)` now searches every family. On `Instance` and
-`ParametricInstance` it returns attached objects keyed by subscript tuples; on
-`Solution` and `SampleSet` it returns nonnegative violations. **Regular constraints
+On `Instance` and `ParametricInstance`, `extract_active_constraints(name)` searches
+every family of active constraints and returns attached objects keyed by subscript
+tuples. On `Solution` and `SampleSet`, `extract_constraints(name)` searches every
+family and returns nonnegative violations. **Regular constraints
 now return violations instead of signed function values.** Parameters are ignored,
 as in variable extraction; duplicate subscripts across families raise `ValueError`.
 
-All four owners provide `constraint_names: set[str]` for the same scope as
-`extract_constraints`. `ParametricInstance.decision_variable_names` lists variable
+`Instance` and `ParametricInstance` provide `active_constraint_names: set[str]`;
+`Solution` and `SampleSet` provide `constraint_names: set[str]`. Each name query
+has the same scope as its corresponding extraction method.
+`ParametricInstance.decision_variable_names` lists variable
 names without including parameters. Unnamed rows are excluded and names are deduplicated.
 
 ### 🆕 Create states from variable names and subscripts ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
@@ -383,7 +411,7 @@ previously accepted.
 
 To migrate your code, use {meth}`~ommx.Solution.total_violation` in place of
 `total_violation_l1()`; `total_violation_l2()` has been removed. The total sums
-violations of regular, Indicator, OneHot, SOS1, and removed constraints.
+violations of regular, Indicator, OneHot, SOS1, and inactive constraints.
 
 ```python
 # Beta 6 syntax. See the migration guide for the current typed-ID API.
@@ -665,7 +693,7 @@ claimed formulation fails validation,
 {class}`~ommx.Sos1BigMPromotionBatchRejectedError` is raised and the `Instance`
 remains unchanged. The returned {class}`~ommx.Sos1BigMPromotion` is a batch
 report whose `promoted` map identifies the new SOS1 constraint. Membership,
-selector reconstruction, and removed rows can be queried from the Instance.
+selector reconstruction, and inactive rows can be queried from the Instance.
 
 ### 🆕 Incremental constructors for interval-domain variables ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
 
@@ -825,8 +853,8 @@ APIs use the shared Rust-to-Python error boundary directly. Missing or unknown
 caller-owned state, invalid caller-provided values, and recoverable
 dependent-variable assertions raise `ValueError`. Direct function and
 polynomial partial evaluation preserves `CoefficientError`, while coefficient
-failures from `Instance`-owned dependency normalization and removed-constraint
-restoration fall back to `RuntimeError`.
+failures from `Instance`-owned dependency normalization and inactive-constraint
+activation fall back to `RuntimeError`.
 
 Decision-variable insertion and substitution, `Function.content_factor`, and
 OneHot/SOS1 construction also use this boundary directly. Duplicate decision
@@ -872,7 +900,7 @@ the magnitude.
 
 `prepare()` updates the instance in place. When you evaluate returned solutions
 and samples, OMMX can restore source-variable values and check constraints that
-were removed during preparation. If a later preparation step fails, changes
+became inactive during preparation. If a later preparation step fails, changes
 from earlier completed steps remain. If you are migrating from v2 or Beta 2,
 replace OpenJij's model-conversion options and the prerelease
 `OpenJijPreparation*` APIs with this common workflow. See
@@ -1389,9 +1417,9 @@ assert state.entries == {1: 2.0, 2: 3.0, 5: 6.0, 10: 5.0, 99: 4.0}
 
 ### ⚠ Decision variable role queries on `Instance` ([#946](https://github.com/Jij-Inc/ommx/pull/946))
 
-The Python SDK no longer exposes `DecisionVariableUsage` or `DecisionVariableUsageEntry` objects. Use {attr}`~ommx.Instance.used_decision_variables` when adapters need the solver input variables, and use {meth}`~ommx.Instance.decision_variable_role`, {meth}`~ommx.Instance.decision_variable_roles`, {meth}`~ommx.Instance.fixed_decision_variables`, {meth}`~ommx.Instance.dependent_decision_variable_ids`, and {meth}`~ommx.Instance.irrelevant_decision_variable_ids` to query state roles directly from the owning Instance.
+The Python SDK no longer exposes `DecisionVariableUsage` or `DecisionVariableUsageEntry` objects. Use {attr}`~ommx.Instance.active_decision_variables` when adapters need the solver input variables, and use {meth}`~ommx.Instance.decision_variable_role`, {meth}`~ommx.Instance.decision_variable_roles`, {meth}`~ommx.Instance.fixed_decision_variables`, {meth}`~ommx.Instance.dependent_decision_variable_ids`, and {meth}`~ommx.Instance.irrelevant_decision_variable_ids` to query state roles directly from the owning Instance.
 
-{meth}`~ommx.Instance.decision_variables_df` continues to include the `state_role` column, so DataFrame-based workflows can inspect `used`, `fixed`, `dependent`, and `irrelevant` roles without constructing a separate usage object.
+{meth}`~ommx.Instance.decision_variables_df` continues to include the `state_role` column, so DataFrame-based workflows can inspect `active`, `fixed`, `dependent`, and `irrelevant` roles without constructing a separate usage object.
 
 ### ⚠ Fixed decision-variable values are owned by instances ([#959](https://github.com/Jij-Inc/ommx/pull/959))
 
@@ -1818,7 +1846,7 @@ See the GitHub Release above for full details. The following summarizes the main
 
 ### ⚠ Removal of the `Constraint.id` field ([#806](https://github.com/Jij-Inc/ommx/pull/806))
 
-The `id` field (along with the `.id` getter, `set_id()`, and `id=` constructor argument) is removed from {class}`~ommx.Constraint` and its variants ({class}`~ommx.IndicatorConstraint` / {class}`~ommx.OneHotConstraint` / {class}`~ommx.Sos1Constraint` / {class}`~ommx.EvaluatedConstraint` / {class}`~ommx.SampledConstraint` / {class}`~ommx.RemovedConstraint`). A constraint's ID now exists only as the key of the `dict[int, Constraint]` passed to {meth}`Instance.from_components <ommx.Instance.from_components>`.
+The `id` field (along with the `.id` getter, `set_id()`, and `id=` constructor argument) is removed from {class}`~ommx.Constraint` and its variants ({class}`~ommx.IndicatorConstraint` / {class}`~ommx.OneHotConstraint` / {class}`~ommx.Sos1Constraint` / {class}`~ommx.EvaluatedConstraint` / {class}`~ommx.SampledConstraint` / `RemovedConstraint`). A constraint's ID now exists only as the key of the `dict[int, Constraint]` passed to {meth}`Instance.from_components <ommx.Instance.from_components>`.
 
 ```python
 # Before (2.5.1)
@@ -1840,7 +1868,7 @@ In addition to regular constraints, the following three special constraint types
 - {class}`~ommx.OneHotConstraint` — replaces the previous `ConstraintHints.OneHot` metadata
 - {class}`~ommx.Sos1Constraint` — replaces the previous `ConstraintHints.Sos1` metadata
 
-For concrete usage, evaluation-result access, and the Indicator relax / restore workflow, see {class}`~ommx.IndicatorConstraint`, {class}`~ommx.OneHotConstraint`, {class}`~ommx.Sos1Constraint`.
+For concrete usage, evaluation-result access, and the Indicator deactivation / activation workflow, see {class}`~ommx.IndicatorConstraint`, {class}`~ommx.OneHotConstraint`, {class}`~ommx.Sos1Constraint`.
 
 Accordingly, the legacy `ConstraintHints` / `OneHot` / `Sos1` classes, the `Instance.constraint_hints` property, and the PySCIPOpt Adapter's `use_sos1` flag are removed.
 

@@ -5,7 +5,7 @@ def test_solution_sense_minimize():
     instance = Instance.from_components(
         decision_variables=[],
         objective=0,
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     solution = instance.evaluate({})
@@ -16,7 +16,7 @@ def test_solution_sense_maximize():
     instance = Instance.from_components(
         decision_variables=[],
         objective=0,
-        constraints={},
+        active_constraints={},
         sense=Sense.Maximize,
     )
     solution = instance.evaluate({})

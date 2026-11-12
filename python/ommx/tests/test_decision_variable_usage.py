@@ -1,10 +1,17 @@
-"""Test decision-variable role and used-variable APIs."""
+"""Test decision-variable roles and Active Formulation variable APIs."""
 
 import math
 
 import pytest
 
-from ommx import DecisionVariable, DecisionVariableRole, Instance, Sense
+from ommx import (
+    ConstraintID,
+    DecisionVariable,
+    DecisionVariableRole,
+    Instance,
+    NamedFunction,
+    Sense,
+)
 
 
 def test_decision_variable_roles_basic():
@@ -14,34 +21,65 @@ def test_decision_variable_roles_basic():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints={0: x[1] + x[2] == 1},
+        active_constraints={0: x[1] + x[2] == 1},
         sense=Sense.Maximize,
     )
 
-    assert instance.used_decision_variables == x
+    assert instance.active_decision_variables == x
     assert instance.decision_variable_roles() == {
-        0: DecisionVariableRole.Used,
-        1: DecisionVariableRole.Used,
-        2: DecisionVariableRole.Used,
+        0: DecisionVariableRole.Active,
+        1: DecisionVariableRole.Active,
+        2: DecisionVariableRole.Active,
     }
-    assert instance.decision_variable_role(0) == DecisionVariableRole.Used
+    assert instance.decision_variable_role(0) == DecisionVariableRole.Active
     assert instance.decision_variable_role(999) is None
+    assert str(DecisionVariableRole.Active) == "active"
+    assert repr(DecisionVariableRole.Active) == "DecisionVariableRole.Active"
+
+
+def test_active_variables_follow_constraint_membership_and_retain_row_references():
+    x = [DecisionVariable.continuous(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0],
+        active_constraints={0: x[1] <= 4},
+        named_functions=[NamedFunction(id=0, function=x[2], name="report")],
+        sense=Sense.Minimize,
+    )
+    cid = ConstraintID(0)
+
+    assert instance.active_decision_variables == x[:2]
+    assert instance.required_ids() == {0, 1}
+    assert instance.decision_variable_role(2) == DecisionVariableRole.Irrelevant
+
+    instance.deactivate_constraint(cid, "retain for interpretation")
+    assert instance.active_decision_variables == x[:1]
+    assert instance.required_ids() == {0}
+    assert instance.decision_variable_role(1) == DecisionVariableRole.Irrelevant
+    result = instance.evaluate({0: 0, 1: 1, 2: 2})
+    assert result.constraints[cid].used_decision_variable_ids == {1}
+    assert result.feasible
+
+    instance.activate_constraint(cid)
+    assert instance.active_decision_variables == x[:2]
+    assert instance.required_ids() == {0, 1}
+    assert instance.decision_variable_role(1) == DecisionVariableRole.Active
 
 
 def test_decision_variable_role_partitions():
-    """Test used/fixed/dependent/irrelevant role partitions on Instance."""
+    """Test active/fixed/dependent/irrelevant role partitions on Instance."""
     x = {i: DecisionVariable.continuous(i) for i in range(4)}
     instance = Instance.from_components(
         decision_variables=list(x.values()),
         objective=x[0],
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     instance.substitute({2: x[0] + 1})
     instance = instance.partial_evaluate({1: 2.0})
 
     assert instance.decision_variable_roles() == {
-        0: DecisionVariableRole.Used,
+        0: DecisionVariableRole.Active,
         1: DecisionVariableRole.Fixed,
         2: DecisionVariableRole.Dependent,
         3: DecisionVariableRole.Irrelevant,
@@ -57,7 +95,7 @@ def _dependent_instance_y_eq_2x():
     instance = Instance.from_components(
         decision_variables=list(x.values()),
         objective=x[1],
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     instance.substitute({10: x[1] + x[1]})
@@ -114,7 +152,7 @@ def test_partial_evaluate_normalizes_dependency_chain():
     instance = Instance.from_components(
         decision_variables=list(x.values()),
         objective=x[1],
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     instance.substitute({10: x[1] + x[1], 11: x[10] + 1})
@@ -151,7 +189,7 @@ def test_instance_populate_state():
     instance = Instance.from_components(
         decision_variables=list(x.values()),
         objective=x[1] + x[2],
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     instance.substitute(
@@ -193,7 +231,7 @@ def test_instance_canonicalizes_discrete_solver_values():
     instance = Instance.from_components(
         decision_variables=list(x.values()),
         objective=x[0],
-        constraints={},
+        active_constraints={},
         sense=Sense.Minimize,
     )
     state = {

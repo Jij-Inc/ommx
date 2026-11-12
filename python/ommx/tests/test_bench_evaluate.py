@@ -20,7 +20,7 @@ def boundary_instance():
     return Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={i: x[i] <= 1 for i in range(size)},
+        active_constraints={i: x[i] <= 1 for i in range(size)},
         sense=Sense.Minimize,
     )
 

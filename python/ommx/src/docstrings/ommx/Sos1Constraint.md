@@ -43,12 +43,15 @@ referenced variables exist when inserting the constraint.
 ```
 
 See {meth}`~ommx.Instance.evaluate` for numerical evaluation and
-{meth}`~ommx.Solution.constraints_df` for violation and activation diagnostics.
+{meth}`~ommx.Solution.constraints_df` for violation and selection diagnostics.
+Evaluated and sampled result rows expose `selected_variable` as a
+candidate-dependent diagnostic, independently of variable or constraint
+membership in the Active Formulation.
 The constructor creates an independent value;
 {meth}`~ommx.Instance.add_sos1_constraint` returns an attached handle.
-For explicit IDs, use the `sos1_constraints` mapping of
+For explicit IDs, use the `active_sos1_constraints` mapping of
 {meth}`~ommx.Instance.from_components`. Constraint numbers follow the same
-cross-family uniqueness rule as regular constraints, including removed rows.
+cross-family uniqueness rule as regular constraints, including inactive rows.
 
 **Use the structure directly or express it with regular constraints**
 

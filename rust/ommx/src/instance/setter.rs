@@ -19,7 +19,7 @@ fn validate_sos1_non_empty(constraint: &crate::Sos1Constraint) -> crate::Result<
 impl Instance {
     /// Internal helper to validate required IDs against precomputed sets.
     ///
-    /// Mirrors the `used / fixed / dependent` disjointness invariant the
+    /// Mirrors the `active / fixed / dependent` disjointness invariant the
     /// builder enforces (`builder.rs`): a constraint or objective cannot
     /// reference a variable whose value has been pinned via
     /// a table-owned fixed value (`fixed`), nor a variable
@@ -93,7 +93,7 @@ impl Instance {
     ///     .sense(Sense::Maximize)
     ///     .objective(Function::from(linear!(1)))
     ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
-    ///     .constraints(BTreeMap::new())
+    ///     .active_constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
     /// assert!(instance.convert_active_objective(Sense::Minimize));
@@ -251,7 +251,7 @@ impl Instance {
         constraint: Constraint,
     ) -> crate::Result<Option<Constraint>> {
         if self.constraint_collection.active().contains_key(&id)
-            || self.constraint_collection.removed().contains_key(&id)
+            || self.constraint_collection.inactive().contains_key(&id)
         {
             let old = self
                 .constraint_collection
@@ -271,7 +271,7 @@ impl Instance {
     /// Insert a constraint into the instance under the given [`ConstraintID`].
     ///
     /// - If the constraint already exists, it will be replaced.
-    /// - If the ID is in the removed constraints, it replaces it.
+    /// - If the ID is in the inactive constraints, it replaces it.
     /// - Otherwise, it adds the constraint to the instance.
     ///
     pub fn insert_constraint(
@@ -293,7 +293,7 @@ impl Instance {
     ///
     /// The behavior for each constraint follows the same rules as [`Self::insert_constraint`]:
     /// - If the constraint already exists, it will be replaced.
-    /// - If the ID is in the removed constraints, it replaces it.
+    /// - If the ID is in the inactive constraints, it replaces it.
     /// - Otherwise, it adds the constraint to the instance.
     ///
     /// # Atomicity
@@ -339,7 +339,7 @@ impl Instance {
 
     /// Return the next regular constraint ID from the instance-wide number space.
     ///
-    /// Includes active and removed constraints of every family. This does not
+    /// Includes active and inactive constraints of every family. This does not
     /// reserve the number: repeated calls return the same ID until insertion.
     ///
     /// # Panics
@@ -708,9 +708,9 @@ mod tests {
 
         // Should return None since no constraint with ID 10 existed before
         assert!(result.is_none());
-        assert_eq!(instance.constraints().len(), 1);
+        assert_eq!(instance.active_constraints().len(), 1);
         assert_eq!(
-            instance.constraints().get(&ConstraintID::from(10)),
+            instance.active_constraints().get(&ConstraintID::from(10)),
             Some(&constraint)
         );
     }
@@ -742,9 +742,9 @@ mod tests {
 
         // Should return the old constraint that was replaced
         assert_eq!(result, Some(original_constraint));
-        assert_eq!(instance.constraints().len(), 1);
+        assert_eq!(instance.active_constraints().len(), 1);
         assert_eq!(
-            instance.constraints().get(&ConstraintID::from(5)),
+            instance.active_constraints().get(&ConstraintID::from(5)),
             Some(&new_constraint)
         );
     }
@@ -781,7 +781,7 @@ mod tests {
             "Undefined variable ID is used: VariableID(999)"
         );
         // Ensure no constraint was added
-        assert_eq!(instance.constraints().len(), 0);
+        assert_eq!(instance.active_constraints().len(), 0);
     }
 
     #[test]
@@ -822,7 +822,7 @@ mod tests {
             .insert_constraint(ConstraintID::from(3), constraint3.clone())
             .unwrap()
             .is_none());
-        assert_eq!(instance.constraints().len(), 3);
+        assert_eq!(instance.active_constraints().len(), 3);
 
         // Replace constraint 2 with new one
         let new_constraint2 = Constraint::equal_to_zero((linear!(1) + coeff!(1.0)).into());
@@ -830,9 +830,9 @@ mod tests {
             .insert_constraint(ConstraintID::from(2), new_constraint2.clone())
             .unwrap();
         assert_eq!(replaced, Some(constraint2));
-        assert_eq!(instance.constraints().len(), 3);
+        assert_eq!(instance.active_constraints().len(), 3);
         assert_eq!(
-            instance.constraints().get(&ConstraintID::from(2)),
+            instance.active_constraints().get(&ConstraintID::from(2)),
             Some(&new_constraint2)
         );
     }
@@ -867,7 +867,7 @@ mod tests {
             "Dependent variable cannot be used in objectives or constraints: VariableID(2)"
         );
         // Ensure no constraint was added
-        assert_eq!(instance.constraints().len(), 0);
+        assert_eq!(instance.active_constraints().len(), 0);
     }
 
     #[test]
@@ -887,7 +887,7 @@ mod tests {
             .fixed_decision_variable_values(btreemap! {
                 VariableID::from(2) => 0.0,
             })
-            .constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::new())
             .build()
             .unwrap();
 
@@ -899,7 +899,7 @@ mod tests {
             err.to_string().contains("Fixed variable") && err.to_string().contains("VariableID(2)"),
             "unexpected error: {err}"
         );
-        assert!(instance.constraints().is_empty());
+        assert!(instance.active_constraints().is_empty());
     }
 
     #[test]
@@ -927,7 +927,7 @@ mod tests {
             err.to_string().contains("at least one variable"),
             "unexpected error: {err}"
         );
-        assert!(instance.one_hot_constraints().is_empty());
+        assert!(instance.active_one_hot_constraints().is_empty());
     }
 
     #[test]
@@ -956,7 +956,7 @@ mod tests {
             err.to_string().contains("at least one variable"),
             "unexpected error: {err}"
         );
-        assert!(instance.one_hot_constraints().is_empty());
+        assert!(instance.active_one_hot_constraints().is_empty());
     }
 
     #[test]
@@ -977,7 +977,7 @@ mod tests {
             err.downcast_ref::<crate::Sos1ConstraintError>(),
             Some(crate::Sos1ConstraintError::EmptyVariables)
         ));
-        assert!(instance.sos1_constraints().is_empty());
+        assert!(instance.active_sos1_constraints().is_empty());
     }
 
     #[test]
@@ -999,7 +999,7 @@ mod tests {
             err.downcast_ref::<crate::Sos1ConstraintError>(),
             Some(crate::Sos1ConstraintError::EmptyVariables)
         ));
-        assert!(instance.sos1_constraints().is_empty());
+        assert!(instance.active_sos1_constraints().is_empty());
     }
 
     #[test]
@@ -1037,8 +1037,8 @@ mod tests {
     }
 
     #[test]
-    fn test_insert_constraint_replace_removed_constraint() {
-        // Create instance with one active constraint and one removed constraint
+    fn test_insert_constraint_replace_inactive_constraint() {
+        // Create instance with one active constraint and one inactive constraint
         let decision_variables = btreemap! {
             VariableID::from(1) => DecisionVariable::binary(),
             VariableID::from(2) => DecisionVariable::binary(),
@@ -1055,14 +1055,14 @@ mod tests {
         let mut instance =
             Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
         instance
-            .relax_constraint(ConstraintID::from(2), "test".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(2), "test".to_string(), [], false)
             .unwrap();
 
         // Verify initial state
-        assert_eq!(instance.constraints().len(), 1);
-        assert_eq!(instance.removed_constraints().len(), 1);
+        assert_eq!(instance.active_constraints().len(), 1);
+        assert_eq!(instance.inactive_constraints().len(), 1);
 
-        // Insert a new constraint with the same ID as the removed constraint
+        // Insert a new constraint with the same ID as the inactive constraint
         let new_constraint = Constraint::equal_to_zero(
             ((linear!(1) + linear!(2)).unwrap() + coeff!(3.0))
                 .unwrap()
@@ -1072,20 +1072,20 @@ mod tests {
             .insert_constraint(ConstraintID::from(2), new_constraint.clone())
             .unwrap();
 
-        // Should return the old removed constraint
+        // Should return the old inactive constraint
         assert_eq!(
             result,
             Some(Constraint::equal_to_zero((linear!(2) + coeff!(2.0)).into(),))
         );
 
-        assert_eq!(instance.constraints().len(), 1);
-        assert_eq!(instance.removed_constraints().len(), 1);
-        let (removed, _reason) = instance
-            .removed_constraints()
+        assert_eq!(instance.active_constraints().len(), 1);
+        assert_eq!(instance.inactive_constraints().len(), 1);
+        let (inactive, _reason) = instance
+            .inactive_constraints()
             .get(&ConstraintID::from(2))
             .unwrap();
-        assert_eq!(removed.equality, new_constraint.equality);
-        assert_eq!(removed.stage.function, new_constraint.stage.function);
+        assert_eq!(inactive.equality, new_constraint.equality);
+        assert_eq!(inactive.stage.function, new_constraint.stage.function);
     }
 
     #[test]
@@ -1125,11 +1125,11 @@ mod tests {
 
         // No constraints were replaced since none existed before
         assert!(replaced.is_empty());
-        assert_eq!(instance.constraints().len(), 3);
+        assert_eq!(instance.active_constraints().len(), 3);
 
         // Verify constraints were inserted correctly
         for (id, constraint) in &constraints {
-            assert_eq!(instance.constraints().get(id), Some(constraint));
+            assert_eq!(instance.active_constraints().get(id), Some(constraint));
         }
     }
 
@@ -1174,7 +1174,7 @@ mod tests {
             "Undefined variable ID is used: VariableID(999)"
         );
         // Ensure no constraints were added (atomic operation)
-        assert_eq!(instance.constraints().len(), 0);
+        assert_eq!(instance.active_constraints().len(), 0);
     }
 
     #[test]
@@ -1218,12 +1218,12 @@ mod tests {
         // Should have replaced constraint 1
         assert_eq!(replaced.len(), 1);
         assert!(replaced.contains_key(&ConstraintID::from(1)));
-        assert_eq!(instance.constraints().len(), 3);
+        assert_eq!(instance.active_constraints().len(), 3);
     }
 
     #[test]
-    fn test_insert_constraints_bulk_replace_removed() {
-        // Create instance with a removed constraint
+    fn test_insert_constraints_bulk_replace_inactive() {
+        // Create instance with an inactive constraint
         let decision_variables = btreemap! {
             VariableID::from(1) => DecisionVariable::binary(),
             VariableID::from(2) => DecisionVariable::binary(),
@@ -1243,12 +1243,12 @@ mod tests {
 
         // Remove constraint 1
         instance
-            .relax_constraint(ConstraintID::from(1), "test".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(1), "test".to_string(), [], false)
             .unwrap();
-        assert_eq!(instance.constraints().len(), 0);
-        assert_eq!(instance.removed_constraints().len(), 1);
+        assert_eq!(instance.active_constraints().len(), 0);
+        assert_eq!(instance.inactive_constraints().len(), 1);
 
-        // Replace the removed constraint
+        // Replace the inactive constraint
         let new_constraints = vec![(
             ConstraintID::from(1),
             Constraint::equal_to_zero((linear!(2) + coeff!(10.0)).into()),
@@ -1256,11 +1256,11 @@ mod tests {
 
         let replaced = instance.insert_constraints(new_constraints).unwrap();
 
-        // Should have replaced the removed constraint
+        // Should have replaced the inactive constraint
         assert_eq!(replaced.len(), 1);
         assert!(replaced.contains_key(&ConstraintID::from(1)));
-        // Constraint is still in removed_constraints (with updated content)
-        assert_eq!(instance.removed_constraints().len(), 1);
+        // Constraint is still in inactive_constraints (with updated content)
+        assert_eq!(instance.inactive_constraints().len(), 1);
     }
 
     #[test]
@@ -1306,7 +1306,7 @@ mod tests {
             "Dependent variable cannot be used in objectives or constraints: VariableID(2)"
         );
         // Ensure no constraints were added (atomic operation)
-        assert_eq!(instance.constraints().len(), 0);
+        assert_eq!(instance.active_constraints().len(), 0);
     }
 
     #[test]
@@ -1325,7 +1325,7 @@ mod tests {
         .unwrap();
         assert_eq!(instance.next_constraint_id(), ConstraintID::from(0));
 
-        // Test considering both active and removed constraints
+        // Test considering both active and inactive constraints
         let decision_variables = btreemap! {
             VariableID::from(1) => DecisionVariable::binary(),
         };
@@ -1339,7 +1339,7 @@ mod tests {
         let mut instance =
             Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
         instance
-            .relax_constraint(ConstraintID::from(15), "test".to_string(), [])
+            .deactivate_constraint(ConstraintID::from(15), "test".to_string(), [], false)
             .unwrap();
 
         // Should return 16 (max(3, 15) + 1)

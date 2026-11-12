@@ -54,7 +54,7 @@ let solution = instance.evaluate(&state, ATol::default())?;
 
 // Access solution properties
 assert_eq!(*solution.objective(), 11.0); // 3 + 2*4 = 11
-assert!(solution.feasible()); // All constraints satisfied
+assert!(solution.feasible()); // All checked constraints satisfied
 
 // Check evaluated constraints
 let evaluated_constraints = solution.evaluated_constraints();

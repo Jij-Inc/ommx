@@ -173,17 +173,17 @@ impl Parse for crate::v1::SampleSet {
             )?
             .parse_as(&(), message, "objectives")?;
 
-        // Parse constraints and extract removed reasons + context
+        // Parse constraints and extract inactive metadata + context
         let mut constraints = std::collections::BTreeMap::new();
-        let mut constraint_removed_reasons = std::collections::BTreeMap::new();
+        let mut constraint_inactive_metadata = std::collections::BTreeMap::new();
         let mut constraint_context =
             crate::ConstraintContextStore::<crate::ConstraintID>::default();
         for v1_constraint in self.constraints {
-            let (id, parsed_constraint, context, removed_reason): (
+            let (id, parsed_constraint, context, inactive_metadata): (
                 crate::ConstraintID,
                 crate::SampledConstraint,
                 crate::ConstraintContext,
-                Option<crate::RemovedReason>,
+                Option<crate::InactiveConstraintMetadata>,
             ) = v1_constraint.parse_as(&(), message, "constraints")?;
             if constraints.contains_key(&id) {
                 return Err(
@@ -195,8 +195,8 @@ impl Parse for crate::v1::SampleSet {
                     .context(message, "constraints"),
                 );
             }
-            if let Some(reason) = removed_reason {
-                constraint_removed_reasons.insert(id, reason);
+            if let Some(reason) = inactive_metadata {
+                constraint_inactive_metadata.insert(id, reason);
             }
             constraint_context.insert(id, context);
             constraints.insert(id, parsed_constraint);
@@ -237,7 +237,7 @@ impl Parse for crate::v1::SampleSet {
             .constraints_collection(
                 crate::constraint_type::SampledCollection::with_context(
                     constraints,
-                    constraint_removed_reasons,
+                    constraint_inactive_metadata,
                     constraint_context,
                 )
                 .map_err(|error| invalid_sample_set_sidecar(error, message, "constraints"))?,
@@ -353,7 +353,7 @@ impl Parse for v2::SampleSet {
                         "sampled_one_hot_constraints",
                     )?;
                     validate_sample_map_ids(
-                        &row.active_variable,
+                        &row.selected_variable,
                         &objective_sample_ids,
                         message,
                         "sampled_one_hot_constraints",
@@ -387,7 +387,7 @@ impl Parse for v2::SampleSet {
                         "sampled_sos1_constraints",
                     )?;
                     validate_sample_map_ids(
-                        &row.active_variable,
+                        &row.selected_variable,
                         &objective_sample_ids,
                         message,
                         "sampled_sos1_constraints",
@@ -606,12 +606,27 @@ impl TryFrom<v2::SampleSet> for SampleSet {
 /// Convert to v1 only when no native special constraints are retained.
 ///
 /// Indicator, OneHot, and SOS1 results cannot be represented in v1, including
-/// removed constraints. Use `to_v2_bytes()` to preserve them. Since v1 cannot
+/// inactive constraints. Skipped constraints also cannot be represented.
+/// Use `to_v2_bytes()` to preserve them. Since v1 cannot
 /// store a tolerance, feasibility is recomputed at [`ATol::default`].
 impl TryFrom<SampleSet> for crate::v1::SampleSet {
     type Error = crate::Error;
 
     fn try_from(sample_set: SampleSet) -> crate::Result<Self> {
+        crate::v1_io::validate_inactive_metadata(
+            sample_set
+                .constraints
+                .inactive_metadata()
+                .values()
+                .chain(
+                    sample_set
+                        .indicator_constraints
+                        .inactive_metadata()
+                        .values(),
+                )
+                .chain(sample_set.one_hot_constraints.inactive_metadata().values())
+                .chain(sample_set.sos1_constraints.inactive_metadata().values()),
+        )?;
         if !sample_set.indicator_constraints.is_empty() {
             crate::bail!(
                 "Indicator constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
@@ -655,7 +670,7 @@ impl TryFrom<SampleSet> for crate::v1::SampleSet {
         let decision_variables: Vec<crate::v1::SampledDecisionVariable> =
             (&decision_variables).into();
         let objectives = Some(objectives.into());
-        let constraints: Vec<crate::v1::SampledConstraint> = constraints.into_v1(atol);
+        let constraints: Vec<crate::v1::SampledConstraint> = constraints.into_v1(atol)?;
         let named_functions: Vec<crate::v1::SampledNamedFunction> = named_functions.into();
         let sense = sense.into();
         let feasible = feasible
@@ -710,7 +725,7 @@ mod tests {
                         .entries[0]
                         .ids = vec![99];
                 } else {
-                    let (feasible, active) = if one_hot {
+                    let (feasible, selections) = if one_hot {
                         let row = wire
                             .sampled_one_hot_constraints
                             .as_mut()
@@ -718,7 +733,7 @@ mod tests {
                             .entries
                             .get_mut(&1)
                             .unwrap();
-                        (&mut row.feasible, &mut row.active_variable)
+                        (&mut row.feasible, &mut row.selected_variable)
                     } else {
                         let row = wire
                             .sampled_sos1_constraints
@@ -727,15 +742,15 @@ mod tests {
                             .entries
                             .get_mut(&1)
                             .unwrap();
-                        (&mut row.feasible, &mut row.active_variable)
+                        (&mut row.feasible, &mut row.selected_variable)
                     };
                     if change == 0 {
                         let flag = feasible.remove(&0).unwrap();
                         feasible.insert(99, flag);
-                        let selected = active.remove(&0).unwrap();
-                        active.insert(99, selected);
+                        let selected = selections.remove(&0).unwrap();
+                        selections.insert(99, selected);
                     } else {
-                        active.clear();
+                        selections.clear();
                     }
                 }
                 let error = SampleSet::try_from(wire).unwrap_err();
@@ -805,12 +820,12 @@ mod tests {
         .unwrap();
         let constraint = SampledIndicatorConstraint {
             indicator_variable: variable_id,
-            activate_on_zero: false,
+            trigger_value: crate::IndicatorTriggerValue::One,
             equality: crate::Equality::EqualToZero,
             stage: IndicatorSampledData {
                 evaluated_values: crate::Sampled::from((sample_id, 0.0)),
                 activation_atol: crate::ATol::default(),
-                indicator_active: BTreeMap::from([(sample_id, true)]),
+                indicator_on: BTreeMap::from([(sample_id, true)]),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
@@ -844,7 +859,7 @@ mod tests {
             stage: OneHotSampledData {
                 activation_atol: crate::ATol::default(),
                 violations: crate::Sampled::from((sample_id, 0.0)),
-                active_variable: BTreeMap::from([(sample_id, Some(variable_id))]),
+                selected_variable: BTreeMap::from([(sample_id, Some(variable_id))]),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
@@ -878,7 +893,7 @@ mod tests {
             stage: Sos1SampledData {
                 activation_atol: crate::ATol::default(),
                 violations: crate::Sampled::from((sample_id, 0.0)),
-                active_variable: BTreeMap::from([(sample_id, None)]),
+                selected_variable: BTreeMap::from([(sample_id, None)]),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
@@ -964,12 +979,12 @@ mod tests {
         let constraint_id = crate::IndicatorConstraintID::from(3);
         let constraint = SampledIndicatorConstraint {
             indicator_variable: crate::VariableID::from(2),
-            activate_on_zero: false,
+            trigger_value: crate::IndicatorTriggerValue::One,
             equality: crate::Equality::EqualToZero,
             stage: IndicatorSampledData {
                 evaluated_values: crate::Sampled::from((crate::SampleID::from(0), 0.0)),
                 activation_atol: crate::ATol::default(),
-                indicator_active: BTreeMap::from([(crate::SampleID::from(0), false)]),
+                indicator_on: BTreeMap::from([(crate::SampleID::from(0), false)]),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
@@ -1026,7 +1041,7 @@ mod tests {
                         stage: OneHotSampledData {
                             activation_atol: crate::ATol::default(),
                             violations: crate::Sampled::from((crate::SampleID::from(0), 0.0)),
-                            active_variable: BTreeMap::from([(
+                            selected_variable: BTreeMap::from([(
                                 crate::SampleID::from(0),
                                 Some(structural_id),
                             )]),
@@ -1077,7 +1092,7 @@ mod tests {
             stage: Sos1SampledData {
                 activation_atol: crate::ATol::default(),
                 violations: crate::Sampled::from((crate::SampleID::from(0), 0.0)),
-                active_variable: BTreeMap::from([(crate::SampleID::from(0), None)]),
+                selected_variable: BTreeMap::from([(crate::SampleID::from(0), None)]),
                 used_decision_variable_ids: [crate::VariableID::from(1)].into_iter().collect(),
             },
         };
@@ -1259,9 +1274,9 @@ mod tests {
             .get_mut(&1)
             .unwrap();
         row.variables = vec![2];
-        row.active_variable.insert(
+        row.selected_variable.insert(
             0,
-            v2::SampledActiveVariable {
+            v2::SampledSelectedVariable {
                 variable_id: Some(2),
             },
         );
@@ -1521,7 +1536,7 @@ mod tests {
             equality: v1::Equality::EqualToZero as i32,
             evaluated_values: Some(sampled_values.clone()),
             feasible: std::collections::HashMap::from([(0, true)]),
-            removed_reason: Some("removed first row".to_string()),
+            removed_reason: Some("inactive first row".to_string()),
             ..Default::default()
         };
         let second = v1::SampledConstraint {
@@ -1855,7 +1870,7 @@ mod tests {
             .unwrap();
         indicator_row.evaluated_values.as_mut().unwrap().entries[0].value = *atol;
         indicator_row.feasible.insert(0, true);
-        indicator_row.indicator_active.insert(0, true);
+        indicator_row.indicator_on.insert(0, true);
         SampleSet::try_from(indicator).unwrap();
 
         let mut one_hot = v2_sample_set_with_one_hot_constraint();
@@ -1923,7 +1938,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v2_sample_set_parse_rejects_indicator_active_mismatching_variable_value() {
+    fn test_v2_sample_set_parse_rejects_indicator_on_mismatching_variable_value() {
         use crate::{
             indicator_constraint::{IndicatorSampledData, SampledIndicatorConstraint},
             DecisionVariable, IndicatorConstraintID, SampleID, Sampled, SampledDecisionVariable,
@@ -1942,12 +1957,12 @@ mod tests {
         .unwrap();
         let indicator = SampledIndicatorConstraint {
             indicator_variable: var_id,
-            activate_on_zero: false,
+            trigger_value: crate::IndicatorTriggerValue::One,
             equality: crate::Equality::EqualToZero,
             stage: IndicatorSampledData {
                 evaluated_values: Sampled::from((sample_id, 0.0)),
                 activation_atol: crate::ATol::default(),
-                indicator_active: BTreeMap::from([(sample_id, true)]),
+                indicator_on: BTreeMap::from([(sample_id, true)]),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1971,12 +1986,12 @@ mod tests {
             .entries
             .get_mut(&1)
             .unwrap();
-        row.indicator_active.insert(sample_id.into_inner(), false);
+        row.indicator_on.insert(sample_id.into_inner(), false);
         row.feasible.insert(sample_id.into_inner(), true);
 
         let err = SampleSet::try_from(proto).unwrap_err();
         assert!(
-            err.to_string().contains("indicator_active=false")
+            err.to_string().contains("indicator_on=false")
                 && err
                     .to_string()
                     .contains("does not match indicator variable"),
@@ -1985,7 +2000,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v2_sample_set_parse_rejects_one_hot_active_variable_mismatching_values() {
+    fn test_v2_sample_set_parse_rejects_one_hot_selected_variable_mismatching_values() {
         use crate::{
             one_hot_constraint::{OneHotSampledData, SampledOneHotConstraint},
             DecisionVariable, OneHotConstraintID, SampleID, Sampled, SampledDecisionVariable,
@@ -2007,7 +2022,7 @@ mod tests {
             stage: OneHotSampledData {
                 activation_atol: crate::ATol::default(),
                 violations: crate::Sampled::from((sample_id, 0.0)),
-                active_variable: BTreeMap::from([(sample_id, Some(var_id))]),
+                selected_variable: BTreeMap::from([(sample_id, Some(var_id))]),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -2045,9 +2060,9 @@ mod tests {
             .entries
             .get_mut(&1)
             .unwrap();
-        row.active_variable.insert(
+        row.selected_variable.insert(
             sample_id.into_inner(),
-            crate::v2::SampledActiveVariable {
+            crate::v2::SampledSelectedVariable {
                 variable_id: Some(2),
             },
         );
@@ -2055,7 +2070,7 @@ mod tests {
         let err = SampleSet::try_from(proto).unwrap_err();
         assert!(
             err.to_string()
-                .contains("active_variable=Some(VariableID(2))")
+                .contains("selected_variable=Some(VariableID(2))")
                 && err
                     .to_string()
                     .contains("does not match decision-variable values"),

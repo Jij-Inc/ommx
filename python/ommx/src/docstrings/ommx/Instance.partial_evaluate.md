@@ -5,7 +5,7 @@ canonicalizes supplied values, fixes the specified variables, and substitutes
 them into active expressions. Use this to study a configuration or optimize
 the remaining variables under chosen conditions.
 
-Named functions and existing removed constraints retain their original
+Named functions and existing inactive constraints retain their original
 expressions as Interpretation Context. The new Instance stores fixed values
 and normalizes dependencies; {meth}`~ommx.Instance.evaluate` and
 {meth}`~ommx.Instance.evaluate_samples` populate those values before evaluating
@@ -33,7 +33,7 @@ value without establishing optimality for the original problem:
 >>> assert original_candidate.feasible and original_candidate.objective == 0.0
 >>> assert conditioned_candidate.feasible and conditioned_candidate.objective == 1.0
 >>> assert conditioned_candidate.state.entries[x.id] == 1.0
->>> assert {v.id for v in source.used_decision_variables} == {x.id}
+>>> assert {v.id for v in source.active_decision_variables} == {x.id}
 
 ```
 
@@ -57,7 +57,7 @@ expressions while retaining canonical fixed values for output evaluation.
 >>> from ommx import DecisionVariable, Instance, Sense
 >>> x = DecisionVariable.binary(0)
 >>> instance = Instance.from_components(
-...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+...     decision_variables=[x], objective=3 * x, active_constraints={}, sense=Sense.Maximize
 ... )
 >>> assert instance.convert_active_objective(Sense.Minimize)
 >>> fixed = instance.partial_evaluate({0: 1.0000005}, atol=1e-6)

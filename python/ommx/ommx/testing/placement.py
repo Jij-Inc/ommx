@@ -304,8 +304,8 @@ def build_sos1(input: Input) -> Instance:
     return Instance.from_components(
         decision_variables=list(s.values()) + list(c.values()),
         objective=_objective(input, s, c),
-        constraints=constraints,
-        sos1_constraints=sos1_constraints,
+        active_constraints=constraints,
+        active_sos1_constraints=sos1_constraints,
         sense=Sense.Minimize,
     )
 
@@ -363,8 +363,8 @@ def _build_with_delta(
     return Instance.from_components(
         decision_variables=list(s.values()) + list(c.values()) + list(delta.values()),
         objective=_objective(input, s, c),
-        constraints=constraints,
-        sos1_constraints=sos1_constraints,
+        active_constraints=constraints,
+        active_sos1_constraints=sos1_constraints,
         sense=Sense.Minimize,
     )
 
