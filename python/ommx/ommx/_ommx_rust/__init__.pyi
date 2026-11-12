@@ -8972,8 +8972,7 @@ class Instance:
         >>> assert set(instance.active_constraints) == {ConstraintID(1)}
         >>> assert set(instance.constraints) == {ConstraintID(1), OneHotConstraintID(0)}
         >>> assert (
-        ...     instance.constraints[OneHotConstraintID(0)].role
-        ...     == ConstraintRole.FEASIBILITY_CHECK
+        ...     instance.constraints[OneHotConstraintID(0)].role == ConstraintRole.FEASIBILITY_CHECK
         ... )
         >>> assert instance.active_special_constraint_kinds == set()
         >>> assert set(instance.inactive_constraints) == {OneHotConstraintID(0)}
