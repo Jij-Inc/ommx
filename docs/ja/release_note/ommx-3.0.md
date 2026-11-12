@@ -13,18 +13,19 @@ L∞距離に変更します。例えばSOS1の `(1, 0.00006, 0.00006)` の違�
 許容誤差 `0.0001` で実行可能になります。
 
 ```python
-details = solution.one_hot_violation_details(OneHotConstraintID(7))
-# None、またはOneHotViolation.MissingSelection / MultipleSelections / ValueErrors
-excess = solution.sos1_violating_values(Sos1ConstraintID(8))
-# feasibility_atolでそのSOS1制約が実行可能な場合に限り空辞書。
+diagnostics = solution.violation_diagnostics()
+sample_diagnostics = samples.violation_diagnostics(sample_id)
 ```
 
-OneHotの診断は未選択・複数選択・値のずれを区別し、全ゼロの候補も表現します。
-SOS1は絶対値が最大の1変数を残し、それ以外の違反値を返します。
-`Solution` と `SampleSet` は保存された変数値から詳細診断を必要時に計算します。
-制約行はスカラーの違反量を保持し、変数値を重複保持しません。
-SampleSetでは同じメソッドに制約IDとサンプルIDを渡します。診断は
-`feasibility_atol` を使い、inactiveな制約、サンプル抽出、v2形式の保存・復元にも対応します。
+辞書は型付きIDをキーに、違反した制約だけを含みます。Regular・Indicatorの値は
+`None`、OneHotは未選択・複数選択・値のずれを区別する診断で、全ゼロも表現します。
+SOS1の値は余分な非ゼロ変数のIDと値の辞書です。実行可能な行は含みません。
+
+診断は保存された変数値から違反行についてだけ必要時に計算し、スカラーの違反量は
+保持します。保存された `feasibility_atol` を使い、既定ではinactiveな行も含みます。
+`min_role` で対象を絞れます。SampleSetは指定サンプルだけを調べます。
+サンプル抽出・v2形式の保存復元後も利用できます。分類と拡張の契約は
+[マイグレーションガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
 
 ### ⚠ Active / inactiveへの整理 ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
 

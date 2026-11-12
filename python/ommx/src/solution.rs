@@ -136,41 +136,31 @@ impl_solution_annotations!(Solution);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Solution {
-    /// Explain a OneHot violation from stored member values, computed on demand.
+    /// Return a dictionary containing only violated constraints, keyed by typed ID.
     ///
-    /// Returns OneHotViolation.MissingSelection, MultipleSelections, or ValueErrors,
-    /// or None exactly when this row is feasible at feasibility_atol. Includes
-    /// inactive constraints regardless of role. Details are not cached and
-    /// feasibility queries with another tolerance do not change the diagnostic.
-    /// Raises RuntimeError for an unknown OneHot constraint ID.
-    fn one_hot_violation_details(
-        &self,
-        constraint_id: crate::constraint_id::OneHotConstraintIDInput,
-    ) -> OmmxPyResult<Option<crate::OneHotViolation>> {
-        Ok(self
-            .inner
-            .one_hot_violation_details(constraint_id.into())?
-            .map(Into::into))
-    }
-
-    /// Explain an SOS1 violation from stored member values, computed on demand.
+    /// Uses the saved feasibility_atol and stored variable values. All retained
+    /// roles are included by default; min_role can restrict participation.
+    /// Feasible constraints are absent. Regular and Indicator entries have None
+    /// values (no extra details); OneHot entries contain OneHotViolation, and
+    /// SOS1 entries contain dictionaries of excess variable IDs and values.
+    /// Future constraint families may return other diagnostic types; consumers
+    /// must handle or explicitly reject unfamiliar ID types.
     ///
-    /// Retains one member of largest absolute value (ties retain the largest ID)
-    /// and returns the other values exceeding feasibility_atol in absolute value.
-    /// Empty exactly when this row is feasible at that tolerance. The retained
-    /// member is one possible repair choice, not a uniquely intended selection.
-    /// Includes inactive constraints regardless of role; results are not cached.
-    /// Raises RuntimeError for an unknown SOS1 constraint ID.
-    fn sos1_violating_values(
+    /// Details are computed only for violated rows and are not cached. An empty
+    /// dictionary means all selected constraints are feasible; variable-domain
+    /// feasibility is separate. Changing a row's query tolerance does not change
+    /// the saved tolerance used here.
+    #[pyo3(signature = (*, min_role=crate::ConstraintRole::EVALUATION_ONLY))]
+    fn violation_diagnostics(
         &self,
-        constraint_id: crate::constraint_id::Sos1ConstraintIDInput,
-    ) -> OmmxPyResult<std::collections::BTreeMap<u64, f64>> {
-        Ok(self
-            .inner
-            .sos1_violating_values(constraint_id.into())?
-            .into_iter()
-            .map(|(id, value)| (id.into_inner(), value))
-            .collect())
+        min_role: crate::ConstraintRole,
+    ) -> OmmxPyResult<crate::violation_diagnostics::ViolationDiagnostics> {
+        Ok(
+            crate::violation_diagnostics::ViolationDiagnostics::solution(
+                &self.inner,
+                min_role.into(),
+            )?,
+        )
     }
 
     /// Unique names across all constraint families, as a set of strings.

@@ -2,7 +2,8 @@ use pyo3::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// A OneHot violation at the result's feasibility_atol. Each variant retains
-/// all member values, including zeros. Feasible rows return None instead.
+/// all member values, including zeros. Feasible rows are absent from the diagnostic
+/// dictionary. Future versions may add variants or fields.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_complex_enum]
 #[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, PartialEq)]
@@ -34,15 +35,17 @@ fn values_to_python(values: BTreeMap<ommx::VariableID, f64>) -> BTreeMap<u64, f6
         .collect()
 }
 
-impl From<ommx::OneHotViolation> for OneHotViolation {
-    fn from(value: ommx::OneHotViolation) -> Self {
-        match value {
-            ommx::OneHotViolation::MissingSelection { values } => Self::MissingSelection {
+impl TryFrom<ommx::OneHotViolation> for OneHotViolation {
+    type Error = ommx::Error;
+    fn try_from(value: ommx::OneHotViolation) -> ommx::Result<Self> {
+        Ok(match value {
+            ommx::OneHotViolation::MissingSelection { values, .. } => Self::MissingSelection {
                 values: values_to_python(values),
             },
             ommx::OneHotViolation::MultipleSelections {
                 selected_variables,
                 values,
+                ..
             } => Self::MultipleSelections {
                 selected_variables: selected_variables
                     .into_iter()
@@ -54,11 +57,13 @@ impl From<ommx::OneHotViolation> for OneHotViolation {
                 target_variable,
                 errors,
                 values,
+                ..
             } => Self::ValueErrors {
                 target_variable: target_variable.into_inner(),
                 errors: values_to_python(errors),
                 values: values_to_python(values),
             },
-        }
+            _ => return Err(ommx::Error::msg("Unsupported OneHot diagnostic variant")),
+        })
     }
 }

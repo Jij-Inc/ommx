@@ -26075,7 +26075,7 @@
         {
           "kind": "Class",
           "name": "OneHotViolation",
-          "doc": "A OneHot violation at the result's feasibility_atol. Each variant retains\nall member values, including zeros. Feasible rows return None instead.",
+          "doc": "A OneHot violation at the result's feasibility_atol. Each variant retains\nall member values, including zeros. Feasible rows are absent from the diagnostic\ndictionary. Future versions may add variants or fields.",
           "bases": [],
           "methods": [],
           "attributes": [],
@@ -34313,63 +34313,6 @@
               "deprecated": null
             },
             {
-              "name": "one_hot_violation_details",
-              "doc": "Explain a OneHot violation from stored member values, computed on demand.\n\nReturns OneHotViolation.MissingSelection, MultipleSelections, or ValueErrors,\nor None exactly when this row is feasible at feasibility_atol. Includes\ninactive constraints regardless of role. Details are not cached and\nfeasibility queries with another tolerance do not change the diagnostic.\nRaises RuntimeError for an unknown OneHot constraint ID.\nOnly the requested sample is inspected; an unknown sample raises KeyError.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "constraint_id",
-                      "type_": {
-                        "display": "_ommx_rust.OneHotConstraintID | int",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": {
-                              "fqn": "ommx.OneHotConstraintID",
-                              "doc_module": "ommx",
-                              "kind": "Class",
-                              "attribute": null
-                            },
-                            "children": []
-                          },
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "sample_id",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Optional[OneHotViolation]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "OneHotViolation",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "replace_annotations",
               "doc": "",
               "signatures": [
@@ -34418,68 +34361,6 @@
                     "children": [
                       {
                         "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "sos1_violating_values",
-              "doc": "Explain an SOS1 violation from stored member values, computed on demand.\n\nRetains one member of largest absolute value (ties retain the largest ID)\nand returns the other values exceeding feasibility_atol in absolute value.\nEmpty exactly when this row is feasible at that tolerance. The retained\nmember is one possible repair choice, not a uniquely intended selection.\nIncludes inactive constraints regardless of role; results are not cached.\nRaises RuntimeError for an unknown SOS1 constraint ID.\nOnly the requested sample is inspected; an unknown sample raises KeyError.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "constraint_id",
-                      "type_": {
-                        "display": "_ommx_rust.Sos1ConstraintID | int",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": {
-                              "fqn": "ommx.Sos1ConstraintID",
-                              "doc_module": "ommx",
-                              "kind": "Class",
-                              "attribute": null
-                            },
-                            "children": []
-                          },
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "sample_id",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "dict[int, float]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "float",
                         "link_target": null,
                         "children": []
                       }
@@ -34548,6 +34429,72 @@
                     "display": "DataFrame",
                     "link_target": null,
                     "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "violation_diagnostics",
+              "doc": "Return a dictionary containing only violated constraints, keyed by typed ID.\n\nUses the saved feasibility_atol and stored variable values. All retained\nroles are included by default; min_role can restrict participation.\nFeasible constraints are absent. Regular and Indicator entries have None\nvalues (no extra details); OneHot entries contain OneHotViolation, and\nSOS1 entries contain dictionaries of excess variable IDs and values.\nFuture constraint families may return other diagnostic types; consumers\nmust handle or explicitly reject unfamiliar ID types.\n\nDetails are computed only for violated rows and are not cached. An empty\ndictionary means all selected constraints are feasible; variable-domain\nfeasibility is separate. Changing a row's query tolerance does not change\nthe saved tolerance used here.\nOnly the requested sample is inspected. An unknown sample raises KeyError.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "sample_id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "min_role",
+                      "type_": {
+                        "display": "ConstraintRole",
+                        "link_target": {
+                          "fqn": "ommx.ConstraintRole",
+                          "doc_module": "ommx",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Expression",
+                        "display": "ConstraintRole.EVALUATION_ONLY",
+                        "type_refs": [
+                          {
+                            "text": "ConstraintRole.EVALUATION_ONLY",
+                            "offset": 0,
+                            "link_target": {
+                              "fqn": "ommx.ConstraintRole.EVALUATION_ONLY",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": "EVALUATION_ONLY"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "dict[ConstraintIDBase, object]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "ConstraintIDBase",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],
@@ -38718,54 +38665,6 @@
               "deprecated": null
             },
             {
-              "name": "one_hot_violation_details",
-              "doc": "Explain a OneHot violation from stored member values, computed on demand.\n\nReturns OneHotViolation.MissingSelection, MultipleSelections, or ValueErrors,\nor None exactly when this row is feasible at feasibility_atol. Includes\ninactive constraints regardless of role. Details are not cached and\nfeasibility queries with another tolerance do not change the diagnostic.\nRaises RuntimeError for an unknown OneHot constraint ID.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "constraint_id",
-                      "type_": {
-                        "display": "_ommx_rust.OneHotConstraintID | int",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": {
-                              "fqn": "ommx.OneHotConstraintID",
-                              "doc_module": "ommx",
-                              "kind": "Class",
-                              "attribute": null
-                            },
-                            "children": []
-                          },
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Optional[OneHotViolation]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "OneHotViolation",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "replace_annotations",
               "doc": "",
               "signatures": [
@@ -38853,59 +38752,6 @@
                     "display": "None",
                     "link_target": null,
                     "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "sos1_violating_values",
-              "doc": "Explain an SOS1 violation from stored member values, computed on demand.\n\nRetains one member of largest absolute value (ties retain the largest ID)\nand returns the other values exceeding feasibility_atol in absolute value.\nEmpty exactly when this row is feasible at that tolerance. The retained\nmember is one possible repair choice, not a uniquely intended selection.\nIncludes inactive constraints regardless of role; results are not cached.\nRaises RuntimeError for an unknown SOS1 constraint ID.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "constraint_id",
-                      "type_": {
-                        "display": "_ommx_rust.Sos1ConstraintID | int",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": {
-                              "fqn": "ommx.Sos1ConstraintID",
-                              "doc_module": "ommx",
-                              "kind": "Class",
-                              "attribute": null
-                            },
-                            "children": []
-                          },
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "dict[int, float]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "float",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
                   }
                 }
               ],
@@ -39016,6 +38862,63 @@
                     "display": "DataFrame",
                     "link_target": null,
                     "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "violation_diagnostics",
+              "doc": "Return a dictionary containing only violated constraints, keyed by typed ID.\n\nUses the saved feasibility_atol and stored variable values. All retained\nroles are included by default; min_role can restrict participation.\nFeasible constraints are absent. Regular and Indicator entries have None\nvalues (no extra details); OneHot entries contain OneHotViolation, and\nSOS1 entries contain dictionaries of excess variable IDs and values.\nFuture constraint families may return other diagnostic types; consumers\nmust handle or explicitly reject unfamiliar ID types.\n\nDetails are computed only for violated rows and are not cached. An empty\ndictionary means all selected constraints are feasible; variable-domain\nfeasibility is separate. Changing a row's query tolerance does not change\nthe saved tolerance used here.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "min_role",
+                      "type_": {
+                        "display": "ConstraintRole",
+                        "link_target": {
+                          "fqn": "ommx.ConstraintRole",
+                          "doc_module": "ommx",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Expression",
+                        "display": "ConstraintRole.EVALUATION_ONLY",
+                        "type_refs": [
+                          {
+                            "text": "ConstraintRole.EVALUATION_ONLY",
+                            "offset": 0,
+                            "link_target": {
+                              "fqn": "ommx.ConstraintRole.EVALUATION_ONLY",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": "EVALUATION_ONLY"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "dict[ConstraintIDBase, object]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "ConstraintIDBase",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],

@@ -10583,7 +10583,8 @@ class OneHotConstraintID(ConstraintIDBase):
 class OneHotViolation:
     r"""
     A OneHot violation at the result's feasibility_atol. Each variant retains
-    all member values, including zeros. Feasible rows return None instead.
+    all member values, including zeros. Feasible rows are absent from the diagnostic
+    dictionary. Future versions may add variants or fields.
     """
     @typing.final
     class MissingSelection(OneHotViolation):
@@ -13050,32 +13051,28 @@ class SampleSet:
     def get_user_annotations(
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
-    def one_hot_violation_details(
-        self, constraint_id: OneHotConstraintID | builtins.int, sample_id: builtins.int
-    ) -> typing.Optional[OneHotViolation]:
+    def violation_diagnostics(
+        self,
+        sample_id: builtins.int,
+        *,
+        min_role: ConstraintRole = ConstraintRole.EVALUATION_ONLY,
+    ) -> builtins.dict[ConstraintIDBase, builtins.object]:
         r"""
-        Explain a OneHot violation from stored member values, computed on demand.
+        Return a dictionary containing only violated constraints, keyed by typed ID.
 
-        Returns OneHotViolation.MissingSelection, MultipleSelections, or ValueErrors,
-        or None exactly when this row is feasible at feasibility_atol. Includes
-        inactive constraints regardless of role. Details are not cached and
-        feasibility queries with another tolerance do not change the diagnostic.
-        Raises RuntimeError for an unknown OneHot constraint ID.
-        Only the requested sample is inspected; an unknown sample raises KeyError.
-        """
-    def sos1_violating_values(
-        self, constraint_id: Sos1ConstraintID | builtins.int, sample_id: builtins.int
-    ) -> builtins.dict[builtins.int, builtins.float]:
-        r"""
-        Explain an SOS1 violation from stored member values, computed on demand.
+        Uses the saved feasibility_atol and stored variable values. All retained
+        roles are included by default; min_role can restrict participation.
+        Feasible constraints are absent. Regular and Indicator entries have None
+        values (no extra details); OneHot entries contain OneHotViolation, and
+        SOS1 entries contain dictionaries of excess variable IDs and values.
+        Future constraint families may return other diagnostic types; consumers
+        must handle or explicitly reject unfamiliar ID types.
 
-        Retains one member of largest absolute value (ties retain the largest ID)
-        and returns the other values exceeding feasibility_atol in absolute value.
-        Empty exactly when this row is feasible at that tolerance. The retained
-        member is one possible repair choice, not a uniquely intended selection.
-        Includes inactive constraints regardless of role; results are not cached.
-        Raises RuntimeError for an unknown SOS1 constraint ID.
-        Only the requested sample is inspected; an unknown sample raises KeyError.
+        Details are computed only for violated rows and are not cached. An empty
+        dictionary means all selected constraints are feasible; variable-domain
+        feasibility is separate. Changing a row's query tolerance does not change
+        the saved tolerance used here.
+        Only the requested sample is inspected. An unknown sample raises KeyError.
         """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> SampleSet:
@@ -14532,30 +14529,24 @@ class Solution:
     def get_user_annotations(
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
-    def one_hot_violation_details(
-        self, constraint_id: OneHotConstraintID | builtins.int
-    ) -> typing.Optional[OneHotViolation]:
+    def violation_diagnostics(
+        self, *, min_role: ConstraintRole = ConstraintRole.EVALUATION_ONLY
+    ) -> builtins.dict[ConstraintIDBase, builtins.object]:
         r"""
-        Explain a OneHot violation from stored member values, computed on demand.
+        Return a dictionary containing only violated constraints, keyed by typed ID.
 
-        Returns OneHotViolation.MissingSelection, MultipleSelections, or ValueErrors,
-        or None exactly when this row is feasible at feasibility_atol. Includes
-        inactive constraints regardless of role. Details are not cached and
-        feasibility queries with another tolerance do not change the diagnostic.
-        Raises RuntimeError for an unknown OneHot constraint ID.
-        """
-    def sos1_violating_values(
-        self, constraint_id: Sos1ConstraintID | builtins.int
-    ) -> builtins.dict[builtins.int, builtins.float]:
-        r"""
-        Explain an SOS1 violation from stored member values, computed on demand.
+        Uses the saved feasibility_atol and stored variable values. All retained
+        roles are included by default; min_role can restrict participation.
+        Feasible constraints are absent. Regular and Indicator entries have None
+        values (no extra details); OneHot entries contain OneHotViolation, and
+        SOS1 entries contain dictionaries of excess variable IDs and values.
+        Future constraint families may return other diagnostic types; consumers
+        must handle or explicitly reject unfamiliar ID types.
 
-        Retains one member of largest absolute value (ties retain the largest ID)
-        and returns the other values exceeding feasibility_atol in absolute value.
-        Empty exactly when this row is feasible at that tolerance. The retained
-        member is one possible repair choice, not a uniquely intended selection.
-        Includes inactive constraints regardless of role; results are not cached.
-        Raises RuntimeError for an unknown SOS1 constraint ID.
+        Details are computed only for violated rows and are not cached. An empty
+        dictionary means all selected constraints are feasible; variable-domain
+        feasibility is separate. Changing a row's query tolerance does not change
+        the saved tolerance used here.
         """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> Solution:

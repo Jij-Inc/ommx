@@ -23,7 +23,8 @@
 //! 3. Implement `ConstraintType for NewConstraint` mapping all three stages.
 //! 4. Implement `Evaluate` for `NewConstraint<Created>`,
 //!    [`EvaluatedConstraintData`] and [`SampledConstraintData`]. Every family must
-//!    provide a nonnegative scalar violation. Feasibility is derived by the
+//!    provide a nonnegative scalar violation and implement `violation_diagnostics`
+//!    with a family-specific associated type (or `()` for no extra details). Feasibility is derived by the
 //!    blanket behavior implementations; families cannot supply a separate rule.
 //! 5. Add a `ConstraintCollection<NewConstraint>` field to [`Instance`].
 //! 6. Add a variant to [`ConstraintKind`] and update
@@ -166,15 +167,28 @@ impl<T> IDType for T where
 pub trait ConstraintType {
     /// The ID type for this constraint family.
     type ID: IDType;
+    /// Family-specific detail for a violated constraint. Use `()` when no extra detail is needed.
+    type ViolationDiagnostics;
     /// The constraint as defined in the problem.
     type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
         + Clone
         + std::fmt::Debug
         + PartialEq;
     /// The constraint after evaluation against a single state.
-    type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
+    type Evaluated: EvaluatedConstraintBehavior<
+        ID = Self::ID,
+        ViolationDiagnostics = Self::ViolationDiagnostics,
+    >;
     /// The constraint after evaluation against multiple samples.
     type Sampled: SampledConstraintBehavior<ID = Self::ID, Evaluated = Self::Evaluated>;
+    /// Read this family's rows from a Solution. The host owns cross-table invariants.
+    fn evaluated_constraints(solution: &crate::Solution) -> &EvaluatedCollection<Self>
+    where
+        Self: Sized;
+    /// Read this family's rows from a SampleSet without extracting a Solution.
+    fn sampled_constraints(samples: &crate::SampleSet) -> &SampledCollection<Self>
+    where
+        Self: Sized;
 }
 
 /// The data each constraint family must provide after a single evaluation.
@@ -187,8 +201,32 @@ pub trait ConstraintType {
 /// contract applies. Each family defines its metric on the values it receives.
 /// This trait does not require a stored tolerance. A family retaining a
 /// tolerance-dependent decision must retain that decision's conditions itself.
+/// Diagnostic generation is mandatory even when the family chooses `()`:
+///
+/// ```compile_fail,E0046
+/// use ommx::{ConstraintID, EvaluatedConstraintData};
+/// struct MissingDiagnostics;
+/// impl EvaluatedConstraintData for MissingDiagnostics {
+///     type ID = ConstraintID;
+///     type ViolationDiagnostics = ();
+///     fn violation(&self) -> f64 { 1.0 }
+///     // Missing the required violation_diagnostics implementation.
+/// }
+/// ```
 pub trait EvaluatedConstraintData {
     type ID;
+    /// Details for a violated candidate, shared with the sampled stage.
+    type ViolationDiagnostics;
+    /// Generate details after the host has established that `violation > atol`.
+    /// `value_of` supplies this candidate's stored values for referenced IDs.
+    /// Callers must provide the same values used for evaluation. This operation
+    /// neither decides feasibility nor stores/caches the returned diagnostic.
+    fn violation_diagnostics(
+        &self,
+        value_of: impl FnMut(crate::VariableID) -> f64,
+        atol: ATol,
+    ) -> Self::ViolationDiagnostics;
+
     fn violation(&self) -> f64;
     fn used_decision_variable_ids(&self) -> &VariableIDSet {
         &EMPTY_VARIABLE_ID_SET
@@ -206,6 +244,8 @@ pub trait EvaluatedConstraintData {
 /// struct NewConstraint;
 /// impl EvaluatedConstraintData for NewConstraint {
 ///     type ID = ConstraintID;
+///     type ViolationDiagnostics = ();
+///     fn violation_diagnostics(&self, _: impl FnMut(ommx::VariableID) -> f64, _: ATol) {}
 ///     fn violation(&self) -> f64 { 0.0 }
 /// }
 /// // This conflicts with the common blanket implementation.
@@ -249,10 +289,34 @@ pub(crate) fn validate_wire_feasibility(
 }
 
 /// The data each constraint family must provide after sample evaluation.
+/// Diagnostic generation is also mandatory for the sampled stage:
+///
+/// ```compile_fail,E0046
+/// use ommx::{ConstraintID, EvaluatedConstraint, SampledConstraintData, SampleID, SampleIDSet};
+/// struct MissingDiagnostics;
+/// impl SampledConstraintData for MissingDiagnostics {
+///     type ID = ConstraintID;
+///     type Evaluated = EvaluatedConstraint;
+///     fn violation_for(&self, _: SampleID) -> Option<f64> { Some(1.0) }
+///     fn validate_sample_ids(&self, _: &SampleIDSet) -> Result<(), SampleIDSet> { Ok(()) }
+///     fn get(&self, _: SampleID) -> Option<Self::Evaluated> { None }
+///     // Missing the required violation_diagnostics implementation.
+/// }
+/// ```
 pub trait SampledConstraintData {
     type ID;
     /// The evaluated constraint type returned by [`get`](Self::get).
     type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
+    /// Generate details for a known, violated sample using its stored member values.
+    /// The host checks sample existence and `violation > atol` before calling this.
+    /// The result type is identical to single-state evaluation; no sample extraction
+    /// or diagnostic cache is required. `value_of` must refer to `sample_id`.
+    fn violation_diagnostics(
+        &self,
+        sample_id: SampleID,
+        value_of: impl FnMut(crate::VariableID) -> f64,
+        atol: ATol,
+    ) -> <Self::Evaluated as EvaluatedConstraintData>::ViolationDiagnostics;
 
     /// The same scalar metric as single-state evaluation, or `None` for a
     /// missing sample. Implementations must satisfy [`EvaluatedConstraintData`]'s
@@ -303,6 +367,14 @@ pub(crate) enum ActiveRowRewrite<T> {
 
 impl EvaluatedConstraintData for EvaluatedConstraint {
     type ID = ConstraintID;
+    type ViolationDiagnostics = ();
+    fn violation_diagnostics(
+        &self,
+        _value_of: impl FnMut(crate::VariableID) -> f64,
+        _atol: ATol,
+    ) -> Self::ViolationDiagnostics {
+    }
+
     fn violation(&self) -> f64 {
         self.equality.violation(self.stage.evaluated_value)
     }
@@ -315,6 +387,13 @@ impl EvaluatedConstraintData for EvaluatedConstraint {
 impl SampledConstraintData for SampledConstraint {
     type ID = ConstraintID;
     type Evaluated = EvaluatedConstraint;
+    fn violation_diagnostics(
+        &self,
+        _sample_id: SampleID,
+        _value_of: impl FnMut(crate::VariableID) -> f64,
+        _atol: ATol,
+    ) -> <Self::Evaluated as EvaluatedConstraintData>::ViolationDiagnostics {
+    }
 
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
         self.stage
@@ -364,6 +443,14 @@ impl SampledConstraintData for SampledConstraint {
 /// `Constraint` (= `Constraint<Created>`) serves as the type family for regular constraints.
 impl ConstraintType for Constraint {
     type ID = ConstraintID;
+    type ViolationDiagnostics = ();
+    fn evaluated_constraints(solution: &crate::Solution) -> &crate::EvaluatedCollection<Self> {
+        solution.evaluated_constraints()
+    }
+    fn sampled_constraints(samples: &crate::SampleSet) -> &crate::SampledCollection<Self> {
+        samples.constraints()
+    }
+
     type Created = Constraint;
     type Evaluated = EvaluatedConstraint;
     type Sampled = SampledConstraint;

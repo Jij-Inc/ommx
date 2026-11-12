@@ -1,240 +1,102 @@
+//! Lazy diagnostic queries owned by result roots.
 use crate::{
-    ATol, OneHotConstraintID, SampleID, SampleSet, Solution, Sos1ConstraintID, VariableID,
-    VariableIDSet,
+    ConstraintRole, ConstraintType, EvaluatedConstraintBehavior, EvaluatedConstraintData, SampleID,
+    SampleSet, SampledConstraintBehavior, SampledConstraintData, Solution,
 };
 use std::collections::BTreeMap;
 
-/// Why a OneHot candidate fails at the result's retained evaluation tolerance.
-///
-/// Returned on demand by [`Solution::one_hot_violation_details`] and
-/// [`SampleSet::one_hot_violation_details`]. Every variant contains all
-/// finite member values, including exact zeros. Feasible candidates return
-/// `None`, including when tolerance neighborhoods overlap.
-#[derive(Debug, Clone, PartialEq)]
-pub enum OneHotViolation {
-    /// Every member is within tolerance of zero, but the row is infeasible.
-    /// No particular member is designated as the missing selection.
-    MissingSelection { values: BTreeMap<VariableID, f64> },
-    /// At least two members are within tolerance of one and the row is infeasible.
-    /// `selected_variables` contains all such members; `values` also retains any
-    /// other member errors, which can coexist with multiple selections.
-    MultipleSelections {
-        selected_variables: VariableIDSet,
-        values: BTreeMap<VariableID, f64>,
-    },
-    /// Other deviations from a OneHot assignment.
-    ///
-    /// `target_variable` is one closest assignment's member to set to one:
-    /// the largest member value, with ties resolved by the largest variable ID.
-    /// It is a repair candidate, not a uniquely intended selection.
-    /// `errors` contains absolute changes exceeding tolerance: distance to one
-    /// for the target and distance to zero for every other member.
-    ValueErrors {
-        target_variable: VariableID,
-        errors: BTreeMap<VariableID, f64>,
-        values: BTreeMap<VariableID, f64>,
-    },
-}
-
-fn diagnose(
-    variables: &VariableIDSet,
-    mut value_of: impl FnMut(VariableID) -> f64,
-    violation: f64,
-    atol: ATol,
-) -> Option<OneHotViolation> {
-    if crate::constraint_type::violation_is_feasible(violation, atol) {
-        return None;
-    }
-    let values: BTreeMap<_, _> = variables.iter().map(|&id| (id, value_of(id))).collect();
-    if values.values().all(|&value| atol.approx_is_zero(value)) {
-        return Some(OneHotViolation::MissingSelection { values });
-    }
-    let selected_variables: VariableIDSet = values
-        .iter()
-        .filter(|(_, value)| atol.approx_eq(**value, 1.0))
-        .map(|(&id, _)| id)
-        .collect();
-    if selected_variables.len() > 1 {
-        return Some(OneHotViolation::MultipleSelections {
-            selected_variables,
-            values,
-        });
-    }
-    let (&target_variable, _) = values
-        .iter()
-        .max_by(|(_, a), (_, b)| a.total_cmp(b))
-        .expect("OneHot constraints have at least one member");
-    let errors = values
-        .iter()
-        .filter_map(|(&id, &value)| {
-            let error = (value - if id == target_variable { 1.0 } else { 0.0 }).abs();
-            (!atol.approx_is_zero(error)).then_some((id, error))
-        })
-        .collect();
-    Some(OneHotViolation::ValueErrors {
-        target_variable,
-        errors,
-        values,
-    })
-}
-
-fn sos1_values(
-    variables: &VariableIDSet,
-    mut value_of: impl FnMut(VariableID) -> f64,
-    atol: ATol,
-) -> BTreeMap<VariableID, f64> {
-    let retained = variables
-        .iter()
-        .map(|&id| (id, value_of(id)))
-        .max_by(|(_, a), (_, b)| a.abs().total_cmp(&b.abs()))
-        .map(|(id, _)| id);
-    variables
-        .iter()
-        .filter_map(|&id| {
-            let value = value_of(id);
-            (Some(id) != retained && !atol.approx_is_zero(value)).then_some((id, value))
-        })
-        .collect()
-}
-
 impl Solution {
-    /// Diagnose a OneHot constraint using the stored member values, on demand.
+    /// Return diagnostics for this family's violated constraints at the saved tolerance.
     ///
-    /// Includes inactive constraints regardless of feasibility participation.
-    /// Returns `None` exactly when this row is feasible at [`Self::feasibility_atol`].
-    /// Other feasibility queries do not change this tolerance. Details are newly
-    /// computed on each call and are neither cached nor stored in constraint rows.
+    /// Rows at or above `min_role` are selected; use `EvaluationOnly` to include
+    /// all retained rows. Feasible rows are absent. Regular and Indicator rows
+    /// have `()` diagnostics, but still appear when violated. Each family's
+    /// associated type defines its details, so new families need no shared enum.
     ///
-    /// # Errors
-    /// Returns an error if `constraint_id` is not a retained OneHot constraint.
-    pub fn one_hot_violation_details(
+    /// Only violated rows generate details, using the stored, canonicalized
+    /// variable values. Scalar violations stay stored; diagnostics are not cached.
+    /// An empty map means every selected constraint in this family is feasible,
+    /// not that variable domains or other families are feasible.
+    ///
+    /// ```
+    /// # use ommx::{Solution, Constraint, OneHotConstraint, ConstraintRole};
+    /// # fn inspect(solution: &Solution) {
+    /// let regular = solution.violation_diagnostics::<Constraint>(ConstraintRole::EvaluationOnly);
+    /// let one_hot = solution.violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly);
+    /// # }
+    /// ```
+    pub fn violation_diagnostics<C: ConstraintType>(
         &self,
-        constraint_id: OneHotConstraintID,
-    ) -> crate::Result<Option<OneHotViolation>> {
-        let row = self
-            .evaluated_one_hot_constraints()
-            .get(&constraint_id)
-            .ok_or_else(|| crate::error!("Unknown OneHot constraint ID: {constraint_id}"))?;
-        Ok(diagnose(
-            &row.variables,
-            |id| *self.decision_variables()[&id].value(),
-            row.violation(),
-            self.feasibility_atol(),
-        ))
-    }
-
-    /// Diagnose an SOS1 constraint using the stored member values, on demand.
-    ///
-    /// Retains one member of largest absolute value (ties retain the largest ID)
-    /// and returns the other values whose absolute value exceeds
-    /// [`Self::feasibility_atol`]. The retained member is one possible repair
-    /// choice, not a uniquely intended selection. The map is empty exactly when
-    /// this row is feasible at that tolerance. Includes inactive constraints
-    /// regardless of feasibility participation. Results are not cached.
-    ///
-    /// # Errors
-    /// Returns an error if `constraint_id` is not a retained SOS1 constraint.
-    pub fn sos1_violating_values(
-        &self,
-        constraint_id: Sos1ConstraintID,
-    ) -> crate::Result<BTreeMap<VariableID, f64>> {
-        let row = self
-            .evaluated_sos1_constraints()
-            .get(&constraint_id)
-            .ok_or_else(|| crate::error!("Unknown SOS1 constraint ID: {constraint_id}"))?;
-        if crate::constraint_type::violation_is_feasible(row.violation(), self.feasibility_atol()) {
-            return Ok(BTreeMap::new());
-        }
-        Ok(sos1_values(
-            &row.variables,
-            |id| *self.decision_variables()[&id].value(),
-            self.feasibility_atol(),
-        ))
+        min_role: ConstraintRole,
+    ) -> BTreeMap<C::ID, C::ViolationDiagnostics> {
+        C::evaluated_constraints(self)
+            .selected(min_role)
+            .filter(|(_, row)| !row.is_feasible(self.feasibility_atol()))
+            .map(|(&id, row)| {
+                (
+                    id,
+                    row.violation_diagnostics(
+                        |variable_id| *self.decision_variables()[&variable_id].value(),
+                        self.feasibility_atol(),
+                    ),
+                )
+            })
+            .collect()
     }
 }
 
 impl SampleSet {
-    /// Diagnose one OneHot constraint in one sample, without extracting a Solution.
+    /// Return one family's violated-constraint diagnostics for a single sample.
     ///
-    /// Uses only the requested constraint's member values from this sample.
-    /// Includes inactive constraints. Like [`Solution::one_hot_violation_details`],
-    /// returns `None` exactly when the row is feasible at [`Self::feasibility_atol`].
-    /// Details are computed per call and are not cached.
-    ///
-    /// # Errors
-    /// Returns an error for an unknown OneHot constraint or sample ID. Unknown
-    /// samples produce [`crate::SampleSetError::UnknownSampleID`].
-    pub fn one_hot_violation_details(
-        &self,
-        constraint_id: OneHotConstraintID,
-        sample_id: SampleID,
-    ) -> crate::Result<Option<OneHotViolation>> {
-        let row = self
-            .one_hot_constraints()
-            .get(&constraint_id)
-            .ok_or_else(|| crate::error!("Unknown OneHot constraint ID: {constraint_id}"))?;
-        let violation = *row
-            .stage
-            .violations
-            .get(sample_id)
-            .ok_or(crate::SampleSetError::UnknownSampleID { id: sample_id })?;
-        Ok(diagnose(
-            &row.variables,
-            |id| {
-                *self.decision_variables()[&id]
-                    .samples()
-                    .get(sample_id)
-                    .expect("validated sample IDs")
-            },
-            violation,
-            self.feasibility_atol(),
-        ))
-    }
-
-    /// Diagnose one SOS1 constraint in one sample, without extracting a Solution.
-    ///
-    /// See [`Solution::sos1_violating_values`] for the repair choice and tolerance
-    /// contract. Uses only this constraint's members in the requested sample,
-    /// includes inactive constraints, and does not cache the returned map.
+    /// Like [`Solution::violation_diagnostics`], uses the saved tolerance and
+    /// excludes feasible rows. Only the requested sample's violated rows generate
+    /// details; this does not extract a whole Solution or cache the result.
+    /// `EvaluationOnly` includes all retained rows, including skipped checks.
     ///
     /// # Errors
-    /// Returns an error for an unknown SOS1 constraint or sample ID. Unknown
-    /// samples produce [`crate::SampleSetError::UnknownSampleID`].
-    pub fn sos1_violating_values(
+    /// An unknown sample produces [`crate::SampleSetError::UnknownSampleID`],
+    /// including when the selected family has no rows.
+    pub fn violation_diagnostics<C: ConstraintType>(
         &self,
-        constraint_id: Sos1ConstraintID,
         sample_id: SampleID,
-    ) -> crate::Result<BTreeMap<VariableID, f64>> {
-        let row = self
-            .sos1_constraints()
-            .get(&constraint_id)
-            .ok_or_else(|| crate::error!("Unknown SOS1 constraint ID: {constraint_id}"))?;
-        let violation = *row
-            .stage
-            .violations
-            .get(sample_id)
-            .ok_or(crate::SampleSetError::UnknownSampleID { id: sample_id })?;
-        if crate::constraint_type::violation_is_feasible(violation, self.feasibility_atol()) {
-            return Ok(BTreeMap::new());
-        }
-        Ok(sos1_values(
-            &row.variables,
-            |id| {
-                *self.decision_variables()[&id]
-                    .samples()
-                    .get(sample_id)
+        min_role: ConstraintRole,
+    ) -> crate::Result<BTreeMap<C::ID, C::ViolationDiagnostics>> {
+        crate::ensure!(
+            self.objectives().get(sample_id).is_some(),
+            crate::SampleSetError::UnknownSampleID { id: sample_id }
+        );
+        Ok(C::sampled_constraints(self)
+            .selected(min_role)
+            .filter(|(_, row)| {
+                !row.is_feasible_for(sample_id, self.feasibility_atol())
                     .expect("validated sample IDs")
-            },
-            self.feasibility_atol(),
-        ))
+            })
+            .map(|(&id, row)| {
+                (
+                    id,
+                    row.violation_diagnostics(
+                        sample_id,
+                        |variable_id| {
+                            *self.decision_variables()[&variable_id]
+                                .samples()
+                                .get(sample_id)
+                                .expect("validated sample IDs")
+                        },
+                        self.feasibility_atol(),
+                    ),
+                )
+            })
+            .collect())
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::v1::State;
-    use crate::{Evaluate, EvaluatedConstraintBehavior};
+    use crate::{
+        ATol, Evaluate, EvaluatedConstraintBehavior, OneHotConstraint, OneHotViolation,
+        Sos1Constraint, VariableIDSet,
+    };
     use proptest::prelude::*;
 
     fn instance(n: usize) -> crate::Instance {
@@ -274,8 +136,9 @@ mod tests {
     fn missing_selection_uses_canonical_stored_values() {
         for values in [[0.0, 0.0, -0.0], [0.0625, -0.0625, 0.0]] {
             let result = evaluate(values, 0.125);
-            let Some(OneHotViolation::MissingSelection { values: retained }) =
-                result.one_hot_violation_details(0.into()).unwrap()
+            let Some(OneHotViolation::MissingSelection { values: retained }) = result
+                .violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly)
+                .remove(&0.into())
             else {
                 panic!("expected a missing selection");
             };
@@ -295,7 +158,9 @@ mod tests {
         let result = evaluate([1.0, 0.9375, -0.5], 0.125);
         assert_eq!(result.one_hot_constraint_violation(0.into()).unwrap(), 1.0);
         assert_eq!(
-            result.one_hot_violation_details(0.into()).unwrap(),
+            result
+                .violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly)
+                .remove(&0.into()),
             Some(OneHotViolation::MultipleSelections {
                 selected_variables: [0.into(), 1.into()].into(),
                 values: [(0.into(), 1.0), (1.into(), 1.0), (2.into(), -0.5)].into(),
@@ -308,7 +173,9 @@ mod tests {
         let result = evaluate([0.875, 0.25, 0.0], 0.0625);
         assert_eq!(result.one_hot_constraint_violation(0.into()).unwrap(), 0.25);
         assert_eq!(
-            result.one_hot_violation_details(0.into()).unwrap(),
+            result
+                .violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly)
+                .remove(&0.into()),
             Some(OneHotViolation::ValueErrors {
                 target_variable: 0.into(),
                 errors: [(0.into(), 0.125), (1.into(), 0.25)].into(),
@@ -320,8 +187,8 @@ mod tests {
             errors,
             ..
         }) = evaluate([0.5, 0.5, 0.0], 0.125)
-            .one_hot_violation_details(0.into())
-            .unwrap()
+            .violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly)
+            .remove(&0.into())
         else {
             panic!()
         };
@@ -333,8 +200,8 @@ mod tests {
             errors,
             ..
         }) = evaluate([-3.0, 0.875, 0.0], 0.0625)
-            .one_hot_violation_details(0.into())
-            .unwrap()
+            .violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly)
+            .remove(&0.into())
         else {
             panic!()
         };
@@ -346,33 +213,128 @@ mod tests {
     fn inclusive_tolerance_and_overlapping_neighborhoods_follow_feasibility() {
         assert_eq!(
             evaluate([0.875, 0.125, 0.0], 0.125)
-                .one_hot_violation_details(0.into())
-                .unwrap(),
+                .violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly)
+                .remove(&0.into()),
             None
         );
         assert_eq!(
             evaluate([0.0, 0.0, 0.0], 1.0)
-                .one_hot_violation_details(0.into())
-                .unwrap(),
+                .violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly)
+                .remove(&0.into()),
             None
         );
         assert_eq!(
             evaluate([1.0, 1.0, 0.0], 1.0)
-                .one_hot_violation_details(0.into())
-                .unwrap(),
+                .violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly)
+                .remove(&0.into()),
             None
         );
         let result = evaluate([0.875, 0.25, 0.0], 0.125);
-        let before = result.one_hot_violation_details(0.into()).unwrap();
+        let before = result
+            .violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly)
+            .remove(&0.into());
         assert!(
             result.evaluated_one_hot_constraints()[&0.into()].is_feasible(ATol::new(0.25).unwrap())
         );
-        assert_eq!(result.one_hot_violation_details(0.into()).unwrap(), before);
+        assert_eq!(
+            result
+                .violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly)
+                .remove(&0.into()),
+            before
+        );
         let Some(OneHotViolation::ValueErrors { errors, .. }) = before else {
             panic!()
         };
         assert_eq!(errors, [(1.into(), 0.25)].into());
     }
+    #[test]
+    fn regular_and_indicator_violations_are_present_with_unit_diagnostics() {
+        use crate::{
+            Constraint, CreatedData, Equality, Function, IndicatorConstraint, IndicatorTriggerValue,
+        };
+        let regular = Constraint {
+            equality: Equality::EqualToZero,
+            stage: CreatedData {
+                function: crate::linear!(0).into(),
+            },
+        };
+        let indicator = IndicatorConstraint::new(
+            0.into(),
+            Equality::EqualToZero,
+            crate::linear!(1).into(),
+            IndicatorTriggerValue::One,
+        );
+        let host = crate::Instance::builder()
+            .sense(crate::Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(
+                [
+                    (0.into(), crate::DecisionVariable::binary()),
+                    (1.into(), crate::DecisionVariable::binary()),
+                ]
+                .into(),
+            )
+            .active_constraints([(10.into(), regular.clone())].into())
+            .active_indicator_constraints([(11.into(), indicator.clone())].into())
+            .build()
+            .unwrap();
+        let state = State::from_iter([(0, 1.0), (1, 1.0)]);
+        let atol = ATol::default();
+        let solution = host.evaluate(&state, atol).unwrap();
+        let samples = host
+            .evaluate_samples(&crate::Sampled::from((7.into(), state.clone())), atol)
+            .unwrap();
+        assert_eq!(
+            solution.violation_diagnostics::<Constraint>(ConstraintRole::EvaluationOnly),
+            [(10.into(), ())].into()
+        );
+        assert_eq!(
+            solution.violation_diagnostics::<IndicatorConstraint>(ConstraintRole::EvaluationOnly),
+            [(11.into(), ())].into()
+        );
+        assert_eq!(
+            samples
+                .violation_diagnostics::<Constraint>(7.into(), ConstraintRole::EvaluationOnly)
+                .unwrap(),
+            [(10.into(), ())].into()
+        );
+        assert_eq!(
+            samples
+                .violation_diagnostics::<IndicatorConstraint>(
+                    7.into(),
+                    ConstraintRole::EvaluationOnly
+                )
+                .unwrap(),
+            [(11.into(), ())].into()
+        );
+        // Empty family queries still reject an unknown sample.
+        let err = samples
+            .violation_diagnostics::<OneHotConstraint>(99.into(), ConstraintRole::EvaluationOnly)
+            .unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<crate::SampleSetError>(),
+            Some(crate::SampleSetError::UnknownSampleID { .. })
+        ));
+        // Unit diagnostics do not read or duplicate member values.
+        regular
+            .evaluate(&state, atol)
+            .unwrap()
+            .violation_diagnostics(|_| panic!("unexpected value lookup"), atol);
+        indicator
+            .evaluate(&state, atol)
+            .unwrap()
+            .violation_diagnostics(|_| panic!("unexpected value lookup"), atol);
+        let feasible = host
+            .evaluate(&State::from_iter([(0, 0.0), (1, 0.0)]), atol)
+            .unwrap();
+        assert!(feasible
+            .violation_diagnostics::<Constraint>(ConstraintRole::EvaluationOnly)
+            .is_empty());
+        assert!(feasible
+            .violation_diagnostics::<IndicatorConstraint>(ConstraintRole::EvaluationOnly)
+            .is_empty());
+    }
+
     proptest::proptest! {
         #[test]
         fn diagnostics_match_feasibility_at_any_retained_tolerance(
@@ -385,25 +347,25 @@ mod tests {
             let solution = host.evaluate(&state, atol).unwrap();
             let one_hot = &solution.evaluated_one_hot_constraints()[&0.into()];
             let sos1 = &solution.evaluated_sos1_constraints()[&1.into()];
-            let one_hot_details = solution.one_hot_violation_details(0.into()).unwrap();
-            let sos1_details = solution.sos1_violating_values(1.into()).unwrap();
+            let one_hot_details = solution.violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly).remove(&0.into());
+            let sos1_details = solution.violation_diagnostics::<Sos1Constraint>(ConstraintRole::EvaluationOnly);
             let samples = host.evaluate_samples(&crate::Sampled::new([vec![2.into(), 7.into()]], [state.clone()]).unwrap(), atol).unwrap();
             let restored = SampleSet::from_v2_bytes(&samples.to_v2_bytes()).unwrap();
             for samples in [&samples, &restored] {
                 for sid in [2.into(), 7.into()] {
-                    prop_assert_eq!(samples.one_hot_violation_details(0.into(), sid).unwrap(), one_hot_details.clone());
-                    prop_assert_eq!(samples.sos1_violating_values(1.into(), sid).unwrap(), sos1_details.clone());
+                    prop_assert_eq!(samples.violation_diagnostics::<OneHotConstraint>(sid, ConstraintRole::EvaluationOnly).unwrap().remove(&0.into()), one_hot_details.clone());
+                    prop_assert_eq!(samples.violation_diagnostics::<Sos1Constraint>(sid, ConstraintRole::EvaluationOnly).unwrap(), sos1_details.clone());
                     let extracted = samples.get(sid).unwrap();
-                    prop_assert_eq!(extracted.one_hot_violation_details(0.into()).unwrap(), one_hot_details.clone());
-                    prop_assert_eq!(extracted.sos1_violating_values(1.into()).unwrap(), sos1_details.clone());
+                    prop_assert_eq!(extracted.violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly).remove(&0.into()), one_hot_details.clone());
+                    prop_assert_eq!(extracted.violation_diagnostics::<Sos1Constraint>(ConstraintRole::EvaluationOnly), sos1_details.clone());
                 }
             }
             let restored = Solution::from_v2_bytes(&solution.to_v2_bytes()).unwrap();
-            prop_assert_eq!(restored.one_hot_violation_details(0.into()).unwrap(), one_hot_details.clone());
-            prop_assert_eq!(restored.sos1_violating_values(1.into()).unwrap(), sos1_details.clone());
+            prop_assert_eq!(restored.violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly).remove(&0.into()), one_hot_details.clone());
+            prop_assert_eq!(restored.violation_diagnostics::<Sos1Constraint>(ConstraintRole::EvaluationOnly), sos1_details.clone());
             prop_assert_eq!(one_hot_details.is_none(), one_hot.is_feasible(atol));
             prop_assert_eq!(sos1_details.is_empty(), sos1.is_feasible(atol));
-            for (id, value) in sos1_details {
+            for (id, value) in sos1_details.into_values().flatten() {
                 prop_assert_eq!(*solution.decision_variables()[&id].value(), value);
                 prop_assert!(value.abs() > *atol);
             }

@@ -215,19 +215,26 @@ accumulate as they did with the earlier prerelease L1 metric. Bounds and kinds r
 Input canonicalization precedes constraint evaluation and does not change the
 definition of the metric on the values supplied to the constraint.
 
-[`Solution::one_hot_violation_details`](crate::Solution::one_hot_violation_details)
-returns `None` exactly when the row is feasible at its retained `feasibility_atol`.
-Otherwise [`OneHotViolation`](crate::OneHotViolation) distinguishes missing selection,
-multiple selections, and value errors, retaining all member values including zeros.
-[`Solution::sos1_violating_values`](crate::Solution::sos1_violating_values)
-returns values exceeding that tolerance after retaining one largest absolute member;
-an empty map means the SOS1 row is feasible at that tolerance. Ties retain the largest ID.
-Details are computed on demand from the host variable table, without caching or
-duplicating values in constraint rows. Scalar violations remain stored.
-[`SampleSet::one_hot_violation_details`](crate::SampleSet::one_hot_violation_details)
-and [`SampleSet::sos1_violating_values`](crate::SampleSet::sos1_violating_values)
-inspect only the requested constraint and sample. Diagnostics include inactive
-rows and remain available after sample extraction and v2 serialization.
+[`Solution::violation_diagnostics`](crate::Solution::violation_diagnostics) and
+[`SampleSet::violation_diagnostics`](crate::SampleSet::violation_diagnostics) return
+`BTreeMap<C::ID, C::ViolationDiagnostics>` for a selected constraint family `C`.
+Only rows violating the saved `feasibility_atol` are present, within the requested
+`min_role` scope. Regular and Indicator diagnostics are `()`; OneHot diagnostics
+are [`OneHotViolation`](crate::OneHotViolation), without `Option`; SOS1 diagnostics
+are nonempty member-value maps after retaining one largest absolute member.
+OneHot includes missing selection, multiple selections, and value errors with
+all member values, including zeros. Its enum and variants are non-exhaustive to
+allow additional variants and fields.
+
+Each [`ConstraintType`](crate::ConstraintType) must specify `ViolationDiagnostics`;
+[`EvaluatedConstraintData`](crate::EvaluatedConstraintData) and
+[`SampledConstraintData`](crate::SampledConstraintData) must explicitly implement
+`violation_diagnostics`, even when returning `()`. Result roots filter by stored
+violation before asking a row to generate details from stored variable values.
+Diagnostics are not cached or stored in rows; scalar violations remain stored.
+SampleSet queries inspect only the requested sample, reject unknown sample IDs,
+and agree with extraction and v2 round trips. Empty maps describe constraint
+feasibility in the selected scope, not variable-domain feasibility.
 
 SampleSet feasibility and best-feasible selection also check variable bounds
 and kinds using the saved tolerance, matching the extracted Solution. Variable

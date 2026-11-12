@@ -13,20 +13,20 @@ of the earlier prerelease L1 sum. For example, SOS1 values `(1, 0.00006, 0.00006
 have violation `0.00006` and pass at tolerance `0.0001`.
 
 ```python
-details = solution.one_hot_violation_details(OneHotConstraintID(7))
-# None, or OneHotViolation.MissingSelection / MultipleSelections / ValueErrors
-excess = solution.sos1_violating_values(Sos1ConstraintID(8))
-# Empty exactly when this SOS1 row is feasible at its feasibility_atol.
+diagnostics = solution.violation_diagnostics()
+sample_diagnostics = samples.violation_diagnostics(sample_id)
 ```
 
-OneHot diagnostics distinguish missing selection, multiple selections, and value
-errors, including all-zero candidates. SOS1 returns excess member values after
-retaining one largest absolute member. `Solution` and `SampleSet` compute details
-on demand from stored variable values; constraint rows retain scalar violations
-without duplicating member values. For samples, pass a constraint ID and sample ID
-to the same methods. Diagnostics use `feasibility_atol`, include inactive rows,
-and remain available after sample extraction and v2 serialization. See the
-[migration guide](../migration/python_sdk_v2_to_v3.md) for classification rules.
+The dictionary contains only violated constraints, keyed by typed ID. Regular
+and Indicator values are `None`; OneHot values distinguish missing selection,
+multiple selections, and value errors, including all-zero candidates. SOS1 values
+are dictionaries of excess member values. Feasible rows are absent.
+
+Details are computed on demand from stored values only for violated rows. Scalar
+violations remain stored. Both queries use `feasibility_atol` and include inactive
+rows by default; `min_role` narrows the scope. SampleSet inspects only the requested
+sample. Diagnostics remain available after extraction and v2 storage. See the
+[migration guide](../migration/python_sdk_v2_to_v3.md) for classification and extension contracts.
 
 ### ⚠ Active and inactive constraints ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
 

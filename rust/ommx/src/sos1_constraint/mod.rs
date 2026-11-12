@@ -1,3 +1,4 @@
+mod diagnostic;
 mod evaluate;
 
 use crate::{
@@ -145,6 +146,15 @@ pub type SampledSos1Constraint = Sos1Constraint<stage::Sampled>;
 
 impl EvaluatedConstraintData for EvaluatedSos1Constraint {
     type ID = Sos1ConstraintID;
+    type ViolationDiagnostics = BTreeMap<VariableID, f64>;
+    fn violation_diagnostics(
+        &self,
+        value_of: impl FnMut(crate::VariableID) -> f64,
+        atol: ATol,
+    ) -> Self::ViolationDiagnostics {
+        diagnostic::diagnose(&self.variables, value_of, atol)
+    }
+
     fn violation(&self) -> f64 {
         self.stage.violation
     }
@@ -157,6 +167,14 @@ impl EvaluatedConstraintData for EvaluatedSos1Constraint {
 impl SampledConstraintData for SampledSos1Constraint {
     type ID = Sos1ConstraintID;
     type Evaluated = EvaluatedSos1Constraint;
+    fn violation_diagnostics(
+        &self,
+        _sample_id: SampleID,
+        value_of: impl FnMut(crate::VariableID) -> f64,
+        atol: ATol,
+    ) -> <Self::Evaluated as EvaluatedConstraintData>::ViolationDiagnostics {
+        diagnostic::diagnose(&self.variables, value_of, atol)
+    }
 
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
         self.stage.violations.get(sample_id).copied()
@@ -197,6 +215,14 @@ impl SampledConstraintData for SampledSos1Constraint {
 
 impl ConstraintType for Sos1Constraint {
     type ID = Sos1ConstraintID;
+    type ViolationDiagnostics = BTreeMap<VariableID, f64>;
+    fn evaluated_constraints(solution: &crate::Solution) -> &crate::EvaluatedCollection<Self> {
+        solution.evaluated_sos1_constraints()
+    }
+    fn sampled_constraints(samples: &crate::SampleSet) -> &crate::SampledCollection<Self> {
+        samples.sos1_constraints()
+    }
+
     type Created = Sos1Constraint;
     type Evaluated = EvaluatedSos1Constraint;
     type Sampled = SampledSos1Constraint;

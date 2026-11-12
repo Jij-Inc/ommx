@@ -174,15 +174,17 @@ Indicator result properties and DataFrame columns use `indicator_on` to report w
 
 OneHot and SOS1 result properties rename `active_variable` to `selected_variable`, including per-sample mappings. DataFrame columns become `selected_variable` and `selected_variable.<sample_id>`. This diagnostic describes selection at the evaluated candidate, independently of variable or constraint membership in the Active Formulation. Evaluation behavior is unchanged.
 
-Inspect `solution.one_hot_violation_details(constraint_id)` for OneHot. It is `None` exactly when the row is feasible at its retained `feasibility_atol`; otherwise it is a `OneHotViolation` variant:
+Use `solution.violation_diagnostics()` or `samples.violation_diagnostics(sample_id)` to obtain a dictionary keyed by typed constraint IDs. It contains only constraints that fail at the saved `feasibility_atol`; feasible constraints are absent. Regular and Indicator entries have `None` values, meaning no additional details, not feasibility. OneHot entries contain a `OneHotViolation` variant:
 
 - `MissingSelection`: all members are within tolerance of zero. `values` includes every member, so an all-zero candidate remains explicit.
 - `MultipleSelections`: at least two members are within tolerance of one. `selected_variables` identifies them; `values` also retains any other member errors.
 - `ValueErrors`: other deviations, with `values`, `target_variable`, and `errors`. The target is one closest OneHot assignment's member to set to one (largest value, ties resolved by largest ID). Errors are absolute changes exceeding tolerance. For `(0.9, 0.2, 0)`, they are approximately `{0: 0.1, 1: 0.2}` at a small tolerance.
 
-For SOS1, `solution.sos1_violating_values(constraint_id)` retains one largest absolute member (ties use the largest ID) and returns the remaining values exceeding `feasibility_atol`. An empty dictionary is equivalent to that SOS1 row being feasible at the retained tolerance. This repair choice does not identify a uniquely intended selection.
+SOS1 entries contain a nonempty variable-ID-to-value dictionary: retain one largest absolute member (ties use the largest ID), then report the remaining values exceeding `feasibility_atol` in absolute value. This repair choice does not identify a uniquely intended selection.
 
-For a SampleSet, call `samples.one_hot_violation_details(constraint_id, sample_id)` or `samples.sos1_violating_values(constraint_id, sample_id)`. These methods compute only the requested diagnostic from stored variable values, without extracting a whole Solution. Scalar violations remain stored; detailed diagnostics are neither cached nor duplicated in constraint rows. Both methods include inactive constraints and produce the same results after sample extraction and v2 serialization. Feasibility queries with another tolerance do not change the diagnostic tolerance; variable-domain checks remain separate.
+The default `min_role=ConstraintRole.EVALUATION_ONLY` includes all retained rows; use `FEASIBILITY_CHECK` or `ACTIVE` to narrow the scope. Diagnostic dictionaries are newly computed only for violated rows, using stored variable values. Scalar violations remain stored, and values are not duplicated in constraint rows. SampleSet queries inspect only the requested sample without extracting a whole Solution; an unknown sample raises `KeyError`, even if no constraints exist. Results agree after extraction and v2 serialization. An empty dictionary means all selected constraints are feasible, but variable-domain violations may still make the whole result infeasible.
+
+The return type is `dict[ConstraintIDBase, object]`, allowing future constraint families and diagnostic types. Consumers should narrow by typed ID and handle or explicitly reject unknown families. OneHot diagnostics may gain variants or fields.
 
 The `min_role` selector for `total_violation()` and `constraints_df` is an ordered minimum, so it can include more than one role:
 

@@ -714,7 +714,7 @@ def test_sos1_small_member_errors_are_feasible_without_changing_values():
     assert solution.feasible
     row = solution.constraints[Sos1ConstraintID(7)]
     assert solution.state.entries == state
-    assert solution.sos1_violating_values(Sos1ConstraintID(7)) == {}
+    assert Sos1ConstraintID(7) not in solution.violation_diagnostics()
     assert row.violation() == 0.00006
 
 
@@ -744,7 +744,7 @@ def test_one_hot_violation_details_survive_storage_and_sample_extraction(inactiv
     samples = instance.evaluate_samples(states, atol=atol)
     for result in [samples, SampleSet.from_v2_bytes(samples.to_v2_bytes())]:
         details = {
-            sid: result.one_hot_violation_details(constraint_id, sid) for sid in states
+            sid: result.violation_diagnostics(sid).get(constraint_id) for sid in states
         }
         assert set(details) == set(states)
         for sample_id, state in states.items():
@@ -755,12 +755,23 @@ def test_one_hot_violation_details_survive_storage_and_sample_extraction(inactiv
                 result.get(sample_id),
             ]:
                 row = candidate.constraints[constraint_id]
-                diagnostic = candidate.one_hot_violation_details(constraint_id)
+                diagnostic = candidate.violation_diagnostics().get(constraint_id)
                 assert diagnostic == details[sample_id]
+                assert (
+                    constraint_id not in candidate.violation_diagnostics()
+                ) == row.is_feasible(atol=atol)
                 assert (diagnostic is None) == row.is_feasible(atol=atol)
                 if sample_id == 11:
                     assert diagnostic is None
                     continue
+                assert isinstance(
+                    diagnostic,
+                    (
+                        OneHotViolation.MissingSelection,
+                        OneHotViolation.MultipleSelections,
+                        OneHotViolation.ValueErrors,
+                    ),
+                )
                 assert diagnostic.values == state
                 if sample_id == 2:
                     assert isinstance(diagnostic, OneHotViolation.MissingSelection)
@@ -780,9 +791,16 @@ def test_one_hot_violation_details_survive_storage_and_sample_extraction(inactiv
                     assert max(diagnostic.errors.values()) == row.violation()
                 # The returned maps are snapshots, not mutable result storage.
                 diagnostic.values.clear()
-                assert (
-                    candidate.one_hot_violation_details(constraint_id).values == state
+                fresh = candidate.violation_diagnostics()[constraint_id]
+                assert isinstance(
+                    fresh,
+                    (
+                        OneHotViolation.MissingSelection,
+                        OneHotViolation.MultipleSelections,
+                        OneHotViolation.ValueErrors,
+                    ),
                 )
+                assert fresh.values == state
 
 
 @pytest.mark.parametrize("atol", [0.125, 0.5, 1.0, 2.0])
@@ -798,10 +816,12 @@ def test_one_hot_diagnostics_follow_retained_tolerance(atol):
     for state in [{0: 0, 1: 0, 2: 0}, {0: 1, 1: 1, 2: 0}, {0: 0.875, 1: 0.25, 2: 0}]:
         solution = instance.evaluate(state, atol=atol)
         row = solution.constraints[OneHotConstraintID(7)]
-        before = solution.one_hot_violation_details(7)
-        assert (before is None) == row.is_feasible(atol=atol)
+        before = solution.violation_diagnostics().get(OneHotConstraintID(7))
+        assert (
+            OneHotConstraintID(7) not in solution.violation_diagnostics()
+        ) == row.is_feasible(atol=atol)
         row.is_feasible(atol=10.0)
-        assert solution.one_hot_violation_details(7) == before
+        assert solution.violation_diagnostics().get(OneHotConstraintID(7)) == before
 
 
 @pytest.mark.parametrize("inactive", [False, True])
@@ -833,7 +853,8 @@ def test_sos1_violating_values_match_feasibility_and_survive_storage(inactive):
     samples = instance.evaluate_samples(states, atol=0.125)
     for result in [samples, SampleSet.from_v2_bytes(samples.to_v2_bytes())]:
         assert {
-            sid: result.sos1_violating_values(constraint_id, sid) for sid in states
+            sid: result.violation_diagnostics(sid).get(constraint_id, {})
+            for sid in states
         } == expected
         for sample_id, state in states.items():
             solution = instance.evaluate(state, atol=0.125)
@@ -844,45 +865,90 @@ def test_sos1_violating_values_match_feasibility_and_survive_storage(inactive):
             ]:
                 row = candidate.constraints[constraint_id]
                 assert (
-                    candidate.sos1_violating_values(constraint_id)
+                    candidate.violation_diagnostics().get(constraint_id, {})
                     == expected[sample_id]
                 )
                 assert (
-                    candidate.sos1_violating_values(constraint_id) == {}
+                    candidate.violation_diagnostics().get(constraint_id, {}) == {}
+                ) == row.is_feasible(atol=0.125)
+                assert (
+                    constraint_id not in candidate.violation_diagnostics()
                 ) == row.is_feasible(atol=0.125)
                 row.is_feasible(atol=10.0)
                 assert (
-                    candidate.sos1_violating_values(constraint_id)
+                    candidate.violation_diagnostics().get(constraint_id, {})
                     == expected[sample_id]
                 )
 
 
-def test_lazy_diagnostics_reject_unknown_ids_and_wrong_families():
-    instance = Instance.minimize()
-    x = [instance.new_binary() for _ in range(2)]
-    one_hot = instance.add_one_hot_constraint(
-        OneHotConstraint(variables=x)
-    ).constraint_id
-    sos1 = instance.add_sos1_constraint(Sos1Constraint(variables=x)).constraint_id
-    solution = instance.evaluate({v.id: 1 for v in x})
-    samples = instance.evaluate_samples({7: {v.id: 1 for v in x}})
-    for owner, suffix in [(solution, ()), (samples, (7,))]:
-        with pytest.raises(RuntimeError, match="Unknown OneHot constraint ID"):
-            owner.one_hot_violation_details(999, *suffix)
-        with pytest.raises(RuntimeError, match="Unknown SOS1 constraint ID"):
-            owner.sos1_violating_values(999, *suffix)
-        with pytest.raises(TypeError):
-            owner.one_hot_violation_details(sos1, *suffix)
-        with pytest.raises(TypeError):
-            owner.sos1_violating_values(one_hot, *suffix)
+def test_violation_diagnostics_all_families_and_unknown_samples():
+    from ommx import (
+        ConstraintID,
+        IndicatorConstraintID,
+        OneHotViolation,
+        SampleSet,
+        Solution,
+    )
+
+    x, y = DecisionVariable.binary(0), DecisionVariable.binary(1)
+    instance = Instance.from_components(
+        decision_variables=[x, y],
+        objective=0,
+        sense=Sense.Minimize,
+        active_constraints={0: x == 0, 1: y == 1},
+        active_indicator_constraints={2: (y == 0).with_indicator(x)},
+        active_one_hot_constraints={3: OneHotConstraint(variables=[x, y])},
+        active_sos1_constraints={4: Sos1Constraint(variables=[x, y])},
+    )
+    states = {7: {0: 1, 1: 1}, 8: {0: 0, 1: 1}, 9: {0: 0, 1: 0}}
+    expected_ids = {
+        7: {
+            ConstraintID(0),
+            IndicatorConstraintID(2),
+            OneHotConstraintID(3),
+            Sos1ConstraintID(4),
+        },
+        8: set(),
+        9: {ConstraintID(1), OneHotConstraintID(3)},
+    }
+    samples = instance.evaluate_samples(states)
+    for result in [samples, SampleSet.from_v2_bytes(samples.to_v2_bytes())]:
+        for sid, state in states.items():
+            diagnostics = result.violation_diagnostics(sid)
+            assert set(diagnostics) == expected_ids[sid]
+            direct = instance.evaluate(state)
+            for candidate in [
+                direct,
+                result.get(sid),
+                Solution.from_v2_bytes(direct.to_v2_bytes()),
+            ]:
+                assert candidate.violation_diagnostics() == diagnostics
+                assert set(diagnostics) == {
+                    cid
+                    for cid in candidate.constraints
+                    if candidate.constraint_violation(cid) > candidate.feasibility_atol
+                }
+            if sid == 7:
+                assert diagnostics[ConstraintID(0)] is None
+                assert diagnostics[IndicatorConstraintID(2)] is None
+                assert isinstance(
+                    diagnostics[OneHotConstraintID(3)],
+                    OneHotViolation.MultipleSelections,
+                )
+                assert diagnostics[Sos1ConstraintID(4)] == {0: 1}
+            diagnostics.clear()
+            assert set(result.violation_diagnostics(sid)) == expected_ids[sid]
+        with pytest.raises(KeyError, match="Unknown sample ID"):
+            result.violation_diagnostics(999)
+    # Missing samples must not silently return {} even with no constraint rows.
+    empty = Instance.minimize().evaluate_samples({7: {}})
+    assert empty.violation_diagnostics(7) == {}
     with pytest.raises(KeyError, match="Unknown sample ID"):
-        samples.one_hot_violation_details(one_hot, 999)
-    with pytest.raises(KeyError, match="Unknown sample ID"):
-        samples.sos1_violating_values(sos1, 999)
+        empty.violation_diagnostics(999)
 
 
 def test_lazy_diagnostics_include_evaluation_only_constraints():
-    from ommx import OneHotViolation, SampleSet, Solution
+    from ommx import ConstraintRole, OneHotViolation, SampleSet, Solution
 
     instance = Instance.minimize()
     x = [instance.new_binary() for _ in range(2)]
@@ -898,16 +964,39 @@ def test_lazy_diagnostics_include_evaluation_only_constraints():
     samples = instance.evaluate_samples({7: state})
     for result in [samples, SampleSet.from_v2_bytes(samples.to_v2_bytes())]:
         assert result.feasible == {7: True}
+        assert (
+            result.violation_diagnostics(7, min_role=ConstraintRole.FEASIBILITY_CHECK)
+            == {}
+        )
+        assert result.violation_diagnostics(7, min_role=ConstraintRole.ACTIVE) == {}
         assert isinstance(
-            result.one_hot_violation_details(one_hot, 7),
+            result.violation_diagnostics(7)[one_hot],
             OneHotViolation.MultipleSelections,
         )
-        assert result.sos1_violating_values(sos1, 7) == {x[0].id: 1}
+        assert result.violation_diagnostics(7)[sos1] == {x[0].id: 1}
         solution = result.get(7)
         for candidate in [solution, Solution.from_v2_bytes(solution.to_v2_bytes())]:
             assert candidate.feasible
+            assert (
+                candidate.violation_diagnostics(
+                    min_role=ConstraintRole.FEASIBILITY_CHECK
+                )
+                == {}
+            )
             assert isinstance(
-                candidate.one_hot_violation_details(one_hot),
+                candidate.violation_diagnostics()[one_hot],
                 OneHotViolation.MultipleSelections,
             )
-            assert candidate.sos1_violating_values(sos1) == {x[0].id: 1}
+            assert candidate.violation_diagnostics()[sos1] == {x[0].id: 1}
+
+
+def test_empty_violation_diagnostics_do_not_imply_variable_domain_feasibility():
+    instance = Instance.minimize()
+    x = instance.new_binary()
+    instance.objective = x
+    solution = instance.evaluate({x.id: 0.5})
+    assert not solution.feasible
+    assert solution.violation_diagnostics() == {}
+    samples = instance.evaluate_samples({7: {x.id: 0.5}})
+    assert samples.feasible == {7: False}
+    assert samples.violation_diagnostics(7) == {}

@@ -55,6 +55,7 @@ mod sos1_constraint;
 mod sos1_promotion;
 mod state;
 mod subscript_map;
+mod violation_diagnostics;
 
 pub use artifact::*;
 // `attached.rs` is implementation detail — re-export only the host enum that
