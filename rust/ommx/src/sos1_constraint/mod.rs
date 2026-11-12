@@ -93,7 +93,7 @@ pub struct Sos1CreatedData;
 ///
 /// `violation` must be nonnegative and not NaN. Feasibility is derived from
 /// `violation` and the query tolerance. Evaluation computes these values; Solution validates
-/// the metric and selected-variable diagnostic against its decision-variable values.
+/// the metric, selected-variable diagnostic, and nonzero values against its decision-variable values.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sos1EvaluatedData {
     /// Tolerance used to determine the retained activation diagnostic.
@@ -103,13 +103,16 @@ pub struct Sos1EvaluatedData {
     /// Retained member at `activation_atol`; None when infeasible at that
     /// tolerance or all members are approximately zero under it.
     pub selected_variable: Option<VariableID>,
+    /// Every strictly nonzero member value, including values within `activation_atol`.
+    /// Retained independently of feasibility; keys belong to `variables` and values are finite.
+    pub nonzero_values: BTreeMap<VariableID, f64>,
     pub used_decision_variable_ids: VariableIDSet,
 }
 
 /// Data carried by a SOS1 constraint in the Sampled stage.
 ///
-/// Each violation is nonnegative and not NaN. The violation and selected-variable
-/// maps must have the same sample IDs. Evaluation constructs this data and
+/// Each violation is nonnegative and not NaN. The violation, selected-variable,
+/// and nonzero-value maps must have the same sample IDs. Evaluation constructs this data and
 /// SampleSet validates the metrics and diagnostics against its sampled variables.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sos1SampledData {
@@ -119,6 +122,9 @@ pub struct Sos1SampledData {
     pub violations: crate::Sampled<f64>,
     /// Retained member for each sample, with the same meaning as the evaluated stage.
     pub selected_variable: BTreeMap<SampleID, Option<VariableID>>,
+    /// Strictly nonzero member values per sample, independently of feasibility or tolerance.
+    /// Includes an empty map for all-zero samples and has the same IDs as `violations`.
+    pub nonzero_values: BTreeMap<SampleID, BTreeMap<VariableID, f64>>,
     pub used_decision_variable_ids: VariableIDSet,
 }
 
@@ -166,6 +172,10 @@ impl SampledConstraintData for SampledSos1Constraint {
         if !self.stage.violations.has_same_ids(expected) {
             return Err(self.stage.violations.ids());
         }
+        let nonzero_value_ids = sample_ids_from_map(&self.stage.nonzero_values);
+        if &nonzero_value_ids != expected {
+            return Err(nonzero_value_ids);
+        }
         let selected_variable_ids = sample_ids_from_map(&self.stage.selected_variable);
         if &selected_variable_ids != expected {
             return Err(selected_variable_ids);
@@ -180,6 +190,7 @@ impl SampledConstraintData for SampledSos1Constraint {
     fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated> {
         let violation = *self.stage.violations.get(sample_id)?;
         let selected_variable = *self.stage.selected_variable.get(&sample_id)?;
+        let nonzero_values = self.stage.nonzero_values.get(&sample_id)?.clone();
 
         Some(Sos1Constraint {
             variables: self.variables.clone(),
@@ -187,6 +198,7 @@ impl SampledConstraintData for SampledSos1Constraint {
                 activation_atol: self.stage.activation_atol,
                 violation,
                 selected_variable,
+                nonzero_values,
                 used_decision_variable_ids: self.stage.used_decision_variable_ids.clone(),
             },
         })
@@ -273,6 +285,7 @@ impl EvaluatedSos1Constraint {
 impl crate::v2::EvaluatedSos1Constraint {
     /// Restore the SDK metric from values supplied by the enclosing Solution or
     /// SampleSet. Structural wire rows contain member IDs, not their values.
+    /// Nonzero diagnostics are reconstructed from the host values.
     pub(crate) fn parse_with_values(
         self,
         value_of: impl FnMut(VariableID) -> Option<f64>,
@@ -301,7 +314,7 @@ impl crate::v2::EvaluatedSos1Constraint {
         }
         let constraint = Sos1Constraint::new(variables)
             .map_err(|error| ParseError::new(error).context(message, "variables"))?;
-        let (violation, _) = constraint
+        let (violation, _, nonzero_values) = constraint
             .evaluate_members(value_of, atol)
             .map_err(|error| ParseError::new(error).context(message, "variables"))?;
         crate::constraint_type::validate_wire_feasibility(violation, self.feasible, atol, message)?;
@@ -311,6 +324,7 @@ impl crate::v2::EvaluatedSos1Constraint {
                 activation_atol: atol,
                 violation,
                 selected_variable,
+                nonzero_values,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                     self.used_decision_variable_ids,
                     message,
@@ -371,6 +385,7 @@ impl SampledSos1Constraint {
 impl crate::v2::SampledSos1Constraint {
     /// Restore the SDK metric from values supplied by the enclosing Solution or
     /// SampleSet. Structural wire rows contain member IDs, not their values.
+    /// Nonzero diagnostics are reconstructed from the host values.
     pub(crate) fn parse_with_values(
         self,
         mut value_of: impl FnMut(SampleID, VariableID) -> Option<f64>,
@@ -414,8 +429,9 @@ impl crate::v2::SampledSos1Constraint {
         let constraint = Sos1Constraint::new(variables)
             .map_err(|error| ParseError::new(error).context(message, "variables"))?;
         let mut violations = crate::Sampled::default();
+        let mut nonzero_values = BTreeMap::new();
         for (&id, &provided_feasible) in &feasible {
-            let (violation, _) = constraint
+            let (violation, _, sample_nonzero_values) = constraint
                 .evaluate_members(|variable_id| value_of(id, variable_id), atol)
                 .map_err(|error| ParseError::new(error).context(message, "variables"))?;
             crate::constraint_type::validate_wire_feasibility(
@@ -424,6 +440,7 @@ impl crate::v2::SampledSos1Constraint {
                 atol,
                 message,
             )?;
+            nonzero_values.insert(id, sample_nonzero_values);
             violations
                 .append([id], violation)
                 .map_err(|error| ParseError::new(error).context(message, "feasible"))?;
@@ -434,6 +451,7 @@ impl crate::v2::SampledSos1Constraint {
                 activation_atol: atol,
                 violations,
                 selected_variable,
+                nonzero_values,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                     self.used_decision_variable_ids,
                     message,
@@ -467,7 +485,7 @@ impl<S: Stage<Self>> Sos1Constraint<S> {
         &self,
         mut value_of: impl FnMut(VariableID) -> Option<f64>,
         atol: ATol,
-    ) -> crate::Result<(f64, Option<VariableID>)> {
+    ) -> crate::Result<(f64, Option<VariableID>, BTreeMap<VariableID, f64>)> {
         let mut values = Vec::with_capacity(self.variables.len());
         for &id in &self.variables {
             let value = value_of(id).ok_or_else(|| {
@@ -501,7 +519,11 @@ impl<S: Stage<Self>> Sos1Constraint<S> {
         } else {
             None
         };
-        Ok((violation, selected_variable))
+        let nonzero_values = values
+            .into_iter()
+            .filter(|(_, value)| *value != 0.0)
+            .collect();
+        Ok((violation, selected_variable, nonzero_values))
     }
 }
 

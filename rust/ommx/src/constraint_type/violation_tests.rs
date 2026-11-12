@@ -2,6 +2,46 @@ use super::*;
 use crate::{v1::State, IndicatorConstraint, OneHotConstraint, Sos1Constraint};
 use proptest::prelude::*;
 
+#[test]
+fn nonzero_diagnostics_retain_all_values_independently_of_feasibility() {
+    let atol = ATol::new(0.0001).unwrap();
+    let one_hot = OneHotConstraint::new([0.into(), 1.into(), 2.into()].into()).unwrap();
+    let sos1 = Sos1Constraint::new(one_hot.variables.clone()).unwrap();
+    for values in [
+        [1.0, 1.0, 0.0],
+        [-0.5, 0.5, 0.0],
+        [0.0, -0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [1.0, 0.00006, -0.00006],
+    ] {
+        let state = State::from_iter(values.into_iter().enumerate().map(|(id, x)| (id as u64, x)));
+        let expected: BTreeMap<_, _> = state
+            .entries
+            .iter()
+            .filter(|(_, value)| **value != 0.0)
+            .map(|(id, value)| ((*id).into(), *value))
+            .collect();
+        let evaluated_one_hot = one_hot.evaluate(&state, atol).unwrap();
+        let evaluated_sos1 = sos1.evaluate(&state, atol).unwrap();
+        assert_eq!(evaluated_one_hot.stage.nonzero_values, expected);
+        assert_eq!(evaluated_sos1.stage.nonzero_values, expected);
+        let sample_ids = [0.into(), 7.into()];
+        let samples = crate::Sampled::new([sample_ids.to_vec()], [state]).unwrap();
+        let mut sampled_one_hot = one_hot.evaluate_samples(&samples, atol).unwrap();
+        let mut sampled_sos1 = sos1.evaluate_samples(&samples, atol).unwrap();
+        for sample_id in sample_ids {
+            assert_eq!(sampled_one_hot.get(sample_id).unwrap(), evaluated_one_hot);
+            assert_eq!(sampled_sos1.get(sample_id).unwrap(), evaluated_sos1);
+        }
+        // A sample with no nonzero members still needs an explicit empty map.
+        sampled_one_hot.stage.nonzero_values.remove(&7.into());
+        sampled_sos1.stage.nonzero_values.remove(&7.into());
+        let expected_ids = sample_ids.into_iter().collect();
+        assert!(sampled_one_hot.validate_sample_ids(&expected_ids).is_err());
+        assert!(sampled_sos1.validate_sample_ids(&expected_ids).is_err());
+    }
+}
+
 fn assert_contract<C: ConstraintType>(constraint: &C::Created, state: &State, atol: ATol) {
     let evaluated = constraint.evaluate(state, atol).unwrap();
     let violation = evaluated.violation();

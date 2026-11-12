@@ -3110,6 +3110,13 @@ class EvaluatedOneHotConstraint(ConstraintView):
         IDs of decision variables used to evaluate this constraint.
         """
     @property
+    def nonzero_values(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Strictly nonzero member values keyed by variable ID, even when infeasible.
+        Includes values within the evaluation tolerance; zero values are omitted.
+        An all-zero candidate has an empty dictionary.
+        """
+    @property
     def variables(self) -> builtins.set[builtins.int]:
         r"""
         Member decision variable IDs.
@@ -3180,6 +3187,13 @@ class EvaluatedSos1Constraint(ConstraintView):
     def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
         IDs of decision variables used to evaluate this constraint.
+        """
+    @property
+    def nonzero_values(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Strictly nonzero member values keyed by variable ID, even when infeasible.
+        Includes values within the evaluation tolerance; zero values are omitted.
+        An all-zero candidate has an empty dictionary.
         """
     @property
     def variables(self) -> builtins.set[builtins.int]:
@@ -13691,6 +13705,15 @@ class SampledOneHotConstraint(ConstraintView):
         IDs of decision variables used to evaluate this constraint.
         """
     @property
+    def nonzero_values(
+        self,
+    ) -> builtins.dict[builtins.int, builtins.dict[builtins.int, builtins.float]]:
+        r"""
+        Strictly nonzero member values keyed by sample ID, then variable ID.
+        Includes values within the evaluation tolerance; zero values are omitted.
+        All-zero samples have an empty dictionary.
+        """
+    @property
     def variables(self) -> builtins.set[builtins.int]:
         r"""
         Member decision variable IDs.
@@ -13766,6 +13789,15 @@ class SampledSos1Constraint(ConstraintView):
     def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
         IDs of decision variables used to evaluate this constraint.
+        """
+    @property
+    def nonzero_values(
+        self,
+    ) -> builtins.dict[builtins.int, builtins.dict[builtins.int, builtins.float]]:
+        r"""
+        Strictly nonzero member values keyed by sample ID, then variable ID.
+        Includes values within the evaluation tolerance; zero values are omitted.
+        All-zero samples have an empty dictionary.
         """
     @property
     def variables(self) -> builtins.set[builtins.int]:

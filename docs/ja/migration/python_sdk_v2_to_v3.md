@@ -174,6 +174,8 @@ Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` を使い�
 
 OneHotとSOS1の評価結果のpropertyは、サンプルごとの対応を返すものも含めて `active_variable` から `selected_variable` に変更します。DataFrame列も `selected_variable` と `selected_variable.<sample_id>` になります。評価した候補点での選択を表す情報であり、変数や制約がActive Formulationに属するかどうかとは独立です。評価の動作は変わりません。
 
+OneHotやSOS1の違反を調べるには `solution.constraints[constraint_id].nonzero_values` を使います。制約に属する変数のIDと非ゼロの評価値を対応させた辞書で、複数選択なら例えば `{1: 1.0, 2: 1.0}` となり、`selected_variable` が `None` の場合も参照できます。許容誤差以下の値も含み、厳密なゼロだけを除きます。空辞書は全変数がゼロであることを表します（既定の許容誤差ではOneHotは違反、SOS1は実行可能）。`samples.constraints[constraint_id].nonzero_values` はサンプルIDごとにこの辞書を返します。inactiveな制約でも保持され、サンプル抽出やv2形式の保存・復元後も参照できます。
+
 `total_violation()` と `constraints_df` の `min_role` は次の順序における下限なので、複数のroleを含められます。
 
 | `min_role` | 含む制約 |

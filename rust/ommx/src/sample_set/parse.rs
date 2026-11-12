@@ -857,6 +857,10 @@ mod tests {
         let constraint = SampledOneHotConstraint {
             variables: BTreeSet::from([variable_id]),
             stage: OneHotSampledData {
+                nonzero_values: std::collections::BTreeMap::from([(
+                    sample_id,
+                    std::collections::BTreeMap::from([(variable_id, 1.0)]),
+                )]),
                 activation_atol: crate::ATol::default(),
                 violations: crate::Sampled::from((sample_id, 0.0)),
                 selected_variable: BTreeMap::from([(sample_id, Some(variable_id))]),
@@ -891,6 +895,10 @@ mod tests {
         let constraint = SampledSos1Constraint {
             variables: BTreeSet::from([variable_id]),
             stage: Sos1SampledData {
+                nonzero_values: std::collections::BTreeMap::from([(
+                    sample_id,
+                    std::collections::BTreeMap::new(),
+                )]),
                 activation_atol: crate::ATol::default(),
                 violations: crate::Sampled::from((sample_id, 0.0)),
                 selected_variable: BTreeMap::from([(sample_id, None)]),
@@ -1039,6 +1047,10 @@ mod tests {
                     SampledOneHotConstraint {
                         variables: [structural_id].into_iter().collect(),
                         stage: OneHotSampledData {
+                            nonzero_values: std::collections::BTreeMap::from([(
+                                crate::SampleID::from(0),
+                                std::collections::BTreeMap::from([(structural_id, 1.0)]),
+                            )]),
                             activation_atol: crate::ATol::default(),
                             violations: crate::Sampled::from((crate::SampleID::from(0), 0.0)),
                             selected_variable: BTreeMap::from([(
@@ -1090,6 +1102,10 @@ mod tests {
         let constraint = SampledSos1Constraint {
             variables: [undefined_id].into_iter().collect(),
             stage: Sos1SampledData {
+                nonzero_values: std::collections::BTreeMap::from([(
+                    crate::SampleID::from(0),
+                    std::collections::BTreeMap::new(),
+                )]),
                 activation_atol: crate::ATol::default(),
                 violations: crate::Sampled::from((crate::SampleID::from(0), 0.0)),
                 selected_variable: BTreeMap::from([(crate::SampleID::from(0), None)]),
@@ -2020,6 +2036,10 @@ mod tests {
         let one_hot = SampledOneHotConstraint {
             variables: BTreeSet::from([var_id, VariableID::from(2)]),
             stage: OneHotSampledData {
+                nonzero_values: std::collections::BTreeMap::from([(
+                    sample_id,
+                    std::collections::BTreeMap::from([(var_id, 1.0)]),
+                )]),
                 activation_atol: crate::ATol::default(),
                 violations: crate::Sampled::from((sample_id, 0.0)),
                 selected_variable: BTreeMap::from([(sample_id, Some(var_id))]),

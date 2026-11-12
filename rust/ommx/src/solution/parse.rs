@@ -612,6 +612,7 @@ mod tests {
         let constraint = crate::one_hot_constraint::EvaluatedOneHotConstraint {
             variables: std::collections::BTreeSet::from([variable_id]),
             stage: crate::one_hot_constraint::OneHotEvaluatedData {
+                nonzero_values: std::collections::BTreeMap::from([(variable_id, 1.0)]),
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
                 selected_variable: Some(variable_id),
@@ -644,6 +645,7 @@ mod tests {
         let constraint = crate::sos1_constraint::EvaluatedSos1Constraint {
             variables: std::collections::BTreeSet::from([variable_id]),
             stage: crate::sos1_constraint::Sos1EvaluatedData {
+                nonzero_values: std::collections::BTreeMap::new(),
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
                 selected_variable: None,
@@ -1854,6 +1856,7 @@ mod tests {
         let one_hot = EvaluatedOneHotConstraint {
             variables: BTreeSet::from([var_id, VariableID::from(2)]),
             stage: OneHotEvaluatedData {
+                nonzero_values: std::collections::BTreeMap::from([(var_id, 1.0)]),
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
                 selected_variable: Some(var_id),
@@ -1921,6 +1924,7 @@ mod tests {
         let one_hot = EvaluatedOneHotConstraint {
             variables: BTreeSet::from([var_id]),
             stage: OneHotEvaluatedData {
+                nonzero_values: std::collections::BTreeMap::from([(var_id, 1.0)]),
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
                 selected_variable: Some(var_id),

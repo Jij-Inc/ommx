@@ -698,3 +698,71 @@ def test_sample_set_one_hot_inactive_reasons_df_after_conversion(snapshot):
         )
         == snapshot
     )
+
+
+@pytest.mark.parametrize("family", ["one_hot", "sos1"])
+@pytest.mark.parametrize("inactive", [False, True])
+def test_nonzero_values_survive_evaluation_storage_and_sample_extraction(
+    family, inactive
+):
+    from ommx import SampleSet, Solution
+
+    variables = [DecisionVariable.binary(i) for i in range(3)]
+    constraint_type, id_type = (
+        (OneHotConstraint, OneHotConstraintID)
+        if family == "one_hot"
+        else (Sos1Constraint, Sos1ConstraintID)
+    )
+    instance = Instance.from_components(
+        decision_variables=variables,
+        objective=0,
+        active_constraints={},
+        sense=Sense.Minimize,
+        **{f"active_{family}_constraints": {7: constraint_type(variables=variables)}},
+    )
+    if inactive:
+        if family == "one_hot":
+            instance.convert_one_hot_to_constraint(7)
+        else:
+            instance.convert_sos1_to_constraints(7)
+    constraint_id = id_type(7)
+    states = {
+        2: {0: 1.0, 1: 1.0, 2: 0.0},
+        5: {0: -0.5, 1: 0.5, 2: 0.0},
+        8: {0: 0.0, 1: -0.0, 2: 0.0},
+        11: {0: 0.0, 1: 1.0, 2: 0.0},
+    }
+    expected = {2: {0: 1.0, 1: 1.0}, 5: {0: -0.5, 1: 0.5}, 8: {}, 11: {1: 1.0}}
+    samples = instance.evaluate_samples(states)
+    restored_samples = SampleSet.from_v2_bytes(samples.to_v2_bytes())
+    for result in [samples, restored_samples]:
+        assert result.constraints[constraint_id].nonzero_values == expected
+        for sample_id, state in states.items():
+            solution = instance.evaluate(state)
+            restored = Solution.from_v2_bytes(solution.to_v2_bytes())
+            for candidate in [solution, restored, result.get(sample_id)]:
+                row = candidate.constraints[constraint_id]
+                assert row.nonzero_values == expected[sample_id]
+                if sample_id in (2, 5):
+                    assert row.selected_variable is None
+                    assert not candidate.feasible
+                # Returned dictionaries are detached from the retained result.
+                values = row.nonzero_values
+                values.clear()
+                assert row.nonzero_values == expected[sample_id]
+
+
+def test_sos1_nonzero_values_include_values_below_tolerance():
+    variables = [DecisionVariable.continuous(i, lower=-10, upper=10) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=variables,
+        objective=0,
+        active_constraints={},
+        active_sos1_constraints={7: Sos1Constraint(variables=variables)},
+        sense=Sense.Minimize,
+    )
+    state = {0: 1.0, 1: 0.00006, 2: -0.00006}
+    solution = instance.evaluate(state, atol=0.0001)
+    assert not solution.feasible
+    row = solution.constraints[Sos1ConstraintID(7)]
+    assert row.nonzero_values == state

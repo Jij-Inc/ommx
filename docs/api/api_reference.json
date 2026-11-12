@@ -10974,6 +10974,28 @@
               "is_readonly": true
             },
             {
+              "name": "nonzero_values",
+              "doc": "Strictly nonzero member values keyed by variable ID, even when infeasible.\nIncludes values within the evaluation tolerance; zero values are omitted.\nAn all-zero candidate has an empty dictionary.",
+              "type_": {
+                "display": "dict[int, float]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "parameters",
               "doc": "Modeling parameters.",
               "type_": {
@@ -11262,6 +11284,28 @@
                 "children": [
                   {
                     "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "nonzero_values",
+              "doc": "Strictly nonzero member values keyed by variable ID, even when infeasible.\nIncludes values within the evaluation tolerance; zero values are omitted.\nAn all-zero candidate has an empty dictionary.",
+              "type_": {
+                "display": "dict[int, float]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "float",
                     "link_target": null,
                     "children": []
                   }
@@ -36984,6 +37028,39 @@
               "is_readonly": true
             },
             {
+              "name": "nonzero_values",
+              "doc": "Strictly nonzero member values keyed by sample ID, then variable ID.\nIncludes values within the evaluation tolerance; zero values are omitted.\nAll-zero samples have an empty dictionary.",
+              "type_": {
+                "display": "dict[int, dict[int, float]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "dict[int, float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "parameters",
               "doc": "Modeling parameters.",
               "type_": {
@@ -37302,6 +37379,39 @@
                     "display": "str",
                     "link_target": null,
                     "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "nonzero_values",
+              "doc": "Strictly nonzero member values keyed by sample ID, then variable ID.\nIncludes values within the evaluation tolerance; zero values are omitted.\nAll-zero samples have an empty dictionary.",
+              "type_": {
+                "display": "dict[int, dict[int, float]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "dict[int, float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               },

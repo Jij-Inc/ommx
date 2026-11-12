@@ -174,6 +174,8 @@ Indicator result properties and DataFrame columns use `indicator_on` to report w
 
 OneHot and SOS1 result properties rename `active_variable` to `selected_variable`, including per-sample mappings. DataFrame columns become `selected_variable` and `selected_variable.<sample_id>`. This diagnostic describes selection at the evaluated candidate, independently of variable or constraint membership in the Active Formulation. Evaluation behavior is unchanged.
 
+To inspect a violated OneHot or SOS1 constraint, use `solution.constraints[constraint_id].nonzero_values`: a dictionary of member variable IDs to their nonzero evaluated values, for example `{1: 1.0, 2: 1.0}` for a multiple selection. It remains available when `selected_variable` is `None`. Values within the evaluation tolerance are included; only exact zeros are omitted. An empty dictionary identifies an all-zero candidate (infeasible for OneHot, feasible for SOS1 at the default tolerance). `samples.constraints[constraint_id].nonzero_values` maps each sample ID to such a dictionary. These diagnostics are retained for inactive constraints and preserved by sample extraction and v2 serialization.
+
 The `min_role` selector for `total_violation()` and `constraints_df` is an ordered minimum, so it can include more than one role:
 
 | `min_role` | Included constraints |

@@ -261,6 +261,19 @@ impl EvaluatedIndicatorConstraint {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl EvaluatedOneHotConstraint {
+    /// Strictly nonzero member values keyed by variable ID, even when infeasible.
+    /// Includes values within the evaluation tolerance; zero values are omitted.
+    /// An all-zero candidate has an empty dictionary.
+    #[getter]
+    pub fn nonzero_values(&self) -> BTreeMap<u64, f64> {
+        self.0
+            .stage
+            .nonzero_values
+            .iter()
+            .map(|(id, value)| (id.into_inner(), *value))
+            .collect()
+    }
+
     /// Member decision variable IDs.
     #[getter]
     pub fn variables(&self) -> BTreeSet<u64> {
@@ -277,6 +290,19 @@ impl EvaluatedOneHotConstraint {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl EvaluatedSos1Constraint {
+    /// Strictly nonzero member values keyed by variable ID, even when infeasible.
+    /// Includes values within the evaluation tolerance; zero values are omitted.
+    /// An all-zero candidate has an empty dictionary.
+    #[getter]
+    pub fn nonzero_values(&self) -> BTreeMap<u64, f64> {
+        self.0
+            .stage
+            .nonzero_values
+            .iter()
+            .map(|(id, value)| (id.into_inner(), *value))
+            .collect()
+    }
+
     /// Member decision variable IDs.
     #[getter]
     pub fn variables(&self) -> BTreeSet<u64> {
@@ -337,6 +363,27 @@ impl SampledIndicatorConstraint {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SampledOneHotConstraint {
+    /// Strictly nonzero member values keyed by sample ID, then variable ID.
+    /// Includes values within the evaluation tolerance; zero values are omitted.
+    /// All-zero samples have an empty dictionary.
+    #[getter]
+    pub fn nonzero_values(&self) -> BTreeMap<u64, BTreeMap<u64, f64>> {
+        self.0
+            .stage
+            .nonzero_values
+            .iter()
+            .map(|(sample_id, values)| {
+                (
+                    sample_id.into_inner(),
+                    values
+                        .iter()
+                        .map(|(id, value)| (id.into_inner(), *value))
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
     /// Member decision variable IDs.
     #[getter]
     pub fn variables(&self) -> BTreeSet<u64> {
@@ -358,6 +405,27 @@ impl SampledOneHotConstraint {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SampledSos1Constraint {
+    /// Strictly nonzero member values keyed by sample ID, then variable ID.
+    /// Includes values within the evaluation tolerance; zero values are omitted.
+    /// All-zero samples have an empty dictionary.
+    #[getter]
+    pub fn nonzero_values(&self) -> BTreeMap<u64, BTreeMap<u64, f64>> {
+        self.0
+            .stage
+            .nonzero_values
+            .iter()
+            .map(|(sample_id, values)| {
+                (
+                    sample_id.into_inner(),
+                    values
+                        .iter()
+                        .map(|(id, value)| (id.into_inner(), *value))
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
     /// Member decision variable IDs.
     #[getter]
     pub fn variables(&self) -> BTreeSet<u64> {

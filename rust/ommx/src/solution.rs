@@ -127,7 +127,7 @@ pub enum SolutionError {
 ///   `selected_variable` values must belong to their structural variable set.
 /// - Evaluated special-constraint stage fields are consistent with
 ///   [`Self::decision_variables`]: `indicator_on` reflects the indicator
-///   variable value, and one-hot/SOS1 `selected_variable` plus scalar violation reflect
+///   variable value, and one-hot/SOS1 `selected_variable`, `nonzero_values`, and scalar violation reflect
 ///   the structural variable values under `feasibility_atol`.
 /// - `feasibility_atol` is the absolute tolerance used to interpret
 ///   decision-variable feasibility and to validate serialized per-constraint
@@ -1021,7 +1021,7 @@ fn validate_solution_one_hot_stage_values(
 ) -> Result<(), SolutionError> {
     for (id, constraint) in one_hot_constraints.inner() {
         let provided_violation = constraint.violation();
-        let (computed_violation, computed_selected_variable) = constraint
+        let (computed_violation, computed_selected_variable, computed_nonzero_values) = constraint
             .evaluate_members(
                 |variable_id| {
                     decision_variables
@@ -1039,6 +1039,13 @@ fn validate_solution_one_hot_stage_values(
             return Err(SolutionError::InvalidConstraintStructure {
                 constraint_family: "one-hot", constraint_id: format!("{id:?}"),
                 message: format!("violation={provided_violation} does not match decision-variable values; computed={computed_violation}"),
+            });
+        }
+        if constraint.stage.nonzero_values != computed_nonzero_values {
+            return Err(SolutionError::InvalidConstraintStructure {
+                constraint_family: "one-hot",
+                constraint_id: format!("{id:?}"),
+                message: "nonzero_values does not match decision-variable values".to_string(),
             });
         }
         let provided_selected_variable = constraint.stage.selected_variable;
@@ -1059,7 +1066,7 @@ fn validate_solution_sos1_stage_values(
 ) -> Result<(), SolutionError> {
     for (id, constraint) in sos1_constraints.inner() {
         let provided_violation = constraint.violation();
-        let (computed_violation, computed_selected_variable) = constraint
+        let (computed_violation, computed_selected_variable, computed_nonzero_values) = constraint
             .evaluate_members(
                 |variable_id| {
                     decision_variables
@@ -1077,6 +1084,13 @@ fn validate_solution_sos1_stage_values(
             return Err(SolutionError::InvalidConstraintStructure {
                 constraint_family: "SOS1", constraint_id: format!("{id:?}"),
                 message: format!("violation={provided_violation} does not match decision-variable values; computed={computed_violation}"),
+            });
+        }
+        if constraint.stage.nonzero_values != computed_nonzero_values {
+            return Err(SolutionError::InvalidConstraintStructure {
+                constraint_family: "SOS1",
+                constraint_id: format!("{id:?}"),
+                message: "nonzero_values does not match decision-variable values".to_string(),
             });
         }
         let provided_selected_variable = constraint.stage.selected_variable;
@@ -1353,7 +1367,7 @@ impl SolutionBuilder {
     /// - Constraint numbers are unique across all families, including inactive rows
     /// - All `used_decision_variable_ids` in constraints and evaluated named
     ///   functions exist in `decision_variables`
-    /// - Special-constraint violations and activation decisions are consistent
+    /// - Special-constraint violations, activation decisions, and nonzero values are consistent
     ///   with `decision_variables`; their retained evaluation tolerance equals `feasibility_atol`
     ///
     /// Use [`Self::build`] for validated construction.
@@ -1413,6 +1427,68 @@ mod tests {
     use crate::EvaluatedConstraintBehavior;
     use crate::{Coefficient, Constraint, Evaluate, Function};
 
+    #[test]
+    fn rejects_nonzero_values_inconsistent_with_candidate() {
+        let atol = ATol::default();
+        let ids = BTreeSet::from([VariableID::from(0), VariableID::from(1)]);
+        let state = crate::v1::State::from_iter([(0, 1.0), (1, 1.0)]);
+        let decision_variables = crate::EvaluatedDecisionVariableTable::new(
+            ids.iter()
+                .map(|id| {
+                    (
+                        *id,
+                        crate::EvaluatedDecisionVariable::new(
+                            *id,
+                            crate::DecisionVariable::binary(),
+                            1.0,
+                        )
+                        .unwrap(),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>(),
+            Default::default(),
+        )
+        .unwrap();
+
+        // Missing values, zeros, changed values, and IDs outside the structural set
+        // must all be rejected by the host's validation.
+        for incorrect in [
+            BTreeMap::new(),
+            BTreeMap::from([(VariableID::from(0), 0.0), (VariableID::from(1), 1.0)]),
+            BTreeMap::from([(VariableID::from(0), 2.0), (VariableID::from(1), 1.0)]),
+            BTreeMap::from([(VariableID::from(99), 1.0)]),
+        ] {
+            let mut constraint = crate::OneHotConstraint::new(ids.clone())
+                .unwrap()
+                .evaluate(&state, atol)
+                .unwrap();
+            constraint.stage.nonzero_values = incorrect.clone();
+            let constraints = crate::EvaluatedCollection::new(
+                BTreeMap::from([(crate::OneHotConstraintID::from(0), constraint)]),
+                BTreeMap::new(),
+            )
+            .unwrap();
+            let error =
+                validate_solution_one_hot_stage_values(&decision_variables, &constraints, atol)
+                    .unwrap_err();
+            assert!(error.to_string().contains("nonzero_values does not match"));
+            let mut constraint = crate::Sos1Constraint::new(ids.clone())
+                .unwrap()
+                .evaluate(&state, atol)
+                .unwrap();
+            constraint.stage.nonzero_values = incorrect.clone();
+            let constraints = crate::EvaluatedCollection::new(
+                BTreeMap::from([(crate::Sos1ConstraintID::from(0), constraint)]),
+                BTreeMap::new(),
+            )
+            .unwrap();
+            let error =
+                validate_solution_sos1_stage_values(&decision_variables, &constraints, atol)
+                    .unwrap_err();
+            assert!(error.to_string().contains("nonzero_values does not match"));
+        }
+    }
+
     proptest::proptest! {
         #[test]
         fn special_violations_match_minimum_changes_and_roundtrip(
@@ -1447,12 +1523,17 @@ mod tests {
                 values.iter().enumerate().filter(|(j, _)| i != *j)
                     .map(|(_, x)| x.abs()).sum::<f64>()
             }).fold(f64::INFINITY, f64::min);
+            let expected_nonzero: BTreeMap<_, _> = values.iter().enumerate()
+                .filter(|(_, value)| **value != 0.0)
+                .map(|(id, value)| (VariableID::from(id as u64), *value)).collect();
             let atol = ATol::default();
             let solution = instance.evaluate(&state, atol).unwrap();
             let samples = instance.evaluate_samples(&crate::Sampled::from((crate::SampleID::from(7), state)), atol).unwrap();
             let restored_samples = crate::SampleSet::from_v2_bytes(&samples.to_v2_bytes()).unwrap();
             let restored = Solution::from_v2_bytes(&solution.to_v2_bytes()).unwrap();
             for result in [solution, restored, samples.get(7.into()).unwrap(), restored_samples.get(7.into()).unwrap()] {
+                prop_assert_eq!(&result.evaluated_one_hot_constraints()[&0.into()].stage.nonzero_values, &expected_nonzero);
+                prop_assert_eq!(&result.evaluated_sos1_constraints()[&1.into()].stage.nonzero_values, &expected_nonzero);
                 prop_assert_eq!(result.one_hot_constraint_violation(0.into()), Some(one_hot));
                 prop_assert_eq!(result.sos1_constraint_violation(1.into()), Some(sos1));
                 prop_assert_eq!(result.total_violation(Default::default()), one_hot + sos1);
@@ -2062,6 +2143,7 @@ mod tests {
         let one_hot = crate::one_hot_constraint::EvaluatedOneHotConstraint {
             variables: BTreeSet::from([variable_id]),
             stage: crate::one_hot_constraint::OneHotEvaluatedData {
+                nonzero_values: std::collections::BTreeMap::new(),
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
                 selected_variable: None,
@@ -2269,6 +2351,7 @@ mod tests {
         let one_hot = crate::one_hot_constraint::EvaluatedOneHotConstraint {
             variables: BTreeSet::from([structural_id]),
             stage: crate::one_hot_constraint::OneHotEvaluatedData {
+                nonzero_values: std::collections::BTreeMap::from([(structural_id, 1.0)]),
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
                 selected_variable: Some(structural_id),
@@ -2300,6 +2383,7 @@ mod tests {
         let sos1 = crate::sos1_constraint::EvaluatedSos1Constraint {
             variables: BTreeSet::from([structural_id]),
             stage: crate::sos1_constraint::Sos1EvaluatedData {
+                nonzero_values: std::collections::BTreeMap::from([(structural_id, 1.0)]),
                 activation_atol: crate::ATol::default(),
                 violation: 0.0,
                 selected_variable: Some(structural_id),

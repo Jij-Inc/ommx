@@ -81,7 +81,7 @@ impl Evaluate for OneHotConstraint<Created> {
 
     fn evaluate(&self, state: &crate::v1::State, atol: ATol) -> crate::Result<Self::Output> {
         let used_decision_variable_ids = self.required_ids();
-        let (violation, selected_variable) =
+        let (violation, selected_variable, nonzero_values) =
             self.evaluate_members(|id| state.entries.get(&id.into_inner()).copied(), atol)?;
 
         Ok(OneHotConstraint {
@@ -90,6 +90,7 @@ impl Evaluate for OneHotConstraint<Created> {
                 activation_atol: atol,
                 violation,
                 selected_variable,
+                nonzero_values,
                 used_decision_variable_ids,
             },
         })
@@ -102,12 +103,14 @@ impl Evaluate for OneHotConstraint<Created> {
     ) -> crate::Result<Self::SampledOutput> {
         let mut violations = crate::Sampled::default();
         let mut selected_variable = BTreeMap::new();
+        let mut nonzero_values = BTreeMap::new();
 
         for (sample_id, state) in samples.iter() {
-            let (violation, selected) =
+            let (violation, selected, values) =
                 self.evaluate_members(|id| state.entries.get(&id.into_inner()).copied(), atol)?;
             violations.append([*sample_id], violation)?;
             selected_variable.insert(*sample_id, selected);
+            nonzero_values.insert(*sample_id, values);
         }
 
         Ok(OneHotConstraint {
@@ -116,6 +119,7 @@ impl Evaluate for OneHotConstraint<Created> {
                 activation_atol: atol,
                 violations,
                 selected_variable,
+                nonzero_values,
                 used_decision_variable_ids: self.required_ids(),
             },
         })
