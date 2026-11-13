@@ -456,8 +456,8 @@ impl DecisionVariableTable<Created> {
     /// Intersect one row's bound without tolerance, preserving table invariants.
     ///
     /// Uses [`DecisionVariable::clip_bound_exact`]. A fixed value must be finite,
-    /// inside the resulting stored bound, integral for an integer-like kind,
-    /// and an exact member for a finite domain.
+    /// inside the resulting stored bound (or exactly zero for a semi kind),
+    /// integral for an integer-like kind, and an exact member for a finite domain.
     /// Fixed values are checked even if the bound does not change. On failure,
     /// this table remains unchanged.
     pub fn clip_bound_exact(&mut self, id: VariableID, bound: Bound) -> crate::Result<bool> {
@@ -946,6 +946,41 @@ mod tests {
                 .clip_bounds_exact(&crate::Bounds::from([(0.into(), bound)]))
                 .is_err());
             assert_eq!(table, original);
+        }
+    }
+
+    #[test]
+    fn exact_clipping_preserves_semi_zero_outside_the_stored_bound() {
+        let id = VariableID::from(0);
+        let atol = ATol::default();
+        for kind in [crate::Kind::SemiInteger, crate::Kind::SemiContinuous] {
+            for (bound, clipped) in [
+                (Bound::new(2.0, 4.0).unwrap(), Bound::new(3.0, 4.0).unwrap()),
+                (
+                    Bound::new(-4.0, -2.0).unwrap(),
+                    Bound::new(-4.0, -3.0).unwrap(),
+                ),
+            ] {
+                let original = DecisionVariableTable::with_fixed_values(
+                    BTreeMap::from([(id, DecisionVariable::new(kind, bound, atol).unwrap())]),
+                    Default::default(),
+                    BTreeMap::from([(id, 0.0)]),
+                    atol,
+                )
+                .unwrap();
+                let mut table = original.clone();
+                assert!(!table.clip_bound_exact(id, bound).unwrap());
+                assert_eq!(table, original);
+                assert!(table.clip_bound_exact(id, clipped).unwrap());
+                assert_eq!(table.get(&id).unwrap().bound(), clipped);
+                assert_eq!(table.fixed_value(id), Some(0.0));
+
+                let mut batch = original;
+                batch
+                    .clip_bounds_exact(&crate::Bounds::from([(id, clipped)]))
+                    .unwrap();
+                assert_eq!(batch, table);
+            }
         }
     }
 

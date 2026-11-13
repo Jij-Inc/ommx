@@ -17,6 +17,15 @@ OneHotとSOS1の違反量を、**制約を満たすために必要な最大修�
 `(1, 0.00006, 0.00006)` の違反量は `0.00006` となり、許容誤差 `0.0001` で
 実行可能になります。数学的には、条件を満たす状態までのL∞距離にあたります。
 
+### 🛠 semi型の変数で区間外のゼロを許容 ([#1386](https://github.com/Jij-Inc/ommx/pull/1386))
+
+`SemiInteger` と `SemiContinuous` の変数で、保存された区間がゼロを含まない場合も
+ゼロを許容するように修正しました。`Solution.feasible` と `SampleSet.feasible`、
+およびそれぞれの `feasible_relaxed` に反映されます。
+例えば、`lower=2, upper=4` のsemi-integer変数は `0` を許容します。
+評価時の許容誤差内でゼロと一致する値も受け付け、それ以外の値には引き続き
+区間への所属と整数性の条件を適用します。
+
 ### ⚠ Active / inactiveへの整理 ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
 
 モデルの `constraints` はすべてのroleの行を含むようになります。activeな接続済みハンドルには `active_constraints`、保持したinactive行には `inactive_constraints` を使います。`Removed*Constraint` は `Inactive*Constraint`、`relax_*` / `restore_*` は `deactivate_*` / `activate_*` に変更します。`from_components` の入力も `active_*` / `inactive_*` に揃えます。

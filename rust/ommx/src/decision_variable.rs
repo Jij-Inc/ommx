@@ -467,6 +467,12 @@ impl DecisionVariable {
             atol,
         };
         ensure_finite_value(id, value)?;
+        // Semi domains include zero independently of the stored interval.
+        if matches!(self.kind, Kind::SemiInteger | Kind::SemiContinuous)
+            && atol.approx_is_zero(value)
+        {
+            return Ok(());
+        }
         if !self.domain.contains(value, atol) {
             return Err(err());
         }
@@ -596,6 +602,9 @@ impl DecisionVariable {
     // Used by the child table module when exact clipping checks fixed values.
     fn check_value_consistency_exact(&self, id: VariableID, value: f64) -> crate::Result<()> {
         ensure_finite_value(id, value)?;
+        if matches!(self.kind, Kind::SemiInteger | Kind::SemiContinuous) && value == 0.0 {
+            return Ok(());
+        }
         let integral = !matches!(self.kind, Kind::Integer | Kind::Binary | Kind::SemiInteger)
             || value == value.round();
         let bound = self.bound();
@@ -830,6 +839,58 @@ impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVar
 mod tests {
     use super::*;
     use crate::v1;
+
+    #[test]
+    fn semi_domains_allow_zero_outside_the_stored_interval() {
+        let id = VariableID::from(0);
+        let atol = ATol::new(0.125).unwrap();
+        for kind in [Kind::SemiInteger, Kind::SemiContinuous] {
+            for (lower, upper) in [(2.0, 4.0), (-4.0, -2.0)] {
+                let variable =
+                    DecisionVariable::new(kind, Bound::new(lower, upper).unwrap(), atol).unwrap();
+                for value in [0.0, -0.0, -0.125, 0.125, lower, upper] {
+                    variable.check_value_consistency(id, value, atol).unwrap();
+                }
+                for value in [
+                    0.125_f64.next_up(),
+                    (-0.125_f64).next_down(),
+                    -1.0,
+                    1.0,
+                    f64::NAN,
+                    f64::NEG_INFINITY,
+                    f64::INFINITY,
+                ] {
+                    assert!(variable.check_value_consistency(id, value, atol).is_err());
+                    assert!(variable.check_value_consistency_exact(id, value).is_err());
+                }
+                for value in [0.0, -0.0, lower, upper] {
+                    variable.check_value_consistency_exact(id, value).unwrap();
+                }
+                for value in [-0.125, 0.125] {
+                    assert!(variable.check_value_consistency_exact(id, value).is_err());
+                }
+                let fractional = lower + 0.5;
+                assert_eq!(
+                    variable
+                        .check_value_consistency(id, fractional, atol)
+                        .is_ok(),
+                    kind == Kind::SemiContinuous
+                );
+                assert_eq!(
+                    variable
+                        .check_value_consistency_exact(id, fractional)
+                        .is_ok(),
+                    kind == Kind::SemiContinuous
+                );
+            }
+        }
+        for kind in [Kind::Integer, Kind::Continuous] {
+            let variable =
+                DecisionVariable::new(kind, Bound::new(2.0, 4.0).unwrap(), atol).unwrap();
+            assert!(variable.check_value_consistency(id, 0.0, atol).is_err());
+            assert!(variable.check_value_consistency_exact(id, 0.0).is_err());
+        }
+    }
 
     #[test]
     fn exact_clipping_retains_sub_tolerance_continuous_updates() {
