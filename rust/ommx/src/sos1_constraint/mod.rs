@@ -511,7 +511,7 @@ impl<S: Stage<Self>> Sos1Constraint<S> {
             .iter()
             .max_by(|(_, a), (_, b)| a.abs().total_cmp(&b.abs()))
             .ok_or_else(|| crate::error!("SOS1 constraints must contain at least one variable"))?;
-        // L-infinity distance to the closest feasible structural assignment.
+        // Largest absolute adjustment after retaining a largest-magnitude member.
         let violation = values
             .iter()
             .map(
@@ -534,7 +534,14 @@ impl<S: Stage<Self>> Sos1Constraint<S> {
 }
 
 impl EvaluatedSos1Constraint {
-    /// Minimum maximum absolute member change needed to satisfy this constraint (L-infinity).
+    /// Largest variable adjustment needed to satisfy this constraint.
+    ///
+    /// Retain one member of largest absolute value and set the others to zero.
+    /// This repair minimizes the largest absolute adjustment: it is the
+    /// second-largest absolute member value, or zero for a singleton. For
+    /// `(1, 0.00006, 0.00006)`, the violation is `0.00006`.
+    /// Mathematically, this is the L∞ distance to an SOS1 assignment;
+    /// variable bounds and kinds are checked separately.
     pub fn violation(&self) -> f64 {
         EvaluatedConstraintData::violation(self)
     }

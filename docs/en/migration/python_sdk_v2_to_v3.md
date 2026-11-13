@@ -272,7 +272,9 @@ Use `include=["label", "parameters"]` for a wide table with metadata. For a join
 
 ### Compare feasibility near the tolerance
 
-A threshold is applied to each constraint's violation. OneHot and SOS1 use the minimum maximum member change needed to satisfy the condition (L-infinity distance), replacing the earlier prerelease sum of changes. For SOS1, `(1, 0.00006, 0.00006)` has violation `0.00006` and passes at `atol=0.0001`. For OneHot, `(0.9, 0.2, 0)` has violation `0.2`, while an all-zero candidate has violation `1`. When reconciling reports, use the stored evaluation tolerance and compare the same constraint family. A new query tolerance does not rerun discrete-value canonicalization. See {meth}`~ommx.Solution.total_violation`.
+A threshold is applied to each constraint's violation. For OneHot and SOS1, the violation is the **largest variable adjustment needed to satisfy the constraint**. Choose the repair that makes this largest adjustment as small as possible. For example, repairing OneHot values `(0.9, 0.2, 0)` to `(1, 0, 0)` changes the variables by `(0.1, 0.2, 0)`, so the violation is `0.2`. An all-zero OneHot candidate needs one variable changed to `1`, giving violation `1`.
+
+This replaces the earlier prerelease sum of adjustments. SOS1 values `(1, 0.00006, 0.00006)` need the two small values changed to zero; the largest adjustment is `0.00006`, so the constraint passes at `atol=0.0001`. Mathematically, this measure is the L∞ distance to a satisfying assignment. When reconciling reports, use the stored evaluation tolerance and compare the same constraint family. A new query tolerance does not rerun discrete-value canonicalization. See {meth}`~ommx.Solution.total_violation`.
 
 (migration-storage)=
 ## 5. Bring saved models and Artifacts forward

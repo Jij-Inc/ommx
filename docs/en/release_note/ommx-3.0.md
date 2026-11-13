@@ -8,9 +8,14 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ### OneHot and SOS1 violation diagnostics ([#1384](https://github.com/Jij-Inc/ommx/pull/1384))
 
-OneHot and SOS1 now use L-infinity distance to a satisfying assignment instead
-of the earlier prerelease L1 sum. For example, SOS1 values `(1, 0.00006, 0.00006)`
-have violation `0.00006` and pass at tolerance `0.0001`.
+OneHot and SOS1 now report the **largest variable adjustment needed to satisfy
+the constraint**, choosing the repair that makes this largest adjustment as
+small as possible. For example, repairing OneHot values `(0.9, 0.2, 0)` to
+`(1, 0, 0)` changes the variables by `(0.1, 0.2, 0)`, so the violation is `0.2`.
+
+The earlier prerelease summed the adjustments. With the new definition, SOS1
+values `(1, 0.00006, 0.00006)` have violation `0.00006` and pass at tolerance
+`0.0001`. Mathematically, this measure is the L∞ distance to a satisfying assignment.
 
 ```python
 diagnostics = solution.violation_diagnostics()

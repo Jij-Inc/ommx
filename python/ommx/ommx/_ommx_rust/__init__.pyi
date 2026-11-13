@@ -14957,6 +14957,13 @@ class Solution:
         r"""
         Sum the nonnegative scalar violations selected by min_role.
 
+        For OneHot and SOS1, each violation is the largest variable adjustment
+        needed to satisfy that constraint. Choose the repair that makes this
+        largest absolute adjustment as small as possible. For example, repairing
+        OneHot values ``(0.9, 0.2, 0)`` to ``(1, 0, 0)`` requires adjustments
+        ``(0.1, 0.2, 0)``, giving violation ``0.2``. Mathematically, this is the
+        L∞ distance to a satisfying assignment.
+
         - Equality: `abs(f(x))`; inequality: `max(0, f(x))`.
         - Indicator: the inner violation when `indicator_on` is true, otherwise zero.
         - OneHot: `min_i max(abs(x_i - 1), max_{j != i} abs(x_j))`.

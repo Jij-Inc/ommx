@@ -206,12 +206,15 @@ Use [`InstanceClassClause::with_allowed_indicator_trigger_values`](crate::Instan
 to set those values independently (`{1}` by default); values other than 0 and 1
 are rejected.
 
-OneHot and SOS1 measure the minimum maximum absolute change needed to satisfy their
-structural condition (L-infinity distance). For OneHot this is
+OneHot and SOS1 report the largest variable adjustment needed to satisfy their
+structural condition, choosing the repair that makes this largest adjustment as
+small as possible. For example, repairing OneHot values `(0.9, 0.2, 0)` to
+`(1, 0, 0)` requires absolute adjustments `(0.1, 0.2, 0)`, giving violation `0.2`.
+Mathematically, this is the L∞ distance to a satisfying assignment. For OneHot it is
 `min_i max(|x_i - 1|, max_{j != i} |x_j|)`; for SOS1 it is the second-largest
 absolute member value, or zero for a singleton. Every constraint is feasible
 exactly when its violation is at most `atol`. Small member deviations no longer
-accumulate as they did with the earlier prerelease L1 metric. Bounds and kinds remain separate.
+accumulate as they did with the earlier prerelease sum of adjustments. Bounds and kinds remain separate.
 Input canonicalization precedes constraint evaluation and does not change the
 definition of the metric on the values supplied to the constraint.
 

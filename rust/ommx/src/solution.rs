@@ -404,6 +404,11 @@ impl Solution {
 
     /// Sum nonnegative scalar violations at or above `min_role`.
     ///
+    /// For OneHot and SOS1, each violation is the largest variable adjustment
+    /// needed to satisfy that constraint. Choose the repair that makes this
+    /// largest absolute adjustment as small as possible. For example, repairing
+    /// OneHot values `(0.9, 0.2, 0)` to `(1, 0, 0)` gives violation `0.2`.
+    ///
     /// `FeasibilityCheck` selects the same constraints as [`Self::feasible_constraints`];
     /// `Active` selects the same constraints as [`Self::feasible_constraints_relaxed`].
     /// `EvaluationOnly` includes every constraint, including those excluded from feasibility:
@@ -442,9 +447,11 @@ impl Solution {
 
     /// Get a one-hot constraint's violation, or `None` for an unknown ID.
     ///
-    /// This is `min_i max(|x_i - 1|, max_{j != i} |x_j|)`, the minimum maximum
-    /// absolute changes needed to make the member values one-hot. Includes
-    /// inactive constraints. A positive value can be feasible within tolerance.
+    /// The largest variable adjustment needed to make the member values one-hot,
+    /// choosing the repair that makes this largest absolute adjustment as small
+    /// as possible. For `(0.9, 0.2, 0)`, repairing to `(1, 0, 0)` gives violation
+    /// `0.2`. The formula is `min_i max(|x_i - 1|, max_{j != i} |x_j|)`.
+    /// Includes inactive constraints. A positive value can be feasible within tolerance.
     pub fn one_hot_constraint_violation(&self, id: crate::OneHotConstraintID) -> Option<f64> {
         self.evaluated_one_hot_constraints
             .get(&id)
@@ -453,9 +460,11 @@ impl Solution {
 
     /// Get an SOS1 constraint's violation, or `None` for an unknown ID.
     ///
-    /// This is `min_i max_{j != i} |x_j|`, the minimum maximum absolute change
-    /// needed to leave at most one nonzero member. Includes inactive constraints.
-    /// A positive value can be feasible within tolerance.
+    /// Retain one member of largest absolute value and set the others to zero.
+    /// The largest absolute adjustment is the violation: the second-largest
+    /// absolute member value, or zero for a singleton. The formula is
+    /// `min_i max_{j != i} |x_j|`. Includes inactive constraints. A positive value
+    /// can be feasible within tolerance.
     pub fn sos1_constraint_violation(&self, id: crate::Sos1ConstraintID) -> Option<f64> {
         self.evaluated_sos1_constraints
             .get(&id)

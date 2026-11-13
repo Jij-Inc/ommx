@@ -509,7 +509,7 @@ impl<S: Stage<Self>> OneHotConstraint<S> {
             .ok_or_else(|| {
                 crate::error!("one-hot constraints must contain at least one variable")
             })?;
-        // L-infinity distance to the closest feasible structural assignment.
+        // Largest absolute adjustment for the repair that minimizes this maximum.
         let violation = values
             .iter()
             .map(|&(id, value)| {
@@ -530,7 +530,12 @@ impl<S: Stage<Self>> OneHotConstraint<S> {
 }
 
 impl EvaluatedOneHotConstraint {
-    /// Minimum maximum absolute member change needed to satisfy this constraint (L-infinity).
+    /// Largest variable adjustment needed to satisfy this constraint.
+    ///
+    /// Choose the repair that makes this largest absolute adjustment as small as
+    /// possible. For `(0.9, 0.2, 0)`, repairing to `(1, 0, 0)` requires adjustments
+    /// `(0.1, 0.2, 0)`, giving violation `0.2`. Mathematically, this is the L∞
+    /// distance to a one-hot assignment; variable bounds and kinds are checked separately.
     pub fn violation(&self) -> f64 {
         EvaluatedConstraintData::violation(self)
     }
