@@ -6,6 +6,15 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### 🛠 Allow zero outside semi-variable bounds ([#1386](https://github.com/Jij-Inc/ommx/pull/1386))
+
+`SemiInteger` and `SemiContinuous` variables now accept zero even when their
+stored interval excludes it. This corrects `Solution.feasible` and
+`SampleSet.feasible`, including their `feasible_relaxed` counterparts.
+For example, a semi-integer variable with `lower=2, upper=4` accepts `0`.
+Values within the evaluation tolerance of zero are also accepted; interval
+membership and integer requirements still apply to other values.
+
 ### ⚠ Active and inactive constraints ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
 
 Model `constraints` now contains rows of every role. Use `active_constraints` for active attached handles and `inactive_constraints` for retained inactive rows. Rename `Removed*Constraint` to `Inactive*Constraint`, `relax_*` / `restore_*` to `deactivate_*` / `activate_*`, and `from_components` inputs to `active_*` / `inactive_*`.
