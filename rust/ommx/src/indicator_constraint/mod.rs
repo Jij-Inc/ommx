@@ -12,6 +12,21 @@ use crate::{
 use derive_more::{Deref, From};
 use std::collections::BTreeMap;
 
+/// Diagnostics for a violated indicator constraint.
+///
+/// Returned by [`crate::Solution::violation_diagnostics`] and
+/// [`crate::SampleSet::violation_diagnostics`] only for violated rows.
+/// Currently contains no additional details. Fields may be added in minor releases;
+/// removing or changing existing information requires a major release.
+///
+/// Diagnostics are obtained from results rather than constructed externally:
+/// ```compile_fail,E0639
+/// let diagnostic = ommx::IndicatorViolation {  };
+/// ```
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct IndicatorViolation {}
+
 /// Binary value at which an indicator constraint's body is enforced.
 ///
 /// This type admits only zero and one, so every [`IndicatorConstraint`] has a
@@ -206,12 +221,13 @@ impl EvaluatedIndicatorConstraint {
 
 impl EvaluatedConstraintData for EvaluatedIndicatorConstraint {
     type ID = IndicatorConstraintID;
-    type ViolationDiagnostics = ();
+    type ViolationDiagnostics = IndicatorViolation;
     fn violation_diagnostics(
         &self,
         _value_of: impl FnMut(crate::VariableID) -> f64,
         _atol: ATol,
     ) -> Self::ViolationDiagnostics {
+        IndicatorViolation {}
     }
 
     fn violation(&self) -> f64 {
@@ -236,6 +252,7 @@ impl SampledConstraintData for SampledIndicatorConstraint {
         _value_of: impl FnMut(crate::VariableID) -> f64,
         _atol: ATol,
     ) -> <Self::Evaluated as EvaluatedConstraintData>::ViolationDiagnostics {
+        IndicatorViolation {}
     }
 
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
@@ -285,7 +302,7 @@ impl SampledConstraintData for SampledIndicatorConstraint {
 
 impl ConstraintType for IndicatorConstraint {
     type ID = IndicatorConstraintID;
-    type ViolationDiagnostics = ();
+    type ViolationDiagnostics = IndicatorViolation;
     fn evaluated_constraints(solution: &crate::Solution) -> &crate::EvaluatedCollection<Self> {
         solution.evaluated_indicator_constraints()
     }

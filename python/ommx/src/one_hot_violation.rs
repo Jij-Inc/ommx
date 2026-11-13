@@ -4,6 +4,8 @@ use std::collections::{BTreeMap, BTreeSet};
 /// A OneHot violation at the result's feasibility_atol. Each variant retains
 /// all member values, including zeros. Feasible rows are absent from the diagnostic
 /// dictionary. Future versions may add variants or fields.
+/// Minor releases may add variants or fields; removing or changing existing
+/// information requires a major release.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_complex_enum]
 #[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, PartialEq)]

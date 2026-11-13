@@ -10,8 +10,8 @@ impl Solution {
     ///
     /// Rows at or above `min_role` are selected; use `EvaluationOnly` to include
     /// all retained rows. Feasible rows are absent. Regular and Indicator rows
-    /// have `()` diagnostics, but still appear when violated. Each family's
-    /// associated type defines its details, so new families need no shared enum.
+    /// have dedicated empty diagnostic structs, but still appear when violated.
+    /// Each family's associated type defines its details, so new families need no shared enum.
     ///
     /// Only violated rows generate details, using the stored, canonicalized
     /// variable values. Scalar violations stay stored; diagnostics are not cached.
@@ -248,7 +248,7 @@ mod tests {
         assert_eq!(errors, [(1.into(), 0.25)].into());
     }
     #[test]
-    fn regular_and_indicator_violations_are_present_with_unit_diagnostics() {
+    fn regular_and_indicator_violations_have_dedicated_diagnostics() {
         use crate::{
             Constraint, CreatedData, Equality, Function, IndicatorConstraint, IndicatorTriggerValue,
         };
@@ -286,17 +286,17 @@ mod tests {
             .unwrap();
         assert_eq!(
             solution.violation_diagnostics::<Constraint>(ConstraintRole::EvaluationOnly),
-            [(10.into(), ())].into()
+            [(10.into(), crate::RegularViolation {})].into()
         );
         assert_eq!(
             solution.violation_diagnostics::<IndicatorConstraint>(ConstraintRole::EvaluationOnly),
-            [(11.into(), ())].into()
+            [(11.into(), crate::IndicatorViolation {})].into()
         );
         assert_eq!(
             samples
                 .violation_diagnostics::<Constraint>(7.into(), ConstraintRole::EvaluationOnly)
                 .unwrap(),
-            [(10.into(), ())].into()
+            [(10.into(), crate::RegularViolation {})].into()
         );
         assert_eq!(
             samples
@@ -305,7 +305,7 @@ mod tests {
                     ConstraintRole::EvaluationOnly
                 )
                 .unwrap(),
-            [(11.into(), ())].into()
+            [(11.into(), crate::IndicatorViolation {})].into()
         );
         // Empty family queries still reject an unknown sample.
         let err = samples
@@ -315,7 +315,7 @@ mod tests {
             err.downcast_ref::<crate::SampleSetError>(),
             Some(crate::SampleSetError::UnknownSampleID { .. })
         ));
-        // Unit diagnostics do not read or duplicate member values.
+        // Empty diagnostics do not read or duplicate member values.
         regular
             .evaluate(&state, atol)
             .unwrap()
@@ -365,7 +365,7 @@ mod tests {
             prop_assert_eq!(restored.violation_diagnostics::<Sos1Constraint>(ConstraintRole::EvaluationOnly), sos1_details.clone());
             prop_assert_eq!(one_hot_details.is_none(), one_hot.is_feasible(atol));
             prop_assert_eq!(sos1_details.is_empty(), sos1.is_feasible(atol));
-            for (id, value) in sos1_details.into_values().flatten() {
+            for (id, value) in sos1_details.into_values().flat_map(|diagnostic| diagnostic.values) {
                 prop_assert_eq!(*solution.decision_variables()[&id].value(), value);
                 prop_assert!(value.abs() > *atol);
             }

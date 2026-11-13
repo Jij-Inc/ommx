@@ -74,6 +74,7 @@ __all__ = [
     "InactiveSos1Constraint",
     "IndicatorConstraint",
     "IndicatorConstraintID",
+    "IndicatorViolation",
     "InfeasibleDetected",
     "InfeasibleOrUnboundedDetected",
     "Instance",
@@ -110,6 +111,7 @@ __all__ = [
     "ProvenanceKind",
     "PruneAnonymousReport",
     "Quadratic",
+    "RegularViolation",
     "Relaxation",
     "RemoteArtifactAuthenticationError",
     "RemoteArtifactAuthorizationError",
@@ -139,6 +141,7 @@ __all__ = [
     "Sos1BigMSelectorClaim",
     "Sos1Constraint",
     "Sos1ConstraintID",
+    "Sos1Violation",
     "SpecialConstraintPreparation",
     "State",
     "ToFunction",
@@ -5393,6 +5396,16 @@ class IndicatorConstraintID(ConstraintIDBase):
         IDs are immutable, including when nested in copied containers.
         """
 
+@typing.final
+class IndicatorViolation:
+    r"""
+    Diagnostics for a violated indicator constraint, currently without extra details.
+    Obtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.
+    Minor releases may add attributes; removing or changing existing information
+    requires a major release.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+
 class InfeasibleDetected(builtins.RuntimeError):
     r"""
     The mathematical model was proven infeasible.
@@ -10585,6 +10598,8 @@ class OneHotViolation:
     A OneHot violation at the result's feasibility_atol. Each variant retains
     all member values, including zeros. Feasible rows are absent from the diagnostic
     dictionary. Future versions may add variants or fields.
+    Minor releases may add variants or fields; removing or changing existing
+    information requires a major release.
     """
     @typing.final
     class MissingSelection(OneHotViolation):
@@ -12352,6 +12367,16 @@ class Quadratic:
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
 
+@typing.final
+class RegularViolation:
+    r"""
+    Diagnostics for a violated regular constraint, currently without extra details.
+    Obtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.
+    Minor releases may add attributes; removing or changing existing information
+    requires a major release.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+
 class RemoteArtifactAuthenticationError(RemoteArtifactError):
     r"""
     Authentication for the remote Artifact registry failed.
@@ -13062,9 +13087,12 @@ class SampleSet:
 
         Uses the saved feasibility_atol and stored variable values. All retained
         roles are included by default; min_role can restrict participation.
-        Feasible constraints are absent. Regular and Indicator entries have None
-        values (no extra details); OneHot entries contain OneHotViolation, and
-        SOS1 entries contain dictionaries of excess variable IDs and values.
+        Feasible constraints are absent. Regular and Indicator entries contain
+        RegularViolation and IndicatorViolation (currently without extra details).
+        OneHot entries contain OneHotViolation; SOS1 entries contain Sos1Violation,
+        whose values property maps excess variable IDs to their values.
+        Diagnostic types may gain attributes or variants in minor releases; removing
+        or changing existing information requires a major release.
         Future constraint families may return other diagnostic types; consumers
         must handle or explicitly reject unfamiliar ID types.
 
@@ -14537,9 +14565,12 @@ class Solution:
 
         Uses the saved feasibility_atol and stored variable values. All retained
         roles are included by default; min_role can restrict participation.
-        Feasible constraints are absent. Regular and Indicator entries have None
-        values (no extra details); OneHot entries contain OneHotViolation, and
-        SOS1 entries contain dictionaries of excess variable IDs and values.
+        Feasible constraints are absent. Regular and Indicator entries contain
+        RegularViolation and IndicatorViolation (currently without extra details).
+        OneHot entries contain OneHotViolation; SOS1 entries contain Sos1Violation,
+        whose values property maps excess variable IDs to their values.
+        Diagnostic types may gain attributes or variants in minor releases; removing
+        or changing existing information requires a major release.
         Future constraint families may return other diagnostic types; consumers
         must handle or explicitly reject unfamiliar ID types.
 
@@ -15298,6 +15329,26 @@ class Sos1ConstraintID(ConstraintIDBase):
         r"""
         IDs are immutable, including when nested in copied containers.
         """
+
+@typing.final
+class Sos1Violation:
+    r"""
+    Diagnostics for a violated SOS1 constraint at the result's saved tolerance.
+    Obtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.
+    Minor releases may add attributes; removing or changing existing information
+    requires a major release.
+    """
+    @property
+    def values(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Original signed values of excess members, keyed by variable ID.
+        Retains one largest absolute member (ties retain the largest ID), then
+        reports remaining values exceeding feasibility_atol in absolute value.
+        This nonempty map describes one possible repair, not a uniquely intended
+        selection. Mutating the returned dictionary does not change the diagnostic
+        or the result.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
 
 @typing.final
 class SpecialConstraintPreparation:

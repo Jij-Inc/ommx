@@ -143,9 +143,12 @@ impl SampleSet {
     ///
     /// Uses the saved feasibility_atol and stored variable values. All retained
     /// roles are included by default; min_role can restrict participation.
-    /// Feasible constraints are absent. Regular and Indicator entries have None
-    /// values (no extra details); OneHot entries contain OneHotViolation, and
-    /// SOS1 entries contain dictionaries of excess variable IDs and values.
+    /// Feasible constraints are absent. Regular and Indicator entries contain
+    /// RegularViolation and IndicatorViolation (currently without extra details).
+    /// OneHot entries contain OneHotViolation; SOS1 entries contain Sos1Violation,
+    /// whose values property maps excess variable IDs to their values.
+    /// Diagnostic types may gain attributes or variants in minor releases; removing
+    /// or changing existing information requires a major release.
     /// Future constraint families may return other diagnostic types; consumers
     /// must handle or explicitly reject unfamiliar ID types.
     ///

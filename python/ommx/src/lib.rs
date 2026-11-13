@@ -106,6 +106,7 @@ pub use solution::*;
 pub use sos1_constraint::*;
 pub use sos1_promotion::*;
 pub use state::*;
+pub use violation_diagnostics::{IndicatorViolation, RegularViolation, Sos1Violation};
 
 use pyo3::prelude::*;
 use pyo3_stub_gen::runtime::PyModuleTypeAliasExt;
@@ -247,6 +248,9 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<InactiveIndicatorConstraint>()?;
     m.add_class::<OneHotConstraint>()?;
     m.add_class::<OneHotViolation>()?;
+    m.add_class::<RegularViolation>()?;
+    m.add_class::<IndicatorViolation>()?;
+    m.add_class::<Sos1Violation>()?;
     m.add_class::<AttachedOneHotConstraint>()?;
     m.add_class::<InactiveOneHotConstraint>()?;
     m.add_class::<Sos1Constraint>()?;
@@ -387,6 +391,9 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "InactiveIndicatorConstraint",
     "OneHotConstraint",
     "OneHotViolation",
+    "RegularViolation",
+    "IndicatorViolation",
+    "Sos1Violation",
     "AttachedOneHotConstraint",
     "InactiveOneHotConstraint",
     "Sos1Constraint",

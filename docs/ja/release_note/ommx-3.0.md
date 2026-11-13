@@ -18,8 +18,10 @@ sample_diagnostics = samples.violation_diagnostics(sample_id)
 ```
 
 辞書は型付きIDをキーに、違反した制約だけを含みます。Regular・Indicatorの値は
-`None`、OneHotは未選択・複数選択・値のずれを区別する診断で、全ゼロも表現します。
-SOS1の値は余分な非ゼロ変数のIDと値の辞書です。実行可能な行は含みません。
+現在は診断項目を持たない専用の `RegularViolation`・`IndicatorViolation` オブジェクトです。
+OneHotは未選択・複数選択・値のずれを区別する診断で、全ゼロも表現します。
+SOS1は `Sos1Violation` の `values` に余分な非ゼロ変数のIDと値を持ちます。
+実行可能な行は含みません。
 
 診断は保存された変数値から違反行についてだけ必要時に計算し、スカラーの違反量は
 保持します。保存された `feasibility_atol` を使い、既定ではinactiveな行も含みます。

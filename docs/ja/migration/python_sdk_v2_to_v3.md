@@ -174,17 +174,17 @@ Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` を使い�
 
 OneHotとSOS1の評価結果のpropertyは、サンプルごとの対応を返すものも含めて `active_variable` から `selected_variable` に変更します。DataFrame列も `selected_variable` と `selected_variable.<sample_id>` になります。評価した候補点での選択を表す情報であり、変数や制約がActive Formulationに属するかどうかとは独立です。評価の動作は変わりません。
 
-`solution.violation_diagnostics()` または `samples.violation_diagnostics(sample_id)` は、型付き制約IDをキーにした辞書を返します。保存された `feasibility_atol` で違反する制約だけを含み、実行可能な制約は含みません。Regular・Indicatorの値は `None` で、追加の診断がないことを意味します。実行可能という意味ではありません。OneHotの値は `OneHotViolation` の次のvariantです。
+`solution.violation_diagnostics()` または `samples.violation_diagnostics(sample_id)` は、型付き制約IDをキーにした辞書を返します。保存された `feasibility_atol` で違反する制約だけを含み、実行可能な制約は含みません。Regular・Indicatorの値は専用の `RegularViolation`・`IndicatorViolation` オブジェクトで、現在は追加の診断項目を持ちません。OneHotの値は `OneHotViolation` の次のvariantです。
 
 - `MissingSelection`：全メンバーが許容誤差内でゼロです。`values` は全メンバーを含み、全ゼロの候補も明示します。
 - `MultipleSelections`：許容誤差内で1のメンバーが2つ以上あります。`selected_variables` がそのIDを示し、`values` はほかのメンバーの値のずれも保持します。
 - `ValueErrors`：それ以外の値のずれで、`values`・`target_variable`・`errors` を返します。targetは最も近いOneHot状態のうち、1にするメンバーの候補です（値が最大の変数、同率なら最大のID）。errorsは許容誤差を超える変更量の絶対値です。例えば `(0.9, 0.2, 0)` では、小さい許容誤差なら約 `{0: 0.1, 1: 0.2}` となります。
 
-SOS1の値は、変数IDと値の空でない辞書です。絶対値が最大の1変数を残し（同率なら最大のID）、残りから絶対値が `feasibility_atol` を超える値を返します。残す変数は修正方法の一例であり、一意の正しい選択を表すものではありません。
+SOS1の値は `Sos1Violation` オブジェクトで、読み取り専用の `values` propertyが変数IDと値の空でない辞書を返します。絶対値が最大の1変数を残し（同率なら最大のID）、残りから絶対値が `feasibility_atol` を超える値を返します。残す変数は修正方法の一例であり、一意の正しい選択を表すものではありません。
 
 既定の `min_role=ConstraintRole.EVALUATION_ONLY` は保持された全行を対象にします。`FEASIBILITY_CHECK` または `ACTIVE` で範囲を絞れます。診断は保存された変数値から違反行についてだけ都度計算します。スカラーの違反量は保持し、変数値を制約行に重複保持しません。SampleSetではSolution全体を抽出せず指定サンプルだけを調べ、存在しないサンプルIDは制約がない場合も `KeyError` になります。サンプル抽出・v2形式の保存復元後も診断は一致します。空辞書は対象の全制約が実行可能であることを表しますが、変数の定義域違反によって結果全体が実行不可能な場合はあります。
 
-返り値の型は `dict[ConstraintIDBase, object]` で、将来の制約タイプと診断型の追加を許容します。利用側は型付きIDで値の型を絞り、未対応の制約タイプを処理するか明示的に拒否してください。OneHotの診断にもvariantや項目が追加される場合があります。
+返り値の型は `dict[ConstraintIDBase, object]` で、将来の制約タイプと診断型の追加を許容します。利用側は型付きIDで値の型を絞り、未対応の制約タイプを処理するか明示的に拒否してください。minorリリースでは診断項目やOneHotのvariantを追加できます。既存情報の削除・改名・型や意味の変更・取得不能になる変更はmajorリリースに限定します。RustではRegular・Indicator・SOS1をnon-exhaustiveなstruct、OneHotをenum本体と各variantがnon-exhaustiveなenumにしています。
 
 `total_violation()` と `constraints_df` の `min_role` は次の順序における下限なので、複数のroleを含められます。
 

@@ -24,7 +24,8 @@
 //! 4. Implement `Evaluate` for `NewConstraint<Created>`,
 //!    [`EvaluatedConstraintData`] and [`SampledConstraintData`]. Every family must
 //!    provide a nonnegative scalar violation and implement `violation_diagnostics`
-//!    with a family-specific associated type (or `()` for no extra details). Feasibility is derived by the
+//!    with a family-specific non-exhaustive diagnostic type, even when currently empty.
+//!    Feasibility is derived by the
 //!    blanket behavior implementations; families cannot supply a separate rule.
 //! 5. Add a `ConstraintCollection<NewConstraint>` field to [`Instance`].
 //! 6. Add a variant to [`ConstraintKind`] and update
@@ -167,7 +168,8 @@ impl<T> IDType for T where
 pub trait ConstraintType {
     /// The ID type for this constraint family.
     type ID: IDType;
-    /// Family-specific detail for a violated constraint. Use `()` when no extra detail is needed.
+    /// Family-specific detail for a violated constraint. Use a dedicated
+    /// non-exhaustive type, even when empty, to allow additive information in minor releases.
     type ViolationDiagnostics;
     /// The constraint as defined in the problem.
     type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
@@ -201,14 +203,14 @@ pub trait ConstraintType {
 /// contract applies. Each family defines its metric on the values it receives.
 /// This trait does not require a stored tolerance. A family retaining a
 /// tolerance-dependent decision must retain that decision's conditions itself.
-/// Diagnostic generation is mandatory even when the family chooses `()`:
+/// Diagnostic generation is mandatory even when the diagnostic type is empty:
 ///
 /// ```compile_fail,E0046
 /// use ommx::{ConstraintID, EvaluatedConstraintData};
 /// struct MissingDiagnostics;
 /// impl EvaluatedConstraintData for MissingDiagnostics {
 ///     type ID = ConstraintID;
-///     type ViolationDiagnostics = ();
+///     type ViolationDiagnostics = ommx::RegularViolation;
 ///     fn violation(&self) -> f64 { 1.0 }
 ///     // Missing the required violation_diagnostics implementation.
 /// }
@@ -367,12 +369,13 @@ pub(crate) enum ActiveRowRewrite<T> {
 
 impl EvaluatedConstraintData for EvaluatedConstraint {
     type ID = ConstraintID;
-    type ViolationDiagnostics = ();
+    type ViolationDiagnostics = crate::RegularViolation;
     fn violation_diagnostics(
         &self,
         _value_of: impl FnMut(crate::VariableID) -> f64,
         _atol: ATol,
     ) -> Self::ViolationDiagnostics {
+        crate::RegularViolation {}
     }
 
     fn violation(&self) -> f64 {
@@ -393,6 +396,7 @@ impl SampledConstraintData for SampledConstraint {
         _value_of: impl FnMut(crate::VariableID) -> f64,
         _atol: ATol,
     ) -> <Self::Evaluated as EvaluatedConstraintData>::ViolationDiagnostics {
+        crate::RegularViolation {}
     }
 
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
@@ -443,7 +447,7 @@ impl SampledConstraintData for SampledConstraint {
 /// `Constraint` (= `Constraint<Created>`) serves as the type family for regular constraints.
 impl ConstraintType for Constraint {
     type ID = ConstraintID;
-    type ViolationDiagnostics = ();
+    type ViolationDiagnostics = crate::RegularViolation;
     fn evaluated_constraints(solution: &crate::Solution) -> &crate::EvaluatedCollection<Self> {
         solution.evaluated_constraints()
     }

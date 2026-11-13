@@ -8,6 +8,8 @@ use std::collections::BTreeMap;
 /// finite member values, including exact zeros. Feasible constraints are omitted
 /// from the host diagnostic map. New variants and fields may be added; consumers
 /// must retain a fallback and use `..` when matching fields.
+/// Minor releases may add variants or fields; removing or changing existing
+/// information requires a major release.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub enum OneHotViolation {

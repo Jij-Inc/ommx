@@ -18,9 +18,11 @@ sample_diagnostics = samples.violation_diagnostics(sample_id)
 ```
 
 The dictionary contains only violated constraints, keyed by typed ID. Regular
-and Indicator values are `None`; OneHot values distinguish missing selection,
-multiple selections, and value errors, including all-zero candidates. SOS1 values
-are dictionaries of excess member values. Feasible rows are absent.
+and Indicator values are dedicated `RegularViolation` and `IndicatorViolation`
+objects, currently without extra details; OneHot values distinguish missing selection,
+multiple selections, and value errors, including all-zero candidates. SOS1 entries
+are `Sos1Violation` objects with excess member IDs and values in `values`.
+Feasible rows are absent.
 
 Details are computed on demand from stored values only for violated rows. Scalar
 violations remain stored. Both queries use `feasibility_atol` and include inactive

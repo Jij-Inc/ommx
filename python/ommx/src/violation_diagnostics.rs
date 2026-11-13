@@ -4,12 +4,64 @@ use pyo3::{prelude::*, types::PyDict};
 use pyo3_stub_gen::{PyStubType, TypeInfo};
 use std::collections::BTreeMap;
 
+/// Diagnostics for a violated regular constraint, currently without extra details.
+/// Obtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.
+/// Minor releases may add attributes; removing or changing existing information
+/// requires a major release.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass(from_py_object, eq, frozen)]
+#[derive(Debug, Clone, PartialEq, derive_more::From)]
+pub struct RegularViolation {
+    inner: ommx::RegularViolation,
+}
+
+/// Diagnostics for a violated indicator constraint, currently without extra details.
+/// Obtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.
+/// Minor releases may add attributes; removing or changing existing information
+/// requires a major release.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass(from_py_object, eq, frozen)]
+#[derive(Debug, Clone, PartialEq, derive_more::From)]
+pub struct IndicatorViolation {
+    inner: ommx::IndicatorViolation,
+}
+
+/// Diagnostics for a violated SOS1 constraint at the result's saved tolerance.
+/// Obtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.
+/// Minor releases may add attributes; removing or changing existing information
+/// requires a major release.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass(from_py_object, eq, frozen)]
+#[derive(Debug, Clone, PartialEq, derive_more::From)]
+pub struct Sos1Violation {
+    inner: ommx::Sos1Violation,
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl Sos1Violation {
+    /// Original signed values of excess members, keyed by variable ID.
+    /// Retains one largest absolute member (ties retain the largest ID), then
+    /// reports remaining values exceeding feasibility_atol in absolute value.
+    /// This nonempty map describes one possible repair, not a uniquely intended
+    /// selection. Mutating the returned dictionary does not change the diagnostic
+    /// or the result.
+    #[getter]
+    fn values(&self) -> BTreeMap<u64, f64> {
+        self.inner
+            .values
+            .iter()
+            .map(|(id, value)| (id.into_inner(), *value))
+            .collect()
+    }
+}
+
 #[derive(IntoPyObject)]
 enum DiagnosticValue {
-    // PyO3 converts Rust () to an empty tuple; absent detail is Python None.
-    Unit(Option<()>),
+    Regular(RegularViolation),
+    Indicator(IndicatorViolation),
     OneHot(crate::OneHotViolation),
-    Sos1(BTreeMap<u64, f64>),
+    Sos1(Sos1Violation),
 }
 
 /// The public dictionary is extensible: consumers narrow values by typed ID,
@@ -56,11 +108,11 @@ impl ViolationDiagnostics {
         let mut output = Self(Vec::new());
         output.extend(
             solution.violation_diagnostics::<ommx::Constraint>(min_role),
-            |()| Ok(DiagnosticValue::Unit(None)),
+            |value| Ok(DiagnosticValue::Regular(value.into())),
         )?;
         output.extend(
             solution.violation_diagnostics::<ommx::IndicatorConstraint>(min_role),
-            |()| Ok(DiagnosticValue::Unit(None)),
+            |value| Ok(DiagnosticValue::Indicator(value.into())),
         )?;
         output.extend(
             solution.violation_diagnostics::<ommx::OneHotConstraint>(min_role),
@@ -68,7 +120,7 @@ impl ViolationDiagnostics {
         )?;
         output.extend(
             solution.violation_diagnostics::<ommx::Sos1Constraint>(min_role),
-            |values| Ok(sos1(values)),
+            |value| Ok(DiagnosticValue::Sos1(value.into())),
         )?;
         Ok(output)
     }
@@ -81,11 +133,11 @@ impl ViolationDiagnostics {
         let mut output = Self(Vec::new());
         output.extend(
             samples.violation_diagnostics::<ommx::Constraint>(sample_id, min_role)?,
-            |()| Ok(DiagnosticValue::Unit(None)),
+            |value| Ok(DiagnosticValue::Regular(value.into())),
         )?;
         output.extend(
             samples.violation_diagnostics::<ommx::IndicatorConstraint>(sample_id, min_role)?,
-            |()| Ok(DiagnosticValue::Unit(None)),
+            |value| Ok(DiagnosticValue::Indicator(value.into())),
         )?;
         output.extend(
             samples.violation_diagnostics::<ommx::OneHotConstraint>(sample_id, min_role)?,
@@ -93,17 +145,8 @@ impl ViolationDiagnostics {
         )?;
         output.extend(
             samples.violation_diagnostics::<ommx::Sos1Constraint>(sample_id, min_role)?,
-            |values| Ok(sos1(values)),
+            |value| Ok(DiagnosticValue::Sos1(value.into())),
         )?;
         Ok(output)
     }
-}
-
-fn sos1(values: BTreeMap<ommx::VariableID, f64>) -> DiagnosticValue {
-    DiagnosticValue::Sos1(
-        values
-            .into_iter()
-            .map(|(id, value)| (id.into_inner(), value))
-            .collect(),
-    )
 }
