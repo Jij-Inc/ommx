@@ -286,6 +286,7 @@ impl SampledConstraintData for SampledIndicatorConstraint {
 // ===== ConstraintType =====
 
 impl ConstraintType for IndicatorConstraint {
+    const KIND: crate::ConstraintKind = crate::ConstraintKind::Indicator;
     type ID = IndicatorConstraintID;
     type ViolationDiagnostics = IndicatorViolationDiagnostics;
     type Created = IndicatorConstraint;
@@ -692,18 +693,6 @@ mod tests {
         let s = format!("{}", ic);
         assert!(s.contains("IndicatorConstraint"));
         assert!(s.contains("x10"));
-    }
-
-    #[test]
-    fn test_constraint_type_impl() {
-        // Verify ConstraintType associated types compile correctly
-        let ic = IndicatorConstraint::new(
-            VariableID::from(10),
-            Equality::EqualToZero,
-            Function::Zero,
-            crate::IndicatorTriggerValue::One,
-        );
-        let _: <IndicatorConstraint as ConstraintType>::Created = ic;
     }
 
     #[test]

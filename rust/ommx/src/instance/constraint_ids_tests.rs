@@ -70,7 +70,7 @@ fn change_wire_id(wire: &mut v2::Instance, family: usize, number: u64, inactive:
 
 #[test]
 fn protobuf_rejects_every_cross_family_and_lifecycle_collision() {
-    let families = ["regular", "indicator", "one-hot", "SOS1"];
+    let families = ["regular", "indicator", "one_hot", "sos1"];
     for first in 0..4 {
         for second in first + 1..4 {
             for first_inactive in [false, true] {
@@ -186,18 +186,25 @@ fn additions_and_transformations_allocate_across_all_families() {
 fn explicit_insertions_reject_other_families_before_any_mutation() {
     let mut instance = mixed();
     instance.convert_one_hot_to_constraint(2.into()).unwrap();
-    for number in [1, 2, 3] {
+    for (number, state, family) in [
+        (1, "active", "indicator"),
+        (2, "inactive", "one_hot"),
+        (3, "active", "sos1"),
+    ] {
         let before = instance.clone();
-        assert!(instance
+        let message = format!("owned by a {state} {family} constraint");
+        let error = instance
             .insert_constraint(number.into(), Constraint::equal_to_zero(Function::Zero))
-            .is_err());
+            .unwrap_err();
+        assert!(error.to_string().contains(&message), "{error}");
         assert_eq!(instance, before);
-        assert!(instance
+        let error = instance
             .insert_constraints(vec![
                 (99.into(), Constraint::equal_to_zero(Function::Zero)),
-                (number.into(), Constraint::equal_to_zero(Function::Zero))
+                (number.into(), Constraint::equal_to_zero(Function::Zero)),
             ])
-            .is_err());
+            .unwrap_err();
+        assert!(error.to_string().contains(&message), "{error}");
         assert_eq!(instance, before);
     }
     assert!(instance
@@ -298,6 +305,7 @@ proptest! {
 
 #[test]
 fn result_builders_and_protobuf_reject_duplicate_numbers_including_inactive() {
+    let families = ["regular", "indicator", "one_hot", "sos1"];
     for first in 0..4 {
         for second in first + 1..4 {
             for first_inactive in [false, true] {
@@ -311,7 +319,16 @@ fn result_builders_and_protobuf_reject_duplicate_numbers_including_inactive() {
                     let samples = instance
                         .evaluate_samples(&crate::Sampled::from((0.into(), state)), ATol::default())
                         .unwrap();
-                    let message = format!("Constraint number {first}");
+                    let first_state = if first_inactive { "inactive" } else { "active" };
+                    let second_state = if second_inactive {
+                        "inactive"
+                    } else {
+                        "active"
+                    };
+                    let message = format!(
+                        "Constraint number {first} is shared by {first_state} {} and {second_state} {} constraints",
+                        families[first], families[second],
+                    );
 
                     // Move the second family's row and sidecars onto the first
                     // family's number. Each collection is still valid alone.
@@ -413,7 +430,14 @@ fn result_builders_and_protobuf_reject_duplicate_numbers_including_inactive() {
                         .unwrap_err();
                     assert!(matches!(
                         error,
-                        crate::SampleSetError::ConflictingConstraintNumber { number, .. } if number == first as u64
+                        crate::SampleSetError::ConflictingConstraintNumber {
+                            number, first_family, first_state: actual_first_state,
+                            second_family, second_state: actual_second_state,
+                        } if number == first as u64
+                            && first_family == families[first]
+                            && second_family == families[second]
+                            && actual_first_state == first_state
+                            && actual_second_state == second_state
                     ));
                 }
             }

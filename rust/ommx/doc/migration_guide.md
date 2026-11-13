@@ -686,11 +686,13 @@ match instance.propagate(&state, atol) {
 ### ConstraintType Trait
 
 A sealed type family mapping lifecycle stages to concrete types and a diagnostic
-type (HKT defunctionalization). Only SDK constraint families implement it; the
-following sketch omits its private sealing bound:
+type (HKT defunctionalization). Its `KIND` constant identifies the corresponding
+[`ConstraintKind`](crate::ConstraintKind) for generic callers. Only SDK constraint
+families implement it; the following sketch omits its private sealing bound:
 
 ```rust,ignore
 pub trait ConstraintType {
+    const KIND: ConstraintKind;
     type ID: IDType;
     type ViolationDiagnostics;
     type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
@@ -701,12 +703,14 @@ pub trait ConstraintType {
 
 // Regular constraints
 impl ConstraintType for Constraint {
+    const KIND: ConstraintKind = ConstraintKind::Regular;
     type ID = ConstraintID;
     // ...
 }
 
 // Indicator constraints
 impl ConstraintType for IndicatorConstraint {
+    const KIND: ConstraintKind = ConstraintKind::Indicator;
     type ID = IndicatorConstraintID;
     // ...
 }

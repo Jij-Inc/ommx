@@ -212,6 +212,7 @@ impl SampledConstraintData for SampledOneHotConstraint {
 // ===== ConstraintType =====
 
 impl ConstraintType for OneHotConstraint {
+    const KIND: crate::ConstraintKind = crate::ConstraintKind::OneHot;
     type ID = OneHotConstraintID;
     type ViolationDiagnostics = crate::OneHotViolationDiagnostics;
     type Created = OneHotConstraint;
@@ -649,12 +650,5 @@ mod tests {
         assert!(s.contains("x1"));
         assert!(s.contains("x2"));
         assert!(s.contains("x3"));
-    }
-
-    #[test]
-    fn test_constraint_type_impl() {
-        let vars: BTreeSet<_> = [1, 2].into_iter().map(VariableID::from).collect();
-        let c = OneHotConstraint::new(vars).unwrap();
-        let _: <OneHotConstraint as ConstraintType>::Created = c;
     }
 }

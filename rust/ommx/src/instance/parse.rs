@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     constraint::{ConstraintContext, InactiveConstraintMetadata},
-    constraint_type::ConstraintCollection,
+    constraint_collection::ConstraintCollection,
     parse::{as_variable_id, Parse, ParseError, RawParseError},
     v1::{self},
     v2, Constraint, ConstraintID, VariableID,

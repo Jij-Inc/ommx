@@ -183,12 +183,13 @@ impl Parse for crate::v1::Solution {
         validate_evaluated_named_function_used_ids(&decision_variables, &evaluated_named_functions)
             .map_err(|e| ParseError::new(e).context(message, "evaluated_named_functions"))?;
 
-        let evaluated_constraints = crate::constraint_type::EvaluatedCollection::with_context(
-            evaluated_constraints,
-            inactive_metadata,
-            constraint_context,
-        )
-        .map_err(|e| invalid_solution_sidecar(e, message, "evaluated_constraints"))?;
+        let evaluated_constraints =
+            crate::constraint_collection::EvaluatedCollection::with_context(
+                evaluated_constraints,
+                inactive_metadata,
+                constraint_context,
+            )
+            .map_err(|e| invalid_solution_sidecar(e, message, "evaluated_constraints"))?;
         validate_solution_regular_constraint_used_ids(&decision_variables, &evaluated_constraints)
             .map_err(|e| ParseError::new(e).context(message, "evaluated_constraints"))?;
 
@@ -389,10 +390,10 @@ impl Parse for v2::Solution {
         let sense = parse_v2_solution_sense(self.sense, message)?;
 
         let mut ids = crate::constraint_ids::ConstraintIds::default();
-        ids.evaluated("regular", &evaluated_constraints)
-            .and_then(|()| ids.evaluated("indicator", &evaluated_indicator_constraints))
-            .and_then(|()| ids.evaluated("one-hot", &evaluated_one_hot_constraints))
-            .and_then(|()| ids.evaluated("SOS1", &evaluated_sos1_constraints))
+        ids.evaluated(&evaluated_constraints)
+            .and_then(|()| ids.evaluated(&evaluated_indicator_constraints))
+            .and_then(|()| ids.evaluated(&evaluated_one_hot_constraints))
+            .and_then(|()| ids.evaluated(&evaluated_sos1_constraints))
             .map_err(|error| ParseError::new(error).context(message, "constraints"))?;
         let solution = Solution {
             objective: self.objective,
@@ -618,7 +619,7 @@ mod tests {
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
-        let collection = crate::constraint_type::EvaluatedCollection::new(
+        let collection = crate::constraint_collection::EvaluatedCollection::new(
             std::collections::BTreeMap::from([(crate::OneHotConstraintID::from(1), constraint)]),
             std::collections::BTreeMap::new(),
         )
@@ -650,7 +651,7 @@ mod tests {
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
-        let collection = crate::constraint_type::EvaluatedCollection::new(
+        let collection = crate::constraint_collection::EvaluatedCollection::new(
             std::collections::BTreeMap::from([(crate::Sos1ConstraintID::from(1), constraint)]),
             std::collections::BTreeMap::new(),
         )
@@ -698,7 +699,7 @@ mod tests {
         let constraint_id = ConstraintID::from(7);
         let mut context = crate::ConstraintContextStore::default();
         context.set_name(constraint_id, "orphan");
-        let source = crate::constraint_type::EvaluatedCollection::<Constraint>::with_context(
+        let source = crate::constraint_collection::EvaluatedCollection::<Constraint>::with_context(
             std::collections::BTreeMap::new(),
             std::collections::BTreeMap::new(),
             context,
@@ -1502,7 +1503,7 @@ mod tests {
     #[test]
     fn test_solution_roundtrip_preserves_labels_and_context() {
         use crate::{
-            constraint::EvaluatedData, constraint_type::EvaluatedCollection, ConstraintID,
+            constraint::EvaluatedData, constraint_collection::EvaluatedCollection, ConstraintID,
             DecisionVariable, Equality, EvaluatedConstraint, EvaluatedDecisionVariable,
             NamedFunctionID, Sense, VariableID,
         };
@@ -1864,7 +1865,7 @@ mod tests {
             .objective(0.0)
             .evaluated_constraints(BTreeMap::new())
             .evaluated_one_hot_constraints_collection(
-                crate::constraint_type::EvaluatedCollection::new(
+                crate::constraint_collection::EvaluatedCollection::new(
                     BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]),
                     BTreeMap::new(),
                 )
@@ -1931,7 +1932,7 @@ mod tests {
             .objective(0.0)
             .evaluated_constraints(BTreeMap::new())
             .evaluated_one_hot_constraints_collection(
-                crate::constraint_type::EvaluatedCollection::new(
+                crate::constraint_collection::EvaluatedCollection::new(
                     BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]),
                     BTreeMap::new(),
                 )

@@ -1,5 +1,6 @@
 mod approx;
 mod arbitrary;
+mod constraint_type;
 mod context_store;
 mod evaluate;
 mod logical_memory;

@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    constraint_type::{ConstraintCollection, ConstraintType},
-    ATol, Evaluate,
-};
+use crate::{constraint_collection::ConstraintCollection, ATol, ConstraintType, Evaluate};
 use std::{collections::BTreeMap, ops::Neg};
 
 fn convert_objective_pair(sense: &mut Sense, objective: &mut Function, target: Sense) -> bool {

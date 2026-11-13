@@ -198,6 +198,7 @@ impl SampledConstraintData for SampledSos1Constraint {
 // ===== ConstraintType =====
 
 impl ConstraintType for Sos1Constraint {
+    const KIND: crate::ConstraintKind = crate::ConstraintKind::Sos1;
     type ID = Sos1ConstraintID;
     type ViolationDiagnostics = Sos1ViolationDiagnostics;
     type Created = Sos1Constraint;
@@ -647,12 +648,5 @@ mod tests {
         let s = format!("{}", c);
         assert!(s.contains("Sos1Constraint"));
         assert!(s.contains("x1"));
-    }
-
-    #[test]
-    fn test_constraint_type_impl() {
-        let vars: BTreeSet<_> = [1, 2].into_iter().map(VariableID::from).collect();
-        let c = Sos1Constraint::new(vars).unwrap();
-        let _: <Sos1Constraint as ConstraintType>::Created = c;
     }
 }
