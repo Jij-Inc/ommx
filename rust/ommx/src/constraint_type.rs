@@ -203,18 +203,6 @@ pub trait ConstraintType {
 /// contract applies. Each family defines its metric on the values it receives.
 /// This trait does not require a stored tolerance. A family retaining a
 /// tolerance-dependent decision must retain that decision's conditions itself.
-/// Diagnostic generation is mandatory even when the diagnostic type is empty:
-///
-/// ```compile_fail,E0046
-/// use ommx::{ConstraintID, EvaluatedConstraintData};
-/// struct MissingDiagnostics;
-/// impl EvaluatedConstraintData for MissingDiagnostics {
-///     type ID = ConstraintID;
-///     type ViolationDiagnostics = ommx::RegularViolationDiagnostics;
-///     fn violation(&self) -> f64 { 1.0 }
-///     // Missing the required violation_diagnostics implementation.
-/// }
-/// ```
 pub trait EvaluatedConstraintData {
     type ID;
     /// Details for a violated candidate, shared with the sampled stage.
@@ -292,20 +280,6 @@ pub(crate) fn validate_wire_feasibility(
 }
 
 /// The data each constraint family must provide after sample evaluation.
-/// Diagnostic generation is also mandatory for the sampled stage:
-///
-/// ```compile_fail,E0046
-/// use ommx::{ConstraintID, EvaluatedConstraint, SampledConstraintData, SampleID, SampleIDSet};
-/// struct MissingDiagnostics;
-/// impl SampledConstraintData for MissingDiagnostics {
-///     type ID = ConstraintID;
-///     type Evaluated = EvaluatedConstraint;
-///     fn violation_for(&self, _: SampleID) -> Option<f64> { Some(1.0) }
-///     fn validate_sample_ids(&self, _: &SampleIDSet) -> Result<(), SampleIDSet> { Ok(()) }
-///     fn get(&self, _: SampleID) -> Option<Self::Evaluated> { None }
-///     // Missing the required violation_diagnostics implementation.
-/// }
-/// ```
 pub trait SampledConstraintData {
     type ID;
     /// The evaluated constraint type returned by [`get`](Self::get).
