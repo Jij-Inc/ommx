@@ -1,7 +1,8 @@
 //! Constraint collections own row membership, inactive metadata, and context sidecars.
 //!
-//! Root objects retain responsibility for cross-table invariants and mathematical
-//! transformations. These collections commit only family-local storage effects.
+//! Root objects retain responsibility for cross-table invariants and coordinated
+//! model transformations. Collections provide family-local storage and evaluation
+//! operations.
 
 mod created;
 mod evaluate;
@@ -103,7 +104,7 @@ pub(crate) enum ActiveRowRewrite<T> {
 ///
 /// Mathematically, this is one constraint-family component
 /// `C_tau = Active_tau + Inactive_tau + Context_tau` of an enclosing instance.
-/// It supports only family-local row effects:
+/// It supports family-local operations:
 ///
 /// - construction from active rows, inactive rows, and context;
 /// - read access to active rows, inactive rows, and context;
@@ -114,15 +115,16 @@ pub(crate) enum ActiveRowRewrite<T> {
 /// - active-to-inactive lifecycle movement;
 /// - activation through a host-supplied normalizer;
 /// - context updates for IDs owned by this collection;
+/// - evaluation of active and inactive rows, preserving metadata and context;
+/// - partial evaluation of active rows, preserving membership and sidecars;
 /// - consuming active rows, inactive rows, and context at conversion boundaries.
 ///
-/// It intentionally does not expose mutable row references, arbitrary
-/// active/inactive map mutation, or semantic operations such as substitution,
-/// partial evaluation, propagation, slack conversion, preparation, or
-/// special-constraint lowering. When implementing a model transformation, use
-/// the enclosing [`crate::Instance`] / [`crate::ParametricInstance`] operation
-/// to preserve cross-table invariants; the collection handles only the row
-/// effects above.
+/// It does not expose mutable row references or arbitrary active/inactive map
+/// mutation. Its [`crate::Evaluate`] implementation evaluates or partially
+/// evaluates this collection's rows without updating an enclosing model's
+/// variable tables or other components. To transform an [`crate::Instance`] or
+/// [`crate::ParametricInstance`], use its corresponding operation to coordinate
+/// these changes and preserve cross-table invariants.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConstraintCollection<T: ConstraintType> {
     active: BTreeMap<T::ID, T::Created>,
