@@ -354,8 +354,8 @@ def test_violation_uses_evaluated_discrete_values():
     assert solution.feasible
 
 
-@pytest.mark.parametrize("atol", [1e-12, 0.5, 1.0, 2.0])
-def test_zero_violation_implies_one_hot_feasibility_with_large_tolerance(atol):
+@pytest.mark.parametrize("atol", [1e-12, 0.125, 0.25, 0.49])
+def test_zero_violation_implies_one_hot_feasibility_with_supported_tolerance(atol):
     xs = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
         decision_variables=xs,
@@ -615,3 +615,43 @@ def test_binary_canonicalization_precedes_constraint_violation():
     assert solution.state.entries == {0: 1, 1: 0, 2: 0}
     assert solution.constraint_violation(OneHotConstraintID(0)) == 0
     assert solution.feasible
+
+
+@pytest.mark.parametrize("atol", [0.5, 1.0, 2.0, float("inf")])
+def test_one_hot_rejects_large_evaluation_and_propagation_tolerances(atol):
+    xs = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=xs,
+        objective=0,
+        active_constraints={},
+        active_one_hot_constraints={0: OneHotConstraint(variables=xs)},
+        sense=Sense.Minimize,
+    )
+    state = {0: 1, 1: 0, 2: 0}
+    before = instance.to_v2_bytes()
+    with pytest.raises(RuntimeError, match="require atol < 0.5"):
+        instance.evaluate(state, atol=atol)
+    with pytest.raises(RuntimeError, match="require atol < 0.5"):
+        instance.evaluate_samples({7: state}, atol=atol)
+    with pytest.raises(RuntimeError, match="require atol < 0.5"):
+        instance.partial_evaluate(state, atol=atol)
+    assert instance.to_v2_bytes() == before
+
+
+def test_one_hot_accepts_tolerance_immediately_below_half():
+    import math
+
+    atol = math.nextafter(0.5, 0)
+    xs = [DecisionVariable.binary(i) for i in range(2)]
+    instance = Instance.from_components(
+        decision_variables=xs,
+        objective=0,
+        active_constraints={},
+        active_one_hot_constraints={0: OneHotConstraint(variables=xs)},
+        sense=Sense.Minimize,
+    )
+    state = {0: 1, 1: 0}
+    assert instance.evaluate(state, atol=atol).feasible
+    assert instance.evaluate_samples({7: state}, atol=atol).get(7).feasible
+    partial = instance.partial_evaluate(state, atol=atol)
+    assert partial.evaluate({}, atol=atol).feasible

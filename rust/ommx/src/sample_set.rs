@@ -674,6 +674,13 @@ fn validate_sampled_one_hot_stage_values(
     atol: ATol,
 ) -> Result<(), SampleSetError> {
     for (id, constraint) in one_hot_constraints.inner() {
+        crate::one_hot_constraint::validate_atol(atol).map_err(|error| {
+            SampleSetError::InvalidConstraintStructure {
+                constraint_family: "one-hot",
+                constraint_id: format!("{id:?}"),
+                message: error.to_string(),
+            }
+        })?;
         for (sample_id, &provided_violation) in constraint.stage.violations.iter() {
             let (computed_violation, computed_selected_variable) = constraint
                 .evaluate_members(

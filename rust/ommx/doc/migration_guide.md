@@ -215,6 +215,12 @@ Mathematically, this is the L∞ distance to a satisfying assignment. For OneHot
 absolute member value, or zero for a singleton. Every constraint is feasible
 exactly when its violation is at most `atol`. Small member deviations no longer
 accumulate as they did with the earlier prerelease sum of adjustments. Bounds and kinds remain separate.
+OneHot evaluation and propagation now require `0 < atol < 0.5`, including
+sample evaluation and restoration of evaluated/sampled OneHot rows. The same
+validation is used in every path so zero and one cannot both be within tolerance.
+Previously saved OneHot results with a tolerance of `0.5` or greater are rejected.
+This restriction belongs to OneHot; the general `ATol` scalar is unchanged.
+
 Input canonicalization precedes constraint evaluation and does not change the
 definition of the metric on the values supplied to the constraint.
 

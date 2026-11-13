@@ -13,6 +13,18 @@ use crate::{
 use derive_more::{Deref, From};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Shared by OneHot evaluation, propagation, wire restoration, and SampleSet
+/// validation (including rows with no samples). The restriction belongs to
+/// OneHot's discrete interpretation, not to the general ATol scalar.
+pub(crate) fn validate_atol(atol: ATol) -> crate::Result<()> {
+    crate::ensure!(
+        atol < 0.5,
+        "OneHot evaluation and propagation require atol < 0.5: got {}",
+        atol.into_inner()
+    );
+    Ok(())
+}
+
 /// Validation failures for one-hot constraints.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -70,6 +82,10 @@ impl From<OneHotConstraintID> for u64 {
 ///
 /// This is a structural constraint — no explicit function or equality is stored.
 /// The implicit constraint is `sum(x_i) = 1` where all `x_i` are binary.
+///
+/// Evaluation and propagation require `0 < atol < 0.5`, so the tolerated
+/// neighborhoods of zero and one do not overlap. This also applies when
+/// restoring evaluated or sampled OneHot rows from stored result values.
 ///
 /// The constraint's [`OneHotConstraintID`] is not stored in this struct — it is held
 /// by the enclosing collection. Modeling labels and provenance live on the
@@ -279,6 +295,7 @@ impl crate::v2::EvaluatedOneHotConstraint {
         value_of: impl FnMut(VariableID) -> Option<f64>,
         atol: ATol,
     ) -> Result<EvaluatedOneHotConstraint, ParseError> {
+        validate_atol(atol).map_err(ParseError::new)?;
         let message = "ommx.v2.EvaluatedOneHotConstraint";
         let variables =
             crate::v2_io::variable_id_set_from_v2(self.variables, message, "variables")?;
@@ -377,6 +394,7 @@ impl crate::v2::SampledOneHotConstraint {
         atol: ATol,
     ) -> Result<SampledOneHotConstraint, ParseError> {
         let message = "ommx.v2.SampledOneHotConstraint";
+        validate_atol(atol).map_err(ParseError::new)?;
         let variables =
             crate::v2_io::variable_id_set_from_v2(self.variables, message, "variables")?;
         if variables.is_empty() {
@@ -486,6 +504,7 @@ impl<S: Stage<Self>> OneHotConstraint<S> {
         mut value_of: impl FnMut(VariableID) -> Option<f64>,
         atol: ATol,
     ) -> crate::Result<(f64, Option<VariableID>)> {
+        validate_atol(atol)?;
         let mut values = Vec::with_capacity(self.variables.len());
         for &id in &self.variables {
             let value = value_of(id).ok_or_else(|| {

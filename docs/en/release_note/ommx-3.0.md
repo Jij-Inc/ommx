@@ -17,6 +17,12 @@ The earlier prerelease summed the adjustments. With the new definition, SOS1
 values `(1, 0.00006, 0.00006)` have violation `0.00006` and pass at tolerance
 `0.0001`. Mathematically, this measure is the L∞ distance to a satisfying assignment.
 
+OneHot evaluation and propagation now require `0 < atol < 0.5` so the zero and
+one neighborhoods do not overlap. This also applies to sample evaluation and
+loading saved results containing OneHot rows. Results saved with a OneHot
+evaluation tolerance of `0.5` or greater are rejected. The general absolute
+tolerance remains unchanged.
+
 ### 🛠 Allow zero outside semi-variable bounds ([#1386](https://github.com/Jij-Inc/ommx/pull/1386))
 
 `SemiInteger` and `SemiContinuous` variables now accept zero even when their

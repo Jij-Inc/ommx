@@ -264,6 +264,12 @@ A threshold is applied to each constraint's violation. For OneHot and SOS1, the 
 
 This replaces the earlier prerelease sum of adjustments. SOS1 values `(1, 0.00006, 0.00006)` need the two small values changed to zero; the largest adjustment is `0.00006`, so the constraint passes at `atol=0.0001`. Mathematically, this measure is the L∞ distance to a satisfying assignment. When reconciling reports, use the stored evaluation tolerance and compare the same constraint family. A new query tolerance does not rerun discrete-value canonicalization. See {meth}`~ommx.Solution.total_violation`.
 
+OneHot evaluation and propagation now require `0 < atol < 0.5` so the zero and
+one neighborhoods do not overlap. This also applies to sample evaluation and
+loading saved results containing OneHot rows. Results saved with a OneHot
+evaluation tolerance of `0.5` or greater are rejected. The general absolute
+tolerance remains unchanged.
+
 (migration-storage)=
 ## 5. Bring saved models and Artifacts forward
 

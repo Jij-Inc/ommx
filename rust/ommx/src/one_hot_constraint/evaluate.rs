@@ -9,6 +9,7 @@ impl Propagate for OneHotConstraint<Created> {
         state: &crate::v1::State,
         atol: ATol,
     ) -> crate::Result<(PropagateOutcome<Self>, crate::v1::State)> {
+        validate_atol(atol)?;
         let mut fixed_to_one: Option<VariableID> = None;
         let mut unfixed = BTreeSet::new();
         let mut fixed_deviation = 0.0_f64;
@@ -100,6 +101,7 @@ impl Evaluate for OneHotConstraint<Created> {
         samples: &crate::Sampled<crate::v1::State>,
         atol: ATol,
     ) -> crate::Result<Self::SampledOutput> {
+        validate_atol(atol)?;
         let mut violations = crate::Sampled::default();
         let mut selected_variable = BTreeMap::new();
 
@@ -121,7 +123,8 @@ impl Evaluate for OneHotConstraint<Created> {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &crate::v1::State, _atol: ATol) -> crate::Result<()> {
+    fn partial_evaluate(&mut self, state: &crate::v1::State, atol: ATol) -> crate::Result<()> {
+        validate_atol(atol)?;
         for var_id in &self.variables {
             if state.entries.contains_key(&var_id.into_inner()) {
                 crate::bail!(
@@ -197,15 +200,56 @@ mod tests {
     }
 
     #[test]
-    fn overlapping_tolerance_neighborhoods_preserve_exact_one_hot_values() {
+    fn evaluation_and_propagation_reject_overlapping_tolerances() {
         let constraint = make_one_hot(0, &[1, 2, 3]);
         let state = crate::v1::State::from(HashMap::from([(1, 0.0), (2, 1.0), (3, 0.0)]));
-        let atol = ATol::new(2.0).unwrap();
+        let samples = crate::Sampled::from((7.into(), state.clone()));
+        for tolerance in [0.5, 0.5_f64.next_up(), 1.0, 2.0, f64::INFINITY] {
+            let atol = ATol::new(tolerance).unwrap();
+            for error in [
+                constraint.evaluate(&state, atol).unwrap_err(),
+                constraint.evaluate_samples(&samples, atol).unwrap_err(),
+                constraint
+                    .evaluate_samples(&crate::Sampled::default(), atol)
+                    .unwrap_err(),
+                constraint.clone().propagate(&state, atol).unwrap_err(),
+                constraint
+                    .clone()
+                    .propagate(&crate::v1::State::default(), atol)
+                    .unwrap_err(),
+                constraint
+                    .clone()
+                    .partial_evaluate(&crate::v1::State::default(), atol)
+                    .unwrap_err(),
+            ] {
+                assert!(error.to_string().contains("require atol < 0.5"), "{error}");
+            }
+        }
+
+        let atol = ATol::new(0.5_f64.next_down()).unwrap();
         let evaluated = constraint.evaluate(&state, atol).unwrap();
         assert!(evaluated.is_feasible(atol));
         assert_eq!(evaluated.stage.selected_variable, Some(2.into()));
+        assert!(constraint.evaluate_samples(&samples, atol).is_ok());
+        assert!(constraint
+            .evaluate_samples(&crate::Sampled::default(), atol)
+            .is_ok());
         let (outcome, _) = constraint.propagate(&state, atol).unwrap();
         assert!(matches!(outcome, PropagateOutcome::Consumed(_)));
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn fully_fixed_propagation_agrees_with_evaluation_within_supported_tolerances(
+            values in proptest::collection::vec(-16_i16..=16, 1..8),
+            tolerance in 1_u16..=31,
+        ) {
+            let constraint = OneHotConstraint::new((0..values.len() as u64).map(Into::into).collect()).unwrap();
+            let state = crate::v1::State::from_iter(values.into_iter().enumerate().map(|(id, x)| (id as u64, f64::from(x) / 8.0)));
+            let atol = ATol::new(f64::from(tolerance) / 64.0).unwrap();
+            let feasible = constraint.evaluate(&state, atol).unwrap().is_feasible(atol);
+            proptest::prop_assert_eq!(constraint.propagate(&state, atol).is_ok(), feasible);
+        }
     }
 
     #[test]

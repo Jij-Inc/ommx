@@ -109,14 +109,6 @@ fn one_hot_target_breaks_signed_zero_ties_by_variable_id() {
     let values = [0.0, -0.0, -2.0];
     let states = Sampled::from((7.into(), state(&values)));
     let constraint = OneHotConstraint::new([0.into(), 1.into(), 2.into()].into()).unwrap();
-    assert_eq!(
-        constraint
-            .evaluate(&state(&values), ATol::new(3.0).unwrap())
-            .unwrap()
-            .stage
-            .selected_variable,
-        Some(1.into())
-    );
     let samples = SampleSet::builder()
         .objectives(Sampled::from((7.into(), 0.0)))
         .constraints(BTreeMap::new())
