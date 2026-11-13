@@ -109,7 +109,7 @@ typecheck = [{ name = "pyright", specifier = ">=1.1.394" }]
 name = "jijmodeling"
 version = "2.4.1"
 requires-dist = ["numpy", "ommx>=2.0.0,<4.0.0", "orjson>=3.8.0,<4.0.0", "pandas", "typing-extensions"]
-requires-python = ">=3.11"
+requires-python = ">=3.11, <4"
 
 [[package]]
 name = "accessible-pygments"
