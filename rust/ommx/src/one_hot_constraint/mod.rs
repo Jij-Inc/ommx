@@ -1,3 +1,5 @@
+mod diagnostics;
+pub use diagnostics::OneHotViolationDiagnostics;
 mod evaluate;
 
 use crate::{
@@ -10,6 +12,18 @@ use crate::{
 };
 use derive_more::{Deref, From};
 use std::collections::{BTreeMap, BTreeSet};
+
+/// Shared by OneHot evaluation, propagation, wire restoration, and SampleSet
+/// validation (including rows with no samples). The restriction belongs to
+/// OneHot's discrete interpretation, not to the general ATol scalar.
+pub(crate) fn validate_atol(atol: ATol) -> crate::Result<()> {
+    crate::ensure!(
+        atol < 0.5,
+        "OneHot evaluation and propagation require atol < 0.5: got {}",
+        atol.into_inner()
+    );
+    Ok(())
+}
 
 /// Validation failures for one-hot constraints.
 #[non_exhaustive]
@@ -68,6 +82,10 @@ impl From<OneHotConstraintID> for u64 {
 ///
 /// This is a structural constraint — no explicit function or equality is stored.
 /// The implicit constraint is `sum(x_i) = 1` where all `x_i` are binary.
+///
+/// Evaluation and propagation require `0 < atol < 0.5`, so the tolerated
+/// neighborhoods of zero and one do not overlap. This also applies when
+/// restoring evaluated or sampled OneHot rows from stored result values.
 ///
 /// The constraint's [`OneHotConstraintID`] is not stored in this struct — it is held
 /// by the enclosing collection. Modeling labels and provenance live on the
@@ -156,7 +174,6 @@ impl EvaluatedConstraintData for EvaluatedOneHotConstraint {
 impl SampledConstraintData for SampledOneHotConstraint {
     type ID = OneHotConstraintID;
     type Evaluated = EvaluatedOneHotConstraint;
-
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
         self.stage.violations.get(sample_id).copied()
     }
@@ -196,6 +213,7 @@ impl SampledConstraintData for SampledOneHotConstraint {
 
 impl ConstraintType for OneHotConstraint {
     type ID = OneHotConstraintID;
+    type ViolationDiagnostics = crate::OneHotViolationDiagnostics;
     type Created = OneHotConstraint;
     type Evaluated = EvaluatedOneHotConstraint;
     type Sampled = SampledOneHotConstraint;
@@ -277,6 +295,7 @@ impl crate::v2::EvaluatedOneHotConstraint {
         value_of: impl FnMut(VariableID) -> Option<f64>,
         atol: ATol,
     ) -> Result<EvaluatedOneHotConstraint, ParseError> {
+        validate_atol(atol).map_err(ParseError::new)?;
         let message = "ommx.v2.EvaluatedOneHotConstraint";
         let variables =
             crate::v2_io::variable_id_set_from_v2(self.variables, message, "variables")?;
@@ -375,6 +394,7 @@ impl crate::v2::SampledOneHotConstraint {
         atol: ATol,
     ) -> Result<SampledOneHotConstraint, ParseError> {
         let message = "ommx.v2.SampledOneHotConstraint";
+        validate_atol(atol).map_err(ParseError::new)?;
         let variables =
             crate::v2_io::variable_id_set_from_v2(self.variables, message, "variables")?;
         if variables.is_empty() {
@@ -456,6 +476,25 @@ impl std::fmt::Display for OneHotConstraint<Created> {
     }
 }
 
+/// Select a member to set to one in a closest OneHot assignment.
+/// Shared with result diagnostics so evaluation and repair use the same tie rule.
+/// Callers supply finite values; numerically equal values, including signed zeros,
+/// are resolved by the largest variable ID.
+fn select_one_hot_member(
+    values: impl IntoIterator<Item = (VariableID, f64)>,
+) -> Option<VariableID> {
+    values
+        .into_iter()
+        .max_by(|(id_a, a), (id_b, b)| {
+            if a == b {
+                id_a.cmp(id_b)
+            } else {
+                a.total_cmp(b)
+            }
+        })
+        .map(|(id, _)| id)
+}
+
 impl<S: Stage<Self>> OneHotConstraint<S> {
     /// Evaluate structural member values supplied by a state or a validated host.
     /// The constraint owns both its metric and the selected-variable diagnostic;
@@ -465,6 +504,7 @@ impl<S: Stage<Self>> OneHotConstraint<S> {
         mut value_of: impl FnMut(VariableID) -> Option<f64>,
         atol: ATol,
     ) -> crate::Result<(f64, Option<VariableID>)> {
+        validate_atol(atol)?;
         let mut values = Vec::with_capacity(self.variables.len());
         for &id in &self.variables {
             let value = value_of(id).ok_or_else(|| {
@@ -476,13 +516,10 @@ impl<S: Stage<Self>> OneHotConstraint<S> {
             );
             values.push((id, value));
         }
-        let &(selected, _selected_value) = values
-            .iter()
-            .max_by(|(_, a), (_, b)| a.total_cmp(b))
-            .ok_or_else(|| {
-                crate::error!("one-hot constraints must contain at least one variable")
-            })?;
-        // Sum nonnegative terms directly: sum-minus-maximum can erase small violations.
+        let selected = select_one_hot_member(values.iter().copied()).ok_or_else(|| {
+            crate::error!("one-hot constraints must contain at least one variable")
+        })?;
+        // Largest absolute adjustment for the repair that minimizes this maximum.
         let violation = values
             .iter()
             .map(|&(id, value)| {
@@ -492,7 +529,7 @@ impl<S: Stage<Self>> OneHotConstraint<S> {
                     value.abs()
                 }
             })
-            .fold(0.0, |total, value| total + value);
+            .fold(0.0, f64::max);
         let selected_variable = if crate::constraint_type::violation_is_feasible(violation, atol) {
             Some(selected)
         } else {
@@ -503,7 +540,12 @@ impl<S: Stage<Self>> OneHotConstraint<S> {
 }
 
 impl EvaluatedOneHotConstraint {
-    /// Minimum sum of absolute member changes needed to satisfy this constraint.
+    /// Largest variable adjustment needed to satisfy this constraint.
+    ///
+    /// Choose the repair that makes this largest absolute adjustment as small as
+    /// possible. For `(0.9, 0.2, 0)`, repairing to `(1, 0, 0)` requires adjustments
+    /// `(0.1, 0.2, 0)`, giving violation `0.2`. Mathematically, this is the L∞
+    /// distance to a one-hot assignment; variable bounds and kinds are checked separately.
     pub fn violation(&self) -> f64 {
         EvaluatedConstraintData::violation(self)
     }

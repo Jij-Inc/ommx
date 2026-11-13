@@ -24,6 +24,24 @@ pub use stage::{
 // The sampled lifecycle marker is re-exported as `SampledStage` to avoid a
 // name collision with `crate::Sampled<T>` (the sampled-values container).
 
+/// Diagnostics for a violated regular constraint.
+///
+/// Returned by [`crate::Solution::violation_diagnostics`] and
+/// [`crate::SampleSet::violation_diagnostics`] only for violated rows.
+/// Currently contains no additional details. Fields may be added in minor releases;
+/// removing or changing existing information requires a major release.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct RegularViolationDiagnostics {}
+
+impl<S: crate::Stage<Self>> crate::constraint_type::DiagnosticRow for Constraint<S> {
+    type Diagnostics = RegularViolationDiagnostics;
+
+    fn diagnose(&self, _: impl FnMut(VariableID) -> f64, _: ATol) -> Self::Diagnostics {
+        RegularViolationDiagnostics {}
+    }
+}
+
 /// Constraint equality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, LogicalMemoryProfile)]
 pub enum Equality {

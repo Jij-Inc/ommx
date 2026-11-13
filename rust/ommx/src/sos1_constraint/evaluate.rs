@@ -24,7 +24,7 @@ impl Propagate for Sos1Constraint<Created> {
     ) -> crate::Result<(PropagateOutcome<Self>, crate::v1::State)> {
         let mut fixed_nonzero: Option<VariableID> = None;
         let mut unfixed = BTreeSet::new();
-        let mut fixed_deviation = 0.0;
+        let mut fixed_deviation = 0.0_f64;
 
         for &var_id in &self.variables {
             let Some(&value) = state.entries.get(&var_id.into_inner()) else {
@@ -34,7 +34,7 @@ impl Propagate for Sos1Constraint<Created> {
 
             ensure_sos1_value_is_finite(var_id, value)?;
             if atol.approx_is_zero(value) {
-                fixed_deviation += value.abs();
+                fixed_deviation = fixed_deviation.max(value.abs());
             } else {
                 // Variable is non-zero
                 if let Some(first) = fixed_nonzero {

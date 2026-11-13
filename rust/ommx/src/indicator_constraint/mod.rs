@@ -12,6 +12,24 @@ use crate::{
 use derive_more::{Deref, From};
 use std::collections::BTreeMap;
 
+/// Diagnostics for a violated indicator constraint.
+///
+/// Returned by [`crate::Solution::violation_diagnostics`] and
+/// [`crate::SampleSet::violation_diagnostics`] only for violated rows.
+/// Currently contains no additional details. Fields may be added in minor releases;
+/// removing or changing existing information requires a major release.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct IndicatorViolationDiagnostics {}
+
+impl<S: crate::Stage<Self>> crate::constraint_type::DiagnosticRow for IndicatorConstraint<S> {
+    type Diagnostics = IndicatorViolationDiagnostics;
+
+    fn diagnose(&self, _: impl FnMut(VariableID) -> f64, _: ATol) -> Self::Diagnostics {
+        IndicatorViolationDiagnostics {}
+    }
+}
+
 /// Binary value at which an indicator constraint's body is enforced.
 ///
 /// This type admits only zero and one, so every [`IndicatorConstraint`] has a
@@ -222,7 +240,6 @@ impl EvaluatedConstraintData for EvaluatedIndicatorConstraint {
 impl SampledConstraintData for SampledIndicatorConstraint {
     type ID = IndicatorConstraintID;
     type Evaluated = EvaluatedIndicatorConstraint;
-
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
         Some(indicator_violation(
             self.equality,
@@ -270,6 +287,7 @@ impl SampledConstraintData for SampledIndicatorConstraint {
 
 impl ConstraintType for IndicatorConstraint {
     type ID = IndicatorConstraintID;
+    type ViolationDiagnostics = IndicatorViolationDiagnostics;
     type Created = IndicatorConstraint;
     type Evaluated = EvaluatedIndicatorConstraint;
     type Sampled = SampledIndicatorConstraint;

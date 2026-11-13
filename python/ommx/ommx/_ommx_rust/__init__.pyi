@@ -10469,6 +10469,12 @@ class OneHotConstraint:
     Unlike {class}`~ommx.Sos1Constraint`, this condition does not allow selecting
     no member. Numerical evaluation and reported violations use the contracts of
     {meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Solution.constraints_df`.
+    Evaluation and propagation require `0 < atol < 0.5` so the neighborhoods of
+    zero and one do not overlap. Larger tolerances raise `RuntimeError`, including
+    when evaluating samples. Loading saved results containing OneHot rows also
+    requires a saved evaluation tolerance below `0.5`. This is a OneHot-specific
+    restriction; the general absolute tolerance remains unrestricted above.
+
     Evaluated and sampled result rows expose `selected_variable` as a
     candidate-dependent diagnostic, independently of variable or constraint
     membership in the Active Formulation.
@@ -14813,10 +14819,17 @@ class Solution:
         r"""
         Sum the nonnegative scalar violations selected by min_role.
 
+        For OneHot and SOS1, each violation is the largest variable adjustment
+        needed to satisfy that constraint. Choose the repair that makes this
+        largest absolute adjustment as small as possible. For example, repairing
+        OneHot values ``(0.9, 0.2, 0)`` to ``(1, 0, 0)`` requires adjustments
+        ``(0.1, 0.2, 0)``, giving violation ``0.2``. Mathematically, this is the
+        L∞ distance to a satisfying assignment.
+
         - Equality: `abs(f(x))`; inequality: `max(0, f(x))`.
         - Indicator: the inner violation when `indicator_on` is true, otherwise zero.
-        - OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.
-        - SOS1: `min_i sum_{j != i} abs(x_j)`.
+        - OneHot: `min_i max(abs(x_i - 1), max_{j != i} abs(x_j))`.
+        - SOS1: `min_i max_{j != i} abs(x_j)` (zero for a singleton).
 
         The default ``FEASIBILITY_CHECK`` selects the same constraints as
         {attr}`~ommx.Solution.feasible`. ``ACTIVE`` selects the same constraints as

@@ -1,5 +1,8 @@
 mod evaluate;
 
+mod diagnostics;
+pub use diagnostics::Sos1ViolationDiagnostics;
+
 use crate::{
     constraint::{stage, Created, Evaluated, Stage},
     constraint_type::{
@@ -157,7 +160,6 @@ impl EvaluatedConstraintData for EvaluatedSos1Constraint {
 impl SampledConstraintData for SampledSos1Constraint {
     type ID = Sos1ConstraintID;
     type Evaluated = EvaluatedSos1Constraint;
-
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
         self.stage.violations.get(sample_id).copied()
     }
@@ -197,6 +199,7 @@ impl SampledConstraintData for SampledSos1Constraint {
 
 impl ConstraintType for Sos1Constraint {
     type ID = Sos1ConstraintID;
+    type ViolationDiagnostics = Sos1ViolationDiagnostics;
     type Created = Sos1Constraint;
     type Evaluated = EvaluatedSos1Constraint;
     type Sampled = SampledSos1Constraint;
@@ -483,7 +486,7 @@ impl<S: Stage<Self>> Sos1Constraint<S> {
             .iter()
             .max_by(|(_, a), (_, b)| a.abs().total_cmp(&b.abs()))
             .ok_or_else(|| crate::error!("SOS1 constraints must contain at least one variable"))?;
-        // Sum nonnegative terms directly: sum-minus-maximum can erase small violations.
+        // Largest absolute adjustment after retaining a largest-magnitude member.
         let violation = values
             .iter()
             .map(
@@ -495,7 +498,7 @@ impl<S: Stage<Self>> Sos1Constraint<S> {
                     }
                 },
             )
-            .fold(0.0, |total, value| total + value);
+            .fold(0.0, f64::max);
         let selected_variable = if crate::constraint_type::violation_is_feasible(violation, atol) {
             (!atol.approx_is_zero(selected_value)).then_some(selected)
         } else {
@@ -506,7 +509,14 @@ impl<S: Stage<Self>> Sos1Constraint<S> {
 }
 
 impl EvaluatedSos1Constraint {
-    /// Minimum sum of absolute member changes needed to satisfy this constraint.
+    /// Largest variable adjustment needed to satisfy this constraint.
+    ///
+    /// Retain one member of largest absolute value and set the others to zero.
+    /// This repair minimizes the largest absolute adjustment: it is the
+    /// second-largest absolute member value, or zero for a singleton. For
+    /// `(1, 0.00006, 0.00006)`, the violation is `0.00006`.
+    /// Mathematically, this is the L∞ distance to an SOS1 assignment;
+    /// variable bounds and kinds are checked separately.
     pub fn violation(&self) -> f64 {
         EvaluatedConstraintData::violation(self)
     }

@@ -7,7 +7,7 @@
 //!
 //! # Adding new constraint types
 //!
-//! To add a new constraint type (e.g. Disjunction):
+//! To add a new constraint type within the SDK (e.g. Disjunction):
 //!
 //! 1. Define a new struct `NewConstraint<S: Stage<Self> = Created>` with the
 //!    type's intrinsic fields (`equality`, `stage`, plus anything specific to
@@ -20,10 +20,15 @@
 //!    than the struct itself.
 //! 2. Implement `Stage<NewConstraint<S>>` for each stage marker (reuse `CreatedData`,
 //!    `EvaluatedData`, etc. if the stage data is the same as regular constraints).
-//! 3. Implement `ConstraintType for NewConstraint` mapping all three stages.
+//! 3. Implement `ConstraintType for NewConstraint` mapping all three stages and
+//!    the diagnostic type. Extend the internal family dispatch and both result
+//!    hosts' queries to cover the new family.
 //! 4. Implement `Evaluate` for `NewConstraint<Created>`,
 //!    [`EvaluatedConstraintData`] and [`SampledConstraintData`]. Every family must
-//!    provide a nonnegative scalar violation. Feasibility is derived by the
+//!    provide a nonnegative scalar violation and the internal `DiagnosticRow`
+//!    implementation with a family-specific non-exhaustive diagnostic type.
+//!    Result hosts own row selection and the values supplied to diagnostics.
+//!    Feasibility is derived by the
 //!    blanket behavior implementations; families cannot supply a separate rule.
 //! 5. Add a `ConstraintCollection<NewConstraint>` field to [`Instance`].
 //! 6. Add a variant to [`ConstraintKind`] and update
@@ -35,6 +40,11 @@
 //! [`IndicatorConstraint`]: crate::IndicatorConstraint
 //! [`Instance`]: crate::Instance
 //! [`ConstraintKind`]: crate::ConstraintKind
+
+mod diagnostics;
+// Solution and SampleSet use typed dispatch without exposing their storage contracts.
+pub(crate) mod dispatch;
+pub(crate) use diagnostics::DiagnosticRow;
 
 use crate::Result;
 use crate::{
@@ -163,9 +173,16 @@ impl<T> IDType for T where
 /// Each constraint kind's default (Created) form implements this trait.
 /// For example, `Constraint` (= `Constraint<Created>`) implements `ConstraintType`
 /// to define all stage types for regular constraints.
-pub trait ConstraintType {
+/// This trait is sealed: only SDK constraint families implement it. Result hosts
+/// support every such family, so generic diagnostic queries need only this bound.
+/// Collection access and diagnostic queries belong to [`crate::Solution`] and
+/// [`crate::SampleSet`], not to the family type.
+pub trait ConstraintType: dispatch::Sealed {
     /// The ID type for this constraint family.
     type ID: IDType;
+    /// Family-specific detail for a violated constraint. Use a dedicated
+    /// non-exhaustive type, even when empty, to allow additive information in minor releases.
+    type ViolationDiagnostics;
     /// The constraint as defined in the problem.
     type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
         + Clone
@@ -200,19 +217,6 @@ pub trait EvaluatedConstraintData {
 /// The blanket implementation prevents constraint families from implementing
 /// a second, independent feasibility rule.
 /// A finite, nonnegative violation is feasible exactly when `violation <= atol`.
-///
-/// ```compile_fail,E0119
-/// use ommx::{ATol, ConstraintID, EvaluatedConstraintData, EvaluatedConstraintBehavior};
-/// struct NewConstraint;
-/// impl EvaluatedConstraintData for NewConstraint {
-///     type ID = ConstraintID;
-///     fn violation(&self) -> f64 { 0.0 }
-/// }
-/// // This conflicts with the common blanket implementation.
-/// impl EvaluatedConstraintBehavior for NewConstraint {
-///     fn is_feasible(&self, _: ATol) -> bool { false }
-/// }
-/// ```
 pub trait EvaluatedConstraintBehavior: EvaluatedConstraintData {
     /// Compare the stored violation with `atol`, without re-evaluating inputs
     /// or changing any retained activation decisions.
@@ -253,7 +257,6 @@ pub trait SampledConstraintData {
     type ID;
     /// The evaluated constraint type returned by [`get`](Self::get).
     type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
-
     /// The same scalar metric as single-state evaluation, or `None` for a
     /// missing sample. Implementations must satisfy [`EvaluatedConstraintData`]'s
     /// nonnegativity contract.
@@ -315,7 +318,6 @@ impl EvaluatedConstraintData for EvaluatedConstraint {
 impl SampledConstraintData for SampledConstraint {
     type ID = ConstraintID;
     type Evaluated = EvaluatedConstraint;
-
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
         self.stage
             .evaluated_values
@@ -364,6 +366,7 @@ impl SampledConstraintData for SampledConstraint {
 /// `Constraint` (= `Constraint<Created>`) serves as the type family for regular constraints.
 impl ConstraintType for Constraint {
     type ID = ConstraintID;
+    type ViolationDiagnostics = crate::RegularViolationDiagnostics;
     type Created = Constraint;
     type Evaluated = EvaluatedConstraint;
     type Sampled = SampledConstraint;

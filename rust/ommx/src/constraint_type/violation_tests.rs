@@ -74,7 +74,7 @@ fn every_family_uses_the_same_inclusive_scalar_threshold() {
 }
 
 #[test]
-fn small_member_errors_accumulate_without_input_canonicalization() {
+fn small_member_errors_use_the_maximum_without_input_canonicalization() {
     for tolerance in [2.0_f64.powi(-10), 2.0_f64.powi(-20), 2.0_f64.powi(-40)] {
         let atol = ATol::new(tolerance).unwrap();
         let variables = [0.into(), 1.into(), 2.into()].into_iter().collect();
@@ -83,12 +83,12 @@ fn small_member_errors_accumulate_without_input_canonicalization() {
         let state = State::from_iter([(0, 1.0), (1, 0.75 * tolerance), (2, 0.75 * tolerance)]);
         let one_hot_result = one_hot.evaluate(&state, atol).unwrap();
         let sos1_result = sos1.evaluate(&state, atol).unwrap();
-        assert_eq!(one_hot_result.violation(), 1.5 * tolerance);
-        assert_eq!(sos1_result.violation(), 1.5 * tolerance);
-        assert!(!one_hot_result.is_feasible(atol));
-        assert!(!sos1_result.is_feasible(atol));
-        assert_eq!(one_hot_result.stage.selected_variable, None);
-        assert_eq!(sos1_result.stage.selected_variable, None);
+        assert_eq!(one_hot_result.violation(), 0.75 * tolerance);
+        assert_eq!(sos1_result.violation(), 0.75 * tolerance);
+        assert!(one_hot_result.is_feasible(atol));
+        assert!(sos1_result.is_feasible(atol));
+        assert_eq!(one_hot_result.stage.selected_variable, Some(0.into()));
+        assert_eq!(sos1_result.stage.selected_variable, Some(0.into()));
         assert_contract::<OneHotConstraint>(&one_hot, &state, atol);
         assert_contract::<Sos1Constraint>(&sos1, &state, atol);
     }
@@ -102,8 +102,8 @@ proptest! {
         let variables = [0.into(), 1.into(), 2.into()].into_iter().collect();
         let one_hot = OneHotConstraint::new(variables).unwrap();
         let sos1 = Sos1Constraint::new(one_hot.variables.clone()).unwrap();
-        let expected_one_hot = (0..3).map(|selected| values.iter().enumerate().map(|(i, x)| (x - if i == selected { 1.0 } else { 0.0 }).abs()).sum::<f64>()).fold(f64::INFINITY, f64::min);
-        let expected_sos1 = (0..3).map(|selected| values.iter().enumerate().filter(|(i, _)| *i != selected).map(|(_, x)| x.abs()).sum::<f64>()).fold(f64::INFINITY, f64::min);
+        let expected_one_hot = (0..3).map(|selected| values.iter().enumerate().map(|(i, x)| (x - if i == selected { 1.0 } else { 0.0 }).abs()).fold(0.0_f64, f64::max)).fold(f64::INFINITY, f64::min);
+        let expected_sos1 = (0..3).map(|selected| values.iter().enumerate().filter(|(i, _)| *i != selected).map(|(_, x)| x.abs()).fold(0.0_f64, f64::max)).fold(f64::INFINITY, f64::min);
         let evaluated_one_hot = one_hot.evaluate(&state, atol).unwrap();
         let evaluated_sos1 = sos1.evaluate(&state, atol).unwrap();
         prop_assert!((evaluated_one_hot.violation() - expected_one_hot).abs() < 1e-12);
@@ -123,13 +123,13 @@ proptest! {
 }
 
 #[test]
-fn overflowed_violations_are_infeasible_and_survive_wire_roundtrip() {
+fn maximum_finite_member_values_do_not_overflow_and_survive_wire_roundtrip() {
     let atol = ATol::default();
     let variables = [0.into(), 1.into(), 2.into()].into_iter().collect();
     let constraint = Sos1Constraint::new(variables).unwrap();
     let state = State::from_iter([(0, f64::MAX), (1, f64::MAX), (2, f64::MAX)]);
     let evaluated = constraint.evaluate(&state, atol).unwrap();
-    assert_eq!(evaluated.violation(), f64::INFINITY);
+    assert_eq!(evaluated.violation(), f64::MAX);
     assert!(!evaluated.is_feasible(atol));
     let wire: crate::v2::EvaluatedSos1Constraint = evaluated.clone().into_v2(atol);
     assert_eq!(
@@ -188,7 +188,7 @@ fn wire_consumers_can_read_feasibility_and_its_tolerance_without_sdk_evaluation(
     let state = State::from_iter([(0, 1.0), (1, 0.00006), (2, 0.00006)]);
     let samples = crate::Sampled::from((7.into(), state.clone()));
 
-    for (tolerance, expected) in [(0.0001, false), (0.0002, true)] {
+    for (tolerance, expected) in [(0.00005, false), (0.0001, true)] {
         let atol = ATol::new(tolerance).unwrap();
         let solution_bytes = instance.evaluate(&state, atol).unwrap().to_v2_bytes();
         // A consumer only needs the generated protobuf types to read these fields.
@@ -199,7 +199,7 @@ fn wire_consumers_can_read_feasibility_and_its_tolerance_without_sdk_evaluation(
         let row = &wire.evaluated_sos1_constraints.as_ref().unwrap().entries[&0];
         assert_eq!(row.feasible, expected);
         let restored = crate::Solution::from_v2_bytes(&solution_bytes).unwrap();
-        assert_eq!(restored.sos1_constraint_violation(0.into()), Some(0.00012));
+        assert_eq!(restored.sos1_constraint_violation(0.into()), Some(0.00006));
         assert_eq!(restored.feasible(), expected);
 
         let sample_bytes = instance
@@ -216,7 +216,7 @@ fn wire_consumers_can_read_feasibility_and_its_tolerance_without_sdk_evaluation(
             .unwrap()
             .get(7.into())
             .unwrap();
-        assert_eq!(restored.sos1_constraint_violation(0.into()), Some(0.00012));
+        assert_eq!(restored.sos1_constraint_violation(0.into()), Some(0.00006));
         assert_eq!(restored.feasible(), expected);
     }
 }
@@ -241,9 +241,9 @@ fn partial_evaluation_preserves_instance_invariants_and_failure_is_atomic() {
         .unwrap();
     let original = instance.clone();
     let fixed = State::from_iter([(1, 0.09375), (2, 0.09375)]);
-    // Dropping the fixed near-zero members would leave a singleton SOS1 and
-    // incorrectly make this infeasible completion feasible.
-    assert!(!original
+    // Fixed near-zero members still contribute to the metric. They cannot be
+    // discarded even though this completion is feasible at the current tolerance.
+    assert!(original
         .evaluate(
             &State::from_iter([(0, 1.0), (1, 0.09375), (2, 0.09375)]),
             atol
@@ -275,8 +275,8 @@ fn activation_decisions_retain_their_conditions_across_queries_and_extraction() 
     let query_atol = ATol::new(4.0 * *activation_atol).unwrap();
     let state = State::from_iter([
         (0, 1.0 + 0.5 * *activation_atol),
-        (1, 0.75 * *activation_atol),
-        (2, 0.75 * *activation_atol),
+        (1, 1.5 * *activation_atol),
+        (2, 1.5 * *activation_atol),
     ]);
     let samples = crate::Sampled::from((SampleID::from(7), state.clone()));
     macro_rules! check {
