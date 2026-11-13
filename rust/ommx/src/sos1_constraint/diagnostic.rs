@@ -16,11 +16,11 @@ use std::collections::BTreeMap;
 ///
 /// Diagnostics are obtained from results rather than constructed externally:
 /// ```compile_fail,E0639
-/// let diagnostic = ommx::Sos1Violation { values: Default::default() };
+/// let diagnostic = ommx::Sos1ViolationDiagnostics { values: Default::default() };
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
-pub struct Sos1Violation {
+pub struct Sos1ViolationDiagnostics {
     /// Excess member values keyed by variable ID.
     pub values: BTreeMap<VariableID, f64>,
 }
@@ -29,7 +29,7 @@ pub fn diagnose(
     variables: &VariableIDSet,
     mut value_of: impl FnMut(VariableID) -> f64,
     atol: ATol,
-) -> Sos1Violation {
+) -> Sos1ViolationDiagnostics {
     let retained = variables
         .iter()
         .map(|&id| (id, value_of(id)))
@@ -42,5 +42,5 @@ pub fn diagnose(
             (Some(id) != retained && !atol.approx_is_zero(value)).then_some((id, value))
         })
         .collect();
-    Sos1Violation { values }
+    Sos1ViolationDiagnostics { values }
 }

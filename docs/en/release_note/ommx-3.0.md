@@ -18,10 +18,10 @@ sample_diagnostics = samples.violation_diagnostics(sample_id)
 ```
 
 The dictionary contains only violated constraints, keyed by typed ID. Regular
-and Indicator values are dedicated `RegularViolation` and `IndicatorViolation`
+and Indicator values are dedicated `RegularViolationDiagnostics` and `IndicatorViolationDiagnostics`
 objects, currently without extra details; OneHot values distinguish missing selection,
 multiple selections, and value errors, including all-zero candidates. SOS1 entries
-are `Sos1Violation` objects with excess member IDs and values in `values`.
+are `Sos1ViolationDiagnostics` objects with excess member IDs and values in `values`.
 Feasible rows are absent.
 
 Details are computed on demand from stored values only for violated rows. Scalar

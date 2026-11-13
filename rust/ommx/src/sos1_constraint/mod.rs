@@ -1,7 +1,7 @@
 mod diagnostic;
 mod evaluate;
 
-pub use diagnostic::Sos1Violation;
+pub use diagnostic::Sos1ViolationDiagnostics;
 
 use crate::{
     constraint::{stage, Created, Evaluated, Stage},
@@ -148,7 +148,7 @@ pub type SampledSos1Constraint = Sos1Constraint<stage::Sampled>;
 
 impl EvaluatedConstraintData for EvaluatedSos1Constraint {
     type ID = Sos1ConstraintID;
-    type ViolationDiagnostics = Sos1Violation;
+    type ViolationDiagnostics = Sos1ViolationDiagnostics;
     fn violation_diagnostics(
         &self,
         value_of: impl FnMut(crate::VariableID) -> f64,
@@ -217,7 +217,7 @@ impl SampledConstraintData for SampledSos1Constraint {
 
 impl ConstraintType for Sos1Constraint {
     type ID = Sos1ConstraintID;
-    type ViolationDiagnostics = Sos1Violation;
+    type ViolationDiagnostics = Sos1ViolationDiagnostics;
     fn evaluated_constraints(solution: &crate::Solution) -> &crate::EvaluatedCollection<Self> {
         solution.evaluated_sos1_constraints()
     }

@@ -144,8 +144,8 @@ impl SampleSet {
     /// Uses the saved feasibility_atol and stored variable values. All retained
     /// roles are included by default; min_role can restrict participation.
     /// Feasible constraints are absent. Regular and Indicator entries contain
-    /// RegularViolation and IndicatorViolation (currently without extra details).
-    /// OneHot entries contain OneHotViolation; SOS1 entries contain Sos1Violation,
+    /// RegularViolationDiagnostics and IndicatorViolationDiagnostics (currently without extra details).
+    /// OneHot entries contain OneHotViolationDiagnostics; SOS1 entries contain Sos1ViolationDiagnostics,
     /// whose values property maps excess variable IDs to their values.
     /// Diagnostic types may gain attributes or variants in minor releases; removing
     /// or changing existing information requires a major release.

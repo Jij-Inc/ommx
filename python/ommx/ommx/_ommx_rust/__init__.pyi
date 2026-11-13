@@ -74,7 +74,7 @@ __all__ = [
     "InactiveSos1Constraint",
     "IndicatorConstraint",
     "IndicatorConstraintID",
-    "IndicatorViolation",
+    "IndicatorViolationDiagnostics",
     "InfeasibleDetected",
     "InfeasibleOrUnboundedDetected",
     "Instance",
@@ -96,7 +96,7 @@ __all__ = [
     "ObjectivePreparation",
     "OneHotConstraint",
     "OneHotConstraintID",
-    "OneHotViolation",
+    "OneHotViolationDiagnostics",
     "OpenSolve",
     "Optimality",
     "OutputObjective",
@@ -111,7 +111,7 @@ __all__ = [
     "ProvenanceKind",
     "PruneAnonymousReport",
     "Quadratic",
-    "RegularViolation",
+    "RegularViolationDiagnostics",
     "Relaxation",
     "RemoteArtifactAuthenticationError",
     "RemoteArtifactAuthorizationError",
@@ -141,7 +141,7 @@ __all__ = [
     "Sos1BigMSelectorClaim",
     "Sos1Constraint",
     "Sos1ConstraintID",
-    "Sos1Violation",
+    "Sos1ViolationDiagnostics",
     "SpecialConstraintPreparation",
     "State",
     "ToFunction",
@@ -5397,7 +5397,7 @@ class IndicatorConstraintID(ConstraintIDBase):
         """
 
 @typing.final
-class IndicatorViolation:
+class IndicatorViolationDiagnostics:
     r"""
     Diagnostics for a violated indicator constraint, currently without extra details.
     Obtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.
@@ -10593,7 +10593,7 @@ class OneHotConstraintID(ConstraintIDBase):
         IDs are immutable, including when nested in copied containers.
         """
 
-class OneHotViolation:
+class OneHotViolationDiagnostics:
     r"""
     A OneHot violation at the result's feasibility_atol. Each variant retains
     all member values, including zeros. Feasible rows are absent from the diagnostic
@@ -10602,7 +10602,7 @@ class OneHotViolation:
     information requires a major release.
     """
     @typing.final
-    class MissingSelection(OneHotViolation):
+    class MissingSelection(OneHotViolationDiagnostics):
         r"""
         All members are within tolerance of zero, but the row is infeasible.
         """
@@ -10612,10 +10612,10 @@ class OneHotViolation:
         def values(self) -> builtins.dict[builtins.int, builtins.float]: ...
         def __new__(
             cls, values: typing.Mapping[builtins.int, builtins.float]
-        ) -> OneHotViolation.MissingSelection: ...
+        ) -> OneHotViolationDiagnostics.MissingSelection: ...
 
     @typing.final
-    class MultipleSelections(OneHotViolation):
+    class MultipleSelections(OneHotViolationDiagnostics):
         r"""
         The row is infeasible and at least two members are within tolerance of one.
         Other value errors can coexist and remain visible in values.
@@ -10633,10 +10633,10 @@ class OneHotViolation:
             cls,
             selected_variables: builtins.set[builtins.int],
             values: typing.Mapping[builtins.int, builtins.float],
-        ) -> OneHotViolation.MultipleSelections: ...
+        ) -> OneHotViolationDiagnostics.MultipleSelections: ...
 
     @typing.final
-    class ValueErrors(OneHotViolation):
+    class ValueErrors(OneHotViolationDiagnostics):
         r"""
         Other value deviations from a closest OneHot assignment.
         The target is the largest member value, breaking ties by largest ID.
@@ -10661,7 +10661,7 @@ class OneHotViolation:
             target_variable: builtins.int,
             errors: typing.Mapping[builtins.int, builtins.float],
             values: typing.Mapping[builtins.int, builtins.float],
-        ) -> OneHotViolation.ValueErrors: ...
+        ) -> OneHotViolationDiagnostics.ValueErrors: ...
 
     ...
 
@@ -12368,7 +12368,7 @@ class Quadratic:
         """
 
 @typing.final
-class RegularViolation:
+class RegularViolationDiagnostics:
     r"""
     Diagnostics for a violated regular constraint, currently without extra details.
     Obtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.
@@ -13088,8 +13088,8 @@ class SampleSet:
         Uses the saved feasibility_atol and stored variable values. All retained
         roles are included by default; min_role can restrict participation.
         Feasible constraints are absent. Regular and Indicator entries contain
-        RegularViolation and IndicatorViolation (currently without extra details).
-        OneHot entries contain OneHotViolation; SOS1 entries contain Sos1Violation,
+        RegularViolationDiagnostics and IndicatorViolationDiagnostics (currently without extra details).
+        OneHot entries contain OneHotViolationDiagnostics; SOS1 entries contain Sos1ViolationDiagnostics,
         whose values property maps excess variable IDs to their values.
         Diagnostic types may gain attributes or variants in minor releases; removing
         or changing existing information requires a major release.
@@ -14566,8 +14566,8 @@ class Solution:
         Uses the saved feasibility_atol and stored variable values. All retained
         roles are included by default; min_role can restrict participation.
         Feasible constraints are absent. Regular and Indicator entries contain
-        RegularViolation and IndicatorViolation (currently without extra details).
-        OneHot entries contain OneHotViolation; SOS1 entries contain Sos1Violation,
+        RegularViolationDiagnostics and IndicatorViolationDiagnostics (currently without extra details).
+        OneHot entries contain OneHotViolationDiagnostics; SOS1 entries contain Sos1ViolationDiagnostics,
         whose values property maps excess variable IDs to their values.
         Diagnostic types may gain attributes or variants in minor releases; removing
         or changing existing information requires a major release.
@@ -15331,7 +15331,7 @@ class Sos1ConstraintID(ConstraintIDBase):
         """
 
 @typing.final
-class Sos1Violation:
+class Sos1ViolationDiagnostics:
     r"""
     Diagnostics for a violated SOS1 constraint at the result's saved tolerance.
     Obtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.

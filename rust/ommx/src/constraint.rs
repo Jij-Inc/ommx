@@ -33,11 +33,11 @@ pub use stage::{
 ///
 /// Diagnostics are obtained from results rather than constructed externally:
 /// ```compile_fail,E0639
-/// let diagnostic = ommx::RegularViolation {  };
+/// let diagnostic = ommx::RegularViolationDiagnostics {  };
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
-pub struct RegularViolation {}
+pub struct RegularViolationDiagnostics {}
 
 /// Constraint equality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, LogicalMemoryProfile)]

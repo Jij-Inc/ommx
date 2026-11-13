@@ -94,7 +94,7 @@ mod tests {
     use super::*;
     use crate::v1::State;
     use crate::{
-        ATol, Evaluate, EvaluatedConstraintBehavior, OneHotConstraint, OneHotViolation,
+        ATol, Evaluate, EvaluatedConstraintBehavior, OneHotConstraint, OneHotViolationDiagnostics,
         Sos1Constraint, VariableIDSet,
     };
     use proptest::prelude::*;
@@ -136,7 +136,7 @@ mod tests {
     fn missing_selection_uses_canonical_stored_values() {
         for values in [[0.0, 0.0, -0.0], [0.0625, -0.0625, 0.0]] {
             let result = evaluate(values, 0.125);
-            let Some(OneHotViolation::MissingSelection { values: retained }) = result
+            let Some(OneHotViolationDiagnostics::MissingSelection { values: retained }) = result
                 .violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly)
                 .remove(&0.into())
             else {
@@ -161,7 +161,7 @@ mod tests {
             result
                 .violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly)
                 .remove(&0.into()),
-            Some(OneHotViolation::MultipleSelections {
+            Some(OneHotViolationDiagnostics::MultipleSelections {
                 selected_variables: [0.into(), 1.into()].into(),
                 values: [(0.into(), 1.0), (1.into(), 1.0), (2.into(), -0.5)].into(),
             })
@@ -176,13 +176,13 @@ mod tests {
             result
                 .violation_diagnostics::<OneHotConstraint>(ConstraintRole::EvaluationOnly)
                 .remove(&0.into()),
-            Some(OneHotViolation::ValueErrors {
+            Some(OneHotViolationDiagnostics::ValueErrors {
                 target_variable: 0.into(),
                 errors: [(0.into(), 0.125), (1.into(), 0.25)].into(),
                 values: [(0.into(), 0.875), (1.into(), 0.25), (2.into(), 0.0)].into(),
             })
         );
-        let Some(OneHotViolation::ValueErrors {
+        let Some(OneHotViolationDiagnostics::ValueErrors {
             target_variable,
             errors,
             ..
@@ -195,7 +195,7 @@ mod tests {
         assert_eq!(target_variable, 1.into());
         assert_eq!(errors, [(0.into(), 0.5), (1.into(), 0.5)].into());
         // Select by value, not absolute value; negative outliers remain errors.
-        let Some(OneHotViolation::ValueErrors {
+        let Some(OneHotViolationDiagnostics::ValueErrors {
             target_variable,
             errors,
             ..
@@ -242,7 +242,7 @@ mod tests {
                 .remove(&0.into()),
             before
         );
-        let Some(OneHotViolation::ValueErrors { errors, .. }) = before else {
+        let Some(OneHotViolationDiagnostics::ValueErrors { errors, .. }) = before else {
             panic!()
         };
         assert_eq!(errors, [(1.into(), 0.25)].into());
@@ -286,17 +286,17 @@ mod tests {
             .unwrap();
         assert_eq!(
             solution.violation_diagnostics::<Constraint>(ConstraintRole::EvaluationOnly),
-            [(10.into(), crate::RegularViolation {})].into()
+            [(10.into(), crate::RegularViolationDiagnostics {})].into()
         );
         assert_eq!(
             solution.violation_diagnostics::<IndicatorConstraint>(ConstraintRole::EvaluationOnly),
-            [(11.into(), crate::IndicatorViolation {})].into()
+            [(11.into(), crate::IndicatorViolationDiagnostics {})].into()
         );
         assert_eq!(
             samples
                 .violation_diagnostics::<Constraint>(7.into(), ConstraintRole::EvaluationOnly)
                 .unwrap(),
-            [(10.into(), crate::RegularViolation {})].into()
+            [(10.into(), crate::RegularViolationDiagnostics {})].into()
         );
         assert_eq!(
             samples
@@ -305,7 +305,7 @@ mod tests {
                     ConstraintRole::EvaluationOnly
                 )
                 .unwrap(),
-            [(11.into(), crate::IndicatorViolation {})].into()
+            [(11.into(), crate::IndicatorViolationDiagnostics {})].into()
         );
         // Empty family queries still reject an unknown sample.
         let err = samples
@@ -369,7 +369,7 @@ mod tests {
                 prop_assert_eq!(*solution.decision_variables()[&id].value(), value);
                 prop_assert!(value.abs() > *atol);
             }
-            if let Some(crate::OneHotViolation::ValueErrors { errors, target_variable, values }) = one_hot_details {
+            if let Some(crate::OneHotViolationDiagnostics::ValueErrors { errors, target_variable, values }) = one_hot_details {
                 prop_assert!(!errors.is_empty());
                 prop_assert_eq!(errors.values().copied().fold(0.0_f64, f64::max), one_hot.violation());
                 for (id, error) in errors {

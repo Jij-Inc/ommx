@@ -210,7 +210,7 @@ pub trait ConstraintType {
 /// struct MissingDiagnostics;
 /// impl EvaluatedConstraintData for MissingDiagnostics {
 ///     type ID = ConstraintID;
-///     type ViolationDiagnostics = ommx::RegularViolation;
+///     type ViolationDiagnostics = ommx::RegularViolationDiagnostics;
 ///     fn violation(&self) -> f64 { 1.0 }
 ///     // Missing the required violation_diagnostics implementation.
 /// }
@@ -369,13 +369,13 @@ pub(crate) enum ActiveRowRewrite<T> {
 
 impl EvaluatedConstraintData for EvaluatedConstraint {
     type ID = ConstraintID;
-    type ViolationDiagnostics = crate::RegularViolation;
+    type ViolationDiagnostics = crate::RegularViolationDiagnostics;
     fn violation_diagnostics(
         &self,
         _value_of: impl FnMut(crate::VariableID) -> f64,
         _atol: ATol,
     ) -> Self::ViolationDiagnostics {
-        crate::RegularViolation {}
+        crate::RegularViolationDiagnostics {}
     }
 
     fn violation(&self) -> f64 {
@@ -396,7 +396,7 @@ impl SampledConstraintData for SampledConstraint {
         _value_of: impl FnMut(crate::VariableID) -> f64,
         _atol: ATol,
     ) -> <Self::Evaluated as EvaluatedConstraintData>::ViolationDiagnostics {
-        crate::RegularViolation {}
+        crate::RegularViolationDiagnostics {}
     }
 
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
@@ -447,7 +447,7 @@ impl SampledConstraintData for SampledConstraint {
 /// `Constraint` (= `Constraint<Created>`) serves as the type family for regular constraints.
 impl ConstraintType for Constraint {
     type ID = ConstraintID;
-    type ViolationDiagnostics = crate::RegularViolation;
+    type ViolationDiagnostics = crate::RegularViolationDiagnostics;
     fn evaluated_constraints(solution: &crate::Solution) -> &crate::EvaluatedCollection<Self> {
         solution.evaluated_constraints()
     }

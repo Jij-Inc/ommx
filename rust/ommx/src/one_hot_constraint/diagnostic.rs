@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 /// information requires a major release.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
-pub enum OneHotViolation {
+pub enum OneHotViolationDiagnostics {
     /// Every member is within tolerance of zero, but the row is infeasible.
     /// No particular member is designated as the missing selection.
     #[non_exhaustive]
@@ -44,10 +44,10 @@ pub fn diagnose(
     variables: &VariableIDSet,
     mut value_of: impl FnMut(VariableID) -> f64,
     atol: ATol,
-) -> OneHotViolation {
+) -> OneHotViolationDiagnostics {
     let values: BTreeMap<_, _> = variables.iter().map(|&id| (id, value_of(id))).collect();
     if values.values().all(|&value| atol.approx_is_zero(value)) {
-        return OneHotViolation::MissingSelection { values };
+        return OneHotViolationDiagnostics::MissingSelection { values };
     }
     let selected_variables: VariableIDSet = values
         .iter()
@@ -55,7 +55,7 @@ pub fn diagnose(
         .map(|(&id, _)| id)
         .collect();
     if selected_variables.len() > 1 {
-        return OneHotViolation::MultipleSelections {
+        return OneHotViolationDiagnostics::MultipleSelections {
             selected_variables,
             values,
         };
@@ -71,7 +71,7 @@ pub fn diagnose(
             (!atol.approx_is_zero(error)).then_some((id, error))
         })
         .collect();
-    OneHotViolation::ValueErrors {
+    OneHotViolationDiagnostics::ValueErrors {
         target_variable,
         errors,
         values,

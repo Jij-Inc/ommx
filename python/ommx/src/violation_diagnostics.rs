@@ -11,8 +11,8 @@ use std::collections::BTreeMap;
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, PartialEq, derive_more::From)]
-pub struct RegularViolation {
-    inner: ommx::RegularViolation,
+pub struct RegularViolationDiagnostics {
+    inner: ommx::RegularViolationDiagnostics,
 }
 
 /// Diagnostics for a violated indicator constraint, currently without extra details.
@@ -22,8 +22,8 @@ pub struct RegularViolation {
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, PartialEq, derive_more::From)]
-pub struct IndicatorViolation {
-    inner: ommx::IndicatorViolation,
+pub struct IndicatorViolationDiagnostics {
+    inner: ommx::IndicatorViolationDiagnostics,
 }
 
 /// Diagnostics for a violated SOS1 constraint at the result's saved tolerance.
@@ -33,13 +33,13 @@ pub struct IndicatorViolation {
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, PartialEq, derive_more::From)]
-pub struct Sos1Violation {
-    inner: ommx::Sos1Violation,
+pub struct Sos1ViolationDiagnostics {
+    inner: ommx::Sos1ViolationDiagnostics,
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
-impl Sos1Violation {
+impl Sos1ViolationDiagnostics {
     /// Original signed values of excess members, keyed by variable ID.
     /// Retains one largest absolute member (ties retain the largest ID), then
     /// reports remaining values exceeding feasibility_atol in absolute value.
@@ -58,10 +58,10 @@ impl Sos1Violation {
 
 #[derive(IntoPyObject)]
 enum DiagnosticValue {
-    Regular(RegularViolation),
-    Indicator(IndicatorViolation),
-    OneHot(crate::OneHotViolation),
-    Sos1(Sos1Violation),
+    Regular(RegularViolationDiagnostics),
+    Indicator(IndicatorViolationDiagnostics),
+    OneHot(crate::OneHotViolationDiagnostics),
+    Sos1(Sos1ViolationDiagnostics),
 }
 
 /// The public dictionary is extensible: consumers narrow values by typed ID,

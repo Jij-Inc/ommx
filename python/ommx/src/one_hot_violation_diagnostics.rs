@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 #[pyo3_stub_gen::derive::gen_stub_pyclass_complex_enum]
 #[pyclass(from_py_object, eq, frozen)]
 #[derive(Debug, Clone, PartialEq)]
-pub enum OneHotViolation {
+pub enum OneHotViolationDiagnostics {
     /// All members are within tolerance of zero, but the row is infeasible.
     MissingSelection { values: BTreeMap<u64, f64> },
     /// The row is infeasible and at least two members are within tolerance of one.
@@ -37,14 +37,16 @@ fn values_to_python(values: BTreeMap<ommx::VariableID, f64>) -> BTreeMap<u64, f6
         .collect()
 }
 
-impl TryFrom<ommx::OneHotViolation> for OneHotViolation {
+impl TryFrom<ommx::OneHotViolationDiagnostics> for OneHotViolationDiagnostics {
     type Error = ommx::Error;
-    fn try_from(value: ommx::OneHotViolation) -> ommx::Result<Self> {
+    fn try_from(value: ommx::OneHotViolationDiagnostics) -> ommx::Result<Self> {
         Ok(match value {
-            ommx::OneHotViolation::MissingSelection { values, .. } => Self::MissingSelection {
-                values: values_to_python(values),
-            },
-            ommx::OneHotViolation::MultipleSelections {
+            ommx::OneHotViolationDiagnostics::MissingSelection { values, .. } => {
+                Self::MissingSelection {
+                    values: values_to_python(values),
+                }
+            }
+            ommx::OneHotViolationDiagnostics::MultipleSelections {
                 selected_variables,
                 values,
                 ..
@@ -55,7 +57,7 @@ impl TryFrom<ommx::OneHotViolation> for OneHotViolation {
                     .collect(),
                 values: values_to_python(values),
             },
-            ommx::OneHotViolation::ValueErrors {
+            ommx::OneHotViolationDiagnostics::ValueErrors {
                 target_variable,
                 errors,
                 values,

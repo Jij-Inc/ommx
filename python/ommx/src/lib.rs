@@ -34,7 +34,7 @@ mod linear;
 mod message_io;
 mod named_function;
 mod one_hot_constraint;
-mod one_hot_violation;
+mod one_hot_violation_diagnostics;
 mod pandas;
 mod parameter;
 mod parameters;
@@ -88,7 +88,7 @@ pub use instance_class::*;
 pub use linear::*;
 pub use named_function::*;
 pub use one_hot_constraint::*;
-pub use one_hot_violation::OneHotViolation;
+pub use one_hot_violation_diagnostics::OneHotViolationDiagnostics;
 pub use parameter::*;
 pub use parameters::*;
 pub use parametric_instance::*;
@@ -106,7 +106,9 @@ pub use solution::*;
 pub use sos1_constraint::*;
 pub use sos1_promotion::*;
 pub use state::*;
-pub use violation_diagnostics::{IndicatorViolation, RegularViolation, Sos1Violation};
+pub use violation_diagnostics::{
+    IndicatorViolationDiagnostics, RegularViolationDiagnostics, Sos1ViolationDiagnostics,
+};
 
 use pyo3::prelude::*;
 use pyo3_stub_gen::runtime::PyModuleTypeAliasExt;
@@ -247,10 +249,10 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<AttachedIndicatorConstraint>()?;
     m.add_class::<InactiveIndicatorConstraint>()?;
     m.add_class::<OneHotConstraint>()?;
-    m.add_class::<OneHotViolation>()?;
-    m.add_class::<RegularViolation>()?;
-    m.add_class::<IndicatorViolation>()?;
-    m.add_class::<Sos1Violation>()?;
+    m.add_class::<OneHotViolationDiagnostics>()?;
+    m.add_class::<RegularViolationDiagnostics>()?;
+    m.add_class::<IndicatorViolationDiagnostics>()?;
+    m.add_class::<Sos1ViolationDiagnostics>()?;
     m.add_class::<AttachedOneHotConstraint>()?;
     m.add_class::<InactiveOneHotConstraint>()?;
     m.add_class::<Sos1Constraint>()?;
@@ -390,10 +392,10 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "AttachedIndicatorConstraint",
     "InactiveIndicatorConstraint",
     "OneHotConstraint",
-    "OneHotViolation",
-    "RegularViolation",
-    "IndicatorViolation",
-    "Sos1Violation",
+    "OneHotViolationDiagnostics",
+    "RegularViolationDiagnostics",
+    "IndicatorViolationDiagnostics",
+    "Sos1ViolationDiagnostics",
     "AttachedOneHotConstraint",
     "InactiveOneHotConstraint",
     "Sos1Constraint",

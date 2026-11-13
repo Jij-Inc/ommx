@@ -1,5 +1,5 @@
 mod diagnostic;
-pub use diagnostic::OneHotViolation;
+pub use diagnostic::OneHotViolationDiagnostics;
 mod evaluate;
 
 use crate::{
@@ -146,7 +146,7 @@ pub type SampledOneHotConstraint = OneHotConstraint<stage::Sampled>;
 
 impl EvaluatedConstraintData for EvaluatedOneHotConstraint {
     type ID = OneHotConstraintID;
-    type ViolationDiagnostics = crate::OneHotViolation;
+    type ViolationDiagnostics = crate::OneHotViolationDiagnostics;
     fn violation_diagnostics(
         &self,
         value_of: impl FnMut(crate::VariableID) -> f64,
@@ -215,7 +215,7 @@ impl SampledConstraintData for SampledOneHotConstraint {
 
 impl ConstraintType for OneHotConstraint {
     type ID = OneHotConstraintID;
-    type ViolationDiagnostics = crate::OneHotViolation;
+    type ViolationDiagnostics = crate::OneHotViolationDiagnostics;
     fn evaluated_constraints(solution: &crate::Solution) -> &crate::EvaluatedCollection<Self> {
         solution.evaluated_one_hot_constraints()
     }

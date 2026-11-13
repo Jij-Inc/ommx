@@ -21,11 +21,11 @@ use std::collections::BTreeMap;
 ///
 /// Diagnostics are obtained from results rather than constructed externally:
 /// ```compile_fail,E0639
-/// let diagnostic = ommx::IndicatorViolation {  };
+/// let diagnostic = ommx::IndicatorViolationDiagnostics {  };
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
-pub struct IndicatorViolation {}
+pub struct IndicatorViolationDiagnostics {}
 
 /// Binary value at which an indicator constraint's body is enforced.
 ///
@@ -221,13 +221,13 @@ impl EvaluatedIndicatorConstraint {
 
 impl EvaluatedConstraintData for EvaluatedIndicatorConstraint {
     type ID = IndicatorConstraintID;
-    type ViolationDiagnostics = IndicatorViolation;
+    type ViolationDiagnostics = IndicatorViolationDiagnostics;
     fn violation_diagnostics(
         &self,
         _value_of: impl FnMut(crate::VariableID) -> f64,
         _atol: ATol,
     ) -> Self::ViolationDiagnostics {
-        IndicatorViolation {}
+        IndicatorViolationDiagnostics {}
     }
 
     fn violation(&self) -> f64 {
@@ -252,7 +252,7 @@ impl SampledConstraintData for SampledIndicatorConstraint {
         _value_of: impl FnMut(crate::VariableID) -> f64,
         _atol: ATol,
     ) -> <Self::Evaluated as EvaluatedConstraintData>::ViolationDiagnostics {
-        IndicatorViolation {}
+        IndicatorViolationDiagnostics {}
     }
 
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
@@ -302,7 +302,7 @@ impl SampledConstraintData for SampledIndicatorConstraint {
 
 impl ConstraintType for IndicatorConstraint {
     type ID = IndicatorConstraintID;
-    type ViolationDiagnostics = IndicatorViolation;
+    type ViolationDiagnostics = IndicatorViolationDiagnostics;
     fn evaluated_constraints(solution: &crate::Solution) -> &crate::EvaluatedCollection<Self> {
         solution.evaluated_indicator_constraints()
     }

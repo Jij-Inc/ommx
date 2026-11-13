@@ -16226,7 +16226,7 @@
         },
         {
           "kind": "Class",
-          "name": "IndicatorViolation",
+          "name": "IndicatorViolationDiagnostics",
           "doc": "Diagnostics for a violated indicator constraint, currently without extra details.\nObtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.\nMinor releases may add attributes; removing or changing existing information\nrequires a major release.",
           "bases": [],
           "methods": [
@@ -26110,7 +26110,7 @@
         },
         {
           "kind": "Class",
-          "name": "OneHotViolation",
+          "name": "OneHotViolationDiagnostics",
           "doc": "A OneHot violation at the result's feasibility_atol. Each variant retains\nall member values, including zeros. Feasible rows are absent from the diagnostic\ndictionary. Future versions may add variants or fields.\nMinor releases may add variants or fields; removing or changing existing\ninformation requires a major release.",
           "bases": [],
           "methods": [],
@@ -33345,7 +33345,7 @@
         },
         {
           "kind": "Class",
-          "name": "RegularViolation",
+          "name": "RegularViolationDiagnostics",
           "doc": "Diagnostics for a violated regular constraint, currently without extra details.\nObtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.\nMinor releases may add attributes; removing or changing existing information\nrequires a major release.",
           "bases": [],
           "methods": [
@@ -34509,7 +34509,7 @@
             },
             {
               "name": "violation_diagnostics",
-              "doc": "Return a dictionary containing only violated constraints, keyed by typed ID.\n\nUses the saved feasibility_atol and stored variable values. All retained\nroles are included by default; min_role can restrict participation.\nFeasible constraints are absent. Regular and Indicator entries contain\nRegularViolation and IndicatorViolation (currently without extra details).\nOneHot entries contain OneHotViolation; SOS1 entries contain Sos1Violation,\nwhose values property maps excess variable IDs to their values.\nDiagnostic types may gain attributes or variants in minor releases; removing\nor changing existing information requires a major release.\nFuture constraint families may return other diagnostic types; consumers\nmust handle or explicitly reject unfamiliar ID types.\n\nDetails are computed only for violated rows and are not cached. An empty\ndictionary means all selected constraints are feasible; variable-domain\nfeasibility is separate. Changing a row's query tolerance does not change\nthe saved tolerance used here.\nOnly the requested sample is inspected. An unknown sample raises KeyError.",
+              "doc": "Return a dictionary containing only violated constraints, keyed by typed ID.\n\nUses the saved feasibility_atol and stored variable values. All retained\nroles are included by default; min_role can restrict participation.\nFeasible constraints are absent. Regular and Indicator entries contain\nRegularViolationDiagnostics and IndicatorViolationDiagnostics (currently without extra details).\nOneHot entries contain OneHotViolationDiagnostics; SOS1 entries contain Sos1ViolationDiagnostics,\nwhose values property maps excess variable IDs to their values.\nDiagnostic types may gain attributes or variants in minor releases; removing\nor changing existing information requires a major release.\nFuture constraint families may return other diagnostic types; consumers\nmust handle or explicitly reject unfamiliar ID types.\n\nDetails are computed only for violated rows and are not cached. An empty\ndictionary means all selected constraints are feasible; variable-domain\nfeasibility is separate. Changing a row's query tolerance does not change\nthe saved tolerance used here.\nOnly the requested sample is inspected. An unknown sample raises KeyError.",
               "signatures": [
                 {
                   "parameters": [
@@ -38942,7 +38942,7 @@
             },
             {
               "name": "violation_diagnostics",
-              "doc": "Return a dictionary containing only violated constraints, keyed by typed ID.\n\nUses the saved feasibility_atol and stored variable values. All retained\nroles are included by default; min_role can restrict participation.\nFeasible constraints are absent. Regular and Indicator entries contain\nRegularViolation and IndicatorViolation (currently without extra details).\nOneHot entries contain OneHotViolation; SOS1 entries contain Sos1Violation,\nwhose values property maps excess variable IDs to their values.\nDiagnostic types may gain attributes or variants in minor releases; removing\nor changing existing information requires a major release.\nFuture constraint families may return other diagnostic types; consumers\nmust handle or explicitly reject unfamiliar ID types.\n\nDetails are computed only for violated rows and are not cached. An empty\ndictionary means all selected constraints are feasible; variable-domain\nfeasibility is separate. Changing a row's query tolerance does not change\nthe saved tolerance used here.",
+              "doc": "Return a dictionary containing only violated constraints, keyed by typed ID.\n\nUses the saved feasibility_atol and stored variable values. All retained\nroles are included by default; min_role can restrict participation.\nFeasible constraints are absent. Regular and Indicator entries contain\nRegularViolationDiagnostics and IndicatorViolationDiagnostics (currently without extra details).\nOneHot entries contain OneHotViolationDiagnostics; SOS1 entries contain Sos1ViolationDiagnostics,\nwhose values property maps excess variable IDs to their values.\nDiagnostic types may gain attributes or variants in minor releases; removing\nor changing existing information requires a major release.\nFuture constraint families may return other diagnostic types; consumers\nmust handle or explicitly reject unfamiliar ID types.\n\nDetails are computed only for violated rows and are not cached. An empty\ndictionary means all selected constraints are feasible; variable-domain\nfeasibility is separate. Changing a row's query tolerance does not change\nthe saved tolerance used here.",
               "signatures": [
                 {
                   "parameters": [
@@ -40668,7 +40668,7 @@
         },
         {
           "kind": "Class",
-          "name": "Sos1Violation",
+          "name": "Sos1ViolationDiagnostics",
           "doc": "Diagnostics for a violated SOS1 constraint at the result's saved tolerance.\nObtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.\nMinor releases may add attributes; removing or changing existing information\nrequires a major release.",
           "bases": [],
           "methods": [
@@ -48734,7 +48734,7 @@
     "ommx.InactiveSos1Constraint": "ommx",
     "ommx.IndicatorConstraint": "ommx",
     "ommx.IndicatorConstraintID": "ommx",
-    "ommx.IndicatorViolation": "ommx",
+    "ommx.IndicatorViolationDiagnostics": "ommx",
     "ommx.InfeasibleDetected": "ommx",
     "ommx.InfeasibleOrUnboundedDetected": "ommx",
     "ommx.Instance": "ommx",
@@ -48753,7 +48753,7 @@
     "ommx.ObjectivePreparation": "ommx",
     "ommx.OneHotConstraint": "ommx",
     "ommx.OneHotConstraintID": "ommx",
-    "ommx.OneHotViolation": "ommx",
+    "ommx.OneHotViolationDiagnostics": "ommx",
     "ommx.Optimality": "ommx",
     "ommx.OutputObjective": "ommx",
     "ommx.Parameter": "ommx",
@@ -48765,7 +48765,7 @@
     "ommx.Provenance": "ommx",
     "ommx.ProvenanceKind": "ommx",
     "ommx.Quadratic": "ommx",
-    "ommx.RegularViolation": "ommx",
+    "ommx.RegularViolationDiagnostics": "ommx",
     "ommx.Relaxation": "ommx",
     "ommx.Rng": "ommx",
     "ommx.SampleSet": "ommx",
@@ -48785,7 +48785,7 @@
     "ommx.Sos1BigMSelectorClaim": "ommx",
     "ommx.Sos1Constraint": "ommx",
     "ommx.Sos1ConstraintID": "ommx",
-    "ommx.Sos1Violation": "ommx",
+    "ommx.Sos1ViolationDiagnostics": "ommx",
     "ommx.SpecialConstraintPreparation": "ommx",
     "ommx.State": "ommx",
     "ommx.ToSamples": "ommx",

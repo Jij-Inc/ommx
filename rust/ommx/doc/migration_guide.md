@@ -220,9 +220,9 @@ definition of the metric on the values supplied to the constraint.
 `BTreeMap<C::ID, C::ViolationDiagnostics>` for a selected constraint family `C`.
 Only rows violating the saved `feasibility_atol` are present, within the requested
 `min_role` scope. Regular and Indicator diagnostics are dedicated empty structs,
-[`RegularViolation`](crate::RegularViolation) and [`IndicatorViolation`](crate::IndicatorViolation).
-OneHot diagnostics are [`OneHotViolation`](crate::OneHotViolation), without `Option`.
-[`Sos1Violation`](crate::Sos1Violation) holds a nonempty `values` map after retaining
+[`RegularViolationDiagnostics`](crate::RegularViolationDiagnostics) and [`IndicatorViolationDiagnostics`](crate::IndicatorViolationDiagnostics).
+OneHot diagnostics are [`OneHotViolationDiagnostics`](crate::OneHotViolationDiagnostics), without `Option`.
+[`Sos1ViolationDiagnostics`](crate::Sos1ViolationDiagnostics) holds a nonempty `values` map after retaining
 one largest absolute member.
 OneHot includes missing selection, multiple selections, and value errors with
 all member values, including zeros. Its enum and variants are non-exhaustive to
