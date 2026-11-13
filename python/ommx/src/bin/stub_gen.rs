@@ -7,8 +7,32 @@ fn main() -> Result<()> {
     stub.generate()?;
 
     let root: &Path = env!("CARGO_MANIFEST_DIR").as_ref();
+    keep_mapping_override_ignore_on_declaration(&root.join("ommx/_ommx_rust/__init__.pyi"))?;
     avoid_git_conflict_marker_headings(&root.join("../../docs/api/_items"))?;
     Ok(())
+}
+
+fn keep_mapping_override_ignore_on_declaration(path: &Path) -> std::io::Result<()> {
+    // Pyright reports this known overload limitation on the `def` line.
+    // Put the existing narrow ignore there before Ruff wraps long signatures;
+    // an ignore moved to the return-annotation line would have no effect.
+    let source = fs::read_to_string(path)?;
+    let mut output = String::new();
+    let ignore = "# type: ignore[reportIncompatibleMethodOverride]";
+    for line in source.lines() {
+        if line.trim_start().starts_with("def get(") && line.contains(ignore) {
+            let (prefix, signature) = line.split_once('(').unwrap();
+            output.push_str(prefix);
+            output.push_str("(  ");
+            output.push_str(ignore);
+            output.push_str("\n        ");
+            output.push_str(signature.split_once(ignore).unwrap().0.trim_end());
+        } else {
+            output.push_str(line);
+        }
+        output.push('\n');
+    }
+    fs::write(path, output)
 }
 
 fn annotate_constraint_get_overrides(stub: &mut pyo3_stub_gen::StubInfo) {
@@ -19,6 +43,8 @@ fn annotate_constraint_get_overrides(stub: &mut pyo3_stub_gen::StubInfo) {
     // lifecycle, arbitrary defaults, and the open-base fallback without ignores.
     // The generic family view covers the same signatures with Row | Default;
     // test_constraint_family_view.py checks its concrete callers without ignores.
+    // Diagnostic snapshots refine Mapping.get in the same way;
+    // test_violation_diagnostics_typing.py checks callers and rejected keys.
     // gen_methods_from_python currently cannot attach per-method ignore metadata.
     for module in stub.modules.values_mut() {
         for class in module.class.values_mut() {
@@ -29,6 +55,8 @@ fn annotate_constraint_get_overrides(stub: &mut pyo3_stub_gen::StubInfo) {
                     | "EvaluatedConstraintCollection"
                     | "SampledConstraintCollection"
                     | "ConstraintFamilyView"
+                    | "ViolationDiagnostics"
+                    | "ViolationDiagnosticsFamilyView"
             ) {
                 let method = class.methods.get_mut("get").unwrap().last_mut().unwrap();
                 method.type_ignored = Some(pyo3_stub_gen::type_info::IgnoreTarget::Specified(&[

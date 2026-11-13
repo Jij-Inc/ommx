@@ -319,7 +319,7 @@ constraint_id!(
 );
 
 /// An identity whose concrete Python type determines its constraint family.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, IntoPyObject)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, IntoPyObject)]
 pub enum AnyConstraintID {
     Regular(ConstraintID),
     Indicator(IndicatorConstraintID),
