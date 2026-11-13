@@ -234,16 +234,13 @@ structs are also `#[non_exhaustive]`. Minor releases may add diagnostic informat
 removing, renaming, changing its type or meaning, or making existing information
 unavailable requires a major release.
 
-Each [`ConstraintType`](crate::ConstraintType) must specify `ViolationDiagnostics`;
-[`EvaluatedConstraintData`](crate::EvaluatedConstraintData) and
-[`SampledConstraintData`](crate::SampledConstraintData) must explicitly implement
-`violation_diagnostics`, even when its diagnostic struct is empty. Result roots filter by stored
-violation before asking a row to generate details from stored variable values.
-The evaluated method borrows an [`EvaluatedDecisionVariableTable`](crate::EvaluatedDecisionVariableTable);
-the sampled method borrows a [`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable)
-and takes a `sample_id` that selects both the row's evaluation data and its variable values.
-Callers pass the owning result's table without copying its values or extracting a sample.
-Value-lookup closures are internal implementation details, not public trait parameters.
+Each [`ConstraintType`](crate::ConstraintType) specifies its `ViolationDiagnostics` type.
+Diagnostic generation belongs to `Solution` and `SampleSet`: each query selects
+violated rows and reads the same host's stored variable values at its saved tolerance.
+For sampled queries, the host validates the requested sample ID before reading values.
+The public row traits expose scalar violations; diagnostic generation and value
+lookup are private implementation details of the result queries. Callers cannot
+supply a separate decision-variable table or a different tolerance.
 Diagnostics are not cached or stored in rows; scalar violations remain stored.
 
 Result hosts provide family access through

@@ -216,15 +216,6 @@ impl EvaluatedIndicatorConstraint {
 
 impl EvaluatedConstraintData for EvaluatedIndicatorConstraint {
     type ID = IndicatorConstraintID;
-    type ViolationDiagnostics = IndicatorViolationDiagnostics;
-    fn violation_diagnostics(
-        &self,
-        _decision_variables: &crate::EvaluatedDecisionVariableTable,
-        _atol: ATol,
-    ) -> Self::ViolationDiagnostics {
-        IndicatorViolationDiagnostics {}
-    }
-
     fn violation(&self) -> f64 {
         indicator_violation(
             self.equality,
@@ -241,15 +232,6 @@ impl EvaluatedConstraintData for EvaluatedIndicatorConstraint {
 impl SampledConstraintData for SampledIndicatorConstraint {
     type ID = IndicatorConstraintID;
     type Evaluated = EvaluatedIndicatorConstraint;
-    fn violation_diagnostics(
-        &self,
-        _sample_id: SampleID,
-        _decision_variables: &crate::SampledDecisionVariableTable,
-        _atol: ATol,
-    ) -> <Self::Evaluated as EvaluatedConstraintData>::ViolationDiagnostics {
-        IndicatorViolationDiagnostics {}
-    }
-
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
         Some(indicator_violation(
             self.equality,

@@ -23,8 +23,8 @@
 //! 3. Implement `ConstraintType for NewConstraint` mapping all three stages.
 //! 4. Implement `Evaluate` for `NewConstraint<Created>`,
 //!    [`EvaluatedConstraintData`] and [`SampledConstraintData`]. Every family must
-//!    provide a nonnegative scalar violation and implement `violation_diagnostics`
-//!    with a family-specific non-exhaustive diagnostic type, even when currently empty.
+//!    provide a nonnegative scalar violation. Diagnostic generation belongs to the
+//!    result hosts, with a family-specific non-exhaustive diagnostic type.
 //!    Feasibility is derived by the
 //!    blanket behavior implementations; families cannot supply a separate rule.
 //! 5. Add a `ConstraintCollection<NewConstraint>` field to [`Instance`].
@@ -179,10 +179,7 @@ pub trait ConstraintType {
         + std::fmt::Debug
         + PartialEq;
     /// The constraint after evaluation against a single state.
-    type Evaluated: EvaluatedConstraintBehavior<
-        ID = Self::ID,
-        ViolationDiagnostics = Self::ViolationDiagnostics,
-    >;
+    type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
     /// The constraint after evaluation against multiple samples.
     type Sampled: SampledConstraintBehavior<ID = Self::ID, Evaluated = Self::Evaluated>;
 }
@@ -199,19 +196,6 @@ pub trait ConstraintType {
 /// tolerance-dependent decision must retain that decision's conditions itself.
 pub trait EvaluatedConstraintData {
     type ID;
-    /// Details for a violated candidate, shared with the sampled stage.
-    type ViolationDiagnostics;
-    /// Generate details after the host has established that `violation > atol`.
-    /// Borrow the owning Solution's decision-variable table, containing the
-    /// stored values used for this evaluation. Every variable read by the
-    /// diagnostic must exist in the table. This operation neither decides
-    /// feasibility nor stores/caches the returned diagnostic.
-    fn violation_diagnostics(
-        &self,
-        decision_variables: &crate::EvaluatedDecisionVariableTable,
-        atol: ATol,
-    ) -> Self::ViolationDiagnostics;
-
     fn violation(&self) -> f64;
     fn used_decision_variable_ids(&self) -> &VariableIDSet {
         &EMPTY_VARIABLE_ID_SET
@@ -263,20 +247,6 @@ pub trait SampledConstraintData {
     type ID;
     /// The evaluated constraint type returned by [`get`](Self::get).
     type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
-    /// Generate details for a known, violated sample using its stored member values.
-    /// The host checks sample existence and `violation > atol` before calling this.
-    /// Borrow the owning SampleSet's decision-variable table. Every variable read
-    /// by the diagnostic must exist and contain `sample_id`, with the stored values
-    /// used for this evaluation. `sample_id` selects both the row's evaluation
-    /// data and its variable values. The result type is identical to single-state
-    /// evaluation; no sample extraction or diagnostic cache is required.
-    fn violation_diagnostics(
-        &self,
-        sample_id: SampleID,
-        decision_variables: &crate::SampledDecisionVariableTable,
-        atol: ATol,
-    ) -> <Self::Evaluated as EvaluatedConstraintData>::ViolationDiagnostics;
-
     /// The same scalar metric as single-state evaluation, or `None` for a
     /// missing sample. Implementations must satisfy [`EvaluatedConstraintData`]'s
     /// nonnegativity contract.
@@ -326,15 +296,6 @@ pub(crate) enum ActiveRowRewrite<T> {
 
 impl EvaluatedConstraintData for EvaluatedConstraint {
     type ID = ConstraintID;
-    type ViolationDiagnostics = crate::RegularViolationDiagnostics;
-    fn violation_diagnostics(
-        &self,
-        _decision_variables: &crate::EvaluatedDecisionVariableTable,
-        _atol: ATol,
-    ) -> Self::ViolationDiagnostics {
-        crate::RegularViolationDiagnostics {}
-    }
-
     fn violation(&self) -> f64 {
         self.equality.violation(self.stage.evaluated_value)
     }
@@ -347,15 +308,6 @@ impl EvaluatedConstraintData for EvaluatedConstraint {
 impl SampledConstraintData for SampledConstraint {
     type ID = ConstraintID;
     type Evaluated = EvaluatedConstraint;
-    fn violation_diagnostics(
-        &self,
-        _sample_id: SampleID,
-        _decision_variables: &crate::SampledDecisionVariableTable,
-        _atol: ATol,
-    ) -> <Self::Evaluated as EvaluatedConstraintData>::ViolationDiagnostics {
-        crate::RegularViolationDiagnostics {}
-    }
-
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
         self.stage
             .evaluated_values

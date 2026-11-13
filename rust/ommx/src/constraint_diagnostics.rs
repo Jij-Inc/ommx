@@ -1,10 +1,104 @@
 //! Lazy diagnostic queries owned by result roots.
+mod one_hot;
+mod sos1;
+pub use one_hot::OneHotViolationDiagnostics;
+pub use sos1::Sos1ViolationDiagnostics;
+
 use crate::{
-    ConstraintRole, ConstraintType, EvaluatedConstraintBehavior, EvaluatedConstraintData,
-    EvaluatedConstraints, SampleID, SampleSet, SampledConstraintBehavior, SampledConstraintData,
-    SampledConstraints, Solution,
+    ATol, Constraint, ConstraintRole, ConstraintType, EvaluatedCollection,
+    EvaluatedConstraintBehavior, EvaluatedConstraints, IndicatorConstraint,
+    IndicatorViolationDiagnostics, OneHotConstraint, RegularViolationDiagnostics, SampleID,
+    SampleSet, SampledCollection, SampledConstraintBehavior, SampledConstraints, Solution,
+    Sos1Constraint, Stage, VariableID,
 };
 use std::collections::BTreeMap;
+
+// Only the result query implementation can combine a row with stored values.
+// The public row traits expose scalar violations, not diagnostic generation.
+trait DiagnosticRow {
+    type Diagnostics;
+    fn diagnose(&self, value_of: impl FnMut(VariableID) -> f64, atol: ATol) -> Self::Diagnostics;
+}
+
+impl<S: Stage<Self>> DiagnosticRow for Constraint<S> {
+    type Diagnostics = RegularViolationDiagnostics;
+    fn diagnose(&self, _: impl FnMut(VariableID) -> f64, _: ATol) -> Self::Diagnostics {
+        RegularViolationDiagnostics {}
+    }
+}
+
+impl<S: Stage<Self>> DiagnosticRow for IndicatorConstraint<S> {
+    type Diagnostics = IndicatorViolationDiagnostics;
+    fn diagnose(&self, _: impl FnMut(VariableID) -> f64, _: ATol) -> Self::Diagnostics {
+        IndicatorViolationDiagnostics {}
+    }
+}
+
+impl<S: Stage<Self>> DiagnosticRow for OneHotConstraint<S> {
+    type Diagnostics = OneHotViolationDiagnostics;
+    fn diagnose(&self, value_of: impl FnMut(VariableID) -> f64, atol: ATol) -> Self::Diagnostics {
+        one_hot::diagnose(&self.variables, value_of, atol)
+    }
+}
+
+impl<S: Stage<Self>> DiagnosticRow for Sos1Constraint<S> {
+    type Diagnostics = Sos1ViolationDiagnostics;
+    fn diagnose(&self, value_of: impl FnMut(VariableID) -> f64, atol: ATol) -> Self::Diagnostics {
+        sos1::diagnose(&self.variables, value_of, atol)
+    }
+}
+
+macro_rules! impl_host_queries {
+    ($family:ty, $evaluated:ident, $sampled:ident) => {
+        impl EvaluatedConstraints<$family> for Solution {
+            fn evaluated_constraints(&self) -> &EvaluatedCollection<$family> {
+                self.$evaluated()
+            }
+
+            fn violation_diagnostics(
+                &self,
+                min_role: ConstraintRole,
+            ) -> BTreeMap<
+                <$family as ConstraintType>::ID,
+                <$family as ConstraintType>::ViolationDiagnostics,
+            > {
+                self.family_violation_diagnostics::<$family>(min_role)
+            }
+        }
+
+        impl SampledConstraints<$family> for SampleSet {
+            fn sampled_constraints(&self) -> &SampledCollection<$family> {
+                self.$sampled()
+            }
+
+            fn violation_diagnostics(
+                &self,
+                sample_id: SampleID,
+                min_role: ConstraintRole,
+            ) -> crate::Result<
+                BTreeMap<
+                    <$family as ConstraintType>::ID,
+                    <$family as ConstraintType>::ViolationDiagnostics,
+                >,
+            > {
+                self.family_violation_diagnostics::<$family>(sample_id, min_role)
+            }
+        }
+    };
+}
+
+impl_host_queries!(Constraint, evaluated_constraints, constraints);
+impl_host_queries!(
+    IndicatorConstraint,
+    evaluated_indicator_constraints,
+    indicator_constraints
+);
+impl_host_queries!(
+    OneHotConstraint,
+    evaluated_one_hot_constraints,
+    one_hot_constraints
+);
+impl_host_queries!(Sos1Constraint, evaluated_sos1_constraints, sos1_constraints);
 
 impl Solution {
     /// Return diagnostics for this family's violated constraints at the saved tolerance.
@@ -33,14 +127,31 @@ impl Solution {
     where
         Self: EvaluatedConstraints<C>,
     {
+        <Self as EvaluatedConstraints<C>>::violation_diagnostics(self, min_role)
+    }
+
+    fn family_violation_diagnostics<C: ConstraintType>(
+        &self,
+        min_role: ConstraintRole,
+    ) -> BTreeMap<C::ID, C::ViolationDiagnostics>
+    where
+        Self: EvaluatedConstraints<C>,
+        C::Evaluated: DiagnosticRow<Diagnostics = C::ViolationDiagnostics>,
+    {
         <Self as EvaluatedConstraints<C>>::evaluated_constraints(self)
             .selected(min_role)
             .filter(|(_, row)| !row.is_feasible(self.feasibility_atol()))
             .map(|(&id, row)| {
                 (
                     id,
-                    row.violation_diagnostics(
-                        self.decision_variable_table(),
+                    row.diagnose(
+                        |id| {
+                            *self
+                                .decision_variable_table()
+                                .get(&id)
+                                .expect("validated variable IDs")
+                                .value()
+                        },
                         self.feasibility_atol(),
                     ),
                 )
@@ -68,6 +179,18 @@ impl SampleSet {
     where
         Self: SampledConstraints<C>,
     {
+        <Self as SampledConstraints<C>>::violation_diagnostics(self, sample_id, min_role)
+    }
+
+    fn family_violation_diagnostics<C: ConstraintType>(
+        &self,
+        sample_id: SampleID,
+        min_role: ConstraintRole,
+    ) -> crate::Result<BTreeMap<C::ID, C::ViolationDiagnostics>>
+    where
+        Self: SampledConstraints<C>,
+        C::Sampled: DiagnosticRow<Diagnostics = C::ViolationDiagnostics>,
+    {
         crate::ensure!(
             self.objectives().get(sample_id).is_some(),
             crate::SampleSetError::UnknownSampleID { id: sample_id }
@@ -81,9 +204,16 @@ impl SampleSet {
             .map(|(&id, row)| {
                 (
                     id,
-                    row.violation_diagnostics(
-                        sample_id,
-                        self.decision_variable_table(),
+                    row.diagnose(
+                        |id| {
+                            *self
+                                .decision_variable_table()
+                                .get(&id)
+                                .expect("validated variable IDs")
+                                .samples()
+                                .get(sample_id)
+                                .expect("validated sample IDs")
+                        },
                         self.feasibility_atol(),
                     ),
                 )
@@ -317,16 +447,25 @@ mod tests {
             err.downcast_ref::<crate::SampleSetError>(),
             Some(crate::SampleSetError::UnknownSampleID { .. })
         ));
-        // Empty diagnostics do not read or duplicate member values.
-        let empty_variables = crate::EvaluatedDecisionVariableTable::default();
-        regular
-            .evaluate(&state, atol)
-            .unwrap()
-            .violation_diagnostics(&empty_variables, atol);
-        indicator
-            .evaluate(&state, atol)
-            .unwrap()
-            .violation_diagnostics(&empty_variables, atol);
+        let err = <SampleSet as SampledConstraints<OneHotConstraint>>::violation_diagnostics(
+            &samples,
+            99.into(),
+            ConstraintRole::EvaluationOnly,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<crate::SampleSetError>(),
+            Some(crate::SampleSetError::UnknownSampleID { .. })
+        ));
+        // Empty family diagnostics need no variable lookup, even internally.
+        regular.evaluate(&state, atol).unwrap().diagnose(
+            |_| panic!("regular diagnostics must not read variable values"),
+            atol,
+        );
+        indicator.evaluate(&state, atol).unwrap().diagnose(
+            |_| panic!("indicator diagnostics must not read variable values"),
+            atol,
+        );
         let feasible = host
             .evaluate(&State::from_iter([(0, 0.0), (1, 0.0)]), atol)
             .unwrap();
@@ -353,11 +492,14 @@ mod tests {
         let samples = host.evaluate_samples(&states, atol).unwrap();
         for (sample_id, target, excess) in [(13, 1, 0), (2, 0, 1), (7, 0, 1)] {
             let sample_id = SampleID::from(sample_id);
-            let one_hot = samples.one_hot_constraints()[&0.into()].violation_diagnostics(
-                sample_id,
-                samples.decision_variable_table(),
-                atol,
-            );
+            let one_hot = samples
+                .violation_diagnostics::<OneHotConstraint>(
+                    sample_id,
+                    ConstraintRole::EvaluationOnly,
+                )
+                .unwrap()
+                .remove(&0.into())
+                .unwrap();
             let OneHotViolationDiagnostics::ValueErrors {
                 target_variable,
                 ref errors,
@@ -371,40 +513,44 @@ mod tests {
                 *errors,
                 [(target.into(), 0.125), (excess.into(), 0.25)].into()
             );
-            let sos1 = samples.sos1_constraints()[&1.into()].violation_diagnostics(
-                sample_id,
-                samples.decision_variable_table(),
-                atol,
-            );
+            let sos1 = samples
+                .violation_diagnostics::<Sos1Constraint>(sample_id, ConstraintRole::EvaluationOnly)
+                .unwrap()
+                .remove(&1.into())
+                .unwrap();
             assert_eq!(sos1.values, [(excess.into(), 0.25)].into());
             assert_eq!(
-                samples
-                    .violation_diagnostics::<OneHotConstraint>(
-                        sample_id,
-                        ConstraintRole::EvaluationOnly
-                    )
-                    .unwrap(),
+                <SampleSet as SampledConstraints<OneHotConstraint>>::violation_diagnostics(
+                    &samples,
+                    sample_id,
+                    ConstraintRole::EvaluationOnly
+                )
+                .unwrap(),
                 [(0.into(), one_hot.clone())].into(),
             );
             assert_eq!(
-                samples
-                    .violation_diagnostics::<Sos1Constraint>(
-                        sample_id,
-                        ConstraintRole::EvaluationOnly
-                    )
-                    .unwrap(),
+                <SampleSet as SampledConstraints<Sos1Constraint>>::violation_diagnostics(
+                    &samples,
+                    sample_id,
+                    ConstraintRole::EvaluationOnly
+                )
+                .unwrap(),
                 [(1.into(), sos1.clone())].into(),
             );
             let solution = samples.get(sample_id).unwrap();
             assert_eq!(
-                solution.evaluated_one_hot_constraints()[&0.into()]
-                    .violation_diagnostics(solution.decision_variable_table(), atol),
-                one_hot,
+                <Solution as EvaluatedConstraints<OneHotConstraint>>::violation_diagnostics(
+                    &solution,
+                    ConstraintRole::EvaluationOnly
+                ),
+                [(0.into(), one_hot)].into(),
             );
             assert_eq!(
-                solution.evaluated_sos1_constraints()[&1.into()]
-                    .violation_diagnostics(solution.decision_variable_table(), atol),
-                sos1,
+                <Solution as EvaluatedConstraints<Sos1Constraint>>::violation_diagnostics(
+                    &solution,
+                    ConstraintRole::EvaluationOnly
+                ),
+                [(1.into(), sos1)].into(),
             );
         }
     }

@@ -1,5 +1,4 @@
-mod diagnostic;
-pub use diagnostic::OneHotViolationDiagnostics;
+pub use crate::constraint_diagnostics::OneHotViolationDiagnostics;
 mod evaluate;
 
 use crate::{
@@ -146,24 +145,6 @@ pub type SampledOneHotConstraint = OneHotConstraint<stage::Sampled>;
 
 impl EvaluatedConstraintData for EvaluatedOneHotConstraint {
     type ID = OneHotConstraintID;
-    type ViolationDiagnostics = crate::OneHotViolationDiagnostics;
-    fn violation_diagnostics(
-        &self,
-        decision_variables: &crate::EvaluatedDecisionVariableTable,
-        atol: ATol,
-    ) -> Self::ViolationDiagnostics {
-        diagnostic::diagnose(
-            &self.variables,
-            |id| {
-                *decision_variables
-                    .get(&id)
-                    .expect("validated variable IDs")
-                    .value()
-            },
-            atol,
-        )
-    }
-
     fn violation(&self) -> f64 {
         self.stage.violation
     }
@@ -176,26 +157,6 @@ impl EvaluatedConstraintData for EvaluatedOneHotConstraint {
 impl SampledConstraintData for SampledOneHotConstraint {
     type ID = OneHotConstraintID;
     type Evaluated = EvaluatedOneHotConstraint;
-    fn violation_diagnostics(
-        &self,
-        sample_id: SampleID,
-        decision_variables: &crate::SampledDecisionVariableTable,
-        atol: ATol,
-    ) -> <Self::Evaluated as EvaluatedConstraintData>::ViolationDiagnostics {
-        diagnostic::diagnose(
-            &self.variables,
-            |id| {
-                *decision_variables
-                    .get(&id)
-                    .expect("validated variable IDs")
-                    .samples()
-                    .get(sample_id)
-                    .expect("validated sample IDs")
-            },
-            atol,
-        )
-    }
-
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
         self.stage.violations.get(sample_id).copied()
     }
