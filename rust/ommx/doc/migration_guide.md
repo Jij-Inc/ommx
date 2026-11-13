@@ -245,6 +245,41 @@ and takes a `sample_id` that selects both the row's evaluation data and its vari
 Callers pass the owning result's table without copying its values or extracting a sample.
 Value-lookup closures are internal implementation details, not public trait parameters.
 Diagnostics are not cached or stored in rows; scalar violations remain stored.
+
+Result hosts provide family access through
+[`EvaluatedConstraints<C>`](crate::EvaluatedConstraints) for `Solution` and
+[`SampledConstraints<C>`](crate::SampledConstraints) for `SampleSet`.
+`ConstraintType` defines the family's types without depending on either host.
+Concrete calls such as `solution.violation_diagnostics::<OneHotConstraint>(role)`
+keep their form. Generic helpers specify that the host stores the selected family:
+
+```rust
+use ommx::{
+    ConstraintRole, ConstraintType, EvaluatedConstraints, SampledConstraints,
+    SampleID, SampleSet, Solution,
+};
+use std::collections::BTreeMap;
+
+fn solution_diagnostics<C: ConstraintType>(
+    solution: &Solution,
+) -> BTreeMap<C::ID, C::ViolationDiagnostics>
+where
+    Solution: EvaluatedConstraints<C>,
+{
+    solution.violation_diagnostics::<C>(ConstraintRole::FeasibilityCheck)
+}
+
+fn sample_diagnostics<C: ConstraintType>(
+    samples: &SampleSet,
+    sample_id: SampleID,
+) -> ommx::Result<BTreeMap<C::ID, C::ViolationDiagnostics>>
+where
+    SampleSet: SampledConstraints<C>,
+{
+    samples.violation_diagnostics::<C>(sample_id, ConstraintRole::FeasibilityCheck)
+}
+```
+
 SampleSet queries inspect only the requested sample, reject unknown sample IDs,
 and agree with extraction and v2 round trips. Empty maps describe constraint
 feasibility in the selected scope, not variable-domain feasibility.

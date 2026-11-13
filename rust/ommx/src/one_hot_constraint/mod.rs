@@ -236,13 +236,6 @@ impl SampledConstraintData for SampledOneHotConstraint {
 impl ConstraintType for OneHotConstraint {
     type ID = OneHotConstraintID;
     type ViolationDiagnostics = crate::OneHotViolationDiagnostics;
-    fn evaluated_constraints(solution: &crate::Solution) -> &crate::EvaluatedCollection<Self> {
-        solution.evaluated_one_hot_constraints()
-    }
-    fn sampled_constraints(samples: &crate::SampleSet) -> &crate::SampledCollection<Self> {
-        samples.one_hot_constraints()
-    }
-
     type Created = OneHotConstraint;
     type Evaluated = EvaluatedOneHotConstraint;
     type Sampled = SampledOneHotConstraint;

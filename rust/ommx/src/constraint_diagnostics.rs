@@ -1,7 +1,8 @@
 //! Lazy diagnostic queries owned by result roots.
 use crate::{
-    ConstraintRole, ConstraintType, EvaluatedConstraintBehavior, EvaluatedConstraintData, SampleID,
-    SampleSet, SampledConstraintBehavior, SampledConstraintData, Solution,
+    ConstraintRole, ConstraintType, EvaluatedConstraintBehavior, EvaluatedConstraintData,
+    EvaluatedConstraints, SampleID, SampleSet, SampledConstraintBehavior, SampledConstraintData,
+    SampledConstraints, Solution,
 };
 use std::collections::BTreeMap;
 
@@ -28,8 +29,11 @@ impl Solution {
     pub fn violation_diagnostics<C: ConstraintType>(
         &self,
         min_role: ConstraintRole,
-    ) -> BTreeMap<C::ID, C::ViolationDiagnostics> {
-        C::evaluated_constraints(self)
+    ) -> BTreeMap<C::ID, C::ViolationDiagnostics>
+    where
+        Self: EvaluatedConstraints<C>,
+    {
+        <Self as EvaluatedConstraints<C>>::evaluated_constraints(self)
             .selected(min_role)
             .filter(|(_, row)| !row.is_feasible(self.feasibility_atol()))
             .map(|(&id, row)| {
@@ -60,12 +64,15 @@ impl SampleSet {
         &self,
         sample_id: SampleID,
         min_role: ConstraintRole,
-    ) -> crate::Result<BTreeMap<C::ID, C::ViolationDiagnostics>> {
+    ) -> crate::Result<BTreeMap<C::ID, C::ViolationDiagnostics>>
+    where
+        Self: SampledConstraints<C>,
+    {
         crate::ensure!(
             self.objectives().get(sample_id).is_some(),
             crate::SampleSetError::UnknownSampleID { id: sample_id }
         );
-        Ok(C::sampled_constraints(self)
+        Ok(<Self as SampledConstraints<C>>::sampled_constraints(self)
             .selected(min_role)
             .filter(|(_, row)| {
                 !row.is_feasible_for(sample_id, self.feasibility_atol())

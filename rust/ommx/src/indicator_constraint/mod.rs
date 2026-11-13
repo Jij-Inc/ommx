@@ -303,13 +303,6 @@ impl SampledConstraintData for SampledIndicatorConstraint {
 impl ConstraintType for IndicatorConstraint {
     type ID = IndicatorConstraintID;
     type ViolationDiagnostics = IndicatorViolationDiagnostics;
-    fn evaluated_constraints(solution: &crate::Solution) -> &crate::EvaluatedCollection<Self> {
-        solution.evaluated_indicator_constraints()
-    }
-    fn sampled_constraints(samples: &crate::SampleSet) -> &crate::SampledCollection<Self> {
-        samples.indicator_constraints()
-    }
-
     type Created = IndicatorConstraint;
     type Evaluated = EvaluatedIndicatorConstraint;
     type Sampled = SampledIndicatorConstraint;

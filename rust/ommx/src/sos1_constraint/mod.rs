@@ -238,13 +238,6 @@ impl SampledConstraintData for SampledSos1Constraint {
 impl ConstraintType for Sos1Constraint {
     type ID = Sos1ConstraintID;
     type ViolationDiagnostics = Sos1ViolationDiagnostics;
-    fn evaluated_constraints(solution: &crate::Solution) -> &crate::EvaluatedCollection<Self> {
-        solution.evaluated_sos1_constraints()
-    }
-    fn sampled_constraints(samples: &crate::SampleSet) -> &crate::SampledCollection<Self> {
-        samples.sos1_constraints()
-    }
-
     type Created = Sos1Constraint;
     type Evaluated = EvaluatedSos1Constraint;
     type Sampled = SampledSos1Constraint;

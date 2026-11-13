@@ -165,6 +165,8 @@ impl<T> IDType for T where
 /// Each constraint kind's default (Created) form implements this trait.
 /// For example, `Constraint` (= `Constraint<Created>`) implements `ConstraintType`
 /// to define all stage types for regular constraints.
+/// Access to a family's stored rows belongs to the result host through
+/// [`crate::EvaluatedConstraints`] and [`crate::SampledConstraints`].
 pub trait ConstraintType {
     /// The ID type for this constraint family.
     type ID: IDType;
@@ -183,14 +185,6 @@ pub trait ConstraintType {
     >;
     /// The constraint after evaluation against multiple samples.
     type Sampled: SampledConstraintBehavior<ID = Self::ID, Evaluated = Self::Evaluated>;
-    /// Read this family's rows from a Solution. The host owns cross-table invariants.
-    fn evaluated_constraints(solution: &crate::Solution) -> &EvaluatedCollection<Self>
-    where
-        Self: Sized;
-    /// Read this family's rows from a SampleSet without extracting a Solution.
-    fn sampled_constraints(samples: &crate::SampleSet) -> &SampledCollection<Self>
-    where
-        Self: Sized;
 }
 
 /// The data each constraint family must provide after a single evaluation.
@@ -426,13 +420,6 @@ impl SampledConstraintData for SampledConstraint {
 impl ConstraintType for Constraint {
     type ID = ConstraintID;
     type ViolationDiagnostics = crate::RegularViolationDiagnostics;
-    fn evaluated_constraints(solution: &crate::Solution) -> &crate::EvaluatedCollection<Self> {
-        solution.evaluated_constraints()
-    }
-    fn sampled_constraints(samples: &crate::SampleSet) -> &crate::SampledCollection<Self> {
-        samples.constraints()
-    }
-
     type Created = Constraint;
     type Evaluated = EvaluatedConstraint;
     type Sampled = SampledConstraint;
