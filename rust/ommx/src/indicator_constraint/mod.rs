@@ -22,6 +22,14 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq)]
 pub struct IndicatorViolationDiagnostics {}
 
+impl<S: crate::Stage<Self>> crate::constraint_type::DiagnosticRow for IndicatorConstraint<S> {
+    type Diagnostics = IndicatorViolationDiagnostics;
+
+    fn diagnose(&self, _: impl FnMut(VariableID) -> f64, _: ATol) -> Self::Diagnostics {
+        IndicatorViolationDiagnostics {}
+    }
+}
+
 /// Binary value at which an indicator constraint's body is enforced.
 ///
 /// This type admits only zero and one, so every [`IndicatorConstraint`] has a

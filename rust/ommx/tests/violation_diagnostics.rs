@@ -1,9 +1,26 @@
 use ommx::{
-    v1::State, ATol, ConstraintRole, DecisionVariable, Evaluate, Function, Instance,
-    OneHotConstraint, OneHotViolationDiagnostics, SampleSet, Sampled, Sense, Solution,
-    Sos1Constraint,
+    v1::State, ATol, ConstraintRole, ConstraintType, DecisionVariable, Evaluate, Function,
+    Instance, OneHotConstraint, OneHotViolationDiagnostics, SampleID, SampleSet, Sampled, Sense,
+    Solution, Sos1Constraint,
 };
 use std::collections::BTreeMap;
+
+// Compile these helpers as a downstream crate: no internal host or dispatch
+// bound may be needed, even when the constraint family is not concrete yet.
+fn solution_diagnostics<C: ConstraintType>(
+    solution: &Solution,
+    role: ConstraintRole,
+) -> BTreeMap<C::ID, C::ViolationDiagnostics> {
+    solution.violation_diagnostics::<C>(role)
+}
+
+fn sample_diagnostics<C: ConstraintType>(
+    samples: &SampleSet,
+    sample_id: SampleID,
+    role: ConstraintRole,
+) -> ommx::Result<BTreeMap<C::ID, C::ViolationDiagnostics>> {
+    samples.violation_diagnostics::<C>(sample_id, role)
+}
 
 fn model(n: usize) -> Instance {
     let members = (0..n as u64).map(Into::into).collect();
@@ -243,11 +260,11 @@ fn every_family_filters_roles_and_survives_storage_and_extraction() {
                                     .map(|offset| ($base + offset).into())
                                     .collect::<Vec<_>>()
                             };
-                            let diagnostics = solution.violation_diagnostics::<$family>(role);
+                            let diagnostics = solution_diagnostics::<$family>(&solution, role);
                             assert_eq!(diagnostics.keys().copied().collect::<Vec<_>>(), expected);
                             assert_eq!(
                                 diagnostics,
-                                samples.violation_diagnostics::<$family>(sid, role).unwrap()
+                                sample_diagnostics::<$family>(&samples, sid, role).unwrap()
                             );
                         }};
                     }

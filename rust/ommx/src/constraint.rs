@@ -34,6 +34,14 @@ pub use stage::{
 #[derive(Debug, Clone, PartialEq)]
 pub struct RegularViolationDiagnostics {}
 
+impl<S: crate::Stage<Self>> crate::constraint_type::DiagnosticRow for Constraint<S> {
+    type Diagnostics = RegularViolationDiagnostics;
+
+    fn diagnose(&self, _: impl FnMut(VariableID) -> f64, _: ATol) -> Self::Diagnostics {
+        RegularViolationDiagnostics {}
+    }
+}
+
 /// Constraint equality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, LogicalMemoryProfile)]
 pub enum Equality {

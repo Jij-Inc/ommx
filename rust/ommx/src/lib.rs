@@ -35,7 +35,6 @@ mod atol;
 mod bound;
 mod coefficient;
 mod constraint;
-mod constraint_diagnostics;
 mod constraint_ids;
 mod constraint_type;
 mod decision_variable;

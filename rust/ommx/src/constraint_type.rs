@@ -7,7 +7,7 @@
 //!
 //! # Adding new constraint types
 //!
-//! To add a new constraint type (e.g. Disjunction):
+//! To add a new constraint type within the SDK (e.g. Disjunction):
 //!
 //! 1. Define a new struct `NewConstraint<S: Stage<Self> = Created>` with the
 //!    type's intrinsic fields (`equality`, `stage`, plus anything specific to
@@ -20,11 +20,14 @@
 //!    than the struct itself.
 //! 2. Implement `Stage<NewConstraint<S>>` for each stage marker (reuse `CreatedData`,
 //!    `EvaluatedData`, etc. if the stage data is the same as regular constraints).
-//! 3. Implement `ConstraintType for NewConstraint` mapping all three stages.
+//! 3. Implement `ConstraintType for NewConstraint` mapping all three stages and
+//!    the diagnostic type. Extend the internal family dispatch and both result
+//!    hosts' queries to cover the new family.
 //! 4. Implement `Evaluate` for `NewConstraint<Created>`,
 //!    [`EvaluatedConstraintData`] and [`SampledConstraintData`]. Every family must
-//!    provide a nonnegative scalar violation. Diagnostic generation belongs to the
-//!    result hosts, with a family-specific non-exhaustive diagnostic type.
+//!    provide a nonnegative scalar violation and the internal `DiagnosticRow`
+//!    implementation with a family-specific non-exhaustive diagnostic type.
+//!    Result hosts own row selection and the values supplied to diagnostics.
 //!    Feasibility is derived by the
 //!    blanket behavior implementations; families cannot supply a separate rule.
 //! 5. Add a `ConstraintCollection<NewConstraint>` field to [`Instance`].
@@ -37,6 +40,11 @@
 //! [`IndicatorConstraint`]: crate::IndicatorConstraint
 //! [`Instance`]: crate::Instance
 //! [`ConstraintKind`]: crate::ConstraintKind
+
+mod diagnostics;
+// Solution and SampleSet use typed dispatch without exposing their storage contracts.
+pub(crate) mod dispatch;
+pub(crate) use diagnostics::DiagnosticRow;
 
 use crate::Result;
 use crate::{
@@ -165,9 +173,11 @@ impl<T> IDType for T where
 /// Each constraint kind's default (Created) form implements this trait.
 /// For example, `Constraint` (= `Constraint<Created>`) implements `ConstraintType`
 /// to define all stage types for regular constraints.
-/// Access to a family's stored rows belongs to the result host through
-/// [`crate::EvaluatedConstraints`] and [`crate::SampledConstraints`].
-pub trait ConstraintType {
+/// This trait is sealed: only SDK constraint families implement it. Result hosts
+/// support every such family, so generic diagnostic queries need only this bound.
+/// Collection access and diagnostic queries belong to [`crate::Solution`] and
+/// [`crate::SampleSet`], not to the family type.
+pub trait ConstraintType: dispatch::Sealed {
     /// The ID type for this constraint family.
     type ID: IDType;
     /// Family-specific detail for a violated constraint. Use a dedicated

@@ -37,7 +37,7 @@ pub enum OneHotViolationDiagnostics {
     },
 }
 
-pub fn diagnose(
+fn diagnose(
     variables: &VariableIDSet,
     mut value_of: impl FnMut(VariableID) -> f64,
     atol: ATol,
@@ -57,10 +57,9 @@ pub fn diagnose(
             values,
         };
     }
-    let target_variable = crate::one_hot_constraint::select_one_hot_member(
-        values.iter().map(|(&id, &value)| (id, value)),
-    )
-    .expect("OneHot constraints have at least one member");
+    let target_variable =
+        super::select_one_hot_member(values.iter().map(|(&id, &value)| (id, value)))
+            .expect("OneHot constraints have at least one member");
     let errors = values
         .iter()
         .filter_map(|(&id, &value)| {
@@ -72,5 +71,13 @@ pub fn diagnose(
         target_variable,
         errors,
         values,
+    }
+}
+
+impl<S: crate::Stage<Self>> crate::constraint_type::DiagnosticRow for super::OneHotConstraint<S> {
+    type Diagnostics = OneHotViolationDiagnostics;
+
+    fn diagnose(&self, value_of: impl FnMut(VariableID) -> f64, atol: ATol) -> Self::Diagnostics {
+        diagnose(&self.variables, value_of, atol)
     }
 }

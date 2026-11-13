@@ -3,8 +3,6 @@ mod constraints;
 mod parse;
 mod serialize;
 
-pub use constraints::EvaluatedConstraints;
-
 use crate::{
     constraint_type::EvaluatedCollection,
     decision_variable::{EvaluatedDecisionVariableTable, VariableLabelStore},

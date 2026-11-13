@@ -1,6 +1,7 @@
 mod evaluate;
 
-pub use crate::constraint_diagnostics::Sos1ViolationDiagnostics;
+mod diagnostics;
+pub use diagnostics::Sos1ViolationDiagnostics;
 
 use crate::{
     constraint::{stage, Created, Evaluated, Stage},

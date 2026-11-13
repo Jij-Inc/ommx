@@ -4,8 +4,6 @@ mod extract;
 mod parse;
 mod serialize;
 
-pub use constraints::SampledConstraints;
-
 use crate::{
     constraint_type::{ConstraintType, EvaluatedCollection, SampledCollection},
     indicator_constraint::IndicatorConstraint,

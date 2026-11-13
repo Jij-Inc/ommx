@@ -20,7 +20,7 @@ pub struct Sos1ViolationDiagnostics {
     pub values: BTreeMap<VariableID, f64>,
 }
 
-pub fn diagnose(
+fn diagnose(
     variables: &VariableIDSet,
     mut value_of: impl FnMut(VariableID) -> f64,
     atol: ATol,
@@ -38,4 +38,12 @@ pub fn diagnose(
         })
         .collect();
     Sos1ViolationDiagnostics { values }
+}
+
+impl<S: crate::Stage<Self>> crate::constraint_type::DiagnosticRow for super::Sos1Constraint<S> {
+    type Diagnostics = Sos1ViolationDiagnostics;
+
+    fn diagnose(&self, value_of: impl FnMut(VariableID) -> f64, atol: ATol) -> Self::Diagnostics {
+        diagnose(&self.variables, value_of, atol)
+    }
 }

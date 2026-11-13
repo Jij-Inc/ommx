@@ -1,4 +1,5 @@
-pub use crate::constraint_diagnostics::OneHotViolationDiagnostics;
+mod diagnostics;
+pub use diagnostics::OneHotViolationDiagnostics;
 mod evaluate;
 
 use crate::{
@@ -461,7 +462,7 @@ impl std::fmt::Display for OneHotConstraint<Created> {
 /// Shared with result diagnostics so evaluation and repair use the same tie rule.
 /// Callers supply finite values; numerically equal values, including signed zeros,
 /// are resolved by the largest variable ID.
-pub(crate) fn select_one_hot_member(
+fn select_one_hot_member(
     values: impl IntoIterator<Item = (VariableID, f64)>,
 ) -> Option<VariableID> {
     values

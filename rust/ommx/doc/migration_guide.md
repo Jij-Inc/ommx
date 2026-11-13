@@ -245,16 +245,14 @@ lookup are private implementation details of the result queries. Callers cannot
 supply a separate decision-variable table or a different tolerance.
 Diagnostics are not cached or stored in rows; scalar violations remain stored.
 
-Result hosts provide family access through
-[`EvaluatedConstraints<C>`](crate::EvaluatedConstraints) for `Solution` and
-[`SampledConstraints<C>`](crate::SampledConstraints) for `SampleSet`.
-`ConstraintType` defines the family's types without depending on either host.
-Concrete calls such as `solution.violation_diagnostics::<OneHotConstraint>(role)`
-keep their form. Generic helpers specify that the host stores the selected family:
+[`ConstraintType`](crate::ConstraintType) is sealed to the SDK's constraint
+families. Every such family is supported by both result hosts. Generic helpers
+need only `C: ConstraintType`; collection access and host dispatch stay internal.
+External implementations of `ConstraintType` are no longer supported.
 
 ```rust
 use ommx::{
-    ConstraintRole, ConstraintType, EvaluatedConstraints, SampledConstraints,
+    ConstraintRole, ConstraintType,
     SampleID, SampleSet, Solution,
 };
 use std::collections::BTreeMap;
@@ -262,8 +260,6 @@ use std::collections::BTreeMap;
 fn solution_diagnostics<C: ConstraintType>(
     solution: &Solution,
 ) -> BTreeMap<C::ID, C::ViolationDiagnostics>
-where
-    Solution: EvaluatedConstraints<C>,
 {
     solution.violation_diagnostics::<C>(ConstraintRole::FeasibilityCheck)
 }
@@ -272,8 +268,6 @@ fn sample_diagnostics<C: ConstraintType>(
     samples: &SampleSet,
     sample_id: SampleID,
 ) -> ommx::Result<BTreeMap<C::ID, C::ViolationDiagnostics>>
-where
-    SampleSet: SampledConstraints<C>,
 {
     samples.violation_diagnostics::<C>(sample_id, ConstraintRole::FeasibilityCheck)
 }
@@ -685,11 +679,14 @@ match instance.propagate(&state, atol) {
 
 ### ConstraintType Trait
 
-A type family mapping lifecycle stages to concrete types (HKT defunctionalization):
+A sealed type family mapping lifecycle stages to concrete types and a diagnostic
+type (HKT defunctionalization). Only SDK constraint families implement it; the
+following sketch omits its private sealing bound:
 
 ```rust,ignore
 pub trait ConstraintType {
     type ID: IDType;
+    type ViolationDiagnostics;
     type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
         + Clone + Debug + PartialEq;
     type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
