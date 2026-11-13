@@ -16226,42 +16226,6 @@
         },
         {
           "kind": "Class",
-          "name": "IndicatorViolationDiagnostics",
-          "doc": "Diagnostics for a violated indicator constraint, currently without extra details.\nObtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.\nMinor releases may add attributes; removing or changing existing information\nrequires a major release.",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "InfeasibleDetected",
           "doc": "The mathematical model was proven infeasible.",
           "bases": [
@@ -26110,15 +26074,6 @@
         },
         {
           "kind": "Class",
-          "name": "OneHotViolationDiagnostics",
-          "doc": "A OneHot violation at the result's feasibility_atol. Each variant retains\nall member values, including zeros. Feasible rows are absent from the diagnostic\ndictionary. Future versions may add variants or fields.\nMinor releases may add variants or fields; removing or changing existing\ninformation requires a major release.",
-          "bases": [],
-          "methods": [],
-          "attributes": [],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "Optimality",
           "doc": "Optimality status of a solution",
           "bases": [],
@@ -33345,42 +33300,6 @@
         },
         {
           "kind": "Class",
-          "name": "RegularViolationDiagnostics",
-          "doc": "Diagnostics for a violated regular constraint, currently without extra details.\nObtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.\nMinor releases may add attributes; removing or changing existing information\nrequires a major release.",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "Relaxation",
           "doc": "Relaxation status of a solution",
           "bases": [],
@@ -34501,72 +34420,6 @@
                     "display": "DataFrame",
                     "link_target": null,
                     "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "violation_diagnostics",
-              "doc": "Return a dictionary containing only violated constraints, keyed by typed ID.\n\nUses the saved feasibility_atol and stored variable values. All retained\nroles are included by default; min_role can restrict participation.\nFeasible constraints are absent. Regular and Indicator entries contain\nRegularViolationDiagnostics and IndicatorViolationDiagnostics (currently without extra details).\nOneHot entries contain OneHotViolationDiagnostics; SOS1 entries contain Sos1ViolationDiagnostics,\nwhose values property maps excess variable IDs to their values.\nDiagnostic types may gain attributes or variants in minor releases; removing\nor changing existing information requires a major release.\nFuture constraint families may return other diagnostic types; consumers\nmust handle or explicitly reject unfamiliar ID types.\n\nDetails are computed only for violated rows and are not cached. An empty\ndictionary means all selected constraints are feasible; variable-domain\nfeasibility is separate. Changing a row's query tolerance does not change\nthe saved tolerance used here.\nOnly the requested sample is inspected. An unknown sample raises KeyError.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "sample_id",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "min_role",
-                      "type_": {
-                        "display": "ConstraintRole",
-                        "link_target": {
-                          "fqn": "ommx.ConstraintRole",
-                          "doc_module": "ommx",
-                          "kind": "Class",
-                          "attribute": null
-                        },
-                        "children": []
-                      },
-                      "default": {
-                        "kind": "Expression",
-                        "display": "ConstraintRole.EVALUATION_ONLY",
-                        "type_refs": [
-                          {
-                            "text": "ConstraintRole.EVALUATION_ONLY",
-                            "offset": 0,
-                            "link_target": {
-                              "fqn": "ommx.ConstraintRole.EVALUATION_ONLY",
-                              "doc_module": "ommx",
-                              "kind": "Class",
-                              "attribute": "EVALUATION_ONLY"
-                            }
-                          }
-                        ]
-                      }
-                    }
-                  ],
-                  "return_type": {
-                    "display": "dict[ConstraintIDBase, object]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "ConstraintIDBase",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
                   }
                 }
               ],
@@ -38939,63 +38792,6 @@
               ],
               "is_async": false,
               "deprecated": null
-            },
-            {
-              "name": "violation_diagnostics",
-              "doc": "Return a dictionary containing only violated constraints, keyed by typed ID.\n\nUses the saved feasibility_atol and stored variable values. All retained\nroles are included by default; min_role can restrict participation.\nFeasible constraints are absent. Regular and Indicator entries contain\nRegularViolationDiagnostics and IndicatorViolationDiagnostics (currently without extra details).\nOneHot entries contain OneHotViolationDiagnostics; SOS1 entries contain Sos1ViolationDiagnostics,\nwhose values property maps excess variable IDs to their values.\nDiagnostic types may gain attributes or variants in minor releases; removing\nor changing existing information requires a major release.\nFuture constraint families may return other diagnostic types; consumers\nmust handle or explicitly reject unfamiliar ID types.\n\nDetails are computed only for violated rows and are not cached. An empty\ndictionary means all selected constraints are feasible; variable-domain\nfeasibility is separate. Changing a row's query tolerance does not change\nthe saved tolerance used here.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "min_role",
-                      "type_": {
-                        "display": "ConstraintRole",
-                        "link_target": {
-                          "fqn": "ommx.ConstraintRole",
-                          "doc_module": "ommx",
-                          "kind": "Class",
-                          "attribute": null
-                        },
-                        "children": []
-                      },
-                      "default": {
-                        "kind": "Expression",
-                        "display": "ConstraintRole.EVALUATION_ONLY",
-                        "type_refs": [
-                          {
-                            "text": "ConstraintRole.EVALUATION_ONLY",
-                            "offset": 0,
-                            "link_target": {
-                              "fqn": "ommx.ConstraintRole.EVALUATION_ONLY",
-                              "doc_module": "ommx",
-                              "kind": "Class",
-                              "attribute": "EVALUATION_ONLY"
-                            }
-                          }
-                        ]
-                      }
-                    }
-                  ],
-                  "return_type": {
-                    "display": "dict[ConstraintIDBase, object]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "ConstraintIDBase",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
             }
           ],
           "attributes": [
@@ -40664,65 +40460,6 @@
             }
           ],
           "attributes": [],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
-          "name": "Sos1ViolationDiagnostics",
-          "doc": "Diagnostics for a violated SOS1 constraint at the result's saved tolerance.\nObtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.\nMinor releases may add attributes; removing or changing existing information\nrequires a major release.",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "values",
-              "doc": "Original signed values of excess members, keyed by variable ID.\nRetains one largest absolute member (ties retain the largest ID), then\nreports remaining values exceeding feasibility_atol in absolute value.\nThis nonempty map describes one possible repair, not a uniquely intended\nselection. Mutating the returned dictionary does not change the diagnostic\nor the result.",
-              "type_": {
-                "display": "dict[int, float]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "float",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
           "deprecated": null
         },
         {
@@ -48734,7 +48471,6 @@
     "ommx.InactiveSos1Constraint": "ommx",
     "ommx.IndicatorConstraint": "ommx",
     "ommx.IndicatorConstraintID": "ommx",
-    "ommx.IndicatorViolationDiagnostics": "ommx",
     "ommx.InfeasibleDetected": "ommx",
     "ommx.InfeasibleOrUnboundedDetected": "ommx",
     "ommx.Instance": "ommx",
@@ -48753,7 +48489,6 @@
     "ommx.ObjectivePreparation": "ommx",
     "ommx.OneHotConstraint": "ommx",
     "ommx.OneHotConstraintID": "ommx",
-    "ommx.OneHotViolationDiagnostics": "ommx",
     "ommx.Optimality": "ommx",
     "ommx.OutputObjective": "ommx",
     "ommx.Parameter": "ommx",
@@ -48765,7 +48500,6 @@
     "ommx.Provenance": "ommx",
     "ommx.ProvenanceKind": "ommx",
     "ommx.Quadratic": "ommx",
-    "ommx.RegularViolationDiagnostics": "ommx",
     "ommx.Relaxation": "ommx",
     "ommx.Rng": "ommx",
     "ommx.SampleSet": "ommx",
@@ -48785,7 +48519,6 @@
     "ommx.Sos1BigMSelectorClaim": "ommx",
     "ommx.Sos1Constraint": "ommx",
     "ommx.Sos1ConstraintID": "ommx",
-    "ommx.Sos1ViolationDiagnostics": "ommx",
     "ommx.SpecialConstraintPreparation": "ommx",
     "ommx.State": "ommx",
     "ommx.ToSamples": "ommx",

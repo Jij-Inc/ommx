@@ -6,7 +6,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-### OneHot・SOS1の違反診断 ([#1384](https://github.com/Jij-Inc/ommx/pull/1384))
+### OneHot・SOS1の違反量 ([#1384](https://github.com/Jij-Inc/ommx/pull/1384))
 
 OneHotとSOS1の違反量を、**制約を満たすために必要な最大修正量**に変更します。
 複数の直し方がある場合は、変数ごとの修正量の最大値が最小になるものを選びます。
@@ -16,23 +16,6 @@ OneHotとSOS1の違反量を、**制約を満たすために必要な最大修�
 以前のプレリリース版では修正量を合計していました。新しい定義では、SOS1の
 `(1, 0.00006, 0.00006)` の違反量は `0.00006` となり、許容誤差 `0.0001` で
 実行可能になります。数学的には、条件を満たす状態までのL∞距離にあたります。
-
-```python
-diagnostics = solution.violation_diagnostics()
-sample_diagnostics = samples.violation_diagnostics(sample_id)
-```
-
-辞書は型付きIDをキーに、違反した制約だけを含みます。Regular・Indicatorの値は
-現在は診断項目を持たない専用の `RegularViolationDiagnostics`・`IndicatorViolationDiagnostics` オブジェクトです。
-OneHotは未選択・複数選択・値のずれを区別する診断で、全ゼロも表現します。
-SOS1は `Sos1ViolationDiagnostics` の `values` に余分な非ゼロ変数のIDと値を持ちます。
-実行可能な行は含みません。
-
-診断は保存された変数値から違反行についてだけ必要時に計算し、スカラーの違反量は
-保持します。保存された `feasibility_atol` を使い、既定ではinactiveな行も含みます。
-`min_role` で対象を絞れます。SampleSetは指定サンプルだけを調べます。
-サンプル抽出・v2形式の保存復元後も利用できます。分類と拡張の契約は
-[マイグレーションガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
 
 ### ⚠ Active / inactiveへの整理 ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
 

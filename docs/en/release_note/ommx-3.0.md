@@ -6,7 +6,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-### OneHot and SOS1 violation diagnostics ([#1384](https://github.com/Jij-Inc/ommx/pull/1384))
+### OneHot and SOS1 violation measure ([#1384](https://github.com/Jij-Inc/ommx/pull/1384))
 
 OneHot and SOS1 now report the **largest variable adjustment needed to satisfy
 the constraint**, choosing the repair that makes this largest adjustment as
@@ -16,24 +16,6 @@ small as possible. For example, repairing OneHot values `(0.9, 0.2, 0)` to
 The earlier prerelease summed the adjustments. With the new definition, SOS1
 values `(1, 0.00006, 0.00006)` have violation `0.00006` and pass at tolerance
 `0.0001`. Mathematically, this measure is the L∞ distance to a satisfying assignment.
-
-```python
-diagnostics = solution.violation_diagnostics()
-sample_diagnostics = samples.violation_diagnostics(sample_id)
-```
-
-The dictionary contains only violated constraints, keyed by typed ID. Regular
-and Indicator values are dedicated `RegularViolationDiagnostics` and `IndicatorViolationDiagnostics`
-objects, currently without extra details; OneHot values distinguish missing selection,
-multiple selections, and value errors, including all-zero candidates. SOS1 entries
-are `Sos1ViolationDiagnostics` objects with excess member IDs and values in `values`.
-Feasible rows are absent.
-
-Details are computed on demand from stored values only for violated rows. Scalar
-violations remain stored. Both queries use `feasibility_atol` and include inactive
-rows by default; `min_role` narrows the scope. SampleSet inspects only the requested
-sample. Diagnostics remain available after extraction and v2 storage. See the
-[migration guide](../migration/python_sdk_v2_to_v3.md) for classification and extension contracts.
 
 ### ⚠ Active and inactive constraints ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
 

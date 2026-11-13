@@ -74,7 +74,6 @@ __all__ = [
     "InactiveSos1Constraint",
     "IndicatorConstraint",
     "IndicatorConstraintID",
-    "IndicatorViolationDiagnostics",
     "InfeasibleDetected",
     "InfeasibleOrUnboundedDetected",
     "Instance",
@@ -96,7 +95,6 @@ __all__ = [
     "ObjectivePreparation",
     "OneHotConstraint",
     "OneHotConstraintID",
-    "OneHotViolationDiagnostics",
     "OpenSolve",
     "Optimality",
     "OutputObjective",
@@ -111,7 +109,6 @@ __all__ = [
     "ProvenanceKind",
     "PruneAnonymousReport",
     "Quadratic",
-    "RegularViolationDiagnostics",
     "Relaxation",
     "RemoteArtifactAuthenticationError",
     "RemoteArtifactAuthorizationError",
@@ -141,7 +138,6 @@ __all__ = [
     "Sos1BigMSelectorClaim",
     "Sos1Constraint",
     "Sos1ConstraintID",
-    "Sos1ViolationDiagnostics",
     "SpecialConstraintPreparation",
     "State",
     "ToFunction",
@@ -5396,16 +5392,6 @@ class IndicatorConstraintID(ConstraintIDBase):
         IDs are immutable, including when nested in copied containers.
         """
 
-@typing.final
-class IndicatorViolationDiagnostics:
-    r"""
-    Diagnostics for a violated indicator constraint, currently without extra details.
-    Obtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.
-    Minor releases may add attributes; removing or changing existing information
-    requires a major release.
-    """
-    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
-
 class InfeasibleDetected(builtins.RuntimeError):
     r"""
     The mathematical model was proven infeasible.
@@ -10593,78 +10579,6 @@ class OneHotConstraintID(ConstraintIDBase):
         IDs are immutable, including when nested in copied containers.
         """
 
-class OneHotViolationDiagnostics:
-    r"""
-    A OneHot violation at the result's feasibility_atol. Each variant retains
-    all member values, including zeros. Feasible rows are absent from the diagnostic
-    dictionary. Future versions may add variants or fields.
-    Minor releases may add variants or fields; removing or changing existing
-    information requires a major release.
-    """
-    @typing.final
-    class MissingSelection(OneHotViolationDiagnostics):
-        r"""
-        All members are within tolerance of zero, but the row is infeasible.
-        """
-
-        __match_args__ = ("values",)
-        @property
-        def values(self) -> builtins.dict[builtins.int, builtins.float]: ...
-        def __new__(
-            cls, values: typing.Mapping[builtins.int, builtins.float]
-        ) -> OneHotViolationDiagnostics.MissingSelection: ...
-
-    @typing.final
-    class MultipleSelections(OneHotViolationDiagnostics):
-        r"""
-        The row is infeasible and at least two members are within tolerance of one.
-        Other value errors can coexist and remain visible in values.
-        """
-
-        __match_args__ = (
-            "selected_variables",
-            "values",
-        )
-        @property
-        def selected_variables(self) -> builtins.set[builtins.int]: ...
-        @property
-        def values(self) -> builtins.dict[builtins.int, builtins.float]: ...
-        def __new__(
-            cls,
-            selected_variables: builtins.set[builtins.int],
-            values: typing.Mapping[builtins.int, builtins.float],
-        ) -> OneHotViolationDiagnostics.MultipleSelections: ...
-
-    @typing.final
-    class ValueErrors(OneHotViolationDiagnostics):
-        r"""
-        Other value deviations from a closest OneHot assignment.
-        The target is the largest member value, breaking ties by largest ID.
-        Errors are absolute changes exceeding feasibility_atol: distance to one
-        for the target, distance to zero for the other members. The target is one
-        possible repair choice, not a uniquely intended selection.
-        """
-
-        __match_args__ = (
-            "target_variable",
-            "errors",
-            "values",
-        )
-        @property
-        def target_variable(self) -> builtins.int: ...
-        @property
-        def errors(self) -> builtins.dict[builtins.int, builtins.float]: ...
-        @property
-        def values(self) -> builtins.dict[builtins.int, builtins.float]: ...
-        def __new__(
-            cls,
-            target_variable: builtins.int,
-            errors: typing.Mapping[builtins.int, builtins.float],
-            values: typing.Mapping[builtins.int, builtins.float],
-        ) -> OneHotViolationDiagnostics.ValueErrors: ...
-
-    ...
-
 @typing.final
 class OpenSolve:
     r"""
@@ -12367,16 +12281,6 @@ class Quadratic:
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
 
-@typing.final
-class RegularViolationDiagnostics:
-    r"""
-    Diagnostics for a violated regular constraint, currently without extra details.
-    Obtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.
-    Minor releases may add attributes; removing or changing existing information
-    requires a major release.
-    """
-    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
-
 class RemoteArtifactAuthenticationError(RemoteArtifactError):
     r"""
     Authentication for the remote Artifact registry failed.
@@ -13076,32 +12980,6 @@ class SampleSet:
     def get_user_annotations(
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
-    def violation_diagnostics(
-        self,
-        sample_id: builtins.int,
-        *,
-        min_role: ConstraintRole = ConstraintRole.EVALUATION_ONLY,
-    ) -> builtins.dict[ConstraintIDBase, builtins.object]:
-        r"""
-        Return a dictionary containing only violated constraints, keyed by typed ID.
-
-        Uses the saved feasibility_atol and stored variable values. All retained
-        roles are included by default; min_role can restrict participation.
-        Feasible constraints are absent. Regular and Indicator entries contain
-        RegularViolationDiagnostics and IndicatorViolationDiagnostics (currently without extra details).
-        OneHot entries contain OneHotViolationDiagnostics; SOS1 entries contain Sos1ViolationDiagnostics,
-        whose values property maps excess variable IDs to their values.
-        Diagnostic types may gain attributes or variants in minor releases; removing
-        or changing existing information requires a major release.
-        Future constraint families may return other diagnostic types; consumers
-        must handle or explicitly reject unfamiliar ID types.
-
-        Details are computed only for violated rows and are not cached. An empty
-        dictionary means all selected constraints are feasible; variable-domain
-        feasibility is separate. Changing a row's query tolerance does not change
-        the saved tolerance used here.
-        Only the requested sample is inspected. An unknown sample raises KeyError.
-        """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> SampleSet:
         r"""
@@ -14557,28 +14435,6 @@ class Solution:
     def get_user_annotations(
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
-    def violation_diagnostics(
-        self, *, min_role: ConstraintRole = ConstraintRole.EVALUATION_ONLY
-    ) -> builtins.dict[ConstraintIDBase, builtins.object]:
-        r"""
-        Return a dictionary containing only violated constraints, keyed by typed ID.
-
-        Uses the saved feasibility_atol and stored variable values. All retained
-        roles are included by default; min_role can restrict participation.
-        Feasible constraints are absent. Regular and Indicator entries contain
-        RegularViolationDiagnostics and IndicatorViolationDiagnostics (currently without extra details).
-        OneHot entries contain OneHotViolationDiagnostics; SOS1 entries contain Sos1ViolationDiagnostics,
-        whose values property maps excess variable IDs to their values.
-        Diagnostic types may gain attributes or variants in minor releases; removing
-        or changing existing information requires a major release.
-        Future constraint families may return other diagnostic types; consumers
-        must handle or explicitly reject unfamiliar ID types.
-
-        Details are computed only for violated rows and are not cached. An empty
-        dictionary means all selected constraints are feasible; variable-domain
-        feasibility is separate. Changing a row's query tolerance does not change
-        the saved tolerance used here.
-        """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> Solution:
         r"""
@@ -15336,26 +15192,6 @@ class Sos1ConstraintID(ConstraintIDBase):
         r"""
         IDs are immutable, including when nested in copied containers.
         """
-
-@typing.final
-class Sos1ViolationDiagnostics:
-    r"""
-    Diagnostics for a violated SOS1 constraint at the result's saved tolerance.
-    Obtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.
-    Minor releases may add attributes; removing or changing existing information
-    requires a major release.
-    """
-    @property
-    def values(self) -> builtins.dict[builtins.int, builtins.float]:
-        r"""
-        Original signed values of excess members, keyed by variable ID.
-        Retains one largest absolute member (ties retain the largest ID), then
-        reports remaining values exceeding feasibility_atol in absolute value.
-        This nonempty map describes one possible repair, not a uniquely intended
-        selection. Mutating the returned dictionary does not change the diagnostic
-        or the result.
-        """
-    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
 
 @typing.final
 class SpecialConstraintPreparation:

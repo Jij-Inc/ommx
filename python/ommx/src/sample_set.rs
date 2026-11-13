@@ -139,39 +139,6 @@ impl_solution_annotations!(SampleSet);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SampleSet {
-    /// Return a dictionary containing only violated constraints, keyed by typed ID.
-    ///
-    /// Uses the saved feasibility_atol and stored variable values. All retained
-    /// roles are included by default; min_role can restrict participation.
-    /// Feasible constraints are absent. Regular and Indicator entries contain
-    /// RegularViolationDiagnostics and IndicatorViolationDiagnostics (currently without extra details).
-    /// OneHot entries contain OneHotViolationDiagnostics; SOS1 entries contain Sos1ViolationDiagnostics,
-    /// whose values property maps excess variable IDs to their values.
-    /// Diagnostic types may gain attributes or variants in minor releases; removing
-    /// or changing existing information requires a major release.
-    /// Future constraint families may return other diagnostic types; consumers
-    /// must handle or explicitly reject unfamiliar ID types.
-    ///
-    /// Details are computed only for violated rows and are not cached. An empty
-    /// dictionary means all selected constraints are feasible; variable-domain
-    /// feasibility is separate. Changing a row's query tolerance does not change
-    /// the saved tolerance used here.
-    /// Only the requested sample is inspected. An unknown sample raises KeyError.
-    #[pyo3(signature = (sample_id, *, min_role=crate::ConstraintRole::EVALUATION_ONLY))]
-    fn violation_diagnostics(
-        &self,
-        sample_id: u64,
-        min_role: crate::ConstraintRole,
-    ) -> OmmxPyResult<crate::violation_diagnostics::ViolationDiagnostics> {
-        Ok(
-            crate::violation_diagnostics::ViolationDiagnostics::sample_set(
-                &self.inner,
-                sample_id.into(),
-                min_role.into(),
-            )?,
-        )
-    }
-
     /// Unique names across all constraint families, as a set of strings.
     ///
     /// Retained inactive constraints are included; no sample ID is needed.
