@@ -33,9 +33,9 @@ impl ConstraintIds {
         if let Some((previous_kind, previous_state)) = self.owners.insert(id, (kind, state)) {
             return Err(ConstraintNumberCollision {
                 number: id,
-                first_family: previous_kind.diagnostic_name(),
+                first_family: previous_kind.as_str(),
                 first_state: previous_state,
-                second_family: kind.diagnostic_name(),
+                second_family: kind.as_str(),
                 second_state: state,
             });
         }

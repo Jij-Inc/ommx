@@ -1532,7 +1532,7 @@ impl Instance {
                 None
             };
             if let Some(state) = state {
-                let family = T::KIND.diagnostic_name();
+                let family = T::KIND.as_str();
                 crate::bail!({ number, family, state }, "Cannot insert regular constraint with number {number}: it is owned by a {state} {family} constraint");
             }
             Ok(())
