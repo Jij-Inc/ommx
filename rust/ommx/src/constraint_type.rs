@@ -220,12 +220,13 @@ pub trait EvaluatedConstraintData {
     /// Details for a violated candidate, shared with the sampled stage.
     type ViolationDiagnostics;
     /// Generate details after the host has established that `violation > atol`.
-    /// `value_of` supplies this candidate's stored values for referenced IDs.
-    /// Callers must provide the same values used for evaluation. This operation
-    /// neither decides feasibility nor stores/caches the returned diagnostic.
+    /// Borrow the owning Solution's decision-variable table, containing the
+    /// stored values used for this evaluation. Every variable read by the
+    /// diagnostic must exist in the table. This operation neither decides
+    /// feasibility nor stores/caches the returned diagnostic.
     fn violation_diagnostics(
         &self,
-        value_of: impl FnMut(crate::VariableID) -> f64,
+        decision_variables: &crate::EvaluatedDecisionVariableTable,
         atol: ATol,
     ) -> Self::ViolationDiagnostics;
 
@@ -247,7 +248,7 @@ pub trait EvaluatedConstraintData {
 /// impl EvaluatedConstraintData for NewConstraint {
 ///     type ID = ConstraintID;
 ///     type ViolationDiagnostics = ();
-///     fn violation_diagnostics(&self, _: impl FnMut(ommx::VariableID) -> f64, _: ATol) {}
+///     fn violation_diagnostics(&self, _: &ommx::EvaluatedDecisionVariableTable, _: ATol) {}
 ///     fn violation(&self) -> f64 { 0.0 }
 /// }
 /// // This conflicts with the common blanket implementation.
@@ -311,12 +312,15 @@ pub trait SampledConstraintData {
     type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
     /// Generate details for a known, violated sample using its stored member values.
     /// The host checks sample existence and `violation > atol` before calling this.
-    /// The result type is identical to single-state evaluation; no sample extraction
-    /// or diagnostic cache is required. `value_of` must refer to `sample_id`.
+    /// Borrow the owning SampleSet's decision-variable table. Every variable read
+    /// by the diagnostic must exist and contain `sample_id`, with the stored values
+    /// used for this evaluation. `sample_id` selects both the row's evaluation
+    /// data and its variable values. The result type is identical to single-state
+    /// evaluation; no sample extraction or diagnostic cache is required.
     fn violation_diagnostics(
         &self,
         sample_id: SampleID,
-        value_of: impl FnMut(crate::VariableID) -> f64,
+        decision_variables: &crate::SampledDecisionVariableTable,
         atol: ATol,
     ) -> <Self::Evaluated as EvaluatedConstraintData>::ViolationDiagnostics;
 
@@ -372,7 +376,7 @@ impl EvaluatedConstraintData for EvaluatedConstraint {
     type ViolationDiagnostics = crate::RegularViolationDiagnostics;
     fn violation_diagnostics(
         &self,
-        _value_of: impl FnMut(crate::VariableID) -> f64,
+        _decision_variables: &crate::EvaluatedDecisionVariableTable,
         _atol: ATol,
     ) -> Self::ViolationDiagnostics {
         crate::RegularViolationDiagnostics {}
@@ -393,7 +397,7 @@ impl SampledConstraintData for SampledConstraint {
     fn violation_diagnostics(
         &self,
         _sample_id: SampleID,
-        _value_of: impl FnMut(crate::VariableID) -> f64,
+        _decision_variables: &crate::SampledDecisionVariableTable,
         _atol: ATol,
     ) -> <Self::Evaluated as EvaluatedConstraintData>::ViolationDiagnostics {
         crate::RegularViolationDiagnostics {}

@@ -36,7 +36,7 @@ impl Solution {
                 (
                     id,
                     row.violation_diagnostics(
-                        |variable_id| *self.decision_variables()[&variable_id].value(),
+                        self.decision_variable_table(),
                         self.feasibility_atol(),
                     ),
                 )
@@ -76,12 +76,7 @@ impl SampleSet {
                     id,
                     row.violation_diagnostics(
                         sample_id,
-                        |variable_id| {
-                            *self.decision_variables()[&variable_id]
-                                .samples()
-                                .get(sample_id)
-                                .expect("validated sample IDs")
-                        },
+                        self.decision_variable_table(),
                         self.feasibility_atol(),
                     ),
                 )
@@ -316,14 +311,15 @@ mod tests {
             Some(crate::SampleSetError::UnknownSampleID { .. })
         ));
         // Empty diagnostics do not read or duplicate member values.
+        let empty_variables = crate::EvaluatedDecisionVariableTable::default();
         regular
             .evaluate(&state, atol)
             .unwrap()
-            .violation_diagnostics(|_| panic!("unexpected value lookup"), atol);
+            .violation_diagnostics(&empty_variables, atol);
         indicator
             .evaluate(&state, atol)
             .unwrap()
-            .violation_diagnostics(|_| panic!("unexpected value lookup"), atol);
+            .violation_diagnostics(&empty_variables, atol);
         let feasible = host
             .evaluate(&State::from_iter([(0, 0.0), (1, 0.0)]), atol)
             .unwrap();
@@ -333,6 +329,77 @@ mod tests {
         assert!(feasible
             .violation_diagnostics::<IndicatorConstraint>(ConstraintRole::EvaluationOnly)
             .is_empty());
+    }
+
+    #[test]
+    fn sampled_diagnostics_select_values_by_sample_id() {
+        let host = instance(3);
+        let atol = ATol::new(0.0625).unwrap();
+        let states = crate::Sampled::new(
+            [vec![2.into(), 7.into()], vec![13.into()]],
+            [
+                State::from_iter([(0, 0.875), (1, 0.25), (2, 0.0)]),
+                State::from_iter([(0, 0.25), (1, 0.875), (2, 0.0)]),
+            ],
+        )
+        .unwrap();
+        let samples = host.evaluate_samples(&states, atol).unwrap();
+        for (sample_id, target, excess) in [(13, 1, 0), (2, 0, 1), (7, 0, 1)] {
+            let sample_id = SampleID::from(sample_id);
+            let one_hot = samples.one_hot_constraints()[&0.into()].violation_diagnostics(
+                sample_id,
+                samples.decision_variable_table(),
+                atol,
+            );
+            let OneHotViolationDiagnostics::ValueErrors {
+                target_variable,
+                ref errors,
+                ..
+            } = one_hot
+            else {
+                panic!("expected value errors");
+            };
+            assert_eq!(target_variable, target.into());
+            assert_eq!(
+                *errors,
+                [(target.into(), 0.125), (excess.into(), 0.25)].into()
+            );
+            let sos1 = samples.sos1_constraints()[&1.into()].violation_diagnostics(
+                sample_id,
+                samples.decision_variable_table(),
+                atol,
+            );
+            assert_eq!(sos1.values, [(excess.into(), 0.25)].into());
+            assert_eq!(
+                samples
+                    .violation_diagnostics::<OneHotConstraint>(
+                        sample_id,
+                        ConstraintRole::EvaluationOnly
+                    )
+                    .unwrap(),
+                [(0.into(), one_hot.clone())].into(),
+            );
+            assert_eq!(
+                samples
+                    .violation_diagnostics::<Sos1Constraint>(
+                        sample_id,
+                        ConstraintRole::EvaluationOnly
+                    )
+                    .unwrap(),
+                [(1.into(), sos1.clone())].into(),
+            );
+            let solution = samples.get(sample_id).unwrap();
+            assert_eq!(
+                solution.evaluated_one_hot_constraints()[&0.into()]
+                    .violation_diagnostics(solution.decision_variable_table(), atol),
+                one_hot,
+            );
+            assert_eq!(
+                solution.evaluated_sos1_constraints()[&1.into()]
+                    .violation_diagnostics(solution.decision_variable_table(), atol),
+                sos1,
+            );
+        }
     }
 
     proptest::proptest! {

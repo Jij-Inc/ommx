@@ -149,10 +149,19 @@ impl EvaluatedConstraintData for EvaluatedOneHotConstraint {
     type ViolationDiagnostics = crate::OneHotViolationDiagnostics;
     fn violation_diagnostics(
         &self,
-        value_of: impl FnMut(crate::VariableID) -> f64,
+        decision_variables: &crate::EvaluatedDecisionVariableTable,
         atol: ATol,
     ) -> Self::ViolationDiagnostics {
-        diagnostic::diagnose(&self.variables, value_of, atol)
+        diagnostic::diagnose(
+            &self.variables,
+            |id| {
+                *decision_variables
+                    .get(&id)
+                    .expect("validated variable IDs")
+                    .value()
+            },
+            atol,
+        )
     }
 
     fn violation(&self) -> f64 {
@@ -169,11 +178,22 @@ impl SampledConstraintData for SampledOneHotConstraint {
     type Evaluated = EvaluatedOneHotConstraint;
     fn violation_diagnostics(
         &self,
-        _sample_id: SampleID,
-        value_of: impl FnMut(crate::VariableID) -> f64,
+        sample_id: SampleID,
+        decision_variables: &crate::SampledDecisionVariableTable,
         atol: ATol,
     ) -> <Self::Evaluated as EvaluatedConstraintData>::ViolationDiagnostics {
-        diagnostic::diagnose(&self.variables, value_of, atol)
+        diagnostic::diagnose(
+            &self.variables,
+            |id| {
+                *decision_variables
+                    .get(&id)
+                    .expect("validated variable IDs")
+                    .samples()
+                    .get(sample_id)
+                    .expect("validated sample IDs")
+            },
+            atol,
+        )
     }
 
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {

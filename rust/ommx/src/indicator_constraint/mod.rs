@@ -224,7 +224,7 @@ impl EvaluatedConstraintData for EvaluatedIndicatorConstraint {
     type ViolationDiagnostics = IndicatorViolationDiagnostics;
     fn violation_diagnostics(
         &self,
-        _value_of: impl FnMut(crate::VariableID) -> f64,
+        _decision_variables: &crate::EvaluatedDecisionVariableTable,
         _atol: ATol,
     ) -> Self::ViolationDiagnostics {
         IndicatorViolationDiagnostics {}
@@ -249,7 +249,7 @@ impl SampledConstraintData for SampledIndicatorConstraint {
     fn violation_diagnostics(
         &self,
         _sample_id: SampleID,
-        _value_of: impl FnMut(crate::VariableID) -> f64,
+        _decision_variables: &crate::SampledDecisionVariableTable,
         _atol: ATol,
     ) -> <Self::Evaluated as EvaluatedConstraintData>::ViolationDiagnostics {
         IndicatorViolationDiagnostics {}
