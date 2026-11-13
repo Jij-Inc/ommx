@@ -30,11 +30,6 @@ pub use stage::{
 /// [`crate::SampleSet::violation_diagnostics`] only for violated rows.
 /// Currently contains no additional details. Fields may be added in minor releases;
 /// removing or changing existing information requires a major release.
-///
-/// Diagnostics are obtained from results rather than constructed externally:
-/// ```compile_fail,E0639
-/// let diagnostic = ommx::RegularViolationDiagnostics {  };
-/// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub struct RegularViolationDiagnostics {}

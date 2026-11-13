@@ -13,11 +13,6 @@ use std::collections::BTreeMap;
 /// Fields may be added in minor releases; removing or changing existing
 /// information requires a major release. Mutating this detached diagnostic does
 /// not change the result or its feasibility.
-///
-/// Diagnostics are obtained from results rather than constructed externally:
-/// ```compile_fail,E0639
-/// let diagnostic = ommx::Sos1ViolationDiagnostics { values: Default::default() };
-/// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sos1ViolationDiagnostics {

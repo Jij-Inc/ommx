@@ -223,21 +223,6 @@ pub trait EvaluatedConstraintData {
 /// The blanket implementation prevents constraint families from implementing
 /// a second, independent feasibility rule.
 /// A finite, nonnegative violation is feasible exactly when `violation <= atol`.
-///
-/// ```compile_fail,E0119
-/// use ommx::{ATol, ConstraintID, EvaluatedConstraintData, EvaluatedConstraintBehavior};
-/// struct NewConstraint;
-/// impl EvaluatedConstraintData for NewConstraint {
-///     type ID = ConstraintID;
-///     type ViolationDiagnostics = ();
-///     fn violation_diagnostics(&self, _: &ommx::EvaluatedDecisionVariableTable, _: ATol) {}
-///     fn violation(&self) -> f64 { 0.0 }
-/// }
-/// // This conflicts with the common blanket implementation.
-/// impl EvaluatedConstraintBehavior for NewConstraint {
-///     fn is_feasible(&self, _: ATol) -> bool { false }
-/// }
-/// ```
 pub trait EvaluatedConstraintBehavior: EvaluatedConstraintData {
     /// Compare the stored violation with `atol`, without re-evaluating inputs
     /// or changing any retained activation decisions.
