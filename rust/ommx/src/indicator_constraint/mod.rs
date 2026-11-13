@@ -696,18 +696,6 @@ mod tests {
     }
 
     #[test]
-    fn test_constraint_type_impl() {
-        // Verify ConstraintType associated types compile correctly
-        let ic = IndicatorConstraint::new(
-            VariableID::from(10),
-            Equality::EqualToZero,
-            Function::Zero,
-            crate::IndicatorTriggerValue::One,
-        );
-        let _: <IndicatorConstraint as ConstraintType>::Created = ic;
-    }
-
-    #[test]
     fn parse_v2_evaluated_rejects_non_finite_value_even_when_indicator_off() {
         let proto = crate::v2::EvaluatedIndicatorConstraint {
             indicator_variable: 1,

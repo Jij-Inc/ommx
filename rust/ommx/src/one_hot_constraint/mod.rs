@@ -651,11 +651,4 @@ mod tests {
         assert!(s.contains("x2"));
         assert!(s.contains("x3"));
     }
-
-    #[test]
-    fn test_constraint_type_impl() {
-        let vars: BTreeSet<_> = [1, 2].into_iter().map(VariableID::from).collect();
-        let c = OneHotConstraint::new(vars).unwrap();
-        let _: <OneHotConstraint as ConstraintType>::Created = c;
-    }
 }

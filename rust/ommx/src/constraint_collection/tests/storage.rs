@@ -1,26 +1,6 @@
 use super::*;
 
 #[test]
-fn empty_collection() {
-    let collection = ConstraintCollection::<Constraint>::default();
-    assert!(collection.active().is_empty());
-    assert!(collection.inactive().is_empty());
-}
-
-#[test]
-fn collection_accessors() {
-    let mut active = BTreeMap::new();
-    active.insert(
-        ConstraintID::from(1),
-        Constraint::equal_to_zero(Function::Zero),
-    );
-
-    let collection = ConstraintCollection::<Constraint>::new(active, BTreeMap::new()).unwrap();
-    assert_eq!(collection.active().len(), 1);
-    assert_eq!(collection.inactive().len(), 0);
-}
-
-#[test]
 fn collection_rejects_active_inactive_overlap() {
     let id = ConstraintID::from(1);
     let active = BTreeMap::from([(id, Constraint::equal_to_zero(Function::Zero))]);

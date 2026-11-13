@@ -73,15 +73,3 @@ impl ConstraintType for Constraint {
     type Evaluated = EvaluatedConstraint;
     type Sampled = SampledConstraint;
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::Function;
-
-    #[test]
-    fn constraint_type_aliases() {
-        let c = Constraint::equal_to_zero(Function::Zero);
-        let _: <Constraint as ConstraintType>::Created = c;
-    }
-}

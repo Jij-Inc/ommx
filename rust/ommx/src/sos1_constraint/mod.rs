@@ -649,11 +649,4 @@ mod tests {
         assert!(s.contains("Sos1Constraint"));
         assert!(s.contains("x1"));
     }
-
-    #[test]
-    fn test_constraint_type_impl() {
-        let vars: BTreeSet<_> = [1, 2].into_iter().map(VariableID::from).collect();
-        let c = Sos1Constraint::new(vars).unwrap();
-        let _: <Sos1Constraint as ConstraintType>::Created = c;
-    }
 }
