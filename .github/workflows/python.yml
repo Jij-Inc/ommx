@@ -141,13 +141,50 @@ jobs:
             task "python:${adapter}:test"
           done
 
-      - name: Check PyO3 bridge generated stub and typing
-        if: matrix.python-version == '3.11'
-        run: task pyo3-bridge:check
+      - name: Verify the downloaded SDK wheel is still installed
+        run: |
+          uv run --no-sync python - <<'PY'
+          from importlib.metadata import distribution
+          import json
+          from pathlib import Path
 
+          wheel, = Path("wheels").glob("ommx-*.whl")
+          source = json.loads(distribution("ommx").read_text("direct_url.json"))
+          assert source["url"] == wheel.resolve().as_uri(), source
+          PY
+
+  # The Rust bridge integration tests reuse the SDK wheel independently of
+  # the SDK's Python version matrix.
+  pyo3-bridge:
+    name: PyO3 bridge integration
+    runs-on: ubuntu-latest
+    needs: build-wheel
+    env:
+      UV_NO_SYNC: '1' # uv run must keep using the installed wheel.
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
+        with:
+          python-version: "3.11"
+      - name: Download wheel
+        uses: actions/download-artifact@v8
+        with:
+          name: wheels-3.11
+          path: wheels
+      - name: Install locked bridge test dependencies
+        run: >-
+          uv sync --locked --package ommx --no-install-package ommx
+          --no-default-groups --group build --group test --group typecheck
+      - name: Install SDK wheel
+        run: uv pip install --python .venv --no-deps wheels/ommx-*.whl
+      - name: Check installed dependencies
+        run: uv pip check --python .venv
+      - name: Check PyO3 bridge generated stub and typing
+        run: task pyo3-bridge:check
       - name: Test PyO3 bridge across extension boundary
         run: task pyo3-bridge:runtime-test
-
       - name: Verify the downloaded SDK wheel is still installed
         run: |
           uv run --no-sync python - <<'PY'
