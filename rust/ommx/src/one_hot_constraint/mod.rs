@@ -457,6 +457,25 @@ impl std::fmt::Display for OneHotConstraint<Created> {
     }
 }
 
+/// Select a member to set to one in a closest OneHot assignment.
+/// Shared with result diagnostics so evaluation and repair use the same tie rule.
+/// Callers supply finite values; numerically equal values, including signed zeros,
+/// are resolved by the largest variable ID.
+pub(crate) fn select_one_hot_member(
+    values: impl IntoIterator<Item = (VariableID, f64)>,
+) -> Option<VariableID> {
+    values
+        .into_iter()
+        .max_by(|(id_a, a), (id_b, b)| {
+            if a == b {
+                id_a.cmp(id_b)
+            } else {
+                a.total_cmp(b)
+            }
+        })
+        .map(|(id, _)| id)
+}
+
 impl<S: Stage<Self>> OneHotConstraint<S> {
     /// Evaluate structural member values supplied by a state or a validated host.
     /// The constraint owns both its metric and the selected-variable diagnostic;
@@ -477,12 +496,9 @@ impl<S: Stage<Self>> OneHotConstraint<S> {
             );
             values.push((id, value));
         }
-        let &(selected, _selected_value) = values
-            .iter()
-            .max_by(|(_, a), (_, b)| a.total_cmp(b))
-            .ok_or_else(|| {
-                crate::error!("one-hot constraints must contain at least one variable")
-            })?;
+        let selected = select_one_hot_member(values.iter().copied()).ok_or_else(|| {
+            crate::error!("one-hot constraints must contain at least one variable")
+        })?;
         // Largest absolute adjustment for the repair that minimizes this maximum.
         let violation = values
             .iter()

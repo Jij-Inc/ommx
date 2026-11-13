@@ -6,21 +6,19 @@ use std::collections::BTreeMap;
 /// Returned on demand by [`crate::Solution::violation_diagnostics`] and
 /// [`crate::SampleSet::violation_diagnostics`]. Every variant contains all
 /// finite member values, including exact zeros. Feasible constraints are omitted
-/// from the host diagnostic map. New variants and fields may be added; consumers
-/// must retain a fallback and use `..` when matching fields.
-/// Minor releases may add variants or fields; removing or changing existing
-/// information requires a major release.
+/// from the host diagnostic map. Minor releases may add variants; consumers
+/// must retain a fallback when matching the enum. Existing variants have fixed
+/// fields. Adding or changing their fields, or removing or changing existing
+/// information, requires a major release.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub enum OneHotViolationDiagnostics {
     /// Every member is within tolerance of zero, but the row is infeasible.
     /// No particular member is designated as the missing selection.
-    #[non_exhaustive]
     MissingSelection { values: BTreeMap<VariableID, f64> },
     /// At least two members are within tolerance of one and the row is infeasible.
     /// `selected_variables` contains all such members; `values` also retains any
     /// other member errors, which can coexist with multiple selections.
-    #[non_exhaustive]
     MultipleSelections {
         selected_variables: VariableIDSet,
         values: BTreeMap<VariableID, f64>,
@@ -32,7 +30,6 @@ pub enum OneHotViolationDiagnostics {
     /// It is a repair candidate, not a uniquely intended selection.
     /// `errors` contains absolute changes exceeding tolerance: distance to one
     /// for the target and distance to zero for every other member.
-    #[non_exhaustive]
     ValueErrors {
         target_variable: VariableID,
         errors: BTreeMap<VariableID, f64>,
@@ -60,10 +57,10 @@ pub fn diagnose(
             values,
         };
     }
-    let (&target_variable, _) = values
-        .iter()
-        .max_by(|(_, a), (_, b)| a.total_cmp(b))
-        .expect("OneHot constraints have at least one member");
+    let target_variable = crate::one_hot_constraint::select_one_hot_member(
+        values.iter().map(|(&id, &value)| (id, value)),
+    )
+    .expect("OneHot constraints have at least one member");
     let errors = values
         .iter()
         .filter_map(|(&id, &value)| {
