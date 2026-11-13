@@ -269,6 +269,33 @@ OneHotの評価・伝播では、0と1の許容範囲が重ならないよう、
 評価時の許容誤差が`0.5`以上のOneHot結果は読み込めません。一般の許容誤差型の
 制限は変更しません。
 
+制約ごとの詳細診断は{meth}`~ommx.Solution.violation_diagnostics`と
+{meth}`~ommx.SampleSet.violation_diagnostics`で取得できます。返り値は、型付き制約IDから
+制約種別ごとの診断を引く読み取り専用の{class}`~ommx.ViolationDiagnostics` Mappingです。
+違反した制約だけを含み、既定の`min_role=ConstraintRole.EVALUATION_ONLY`では、
+実行可能性判定を省略した保持制約も対象になります。
+
+```python
+from ommx import ConstraintKind, Sos1ConstraintID
+
+diagnostics = solution.violation_diagnostics()
+excess = diagnostics.get(Sos1ConstraintID(7))
+if excess is not None:
+    print(excess.values)  # 余分に選択された変数のIDと符号付きの値
+one_hot = diagnostics.of_kind(ConstraintKind.OneHot)
+```
+
+OneHotでは未選択・複数選択・値のずれを区別できます。
+`OneHotViolationDiagnostics.MissingSelection`、`.MultipleSelections`、`.ValueErrors`
+で型を判定でき、それぞれトップレベルの`OneHotMissingSelection`、
+`OneHotMultipleSelections`、`OneHotValueErrors`と同じ型です。
+すべての診断は`ViolationDiagnosticsBase`を継承するため、制約種別が増えても
+共通のMappingインターフェースは変わりません。詳細は要求時に保存済みの値と
+許容誤差から計算され、返されたスナップショットを通じて元の結果を変更することはできません。
+サンプルには`samples.violation_diagnostics(sample_id)`を使います。
+存在しないsample IDは`KeyError`になります。空のMappingが示すのは対象制約の
+実行可能性だけであり、変数の定義域の検査は別です。
+
 (migration-storage)=
 ## 5. 保存済みモデルとArtifactを引き継ぐ
 

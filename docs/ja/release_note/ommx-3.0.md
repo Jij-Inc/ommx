@@ -6,6 +6,30 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 制約種別ごとの違反診断 ([#1389](https://github.com/Jij-Inc/ommx/pull/1389))
+
+`Solution.violation_diagnostics()` と `SampleSet.violation_diagnostics(sample_id)`
+で、保存された評価時の許容誤差に基づき、違反した制約だけを含む読み取り専用の
+Mappingを取得できます。型付き制約IDから制約種別に応じた診断を取得でき、
+`.of_kind()` で絞った種別ごとのビューでは整数IDも使えます。
+
+```python
+from ommx import ConstraintKind, OneHotViolationDiagnostics
+
+diagnostics = solution.violation_diagnostics()
+for constraint_id, detail in diagnostics.of_kind(ConstraintKind.OneHot).items():
+    if isinstance(detail, OneHotViolationDiagnostics.MissingSelection):
+        print(constraint_id, detail.values)
+```
+
+OneHotは未選択・複数選択・値のずれを区別し、全変数がゼロの場合も診断できます。
+SOS1は余分に選択された変数の値を返します。RegularとIndicatorにも専用の診断型を
+用意していますが、現時点で追加フィールドはありません。詳細は取得時に計算し、
+独立したスナップショットとして返します。既定ではすべてのroleを対象とし、
+`min_role` で絞り込めます。詳しくは
+{meth}`~ommx.Solution.violation_diagnostics` と
+{meth}`~ommx.SampleSet.violation_diagnostics` を参照してください。
+
 ### OneHot・SOS1の違反量 ([#1384](https://github.com/Jij-Inc/ommx/pull/1384))
 
 OneHotとSOS1の違反量を、**制約を満たすために必要な最大修正量**に変更します。

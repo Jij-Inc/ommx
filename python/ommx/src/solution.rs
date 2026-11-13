@@ -136,6 +136,18 @@ impl_solution_annotations!(Solution);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Solution {
+    #[doc = include_str!("docstrings/ommx/Solution.violation_diagnostics.md")]
+    #[pyo3(signature = (*, min_role=crate::ConstraintRole::EVALUATION_ONLY))]
+    fn violation_diagnostics(
+        &self,
+        min_role: crate::ConstraintRole,
+    ) -> OmmxPyResult<crate::ViolationDiagnostics> {
+        Ok(crate::ViolationDiagnostics::solution(
+            &self.inner,
+            min_role.into(),
+        )?)
+    }
+
     /// Unique names across all constraint families, as a set of strings.
     ///
     /// Retained inactive constraints are included; no sample ID is needed.

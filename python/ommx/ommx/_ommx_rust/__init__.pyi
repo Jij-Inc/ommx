@@ -16,7 +16,7 @@ import pathlib
 import types
 import typing
 import typing_extensions
-from ommx._typing import _C_co, _K, _T, _V_co
+from ommx._typing import _C_co, _D_co, _K, _T, _V_co
 from typing import TypeAlias
 
 __all__ = [
@@ -74,6 +74,7 @@ __all__ = [
     "InactiveSos1Constraint",
     "IndicatorConstraint",
     "IndicatorConstraintID",
+    "IndicatorViolationDiagnostics",
     "InfeasibleDetected",
     "InfeasibleOrUnboundedDetected",
     "Instance",
@@ -95,6 +96,10 @@ __all__ = [
     "ObjectivePreparation",
     "OneHotConstraint",
     "OneHotConstraintID",
+    "OneHotMissingSelection",
+    "OneHotMultipleSelections",
+    "OneHotValueErrors",
+    "OneHotViolationDiagnostics",
     "OpenSolve",
     "Optimality",
     "OutputObjective",
@@ -109,6 +114,7 @@ __all__ = [
     "ProvenanceKind",
     "PruneAnonymousReport",
     "Quadratic",
+    "RegularViolationDiagnostics",
     "Relaxation",
     "RemoteArtifactAuthenticationError",
     "RemoteArtifactAuthorizationError",
@@ -138,12 +144,16 @@ __all__ = [
     "Sos1BigMSelectorClaim",
     "Sos1Constraint",
     "Sos1ConstraintID",
+    "Sos1ViolationDiagnostics",
     "SpecialConstraintPreparation",
     "State",
     "ToFunction",
     "ToSamples",
     "ToState",
     "VariableIDLike",
+    "ViolationDiagnostics",
+    "ViolationDiagnosticsBase",
+    "ViolationDiagnosticsFamilyView",
     "gc",
     "get_default_atol",
     "get_images",
@@ -365,7 +375,9 @@ class ActiveConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView
     @typing.overload
     def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
     @typing.overload
-    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    def get(  # type: ignore[reportIncompatibleMethodOverride]
+        self, key: ConstraintIDBase, default: _T
+    ) -> ConstraintView | _T: ...
     @typing.overload
     def of_kind(
         self, kind: ConstraintKind[ConstraintID]
@@ -2143,7 +2155,9 @@ class ConstraintFamilyView(typing.Mapping[_K, _V_co]):
     @typing.overload
     def get(self, key: _K | builtins.int, default: None = None) -> _V_co | None: ...
     @typing.overload
-    def get(self, key: _K | builtins.int, default: _T) -> _V_co | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    def get(  # type: ignore[reportIncompatibleMethodOverride]
+        self, key: _K | builtins.int, default: _T
+    ) -> _V_co | _T: ...
 
 @typing.final
 class ConstraintID(ConstraintIDBase):
@@ -2857,7 +2871,9 @@ class EvaluatedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintV
     @typing.overload
     def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
     @typing.overload
-    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    def get(  # type: ignore[reportIncompatibleMethodOverride]
+        self, key: ConstraintIDBase, default: _T
+    ) -> ConstraintView | _T: ...
     @typing.overload
     def of_kind(
         self, kind: ConstraintKind[ConstraintID]
@@ -5024,7 +5040,9 @@ class InactiveConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintVi
     @typing.overload
     def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
     @typing.overload
-    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    def get(  # type: ignore[reportIncompatibleMethodOverride]
+        self, key: ConstraintIDBase, default: _T
+    ) -> ConstraintView | _T: ...
     @typing.overload
     def of_kind(
         self, kind: ConstraintKind[ConstraintID]
@@ -5391,6 +5409,16 @@ class IndicatorConstraintID(ConstraintIDBase):
         r"""
         IDs are immutable, including when nested in copied containers.
         """
+
+@typing.final
+class IndicatorViolationDiagnostics(ViolationDiagnosticsBase):
+    r"""
+    Diagnostics for a violated indicator constraint, currently without extra details.
+    Obtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.
+    Minor releases may add attributes; removing or changing existing information
+    requires a major release.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
 
 class InfeasibleDetected(builtins.RuntimeError):
     r"""
@@ -10586,6 +10614,86 @@ class OneHotConstraintID(ConstraintIDBase):
         """
 
 @typing.final
+class OneHotMissingSelection(OneHotViolationDiagnostics):
+    r"""
+    Every member is within the saved tolerance of zero; no member is selected.
+    """
+    @property
+    def values(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        All original member values. The returned dictionary is an independent copy.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+
+@typing.final
+class OneHotMultipleSelections(OneHotViolationDiagnostics):
+    r"""
+    At least two members are within the saved tolerance of one.
+    Other errors may coexist and remain visible in values.
+    """
+    @property
+    def selected_variables(self) -> builtins.set[builtins.int]:
+        r"""
+        IDs of all members within tolerance of one.
+        """
+    @property
+    def values(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        All original member values. The returned dictionary is an independent copy.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+
+@typing.final
+class OneHotValueErrors(OneHotViolationDiagnostics):
+    r"""
+    Deviations from one closest OneHot assignment. The target is the largest
+    member value, with ties resolved by largest ID; it is one possible repair.
+    """
+    @property
+    def target_variable(self) -> builtins.int:
+        r"""
+        Member to set to one in this repair.
+        """
+    @property
+    def errors(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Absolute changes exceeding the saved tolerance: distance to one for
+        the target and distance to zero for other members.
+        """
+    @property
+    def values(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        All original member values. The returned dictionary is an independent copy.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+
+class OneHotViolationDiagnostics(ViolationDiagnosticsBase):
+    r"""
+    Base of the OneHot MissingSelection, MultipleSelections, and ValueErrors variants.
+    All variants retain every member value, including zeros. Minor releases may
+    add variants; existing variant fields retain their meaning and availability.
+    Match the named variants and retain a fallback for future versions.
+    """
+
+    MissingSelection: builtins.type[OneHotMissingSelection]
+    r"""
+    Missing-selection variant.
+    """
+    MultipleSelections: builtins.type[OneHotMultipleSelections]
+    r"""
+    Multiple-selection variant.
+    """
+    ValueErrors: builtins.type[OneHotValueErrors]
+    r"""
+    Value-error variant.
+    """
+    @property
+    def values(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        All original member values, including zeros, as an independent dictionary.
+        """
+
+@typing.final
 class OpenSolve:
     r"""
     Context manager for a manually executed Solve inside a Run.
@@ -12287,6 +12395,16 @@ class Quadratic:
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
 
+@typing.final
+class RegularViolationDiagnostics(ViolationDiagnosticsBase):
+    r"""
+    Diagnostics for a violated regular constraint, currently without extra details.
+    Obtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.
+    Minor releases may add attributes; removing or changing existing information
+    requires a major release.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+
 class RemoteArtifactAuthenticationError(RemoteArtifactError):
     r"""
     Authentication for the remote Artifact registry failed.
@@ -12986,6 +13104,22 @@ class SampleSet:
     def get_user_annotations(
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def violation_diagnostics(
+        self,
+        sample_id: builtins.int,
+        *,
+        min_role: ConstraintRole = ConstraintRole.EVALUATION_ONLY,
+    ) -> ViolationDiagnostics:
+        r"""
+        Explain violated constraints for one sample using the saved tolerance.
+
+        Returns the same read-only {class}`~ommx.ViolationDiagnostics` Mapping as
+        {meth}`~ommx.Solution.violation_diagnostics`, with the same role filtering and
+        snapshot semantics. Only the requested sample is inspected; a whole Solution
+        is not extracted. Unknown sample IDs raise `KeyError`, including when there
+        are no constraints. Variable and sample IDs are integers; diagnostic Mapping
+        keys are typed constraint IDs.
+        """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> SampleSet:
         r"""
@@ -13423,7 +13557,9 @@ class SampledConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintVie
     @typing.overload
     def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
     @typing.overload
-    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    def get(  # type: ignore[reportIncompatibleMethodOverride]
+        self, key: ConstraintIDBase, default: _T
+    ) -> ConstraintView | _T: ...
     @typing.overload
     def of_kind(
         self, kind: ConstraintKind[ConstraintID]
@@ -14441,6 +14577,42 @@ class Solution:
     def get_user_annotations(
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def violation_diagnostics(
+        self, *, min_role: ConstraintRole = ConstraintRole.EVALUATION_ONLY
+    ) -> ViolationDiagnostics:
+        r"""
+        Explain violated constraints using the saved evaluation tolerance.
+
+        ```pycon
+        >>> from ommx import Instance, OneHotConstraint, OneHotViolationDiagnostics
+        >>> model = Instance.minimize()
+        >>> x, y = model.new_binary("x"), model.new_binary("y")
+        >>> choice = model.add_one_hot_constraint(OneHotConstraint(variables=[x, y]))
+        >>> solution = model.evaluate({x.id: 0, y.id: 0})
+        >>> diagnostics = solution.violation_diagnostics()
+        >>> detail = diagnostics[choice.constraint_id]
+        >>> assert isinstance(detail, OneHotViolationDiagnostics.MissingSelection)
+        >>> assert detail.values == {x.id: 0, y.id: 0}
+
+        ```
+
+        Returns a read-only {class}`~ommx.ViolationDiagnostics` Mapping. Details are
+        computed on request from this result's stored variable values and
+        `feasibility_atol`; no evaluation or canonicalization is repeated. Feasible
+        constraints are absent. The default `min_role=EVALUATION_ONLY` includes all
+        retained roles, even skipped checks. `FEASIBILITY_CHECK` includes normal checks
+        and active constraints; `ACTIVE` includes only active constraints.
+
+        Regular and Indicator diagnostics currently have no extra fields. SOS1 reports
+        excess members with their signed values. OneHot distinguishes missing selection,
+        multiple selections, and value errors. Returned data is independent of the
+        result; changing a property dictionary does not change the diagnostic.
+
+        An empty Mapping describes only the selected constraints, not variable domains.
+        Changing a row's query tolerance does not change the saved tolerance used here.
+        Minor releases may add diagnostic information or OneHot variants; removing or
+        changing existing information requires a major release.
+        """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> Solution:
         r"""
@@ -15200,6 +15372,26 @@ class Sos1ConstraintID(ConstraintIDBase):
         """
 
 @typing.final
+class Sos1ViolationDiagnostics(ViolationDiagnosticsBase):
+    r"""
+    Diagnostics for a violated SOS1 constraint at the result's saved tolerance.
+    Obtained from Solution.violation_diagnostics or SampleSet.violation_diagnostics.
+    Minor releases may add attributes; removing or changing existing information
+    requires a major release.
+    """
+    @property
+    def values(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Original signed values of excess members, keyed by variable ID.
+        Retains one largest absolute member (ties retain the largest ID), then
+        reports remaining values exceeding feasibility_atol in absolute value.
+        This nonempty map describes one possible repair, not a uniquely intended
+        selection. Mutating the returned dictionary does not change the diagnostic
+        or the result.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+
+@typing.final
 class SpecialConstraintPreparation:
     r"""
     Selection for the special-constraint Preparation phase.
@@ -15305,6 +15497,158 @@ class State:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> State: ...
     def __deepcopy__(self, _memo: typing.Any) -> State: ...
+
+@typing.final
+class ViolationDiagnostics(typing.Mapping[ConstraintIDBase, ViolationDiagnosticsBase]):
+    r"""
+    Read-only snapshot of violated constraints, keyed by typed constraint ID.
+
+    Obtain this Mapping from {meth}`~ommx.Solution.violation_diagnostics` or
+    {meth}`~ommx.SampleSet.violation_diagnostics`. It contains only constraints that
+    fail at the result's saved tolerance within the selected role scope. An empty
+    Mapping does not establish variable-domain feasibility.
+
+    Index with a typed ID to obtain that family's concrete diagnostic type. Use
+    `of_kind(ConstraintKind.OneHot)` (or another family) for a view accepting integer
+    keys. Mixed-family lookups reject integers; family views reject IDs from other
+    families. Missing keys raise `KeyError`, and `get` preserves a supplied default.
+
+    Iteration, `keys()`, `values()`, `items()`, and equality follow the Mapping
+    protocol. Iteration is ordered by family, then numeric ID. The Mapping and its
+    family views share an immutable diagnostic snapshot; they cannot modify the
+    owning result. Dictionaries and sets returned by diagnostic properties are
+    independent copies.
+
+    Values inherit {class}`~ommx.ViolationDiagnosticsBase`. Future SDKs may add
+    constraint families; consumers should inspect the concrete diagnostic type and
+    handle or reject unfamiliar types. Regular and Indicator diagnostics currently
+    carry no extra fields. SOS1 reports excess signed member values. OneHot separates
+    missing selection, multiple selections, and value errors, retaining zeros too.
+    """
+    def __len__(self) -> builtins.int: ...
+    def __contains__(self, key: builtins.object) -> builtins.bool: ...
+    def __iter__(self) -> typing.Iterator[ConstraintIDBase]: ...
+    def keys(self) -> typing.KeysView[ConstraintIDBase]: ...
+    def values(self) -> typing.ValuesView[ViolationDiagnosticsBase]: ...
+    def items(self) -> typing.ItemsView[ConstraintIDBase, ViolationDiagnosticsBase]: ...
+    def __eq__(self, other: typing.Any) -> typing.Any: ...
+    @typing.overload
+    def __getitem__(self, key: ConstraintID) -> RegularViolationDiagnostics: ...
+    @typing.overload
+    def __getitem__(
+        self, key: IndicatorConstraintID
+    ) -> IndicatorViolationDiagnostics: ...
+    @typing.overload
+    def __getitem__(self, key: OneHotConstraintID) -> OneHotViolationDiagnostics: ...
+    @typing.overload
+    def __getitem__(self, key: Sos1ConstraintID) -> Sos1ViolationDiagnostics: ...
+    @typing.overload
+    def __getitem__(self, key: ConstraintIDBase) -> ViolationDiagnosticsBase: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintID, default: None = None
+    ) -> RegularViolationDiagnostics | None: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintID, default: _T
+    ) -> RegularViolationDiagnostics | _T: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: None = None
+    ) -> IndicatorViolationDiagnostics | None: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: _T
+    ) -> IndicatorViolationDiagnostics | _T: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: None = None
+    ) -> OneHotViolationDiagnostics | None: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: _T
+    ) -> OneHotViolationDiagnostics | _T: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: None = None
+    ) -> Sos1ViolationDiagnostics | None: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: _T
+    ) -> Sos1ViolationDiagnostics | _T: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintIDBase, default: None = None
+    ) -> ViolationDiagnosticsBase | None: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintIDBase, default: ViolationDiagnosticsBase
+    ) -> ViolationDiagnosticsBase: ...
+    @typing.overload
+    def get(  # type: ignore[reportIncompatibleMethodOverride]
+        self, key: ConstraintIDBase, default: _T
+    ) -> ViolationDiagnosticsBase | _T: ...
+    @typing.overload
+    def of_kind(
+        self, kind: ConstraintKind[ConstraintID]
+    ) -> ViolationDiagnosticsFamilyView[ConstraintID, RegularViolationDiagnostics]: ...
+    @typing.overload
+    def of_kind(
+        self, kind: ConstraintKind[IndicatorConstraintID]
+    ) -> ViolationDiagnosticsFamilyView[
+        IndicatorConstraintID, IndicatorViolationDiagnostics
+    ]: ...
+    @typing.overload
+    def of_kind(
+        self, kind: ConstraintKind[OneHotConstraintID]
+    ) -> ViolationDiagnosticsFamilyView[
+        OneHotConstraintID, OneHotViolationDiagnostics
+    ]: ...
+    @typing.overload
+    def of_kind(
+        self, kind: ConstraintKind[Sos1ConstraintID]
+    ) -> ViolationDiagnosticsFamilyView[Sos1ConstraintID, Sos1ViolationDiagnostics]: ...
+    @typing.overload
+    def of_kind(
+        self, kind: ConstraintKind[_K]
+    ) -> ViolationDiagnosticsFamilyView[_K, ViolationDiagnosticsBase]: ...
+
+class ViolationDiagnosticsBase:
+    r"""
+    Common interface for diagnostics from any current or future constraint family.
+    Inspect the concrete type before using family-specific information.
+    """
+
+    ...
+
+@typing.final
+class ViolationDiagnosticsFamilyView(typing.Mapping[_K, _D_co]):
+    r"""
+    Read-only view of one diagnostic family.
+
+    Created by `ViolationDiagnostics.of_kind(ConstraintKind.…)`. Keys retain their
+    typed identity; indexing and `get` also accept integers, promoted to the selected
+    family. IDs from other families are rejected. Missing keys raise `KeyError`,
+    and `get` returns the supplied default or `None`.
+
+    The view shares its immutable diagnostic snapshot. It supports iteration,
+    `keys()`, `values()`, `items()`, and Mapping equality. The key and value type
+    parameters preserve the selected family's concrete types for static checking.
+    """
+    def __len__(self) -> builtins.int: ...
+    def __contains__(self, key: builtins.object) -> builtins.bool: ...
+    def __iter__(self) -> typing.Iterator[_K]: ...
+    def keys(self) -> typing.KeysView[_K]: ...
+    def values(self) -> typing.ValuesView[_D_co]: ...
+    def items(self) -> typing.ItemsView[_K, _D_co]: ...
+    def __eq__(self, other: typing.Any) -> typing.Any: ...
+    def __getitem__(self, key: _K | builtins.int) -> _D_co: ...
+    @typing.overload
+    def get(self, key: _K | builtins.int, default: None = None) -> _D_co | None: ...
+    @typing.overload
+    def get(  # type: ignore[reportIncompatibleMethodOverride]
+        self, key: _K | builtins.int, default: _T
+    ) -> _D_co | _T: ...
 
 @typing.final
 class DecisionVariableRole(enum.Enum):
