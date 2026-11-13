@@ -4,7 +4,7 @@ mod parse;
 mod serialize;
 
 use crate::{
-    constraint_type::EvaluatedCollection,
+    constraint_collection::EvaluatedCollection,
     decision_variable::{EvaluatedDecisionVariableTable, VariableLabelStore},
     indicator_constraint::IndicatorConstraint,
     ATol, Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
@@ -1294,10 +1294,10 @@ impl SolutionBuilder {
             }
         };
         let mut ids = crate::constraint_ids::ConstraintIds::default();
-        ids.evaluated("regular", &evaluated_constraints)?;
-        ids.evaluated("indicator", &self.evaluated_indicator_constraints)?;
-        ids.evaluated("one-hot", &self.evaluated_one_hot_constraints)?;
-        ids.evaluated("SOS1", &self.evaluated_sos1_constraints)?;
+        ids.evaluated(&evaluated_constraints)?;
+        ids.evaluated(&self.evaluated_indicator_constraints)?;
+        ids.evaluated(&self.evaluated_one_hot_constraints)?;
+        ids.evaluated(&self.evaluated_sos1_constraints)?;
         evaluated_constraints.validate_context_ids()?;
         self.evaluated_indicator_constraints
             .validate_context_ids()?;

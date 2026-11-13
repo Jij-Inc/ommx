@@ -298,6 +298,7 @@ proptest! {
 
 #[test]
 fn result_builders_and_protobuf_reject_duplicate_numbers_including_inactive() {
+    let families = ["regular", "indicator", "one-hot", "SOS1"];
     for first in 0..4 {
         for second in first + 1..4 {
             for first_inactive in [false, true] {
@@ -311,7 +312,16 @@ fn result_builders_and_protobuf_reject_duplicate_numbers_including_inactive() {
                     let samples = instance
                         .evaluate_samples(&crate::Sampled::from((0.into(), state)), ATol::default())
                         .unwrap();
-                    let message = format!("Constraint number {first}");
+                    let first_state = if first_inactive { "inactive" } else { "active" };
+                    let second_state = if second_inactive {
+                        "inactive"
+                    } else {
+                        "active"
+                    };
+                    let message = format!(
+                        "Constraint number {first} is shared by {first_state} {} and {second_state} {} constraints",
+                        families[first], families[second],
+                    );
 
                     // Move the second family's row and sidecars onto the first
                     // family's number. Each collection is still valid alone.
@@ -413,7 +423,14 @@ fn result_builders_and_protobuf_reject_duplicate_numbers_including_inactive() {
                         .unwrap_err();
                     assert!(matches!(
                         error,
-                        crate::SampleSetError::ConflictingConstraintNumber { number, .. } if number == first as u64
+                        crate::SampleSetError::ConflictingConstraintNumber {
+                            number, first_family, first_state: actual_first_state,
+                            second_family, second_state: actual_second_state,
+                        } if number == first as u64
+                            && first_family == families[first]
+                            && second_family == families[second]
+                            && actual_first_state == first_state
+                            && actual_second_state == second_state
                     ));
                 }
             }

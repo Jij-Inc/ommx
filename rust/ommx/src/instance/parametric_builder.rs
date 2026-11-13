@@ -1,5 +1,5 @@
 use super::*;
-use crate::constraint_type::ConstraintCollection;
+use crate::constraint_collection::ConstraintCollection;
 
 /// Builder for creating [`ParametricInstance`] with validation.
 ///

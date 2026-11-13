@@ -1,5 +1,6 @@
 mod approx;
 mod arbitrary;
+mod constraint_type;
 mod context_store;
 mod evaluate;
 mod logical_memory;
@@ -147,6 +148,18 @@ pub enum ConstraintKind {
 pub type ConstraintKinds = std::collections::BTreeSet<ConstraintKind>;
 
 impl ConstraintKind {
+    /// Human-readable spelling shared by model and result validation errors.
+    /// Crate-internal so root owners can preserve their existing diagnostics
+    /// independently of the stable tabular labels returned by `as_str`.
+    pub(crate) fn diagnostic_name(self) -> &'static str {
+        match self {
+            Self::Regular => "regular",
+            Self::Indicator => "indicator",
+            Self::OneHot => "one-hot",
+            Self::Sos1 => "SOS1",
+        }
+    }
+
     /// Stable family label for display and tabular column names.
     pub fn as_str(self) -> &'static str {
         match self {

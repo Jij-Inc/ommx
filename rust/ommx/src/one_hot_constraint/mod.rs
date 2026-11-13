@@ -212,6 +212,7 @@ impl SampledConstraintData for SampledOneHotConstraint {
 // ===== ConstraintType =====
 
 impl ConstraintType for OneHotConstraint {
+    const KIND: crate::ConstraintKind = crate::ConstraintKind::OneHot;
     type ID = OneHotConstraintID;
     type ViolationDiagnostics = crate::OneHotViolationDiagnostics;
     type Created = OneHotConstraint;

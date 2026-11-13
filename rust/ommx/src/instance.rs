@@ -67,7 +67,7 @@ pub use v1_hint_promotion::{
 
 use crate::{
     constraint::{ConstraintContextStore, InactiveConstraintMetadata},
-    constraint_type::ConstraintCollection,
+    constraint_collection::ConstraintCollection,
     decision_variable::{DecisionVariableTable, VariableLabelStore},
     indicator_constraint::IndicatorConstraint,
     named_function::NamedFunctionID,
@@ -1470,10 +1470,10 @@ macro_rules! constraint_numbers {
         impl $owner {
             fn validate_constraint_ids(&self) -> crate::Result<()> {
                 let mut ids = crate::constraint_ids::ConstraintIds::default();
-                ids.created("regular", &self.constraint_collection)?;
-                ids.created("indicator", &self.indicator_constraint_collection)?;
-                ids.created("one-hot", &self.one_hot_constraint_collection)?;
-                ids.created("SOS1", &self.sos1_constraint_collection)?;
+                ids.created(&self.constraint_collection)?;
+                ids.created(&self.indicator_constraint_collection)?;
+                ids.created(&self.one_hot_constraint_collection)?;
+                ids.created(&self.sos1_constraint_collection)?;
                 Ok(())
             }
 
@@ -1521,7 +1521,6 @@ impl Instance {
     fn validate_regular_constraint_number(&self, id: crate::ConstraintID) -> crate::Result<()> {
         fn check<T: crate::ConstraintType>(
             number: u64,
-            family: &str,
             collection: &ConstraintCollection<T>,
         ) -> crate::Result<()> {
             let id = T::ID::from(number);
@@ -1533,14 +1532,15 @@ impl Instance {
                 None
             };
             if let Some(state) = state {
+                let family = T::KIND.diagnostic_name();
                 crate::bail!({ number, family, state }, "Cannot insert regular constraint with number {number}: it is owned by a {state} {family} constraint");
             }
             Ok(())
         }
         let number = id.into_inner();
-        check(number, "indicator", &self.indicator_constraint_collection)?;
-        check(number, "one-hot", &self.one_hot_constraint_collection)?;
-        check(number, "SOS1", &self.sos1_constraint_collection)
+        check(number, &self.indicator_constraint_collection)?;
+        check(number, &self.one_hot_constraint_collection)?;
+        check(number, &self.sos1_constraint_collection)
     }
 }
 

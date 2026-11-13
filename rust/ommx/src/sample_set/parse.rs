@@ -14,7 +14,7 @@ fn invalid_sample_set_sidecar(
 }
 
 fn validate_sampled_indicator_structural_ids(
-    constraints: &crate::constraint_type::SampledCollection<crate::IndicatorConstraint>,
+    constraints: &crate::constraint_collection::SampledCollection<crate::IndicatorConstraint>,
     decision_variables: &crate::SampledDecisionVariableTable,
     message: &'static str,
 ) -> Result<(), ParseError> {
@@ -62,7 +62,7 @@ fn validate_structural_member_id(
 }
 
 fn validate_sampled_one_hot_structural_ids(
-    constraints: &crate::constraint_type::SampledCollection<crate::OneHotConstraint>,
+    constraints: &crate::constraint_collection::SampledCollection<crate::OneHotConstraint>,
     decision_variables: &crate::SampledDecisionVariableTable,
     message: &'static str,
 ) -> Result<(), ParseError> {
@@ -89,7 +89,7 @@ fn validate_sampled_one_hot_structural_ids(
 }
 
 fn validate_sampled_sos1_structural_ids(
-    constraints: &crate::constraint_type::SampledCollection<crate::Sos1Constraint>,
+    constraints: &crate::constraint_collection::SampledCollection<crate::Sos1Constraint>,
     decision_variables: &crate::SampledDecisionVariableTable,
     message: &'static str,
 ) -> Result<(), ParseError> {
@@ -235,7 +235,7 @@ impl Parse for crate::v1::SampleSet {
             .variable_labels(variable_labels)
             .objectives(objectives)
             .constraints_collection(
-                crate::constraint_type::SampledCollection::with_context(
+                crate::constraint_collection::SampledCollection::with_context(
                     constraints,
                     constraint_inactive_metadata,
                     constraint_context,
@@ -572,10 +572,10 @@ impl Parse for v2::SampleSet {
         }
 
         let mut ids = crate::constraint_ids::ConstraintIds::default();
-        ids.sampled("regular", &constraints)
-            .and_then(|()| ids.sampled("indicator", &indicator_constraints))
-            .and_then(|()| ids.sampled("one-hot", &one_hot_constraints))
-            .and_then(|()| ids.sampled("SOS1", &sos1_constraints))
+        ids.sampled(&constraints)
+            .and_then(|()| ids.sampled(&indicator_constraints))
+            .and_then(|()| ids.sampled(&one_hot_constraints))
+            .and_then(|()| ids.sampled(&sos1_constraints))
             .map_err(|error| ParseError::new(error).context(message, "constraints"))?;
         Ok(SampleSet {
             decision_variables,
@@ -952,12 +952,13 @@ mod tests {
         let constraint_id = crate::ConstraintID::from(7);
         let mut context = crate::ConstraintContextStore::default();
         context.set_name(constraint_id, "orphan");
-        let source = crate::constraint_type::SampledCollection::<crate::Constraint>::with_context(
-            BTreeMap::new(),
-            BTreeMap::new(),
-            context,
-        )
-        .unwrap_err();
+        let source =
+            crate::constraint_collection::SampledCollection::<crate::Constraint>::with_context(
+                BTreeMap::new(),
+                BTreeMap::new(),
+                context,
+            )
+            .unwrap_err();
 
         let error = invalid_sample_set_sidecar(source, "ommx.v1.SampleSet", "constraints");
 
@@ -1726,7 +1727,7 @@ mod tests {
         let mut constraint_context = crate::ConstraintContextStore::<ConstraintID>::default();
         constraint_context.set_name(cid, "balance");
         constraint_context.set_description(cid, "demand-balance row");
-        let constraints = crate::constraint_type::SampledCollection::with_context(
+        let constraints = crate::constraint_collection::SampledCollection::with_context(
             constraints_map,
             BTreeMap::new(),
             constraint_context,

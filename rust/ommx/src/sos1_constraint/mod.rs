@@ -198,6 +198,7 @@ impl SampledConstraintData for SampledSos1Constraint {
 // ===== ConstraintType =====
 
 impl ConstraintType for Sos1Constraint {
+    const KIND: crate::ConstraintKind = crate::ConstraintKind::Sos1;
     type ID = Sos1ConstraintID;
     type ViolationDiagnostics = Sos1ViolationDiagnostics;
     type Created = Sos1Constraint;

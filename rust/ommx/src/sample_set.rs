@@ -5,9 +5,9 @@ mod parse;
 mod serialize;
 
 use crate::{
-    constraint_type::{ConstraintType, EvaluatedCollection, SampledCollection},
+    constraint_collection::{EvaluatedCollection, SampledCollection},
     indicator_constraint::IndicatorConstraint,
-    ATol, Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
+    ATol, Constraint, ConstraintID, ConstraintType, EvaluatedConstraint, EvaluatedDecisionVariable,
     EvaluatedNamedFunction, NamedFunctionID, NamedFunctionTable, SampleID, SampleIDSet, Sampled,
     SampledConstraint, SampledDecisionVariable, SampledNamedFunction, Sense, Solution, VariableID,
 };
@@ -969,10 +969,10 @@ impl SampleSetBuilder {
                 })?,
         };
         let mut ids = crate::constraint_ids::ConstraintIds::default();
-        ids.sampled("regular", &constraints)
-            .and_then(|()| ids.sampled("indicator", &self.indicator_constraints))
-            .and_then(|()| ids.sampled("one-hot", &self.one_hot_constraints))
-            .and_then(|()| ids.sampled("SOS1", &self.sos1_constraints))
+        ids.sampled(&constraints)
+            .and_then(|()| ids.sampled(&self.indicator_constraints))
+            .and_then(|()| ids.sampled(&self.one_hot_constraints))
+            .and_then(|()| ids.sampled(&self.sos1_constraints))
             .map_err(|error| SampleSetError::ConflictingConstraintNumber {
                 number: error.number,
                 first_family: error.first_family,
@@ -1636,7 +1636,7 @@ mod tests {
             reason: "relaxed for test".to_string(),
             parameters: Default::default(),
         };
-        let constraints = crate::constraint_type::SampledCollection::with_context(
+        let constraints = crate::constraint_collection::SampledCollection::with_context(
             constraints_map,
             BTreeMap::from([(cid, inactive_metadata)]),
             constraint_context,

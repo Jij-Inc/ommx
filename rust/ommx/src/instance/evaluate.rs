@@ -1,7 +1,7 @@
 use super::*;
 use crate::Result;
 use crate::{
-    constraint::InactiveConstraintMetadata, constraint_type::ActiveRowRewrite, ATol,
+    constraint::InactiveConstraintMetadata, constraint_collection::ActiveRowRewrite, ATol,
     DecisionVariableError, Evaluate, InconsistentDependentValue, Kind, MissingStateEntries,
     Propagate, PropagateOutcome, UnknownStateEntries, UnverifiableDependentAssertion,
     VariableIDSet,
@@ -820,20 +820,22 @@ impl Evaluate for Instance {
             samples
         };
 
-        let sampled_constraints: crate::constraint_type::SampledCollection<crate::Constraint> =
-            self.constraint_collection
-                .evaluate_samples(&samples, atol)?;
-        let sampled_indicator_constraints: crate::constraint_type::SampledCollection<
+        let sampled_constraints: crate::constraint_collection::SampledCollection<
+            crate::Constraint,
+        > = self
+            .constraint_collection
+            .evaluate_samples(&samples, atol)?;
+        let sampled_indicator_constraints: crate::constraint_collection::SampledCollection<
             crate::IndicatorConstraint,
         > = self
             .indicator_constraint_collection
             .evaluate_samples(&samples, atol)?;
-        let sampled_one_hot_constraints: crate::constraint_type::SampledCollection<
+        let sampled_one_hot_constraints: crate::constraint_collection::SampledCollection<
             crate::OneHotConstraint,
         > = self
             .one_hot_constraint_collection
             .evaluate_samples(&samples, atol)?;
-        let sampled_sos1_constraints: crate::constraint_type::SampledCollection<
+        let sampled_sos1_constraints: crate::constraint_collection::SampledCollection<
             crate::Sos1Constraint,
         > = self
             .sos1_constraint_collection

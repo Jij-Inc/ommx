@@ -286,6 +286,7 @@ impl SampledConstraintData for SampledIndicatorConstraint {
 // ===== ConstraintType =====
 
 impl ConstraintType for IndicatorConstraint {
+    const KIND: crate::ConstraintKind = crate::ConstraintKind::Indicator;
     type ID = IndicatorConstraintID;
     type ViolationDiagnostics = IndicatorViolationDiagnostics;
     type Created = IndicatorConstraint;

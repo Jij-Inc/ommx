@@ -69,7 +69,7 @@ impl_special_constraint_profile!(
 macro_rules! impl_constraint_collection_profile {
     ($constraint_type:ty, $active_name:expr, $inactive_name:expr) => {
         impl LogicalMemoryProfile
-            for crate::constraint_type::ConstraintCollection<$constraint_type>
+            for crate::constraint_collection::ConstraintCollection<$constraint_type>
         {
             fn visit_logical_memory<V: LogicalMemoryVisitor>(
                 &self,
