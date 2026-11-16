@@ -4,7 +4,11 @@
 Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレーションガイドを [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) にまとめてあります。
 ```
 
+## Unreleased
+
 ## 3.0.0 Release Candidate 1
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0rc1-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0rc1)
 
 Beta 9 に続く、3.0.0 正式版に向けたリリース候補です。
 Python SDK とすべてのソルバー adapter パッケージのバージョンは `3.0.0rc1` です。
