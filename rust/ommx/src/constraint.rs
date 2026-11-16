@@ -14,7 +14,7 @@ use crate::constraint_type::sample_ids_from_map;
 use crate::logical_memory::LogicalMemoryProfile;
 use crate::SampledConstraintBehavior;
 use crate::{ATol, Function, Parse, ParseError, RawParseError, SampleID, VariableID};
-use crate::{EvaluatedConstraintBehavior, EvaluatedConstraintData};
+use crate::{EvaluatedConstraintBehavior, EvaluatedConstraintView};
 pub use arbitrary::*;
 use derive_more::{Deref, From};
 use fnv::FnvHashSet;
@@ -485,7 +485,7 @@ impl EvaluatedConstraint {
     /// Zero implies feasibility. A small positive violation may also be feasible
     /// within the supplied query tolerance; the residual is not rounded to zero.
     pub fn violation(&self) -> f64 {
-        EvaluatedConstraintData::violation(self)
+        EvaluatedConstraintView::violation(self)
     }
 }
 

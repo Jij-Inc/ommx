@@ -1,11 +1,11 @@
 //! The regular constraint's type mapping and evaluated-row contracts.
 
 use crate::{
-    Constraint, ConstraintID, ConstraintType, EvaluatedConstraint, EvaluatedConstraintData,
-    SampleID, SampleIDSet, SampledConstraint, SampledConstraintData, VariableIDSet,
+    Constraint, ConstraintID, ConstraintType, EvaluatedConstraint, EvaluatedConstraintView,
+    SampleID, SampleIDSet, SampledConstraint, SampledConstraintView, VariableIDSet,
 };
 
-impl EvaluatedConstraintData for EvaluatedConstraint {
+impl EvaluatedConstraintView for EvaluatedConstraint {
     type ID = ConstraintID;
     fn violation(&self) -> f64 {
         self.equality.violation(self.stage.evaluated_value)
@@ -16,7 +16,7 @@ impl EvaluatedConstraintData for EvaluatedConstraint {
     }
 }
 
-impl SampledConstraintData for SampledConstraint {
+impl SampledConstraintView for SampledConstraint {
     type ID = ConstraintID;
     type Evaluated = EvaluatedConstraint;
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {

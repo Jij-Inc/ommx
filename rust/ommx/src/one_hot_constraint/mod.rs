@@ -5,8 +5,8 @@ mod evaluate;
 use crate::{
     constraint::{stage, Created, Evaluated, Stage},
     constraint_type::{
-        sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, EvaluatedConstraintData,
-        SampledConstraintBehavior, SampledConstraintData,
+        sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, EvaluatedConstraintView,
+        SampledConstraintBehavior, SampledConstraintView,
     },
     ATol, Parse, ParseError, SampleID, SampleIDSet, VariableID, VariableIDSet,
 };
@@ -158,9 +158,9 @@ impl Stage<OneHotConstraint<stage::Sampled>> for stage::Sampled {
 pub type EvaluatedOneHotConstraint = OneHotConstraint<Evaluated>;
 pub type SampledOneHotConstraint = OneHotConstraint<stage::Sampled>;
 
-// ===== EvaluatedConstraintBehavior / SampledConstraintBehavior =====
+// ===== EvaluatedConstraintView / SampledConstraintView =====
 
-impl EvaluatedConstraintData for EvaluatedOneHotConstraint {
+impl EvaluatedConstraintView for EvaluatedOneHotConstraint {
     type ID = OneHotConstraintID;
     fn violation(&self) -> f64 {
         self.stage.violation
@@ -171,7 +171,7 @@ impl EvaluatedConstraintData for EvaluatedOneHotConstraint {
     }
 }
 
-impl SampledConstraintData for SampledOneHotConstraint {
+impl SampledConstraintView for SampledOneHotConstraint {
     type ID = OneHotConstraintID;
     type Evaluated = EvaluatedOneHotConstraint;
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
@@ -548,7 +548,7 @@ impl EvaluatedOneHotConstraint {
     /// `(0.1, 0.2, 0)`, giving violation `0.2`. Mathematically, this is the L∞
     /// distance to a one-hot assignment; variable bounds and kinds are checked separately.
     pub fn violation(&self) -> f64 {
-        EvaluatedConstraintData::violation(self)
+        EvaluatedConstraintView::violation(self)
     }
 }
 

@@ -1,5 +1,5 @@
 use super::*;
-use crate::{ATol, SampleID, SampleIDSet, SampledConstraintBehavior, SampledConstraintData};
+use crate::{ATol, SampleID, SampleIDSet, SampledConstraintBehavior, SampledConstraintView};
 
 impl<T: ConstraintType> std::ops::Deref for SampledCollection<T> {
     type Target = BTreeMap<T::ID, T::Sampled>;

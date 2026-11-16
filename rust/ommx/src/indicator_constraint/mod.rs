@@ -3,8 +3,8 @@ mod evaluate;
 use crate::{
     constraint::{stage, Created, CreatedData, Equality, Evaluated, Stage},
     constraint_type::{
-        sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, EvaluatedConstraintData,
-        SampledConstraintBehavior, SampledConstraintData,
+        sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, EvaluatedConstraintView,
+        SampledConstraintBehavior, SampledConstraintView,
     },
     ATol, Function, Parse, ParseError, RawParseError, SampleID, SampleIDSet, VariableID,
     VariableIDSet,
@@ -216,13 +216,13 @@ impl EvaluatedIndicatorConstraint {
     /// Equality uses `|f(x)|`; inequality uses `max(0, f(x))`. Zero implies
     /// feasibility, but a small positive violation may be feasible within tolerance.
     pub fn violation(&self) -> f64 {
-        EvaluatedConstraintData::violation(self)
+        EvaluatedConstraintView::violation(self)
     }
 }
 
-// ===== HasConstraintID =====
+// ===== EvaluatedConstraintView / SampledConstraintView =====
 
-impl EvaluatedConstraintData for EvaluatedIndicatorConstraint {
+impl EvaluatedConstraintView for EvaluatedIndicatorConstraint {
     type ID = IndicatorConstraintID;
     fn violation(&self) -> f64 {
         indicator_violation(
@@ -237,7 +237,7 @@ impl EvaluatedConstraintData for EvaluatedIndicatorConstraint {
     }
 }
 
-impl SampledConstraintData for SampledIndicatorConstraint {
+impl SampledConstraintView for SampledIndicatorConstraint {
     type ID = IndicatorConstraintID;
     type Evaluated = EvaluatedIndicatorConstraint;
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {

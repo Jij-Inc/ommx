@@ -24,7 +24,7 @@
 //!    the diagnostic type. Extend the internal family dispatch and both result
 //!    hosts' queries to cover the new family.
 //! 4. Implement `Evaluate` for `NewConstraint<Created>`,
-//!    [`EvaluatedConstraintData`] and [`SampledConstraintData`]. Every family must
+//!    [`EvaluatedConstraintView`] and [`SampledConstraintView`]. Every family must
 //!    provide a nonnegative scalar violation and the internal `DiagnosticRow`
 //!    implementation with a family-specific non-exhaustive diagnostic type.
 //!    Result hosts own row selection and the values supplied to diagnostics.
@@ -147,7 +147,12 @@ pub trait ConstraintType: dispatch::Sealed {
     type Sampled: SampledConstraintBehavior<ID = Self::ID, Evaluated = Self::Evaluated>;
 }
 
-/// The data each constraint family must provide after a single evaluation.
+/// Read-only access to a constraint after a single evaluation.
+///
+/// Each family provides its violation and referenced variable IDs through this
+/// trait. [`EvaluatedConstraintBehavior`] derives feasibility from the violation
+/// using a shared predicate. Constraint identity and membership belong to the
+/// enclosing collection; cross-table consistency belongs to [`crate::Solution`].
 ///
 /// `violation` is nonnegative and independent of the feasibility tolerance.
 /// It is zero exactly when the constraint is satisfied without tolerance.
@@ -157,7 +162,7 @@ pub trait ConstraintType: dispatch::Sealed {
 /// contract applies. Each family defines its metric on the values it receives.
 /// This trait does not require a stored tolerance. A family retaining a
 /// tolerance-dependent decision must retain that decision's conditions itself.
-pub trait EvaluatedConstraintData {
+pub trait EvaluatedConstraintView {
     type ID;
     fn violation(&self) -> f64;
     fn used_decision_variable_ids(&self) -> &VariableIDSet {
@@ -170,13 +175,13 @@ pub trait EvaluatedConstraintData {
 /// The blanket implementation prevents constraint families from implementing
 /// a second, independent feasibility rule.
 /// A finite, nonnegative violation is feasible exactly when `violation <= atol`.
-pub trait EvaluatedConstraintBehavior: EvaluatedConstraintData {
+pub trait EvaluatedConstraintBehavior: EvaluatedConstraintView {
     /// Compare the stored violation with `atol`, without re-evaluating inputs
     /// or changing any retained activation decisions.
     fn is_feasible(&self, atol: ATol) -> bool;
 }
 
-impl<T: EvaluatedConstraintData + ?Sized> EvaluatedConstraintBehavior for T {
+impl<T: EvaluatedConstraintView + ?Sized> EvaluatedConstraintBehavior for T {
     fn is_feasible(&self, atol: ATol) -> bool {
         violation_is_feasible(self.violation(), atol)
     }
@@ -205,13 +210,19 @@ pub(crate) fn validate_wire_feasibility(
     Ok(())
 }
 
-/// The data each constraint family must provide after sample evaluation.
-pub trait SampledConstraintData {
+/// Read-only access to a constraint after sample evaluation.
+///
+/// Each family provides per-sample violations, referenced variable IDs, and
+/// extraction of an evaluated row. It also checks its sample-keyed fields
+/// against IDs supplied by the caller. [`crate::SampleSet`] owns the expected
+/// sample IDs and consistency across tables; [`SampledConstraintBehavior`]
+/// derives per-sample feasibility from the violation using a shared predicate.
+pub trait SampledConstraintView {
     type ID;
     /// The evaluated constraint type returned by [`get`](Self::get).
     type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
     /// The same scalar metric as single-state evaluation, or `None` for a
-    /// missing sample. Implementations must satisfy [`EvaluatedConstraintData`]'s
+    /// missing sample. Implementations must satisfy [`EvaluatedConstraintView`]'s
     /// nonnegativity contract.
     fn violation_for(&self, sample_id: SampleID) -> Option<f64>;
 
@@ -233,12 +244,12 @@ pub trait SampledConstraintData {
 }
 
 /// Common sample feasibility, derived from each sample's violation.
-pub trait SampledConstraintBehavior: SampledConstraintData {
+pub trait SampledConstraintBehavior: SampledConstraintView {
     /// Query a stored sample's violation without changing evaluation decisions.
     fn is_feasible_for(&self, sample_id: SampleID, atol: ATol) -> Option<bool>;
 }
 
-impl<T: SampledConstraintData + ?Sized> SampledConstraintBehavior for T {
+impl<T: SampledConstraintView + ?Sized> SampledConstraintBehavior for T {
     fn is_feasible_for(&self, sample_id: SampleID, atol: ATol) -> Option<bool> {
         self.violation_for(sample_id)
             .map(|violation| violation_is_feasible(violation, atol))

@@ -288,12 +288,12 @@ and kinds using the saved tolerance, matching the extracted Solution. Variable
 violations are not added to `total_violation`, so zero total constraint violation
 does not imply feasibility of the whole solution.
 
-Implement [`EvaluatedConstraintData`](crate::EvaluatedConstraintData) and
-[`SampledConstraintData`](crate::SampledConstraintData) for new constraint families.
+Implement [`EvaluatedConstraintView`](crate::EvaluatedConstraintView) and
+[`SampledConstraintView`](crate::SampledConstraintView) for new constraint families.
 Their scalar metrics are required; blanket behavior implementations derive
 feasibility through `is_feasible(atol)` and `is_feasible_for(id, atol)`.
 `EvaluatedConstraint::is_feasible_with_tolerance(atol)` is renamed to
-`is_feasible(atol)`. The data traits no longer require a stored tolerance.
+`is_feasible(atol)`. The view traits do not require a stored tolerance.
 Regular `EvaluatedData` / `SampledData` retain numeric results only. OneHot/SOS1
 stage data also store `violation`/`violations` in the SDK.
 
@@ -716,25 +716,29 @@ impl ConstraintType for IndicatorConstraint {
 }
 ```
 
-### Constraint Data and Behavior Traits
+### Constraint View and Behavior Traits
 
-Each family supplies its scalar violations through the data traits.
-The caller supplies the feasibility tolerance to the behavior methods. The behavior traits have blanket implementations that derive
-feasibility from `violation <= atol`; families cannot override that predicate.
+Each family exposes its scalar violations and referenced variable IDs through
+the read-only view traits. The sampled view also extracts evaluated rows and
+checks its sample-keyed fields against IDs supplied by the caller. `Solution`
+and `SampleSet` retain responsibility for consistency across tables.
+The caller supplies the feasibility tolerance to the behavior methods. Their
+blanket implementations derive feasibility from the shared violation predicate;
+families cannot override it.
 The core methods are:
 
 ```rust,ignore
-pub trait EvaluatedConstraintData {
+pub trait EvaluatedConstraintView {
     type ID;
     fn violation(&self) -> f64;
     // Optional used_decision_variable_ids() override.
 }
 
-pub trait EvaluatedConstraintBehavior: EvaluatedConstraintData {
+pub trait EvaluatedConstraintBehavior: EvaluatedConstraintView {
     fn is_feasible(&self, atol: ATol) -> bool;
 }
 
-pub trait SampledConstraintData {
+pub trait SampledConstraintView {
     type ID;
     type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
     fn violation_for(&self, sample_id: SampleID) -> Option<f64>;
@@ -743,7 +747,7 @@ pub trait SampledConstraintData {
     // Optional used_decision_variable_ids() override.
 }
 
-pub trait SampledConstraintBehavior: SampledConstraintData {
+pub trait SampledConstraintBehavior: SampledConstraintView {
     fn is_feasible_for(&self, sample_id: SampleID, atol: ATol) -> Option<bool>;
 }
 ```

@@ -1,4 +1,4 @@
-use crate::{SampledConstraintData, SampledDecisionVariable};
+use crate::{SampledConstraintView, SampledDecisionVariable};
 use std::collections::BTreeMap;
 
 use super::*;

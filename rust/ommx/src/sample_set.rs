@@ -1,4 +1,4 @@
-use crate::SampledConstraintData;
+use crate::SampledConstraintView;
 mod constraints;
 mod extract;
 mod parse;
