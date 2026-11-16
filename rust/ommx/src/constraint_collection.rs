@@ -8,6 +8,8 @@ mod created;
 mod evaluate;
 mod evaluated;
 mod sampled;
+// Model/result owners share typed, read-only traversal over registered families.
+pub(crate) mod traverse;
 mod v1;
 mod v2;
 

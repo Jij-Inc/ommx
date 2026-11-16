@@ -1,8 +1,7 @@
 use crate::SampleID;
 use crate::{
     constraint_type::{dispatch::Query, DiagnosticRow},
-    Constraint, ConstraintRole, ConstraintType, IndicatorConstraint, OneHotConstraint, SampleSet,
-    SampledCollection, SampledConstraintBehavior, Sos1Constraint,
+    ConstraintRole, ConstraintType, SampleSet, SampledCollection, SampledConstraintBehavior,
 };
 use std::collections::BTreeMap;
 
@@ -76,23 +75,20 @@ struct DiagnosticsQuery<'a> {
     sample_id: SampleID,
 }
 
-macro_rules! query_family {
-    ($method:ident, $family:ty, $accessor:ident) => {
-        fn $method(self) -> Self::Output<$family> {
-            self.host.family_violation_diagnostics::<$family>(
-                SampleSet::$accessor,
-                self.sample_id,
-                self.min_role,
-            )
+macro_rules! impl_diagnostics_query {
+    ((); $( $method:ident: $family:ty {
+        created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident,
+    } )*) => {
+        impl Query for DiagnosticsQuery<'_> {
+            type Output<C: ConstraintType> = BTreeMap<C::ID, C::ViolationDiagnostics>;
+
+            $(fn $method(self) -> Self::Output<$family> {
+                self.host.family_violation_diagnostics::<$family>(
+                    SampleSet::$sampled, self.sample_id, self.min_role,
+                )
+            })*
         }
     };
 }
 
-impl Query for DiagnosticsQuery<'_> {
-    type Output<C: ConstraintType> = BTreeMap<C::ID, C::ViolationDiagnostics>;
-
-    query_family!(regular, Constraint, constraints);
-    query_family!(indicator, IndicatorConstraint, indicator_constraints);
-    query_family!(one_hot, OneHotConstraint, one_hot_constraints);
-    query_family!(sos1, Sos1Constraint, sos1_constraints);
-}
+crate::constraint_type::families::with_constraint_families!(impl_diagnostics_query; ());

@@ -1,3 +1,4 @@
+use crate::constraint_collection::traverse::{for_each_constraint_collection, SampledCollections};
 use crate::SampledConstraintView;
 mod constraints;
 mod extract;
@@ -968,38 +969,31 @@ impl SampleSetBuilder {
                     message: e.to_string(),
                 })?,
         };
+        let collections = SampledCollections {
+            constraints: &constraints,
+            indicator_constraints: &self.indicator_constraints,
+            one_hot_constraints: &self.one_hot_constraints,
+            sos1_constraints: &self.sos1_constraints,
+        };
         let mut ids = crate::constraint_ids::ConstraintIds::default();
-        ids.sampled(&constraints)
-            .and_then(|()| ids.sampled(&self.indicator_constraints))
-            .and_then(|()| ids.sampled(&self.one_hot_constraints))
-            .and_then(|()| ids.sampled(&self.sos1_constraints))
-            .map_err(|error| SampleSetError::ConflictingConstraintNumber {
-                number: error.number,
-                first_family: error.first_family,
-                first_state: error.first_state,
-                second_family: error.second_family,
-                second_state: error.second_state,
+        for_each_constraint_collection!(sampled, collections, |_, collection| {
+            ids.sampled(collection).map_err(|error| {
+                SampleSetError::ConflictingConstraintNumber {
+                    number: error.number,
+                    first_family: error.first_family,
+                    first_state: error.first_state,
+                    second_family: error.second_family,
+                    second_state: error.second_state,
+                }
             })?;
-        constraints
-            .validate_context_ids()
-            .map_err(|e| SampleSetError::InvalidSidecar {
-                message: e.to_string(),
-            })?;
-        self.indicator_constraints
-            .validate_context_ids()
-            .map_err(|e| SampleSetError::InvalidSidecar {
-                message: e.to_string(),
-            })?;
-        self.one_hot_constraints
-            .validate_context_ids()
-            .map_err(|e| SampleSetError::InvalidSidecar {
-                message: e.to_string(),
-            })?;
-        self.sos1_constraints.validate_context_ids().map_err(|e| {
-            SampleSetError::InvalidSidecar {
-                message: e.to_string(),
-            }
-        })?;
+        });
+        for_each_constraint_collection!(sampled, collections, |_, collection| {
+            collection
+                .validate_context_ids()
+                .map_err(|e| SampleSetError::InvalidSidecar {
+                    message: e.to_string(),
+                })?;
+        });
 
         // Validate sample ID consistency
         let objective_sample_ids = objectives.ids();
@@ -1013,30 +1007,14 @@ impl SampleSetBuilder {
             }
         }
 
-        constraints
-            .validate_sample_ids(&objective_sample_ids)
-            .map_err(|found| SampleSetError::InconsistentSampleIDs {
-                expected: objective_sample_ids.clone(),
-                found,
-            })?;
-        self.indicator_constraints
-            .validate_sample_ids(&objective_sample_ids)
-            .map_err(|found| SampleSetError::InconsistentSampleIDs {
-                expected: objective_sample_ids.clone(),
-                found,
-            })?;
-        self.one_hot_constraints
-            .validate_sample_ids(&objective_sample_ids)
-            .map_err(|found| SampleSetError::InconsistentSampleIDs {
-                expected: objective_sample_ids.clone(),
-                found,
-            })?;
-        self.sos1_constraints
-            .validate_sample_ids(&objective_sample_ids)
-            .map_err(|found| SampleSetError::InconsistentSampleIDs {
-                expected: objective_sample_ids.clone(),
-                found,
-            })?;
+        for_each_constraint_collection!(sampled, collections, |_, collection| {
+            collection
+                .validate_sample_ids(&objective_sample_ids)
+                .map_err(|found| SampleSetError::InconsistentSampleIDs {
+                    expected: objective_sample_ids.clone(),
+                    found,
+                })?;
+        });
         validate_sampled_activation_tolerances(
             &self.indicator_constraints,
             &self.one_hot_constraints,
@@ -1097,10 +1075,7 @@ impl SampleSetBuilder {
         // Derive feasibility from variables and every constraint family.
         let (feasible, feasible_relaxed) = Self::compute_feasibility(
             &decision_variables,
-            &constraints,
-            &self.indicator_constraints,
-            &self.one_hot_constraints,
-            &self.sos1_constraints,
+            &collections,
             &objective_sample_ids,
             self.feasibility_atol,
         );
@@ -1172,10 +1147,12 @@ impl SampleSetBuilder {
         let objective_sample_ids = objectives.ids();
         let (feasible, feasible_relaxed) = Self::compute_feasibility(
             &decision_variables,
-            &constraints,
-            &self.indicator_constraints,
-            &self.one_hot_constraints,
-            &self.sos1_constraints,
+            &SampledCollections {
+                constraints: &constraints,
+                indicator_constraints: &self.indicator_constraints,
+                one_hot_constraints: &self.one_hot_constraints,
+                sos1_constraints: &self.sos1_constraints,
+            },
             &objective_sample_ids,
             self.feasibility_atol,
         );
@@ -1207,10 +1184,7 @@ impl SampleSetBuilder {
 
     fn compute_feasibility(
         decision_variables: &crate::SampledDecisionVariableTable,
-        constraints: &SampledCollection<Constraint>,
-        indicator_constraints: &SampledCollection<IndicatorConstraint>,
-        one_hot_constraints: &SampledCollection<crate::OneHotConstraint>,
-        sos1_constraints: &SampledCollection<crate::Sos1Constraint>,
+        collections: &SampledCollections<'_>,
         sample_ids: &SampleIDSet,
         atol: ATol,
     ) -> (BTreeMap<SampleID, bool>, BTreeMap<SampleID, bool>) {
@@ -1221,16 +1195,12 @@ impl SampleSetBuilder {
             let variables_feasible = decision_variables
                 .iter()
                 .all(|(id, variable)| variable.is_valid_for(*id, *sample_id, atol));
-            let f = variables_feasible
-                && constraints.is_feasible_for(*sample_id, atol)
-                && indicator_constraints.is_feasible_for(*sample_id, atol)
-                && one_hot_constraints.is_feasible_for(*sample_id, atol)
-                && sos1_constraints.is_feasible_for(*sample_id, atol);
-            let fr = variables_feasible
-                && constraints.is_feasible_relaxed_for(*sample_id, atol)
-                && indicator_constraints.is_feasible_relaxed_for(*sample_id, atol)
-                && one_hot_constraints.is_feasible_relaxed_for(*sample_id, atol)
-                && sos1_constraints.is_feasible_relaxed_for(*sample_id, atol);
+            let mut f = variables_feasible;
+            let mut fr = variables_feasible;
+            for_each_constraint_collection!(sampled, collections, |_, collection| {
+                f = f && collection.is_feasible_for(*sample_id, atol);
+                fr = fr && collection.is_feasible_relaxed_for(*sample_id, atol);
+            });
 
             feasible.insert(*sample_id, f);
             feasible_relaxed.insert(*sample_id, fr);

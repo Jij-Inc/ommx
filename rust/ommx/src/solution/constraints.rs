@@ -1,7 +1,6 @@
 use crate::{
     constraint_type::{dispatch::Query, DiagnosticRow},
-    Constraint, ConstraintRole, ConstraintType, EvaluatedCollection, EvaluatedConstraintBehavior,
-    IndicatorConstraint, OneHotConstraint, Solution, Sos1Constraint,
+    ConstraintRole, ConstraintType, EvaluatedCollection, EvaluatedConstraintBehavior, Solution,
 };
 use std::collections::BTreeMap;
 
@@ -71,27 +70,23 @@ struct DiagnosticsQuery<'a> {
     min_role: ConstraintRole,
 }
 
-macro_rules! query_family {
-    ($method:ident, $family:ty, $accessor:ident) => {
-        fn $method(self) -> Self::Output<$family> {
-            self.host
-                .family_violation_diagnostics::<$family>(Solution::$accessor, self.min_role)
+macro_rules! impl_diagnostics_query {
+    ((); $( $method:ident: $family:ty {
+        created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident,
+    } )*) => {
+        impl Query for DiagnosticsQuery<'_> {
+            type Output<C: ConstraintType> = BTreeMap<C::ID, C::ViolationDiagnostics>;
+
+            $(fn $method(self) -> Self::Output<$family> {
+                self.host.family_violation_diagnostics::<$family>(
+                    Solution::$evaluated, self.min_role,
+                )
+            })*
         }
     };
 }
 
-impl Query for DiagnosticsQuery<'_> {
-    type Output<C: ConstraintType> = BTreeMap<C::ID, C::ViolationDiagnostics>;
-
-    query_family!(regular, Constraint, evaluated_constraints);
-    query_family!(
-        indicator,
-        IndicatorConstraint,
-        evaluated_indicator_constraints
-    );
-    query_family!(one_hot, OneHotConstraint, evaluated_one_hot_constraints);
-    query_family!(sos1, Sos1Constraint, evaluated_sos1_constraints);
-}
+crate::constraint_type::families::with_constraint_families!(impl_diagnostics_query; ());
 
 #[cfg(test)]
 mod tests;

@@ -418,42 +418,30 @@ impl Parse for v2::SampleSet {
             .unwrap_or_default();
         let sense = crate::v2_io::parse_v2_required_sense(self.sense, message)?;
 
-        constraints
-            .validate_sample_ids(&objective_sample_ids)
-            .map_err(|found| {
-                ParseError::new(crate::SampleSetError::InconsistentSampleIDs {
-                    expected: objective_sample_ids.clone(),
-                    found,
-                })
-                .context(message, "sampled_regular_constraints")
-            })?;
-        indicator_constraints
-            .validate_sample_ids(&objective_sample_ids)
-            .map_err(|found| {
-                ParseError::new(crate::SampleSetError::InconsistentSampleIDs {
-                    expected: objective_sample_ids.clone(),
-                    found,
-                })
-                .context(message, "sampled_indicator_constraints")
-            })?;
-        one_hot_constraints
-            .validate_sample_ids(&objective_sample_ids)
-            .map_err(|found| {
-                ParseError::new(crate::SampleSetError::InconsistentSampleIDs {
-                    expected: objective_sample_ids.clone(),
-                    found,
-                })
-                .context(message, "sampled_one_hot_constraints")
-            })?;
-        sos1_constraints
-            .validate_sample_ids(&objective_sample_ids)
-            .map_err(|found| {
-                ParseError::new(crate::SampleSetError::InconsistentSampleIDs {
-                    expected: objective_sample_ids.clone(),
-                    found,
-                })
-                .context(message, "sampled_sos1_constraints")
-            })?;
+        let collections = SampledCollections {
+            constraints: &constraints,
+            indicator_constraints: &indicator_constraints,
+            one_hot_constraints: &one_hot_constraints,
+            sos1_constraints: &sos1_constraints,
+        };
+        for_each_constraint_collection!(sampled, collections, |kind, collection| {
+            // These are protobuf field names owned by this parser, not SDK kind labels.
+            let field = match kind {
+                crate::ConstraintKind::Regular => "sampled_regular_constraints",
+                crate::ConstraintKind::Indicator => "sampled_indicator_constraints",
+                crate::ConstraintKind::OneHot => "sampled_one_hot_constraints",
+                crate::ConstraintKind::Sos1 => "sampled_sos1_constraints",
+            };
+            collection
+                .validate_sample_ids(&objective_sample_ids)
+                .map_err(|found| {
+                    ParseError::new(crate::SampleSetError::InconsistentSampleIDs {
+                        expected: objective_sample_ids.clone(),
+                        found,
+                    })
+                    .context(message, field)
+                })?;
+        });
 
         let decision_variable_ids = decision_variables.keys().copied().collect::<BTreeSet<_>>();
         validate_sampled_constraint_used_ids("regular", &constraints, &decision_variable_ids)
@@ -530,10 +518,7 @@ impl Parse for v2::SampleSet {
 
         let (computed_feasible, computed_feasible_relaxed) = SampleSetBuilder::compute_feasibility(
             &decision_variables,
-            &constraints,
-            &indicator_constraints,
-            &one_hot_constraints,
-            &sos1_constraints,
+            &collections,
             &objective_sample_ids,
             feasibility_atol,
         );
@@ -572,11 +557,10 @@ impl Parse for v2::SampleSet {
         }
 
         let mut ids = crate::constraint_ids::ConstraintIds::default();
-        ids.sampled(&constraints)
-            .and_then(|()| ids.sampled(&indicator_constraints))
-            .and_then(|()| ids.sampled(&one_hot_constraints))
-            .and_then(|()| ids.sampled(&sos1_constraints))
-            .map_err(|error| ParseError::new(error).context(message, "constraints"))?;
+        for_each_constraint_collection!(sampled, collections, |_, collection| {
+            ids.sampled(collection)
+                .map_err(|error| ParseError::new(error).context(message, "constraints"))?;
+        });
         Ok(SampleSet {
             decision_variables,
             objectives,
@@ -660,10 +644,12 @@ impl TryFrom<SampleSet> for crate::v1::SampleSet {
         let atol = ATol::default();
         let (feasible, feasible_relaxed) = SampleSetBuilder::compute_feasibility(
             &decision_variables,
-            &constraints,
-            &Default::default(),
-            &Default::default(),
-            &Default::default(),
+            &SampledCollections {
+                constraints: &constraints,
+                indicator_constraints: &Default::default(),
+                one_hot_constraints: &Default::default(),
+                sos1_constraints: &Default::default(),
+            },
             &objectives.ids(),
             atol,
         );

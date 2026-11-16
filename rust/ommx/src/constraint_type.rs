@@ -20,9 +20,11 @@
 //!    than the struct itself.
 //! 2. Implement `Stage<NewConstraint<S>>` for each stage marker (reuse `CreatedData`,
 //!    `EvaluatedData`, etc. if the stage data is the same as regular constraints).
-//! 3. Implement `ConstraintType for NewConstraint` mapping its `KIND`, all three stages, and
-//!    the diagnostic type. Extend the internal family dispatch and both result
-//!    hosts' queries to cover the new family.
+//! 3. Add a variant to [`ConstraintKind`] and implement `ConstraintType for
+//!    NewConstraint` mapping its `KIND`, all three stages, and the diagnostic type.
+//!    Register the family and its collection fields/accessors in the internal
+//!    `constraint_type/families.rs` registry. This generates typed dispatch,
+//!    both result owners' diagnostic queries, and common collection traversal.
 //! 4. Implement `Evaluate` for `NewConstraint<Created>`,
 //!    [`EvaluatedConstraintView`] and [`SampledConstraintView`]. Every family must
 //!    provide a nonnegative scalar violation and the internal `DiagnosticRow`
@@ -30,18 +32,26 @@
 //!    Result hosts own row selection and the values supplied to diagnostics.
 //!    Feasibility is derived by the
 //!    blanket behavior implementations; families cannot supply a separate rule.
-//! 5. Add a `ConstraintCollection<NewConstraint>` field to [`Instance`].
-//! 6. Add a variant to [`ConstraintKind`] and update
-//!    `Instance::active_special_constraint_kinds`.
-//! 7. Include the family in heterogeneous Python collections, name enumeration,
-//!    and name-based extraction on models and results. Result extraction uses the family's
-//!    violation metric; no family may be silently omitted.
+//! 5. Add the registered collection fields to `Instance`, `ParametricInstance`,
+//!    `Solution`, and `SampleSet`, and wire their construction and accessors.
+//!    Common traversal includes the new family in ID checks, name enumeration,
+//!    result extraction, and feasibility aggregation. Construction paths using
+//!    borrowed collection bundles must supply the new field as well.
+//! 6. Implement the family's root-level semantic validation, evaluation,
+//!    transformations, and wire conversions. Registration does not define these
+//!    mathematical or serialization contracts. Consumers that cannot handle the
+//!    new family must explicitly reject it.
+//! 7. Include the family in heterogeneous Python collections and bindings.
+//!    Verify all roles through evaluation, sample extraction, and wire round trips;
+//!    no family may be silently omitted.
 //!
 //! [`IndicatorConstraint`]: crate::IndicatorConstraint
 //! [`Instance`]: crate::Instance
 //! [`ConstraintKind`]: crate::ConstraintKind
 
 mod diagnostics;
+// Shared registration for typed dispatch and root-owned collection traversal.
+pub(crate) mod families;
 // Solution and SampleSet use typed dispatch without exposing their storage contracts.
 pub(crate) mod dispatch;
 pub(crate) use diagnostics::DiagnosticRow;

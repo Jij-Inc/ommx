@@ -5,7 +5,7 @@
 //! These traits are unreachable outside the crate. `Sealed` is the private
 //! supertrait of `ConstraintType`, so external generic callers need no host bound.
 
-use crate::{Constraint, ConstraintType, IndicatorConstraint, OneHotConstraint, Sos1Constraint};
+use crate::ConstraintType;
 
 pub trait Sealed: Sized {
     fn dispatch<Q: Query>(query: Q) -> Q::Output<Self>
@@ -13,26 +13,21 @@ pub trait Sealed: Sized {
         Self: ConstraintType;
 }
 
-pub trait Query {
-    type Output<C: ConstraintType>;
+macro_rules! define_dispatch {
+    ((); $( $method:ident: $family:ty {
+        created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident,
+    } )*) => {
+        pub trait Query {
+            type Output<C: ConstraintType>;
+            $(fn $method(self) -> Self::Output<$family>;)*
+        }
 
-    fn regular(self) -> Self::Output<Constraint>;
-    fn indicator(self) -> Self::Output<IndicatorConstraint>;
-    fn one_hot(self) -> Self::Output<OneHotConstraint>;
-    fn sos1(self) -> Self::Output<Sos1Constraint>;
-}
-
-macro_rules! impl_dispatch {
-    ($family:ty, $method:ident) => {
-        impl Sealed for $family {
+        $(impl Sealed for $family {
             fn dispatch<Q: Query>(query: Q) -> Q::Output<Self> {
                 query.$method()
             }
-        }
+        })*
     };
 }
 
-impl_dispatch!(Constraint, regular);
-impl_dispatch!(IndicatorConstraint, indicator);
-impl_dispatch!(OneHotConstraint, one_hot);
-impl_dispatch!(Sos1Constraint, sos1);
+super::families::with_constraint_families!(define_dispatch; ());

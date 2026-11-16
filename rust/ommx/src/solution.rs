@@ -1,3 +1,6 @@
+use crate::constraint_collection::traverse::{
+    for_each_constraint_collection, EvaluatedCollections,
+};
 use crate::EvaluatedConstraintView;
 mod constraints;
 mod parse;
@@ -261,6 +264,20 @@ fn validate_all_solution_constraint_used_ids(
     validate_solution_sos1_constraint_used_ids(decision_variables, sos1_constraints)
 }
 
+macro_rules! impl_constraint_violations {
+    ((); $( $method:ident: $family:ty {
+        created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident,
+    } )*) => {
+        impl Solution {
+            fn constraint_violations(&self, min_role: crate::ConstraintRole) -> impl Iterator<Item = f64> + '_ {
+                std::iter::empty()
+                    $(.chain(self.$evaluated.selected(min_role).map(|(_, row)| row.violation())))*
+            }
+        }
+    };
+}
+crate::constraint_type::families::with_constraint_families!(impl_constraint_violations; ());
+
 impl Solution {
     /// Unique constraint names across every family, including retained inactive rows.
     ///
@@ -269,20 +286,13 @@ impl Solution {
     /// returned once, even when their subscripts are ambiguous for extraction.
     pub fn constraint_names(&self) -> BTreeSet<String> {
         let mut names = BTreeSet::new();
-        macro_rules! collect {
-            ($collection:expr) => {
-                let collection = $collection;
-                names.extend(
-                    collection
-                        .keys()
-                        .filter_map(|id| collection.context().name(*id).map(str::to_owned)),
-                );
-            };
-        }
-        collect!(&self.evaluated_constraints);
-        collect!(&self.evaluated_indicator_constraints);
-        collect!(&self.evaluated_one_hot_constraints);
-        collect!(&self.evaluated_sos1_constraints);
+        for_each_constraint_collection!(evaluated, self, |_, collection| {
+            names.extend(
+                collection
+                    .keys()
+                    .filter_map(|id| collection.context().name(*id).map(str::to_owned)),
+            );
+        });
         names
     }
 
@@ -353,17 +363,12 @@ impl Solution {
     /// - To check both constraints and decision variables, use [`feasible()`](Self::feasible)
     /// - To check only decision variables, use [`feasible_decision_variables()`](Self::feasible_decision_variables)
     pub fn feasible_constraints(&self) -> bool {
-        self.evaluated_constraints
-            .is_feasible(self.feasibility_atol)
-            && self
-                .evaluated_indicator_constraints
-                .is_feasible(self.feasibility_atol)
-            && self
-                .evaluated_one_hot_constraints
-                .is_feasible(self.feasibility_atol)
-            && self
-                .evaluated_sos1_constraints
-                .is_feasible(self.feasibility_atol)
+        for_each_constraint_collection!(evaluated, self, |_, collection| {
+            if !collection.is_feasible(self.feasibility_atol) {
+                return false;
+            }
+        });
+        true
     }
 
     /// Check `FeasibilityCheck` and `Active` constraints, and all decision variable domains.
@@ -381,17 +386,12 @@ impl Solution {
     /// - To check both constraints and decision variables, use [`feasible_relaxed()`](Self::feasible_relaxed)
     /// - To check only decision variables, use [`feasible_decision_variables()`](Self::feasible_decision_variables)
     pub fn feasible_constraints_relaxed(&self) -> bool {
-        self.evaluated_constraints
-            .is_feasible_relaxed(self.feasibility_atol)
-            && self
-                .evaluated_indicator_constraints
-                .is_feasible_relaxed(self.feasibility_atol)
-            && self
-                .evaluated_one_hot_constraints
-                .is_feasible_relaxed(self.feasibility_atol)
-            && self
-                .evaluated_sos1_constraints
-                .is_feasible_relaxed(self.feasibility_atol)
+        for_each_constraint_collection!(evaluated, self, |_, collection| {
+            if !collection.is_feasible_relaxed(self.feasibility_atol) {
+                return false;
+            }
+        });
+        true
     }
 
     /// Check active constraints and all decision variable domains.
@@ -470,30 +470,6 @@ impl Solution {
         self.evaluated_sos1_constraints
             .get(&id)
             .map(|c| c.violation())
-    }
-
-    fn constraint_violations(
-        &self,
-        min_role: crate::ConstraintRole,
-    ) -> impl Iterator<Item = f64> + '_ {
-        self.evaluated_constraints
-            .selected(min_role)
-            .map(|(_, c)| c.violation())
-            .chain(
-                self.evaluated_indicator_constraints
-                    .selected(min_role)
-                    .map(|(_, c)| c.violation()),
-            )
-            .chain(
-                self.evaluated_one_hot_constraints
-                    .selected(min_role)
-                    .map(|(_, c)| c.violation()),
-            )
-            .chain(
-                self.evaluated_sos1_constraints
-                    .selected(min_role)
-                    .map(|(_, c)| c.violation()),
-            )
     }
 
     /// Generate state from decision variables (for backward compatibility)
@@ -611,27 +587,20 @@ impl Solution {
         name: &str,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
         let mut result = BTreeMap::new();
-        macro_rules! collect {
-            ($collection:expr) => {
-                let collection = $collection;
-                let context = collection.context();
-                for (id, constraint) in collection.iter() {
-                    if context.name(*id) == Some(name) {
-                        let subscripts = context.subscripts(*id).to_vec();
-                        if result
-                            .insert(subscripts.clone(), constraint.violation())
-                            .is_some()
-                        {
-                            return Err(SolutionError::DuplicateSubscript { subscripts });
-                        }
+        for_each_constraint_collection!(evaluated, self, |_, collection| {
+            let context = collection.context();
+            for (id, constraint) in collection.iter() {
+                if context.name(*id) == Some(name) {
+                    let subscripts = context.subscripts(*id).to_vec();
+                    if result
+                        .insert(subscripts.clone(), constraint.violation())
+                        .is_some()
+                    {
+                        return Err(SolutionError::DuplicateSubscript { subscripts });
                     }
                 }
-            };
-        }
-        collect!(&self.evaluated_constraints);
-        collect!(&self.evaluated_indicator_constraints);
-        collect!(&self.evaluated_one_hot_constraints);
-        collect!(&self.evaluated_sos1_constraints);
+            }
+        });
         if result.is_empty() {
             return Err(SolutionError::UnknownConstraintName {
                 name: name.to_owned(),
@@ -1293,16 +1262,19 @@ impl SolutionBuilder {
                 NamedFunctionTable::new(self.evaluated_named_functions, self.named_function_labels)?
             }
         };
+        let collections = EvaluatedCollections {
+            evaluated_constraints: &evaluated_constraints,
+            evaluated_indicator_constraints: &self.evaluated_indicator_constraints,
+            evaluated_one_hot_constraints: &self.evaluated_one_hot_constraints,
+            evaluated_sos1_constraints: &self.evaluated_sos1_constraints,
+        };
         let mut ids = crate::constraint_ids::ConstraintIds::default();
-        ids.evaluated(&evaluated_constraints)?;
-        ids.evaluated(&self.evaluated_indicator_constraints)?;
-        ids.evaluated(&self.evaluated_one_hot_constraints)?;
-        ids.evaluated(&self.evaluated_sos1_constraints)?;
-        evaluated_constraints.validate_context_ids()?;
-        self.evaluated_indicator_constraints
-            .validate_context_ids()?;
-        self.evaluated_one_hot_constraints.validate_context_ids()?;
-        self.evaluated_sos1_constraints.validate_context_ids()?;
+        for_each_constraint_collection!(evaluated, collections, |_, collection| {
+            ids.evaluated(collection)?;
+        });
+        for_each_constraint_collection!(evaluated, collections, |_, collection| {
+            collection.validate_context_ids()?;
+        });
         validate_solution_activation_tolerances(
             &self.evaluated_indicator_constraints,
             &self.evaluated_one_hot_constraints,

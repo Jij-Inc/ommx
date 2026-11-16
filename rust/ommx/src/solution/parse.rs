@@ -389,12 +389,17 @@ impl Parse for v2::Solution {
             .map_err(|e| ParseError::from(e).context(message, "relaxation"))?;
         let sense = parse_v2_solution_sense(self.sense, message)?;
 
+        let collections = EvaluatedCollections {
+            evaluated_constraints: &evaluated_constraints,
+            evaluated_indicator_constraints: &evaluated_indicator_constraints,
+            evaluated_one_hot_constraints: &evaluated_one_hot_constraints,
+            evaluated_sos1_constraints: &evaluated_sos1_constraints,
+        };
         let mut ids = crate::constraint_ids::ConstraintIds::default();
-        ids.evaluated(&evaluated_constraints)
-            .and_then(|()| ids.evaluated(&evaluated_indicator_constraints))
-            .and_then(|()| ids.evaluated(&evaluated_one_hot_constraints))
-            .and_then(|()| ids.evaluated(&evaluated_sos1_constraints))
-            .map_err(|error| ParseError::new(error).context(message, "constraints"))?;
+        for_each_constraint_collection!(evaluated, collections, |_, collection| {
+            ids.evaluated(collection)
+                .map_err(|error| ParseError::new(error).context(message, "constraints"))?;
+        });
         let solution = Solution {
             objective: self.objective,
             evaluated_constraints,
