@@ -34,9 +34,11 @@
 //!    blanket behavior implementations; families cannot supply a separate rule.
 //! 5. Add the registered collection fields to `Instance`, `ParametricInstance`,
 //!    `Solution`, and `SampleSet`, and wire their construction and accessors.
-//!    Common traversal includes the new family in ID checks, name enumeration,
-//!    result extraction, and feasibility aggregation. Construction paths using
-//!    borrowed collection bundles must supply the new field as well.
+//!    Common traversal includes the new family in constraint/reference ID checks,
+//!    name and count queries, result extraction, inactive-policy detection, and
+//!    feasibility aggregation. It also covers rejection of special constraints
+//!    by penalty operations and v1 export. Construction paths
+//!    using borrowed collection bundles must supply the new field as well.
 //! 6. Implement the family's root-level semantic validation, evaluation,
 //!    transformations, and wire conversions. Registration does not define these
 //!    mathematical or serialization contracts. Consumers that cannot handle the

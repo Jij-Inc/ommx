@@ -614,21 +614,15 @@ impl Instance {
     }
 
     fn ensure_penalty_method_supported(&self, operation: &str) -> crate::Result<()> {
-        anyhow::ensure!(
-            self.indicator_constraint_collection.active().is_empty(),
-            "{operation} does not support indicator constraints. \
-             Remove or convert indicator constraints before applying penalty method."
-        );
-        anyhow::ensure!(
-            self.one_hot_constraint_collection.active().is_empty(),
-            "{operation} does not support one-hot constraints. \
-             Remove or convert one-hot constraints before applying penalty method."
-        );
-        anyhow::ensure!(
-            self.sos1_constraint_collection.active().is_empty(),
-            "{operation} does not support SOS1 constraints. \
-             Remove or convert SOS1 constraints before applying penalty method."
-        );
+        for_each_constraint_collection!(created, self, |kind, collection| {
+            if kind != ConstraintKind::Regular && !collection.active().is_empty() {
+                let family = kind.as_str();
+                crate::bail!(
+                    "{operation} does not support {family} constraints. \
+                     Remove or convert {family} constraints before applying penalty method."
+                );
+            }
+        });
         Ok(())
     }
 

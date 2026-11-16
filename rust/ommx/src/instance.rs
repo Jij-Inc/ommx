@@ -1,4 +1,4 @@
-use crate::constraint_collection::traverse::for_each_constraint_collection;
+use crate::constraint_collection::traverse::{for_each_constraint_collection, CreatedCollections};
 mod analysis;
 mod approx;
 pub(crate) mod arbitrary;
@@ -1446,11 +1446,20 @@ fn maximum_number<T: crate::ConstraintType>(collection: &ConstraintCollection<T>
         )
 }
 
-// Both model roots own the same constraint-number invariant. This implementation
-// stays inside the instance module; it grants no collection mutation authority.
-macro_rules! constraint_numbers {
+// Both model roots own the same collection queries and constraint-number invariant.
+// These implementations stay inside the instance module and grant no mutation authority.
+macro_rules! constraint_collection_queries {
     ($owner:ty) => {
         impl $owner {
+            // Flat annotations need this model-owned aggregate without access to storage.
+            pub(crate) fn active_constraint_count(&self) -> usize {
+                let mut count = 0;
+                for_each_constraint_collection!(created, self, |_, collection| {
+                    count += collection.active().len();
+                });
+                count
+            }
+
             fn validate_constraint_ids(&self) -> crate::Result<()> {
                 let mut ids = crate::constraint_ids::ConstraintIds::default();
                 for_each_constraint_collection!(created, self, |_, collection| {
@@ -1490,8 +1499,8 @@ macro_rules! constraint_numbers {
     };
 }
 
-constraint_numbers!(Instance);
-constraint_numbers!(ParametricInstance);
+constraint_collection_queries!(Instance);
+constraint_collection_queries!(ParametricInstance);
 
 impl Instance {
     // Replacement within the regular family keeps its identity. Only ownership

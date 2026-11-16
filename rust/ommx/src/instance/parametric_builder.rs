@@ -327,23 +327,6 @@ impl ParametricInstanceBuilder {
                 crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
             }
         }
-        for constraint in constraints.values() {
-            for id in constraint.required_ids() {
-                if !all_variable_ids.contains(&id) {
-                    crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
-                }
-            }
-        }
-        // Validate that all variable IDs in inactive_constraints are defined
-        // (inactive_constraints may contain fixed or dependent variable IDs)
-        for (inactive, _reason) in self.inactive_constraints.values() {
-            for id in inactive.required_ids() {
-                if !all_variable_ids.contains(&id) {
-                    crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
-                }
-            }
-        }
-
         // Validate named_functions: map keys own IDs, and all referenced variable IDs must exist.
         for nf in self.named_functions.values() {
             for id in nf.function.required_ids() {
@@ -377,13 +360,6 @@ impl ParametricInstanceBuilder {
                     { ?indicator_id },
                     "Indicator variable {indicator_id:?} must be binary",
                 );
-            }
-            // Function body (and the indicator var) may reference any
-            // defined id (variables ∪ parameters).
-            for id in ic.required_ids() {
-                if !all_variable_ids.contains(&id) {
-                    crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
-                }
             }
             Ok(())
         };
@@ -498,23 +474,53 @@ impl ParametricInstanceBuilder {
             }
         }
 
+        let constraint_collection = ConstraintCollection::with_context(
+            constraints,
+            self.inactive_constraints,
+            self.constraint_context,
+        )?;
+        let indicator_constraint_collection = ConstraintCollection::with_context(
+            self.indicator_constraints,
+            self.inactive_indicator_constraints,
+            self.indicator_constraint_context,
+        )?;
+        let one_hot_constraint_collection = ConstraintCollection::with_context(
+            self.one_hot_constraints,
+            self.inactive_one_hot_constraints,
+            self.one_hot_constraint_context,
+        )?;
+        let sos1_constraint_collection = ConstraintCollection::with_context(
+            self.sos1_constraints,
+            self.inactive_sos1_constraints,
+            self.sos1_constraint_context,
+        )?;
+        let collections = CreatedCollections {
+            constraint_collection: &constraint_collection,
+            indicator_constraint_collection: &indicator_constraint_collection,
+            one_hot_constraint_collection: &one_hot_constraint_collection,
+            sos1_constraint_collection: &sos1_constraint_collection,
+        };
+        for_each_constraint_collection!(created, collections, |_, collection| {
+            for constraint in collection
+                .active()
+                .values()
+                .chain(collection.inactive().values().map(|(row, _)| row))
+            {
+                for id in constraint.required_ids() {
+                    if !all_variable_ids.contains(&id) {
+                        crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
+                    }
+                }
+            }
+        });
         // Construction invariant: raw active, fixed, and dependent sets must be pairwise disjoint.
         // - active: IDs appearing in objective or constraints
         // - fixed: IDs in the decision-variable table's fixed-value column
         // - dependent: keys of decision_variable_dependency
-        let mut active: VariableIDSet = objective.required_ids().into_iter().collect();
-        for constraint in constraints.values() {
-            active.extend(constraint.required_ids());
-        }
-        for ic in self.indicator_constraints.values() {
-            active.extend(ic.required_ids());
-        }
-        for oh in self.one_hot_constraints.values() {
-            active.extend(oh.required_ids());
-        }
-        for sos1 in self.sos1_constraints.values() {
-            active.extend(sos1.required_ids());
-        }
+        let mut active = objective.required_ids();
+        for_each_constraint_collection!(created, collections, |_, collection| {
+            active.extend(collection.active_decision_variable_ids());
+        });
         let fixed: VariableIDSet = decision_variables.fixed_values().keys().copied().collect();
         let dependent: VariableIDSet = self.decision_variable_dependency.keys().collect();
 
@@ -548,26 +554,10 @@ impl ParametricInstanceBuilder {
             output_objective: None,
             decision_variables,
             parameters,
-            constraint_collection: ConstraintCollection::with_context(
-                constraints,
-                self.inactive_constraints,
-                self.constraint_context,
-            )?,
-            indicator_constraint_collection: ConstraintCollection::with_context(
-                self.indicator_constraints,
-                self.inactive_indicator_constraints,
-                self.indicator_constraint_context,
-            )?,
-            one_hot_constraint_collection: ConstraintCollection::with_context(
-                self.one_hot_constraints,
-                self.inactive_one_hot_constraints,
-                self.one_hot_constraint_context,
-            )?,
-            sos1_constraint_collection: ConstraintCollection::with_context(
-                self.sos1_constraints,
-                self.inactive_sos1_constraints,
-                self.sos1_constraint_context,
-            )?,
+            constraint_collection,
+            indicator_constraint_collection,
+            one_hot_constraint_collection,
+            sos1_constraint_collection,
             named_functions,
             decision_variable_dependency: self.decision_variable_dependency,
             description: self.description,

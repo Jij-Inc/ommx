@@ -187,7 +187,6 @@ pub struct SampleSet {
 }
 
 fn validate_sampled_constraint_used_ids<T: ConstraintType>(
-    constraint_family: &'static str,
     constraints: &SampledCollection<T>,
     decision_variable_ids: &BTreeSet<VariableID>,
 ) -> Result<(), SampleSetError> {
@@ -196,7 +195,7 @@ fn validate_sampled_constraint_used_ids<T: ConstraintType>(
         .map_err(
             |(constraint_id, var_id)| SampleSetError::UndefinedVariableInConstraint {
                 id: var_id,
-                constraint_family,
+                constraint_family: T::KIND.as_str(),
                 constraint_id: format!("{constraint_id:?}"),
             },
         )
@@ -1035,22 +1034,9 @@ impl SampleSetBuilder {
             self.feasibility_atol,
         )?;
 
-        validate_sampled_constraint_used_ids("regular", &constraints, &decision_variable_ids)?;
-        validate_sampled_constraint_used_ids(
-            "indicator",
-            &self.indicator_constraints,
-            &decision_variable_ids,
-        )?;
-        validate_sampled_constraint_used_ids(
-            "one-hot",
-            &self.one_hot_constraints,
-            &decision_variable_ids,
-        )?;
-        validate_sampled_constraint_used_ids(
-            "SOS1",
-            &self.sos1_constraints,
-            &decision_variable_ids,
-        )?;
+        for_each_constraint_collection!(sampled, collections, |_, collection| {
+            validate_sampled_constraint_used_ids(collection, &decision_variable_ids)?;
+        });
 
         for (named_function_id, sampled_named_function) in named_functions.iter() {
             if !sampled_named_function

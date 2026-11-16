@@ -35,6 +35,14 @@ impl Solution {
 
 impl From<Solution> for v2::Solution {
     fn from(value: Solution) -> Self {
+        let mut has_skipped_constraints = false;
+        for_each_constraint_collection!(evaluated, value, |_, collection| {
+            has_skipped_constraints = has_skipped_constraints
+                || collection
+                    .inactive_metadata()
+                    .values()
+                    .any(|metadata| metadata.skip_feasibility_check);
+        });
         let required_features = crate::v2_io::required_features(
             !value.evaluated_indicator_constraints.is_empty(),
             value
@@ -48,29 +56,7 @@ impl From<Solution> for v2::Solution {
                 .decision_variables
                 .values()
                 .any(|variable| *variable.kind() == crate::Kind::FiniteDomain),
-            value
-                .evaluated_constraints
-                .inactive_metadata()
-                .values()
-                .chain(
-                    value
-                        .evaluated_indicator_constraints
-                        .inactive_metadata()
-                        .values(),
-                )
-                .chain(
-                    value
-                        .evaluated_one_hot_constraints
-                        .inactive_metadata()
-                        .values(),
-                )
-                .chain(
-                    value
-                        .evaluated_sos1_constraints
-                        .inactive_metadata()
-                        .values(),
-                )
-                .any(|metadata| metadata.skip_feasibility_check),
+            has_skipped_constraints,
         );
         let feasible = value.feasible();
         let feasible_relaxed = value.feasible_relaxed();
@@ -402,19 +388,19 @@ mod tests {
                                 constraint,
                             )]))
                         };
-                        "Indicator"
+                        "indicator"
                     }
                     "one-hot" => {
                         let constraint = crate::OneHotConstraint::new(variables).unwrap();
                         builder = builder
                             .active_one_hot_constraints(BTreeMap::from([(0.into(), constraint)]));
-                        "One-hot"
+                        "one_hot"
                     }
                     "sos1" => {
                         let constraint = crate::Sos1Constraint::new(variables).unwrap();
                         builder = builder
                             .active_sos1_constraints(BTreeMap::from([(0.into(), constraint)]));
-                        "SOS1"
+                        "sos1"
                     }
                     _ => unreachable!(),
                 };

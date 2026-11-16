@@ -8,6 +8,11 @@ macro_rules! define_borrowed_collections {
     ((); $( $method:ident: $family:ty {
         created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident,
     } )*) => {
+        /// Model-owner construction paths borrow all created collections together.
+        pub(crate) struct CreatedCollections<'a> {
+            $(pub(crate) $created: &'a crate::ConstraintCollection<$family>,)*
+        }
+
         /// Result-owner construction paths borrow all evaluated collections together.
         pub(crate) struct EvaluatedCollections<'a> {
             $(pub(crate) $evaluated: &'a crate::EvaluatedCollection<$family>,)*

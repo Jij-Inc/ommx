@@ -169,6 +169,15 @@ impl ParametricInstance {
 
 impl From<Instance> for v2::Instance {
     fn from(value: Instance) -> Self {
+        let mut has_skipped_constraints = false;
+        for_each_constraint_collection!(created, value, |_, collection| {
+            has_skipped_constraints = has_skipped_constraints
+                || collection
+                    .inactive()
+                    .values()
+                    .map(|(_, metadata)| metadata)
+                    .any(|metadata| metadata.skip_feasibility_check);
+        });
         let mut required_features = crate::v2_io::required_features(
             created_collection_has_payload(&value.indicator_constraint_collection),
             value
@@ -181,33 +190,7 @@ impl From<Instance> for v2::Instance {
                 .decision_variables
                 .values()
                 .any(|variable| variable.kind() == crate::Kind::FiniteDomain),
-            value
-                .constraint_collection
-                .inactive()
-                .values()
-                .map(|(_, metadata)| metadata)
-                .chain(
-                    value
-                        .indicator_constraint_collection
-                        .inactive()
-                        .values()
-                        .map(|(_, metadata)| metadata),
-                )
-                .chain(
-                    value
-                        .one_hot_constraint_collection
-                        .inactive()
-                        .values()
-                        .map(|(_, metadata)| metadata),
-                )
-                .chain(
-                    value
-                        .sos1_constraint_collection
-                        .inactive()
-                        .values()
-                        .map(|(_, metadata)| metadata),
-                )
-                .any(|metadata| metadata.skip_feasibility_check),
+            has_skipped_constraints,
         );
         if value.output_objective.is_some() {
             required_features.push(v2::Feature::OutputObjective as i32);
@@ -262,6 +245,15 @@ impl From<OutputObjective> for v2::OutputObjective {
 
 impl From<ParametricInstance> for v2::ParametricInstance {
     fn from(value: ParametricInstance) -> Self {
+        let mut has_skipped_constraints = false;
+        for_each_constraint_collection!(created, value, |_, collection| {
+            has_skipped_constraints = has_skipped_constraints
+                || collection
+                    .inactive()
+                    .values()
+                    .map(|(_, metadata)| metadata)
+                    .any(|metadata| metadata.skip_feasibility_check);
+        });
         let mut required_features = crate::v2_io::required_features(
             created_collection_has_payload(&value.indicator_constraint_collection),
             value
@@ -274,33 +266,7 @@ impl From<ParametricInstance> for v2::ParametricInstance {
                 .decision_variables
                 .values()
                 .any(|variable| variable.kind() == crate::Kind::FiniteDomain),
-            value
-                .constraint_collection
-                .inactive()
-                .values()
-                .map(|(_, metadata)| metadata)
-                .chain(
-                    value
-                        .indicator_constraint_collection
-                        .inactive()
-                        .values()
-                        .map(|(_, metadata)| metadata),
-                )
-                .chain(
-                    value
-                        .one_hot_constraint_collection
-                        .inactive()
-                        .values()
-                        .map(|(_, metadata)| metadata),
-                )
-                .chain(
-                    value
-                        .sos1_constraint_collection
-                        .inactive()
-                        .values()
-                        .map(|(_, metadata)| metadata),
-                )
-                .any(|metadata| metadata.skip_feasibility_check),
+            has_skipped_constraints,
         );
         if value.output_objective.is_some() {
             required_features.push(v2::Feature::OutputObjective as i32);

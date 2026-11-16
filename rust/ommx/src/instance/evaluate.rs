@@ -258,9 +258,7 @@ impl PartialEvaluatePlan {
     }
 
     fn has_no_active_special_constraints(instance: &Instance) -> bool {
-        instance.indicator_constraint_collection.active().is_empty()
-            && instance.one_hot_constraint_collection.active().is_empty()
-            && instance.sos1_constraint_collection.active().is_empty()
+        instance.active_special_constraint_kinds().is_empty()
     }
 
     fn supports_fixed_values_only_fast_path(instance: &Instance) -> bool {

@@ -188,80 +188,30 @@ fn validate_evaluated_named_function_used_ids(
     Ok(())
 }
 
-fn validate_constraint_used_ids<T: crate::ConstraintType>(
+fn validate_solution_constraint_used_ids<T: crate::ConstraintType>(
     decision_variables: &EvaluatedDecisionVariableTable,
     constraints: &EvaluatedCollection<T>,
-    classify: impl Fn(T::ID, VariableID) -> SolutionError,
 ) -> Result<(), SolutionError> {
     for (constraint_id, constraint) in constraints.inner() {
-        for variable_id in constraint.used_decision_variable_ids() {
-            if !decision_variables.contains_key(variable_id) {
-                return Err(classify(*constraint_id, *variable_id));
+        for id in constraint.used_decision_variable_ids() {
+            if !decision_variables.contains_key(id) {
+                return Err(if T::KIND == crate::ConstraintKind::Regular {
+                    let number: u64 = (*constraint_id).into();
+                    SolutionError::UndefinedVariableInConstraint {
+                        id: *id,
+                        constraint_id: number.into(),
+                    }
+                } else {
+                    SolutionError::InvalidConstraintStructure {
+                        constraint_family: T::KIND.as_str(),
+                        constraint_id: format!("{constraint_id:?}"),
+                        message: format!("variable {id:?} is not in decision_variables"),
+                    }
+                });
             }
         }
     }
     Ok(())
-}
-
-fn validate_solution_regular_constraint_used_ids(
-    decision_variables: &EvaluatedDecisionVariableTable,
-    constraints: &EvaluatedCollection<Constraint>,
-) -> Result<(), SolutionError> {
-    validate_constraint_used_ids(decision_variables, constraints, |constraint_id, id| {
-        SolutionError::UndefinedVariableInConstraint { id, constraint_id }
-    })
-}
-
-fn validate_solution_indicator_constraint_used_ids(
-    decision_variables: &EvaluatedDecisionVariableTable,
-    constraints: &EvaluatedCollection<IndicatorConstraint>,
-) -> Result<(), SolutionError> {
-    validate_constraint_used_ids(decision_variables, constraints, |constraint_id, id| {
-        SolutionError::InvalidConstraintStructure {
-            constraint_family: "indicator",
-            constraint_id: format!("{constraint_id:?}"),
-            message: format!("variable {id:?} is not in decision_variables"),
-        }
-    })
-}
-
-fn validate_solution_one_hot_constraint_used_ids(
-    decision_variables: &EvaluatedDecisionVariableTable,
-    constraints: &EvaluatedCollection<crate::OneHotConstraint>,
-) -> Result<(), SolutionError> {
-    validate_constraint_used_ids(decision_variables, constraints, |constraint_id, id| {
-        SolutionError::InvalidConstraintStructure {
-            constraint_family: "one-hot",
-            constraint_id: format!("{constraint_id:?}"),
-            message: format!("variable {id:?} is not in decision_variables"),
-        }
-    })
-}
-
-fn validate_solution_sos1_constraint_used_ids(
-    decision_variables: &EvaluatedDecisionVariableTable,
-    constraints: &EvaluatedCollection<crate::Sos1Constraint>,
-) -> Result<(), SolutionError> {
-    validate_constraint_used_ids(decision_variables, constraints, |constraint_id, id| {
-        SolutionError::InvalidConstraintStructure {
-            constraint_family: "SOS1",
-            constraint_id: format!("{constraint_id:?}"),
-            message: format!("variable {id:?} is not in decision_variables"),
-        }
-    })
-}
-
-fn validate_all_solution_constraint_used_ids(
-    decision_variables: &EvaluatedDecisionVariableTable,
-    regular_constraints: &EvaluatedCollection<Constraint>,
-    indicator_constraints: &EvaluatedCollection<IndicatorConstraint>,
-    one_hot_constraints: &EvaluatedCollection<crate::OneHotConstraint>,
-    sos1_constraints: &EvaluatedCollection<crate::Sos1Constraint>,
-) -> Result<(), SolutionError> {
-    validate_solution_regular_constraint_used_ids(decision_variables, regular_constraints)?;
-    validate_solution_indicator_constraint_used_ids(decision_variables, indicator_constraints)?;
-    validate_solution_one_hot_constraint_used_ids(decision_variables, one_hot_constraints)?;
-    validate_solution_sos1_constraint_used_ids(decision_variables, sos1_constraints)
 }
 
 macro_rules! impl_constraint_violations {
@@ -1295,13 +1245,9 @@ impl SolutionBuilder {
             self.feasibility_atol,
         )?;
 
-        validate_all_solution_constraint_used_ids(
-            &decision_variables,
-            &evaluated_constraints,
-            &self.evaluated_indicator_constraints,
-            &self.evaluated_one_hot_constraints,
-            &self.evaluated_sos1_constraints,
-        )?;
+        for_each_constraint_collection!(evaluated, collections, |_, collection| {
+            validate_solution_constraint_used_ids(&decision_variables, collection)?;
+        });
         validate_evaluated_named_function_used_ids(
             &decision_variables,
             &evaluated_named_functions,
@@ -2271,7 +2217,7 @@ mod tests {
         assert!(matches!(
             error.downcast_ref::<SolutionError>(),
             Some(SolutionError::InvalidConstraintStructure {
-                constraint_family: "one-hot",
+                constraint_family: "one_hot",
                 constraint_id,
                 message,
             }) if constraint_id == "OneHotConstraintID(4)"
@@ -2302,7 +2248,7 @@ mod tests {
         assert!(matches!(
             error.downcast_ref::<SolutionError>(),
             Some(SolutionError::InvalidConstraintStructure {
-                constraint_family: "SOS1",
+                constraint_family: "sos1",
                 constraint_id,
                 message,
             }) if constraint_id == "Sos1ConstraintID(5)"
