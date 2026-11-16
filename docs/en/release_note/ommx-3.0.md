@@ -6,6 +6,20 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### Preserve finite bounds in the HiGHS adapter ([#1395](https://github.com/Jij-Inc/ommx/pull/1395))
+
+The HiGHS adapter now preserves finite variable and constraint bounds throughout
+model construction and solving, including values at or above `1e20`. Only
+explicit infinities represent absent bounds. This fixes large constant
+constraints failing before solving with HiGHS 1.16.0 and prevents large finite
+bounds on other rows or variables from becoming infinite during translation.
+Constant constraints retain their original scale and use HiGHS's configured
+feasibility tolerances.
+
+Failed solver calls and model error statuses raise `OMMXHighsAdapterError`
+without decoding a solution. Large finite bounds can still cause numerical
+failures; these are not reported as `InfeasibleDetected`.
+
 ## 3.0.0 Release Candidate 1
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0rc1-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0rc1)

@@ -1,3 +1,5 @@
+import sys
+
 import highspy
 import pytest
 
@@ -45,6 +47,45 @@ def test_variable_domains_and_column_mapping():
     assert model.run() == highspy.HighsStatus.kOk
     state = adapter.decode_to_state(model)
     assert state.entries == pytest.approx({100: 0, 7: -3, 42: -2.5})
+
+
+@pytest.mark.parametrize("bound", [1e20, 1e30, sys.float_info.max, float("inf")])
+def test_variable_and_constraint_bounds_preserve_finite_values_and_infinities(bound):
+    x = DecisionVariable.continuous(11, lower=-bound, upper=bound)
+    constraints = {10: x == 0}
+    if bound != float("inf"):
+        constraints.update({20: x <= bound, 30: x >= -bound})
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        active_constraints=constraints,
+        sense=Sense.Minimize,
+    )
+    before = instance.to_v2_bytes()
+    adapter = OMMXHighsAdapter(instance)
+    model = adapter.solver_input
+    lp = model.getLp()
+    assert list(lp.col_lower_) == [-bound]
+    assert list(lp.col_upper_) == [bound]
+    assert lp.row_lower_[0] == lp.row_upper_[0] == 0
+    if bound != float("inf"):
+        assert list(lp.row_lower_)[1:] == [-highspy.kHighsInf] * 2
+        assert list(lp.row_upper_)[1:] == [bound] * 2
+    assert model.run() == highspy.HighsStatus.kOk
+    assert model.getModelStatus() == highspy.HighsModelStatus.kOptimal
+    assert adapter.decode_to_state(model).entries == {11: 0.0}
+    assert instance.to_v2_bytes() == before
+
+
+def test_bound_preservation_configuration_failure(monkeypatch):
+    instance = Instance.from_components(
+        decision_variables=[], objective=0, active_constraints={}, sense=Sense.Minimize
+    )
+    monkeypatch.setattr(
+        highspy.Highs, "setOptionValue", lambda *args: highspy.HighsStatus.kError
+    )
+    with pytest.raises(OMMXHighsAdapterError, match="finite bound preservation"):
+        OMMXHighsAdapter(instance)
 
 
 @pytest.mark.parametrize("has_non_active_variable", [False, True])

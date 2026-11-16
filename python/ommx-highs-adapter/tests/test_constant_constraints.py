@@ -44,8 +44,9 @@ def test_constant_constraint_solver_lifecycle(
     assert OMMXHighsAdapter.check_applicability(instance).is_member
     adapter = OMMXHighsAdapter(instance)
     model = adapter.solver_input
-    assert model.getOptionValue("infinite_bound") == highspy.Highs().getOptionValue(
-        "infinite_bound"
+    assert model.getOptionValue("infinite_bound") == (
+        highspy.HighsStatus.kOk,
+        highspy.kHighsInf,
     )
     assert model.getModelStatus() == highspy.HighsModelStatus.kNotset
     assert model.getNumRow() == 1
@@ -56,6 +57,10 @@ def test_constant_constraint_solver_lifecycle(
     )
 
     assert model.run() == highspy.HighsStatus.kOk
+    assert model.getOptionValue("infinite_bound") == (
+        highspy.HighsStatus.kOk,
+        highspy.kHighsInf,
+    )
     if feasible:
         assert model.getModelStatus() == highspy.HighsModelStatus.kOptimal
         state = adapter.decode_to_state(model)
@@ -143,7 +148,7 @@ def test_decode_unresolved_status_does_not_read_a_solution_or_solve():
     model.solve.assert_not_called()
 
 
-def test_large_constant_override_does_not_affect_other_rows():
+def test_finite_bounds_are_preserved_across_constant_and_nonconstant_rows():
     x = DecisionVariable.continuous(11, lower=0, upper=1)
     instance = Instance.from_components(
         decision_variables=[x],
@@ -159,18 +164,22 @@ def test_large_constant_override_does_not_affect_other_rows():
         sense=Sense.Minimize,
     )
     model = OMMXHighsAdapter(instance).solver_input
-    # The neighboring nonconstant rows retain HiGHS's default bound handling.
+    # Every finite bound survives translation, independently of row order.
     assert list(model.getLp().row_upper_) == [
-        highspy.kHighsInf,
+        1e30,
         sys.float_info.max,
-        highspy.kHighsInf,
+        1e30,
     ]
-    assert model.getOptionValue("infinite_bound") == highspy.Highs().getOptionValue(
-        "infinite_bound"
+    assert list(model.getLp().row_lower_) == [-highspy.kHighsInf] * 3
+    assert model.getOptionValue("infinite_bound") == (
+        highspy.HighsStatus.kOk,
+        highspy.kHighsInf,
     )
+    assert model.run() == highspy.HighsStatus.kOk
+    assert model.getModelStatus() == highspy.HighsModelStatus.kOptimal
 
 
-def test_large_constant_override_is_restored_on_registration_failure(monkeypatch):
+def test_constant_registration_failure_is_propagated(monkeypatch):
     instance = Instance.from_components(
         decision_variables=[],
         objective=0,
@@ -193,6 +202,7 @@ def test_large_constant_override_is_restored_on_registration_failure(monkeypatch
     with pytest.raises(RuntimeError, match="constraint registration failed"):
         OMMXHighsAdapter(instance)
     [model] = models
-    assert model.getOptionValue("infinite_bound") == highspy.Highs().getOptionValue(
-        "infinite_bound"
+    assert model.getOptionValue("infinite_bound") == (
+        highspy.HighsStatus.kOk,
+        highspy.kHighsInf,
     )
