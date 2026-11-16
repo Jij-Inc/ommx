@@ -4,24 +4,12 @@
 Python SDK 3.0.0 contains breaking API changes. A migration guide is available in the [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md).
 ```
 
-## Unreleased
+## 3.0.0 Release Candidate 1
 
-### OneHot and SOS1 violation measure ([#1384](https://github.com/Jij-Inc/ommx/pull/1384))
-
-OneHot and SOS1 now report the **largest variable adjustment needed to satisfy
-the constraint**, choosing the repair that makes this largest adjustment as
-small as possible. For example, repairing OneHot values `(0.9, 0.2, 0)` to
-`(1, 0, 0)` changes the variables by `(0.1, 0.2, 0)`, so the violation is `0.2`.
-
-The earlier prerelease summed the adjustments. With the new definition, SOS1
-values `(1, 0.00006, 0.00006)` have violation `0.00006` and pass at tolerance
-`0.0001`. Mathematically, this measure is the L∞ distance to a satisfying assignment.
-
-OneHot evaluation and propagation now require `0 < atol < 0.5` so the zero and
-one neighborhoods do not overlap. This also applies to sample evaluation and
-loading saved results containing OneHot rows. Results saved with a OneHot
-evaluation tolerance of `0.5` or greater are rejected. The general absolute
-tolerance remains unchanged.
+This release candidate follows Beta 9 and targets the stable 3.0.0 release.
+The Python SDK and all solver adapter packages use version `3.0.0rc1`.
+When upgrading from Beta 9, review the API and evaluation changes below;
+when upgrading from v2, start with the migration guide linked above.
 
 ### 🛠 Allow zero outside semi-variable bounds ([#1386](https://github.com/Jij-Inc/ommx/pull/1386))
 
@@ -31,45 +19,6 @@ stored interval excludes it. This corrects `Solution.feasible` and
 For example, a semi-integer variable with `lower=2, upper=4` accepts `0`.
 Values within the evaluation tolerance of zero are also accepted; interval
 membership and integer requirements still apply to other values.
-
-### ⚠ Active and inactive constraints ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
-
-Model `constraints` now contains rows of every role. Use `active_constraints` for active attached handles and `inactive_constraints` for retained inactive rows. Rename `Removed*Constraint` to `Inactive*Constraint`, `relax_*` / `restore_*` to `deactivate_*` / `activate_*`, and `from_components` inputs to `active_*` / `inactive_*`.
-
-On `Instance` and `ParametricInstance`, `constraint_names` becomes `active_constraint_names` and `extract_constraints(name)` becomes `extract_active_constraints(name)`. Their active-only scope and return types are unchanged. `Solution` and `SampleSet` keep their existing names.
-
-Each constraint exposes a `role` property of type `ConstraintRole`. `EVALUATION_ONLY` participates in numerical evaluation; `FEASIBILITY_CHECK` additionally participates in normal feasibility; `ACTIVE` additionally belongs to the Active Formulation. Inactive rows have role `FEASIBILITY_CHECK` by default and `EVALUATION_ONLY` when `skip_feasibility_check=True`. Inactive is the umbrella term for these two roles. Roles describe how a constraint is used, independently of its evaluation stage.
-
-`Solution.feasible` and `SampleSet.feasible` remain properties and check constraints with the `FEASIBILITY_CHECK` or `ACTIVE` role. `feasible_relaxed` remains a property checking active constraints only. Both check variable domains. SampleSet's `best_feasible` and `best_feasible_id` also remain properties; `feasible_ids()` remains a method without arguments. Feasibility queries and sample selection do not take `min_role`.
-
-For `total_violation()` and `constraints_df`, the order is `EVALUATION_ONLY < FEASIBILITY_CHECK < ACTIVE`; `min_role` includes rows at or above the minimum. The default total violation uses `FEASIBILITY_CHECK`, matching the constraints checked by `feasible`; `ACTIVE` matches `feasible_relaxed`. `constraints_df` replaces `removed=` with this selector, defaults to `EVALUATION_ONLY` to include all rows, and always includes `role`. Request `include=["inactive_reason"]` for reasons.
-
-The v1 schema is unchanged and v1 export rejects a true skip flag; use v2 to preserve it. See the [migration guide](../migration/python_sdk_v2_to_v3.md) for the full API mapping.
-
-The `ommx.v2` protobuf format is still pre-release; its version is separate from the Python SDK version. This update does not guarantee compatibility with earlier pre-release v2 data. Field numbers, types, and structure may change, and unchanged field numbers are not a compatibility commitment. `required_features` remains the mechanism for rejecting unsupported semantic extensions.
-
-Indicator result properties and DataFrame columns now use `indicator_on` for the indicator's ON/OFF state at the evaluated candidate, independently of constraint role.
-
-Indicator configuration uses `trigger_value=0` or `trigger_value=1` (the default), replacing the boolean `activate_on_zero`. The integer property and DataFrame column describe when the body applies; `indicator_on` remains the evaluated boolean result. Instance-class clauses use `allowed_indicator_trigger_values`, and unsupported values are reported by `IndicatorTriggerNotAllowed` with `trigger_value` and `allowed_trigger_values`.
-
-OneHot/SOS1 result properties rename `active_variable` to `selected_variable`, including per-sample mappings. DataFrame columns use `selected_variable` and `selected_variable.<sample_id>`. This reports selection at a candidate, independently of variable or constraint membership in the Active Formulation. Evaluation behavior is unchanged.
-
-The Active Formulation also names its variables explicitly: use `active_decision_variables` and `DecisionVariableRole.Active`. The `state_role` value is `"active"`. Adapters consume active variables and active constraints; row-level `used_ids` retain their reference meaning.
-
-### Reject v1 exports that would discard special-constraint results ([#1380](https://github.com/Jij-Inc/ommx/pull/1380))
-
-`to_v1_bytes()` is a compatibility serialization format for older OMMX SDKs;
-v3 features that cannot be represented in v1 require `to_v2_bytes()`.
-`Solution.to_v1_bytes()` and `SampleSet.to_v1_bytes()` now raise `RuntimeError`
-when Indicator, OneHot, or SOS1 results are retained, including Indicators that
-are OFF, satisfied constraints, and inactive rows. Use `to_v2_bytes()` to preserve them.
-Regular-only v1 exports remain available when they satisfy the other v1 export
-restrictions; existing v1 readers retain their behavior.
-`from_v1_bytes()` is documented as compatibility import that aims to recover
-legacy data without changing its mathematical meaning. Current recovery limits
-are explicit; implementation improvements are tracked separately in
-[#1381](https://github.com/Jij-Inc/ommx/issues/1381).
-See the [migration guide](../migration/python_sdk_v2_to_v3.md) for versioned serialization.
 
 ### 🛠 ⚠ Report infeasible constant constraints through the solver ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))
 
@@ -115,6 +64,76 @@ machine epsilon. This also applies to `to_qubo()` and `to_hubo()` after
 Preparation. See {meth}`~ommx.Instance.as_qubo_format` for the floating-point
 contract.
 
+### OneHot and SOS1 violation measure ([#1384](https://github.com/Jij-Inc/ommx/pull/1384))
+
+OneHot and SOS1 now report the **largest variable adjustment needed to satisfy
+the constraint**, choosing the repair that makes this largest adjustment as
+small as possible. For example, repairing OneHot values `(0.9, 0.2, 0)` to
+`(1, 0, 0)` changes the variables by `(0.1, 0.2, 0)`, so the violation is `0.2`.
+
+The earlier prerelease summed the adjustments. With the new definition, SOS1
+values `(1, 0.00006, 0.00006)` have violation `0.00006` and pass at tolerance
+`0.0001`. Mathematically, this measure is the L∞ distance to a satisfying assignment.
+
+OneHot evaluation and propagation now require `0 < atol < 0.5` so the zero and
+one neighborhoods do not overlap. This also applies to sample evaluation and
+loading saved results containing OneHot rows. Results saved with a OneHot
+evaluation tolerance of `0.5` or greater are rejected. The general absolute
+tolerance remains unchanged.
+
+### ⚠ Active and inactive constraints ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
+
+Model `constraints` now contains rows of every role. Use `active_constraints` for active attached handles and `inactive_constraints` for retained inactive rows. Rename `Removed*Constraint` to `Inactive*Constraint`, `relax_*` / `restore_*` to `deactivate_*` / `activate_*`, and `from_components` inputs to `active_*` / `inactive_*`.
+
+On `Instance` and `ParametricInstance`, `constraint_names` becomes `active_constraint_names` and `extract_constraints(name)` becomes `extract_active_constraints(name)`. Their active-only scope and return types are unchanged. `Solution` and `SampleSet` keep their existing names.
+
+Each constraint exposes a `role` property of type `ConstraintRole`. `EVALUATION_ONLY` participates in numerical evaluation; `FEASIBILITY_CHECK` additionally participates in normal feasibility; `ACTIVE` additionally belongs to the Active Formulation. Inactive rows have role `FEASIBILITY_CHECK` by default and `EVALUATION_ONLY` when `skip_feasibility_check=True`. Inactive is the umbrella term for these two roles. Roles describe how a constraint is used, independently of its evaluation stage.
+
+`Solution.feasible` and `SampleSet.feasible` remain properties and check constraints with the `FEASIBILITY_CHECK` or `ACTIVE` role. `feasible_relaxed` remains a property checking active constraints only. Both check variable domains. SampleSet's `best_feasible` and `best_feasible_id` also remain properties; `feasible_ids()` remains a method without arguments. Feasibility queries and sample selection do not take `min_role`.
+
+For `total_violation()` and `constraints_df`, the order is `EVALUATION_ONLY < FEASIBILITY_CHECK < ACTIVE`; `min_role` includes rows at or above the minimum. The default total violation uses `FEASIBILITY_CHECK`, matching the constraints checked by `feasible`; `ACTIVE` matches `feasible_relaxed`. `constraints_df` replaces `removed=` with this selector, defaults to `EVALUATION_ONLY` to include all rows, and always includes `role`. Request `include=["inactive_reason"]` for reasons.
+
+The v1 schema is unchanged and v1 export rejects a true skip flag; use v2 to preserve it. See the [migration guide](../migration/python_sdk_v2_to_v3.md) for the full API mapping.
+
+The `ommx.v2` protobuf format is still pre-release; its version is separate from the Python SDK version. This update does not guarantee compatibility with earlier pre-release v2 data. Field numbers, types, and structure may change, and unchanged field numbers are not a compatibility commitment. `required_features` remains the mechanism for rejecting unsupported semantic extensions.
+
+Indicator result properties and DataFrame columns now use `indicator_on` for the indicator's ON/OFF state at the evaluated candidate, independently of constraint role.
+
+Indicator configuration uses `trigger_value=0` or `trigger_value=1` (the default), replacing the boolean `activate_on_zero`. The integer property and DataFrame column describe when the body applies; `indicator_on` remains the evaluated boolean result. Instance-class clauses use `allowed_indicator_trigger_values`, and unsupported values are reported by `IndicatorTriggerNotAllowed` with `trigger_value` and `allowed_trigger_values`.
+
+OneHot/SOS1 result properties rename `active_variable` to `selected_variable`, including per-sample mappings. DataFrame columns use `selected_variable` and `selected_variable.<sample_id>`. This reports selection at a candidate, independently of variable or constraint membership in the Active Formulation. Evaluation behavior is unchanged.
+
+The Active Formulation also names its variables explicitly: use `active_decision_variables` and `DecisionVariableRole.Active`. The `state_role` value is `"active"`. Adapters consume active variables and active constraints; row-level `used_ids` retain their reference meaning.
+
+### Reject v1 exports that would discard special-constraint results ([#1380](https://github.com/Jij-Inc/ommx/pull/1380))
+
+`to_v1_bytes()` is a compatibility serialization format for older OMMX SDKs;
+v3 features that cannot be represented in v1 require `to_v2_bytes()`.
+`Solution.to_v1_bytes()` and `SampleSet.to_v1_bytes()` now raise `RuntimeError`
+when Indicator, OneHot, or SOS1 results are retained, including Indicators that
+are OFF, satisfied constraints, and inactive rows. Use `to_v2_bytes()` to preserve them.
+Regular-only v1 exports remain available when they satisfy the other v1 export
+restrictions; existing v1 readers retain their behavior.
+`from_v1_bytes()` is documented as compatibility import that aims to recover
+legacy data without changing its mathematical meaning. Current recovery limits
+are explicit; implementation improvements are tracked separately in
+[#1381](https://github.com/Jij-Inc/ommx/issues/1381).
+See the [migration guide](../migration/python_sdk_v2_to_v3.md) for versioned serialization.
+
+### Preserve reporting expressions during transformations ([#1363](https://github.com/Jij-Inc/ommx/pull/1363))
+
+`Instance.substitute()`, `ParametricInstance.substitute()`, and integer encoding
+preserve named functions, inactive constraints, and existing output objectives
+as Interpretation Context. Evaluation reconstructs substituted variables before
+interpreting these expressions. Substitution rejects targets that are already
+fixed or dependent; to change their representation, start from the original
+model or substitute the remaining independent variables.
+
+`Instance.partial_evaluate()` also retains named-function expressions. If you
+need a simplified standalone expression, call `NamedFunction.partial_evaluate()`
+explicitly. See {meth}`~ommx.Instance.substitute` and
+{meth}`~ommx.Instance.partial_evaluate` for the reconstruction contract.
+
 ### Require Python 3.11 and add Python 3.15 SDK support ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
 
 The SDK and adapter packages now require Python 3.11 or newer under a shared
@@ -128,6 +147,35 @@ also depends on the underlying solver's Python support.
 
 The SDK now allows pandas 3. PyArrow remains a required runtime
 dependency for storing and loading Artifact DataFrames in Parquet format.
+
+### Indicator constraints triggered at zero ([#1373](https://github.com/Jij-Inc/ommx/pull/1373))
+
+Indicators can enforce their body when the controlling binary variable is zero
+or one. Use `trigger_value=0` for the zero case; the default remains one.
+For example, add an equality that applies only when `z` is zero:
+
+```python
+from ommx import Instance
+
+instance = Instance.minimize()
+z = instance.new_binary("z")
+x = instance.new_binary("x")
+instance.add_indicator_constraint((x == 1).with_indicator(z, trigger_value=0))
+```
+
+PySCIPOpt and Big-M conversion support both trigger values. Instance classes
+can restrict the allowed values, and v2 serialization declares the required
+feature for zero-triggered Indicators so unsupported readers reject them.
+See the Indicator trigger values section in the
+[migration guide](../migration/python_sdk_v2_to_v3.md).
+
+### Reduce binary powers in Indicator bodies ([#1357](https://github.com/Jij-Inc/ommx/pull/1357))
+
+`Instance.reduce_binary_power()` now reduces powers in active Indicator bodies
+as well as the active objective and regular constraints. It preserves
+Interpretation Context expressions, labels, and constraint context. If
+coefficient arithmetic fails, the entire instance remains unchanged.
+See {meth}`~ommx.Instance.reduce_binary_power`.
 
 ## 3.0.0 Beta 9
 

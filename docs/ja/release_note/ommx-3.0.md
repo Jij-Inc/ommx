@@ -4,23 +4,12 @@
 Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレーションガイドを [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) にまとめてあります。
 ```
 
-## Unreleased
+## 3.0.0 Release Candidate 1
 
-### OneHot・SOS1の違反量 ([#1384](https://github.com/Jij-Inc/ommx/pull/1384))
-
-OneHotとSOS1の違反量を、**制約を満たすために必要な最大修正量**に変更します。
-複数の直し方がある場合は、変数ごとの修正量の最大値が最小になるものを選びます。
-例えばOneHotの `(0.9, 0.2, 0)` を `(1, 0, 0)` に直す場合、各変数の修正量は
-`(0.1, 0.2, 0)` なので、違反量は `0.2` です。
-
-以前のプレリリース版では修正量を合計していました。新しい定義では、SOS1の
-`(1, 0.00006, 0.00006)` の違反量は `0.00006` となり、許容誤差 `0.0001` で
-実行可能になります。数学的には、条件を満たす状態までのL∞距離にあたります。
-
-OneHotの評価・伝播では、0と1の許容範囲が重ならないよう、`0 < atol < 0.5`を
-必須とします。サンプル評価とOneHotを含む保存済み結果の読み込みにも適用します。
-評価時の許容誤差が`0.5`以上のOneHot結果は読み込めません。一般の許容誤差型の
-制限は変更しません。
+Beta 9 に続く、3.0.0 正式版に向けたリリース候補です。
+Python SDK とすべてのソルバー adapter パッケージのバージョンは `3.0.0rc1` です。
+Beta 9 から更新する場合は、以下の API と評価方法の変更を確認してください。
+v2 から更新する場合は、上記の移行ガイドを参照してください。
 
 ### 🛠 semi型の変数で区間外のゼロを許容 ([#1386](https://github.com/Jij-Inc/ommx/pull/1386))
 
@@ -30,40 +19,6 @@ OneHotの評価・伝播では、0と1の許容範囲が重ならないよう、
 例えば、`lower=2, upper=4` のsemi-integer変数は `0` を許容します。
 評価時の許容誤差内でゼロと一致する値も受け付け、それ以外の値には引き続き
 区間への所属と整数性の条件を適用します。
-
-### ⚠ Active / inactiveへの整理 ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
-
-モデルの `constraints` はすべてのroleの行を含むようになります。activeな接続済みハンドルには `active_constraints`、保持したinactive行には `inactive_constraints` を使います。`Removed*Constraint` は `Inactive*Constraint`、`relax_*` / `restore_*` は `deactivate_*` / `activate_*` に変更します。`from_components` の入力も `active_*` / `inactive_*` に揃えます。
-
-`Instance` と `ParametricInstance` では、`constraint_names` を `active_constraint_names`、`extract_constraints(name)` を `extract_active_constraints(name)` に変更します。activeな制約だけを対象とする動作と返り値の型は変わりません。`Solution` と `SampleSet` では既存の名前を維持します。
-
-各制約は `ConstraintRole` 型の `role` propertyを持ちます。`EVALUATION_ONLY` は数値評価に使い、`FEASIBILITY_CHECK` はさらに通常の実行可能性判定に使い、`ACTIVE` はさらにActive Formulationにも含めます。inactive行のroleは既定で `FEASIBILITY_CHECK`、`skip_feasibility_check=True` を指定すると `EVALUATION_ONLY` になります。inactiveはこの2つのroleの総称です。roleは制約をどこまで利用するかを表し、評価段階とは独立です。
-
-`Solution.feasible` と `SampleSet.feasible` はpropertyのまま維持し、roleが `FEASIBILITY_CHECK` または `ACTIVE` の制約を判定します。`feasible_relaxed` もpropertyのまま、active制約のみを判定します。どちらも変数の定義域を検査します。SampleSetの `best_feasible` と `best_feasible_id` もpropertyを維持し、`feasible_ids()` は引数なしのメソッドです。実行可能性の判定とサンプル選択には `min_role` を渡しません。
-
-`total_violation()` と `constraints_df` では、`EVALUATION_ONLY < FEASIBILITY_CHECK < ACTIVE` の順序で `min_role` 以上の行を対象とします。違反量合計の既定値は `FEASIBILITY_CHECK` で、`feasible` が検査する制約集合と一致します。`ACTIVE` を指定すると `feasible_relaxed` と同じ制約集合になります。`constraints_df` は `removed=` をこの下限引数に置き換え、既定値の `EVALUATION_ONLY` では全行を返し、常に `role` 列を含みます。理由には `include=["inactive_reason"]` を指定します。
-
-v1のschemaは拡張せず、skipがtrueのデータのv1出力は失敗します。この状態を保存するにはv2を使ってください。APIの対応表は[移行ガイド](../migration/python_sdk_v2_to_v3.md)にあります。
-
-protobuf形式の `ommx.v2` はまだ正式リリース前で、Python SDKのバージョンとは別です。今回の更新では、過去のプレリリース版v2データとの互換性を保証しません。フィールド番号・型・構造は変更されることがあり、番号が同じでも互換性を保証するものではありません。未対応の意味的拡張を拒否する `required_features` の仕組みは維持します。
-
-Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` に揃えます。評価した候補点でのIndicatorのON/OFFを表し、制約のroleとは独立です。
-
-Indicatorの設定はboolの `activate_on_zero` から、`trigger_value=0` または既定値の `trigger_value=1` に変更します。整数のpropertyとDataFrame列は本体を適用する条件を表し、評価結果のboolは引き続き `indicator_on` で表します。Instance classの節では `allowed_indicator_trigger_values` を使い、許可しない発火値は `IndicatorTriggerNotAllowed` の `trigger_value` と `allowed_trigger_values` で報告します。
-
-OneHot/SOS1の評価結果のpropertyは、サンプルごとの対応を返すものも含めて `active_variable` から `selected_variable` に変更します。DataFrame列も `selected_variable` と `selected_variable.<sample_id>` になります。候補点での選択を表す情報であり、変数や制約がActive Formulationに属するかどうかとは独立です。評価の動作は変わりません。
-
-Active Formulationの変数も明示的に `active_decision_variables` と `DecisionVariableRole.Active` で表します。`state_role` の値は `"active"` です。Adapterはactiveな変数と制約を使い、行ごとの `used_ids` は参照関係を表す名前として維持します。
-
-### 特殊制約の結果が欠落するv1書き出しを拒否 ([#1380](https://github.com/Jij-Inc/ommx/pull/1380))
-
-`to_v1_bytes()` は旧OMMX SDK向けの互換シリアライズ方式です。V3の機能のうちv1形式で表現できないものには `to_v2_bytes()` を使います。
-`Solution.to_v1_bytes()` と `SampleSet.to_v1_bytes()` は、Indicator・OneHot・SOS1の結果が残っている場合に `RuntimeError` を送出します。
-非発火・成立済みの条件やinactiveの制約も対象です。これらを保持するには `to_v2_bytes()` を使ってください。
-通常制約だけの結果は、他のv1出力制限を満たす場合に引き続き書き出せます。既存v1データの読込みは変わりません。
-`from_v1_bytes()` は、数学的な意味を保ちながら旧データを可能な限り補完・正規化する互換読込みとして説明を揃えました。
-現実装の制限も明示し、ヒーリングの拡充は [#1381](https://github.com/Jij-Inc/ommx/issues/1381) で別途扱います。
-形式を指定したシリアライズについては[移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
 
 ### 🛠 ⚠ 実行不能な定数制約をソルバーの判定結果として扱う ([#1353](https://github.com/Jij-Inc/ommx/pull/1353))
 
@@ -105,6 +60,69 @@ SDK側での定数制約の簡約と早期検出は [#1188](https://github.com/J
 `to_qubo()` と `to_hubo()` のPreparation後の変換にも適用されます。
 浮動小数点演算の扱いは {meth}`~ommx.Instance.as_qubo_format` を参照してください。
 
+### OneHot・SOS1の違反量 ([#1384](https://github.com/Jij-Inc/ommx/pull/1384))
+
+OneHotとSOS1の違反量を、**制約を満たすために必要な最大修正量**に変更します。
+複数の直し方がある場合は、変数ごとの修正量の最大値が最小になるものを選びます。
+例えばOneHotの `(0.9, 0.2, 0)` を `(1, 0, 0)` に直す場合、各変数の修正量は
+`(0.1, 0.2, 0)` なので、違反量は `0.2` です。
+
+以前のプレリリース版では修正量を合計していました。新しい定義では、SOS1の
+`(1, 0.00006, 0.00006)` の違反量は `0.00006` となり、許容誤差 `0.0001` で
+実行可能になります。数学的には、条件を満たす状態までのL∞距離にあたります。
+
+OneHotの評価・伝播では、0と1の許容範囲が重ならないよう、`0 < atol < 0.5`を
+必須とします。サンプル評価とOneHotを含む保存済み結果の読み込みにも適用します。
+評価時の許容誤差が`0.5`以上のOneHot結果は読み込めません。一般の許容誤差型の
+制限は変更しません。
+
+### ⚠ Active / inactiveへの整理 ([#1374](https://github.com/Jij-Inc/ommx/pull/1374))
+
+モデルの `constraints` はすべてのroleの行を含むようになります。activeな接続済みハンドルには `active_constraints`、保持したinactive行には `inactive_constraints` を使います。`Removed*Constraint` は `Inactive*Constraint`、`relax_*` / `restore_*` は `deactivate_*` / `activate_*` に変更します。`from_components` の入力も `active_*` / `inactive_*` に揃えます。
+
+`Instance` と `ParametricInstance` では、`constraint_names` を `active_constraint_names`、`extract_constraints(name)` を `extract_active_constraints(name)` に変更します。activeな制約だけを対象とする動作と返り値の型は変わりません。`Solution` と `SampleSet` では既存の名前を維持します。
+
+各制約は `ConstraintRole` 型の `role` propertyを持ちます。`EVALUATION_ONLY` は数値評価に使い、`FEASIBILITY_CHECK` はさらに通常の実行可能性判定に使い、`ACTIVE` はさらにActive Formulationにも含めます。inactive行のroleは既定で `FEASIBILITY_CHECK`、`skip_feasibility_check=True` を指定すると `EVALUATION_ONLY` になります。inactiveはこの2つのroleの総称です。roleは制約をどこまで利用するかを表し、評価段階とは独立です。
+
+`Solution.feasible` と `SampleSet.feasible` はpropertyのまま維持し、roleが `FEASIBILITY_CHECK` または `ACTIVE` の制約を判定します。`feasible_relaxed` もpropertyのまま、active制約のみを判定します。どちらも変数の定義域を検査します。SampleSetの `best_feasible` と `best_feasible_id` もpropertyを維持し、`feasible_ids()` は引数なしのメソッドです。実行可能性の判定とサンプル選択には `min_role` を渡しません。
+
+`total_violation()` と `constraints_df` では、`EVALUATION_ONLY < FEASIBILITY_CHECK < ACTIVE` の順序で `min_role` 以上の行を対象とします。違反量合計の既定値は `FEASIBILITY_CHECK` で、`feasible` が検査する制約集合と一致します。`ACTIVE` を指定すると `feasible_relaxed` と同じ制約集合になります。`constraints_df` は `removed=` をこの下限引数に置き換え、既定値の `EVALUATION_ONLY` では全行を返し、常に `role` 列を含みます。理由には `include=["inactive_reason"]` を指定します。
+
+v1のschemaは拡張せず、skipがtrueのデータのv1出力は失敗します。この状態を保存するにはv2を使ってください。APIの対応表は[移行ガイド](../migration/python_sdk_v2_to_v3.md)にあります。
+
+protobuf形式の `ommx.v2` はまだ正式リリース前で、Python SDKのバージョンとは別です。今回の更新では、過去のプレリリース版v2データとの互換性を保証しません。フィールド番号・型・構造は変更されることがあり、番号が同じでも互換性を保証するものではありません。未対応の意味的拡張を拒否する `required_features` の仕組みは維持します。
+
+Indicatorの評価結果のpropertyとDataFrame列は `indicator_on` に揃えます。評価した候補点でのIndicatorのON/OFFを表し、制約のroleとは独立です。
+
+Indicatorの設定はboolの `activate_on_zero` から、`trigger_value=0` または既定値の `trigger_value=1` に変更します。整数のpropertyとDataFrame列は本体を適用する条件を表し、評価結果のboolは引き続き `indicator_on` で表します。Instance classの節では `allowed_indicator_trigger_values` を使い、許可しない発火値は `IndicatorTriggerNotAllowed` の `trigger_value` と `allowed_trigger_values` で報告します。
+
+OneHot/SOS1の評価結果のpropertyは、サンプルごとの対応を返すものも含めて `active_variable` から `selected_variable` に変更します。DataFrame列も `selected_variable` と `selected_variable.<sample_id>` になります。候補点での選択を表す情報であり、変数や制約がActive Formulationに属するかどうかとは独立です。評価の動作は変わりません。
+
+Active Formulationの変数も明示的に `active_decision_variables` と `DecisionVariableRole.Active` で表します。`state_role` の値は `"active"` です。Adapterはactiveな変数と制約を使い、行ごとの `used_ids` は参照関係を表す名前として維持します。
+
+### 特殊制約の結果が欠落するv1書き出しを拒否 ([#1380](https://github.com/Jij-Inc/ommx/pull/1380))
+
+`to_v1_bytes()` は旧OMMX SDK向けの互換シリアライズ方式です。V3の機能のうちv1形式で表現できないものには `to_v2_bytes()` を使います。
+`Solution.to_v1_bytes()` と `SampleSet.to_v1_bytes()` は、Indicator・OneHot・SOS1の結果が残っている場合に `RuntimeError` を送出します。
+非発火・成立済みの条件やinactiveの制約も対象です。これらを保持するには `to_v2_bytes()` を使ってください。
+通常制約だけの結果は、他のv1出力制限を満たす場合に引き続き書き出せます。既存v1データの読込みは変わりません。
+`from_v1_bytes()` は、数学的な意味を保ちながら旧データを可能な限り補完・正規化する互換読込みとして説明を揃えました。
+現実装の制限も明示し、ヒーリングの拡充は [#1381](https://github.com/Jij-Inc/ommx/issues/1381) で別途扱います。
+形式を指定したシリアライズについては[移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
+### 変換時に報告用の式を保持 ([#1363](https://github.com/Jij-Inc/ommx/pull/1363))
+
+`Instance.substitute()`、`ParametricInstance.substitute()`、整数エンコーディングは、
+名前付き関数・inactive の制約・既存の出力目的関数を Interpretation Context として保持します。
+評価時に置換された変数の値を復元してから、これらの式を評価します。
+既に固定済みまたは従属変数になっている変数を置換対象にするとエラーになります。
+表現を変えるには、元のモデルからやり直すか、残っている独立変数を置換してください。
+
+`Instance.partial_evaluate()` も名前付き関数の式を保持します。
+単独の式を簡約したい場合は、明示的に `NamedFunction.partial_evaluate()` を呼び出してください。
+値の復元については {meth}`~ommx.Instance.substitute` と
+{meth}`~ommx.Instance.partial_evaluate` を参照してください。
+
 ### Python 3.11 以降を必須とし、SDK が Python 3.15 に対応 ([#1343](https://github.com/Jij-Inc/ommx/pull/1343))
 
 Python 3.10 のサポート終了に伴う共通の方針として、SDK と Adapter パッケージの
@@ -118,6 +136,34 @@ Adapter の利用可否は接続するソルバーの Python 対応状況にも�
 
 pandas 3 を利用できるようになりました。PyArrow は引き続き、
 Artifact の DataFrame を Parquet 形式で保存・復元するための必須依存です。
+
+### 0 で発火する Indicator 制約 ([#1373](https://github.com/Jij-Inc/ommx/pull/1373))
+
+Indicator は、制御する二値変数が 0 または 1 のときに本体を適用できます。
+0 のときに適用するには `trigger_value=0` を指定します。既定値は引き続き 1 です。
+例えば、`z` が 0 のときだけ適用する等式制約は次のように追加します。
+
+```python
+from ommx import Instance
+
+instance = Instance.minimize()
+z = instance.new_binary("z")
+x = instance.new_binary("x")
+instance.add_indicator_constraint((x == 1).with_indicator(z, trigger_value=0))
+```
+
+PySCIPOpt と Big-M 変換は両方の発火値に対応します。
+Instance class で許可する発火値を制限でき、v2 シリアライズでは 0 で発火する Indicator に
+必要な feature を宣言するため、未対応の reader は読み込みを拒否します。
+詳細は[移行ガイドの Indicator の発火値](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
+### Indicator の本体の二値変数の冪を削減 ([#1357](https://github.com/Jij-Inc/ommx/pull/1357))
+
+`Instance.reduce_binary_power()` は、active な目的関数と通常制約に加え、
+active な Indicator の本体の冪も削減します。
+Interpretation Context の式、ラベル、制約のコンテキストは保持します。
+係数の演算に失敗した場合は、Instance 全体が変更前のまま残ります。
+詳細は {meth}`~ommx.Instance.reduce_binary_power` を参照してください。
 
 ## 3.0.0 Beta 9
 
