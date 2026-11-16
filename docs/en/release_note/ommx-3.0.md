@@ -64,6 +64,13 @@ machine epsilon. This also applies to `to_qubo()` and `to_hubo()` after
 Preparation. See {meth}`~ommx.Instance.as_qubo_format` for the floating-point
 contract.
 
+### Canonical constraint-family names ([#1390](https://github.com/Jij-Inc/ommx/pull/1390))
+
+`str(kind)` for a `ConstraintKind` value and shared diagnostics use lowercase
+kebab-case family names: `regular`, `indicator`, `one-hot`, and `sos1`.
+Update code that compares these display strings. Typed selectors such as
+`ConstraintKind.OneHot` remain unchanged.
+
 ### OneHot and SOS1 violation measure ([#1384](https://github.com/Jij-Inc/ommx/pull/1384))
 
 OneHot and SOS1 now report the **largest variable adjustment needed to satisfy

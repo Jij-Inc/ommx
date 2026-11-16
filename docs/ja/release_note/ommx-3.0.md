@@ -60,6 +60,13 @@ SDK側での定数制約の簡約と早期検出は [#1188](https://github.com/J
 `to_qubo()` と `to_hubo()` のPreparation後の変換にも適用されます。
 浮動小数点演算の扱いは {meth}`~ommx.Instance.as_qubo_format` を参照してください。
 
+### 制約種別の名前を統一 ([#1390](https://github.com/Jij-Inc/ommx/pull/1390))
+
+`ConstraintKind` の値に対する `str(kind)` と共通の診断メッセージは、小文字の
+kebab-case による種別名 `regular`、`indicator`、`one-hot`、`sos1` を使います。
+これらの表示文字列を比較するコードは更新してください。
+`ConstraintKind.OneHot` などの型付きセレクタは変わりません。
+
 ### OneHot・SOS1の違反量 ([#1384](https://github.com/Jij-Inc/ommx/pull/1384))
 
 OneHotとSOS1の違反量を、**制約を満たすために必要な最大修正量**に変更します。
