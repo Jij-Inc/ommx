@@ -1,4 +1,4 @@
-use crate::{SampledConstraintData, SampledDecisionVariable};
+use crate::{SampledConstraintView, SampledDecisionVariable};
 use std::collections::BTreeMap;
 
 use super::*;
@@ -11,20 +11,13 @@ impl SampleSet {
     /// returned once, even when their subscripts are ambiguous for extraction.
     pub fn constraint_names(&self) -> BTreeSet<String> {
         let mut names = BTreeSet::new();
-        macro_rules! collect {
-            ($collection:expr) => {
-                let collection = $collection;
-                names.extend(
-                    collection
-                        .keys()
-                        .filter_map(|id| collection.context().name(*id).map(str::to_owned)),
-                );
-            };
-        }
-        collect!(&self.constraints);
-        collect!(&self.indicator_constraints);
-        collect!(&self.one_hot_constraints);
-        collect!(&self.sos1_constraints);
+        for_each_constraint_collection!(sampled, self, |_, collection| {
+            names.extend(
+                collection
+                    .keys()
+                    .filter_map(|id| collection.context().name(*id).map(str::to_owned)),
+            );
+        });
         names
     }
 
@@ -162,30 +155,23 @@ impl SampleSet {
     ) -> Result<BTreeMap<Vec<i64>, f64>, SampleSetError> {
         self.ensure_sample_id(sample_id)?;
         let mut result = BTreeMap::new();
-        macro_rules! collect {
-            ($collection:expr) => {
-                let collection = $collection;
-                let context = collection.context();
-                for (id, constraint) in collection.iter() {
-                    if context.name(*id) == Some(name) {
-                        let subscripts = context.subscripts(*id).to_vec();
-                        let value = constraint
-                            .violation_for(sample_id)
-                            .ok_or(SampleSetError::UnknownSampleID { id: sample_id })?;
-                        if result.insert(subscripts.clone(), value).is_some() {
-                            return Err(SampleSetError::DuplicateSubscripts {
-                                name: name.to_owned(),
-                                subscripts,
-                            });
-                        }
+        for_each_constraint_collection!(sampled, self, |_, collection| {
+            let context = collection.context();
+            for (id, constraint) in collection.iter() {
+                if context.name(*id) == Some(name) {
+                    let subscripts = context.subscripts(*id).to_vec();
+                    let value = constraint
+                        .violation_for(sample_id)
+                        .ok_or(SampleSetError::UnknownSampleID { id: sample_id })?;
+                    if result.insert(subscripts.clone(), value).is_some() {
+                        return Err(SampleSetError::DuplicateSubscripts {
+                            name: name.to_owned(),
+                            subscripts,
+                        });
                     }
                 }
-            };
-        }
-        collect!(&self.constraints);
-        collect!(&self.indicator_constraints);
-        collect!(&self.one_hot_constraints);
-        collect!(&self.sos1_constraints);
+            }
+        });
         if result.is_empty() {
             return Err(SampleSetError::UnknownConstraintName {
                 name: name.to_owned(),

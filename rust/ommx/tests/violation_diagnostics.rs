@@ -212,6 +212,30 @@ fn every_family_filters_roles_and_survives_storage_and_extraction() {
         .active_sos1_constraints((30..33).map(|id| (id.into(), sos1.clone())).collect())
         .build()
         .unwrap();
+    let context = |id| ommx::ConstraintContext {
+        label: ommx::ModelingLabel {
+            name: Some(format!("row_{id}")),
+            subscripts: vec![id],
+            ..Default::default()
+        },
+        provenance: vec![ommx::Provenance::IndicatorConstraint(
+            (100 + id as u64).into(),
+        )],
+    };
+    for offset in 0..3 {
+        model
+            .set_constraint_context(offset.into(), context(offset as i64))
+            .unwrap();
+        model
+            .set_indicator_constraint_context((10 + offset).into(), context(10 + offset as i64))
+            .unwrap();
+        model
+            .set_one_hot_constraint_context((20 + offset).into(), context(20 + offset as i64))
+            .unwrap();
+        model
+            .set_sos1_constraint_context((30 + offset).into(), context(30 + offset as i64))
+            .unwrap();
+    }
     for (offset, skip) in [(1, false), (2, true)] {
         model
             .deactivate_constraint(offset.into(), "retained".into(), [], skip)
@@ -234,8 +258,17 @@ fn every_family_filters_roles_and_survives_storage_and_extraction() {
     let samples = model.evaluate_samples(&states, ATol::default()).unwrap();
     let restored = SampleSet::from_v2_bytes(&samples.to_v2_bytes()).unwrap();
     for samples in [&samples, &restored] {
+        assert!(samples.get(99.into()).is_none());
         for sid in [2.into(), 7.into(), 13.into()] {
             let solution = samples.get(sid).unwrap();
+            // Compare the complete result, including all families' membership,
+            // labels, provenance, and stored evaluation data.
+            assert_eq!(
+                solution,
+                model
+                    .evaluate(states.get(sid).unwrap(), ATol::default())
+                    .unwrap()
+            );
             let restored = Solution::from_v2_bytes(&solution.to_v2_bytes()).unwrap();
             for solution in [&solution, &restored] {
                 for (role, count) in [
@@ -264,6 +297,118 @@ fn every_family_filters_roles_and_survives_storage_and_extraction() {
                     check!(IndicatorConstraint, 10);
                     check!(OneHotConstraint, 20);
                     check!(Sos1Constraint, 30);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn each_family_can_independently_determine_feasibility() {
+    use ommx::{Constraint, Equality, IndicatorConstraint, IndicatorTriggerValue};
+    let model = Instance::builder()
+        .sense(Sense::Minimize)
+        .objective(Function::Zero)
+        .decision_variables(
+            (0..7)
+                .map(|id| (id.into(), DecisionVariable::binary()))
+                .collect(),
+        )
+        .active_constraints([(0.into(), Constraint::equal_to_zero(ommx::linear!(0).into()))].into())
+        .active_indicator_constraints(
+            [(
+                1.into(),
+                IndicatorConstraint::new(
+                    1.into(),
+                    Equality::EqualToZero,
+                    ommx::linear!(2).into(),
+                    IndicatorTriggerValue::One,
+                ),
+            )]
+            .into(),
+        )
+        .active_one_hot_constraints(
+            [(
+                2.into(),
+                OneHotConstraint::new([3.into(), 4.into()].into()).unwrap(),
+            )]
+            .into(),
+        )
+        .active_sos1_constraints(
+            [(
+                3.into(),
+                Sos1Constraint::new([5.into(), 6.into()].into()).unwrap(),
+            )]
+            .into(),
+        )
+        .build()
+        .unwrap();
+    for role in [
+        ConstraintRole::Active,
+        ConstraintRole::FeasibilityCheck,
+        ConstraintRole::EvaluationOnly,
+    ] {
+        let mut model = model.clone();
+        if role != ConstraintRole::Active {
+            let skip = role == ConstraintRole::EvaluationOnly;
+            model
+                .deactivate_constraint(0.into(), "retained".into(), [], skip)
+                .unwrap();
+            model
+                .deactivate_indicator_constraint(1.into(), "retained".into(), [], skip)
+                .unwrap();
+            model
+                .deactivate_one_hot_constraint(2.into(), "retained".into(), [], skip)
+                .unwrap();
+            model
+                .deactivate_sos1_constraint(3.into(), "retained".into(), [], skip)
+                .unwrap();
+        }
+        // Exactly one family is violated in each sample. An omitted family
+        // cannot be masked by an earlier family's infeasibility.
+        let states = Sampled::new(
+            (0..4).map(|id| vec![SampleID::from(id)]),
+            [0, 2, 4, 6].map(|index| {
+                let mut values = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0];
+                values[index] = 1.0;
+                state(&values)
+            }),
+        )
+        .unwrap();
+        let samples = model.evaluate_samples(&states, ATol::default()).unwrap();
+        let built = SampleSet::builder()
+            .sense(*samples.sense())
+            .objectives(samples.objectives().clone())
+            .decision_variables(samples.decision_variables().clone())
+            .constraints_collection(samples.constraints().clone())
+            .indicator_constraints_collection(samples.indicator_constraints().clone())
+            .one_hot_constraints_collection(samples.one_hot_constraints().clone())
+            .sos1_constraints_collection(samples.sos1_constraints().clone())
+            .build()
+            .unwrap();
+        let restored = SampleSet::from_v2_bytes(&samples.to_v2_bytes()).unwrap();
+        for samples in [samples, built, restored] {
+            for id in 0..4 {
+                let id = SampleID::from(id);
+                let feasible = role == ConstraintRole::EvaluationOnly;
+                let relaxed = role != ConstraintRole::Active;
+                assert_eq!(samples.is_sample_feasible(id), Some(feasible));
+                assert_eq!(samples.is_sample_feasible_relaxed(id), Some(relaxed));
+                let solution = samples.get(id).unwrap();
+                let restored = Solution::from_v2_bytes(&solution.to_v2_bytes()).unwrap();
+                for solution in [solution, restored] {
+                    assert_eq!(solution.feasible_constraints(), feasible);
+                    assert_eq!(solution.feasible_constraints_relaxed(), relaxed);
+                    for min_role in [
+                        ConstraintRole::EvaluationOnly,
+                        ConstraintRole::FeasibilityCheck,
+                        ConstraintRole::Active,
+                    ] {
+                        assert_eq!(
+                            solution.total_violation(min_role),
+                            if role >= min_role { 1.0 } else { 0.0 }
+                        );
+                    }
                 }
             }
         }

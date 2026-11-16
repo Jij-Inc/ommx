@@ -344,11 +344,7 @@ impl FlatAnnotations for crate::Instance {
         );
         annotations.insert(
             annotation_keys::INSTANCE_CONSTRAINTS.to_string(),
-            (self.active_constraints().len()
-                + self.active_indicator_constraints().len()
-                + self.active_one_hot_constraints().len()
-                + self.active_sos1_constraints().len())
-            .to_string(),
+            self.active_constraint_count().to_string(),
         );
         annotations
     }
@@ -388,11 +384,7 @@ impl FlatAnnotations for crate::ParametricInstance {
         );
         annotations.insert(
             annotation_keys::PARAMETRIC_INSTANCE_CONSTRAINTS.to_string(),
-            (self.active_constraints().len()
-                + self.active_indicator_constraints().len()
-                + self.active_one_hot_constraints().len()
-                + self.active_sos1_constraints().len())
-            .to_string(),
+            self.active_constraint_count().to_string(),
         );
         annotations
     }
@@ -587,29 +579,60 @@ mod tests {
             crate::VariableID::from(2),
         ]))
         .unwrap();
-        let instance = crate::Instance::builder()
+        let mut instance = crate::Instance::builder()
             .sense(crate::Sense::Minimize)
             .objective(crate::Function::Zero)
             .decision_variables(decision_variables)
-            .active_constraints(BTreeMap::new())
+            .active_constraints(BTreeMap::from([(
+                9.into(),
+                crate::Constraint::equal_to_zero(crate::Function::Zero),
+            )]))
             .active_one_hot_constraints(BTreeMap::from([(
                 crate::OneHotConstraintID::from(10),
                 one_hot,
             )]))
+            .active_indicator_constraints(BTreeMap::from([(
+                11.into(),
+                crate::IndicatorConstraint::new(
+                    1.into(),
+                    crate::Equality::EqualToZero,
+                    crate::Function::Zero,
+                    crate::IndicatorTriggerValue::One,
+                ),
+            )]))
+            .active_sos1_constraints(BTreeMap::from([(
+                12.into(),
+                crate::Sos1Constraint::new([1.into(), 2.into()].into()).unwrap(),
+            )]))
             .build()
             .unwrap();
 
-        let annotations = instance.flat_annotations();
-        assert_eq!(
-            annotations.get(annotation_keys::INSTANCE_CONSTRAINTS),
-            Some(&"1".to_string())
-        );
-
-        let parametric: crate::ParametricInstance = instance.into();
-        let annotations = parametric.flat_annotations();
-        assert_eq!(
-            annotations.get(annotation_keys::PARAMETRIC_INSTANCE_CONSTRAINTS),
-            Some(&"1".to_string())
-        );
+        for count in (0..=4).rev() {
+            assert_eq!(
+                instance.flat_annotations()[annotation_keys::INSTANCE_CONSTRAINTS],
+                count.to_string(),
+            );
+            let parametric: crate::ParametricInstance = instance.clone().into();
+            assert_eq!(
+                parametric.flat_annotations()[annotation_keys::PARAMETRIC_INSTANCE_CONSTRAINTS],
+                count.to_string(),
+            );
+            // Retained rows of either inactive role must stop contributing to the count.
+            match count {
+                4 => instance
+                    .deactivate_constraint(9.into(), "retained".into(), [], false)
+                    .unwrap(),
+                3 => instance
+                    .deactivate_indicator_constraint(11.into(), "retained".into(), [], true)
+                    .unwrap(),
+                2 => instance
+                    .deactivate_one_hot_constraint(10.into(), "retained".into(), [], false)
+                    .unwrap(),
+                1 => instance
+                    .deactivate_sos1_constraint(12.into(), "retained".into(), [], true)
+                    .unwrap(),
+                _ => (),
+            }
+        }
     }
 }

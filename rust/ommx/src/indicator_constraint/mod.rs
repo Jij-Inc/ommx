@@ -3,8 +3,8 @@ mod evaluate;
 use crate::{
     constraint::{stage, Created, CreatedData, Equality, Evaluated, Stage},
     constraint_type::{
-        sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, EvaluatedConstraintData,
-        SampledConstraintBehavior, SampledConstraintData,
+        sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, EvaluatedConstraintView,
+        SampledConstraintBehavior, SampledConstraintView,
     },
     ATol, Function, Parse, ParseError, RawParseError, SampleID, SampleIDSet, VariableID,
     VariableIDSet,
@@ -216,13 +216,13 @@ impl EvaluatedIndicatorConstraint {
     /// Equality uses `|f(x)|`; inequality uses `max(0, f(x))`. Zero implies
     /// feasibility, but a small positive violation may be feasible within tolerance.
     pub fn violation(&self) -> f64 {
-        EvaluatedConstraintData::violation(self)
+        EvaluatedConstraintView::violation(self)
     }
 }
 
-// ===== HasConstraintID =====
+// ===== EvaluatedConstraintView / SampledConstraintView =====
 
-impl EvaluatedConstraintData for EvaluatedIndicatorConstraint {
+impl EvaluatedConstraintView for EvaluatedIndicatorConstraint {
     type ID = IndicatorConstraintID;
     fn violation(&self) -> f64 {
         indicator_violation(
@@ -237,7 +237,7 @@ impl EvaluatedConstraintData for EvaluatedIndicatorConstraint {
     }
 }
 
-impl SampledConstraintData for SampledIndicatorConstraint {
+impl SampledConstraintView for SampledIndicatorConstraint {
     type ID = IndicatorConstraintID;
     type Evaluated = EvaluatedIndicatorConstraint;
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
@@ -286,6 +286,7 @@ impl SampledConstraintData for SampledIndicatorConstraint {
 // ===== ConstraintType =====
 
 impl ConstraintType for IndicatorConstraint {
+    const KIND: crate::ConstraintKind = crate::ConstraintKind::Indicator;
     type ID = IndicatorConstraintID;
     type ViolationDiagnostics = IndicatorViolationDiagnostics;
     type Created = IndicatorConstraint;
@@ -692,18 +693,6 @@ mod tests {
         let s = format!("{}", ic);
         assert!(s.contains("IndicatorConstraint"));
         assert!(s.contains("x10"));
-    }
-
-    #[test]
-    fn test_constraint_type_impl() {
-        // Verify ConstraintType associated types compile correctly
-        let ic = IndicatorConstraint::new(
-            VariableID::from(10),
-            Equality::EqualToZero,
-            Function::Zero,
-            crate::IndicatorTriggerValue::One,
-        );
-        let _: <IndicatorConstraint as ConstraintType>::Created = ic;
     }
 
     #[test]

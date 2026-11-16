@@ -2125,7 +2125,7 @@ wheels = [
 
 [[package]]
 name = "ommx"
-version = "3.0.0b10"
+version = "3.0.0rc1"
 source = { editable = "python/ommx" }
 dependencies = [
     { name = "ipython" },
@@ -2157,7 +2157,7 @@ requires-dist = [
 
 [[package]]
 name = "ommx-highs-adapter"
-version = "3.0.0b10"
+version = "3.0.0rc1"
 source = { editable = "python/ommx-highs-adapter" }
 dependencies = [
     { name = "highspy" },
@@ -2175,7 +2175,7 @@ requires-dist = [
 
 [[package]]
 name = "ommx-openjij-adapter"
-version = "3.0.0b10"
+version = "3.0.0rc1"
 source = { editable = "python/ommx-openjij-adapter" }
 dependencies = [
     { name = "ommx" },
@@ -2190,7 +2190,7 @@ requires-dist = [
 
 [[package]]
 name = "ommx-pyscipopt-adapter"
-version = "3.0.0b10"
+version = "3.0.0rc1"
 source = { editable = "python/ommx-pyscipopt-adapter" }
 dependencies = [
     { name = "ommx" },
@@ -2205,7 +2205,7 @@ requires-dist = [
 
 [[package]]
 name = "ommx-python-mip-adapter"
-version = "3.0.0b10"
+version = "3.0.0rc1"
 source = { editable = "python/ommx-python-mip-adapter" }
 dependencies = [
     { name = "cffi" },

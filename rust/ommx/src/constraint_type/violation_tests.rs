@@ -1,5 +1,5 @@
 use super::*;
-use crate::{v1::State, IndicatorConstraint, OneHotConstraint, Sos1Constraint};
+use crate::{v1::State, Constraint, IndicatorConstraint, OneHotConstraint, Sos1Constraint};
 use proptest::prelude::*;
 
 fn assert_contract<C: ConstraintType>(constraint: &C::Created, state: &State, atol: ATol) {
