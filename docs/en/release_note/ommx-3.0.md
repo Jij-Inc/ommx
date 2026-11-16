@@ -6,6 +6,30 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### Typed constraint violation diagnostics ([#1389](https://github.com/Jij-Inc/ommx/pull/1389))
+
+`Solution.violation_diagnostics()` and `SampleSet.violation_diagnostics(sample_id)`
+return a read-only Mapping containing only violated constraints, using the saved
+evaluation tolerance. Typed constraint IDs select family-specific diagnostics;
+`.of_kind()` provides a typed family view that also accepts integer IDs.
+
+```python
+from ommx import ConstraintKind, OneHotViolationDiagnostics
+
+diagnostics = solution.violation_diagnostics()
+for constraint_id, detail in diagnostics.of_kind(ConstraintKind.OneHot).items():
+    if isinstance(detail, OneHotViolationDiagnostics.MissingSelection):
+        print(constraint_id, detail.values)
+```
+
+OneHot distinguishes missing selection, multiple selections, and value errors,
+including all-zero assignments. SOS1 reports excess member values. Regular and
+Indicator have dedicated diagnostic types with no extra fields yet. Details are
+computed on request and returned as independent snapshots. The default includes
+all retained roles; use `min_role` to narrow the query. See
+{meth}`~ommx.Solution.violation_diagnostics` and
+{meth}`~ommx.SampleSet.violation_diagnostics` for the full contract.
+
 ### OneHot and SOS1 violation measure ([#1384](https://github.com/Jij-Inc/ommx/pull/1384))
 
 OneHot and SOS1 now report the **largest variable adjustment needed to satisfy

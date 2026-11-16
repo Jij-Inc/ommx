@@ -63,6 +63,16 @@ ommx
    _items/ommx.AttachedIndicatorConstraint
    _items/ommx.InactiveIndicatorConstraint
    _items/ommx.OneHotConstraint
+   _items/ommx.ViolationDiagnostics
+   _items/ommx.ViolationDiagnosticsFamilyView
+   _items/ommx.ViolationDiagnosticsBase
+   _items/ommx.RegularViolationDiagnostics
+   _items/ommx.IndicatorViolationDiagnostics
+   _items/ommx.Sos1ViolationDiagnostics
+   _items/ommx.OneHotViolationDiagnostics
+   _items/ommx.OneHotMissingSelection
+   _items/ommx.OneHotMultipleSelections
+   _items/ommx.OneHotValueErrors
    _items/ommx.AttachedOneHotConstraint
    _items/ommx.InactiveOneHotConstraint
    _items/ommx.Sos1Constraint

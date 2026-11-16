@@ -270,6 +270,34 @@ loading saved results containing OneHot rows. Results saved with a OneHot
 evaluation tolerance of `0.5` or greater are rejected. The general absolute
 tolerance remains unchanged.
 
+Detailed constraint diagnostics are available through
+{meth}`~ommx.Solution.violation_diagnostics` and
+{meth}`~ommx.SampleSet.violation_diagnostics`. Both return a read-only
+{class}`~ommx.ViolationDiagnostics` Mapping of typed constraint IDs to
+family-specific diagnostics. Only violated constraints appear; the default
+`min_role=ConstraintRole.EVALUATION_ONLY` includes retained skipped checks.
+
+```python
+from ommx import ConstraintKind, Sos1ConstraintID
+
+diagnostics = solution.violation_diagnostics()
+excess = diagnostics.get(Sos1ConstraintID(7))
+if excess is not None:
+    print(excess.values)  # excess variable IDs and signed values
+one_hot = diagnostics.of_kind(ConstraintKind.OneHot)
+```
+
+OneHot distinguishes missing selection, multiple selections, and value errors.
+Its variants can be matched as `OneHotViolationDiagnostics.MissingSelection`,
+`.MultipleSelections`, and `.ValueErrors`, or by the corresponding top-level
+classes `OneHotMissingSelection`, `OneHotMultipleSelections`, and `OneHotValueErrors`.
+Every diagnostic inherits `ViolationDiagnosticsBase`, so future constraint
+families do not change the common Mapping interface. Details are computed when
+requested from the saved values and tolerance; the returned snapshot cannot
+modify the result. For samples use `samples.violation_diagnostics(sample_id)`;
+unknown sample IDs raise `KeyError`. An empty Mapping describes the selected
+constraints only, not variable-domain feasibility.
+
 (migration-storage)=
 ## 5. Bring saved models and Artifacts forward
 

@@ -54,6 +54,7 @@ mod sos1_constraint;
 mod sos1_promotion;
 mod state;
 mod subscript_map;
+mod violation_diagnostics;
 
 pub use artifact::*;
 // `attached.rs` is implementation detail — re-export only the host enum that
@@ -103,6 +104,12 @@ pub use solution::*;
 pub use sos1_constraint::*;
 pub use sos1_promotion::*;
 pub use state::*;
+pub use violation_diagnostics::{
+    IndicatorViolationDiagnostics, OneHotMissingSelection, OneHotMultipleSelections,
+    OneHotValueErrors, OneHotViolationDiagnostics, RegularViolationDiagnostics,
+    Sos1ViolationDiagnostics, ViolationDiagnostics, ViolationDiagnosticsBase,
+    ViolationDiagnosticsFamilyView,
+};
 
 use pyo3::prelude::*;
 use pyo3_stub_gen::runtime::PyModuleTypeAliasExt;
@@ -243,6 +250,7 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<AttachedIndicatorConstraint>()?;
     m.add_class::<InactiveIndicatorConstraint>()?;
     m.add_class::<OneHotConstraint>()?;
+    violation_diagnostics::register(m)?;
     m.add_class::<AttachedOneHotConstraint>()?;
     m.add_class::<InactiveOneHotConstraint>()?;
     m.add_class::<Sos1Constraint>()?;
@@ -382,6 +390,16 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "AttachedIndicatorConstraint",
     "InactiveIndicatorConstraint",
     "OneHotConstraint",
+    "ViolationDiagnostics",
+    "ViolationDiagnosticsFamilyView",
+    "ViolationDiagnosticsBase",
+    "RegularViolationDiagnostics",
+    "IndicatorViolationDiagnostics",
+    "Sos1ViolationDiagnostics",
+    "OneHotViolationDiagnostics",
+    "OneHotMissingSelection",
+    "OneHotMultipleSelections",
+    "OneHotValueErrors",
     "AttachedOneHotConstraint",
     "InactiveOneHotConstraint",
     "Sos1Constraint",
