@@ -696,9 +696,13 @@ class OMMXHighsAdapter(SolverAdapter):
     tolerances. A definite infeasible status raises ``InfeasibleDetected``;
     an unresolved infeasible-or-unbounded status raises
     ``InfeasibleOrUnboundedDetected`` during decoding.
-    When a constant-row bound reaches HiGHS's infinity threshold, the adapter
-    temporarily raises ``infinite_bound`` while adding that row and restores
-    it immediately afterward. Other rows and solver settings are unchanged.
+    The adapter sets ``infinite_bound`` to infinity before registering any
+    variables or constraints and keeps it set during solving. Finite variable
+    and constraint bounds remain finite, including values at or above
+    ``1e20``; only explicit infinities represent absent bounds. Constants are
+    not rescaled, so feasibility tolerances retain their original units.
+    Large finite bounds may still cause numerical solver failures, which
+    raise ``OMMXHighsAdapterError`` rather than an infeasibility signal.
 
     **Constraint ID Management**:
 
@@ -761,6 +765,9 @@ class OMMXHighsAdapter(SolverAdapter):
        * - ``kUnboundedOrInfeasible``
          - ``InfeasibleOrUnboundedDetected``
        * - ``kNotset``
+         - ``OMMXHighsAdapterError``
+       * - Failed ``run()`` or model load, validation, presolve, solve,
+           postsolve, or unknown status
          - ``OMMXHighsAdapterError``
 
     Limitations
@@ -828,6 +835,13 @@ class OMMXHighsAdapter(SolverAdapter):
             self.require_applicable(ommx_instance)
             self.instance = ommx_instance
             self.model = highspy.Highs()
+            # Preserve finite OMMX bounds throughout registration and solving.
+            # HiGHS also validates bounds against this option in run().
+            status = self.model.setOptionValue("infinite_bound", highspy.kHighsInf)
+            if status != highspy.HighsStatus.kOk:
+                raise OMMXHighsAdapterError(
+                    f"Failed to configure finite bound preservation: {status}"
+                )
 
             # the default is for `log_to_console` to be True, so we
             # turn it off unless user requests it
@@ -982,10 +996,15 @@ class OMMXHighsAdapter(SolverAdapter):
                 model.cbMipLogging.subscribe(diagnostics_callback)
             with _tracer.start_as_current_span("call"):
                 try:
-                    model.run()
+                    run_status = model.run()
                 finally:
                     if diagnostics_callback is not None:
                         model.cbMipLogging.unsubscribe(diagnostics_callback)
+            if run_status == highspy.HighsStatus.kError:
+                raise OMMXHighsAdapterError(
+                    f"HiGHS run failed: {run_status} "
+                    f"[model status: {model.getModelStatus()}]"
+                )
             if diagnostics is not None:
                 diagnostics.record(HighsTerminationReport.from_model(model))
             return adapter.decode(model)
@@ -1152,6 +1171,15 @@ class OMMXHighsAdapter(SolverAdapter):
                 "HiGHS could not distinguish infeasibility from unboundedness "
                 "[status: UnboundedOrInfeasible]"
             )
+        elif status in (
+            highspy.HighsModelStatus.kLoadError,
+            highspy.HighsModelStatus.kModelError,
+            highspy.HighsModelStatus.kPresolveError,
+            highspy.HighsModelStatus.kSolveError,
+            highspy.HighsModelStatus.kPostsolveError,
+            highspy.HighsModelStatus.kUnknown,
+        ):
+            raise OMMXHighsAdapterError(f"HiGHS failed to solve the model: {status}")
 
         solution = data.getSolution()
         return State(
@@ -1281,25 +1309,5 @@ class OMMXHighsAdapter(SolverAdapter):
                 raise OMMXHighsAdapterError(
                     f"Unsupported constraint equality kind: {constr.equality}"
                 )
-            if function.degree() == 0:
-                self._add_constant_row(row, str(cid), function.constant_term)
-            else:
-                self.model.addConstr(row, str(cid))
+            self.model.addConstr(row, str(cid))
             self._constraint_rows[cid] = row_index
-
-    def _add_constant_row(
-        self, row: highs_linear_expression, name: str, constant: float
-    ):
-        _, infinite_bound = self.model.getOptionValue("infinite_bound")
-        infinite_bound = cast(float, infinite_bound)
-        if abs(constant) < infinite_bound:
-            self.model.addConstr(row, name)
-            return
-
-        # Restore the original threshold before adding any other row or
-        # running HiGHS, even if registering this constant row fails.
-        self.model.setOptionValue("infinite_bound", highspy.kHighsInf)
-        try:
-            self.model.addConstr(row, name)
-        finally:
-            self.model.setOptionValue("infinite_bound", infinite_bound)
