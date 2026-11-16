@@ -6,6 +6,19 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### HiGHS アダプターで有限の境界値を保持 ([#1395](https://github.com/Jij-Inc/ommx/pull/1395))
+
+HiGHS アダプターは、`1e20` 以上の値も含め、変数と制約の有限の境界値を
+モデル構築から求解まで保持するようになりました。境界なしを表すのは、
+明示的な無限大だけです。これにより、HiGHS 1.16.0 で巨大な定数制約が
+求解前にエラーとなる問題を修正し、他の制約や変数の大きな有限境界が
+変換時に無限大になることも防ぎます。定数制約のスケールは変更せず、
+HiGHS に設定された実行可能性の許容誤差を適用します。
+
+求解の呼び出しが失敗した場合やモデルの状態がエラーの場合は、解をデコードせず
+`OMMXHighsAdapterError` を送出します。大きな有限境界によって数値的な問題が
+生じる可能性は残りますが、その失敗を `InfeasibleDetected` として扱うことはありません。
+
 ## 3.0.0 Release Candidate 1
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0rc1-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0rc1)
