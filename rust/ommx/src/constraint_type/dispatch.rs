@@ -15,7 +15,7 @@ pub trait Sealed: Sized {
 
 macro_rules! define_dispatch {
     ((); $( $method:ident: $family:ty {
-        created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident,
+        created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident, $($rest:tt)*
     } )*) => {
         pub trait Query {
             type Output<C: ConstraintType>;

@@ -2,13 +2,14 @@ use crate::constraint_collection::traverse::{for_each_constraint_collection, Sam
 use crate::SampledConstraintView;
 mod constraints;
 mod extract;
+mod extract_collections;
 mod parse;
 mod serialize;
 
 use crate::{
     constraint_collection::{EvaluatedCollection, SampledCollection},
     indicator_constraint::IndicatorConstraint,
-    ATol, Constraint, ConstraintID, ConstraintType, EvaluatedConstraint, EvaluatedDecisionVariable,
+    ATol, Constraint, ConstraintID, ConstraintType, EvaluatedDecisionVariable,
     EvaluatedNamedFunction, NamedFunctionID, NamedFunctionTable, SampleID, SampleIDSet, Sampled,
     SampledConstraint, SampledDecisionVariable, SampledNamedFunction, Sense, Solution, VariableID,
 };
@@ -312,34 +313,7 @@ impl SampleSet {
             decision_variables.insert(*variable_id, evaluated_dv);
         }
 
-        // Get evaluated constraints
-        let mut evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint> =
-            BTreeMap::default();
-        for (constraint_id, constraint) in self.constraints.iter() {
-            let evaluated_constraint = constraint.get(sample_id)?;
-            evaluated_constraints.insert(*constraint_id, evaluated_constraint);
-        }
-
-        // Get evaluated indicator constraints
-        let mut evaluated_indicator_constraints = BTreeMap::default();
-        for (constraint_id, constraint) in self.indicator_constraints.iter() {
-            let evaluated = constraint.get(sample_id)?;
-            evaluated_indicator_constraints.insert(*constraint_id, evaluated);
-        }
-
-        // Get evaluated one-hot constraints
-        let mut evaluated_one_hot_constraints = BTreeMap::default();
-        for (constraint_id, constraint) in self.one_hot_constraints.iter() {
-            let evaluated = constraint.get(sample_id)?;
-            evaluated_one_hot_constraints.insert(*constraint_id, evaluated);
-        }
-
-        // Get evaluated SOS1 constraints
-        let mut evaluated_sos1_constraints = BTreeMap::default();
-        for (constraint_id, constraint) in self.sos1_constraints.iter() {
-            let evaluated = constraint.get(sample_id)?;
-            evaluated_sos1_constraints.insert(*constraint_id, evaluated);
-        }
+        let builder = extract_collections::extract_collections(self, sample_id)?;
 
         // Get evaluated named functions
         let mut evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction> =
@@ -356,39 +330,7 @@ impl SampleSet {
         // SampledCollection so per-sample Solutions retain modeling labels and
         // transformation lineage attached at the SampleSet level.
         Some(unsafe {
-            Solution::builder()
-                .evaluated_constraints_collection(
-                    EvaluatedCollection::with_context(
-                        evaluated_constraints,
-                        self.constraints.inactive_metadata().clone(),
-                        self.constraints.context().clone(),
-                    )
-                    .expect("SampleSet sidecars must reference constraints present in this sample"),
-                )
-                .evaluated_indicator_constraints_collection(
-                    EvaluatedCollection::with_context(
-                        evaluated_indicator_constraints,
-                        self.indicator_constraints.inactive_metadata().clone(),
-                        self.indicator_constraints.context().clone(),
-                    )
-                    .expect("SampleSet sidecars must reference constraints present in this sample"),
-                )
-                .evaluated_one_hot_constraints_collection(
-                    EvaluatedCollection::with_context(
-                        evaluated_one_hot_constraints,
-                        self.one_hot_constraints.inactive_metadata().clone(),
-                        self.one_hot_constraints.context().clone(),
-                    )
-                    .expect("SampleSet sidecars must reference constraints present in this sample"),
-                )
-                .evaluated_sos1_constraints_collection(
-                    EvaluatedCollection::with_context(
-                        evaluated_sos1_constraints,
-                        self.sos1_constraints.inactive_metadata().clone(),
-                        self.sos1_constraints.context().clone(),
-                    )
-                    .expect("SampleSet sidecars must reference constraints present in this sample"),
-                )
+            builder
                 .objective(objective)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)

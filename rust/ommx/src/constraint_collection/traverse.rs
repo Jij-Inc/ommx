@@ -6,7 +6,7 @@
 
 macro_rules! define_borrowed_collections {
     ((); $( $method:ident: $family:ty {
-        created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident,
+        created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident, $($rest:tt)*
     } )*) => {
         /// Model-owner construction paths borrow all created collections together.
         pub(crate) struct CreatedCollections<'a> {
@@ -42,7 +42,7 @@ macro_rules! collection_field {
 macro_rules! visit_collections {
     (($stage:ident, $owner:expr, $kind:pat_param, $collection:ident, $body:block);
         $( $method:ident: $family:ty {
-            created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident,
+            created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident, $($rest:tt)*
         } )*
     ) => {{
         let owner = &$owner;

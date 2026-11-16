@@ -212,6 +212,30 @@ fn every_family_filters_roles_and_survives_storage_and_extraction() {
         .active_sos1_constraints((30..33).map(|id| (id.into(), sos1.clone())).collect())
         .build()
         .unwrap();
+    let context = |id| ommx::ConstraintContext {
+        label: ommx::ModelingLabel {
+            name: Some(format!("row_{id}")),
+            subscripts: vec![id],
+            ..Default::default()
+        },
+        provenance: vec![ommx::Provenance::IndicatorConstraint(
+            (100 + id as u64).into(),
+        )],
+    };
+    for offset in 0..3 {
+        model
+            .set_constraint_context(offset.into(), context(offset as i64))
+            .unwrap();
+        model
+            .set_indicator_constraint_context((10 + offset).into(), context(10 + offset as i64))
+            .unwrap();
+        model
+            .set_one_hot_constraint_context((20 + offset).into(), context(20 + offset as i64))
+            .unwrap();
+        model
+            .set_sos1_constraint_context((30 + offset).into(), context(30 + offset as i64))
+            .unwrap();
+    }
     for (offset, skip) in [(1, false), (2, true)] {
         model
             .deactivate_constraint(offset.into(), "retained".into(), [], skip)
@@ -234,8 +258,17 @@ fn every_family_filters_roles_and_survives_storage_and_extraction() {
     let samples = model.evaluate_samples(&states, ATol::default()).unwrap();
     let restored = SampleSet::from_v2_bytes(&samples.to_v2_bytes()).unwrap();
     for samples in [&samples, &restored] {
+        assert!(samples.get(99.into()).is_none());
         for sid in [2.into(), 7.into(), 13.into()] {
             let solution = samples.get(sid).unwrap();
+            // Compare the complete result, including all families' membership,
+            // labels, provenance, and stored evaluation data.
+            assert_eq!(
+                solution,
+                model
+                    .evaluate(states.get(sid).unwrap(), ATol::default())
+                    .unwrap()
+            );
             let restored = Solution::from_v2_bytes(&solution.to_v2_bytes()).unwrap();
             for solution in [&solution, &restored] {
                 for (role, count) in [

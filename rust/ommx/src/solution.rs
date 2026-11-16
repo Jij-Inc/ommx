@@ -216,7 +216,7 @@ fn validate_solution_constraint_used_ids<T: crate::ConstraintType>(
 
 macro_rules! impl_constraint_violations {
     ((); $( $method:ident: $family:ty {
-        created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident,
+        created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident, $($rest:tt)*
     } )*) => {
         impl Solution {
             fn constraint_violations(&self, min_role: crate::ConstraintRole) -> impl Iterator<Item = f64> + '_ {

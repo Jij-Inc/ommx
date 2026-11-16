@@ -22,9 +22,10 @@
 //!    `EvaluatedData`, etc. if the stage data is the same as regular constraints).
 //! 3. Add a variant to [`ConstraintKind`] and implement `ConstraintType for
 //!    NewConstraint` mapping its `KIND`, all three stages, and the diagnostic type.
-//!    Register the family and its collection fields/accessors in the internal
-//!    `constraint_type/families.rs` registry. This generates typed dispatch,
-//!    both result owners' diagnostic queries, and common collection traversal.
+//!    Register the family's collection accessors, result-builder setters, and
+//!    variable-use fields in the internal `constraint_type/families.rs` registry.
+//!    This generates typed dispatch, diagnostic queries, common collection
+//!    traversal, evaluation/extraction wiring, and active-variable visitors.
 //! 4. Implement `Evaluate` for `NewConstraint<Created>`,
 //!    [`EvaluatedConstraintView`] and [`SampledConstraintView`]. Every family must
 //!    provide a nonnegative scalar violation and the internal `DiagnosticRow`
@@ -39,6 +40,8 @@
 //!    feasibility aggregation. It also covers rejection of special constraints
 //!    by penalty operations and v1 export. Construction paths
 //!    using borrowed collection bundles must supply the new field as well.
+//!    Add the registered usage and exclusion fields to the variable-use analysis;
+//!    generated visitors require them and preserve the family's concrete ID type.
 //! 6. Implement the family's root-level semantic validation, evaluation,
 //!    transformations, and wire conversions. Registration does not define these
 //!    mathematical or serialization contracts. Consumers that cannot handle the

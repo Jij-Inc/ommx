@@ -1,3 +1,5 @@
+mod collections;
+
 use super::*;
 use crate::Result;
 use crate::{
@@ -737,13 +739,7 @@ impl Evaluate for Instance {
 
         let (sense, output_objective) = self.objective_for_output();
         let objective = output_objective.evaluate(&state, atol)?;
-        let evaluated_constraints = self.constraint_collection.evaluate(&state, atol)?;
-        let evaluated_indicator_constraints = self
-            .indicator_constraint_collection
-            .evaluate(&state, atol)?;
-        let evaluated_one_hot_constraints =
-            self.one_hot_constraint_collection.evaluate(&state, atol)?;
-        let evaluated_sos1_constraints = self.sos1_constraint_collection.evaluate(&state, atol)?;
+        let builder = collections::evaluate(self, &state, atol)?;
 
         let mut decision_variables = BTreeMap::default();
         for (id, dv) in self.decision_variables.iter() {
@@ -755,12 +751,8 @@ impl Evaluate for Instance {
 
         // SAFETY: Instance invariants guarantee Solution invariants
         let solution = unsafe {
-            crate::Solution::builder()
+            builder
                 .objective(objective)
-                .evaluated_constraints_collection(evaluated_constraints)
-                .evaluated_indicator_constraints_collection(evaluated_indicator_constraints)
-                .evaluated_one_hot_constraints_collection(evaluated_one_hot_constraints)
-                .evaluated_sos1_constraints_collection(evaluated_sos1_constraints)
                 .evaluated_named_function_table(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .variable_labels(self.variable_labels().clone())
@@ -818,26 +810,7 @@ impl Evaluate for Instance {
             samples
         };
 
-        let sampled_constraints: crate::constraint_collection::SampledCollection<
-            crate::Constraint,
-        > = self
-            .constraint_collection
-            .evaluate_samples(&samples, atol)?;
-        let sampled_indicator_constraints: crate::constraint_collection::SampledCollection<
-            crate::IndicatorConstraint,
-        > = self
-            .indicator_constraint_collection
-            .evaluate_samples(&samples, atol)?;
-        let sampled_one_hot_constraints: crate::constraint_collection::SampledCollection<
-            crate::OneHotConstraint,
-        > = self
-            .one_hot_constraint_collection
-            .evaluate_samples(&samples, atol)?;
-        let sampled_sos1_constraints: crate::constraint_collection::SampledCollection<
-            crate::Sos1Constraint,
-        > = self
-            .sos1_constraint_collection
-            .evaluate_samples(&samples, atol)?;
+        let builder = collections::evaluate_samples(self, &samples, atol)?;
 
         // Objective
         let (sense, output_objective) = self.objective_for_output();
@@ -852,14 +825,10 @@ impl Evaluate for Instance {
 
         let named_functions = self.named_functions.evaluate_samples(&samples, atol)?;
 
-        Ok(crate::SampleSet::builder()
+        Ok(builder
             .decision_variables(decision_variables)
             .variable_labels(self.variable_labels().clone())
             .objectives(objectives)
-            .constraints_collection(sampled_constraints)
-            .indicator_constraints_collection(sampled_indicator_constraints)
-            .one_hot_constraints_collection(sampled_one_hot_constraints)
-            .sos1_constraints_collection(sampled_sos1_constraints)
             .named_function_table(named_functions)
             .sense(sense)
             .feasibility_atol(atol)

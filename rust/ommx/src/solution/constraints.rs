@@ -72,7 +72,7 @@ struct DiagnosticsQuery<'a> {
 
 macro_rules! impl_diagnostics_query {
     ((); $( $method:ident: $family:ty {
-        created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident,
+        created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident, $($rest:tt)*
     } )*) => {
         impl Query for DiagnosticsQuery<'_> {
             type Output<C: ConstraintType> = BTreeMap<C::ID, C::ViolationDiagnostics>;
