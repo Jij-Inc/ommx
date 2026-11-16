@@ -1,3 +1,4 @@
+use crate::constraint_collection::traverse::{for_each_constraint_collection, CreatedCollections};
 mod analysis;
 mod approx;
 pub(crate) mod arbitrary;
@@ -67,7 +68,7 @@ pub use v1_hint_promotion::{
 
 use crate::{
     constraint::{ConstraintContextStore, InactiveConstraintMetadata},
-    constraint_type::ConstraintCollection,
+    constraint_collection::ConstraintCollection,
     decision_variable::{DecisionVariableTable, VariableLabelStore},
     indicator_constraint::IndicatorConstraint,
     named_function::NamedFunctionID,
@@ -496,21 +497,14 @@ impl Instance {
     /// is included. Names are deduplicated even when subscripts are ambiguous.
     pub fn active_constraint_names(&self) -> BTreeSet<String> {
         let mut names = BTreeSet::new();
-        macro_rules! collect {
-            ($collection:expr) => {
-                let collection = $collection;
-                names.extend(
-                    collection
-                        .active()
-                        .keys()
-                        .filter_map(|id| collection.context().name(*id).map(str::to_owned)),
-                );
-            };
-        }
-        collect!(&self.constraint_collection);
-        collect!(&self.indicator_constraint_collection);
-        collect!(&self.one_hot_constraint_collection);
-        collect!(&self.sos1_constraint_collection);
+        for_each_constraint_collection!(created, self, |_, collection| {
+            names.extend(
+                collection
+                    .active()
+                    .keys()
+                    .filter_map(|id| collection.context().name(*id).map(str::to_owned)),
+            );
+        });
         names
     }
 
@@ -904,15 +898,11 @@ impl Instance {
     /// establish adapter applicability.
     pub fn active_special_constraint_kinds(&self) -> ConstraintKinds {
         let mut kinds = ConstraintKinds::new();
-        if !self.indicator_constraint_collection.active().is_empty() {
-            kinds.insert(ConstraintKind::Indicator);
-        }
-        if !self.one_hot_constraint_collection.active().is_empty() {
-            kinds.insert(ConstraintKind::OneHot);
-        }
-        if !self.sos1_constraint_collection.active().is_empty() {
-            kinds.insert(ConstraintKind::Sos1);
-        }
+        for_each_constraint_collection!(created, self, |kind, collection| {
+            if kind != ConstraintKind::Regular && !collection.active().is_empty() {
+                kinds.insert(kind);
+            }
+        });
         kinds
     }
 
@@ -1197,21 +1187,14 @@ impl ParametricInstance {
     /// is included. Names are deduplicated even when subscripts are ambiguous.
     pub fn active_constraint_names(&self) -> BTreeSet<String> {
         let mut names = BTreeSet::new();
-        macro_rules! collect {
-            ($collection:expr) => {
-                let collection = $collection;
-                names.extend(
-                    collection
-                        .active()
-                        .keys()
-                        .filter_map(|id| collection.context().name(*id).map(str::to_owned)),
-                );
-            };
-        }
-        collect!(&self.constraint_collection);
-        collect!(&self.indicator_constraint_collection);
-        collect!(&self.one_hot_constraint_collection);
-        collect!(&self.sos1_constraint_collection);
+        for_each_constraint_collection!(created, self, |_, collection| {
+            names.extend(
+                collection
+                    .active()
+                    .keys()
+                    .filter_map(|id| collection.context().name(*id).map(str::to_owned)),
+            );
+        });
         names
     }
 
@@ -1463,30 +1446,34 @@ fn maximum_number<T: crate::ConstraintType>(collection: &ConstraintCollection<T>
         )
 }
 
-// Both model roots own the same constraint-number invariant. This implementation
-// stays inside the instance module; it grants no collection mutation authority.
-macro_rules! constraint_numbers {
+// Both model roots own the same collection queries and constraint-number invariant.
+// These implementations stay inside the instance module and grant no mutation authority.
+macro_rules! constraint_collection_queries {
     ($owner:ty) => {
         impl $owner {
+            // Flat annotations need this model-owned aggregate without access to storage.
+            pub(crate) fn active_constraint_count(&self) -> usize {
+                let mut count = 0;
+                for_each_constraint_collection!(created, self, |_, collection| {
+                    count += collection.active().len();
+                });
+                count
+            }
+
             fn validate_constraint_ids(&self) -> crate::Result<()> {
                 let mut ids = crate::constraint_ids::ConstraintIds::default();
-                ids.created("regular", &self.constraint_collection)?;
-                ids.created("indicator", &self.indicator_constraint_collection)?;
-                ids.created("one-hot", &self.one_hot_constraint_collection)?;
-                ids.created("SOS1", &self.sos1_constraint_collection)?;
+                for_each_constraint_collection!(created, self, |_, collection| {
+                    ids.created(collection)?;
+                });
                 Ok(())
             }
 
             fn maximum_constraint_number(&self) -> Option<u64> {
-                [
-                    maximum_number(&self.constraint_collection),
-                    maximum_number(&self.indicator_constraint_collection),
-                    maximum_number(&self.one_hot_constraint_collection),
-                    maximum_number(&self.sos1_constraint_collection),
-                ]
-                .into_iter()
-                .flatten()
-                .max()
+                let mut maximum = None;
+                for_each_constraint_collection!(created, self, |_, collection| {
+                    maximum = maximum.max(maximum_number(collection));
+                });
+                maximum
             }
 
             fn ensure_constraint_id_capacity(&self, count: usize) -> crate::Result<()> {
@@ -1512,8 +1499,8 @@ macro_rules! constraint_numbers {
     };
 }
 
-constraint_numbers!(Instance);
-constraint_numbers!(ParametricInstance);
+constraint_collection_queries!(Instance);
+constraint_collection_queries!(ParametricInstance);
 
 impl Instance {
     // Replacement within the regular family keeps its identity. Only ownership
@@ -1521,7 +1508,6 @@ impl Instance {
     fn validate_regular_constraint_number(&self, id: crate::ConstraintID) -> crate::Result<()> {
         fn check<T: crate::ConstraintType>(
             number: u64,
-            family: &str,
             collection: &ConstraintCollection<T>,
         ) -> crate::Result<()> {
             let id = T::ID::from(number);
@@ -1533,14 +1519,18 @@ impl Instance {
                 None
             };
             if let Some(state) = state {
+                let family = T::KIND.as_str();
                 crate::bail!({ number, family, state }, "Cannot insert regular constraint with number {number}: it is owned by a {state} {family} constraint");
             }
             Ok(())
         }
         let number = id.into_inner();
-        check(number, "indicator", &self.indicator_constraint_collection)?;
-        check(number, "one-hot", &self.one_hot_constraint_collection)?;
-        check(number, "SOS1", &self.sos1_constraint_collection)
+        for_each_constraint_collection!(created, self, |kind, collection| {
+            if kind != crate::ConstraintKind::Regular {
+                check(number, collection)?;
+            }
+        });
+        Ok(())
     }
 }
 

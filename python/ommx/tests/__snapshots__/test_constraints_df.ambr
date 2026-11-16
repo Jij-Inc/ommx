@@ -64,7 +64,7 @@
   IndicatorConstraintID(20)                      0              1       =0  Linear  {0, 1, 2}  <NA>         []        <NA>  ConstraintRole.ACTIVE
   '''
 # ---
-# name: test_instance_constraints_df_kind[one_hot]
+# name: test_instance_constraints_df_kind[one-hot]
   '''
                           variables  num_variables   used_ids  name subscripts description                   role
   one_hot_constraint_id                                                                                          
@@ -107,7 +107,7 @@
   Index: []
   '''
 # ---
-# name: test_parametric_instance_constraints_df_special_kinds_empty[one_hot-one_hot_constraint_id]
+# name: test_parametric_instance_constraints_df_special_kinds_empty[one-hot-one_hot_constraint_id]
   '''
   Empty DataFrame
   Columns: [role]
@@ -128,7 +128,7 @@
   IndicatorConstraintID(20)                      0              1       =0  {0, 1, 2}  <NA>         []        <NA>      0.0        True           False      0.0        True            True  ConstraintRole.ACTIVE
   '''
 # ---
-# name: test_sample_set_constraints_df_kind[one_hot]
+# name: test_sample_set_constraints_df_kind[one-hot]
   '''
                            used_ids  name subscripts description  feasible.0  selected_variable.0  feasible.1 selected_variable.1                   role
   one_hot_constraint_id                                                                                                                                 
@@ -170,7 +170,7 @@
   IndicatorConstraintID(20)                      0              1       =0    0.0      True         False  {0, 1, 2}  <NA>         []        <NA>        0.0  ConstraintRole.ACTIVE
   '''
 # ---
-# name: test_solution_constraints_df_kind[one_hot]
+# name: test_solution_constraints_df_kind[one-hot]
   '''
                           feasible  selected_variable   used_ids  name subscripts description  violation                   role
   one_hot_constraint_id                                                                                                        

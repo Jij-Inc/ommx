@@ -1,5 +1,5 @@
 use crate::constraint_base::ConstraintView;
-use ommx::{SampledConstraintBehavior, SampledConstraintData};
+use ommx::{SampledConstraintBehavior, SampledConstraintView};
 use pyo3::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 

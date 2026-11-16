@@ -1,29 +1,8 @@
 use crate::{
     constraint_type::{dispatch::Query, DiagnosticRow},
-    Constraint, ConstraintRole, ConstraintType, EvaluatedCollection, EvaluatedConstraintBehavior,
-    IndicatorConstraint, OneHotConstraint, Solution, Sos1Constraint,
+    ConstraintRole, ConstraintType, EvaluatedCollection, EvaluatedConstraintBehavior, Solution,
 };
 use std::collections::BTreeMap;
-
-// Storage access is private to this result owner. The public query dispatches
-// over SDK families without requiring callers to name a host trait.
-trait EvaluatedConstraintHost<C: ConstraintType> {
-    fn evaluated_constraints(&self) -> &EvaluatedCollection<C>;
-}
-
-macro_rules! impl_host {
-    ($family:ty, $accessor:ident) => {
-        impl EvaluatedConstraintHost<$family> for Solution {
-            fn evaluated_constraints(&self) -> &EvaluatedCollection<$family> {
-                self.$accessor()
-            }
-        }
-    };
-}
-impl_host!(Constraint, evaluated_constraints);
-impl_host!(IndicatorConstraint, evaluated_indicator_constraints);
-impl_host!(OneHotConstraint, evaluated_one_hot_constraints);
-impl_host!(Sos1Constraint, evaluated_sos1_constraints);
 
 impl Solution {
     /// Return diagnostics for this family's violated constraints at the saved tolerance.
@@ -55,15 +34,16 @@ impl Solution {
         })
     }
 
+    // Select rows from this owner; the accessor cannot capture another result's table.
     fn family_violation_diagnostics<C: ConstraintType>(
         &self,
+        select: fn(&Self) -> &EvaluatedCollection<C>,
         min_role: ConstraintRole,
     ) -> BTreeMap<C::ID, C::ViolationDiagnostics>
     where
-        Self: EvaluatedConstraintHost<C>,
         C::Evaluated: DiagnosticRow<Diagnostics = C::ViolationDiagnostics>,
     {
-        <Self as EvaluatedConstraintHost<C>>::evaluated_constraints(self)
+        select(self)
             .selected(min_role)
             .filter(|(_, row)| !row.is_feasible(self.feasibility_atol()))
             .map(|(&id, row)| {
@@ -90,23 +70,23 @@ struct DiagnosticsQuery<'a> {
     min_role: ConstraintRole,
 }
 
-macro_rules! query_family {
-    ($method:ident, $family:ty) => {
-        fn $method(self) -> Self::Output<$family> {
-            self.host
-                .family_violation_diagnostics::<$family>(self.min_role)
+macro_rules! impl_diagnostics_query {
+    ((); $( $method:ident: $family:ty {
+        created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident, $($rest:tt)*
+    } )*) => {
+        impl Query for DiagnosticsQuery<'_> {
+            type Output<C: ConstraintType> = BTreeMap<C::ID, C::ViolationDiagnostics>;
+
+            $(fn $method(self) -> Self::Output<$family> {
+                self.host.family_violation_diagnostics::<$family>(
+                    Solution::$evaluated, self.min_role,
+                )
+            })*
         }
     };
 }
 
-impl Query for DiagnosticsQuery<'_> {
-    type Output<C: ConstraintType> = BTreeMap<C::ID, C::ViolationDiagnostics>;
-
-    query_family!(regular, Constraint);
-    query_family!(indicator, IndicatorConstraint);
-    query_family!(one_hot, OneHotConstraint);
-    query_family!(sos1, Sos1Constraint);
-}
+crate::constraint_type::families::with_constraint_families!(impl_diagnostics_query; ());
 
 #[cfg(test)]
 mod tests;

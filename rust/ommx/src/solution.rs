@@ -1,10 +1,13 @@
-use crate::EvaluatedConstraintData;
+use crate::constraint_collection::traverse::{
+    for_each_constraint_collection, EvaluatedCollections,
+};
+use crate::EvaluatedConstraintView;
 mod constraints;
 mod parse;
 mod serialize;
 
 use crate::{
-    constraint_type::EvaluatedCollection,
+    constraint_collection::EvaluatedCollection,
     decision_variable::{EvaluatedDecisionVariableTable, VariableLabelStore},
     indicator_constraint::IndicatorConstraint,
     ATol, Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
@@ -185,81 +188,45 @@ fn validate_evaluated_named_function_used_ids(
     Ok(())
 }
 
-fn validate_constraint_used_ids<T: crate::ConstraintType>(
+fn validate_solution_constraint_used_ids<T: crate::ConstraintType>(
     decision_variables: &EvaluatedDecisionVariableTable,
     constraints: &EvaluatedCollection<T>,
-    classify: impl Fn(T::ID, VariableID) -> SolutionError,
 ) -> Result<(), SolutionError> {
     for (constraint_id, constraint) in constraints.inner() {
-        for variable_id in constraint.used_decision_variable_ids() {
-            if !decision_variables.contains_key(variable_id) {
-                return Err(classify(*constraint_id, *variable_id));
+        for id in constraint.used_decision_variable_ids() {
+            if !decision_variables.contains_key(id) {
+                return Err(if T::KIND == crate::ConstraintKind::Regular {
+                    let number: u64 = (*constraint_id).into();
+                    SolutionError::UndefinedVariableInConstraint {
+                        id: *id,
+                        constraint_id: number.into(),
+                    }
+                } else {
+                    SolutionError::InvalidConstraintStructure {
+                        constraint_family: T::KIND.as_str(),
+                        constraint_id: format!("{constraint_id:?}"),
+                        message: format!("variable {id:?} is not in decision_variables"),
+                    }
+                });
             }
         }
     }
     Ok(())
 }
 
-fn validate_solution_regular_constraint_used_ids(
-    decision_variables: &EvaluatedDecisionVariableTable,
-    constraints: &EvaluatedCollection<Constraint>,
-) -> Result<(), SolutionError> {
-    validate_constraint_used_ids(decision_variables, constraints, |constraint_id, id| {
-        SolutionError::UndefinedVariableInConstraint { id, constraint_id }
-    })
-}
-
-fn validate_solution_indicator_constraint_used_ids(
-    decision_variables: &EvaluatedDecisionVariableTable,
-    constraints: &EvaluatedCollection<IndicatorConstraint>,
-) -> Result<(), SolutionError> {
-    validate_constraint_used_ids(decision_variables, constraints, |constraint_id, id| {
-        SolutionError::InvalidConstraintStructure {
-            constraint_family: "indicator",
-            constraint_id: format!("{constraint_id:?}"),
-            message: format!("variable {id:?} is not in decision_variables"),
+macro_rules! impl_constraint_violations {
+    ((); $( $method:ident: $family:ty {
+        created: $created:ident, evaluated: $evaluated:ident, sampled: $sampled:ident, $($rest:tt)*
+    } )*) => {
+        impl Solution {
+            fn constraint_violations(&self, min_role: crate::ConstraintRole) -> impl Iterator<Item = f64> + '_ {
+                std::iter::empty()
+                    $(.chain(self.$evaluated.selected(min_role).map(|(_, row)| row.violation())))*
+            }
         }
-    })
+    };
 }
-
-fn validate_solution_one_hot_constraint_used_ids(
-    decision_variables: &EvaluatedDecisionVariableTable,
-    constraints: &EvaluatedCollection<crate::OneHotConstraint>,
-) -> Result<(), SolutionError> {
-    validate_constraint_used_ids(decision_variables, constraints, |constraint_id, id| {
-        SolutionError::InvalidConstraintStructure {
-            constraint_family: "one-hot",
-            constraint_id: format!("{constraint_id:?}"),
-            message: format!("variable {id:?} is not in decision_variables"),
-        }
-    })
-}
-
-fn validate_solution_sos1_constraint_used_ids(
-    decision_variables: &EvaluatedDecisionVariableTable,
-    constraints: &EvaluatedCollection<crate::Sos1Constraint>,
-) -> Result<(), SolutionError> {
-    validate_constraint_used_ids(decision_variables, constraints, |constraint_id, id| {
-        SolutionError::InvalidConstraintStructure {
-            constraint_family: "SOS1",
-            constraint_id: format!("{constraint_id:?}"),
-            message: format!("variable {id:?} is not in decision_variables"),
-        }
-    })
-}
-
-fn validate_all_solution_constraint_used_ids(
-    decision_variables: &EvaluatedDecisionVariableTable,
-    regular_constraints: &EvaluatedCollection<Constraint>,
-    indicator_constraints: &EvaluatedCollection<IndicatorConstraint>,
-    one_hot_constraints: &EvaluatedCollection<crate::OneHotConstraint>,
-    sos1_constraints: &EvaluatedCollection<crate::Sos1Constraint>,
-) -> Result<(), SolutionError> {
-    validate_solution_regular_constraint_used_ids(decision_variables, regular_constraints)?;
-    validate_solution_indicator_constraint_used_ids(decision_variables, indicator_constraints)?;
-    validate_solution_one_hot_constraint_used_ids(decision_variables, one_hot_constraints)?;
-    validate_solution_sos1_constraint_used_ids(decision_variables, sos1_constraints)
-}
+crate::constraint_type::families::with_constraint_families!(impl_constraint_violations; ());
 
 impl Solution {
     /// Unique constraint names across every family, including retained inactive rows.
@@ -269,20 +236,13 @@ impl Solution {
     /// returned once, even when their subscripts are ambiguous for extraction.
     pub fn constraint_names(&self) -> BTreeSet<String> {
         let mut names = BTreeSet::new();
-        macro_rules! collect {
-            ($collection:expr) => {
-                let collection = $collection;
-                names.extend(
-                    collection
-                        .keys()
-                        .filter_map(|id| collection.context().name(*id).map(str::to_owned)),
-                );
-            };
-        }
-        collect!(&self.evaluated_constraints);
-        collect!(&self.evaluated_indicator_constraints);
-        collect!(&self.evaluated_one_hot_constraints);
-        collect!(&self.evaluated_sos1_constraints);
+        for_each_constraint_collection!(evaluated, self, |_, collection| {
+            names.extend(
+                collection
+                    .keys()
+                    .filter_map(|id| collection.context().name(*id).map(str::to_owned)),
+            );
+        });
         names
     }
 
@@ -353,17 +313,12 @@ impl Solution {
     /// - To check both constraints and decision variables, use [`feasible()`](Self::feasible)
     /// - To check only decision variables, use [`feasible_decision_variables()`](Self::feasible_decision_variables)
     pub fn feasible_constraints(&self) -> bool {
-        self.evaluated_constraints
-            .is_feasible(self.feasibility_atol)
-            && self
-                .evaluated_indicator_constraints
-                .is_feasible(self.feasibility_atol)
-            && self
-                .evaluated_one_hot_constraints
-                .is_feasible(self.feasibility_atol)
-            && self
-                .evaluated_sos1_constraints
-                .is_feasible(self.feasibility_atol)
+        for_each_constraint_collection!(evaluated, self, |_, collection| {
+            if !collection.is_feasible(self.feasibility_atol) {
+                return false;
+            }
+        });
+        true
     }
 
     /// Check `FeasibilityCheck` and `Active` constraints, and all decision variable domains.
@@ -381,17 +336,12 @@ impl Solution {
     /// - To check both constraints and decision variables, use [`feasible_relaxed()`](Self::feasible_relaxed)
     /// - To check only decision variables, use [`feasible_decision_variables()`](Self::feasible_decision_variables)
     pub fn feasible_constraints_relaxed(&self) -> bool {
-        self.evaluated_constraints
-            .is_feasible_relaxed(self.feasibility_atol)
-            && self
-                .evaluated_indicator_constraints
-                .is_feasible_relaxed(self.feasibility_atol)
-            && self
-                .evaluated_one_hot_constraints
-                .is_feasible_relaxed(self.feasibility_atol)
-            && self
-                .evaluated_sos1_constraints
-                .is_feasible_relaxed(self.feasibility_atol)
+        for_each_constraint_collection!(evaluated, self, |_, collection| {
+            if !collection.is_feasible_relaxed(self.feasibility_atol) {
+                return false;
+            }
+        });
+        true
     }
 
     /// Check active constraints and all decision variable domains.
@@ -470,30 +420,6 @@ impl Solution {
         self.evaluated_sos1_constraints
             .get(&id)
             .map(|c| c.violation())
-    }
-
-    fn constraint_violations(
-        &self,
-        min_role: crate::ConstraintRole,
-    ) -> impl Iterator<Item = f64> + '_ {
-        self.evaluated_constraints
-            .selected(min_role)
-            .map(|(_, c)| c.violation())
-            .chain(
-                self.evaluated_indicator_constraints
-                    .selected(min_role)
-                    .map(|(_, c)| c.violation()),
-            )
-            .chain(
-                self.evaluated_one_hot_constraints
-                    .selected(min_role)
-                    .map(|(_, c)| c.violation()),
-            )
-            .chain(
-                self.evaluated_sos1_constraints
-                    .selected(min_role)
-                    .map(|(_, c)| c.violation()),
-            )
     }
 
     /// Generate state from decision variables (for backward compatibility)
@@ -611,27 +537,20 @@ impl Solution {
         name: &str,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
         let mut result = BTreeMap::new();
-        macro_rules! collect {
-            ($collection:expr) => {
-                let collection = $collection;
-                let context = collection.context();
-                for (id, constraint) in collection.iter() {
-                    if context.name(*id) == Some(name) {
-                        let subscripts = context.subscripts(*id).to_vec();
-                        if result
-                            .insert(subscripts.clone(), constraint.violation())
-                            .is_some()
-                        {
-                            return Err(SolutionError::DuplicateSubscript { subscripts });
-                        }
+        for_each_constraint_collection!(evaluated, self, |_, collection| {
+            let context = collection.context();
+            for (id, constraint) in collection.iter() {
+                if context.name(*id) == Some(name) {
+                    let subscripts = context.subscripts(*id).to_vec();
+                    if result
+                        .insert(subscripts.clone(), constraint.violation())
+                        .is_some()
+                    {
+                        return Err(SolutionError::DuplicateSubscript { subscripts });
                     }
                 }
-            };
-        }
-        collect!(&self.evaluated_constraints);
-        collect!(&self.evaluated_indicator_constraints);
-        collect!(&self.evaluated_one_hot_constraints);
-        collect!(&self.evaluated_sos1_constraints);
+            }
+        });
         if result.is_empty() {
             return Err(SolutionError::UnknownConstraintName {
                 name: name.to_owned(),
@@ -1293,16 +1212,19 @@ impl SolutionBuilder {
                 NamedFunctionTable::new(self.evaluated_named_functions, self.named_function_labels)?
             }
         };
+        let collections = EvaluatedCollections {
+            evaluated_constraints: &evaluated_constraints,
+            evaluated_indicator_constraints: &self.evaluated_indicator_constraints,
+            evaluated_one_hot_constraints: &self.evaluated_one_hot_constraints,
+            evaluated_sos1_constraints: &self.evaluated_sos1_constraints,
+        };
         let mut ids = crate::constraint_ids::ConstraintIds::default();
-        ids.evaluated("regular", &evaluated_constraints)?;
-        ids.evaluated("indicator", &self.evaluated_indicator_constraints)?;
-        ids.evaluated("one-hot", &self.evaluated_one_hot_constraints)?;
-        ids.evaluated("SOS1", &self.evaluated_sos1_constraints)?;
-        evaluated_constraints.validate_context_ids()?;
-        self.evaluated_indicator_constraints
-            .validate_context_ids()?;
-        self.evaluated_one_hot_constraints.validate_context_ids()?;
-        self.evaluated_sos1_constraints.validate_context_ids()?;
+        for_each_constraint_collection!(evaluated, collections, |_, collection| {
+            ids.evaluated(collection)?;
+        });
+        for_each_constraint_collection!(evaluated, collections, |_, collection| {
+            collection.validate_context_ids()?;
+        });
         validate_solution_activation_tolerances(
             &self.evaluated_indicator_constraints,
             &self.evaluated_one_hot_constraints,
@@ -1323,13 +1245,9 @@ impl SolutionBuilder {
             self.feasibility_atol,
         )?;
 
-        validate_all_solution_constraint_used_ids(
-            &decision_variables,
-            &evaluated_constraints,
-            &self.evaluated_indicator_constraints,
-            &self.evaluated_one_hot_constraints,
-            &self.evaluated_sos1_constraints,
-        )?;
+        for_each_constraint_collection!(evaluated, collections, |_, collection| {
+            validate_solution_constraint_used_ids(&decision_variables, collection)?;
+        });
         validate_evaluated_named_function_used_ids(
             &decision_variables,
             &evaluated_named_functions,
@@ -2330,7 +2248,7 @@ mod tests {
         assert!(matches!(
             error.downcast_ref::<SolutionError>(),
             Some(SolutionError::InvalidConstraintStructure {
-                constraint_family: "SOS1",
+                constraint_family: "sos1",
                 constraint_id,
                 message,
             }) if constraint_id == "Sos1ConstraintID(5)"

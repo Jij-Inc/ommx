@@ -70,7 +70,7 @@ pyo3_stub_gen::inventory::submit! {
     pyo3_stub_gen::type_info::PyClassInfo {
         pyclass_name: "ConstraintKind", struct_id: std::any::TypeId::of::<ConstraintKind>,
         getters: &[], setters: &[], module: Some("ommx._ommx_rust"),
-        doc: "An extensible constraint family selector. Use Regular, Indicator, OneHot or Sos1; keep a rejecting fallback for unsupported families. The type parameter records the family's ID type for precise filtered views.",
+        doc: "An extensible constraint family selector. Use Regular, Indicator, OneHot or Sos1; keep a rejecting fallback for unsupported families. The type parameter records the family's ID type for precise filtered views.\n\nCanonical family names use lowercase kebab-case: regular, indicator, one-hot, and sos1. New families separate words with hyphens, lowercase acronyms, and keep digits attached. str(kind) uses the same canonical name as Rust ConstraintKind.as_str() and Display. Python class attributes and method names retain Python naming conventions.",
         bases: &[|| {
             let mut import = pyo3_stub_gen::ImportRef::Type(Default::default());
             if let pyo3_stub_gen::ImportRef::Type(reference) = &mut import {
@@ -126,12 +126,7 @@ pub enum ConstraintFamilyInput {
 }
 impl ConstraintFamilyInput {
     pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Regular => "regular",
-            Self::Indicator => "indicator",
-            Self::OneHot => "one_hot",
-            Self::Sos1 => "sos1",
-        }
+        self.core().as_str()
     }
     fn core(self) -> ommx::ConstraintKind {
         match self {

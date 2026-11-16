@@ -34,17 +34,17 @@ def test_v1_rejects_special_results_and_preserves_v2(
                 z, trigger_value=0 if family == "indicator-zero" else 1
             )
         )
-        expected_family = "Indicator"
+        expected_family = "indicator"
         if inactive:
             instance.convert_all_indicators_to_constraints()
     elif family == "one-hot":
         instance.add_one_hot_constraint(OneHotConstraint(variables=[0, 1]))
-        expected_family = "One-hot"
+        expected_family = "one-hot"
         if inactive:
             instance.convert_all_one_hots_to_constraints()
     else:
         instance.add_sos1_constraint(Sos1Constraint(variables=[0, 1]))
-        expected_family = "SOS1"
+        expected_family = "sos1"
         if inactive:
             instance.convert_all_sos1_to_constraints()
 

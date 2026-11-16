@@ -35,6 +35,14 @@ impl SampleSet {
 
 impl From<SampleSet> for v2::SampleSet {
     fn from(value: SampleSet) -> Self {
+        let mut has_skipped_constraints = false;
+        for_each_constraint_collection!(sampled, value, |_, collection| {
+            has_skipped_constraints = has_skipped_constraints
+                || collection
+                    .inactive_metadata()
+                    .values()
+                    .any(|metadata| metadata.skip_feasibility_check);
+        });
         let required_features = crate::v2_io::required_features(
             !value.indicator_constraints.is_empty(),
             value
@@ -48,14 +56,7 @@ impl From<SampleSet> for v2::SampleSet {
                 .decision_variables
                 .values()
                 .any(|variable| *variable.kind() == crate::Kind::FiniteDomain),
-            value
-                .constraints
-                .inactive_metadata()
-                .values()
-                .chain(value.indicator_constraints.inactive_metadata().values())
-                .chain(value.one_hot_constraints.inactive_metadata().values())
-                .chain(value.sos1_constraints.inactive_metadata().values())
-                .any(|metadata| metadata.skip_feasibility_check),
+            has_skipped_constraints,
         );
 
         let SampleSet {
