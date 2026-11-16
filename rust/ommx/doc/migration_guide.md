@@ -10,6 +10,14 @@ for the variable-domain and constraint-family compatibility boundary.
 `SpecialConstraintKind` / `SpecialConstraintKinds` selectors. The common family
 type includes `Regular`; selecting it for special-constraint lowering is an error.
 
+Constraint family names use lowercase kebab-case: `regular`, `indicator`,
+`one-hot`, and `sos1`. [`ConstraintKind::as_str`](crate::ConstraintKind::as_str)
+and `Display` return the same canonical name, also used by Python's `str()`.
+New families follow the [naming convention](crate::ConstraintKind#canonical-names):
+hyphens separate words, acronyms are lowercase, and digits remain attached.
+Language-level symbols such as `OneHotConstraint` and `add_one_hot_constraint`,
+and protobuf field names, retain their respective naming conventions.
+
 - [v3 (Stage Pattern)](#rust-sdk-v3-stage-pattern-migration-guide) — Constraint lifecycle stage parameterization
 - [v3 (Artifact API)](#rust-sdk-v3-artifact-api-migration-guide) — Local registry / archive draft split and renames
 
@@ -288,12 +296,12 @@ and kinds using the saved tolerance, matching the extracted Solution. Variable
 violations are not added to `total_violation`, so zero total constraint violation
 does not imply feasibility of the whole solution.
 
-Implement [`EvaluatedConstraintData`](crate::EvaluatedConstraintData) and
-[`SampledConstraintData`](crate::SampledConstraintData) for new constraint families.
+Implement [`EvaluatedConstraintView`](crate::EvaluatedConstraintView) and
+[`SampledConstraintView`](crate::SampledConstraintView) for new constraint families.
 Their scalar metrics are required; blanket behavior implementations derive
 feasibility through `is_feasible(atol)` and `is_feasible_for(id, atol)`.
 `EvaluatedConstraint::is_feasible_with_tolerance(atol)` is renamed to
-`is_feasible(atol)`. The data traits no longer require a stored tolerance.
+`is_feasible(atol)`. The view traits do not require a stored tolerance.
 Regular `EvaluatedData` / `SampledData` retain numeric results only. OneHot/SOS1
 stage data also store `violation`/`violations` in the SDK.
 
@@ -686,11 +694,13 @@ match instance.propagate(&state, atol) {
 ### ConstraintType Trait
 
 A sealed type family mapping lifecycle stages to concrete types and a diagnostic
-type (HKT defunctionalization). Only SDK constraint families implement it; the
-following sketch omits its private sealing bound:
+type (HKT defunctionalization). Its `KIND` constant identifies the corresponding
+[`ConstraintKind`](crate::ConstraintKind) for generic callers. Only SDK constraint
+families implement it; the following sketch omits its private sealing bound:
 
 ```rust,ignore
 pub trait ConstraintType {
+    const KIND: ConstraintKind;
     type ID: IDType;
     type ViolationDiagnostics;
     type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
@@ -701,36 +711,42 @@ pub trait ConstraintType {
 
 // Regular constraints
 impl ConstraintType for Constraint {
+    const KIND: ConstraintKind = ConstraintKind::Regular;
     type ID = ConstraintID;
     // ...
 }
 
 // Indicator constraints
 impl ConstraintType for IndicatorConstraint {
+    const KIND: ConstraintKind = ConstraintKind::Indicator;
     type ID = IndicatorConstraintID;
     // ...
 }
 ```
 
-### Constraint Data and Behavior Traits
+### Constraint View and Behavior Traits
 
-Each family supplies its scalar violations through the data traits.
-The caller supplies the feasibility tolerance to the behavior methods. The behavior traits have blanket implementations that derive
-feasibility from `violation <= atol`; families cannot override that predicate.
+Each family exposes its scalar violations and referenced variable IDs through
+the read-only view traits. The sampled view also extracts evaluated rows and
+checks its sample-keyed fields against IDs supplied by the caller. `Solution`
+and `SampleSet` retain responsibility for consistency across tables.
+The caller supplies the feasibility tolerance to the behavior methods. Their
+blanket implementations derive feasibility from the shared violation predicate;
+families cannot override it.
 The core methods are:
 
 ```rust,ignore
-pub trait EvaluatedConstraintData {
+pub trait EvaluatedConstraintView {
     type ID;
     fn violation(&self) -> f64;
     // Optional used_decision_variable_ids() override.
 }
 
-pub trait EvaluatedConstraintBehavior: EvaluatedConstraintData {
+pub trait EvaluatedConstraintBehavior: EvaluatedConstraintView {
     fn is_feasible(&self, atol: ATol) -> bool;
 }
 
-pub trait SampledConstraintData {
+pub trait SampledConstraintView {
     type ID;
     type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
     fn violation_for(&self, sample_id: SampleID) -> Option<f64>;
@@ -739,7 +755,7 @@ pub trait SampledConstraintData {
     // Optional used_decision_variable_ids() override.
 }
 
-pub trait SampledConstraintBehavior: SampledConstraintData {
+pub trait SampledConstraintBehavior: SampledConstraintView {
     fn is_feasible_for(&self, sample_id: SampleID, atol: ATol) -> Option<bool>;
 }
 ```

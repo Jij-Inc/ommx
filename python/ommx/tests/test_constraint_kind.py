@@ -20,6 +20,19 @@ from ommx import (
 from test_live_constraint_collections import make_model
 
 
+@pytest.mark.parametrize(
+    ("kind", "name"),
+    [
+        (ConstraintKind.Regular, "regular"),
+        (ConstraintKind.Indicator, "indicator"),
+        (ConstraintKind.OneHot, "one-hot"),
+        (ConstraintKind.Sos1, "sos1"),
+    ],
+)
+def test_canonical_family_names(kind, name):
+    assert str(kind) == name
+
+
 def generic_family(model: Instance, kind: ConstraintKind[ConstraintIDBase]) -> None:
     assert_type(
         model.active_constraints.of_kind(kind),

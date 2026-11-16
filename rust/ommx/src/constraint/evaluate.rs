@@ -77,7 +77,7 @@ impl Evaluate for Constraint<Created> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::SampledConstraintData;
+    use crate::SampledConstraintView;
     use crate::{random::*, Sampled};
     use proptest::prelude::*;
 

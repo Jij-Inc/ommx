@@ -1,7 +1,7 @@
 //! Shared constraint-number validation for model and result root owners.
 
-use crate::constraint_type::{
-    ConstraintCollection, ConstraintType, EvaluatedCollection, SampledCollection,
+use crate::{
+    ConstraintCollection, ConstraintKind, ConstraintType, EvaluatedCollection, SampledCollection,
 };
 use std::collections::BTreeMap;
 
@@ -19,23 +19,23 @@ pub(crate) struct ConstraintNumberCollision {
 /// Collections cannot enforce uniqueness across families on their own.
 #[derive(Default)]
 pub(crate) struct ConstraintIds {
-    owners: BTreeMap<u64, (&'static str, &'static str)>,
+    owners: BTreeMap<u64, (ConstraintKind, &'static str)>,
 }
 
 impl ConstraintIds {
     fn insert(
         &mut self,
         id: u64,
-        family: &'static str,
+        kind: ConstraintKind,
         inactive: bool,
     ) -> Result<(), ConstraintNumberCollision> {
         let state = if inactive { "inactive" } else { "active" };
-        if let Some((previous_family, previous_state)) = self.owners.insert(id, (family, state)) {
+        if let Some((previous_kind, previous_state)) = self.owners.insert(id, (kind, state)) {
             return Err(ConstraintNumberCollision {
                 number: id,
-                first_family: previous_family,
+                first_family: previous_kind.as_str(),
                 first_state: previous_state,
-                second_family: family,
+                second_family: kind.as_str(),
                 second_state: state,
             });
         }
@@ -44,27 +44,25 @@ impl ConstraintIds {
 
     pub(crate) fn created<T: ConstraintType>(
         &mut self,
-        family: &'static str,
         collection: &ConstraintCollection<T>,
     ) -> Result<(), ConstraintNumberCollision> {
         for id in collection.active().keys() {
-            self.insert((*id).into(), family, false)?;
+            self.insert((*id).into(), T::KIND, false)?;
         }
         for id in collection.inactive().keys() {
-            self.insert((*id).into(), family, true)?;
+            self.insert((*id).into(), T::KIND, true)?;
         }
         Ok(())
     }
 
     pub(crate) fn evaluated<T: ConstraintType>(
         &mut self,
-        family: &'static str,
         collection: &EvaluatedCollection<T>,
     ) -> Result<(), ConstraintNumberCollision> {
         for id in collection.inner().keys() {
             self.insert(
                 (*id).into(),
-                family,
+                T::KIND,
                 collection.inactive_metadata().contains_key(id),
             )?;
         }
@@ -73,13 +71,12 @@ impl ConstraintIds {
 
     pub(crate) fn sampled<T: ConstraintType>(
         &mut self,
-        family: &'static str,
         collection: &SampledCollection<T>,
     ) -> Result<(), ConstraintNumberCollision> {
         for id in collection.inner().keys() {
             self.insert(
                 (*id).into(),
-                family,
+                T::KIND,
                 collection.inactive_metadata().contains_key(id),
             )?;
         }

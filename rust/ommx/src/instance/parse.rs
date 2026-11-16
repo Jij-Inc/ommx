@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     constraint::{ConstraintContext, InactiveConstraintMetadata},
-    constraint_type::ConstraintCollection,
+    constraint_collection::ConstraintCollection,
     parse::{as_variable_id, Parse, ParseError, RawParseError},
     v1::{self},
     v2, Constraint, ConstraintID, VariableID,
@@ -251,6 +251,16 @@ fn validate_structural_special_constraints(
     }
 
     Ok(())
+}
+
+// Protobuf field names belong to this root parser, independently of SDK labels.
+fn constraint_field(kind: crate::ConstraintKind) -> &'static str {
+    match kind {
+        crate::ConstraintKind::Regular => "regular_constraints",
+        crate::ConstraintKind::Indicator => "indicator_constraints",
+        crate::ConstraintKind::OneHot => "one_hot_constraints",
+        crate::ConstraintKind::Sos1 => "sos1_constraints",
+    }
 }
 
 impl Parse for v1::instance::Sense {
@@ -508,30 +518,20 @@ impl Parse for v2::Instance {
             .map(|value| value.parse_as(&(), message, "sos1_constraints"))
             .transpose()?
             .unwrap_or_default();
-        validate_created_constraint_references(
-            &constraint_collection,
-            &decision_variable_ids,
-            message,
-            "regular_constraints",
-        )?;
-        validate_created_constraint_references(
-            &indicator_constraint_collection,
-            &decision_variable_ids,
-            message,
-            "indicator_constraints",
-        )?;
-        validate_created_constraint_references(
-            &one_hot_constraint_collection,
-            &decision_variable_ids,
-            message,
-            "one_hot_constraints",
-        )?;
-        validate_created_constraint_references(
-            &sos1_constraint_collection,
-            &decision_variable_ids,
-            message,
-            "sos1_constraints",
-        )?;
+        let collections = CreatedCollections {
+            constraint_collection: &constraint_collection,
+            indicator_constraint_collection: &indicator_constraint_collection,
+            one_hot_constraint_collection: &one_hot_constraint_collection,
+            sos1_constraint_collection: &sos1_constraint_collection,
+        };
+        for_each_constraint_collection!(created, collections, |kind, collection| {
+            validate_created_constraint_references(
+                collection,
+                &decision_variable_ids,
+                message,
+                constraint_field(kind),
+            )?;
+        });
 
         validate_structural_special_constraints(
             &decision_variables,
@@ -578,16 +578,9 @@ impl Parse for v2::Instance {
         }
 
         let mut active = objective.required_ids();
-        active.extend(variable_ids_from_active_collection(&constraint_collection));
-        active.extend(variable_ids_from_active_collection(
-            &indicator_constraint_collection,
-        ));
-        active.extend(variable_ids_from_active_collection(
-            &one_hot_constraint_collection,
-        ));
-        active.extend(variable_ids_from_active_collection(
-            &sos1_constraint_collection,
-        ));
+        for_each_constraint_collection!(created, collections, |_, collection| {
+            active.extend(variable_ids_from_active_collection(collection));
+        });
         validate_fixed_dependent_partition_from_sets(
             &active,
             decision_variables.fixed_values(),
@@ -629,39 +622,25 @@ impl TryFrom<Instance> for v1::Instance {
     type Error = crate::Error;
 
     fn try_from(value: Instance) -> crate::Result<Self> {
-        crate::v1_io::validate_inactive_metadata(
-            value
-                .constraint_collection
-                .inactive()
-                .values()
-                .map(|(_, metadata)| metadata)
-                .chain(
-                    value
-                        .indicator_constraint_collection
-                        .inactive()
-                        .values()
-                        .map(|(_, metadata)| metadata),
-                )
-                .chain(
-                    value
-                        .one_hot_constraint_collection
-                        .inactive()
-                        .values()
-                        .map(|(_, metadata)| metadata),
-                )
-                .chain(
-                    value
-                        .sos1_constraint_collection
-                        .inactive()
-                        .values()
-                        .map(|(_, metadata)| metadata),
-                ),
-        )?;
+        for_each_constraint_collection!(created, value, |_, collection| {
+            crate::v1_io::validate_inactive_metadata(
+                collection.inactive().values().map(|(_, metadata)| metadata),
+            )?;
+        });
         if value.output_objective.is_some() {
             crate::bail!(
                 "ommx.v1.Instance cannot represent Instance.output_objective; use the v2 format"
             );
         }
+        for_each_constraint_collection!(created, value, |kind, collection| {
+            if kind != crate::ConstraintKind::Regular
+                && (!collection.active().is_empty() || !collection.inactive().is_empty())
+            {
+                let family = kind.as_str();
+                crate::bail!("{family} constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()");
+            }
+        });
+
         let decision_variables: Vec<v1::DecisionVariable> = (&value.decision_variables).into();
         let (constraints, inactive_constraints): (Vec<v1::Constraint>, Vec<v1::RemovedConstraint>) =
             value.constraint_collection.try_into()?;
@@ -671,29 +650,7 @@ impl TryFrom<Instance> for v1::Instance {
             .into_iter()
             .map(|(id, dep)| (id.into(), dep.into()))
             .collect();
-        // Special constraint types do not have a v1 proto representation yet.
-        // Serialization is not supported when these collections are non-empty.
-        if !value.indicator_constraint_collection.active().is_empty()
-            || !value.indicator_constraint_collection.inactive().is_empty()
-        {
-            crate::bail!(
-                "Indicator constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
-            );
-        }
-        if !value.one_hot_constraint_collection.active().is_empty()
-            || !value.one_hot_constraint_collection.inactive().is_empty()
-        {
-            crate::bail!(
-                "One-hot constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
-            );
-        }
-        if !value.sos1_constraint_collection.active().is_empty()
-            || !value.sos1_constraint_collection.inactive().is_empty()
-        {
-            crate::bail!(
-                "SOS1 constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
-            );
-        }
+
         Ok(Self {
             sense: v1::instance::Sense::from(value.sense).into(),
             decision_variables,
@@ -947,30 +904,20 @@ impl Parse for v2::ParametricInstance {
             .map(|value| value.parse_as(&(), message, "sos1_constraints"))
             .transpose()?
             .unwrap_or_default();
-        validate_created_constraint_references(
-            &constraint_collection,
-            &all_variable_ids,
-            message,
-            "regular_constraints",
-        )?;
-        validate_created_constraint_references(
-            &indicator_constraint_collection,
-            &all_variable_ids,
-            message,
-            "indicator_constraints",
-        )?;
-        validate_created_constraint_references(
-            &one_hot_constraint_collection,
-            &all_variable_ids,
-            message,
-            "one_hot_constraints",
-        )?;
-        validate_created_constraint_references(
-            &sos1_constraint_collection,
-            &all_variable_ids,
-            message,
-            "sos1_constraints",
-        )?;
+        let collections = CreatedCollections {
+            constraint_collection: &constraint_collection,
+            indicator_constraint_collection: &indicator_constraint_collection,
+            one_hot_constraint_collection: &one_hot_constraint_collection,
+            sos1_constraint_collection: &sos1_constraint_collection,
+        };
+        for_each_constraint_collection!(created, collections, |kind, collection| {
+            validate_created_constraint_references(
+                collection,
+                &all_variable_ids,
+                message,
+                constraint_field(kind),
+            )?;
+        });
 
         validate_structural_special_constraints(
             &decision_variables,
@@ -1017,16 +964,9 @@ impl Parse for v2::ParametricInstance {
         }
 
         let mut active = objective.required_ids();
-        active.extend(variable_ids_from_active_collection(&constraint_collection));
-        active.extend(variable_ids_from_active_collection(
-            &indicator_constraint_collection,
-        ));
-        active.extend(variable_ids_from_active_collection(
-            &one_hot_constraint_collection,
-        ));
-        active.extend(variable_ids_from_active_collection(
-            &sos1_constraint_collection,
-        ));
+        for_each_constraint_collection!(created, collections, |_, collection| {
+            active.extend(variable_ids_from_active_collection(collection));
+        });
         validate_fixed_dependent_partition_from_sets(
             &active,
             decision_variables.fixed_values(),
@@ -1068,39 +1008,25 @@ impl TryFrom<ParametricInstance> for v1::ParametricInstance {
     type Error = crate::Error;
 
     fn try_from(value: ParametricInstance) -> crate::Result<Self> {
-        crate::v1_io::validate_inactive_metadata(
-            value
-                .constraint_collection
-                .inactive()
-                .values()
-                .map(|(_, metadata)| metadata)
-                .chain(
-                    value
-                        .indicator_constraint_collection
-                        .inactive()
-                        .values()
-                        .map(|(_, metadata)| metadata),
-                )
-                .chain(
-                    value
-                        .one_hot_constraint_collection
-                        .inactive()
-                        .values()
-                        .map(|(_, metadata)| metadata),
-                )
-                .chain(
-                    value
-                        .sos1_constraint_collection
-                        .inactive()
-                        .values()
-                        .map(|(_, metadata)| metadata),
-                ),
-        )?;
+        for_each_constraint_collection!(created, value, |_, collection| {
+            crate::v1_io::validate_inactive_metadata(
+                collection.inactive().values().map(|(_, metadata)| metadata),
+            )?;
+        });
         if value.output_objective.is_some() {
             crate::bail!(
                 "ommx.v1.ParametricInstance cannot represent ParametricInstance.output_objective; use the v2 format"
             );
         }
+        for_each_constraint_collection!(created, value, |kind, collection| {
+            if kind != crate::ConstraintKind::Regular
+                && (!collection.active().is_empty() || !collection.inactive().is_empty())
+            {
+                let family = kind.as_str();
+                crate::bail!("{family} constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()");
+            }
+        });
+
         let ParametricInstance {
             sense,
             objective,
@@ -1108,36 +1034,15 @@ impl TryFrom<ParametricInstance> for v1::ParametricInstance {
             decision_variables,
             parameters,
             constraint_collection,
-            indicator_constraint_collection,
-            one_hot_constraint_collection,
-            sos1_constraint_collection,
+            indicator_constraint_collection: _,
+            one_hot_constraint_collection: _,
+            sos1_constraint_collection: _,
             decision_variable_dependency,
             description,
             named_functions,
             annotations,
         } = value;
-        // Special constraint types do not have a v1 proto representation yet.
-        if !indicator_constraint_collection.active().is_empty()
-            || !indicator_constraint_collection.inactive().is_empty()
-        {
-            crate::bail!(
-                "Indicator constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
-            );
-        }
-        if !one_hot_constraint_collection.active().is_empty()
-            || !one_hot_constraint_collection.inactive().is_empty()
-        {
-            crate::bail!(
-                "One-hot constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
-            );
-        }
-        if !sos1_constraint_collection.active().is_empty()
-            || !sos1_constraint_collection.inactive().is_empty()
-        {
-            crate::bail!(
-                "SOS1 constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
-            );
-        }
+
         let v1_decision_variables: Vec<v1::DecisionVariable> = (&decision_variables).into();
         let (v1_constraints, v1_inactive_constraints): (
             Vec<v1::Constraint>,

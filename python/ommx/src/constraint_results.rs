@@ -4,7 +4,7 @@
 //! validated rows and their context; they cannot mutate the enclosing result.
 
 use crate::constraint_base::ConstraintView;
-use ommx::{EvaluatedConstraintBehavior, EvaluatedConstraintData, SampledConstraintData};
+use ommx::{EvaluatedConstraintBehavior, EvaluatedConstraintView, SampledConstraintView};
 use pyo3::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 

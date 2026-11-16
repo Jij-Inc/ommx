@@ -26,6 +26,16 @@ fn invalid_solution_sidecar(
     ParseError::new(signal).context(message, field)
 }
 
+// Protobuf field names belong to this root parser, independently of SDK labels.
+fn constraint_field(kind: crate::ConstraintKind) -> &'static str {
+    match kind {
+        crate::ConstraintKind::Regular => "evaluated_regular_constraints",
+        crate::ConstraintKind::Indicator => "evaluated_indicator_constraints",
+        crate::ConstraintKind::OneHot => "evaluated_one_hot_constraints",
+        crate::ConstraintKind::Sos1 => "evaluated_sos1_constraints",
+    }
+}
+
 impl Parse for crate::v1::Solution {
     type Output = Solution;
     type Context = ();
@@ -183,13 +193,14 @@ impl Parse for crate::v1::Solution {
         validate_evaluated_named_function_used_ids(&decision_variables, &evaluated_named_functions)
             .map_err(|e| ParseError::new(e).context(message, "evaluated_named_functions"))?;
 
-        let evaluated_constraints = crate::constraint_type::EvaluatedCollection::with_context(
-            evaluated_constraints,
-            inactive_metadata,
-            constraint_context,
-        )
-        .map_err(|e| invalid_solution_sidecar(e, message, "evaluated_constraints"))?;
-        validate_solution_regular_constraint_used_ids(&decision_variables, &evaluated_constraints)
+        let evaluated_constraints =
+            crate::constraint_collection::EvaluatedCollection::with_context(
+                evaluated_constraints,
+                inactive_metadata,
+                constraint_context,
+            )
+            .map_err(|e| invalid_solution_sidecar(e, message, "evaluated_constraints"))?;
+        validate_solution_constraint_used_ids(&decision_variables, &evaluated_constraints)
             .map_err(|e| ParseError::new(e).context(message, "evaluated_constraints"))?;
 
         let solution = Solution {
@@ -336,23 +347,16 @@ impl Parse for v2::Solution {
             &evaluated_sos1_constraints,
         )
         .map_err(|e| ParseError::new(e).context(message, "evaluated_sos1_constraints"))?;
-        validate_solution_regular_constraint_used_ids(&decision_variables, &evaluated_constraints)
-            .map_err(|e| ParseError::new(e).context(message, "evaluated_regular_constraints"))?;
-        validate_solution_indicator_constraint_used_ids(
-            &decision_variables,
-            &evaluated_indicator_constraints,
-        )
-        .map_err(|e| ParseError::new(e).context(message, "evaluated_indicator_constraints"))?;
-        validate_solution_one_hot_constraint_used_ids(
-            &decision_variables,
-            &evaluated_one_hot_constraints,
-        )
-        .map_err(|e| ParseError::new(e).context(message, "evaluated_one_hot_constraints"))?;
-        validate_solution_sos1_constraint_used_ids(
-            &decision_variables,
-            &evaluated_sos1_constraints,
-        )
-        .map_err(|e| ParseError::new(e).context(message, "evaluated_sos1_constraints"))?;
+        let collections = EvaluatedCollections {
+            evaluated_constraints: &evaluated_constraints,
+            evaluated_indicator_constraints: &evaluated_indicator_constraints,
+            evaluated_one_hot_constraints: &evaluated_one_hot_constraints,
+            evaluated_sos1_constraints: &evaluated_sos1_constraints,
+        };
+        for_each_constraint_collection!(evaluated, collections, |kind, collection| {
+            validate_solution_constraint_used_ids(&decision_variables, collection)
+                .map_err(|e| ParseError::new(e).context(message, constraint_field(kind)))?;
+        });
         validate_solution_indicator_stage_values(
             &decision_variables,
             &evaluated_indicator_constraints,
@@ -389,11 +393,10 @@ impl Parse for v2::Solution {
         let sense = parse_v2_solution_sense(self.sense, message)?;
 
         let mut ids = crate::constraint_ids::ConstraintIds::default();
-        ids.evaluated("regular", &evaluated_constraints)
-            .and_then(|()| ids.evaluated("indicator", &evaluated_indicator_constraints))
-            .and_then(|()| ids.evaluated("one-hot", &evaluated_one_hot_constraints))
-            .and_then(|()| ids.evaluated("SOS1", &evaluated_sos1_constraints))
-            .map_err(|error| ParseError::new(error).context(message, "constraints"))?;
+        for_each_constraint_collection!(evaluated, collections, |_, collection| {
+            ids.evaluated(collection)
+                .map_err(|error| ParseError::new(error).context(message, "constraints"))?;
+        });
         let solution = Solution {
             objective: self.objective,
             evaluated_constraints,
@@ -452,45 +455,16 @@ impl TryFrom<Solution> for crate::v1::Solution {
     type Error = crate::Error;
 
     fn try_from(solution: Solution) -> crate::Result<Self> {
-        crate::v1_io::validate_inactive_metadata(
-            solution
-                .evaluated_constraints
-                .inactive_metadata()
-                .values()
-                .chain(
-                    solution
-                        .evaluated_indicator_constraints
-                        .inactive_metadata()
-                        .values(),
-                )
-                .chain(
-                    solution
-                        .evaluated_one_hot_constraints
-                        .inactive_metadata()
-                        .values(),
-                )
-                .chain(
-                    solution
-                        .evaluated_sos1_constraints
-                        .inactive_metadata()
-                        .values(),
-                ),
-        )?;
-        if !solution.evaluated_indicator_constraints.is_empty() {
-            crate::bail!(
-                "Indicator constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
-            );
-        }
-        if !solution.evaluated_one_hot_constraints.is_empty() {
-            crate::bail!(
-                "One-hot constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
-            );
-        }
-        if !solution.evaluated_sos1_constraints.is_empty() {
-            crate::bail!(
-                "SOS1 constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
-            );
-        }
+        for_each_constraint_collection!(evaluated, solution, |_, collection| {
+            crate::v1_io::validate_inactive_metadata(collection.inactive_metadata().values())?;
+        });
+        for_each_constraint_collection!(evaluated, solution, |kind, collection| {
+            if kind != crate::ConstraintKind::Regular && !collection.is_empty() {
+                let family = kind.as_str();
+                crate::bail!("{family} constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()");
+            }
+        });
+
         let Solution {
             objective,
             evaluated_constraints,
@@ -618,7 +592,7 @@ mod tests {
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
-        let collection = crate::constraint_type::EvaluatedCollection::new(
+        let collection = crate::constraint_collection::EvaluatedCollection::new(
             std::collections::BTreeMap::from([(crate::OneHotConstraintID::from(1), constraint)]),
             std::collections::BTreeMap::new(),
         )
@@ -650,7 +624,7 @@ mod tests {
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
         };
-        let collection = crate::constraint_type::EvaluatedCollection::new(
+        let collection = crate::constraint_collection::EvaluatedCollection::new(
             std::collections::BTreeMap::from([(crate::Sos1ConstraintID::from(1), constraint)]),
             std::collections::BTreeMap::new(),
         )
@@ -698,7 +672,7 @@ mod tests {
         let constraint_id = ConstraintID::from(7);
         let mut context = crate::ConstraintContextStore::default();
         context.set_name(constraint_id, "orphan");
-        let source = crate::constraint_type::EvaluatedCollection::<Constraint>::with_context(
+        let source = crate::constraint_collection::EvaluatedCollection::<Constraint>::with_context(
             std::collections::BTreeMap::new(),
             std::collections::BTreeMap::new(),
             context,
@@ -816,7 +790,7 @@ mod tests {
 
         assert_invalid_constraint_structure(
             &error,
-            "SOS1",
+            "sos1",
             "Sos1ConstraintID(1)",
             "variable VariableID(2) is not in decision_variables",
         );
@@ -1502,7 +1476,7 @@ mod tests {
     #[test]
     fn test_solution_roundtrip_preserves_labels_and_context() {
         use crate::{
-            constraint::EvaluatedData, constraint_type::EvaluatedCollection, ConstraintID,
+            constraint::EvaluatedData, constraint_collection::EvaluatedCollection, ConstraintID,
             DecisionVariable, Equality, EvaluatedConstraint, EvaluatedDecisionVariable,
             NamedFunctionID, Sense, VariableID,
         };
@@ -1864,7 +1838,7 @@ mod tests {
             .objective(0.0)
             .evaluated_constraints(BTreeMap::new())
             .evaluated_one_hot_constraints_collection(
-                crate::constraint_type::EvaluatedCollection::new(
+                crate::constraint_collection::EvaluatedCollection::new(
                     BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]),
                     BTreeMap::new(),
                 )
@@ -1931,7 +1905,7 @@ mod tests {
             .objective(0.0)
             .evaluated_constraints(BTreeMap::new())
             .evaluated_one_hot_constraints_collection(
-                crate::constraint_type::EvaluatedCollection::new(
+                crate::constraint_collection::EvaluatedCollection::new(
                     BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]),
                     BTreeMap::new(),
                 )

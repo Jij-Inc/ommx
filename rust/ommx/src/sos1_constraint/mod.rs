@@ -6,8 +6,8 @@ pub use diagnostics::Sos1ViolationDiagnostics;
 use crate::{
     constraint::{stage, Created, Evaluated, Stage},
     constraint_type::{
-        sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, EvaluatedConstraintData,
-        SampledConstraintBehavior, SampledConstraintData,
+        sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, EvaluatedConstraintView,
+        SampledConstraintBehavior, SampledConstraintView,
     },
     ATol, Parse, ParseError, SampleID, SampleIDSet, VariableID, VariableIDSet,
 };
@@ -144,9 +144,9 @@ impl Stage<Sos1Constraint<stage::Sampled>> for stage::Sampled {
 pub type EvaluatedSos1Constraint = Sos1Constraint<Evaluated>;
 pub type SampledSos1Constraint = Sos1Constraint<stage::Sampled>;
 
-// ===== EvaluatedConstraintBehavior / SampledConstraintBehavior =====
+// ===== EvaluatedConstraintView / SampledConstraintView =====
 
-impl EvaluatedConstraintData for EvaluatedSos1Constraint {
+impl EvaluatedConstraintView for EvaluatedSos1Constraint {
     type ID = Sos1ConstraintID;
     fn violation(&self) -> f64 {
         self.stage.violation
@@ -157,7 +157,7 @@ impl EvaluatedConstraintData for EvaluatedSos1Constraint {
     }
 }
 
-impl SampledConstraintData for SampledSos1Constraint {
+impl SampledConstraintView for SampledSos1Constraint {
     type ID = Sos1ConstraintID;
     type Evaluated = EvaluatedSos1Constraint;
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
@@ -198,6 +198,7 @@ impl SampledConstraintData for SampledSos1Constraint {
 // ===== ConstraintType =====
 
 impl ConstraintType for Sos1Constraint {
+    const KIND: crate::ConstraintKind = crate::ConstraintKind::Sos1;
     type ID = Sos1ConstraintID;
     type ViolationDiagnostics = Sos1ViolationDiagnostics;
     type Created = Sos1Constraint;
@@ -518,7 +519,7 @@ impl EvaluatedSos1Constraint {
     /// Mathematically, this is the L∞ distance to an SOS1 assignment;
     /// variable bounds and kinds are checked separately.
     pub fn violation(&self) -> f64 {
-        EvaluatedConstraintData::violation(self)
+        EvaluatedConstraintView::violation(self)
     }
 }
 
@@ -647,12 +648,5 @@ mod tests {
         let s = format!("{}", c);
         assert!(s.contains("Sos1Constraint"));
         assert!(s.contains("x1"));
-    }
-
-    #[test]
-    fn test_constraint_type_impl() {
-        let vars: BTreeSet<_> = [1, 2].into_iter().map(VariableID::from).collect();
-        let c = Sos1Constraint::new(vars).unwrap();
-        let _: <Sos1Constraint as ConstraintType>::Created = c;
     }
 }

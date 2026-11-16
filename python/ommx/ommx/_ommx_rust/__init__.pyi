@@ -2279,6 +2279,8 @@ class ConstraintIDBase:
 class ConstraintKind(typing.Generic[_C_co]):
     r"""
     An extensible constraint family selector. Use Regular, Indicator, OneHot or Sos1; keep a rejecting fallback for unsupported families. The type parameter records the family's ID type for precise filtered views.
+
+    Canonical family names use lowercase kebab-case: regular, indicator, one-hot, and sos1. New families separate words with hyphens, lowercase acronyms, and keep digits attached. str(kind) uses the same canonical name as Rust ConstraintKind.as_str() and Display. Python class attributes and method names retain Python naming conventions.
     """
 
     Regular: ConstraintKind[ConstraintID]
