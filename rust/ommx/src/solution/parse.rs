@@ -767,7 +767,7 @@ mod tests {
 
         assert_invalid_constraint_structure(
             &error,
-            "one_hot",
+            "one-hot",
             "OneHotConstraintID(1)",
             "variable VariableID(2) is not in decision_variables",
         );

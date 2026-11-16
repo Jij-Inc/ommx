@@ -394,7 +394,7 @@ mod tests {
                         let constraint = crate::OneHotConstraint::new(variables).unwrap();
                         builder = builder
                             .active_one_hot_constraints(BTreeMap::from([(0.into(), constraint)]));
-                        "one_hot"
+                        "one-hot"
                     }
                     "sos1" => {
                         let constraint = crate::Sos1Constraint::new(variables).unwrap();

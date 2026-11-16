@@ -1151,7 +1151,7 @@ mod tests {
         assert_undefined_variable_in_constraint(
             &error,
             crate::VariableID::from(2),
-            "one_hot",
+            "one-hot",
             "OneHotConstraintID(1)",
         );
     }

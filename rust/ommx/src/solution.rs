@@ -2217,7 +2217,7 @@ mod tests {
         assert!(matches!(
             error.downcast_ref::<SolutionError>(),
             Some(SolutionError::InvalidConstraintStructure {
-                constraint_family: "one_hot",
+                constraint_family: "one-hot",
                 constraint_id,
                 message,
             }) if constraint_id == "OneHotConstraintID(4)"

@@ -70,7 +70,7 @@ fn change_wire_id(wire: &mut v2::Instance, family: usize, number: u64, inactive:
 
 #[test]
 fn protobuf_rejects_every_cross_family_and_lifecycle_collision() {
-    let families = ["regular", "indicator", "one_hot", "sos1"];
+    let families = ["regular", "indicator", "one-hot", "sos1"];
     for first in 0..4 {
         for second in first + 1..4 {
             for first_inactive in [false, true] {
@@ -188,7 +188,7 @@ fn explicit_insertions_reject_other_families_before_any_mutation() {
     instance.convert_one_hot_to_constraint(2.into()).unwrap();
     for (number, state, family) in [
         (1, "active", "indicator"),
-        (2, "inactive", "one_hot"),
+        (2, "inactive", "one-hot"),
         (3, "active", "sos1"),
     ] {
         let before = instance.clone();
@@ -305,7 +305,7 @@ proptest! {
 
 #[test]
 fn result_builders_and_protobuf_reject_duplicate_numbers_including_inactive() {
-    let families = ["regular", "indicator", "one_hot", "sos1"];
+    let families = ["regular", "indicator", "one-hot", "sos1"];
     for first in 0..4 {
         for second in first + 1..4 {
             for first_inactive in [false, true] {

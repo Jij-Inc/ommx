@@ -22,6 +22,8 @@
 //!    `EvaluatedData`, etc. if the stage data is the same as regular constraints).
 //! 3. Add a variant to [`ConstraintKind`] and implement `ConstraintType for
 //!    NewConstraint` mapping its `KIND`, all three stages, and the diagnostic type.
+//!    Give the kind a canonical lowercase kebab-case name following
+//!    [`ConstraintKind`]'s naming convention; `Display` and Python reuse it.
 //!    Register the family's collection accessors, result-builder setters, and
 //!    variable-use fields in the internal `constraint_type/families.rs` registry.
 //!    This generates typed dispatch, diagnostic queries, common collection

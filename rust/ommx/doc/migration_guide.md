@@ -10,6 +10,14 @@ for the variable-domain and constraint-family compatibility boundary.
 `SpecialConstraintKind` / `SpecialConstraintKinds` selectors. The common family
 type includes `Regular`; selecting it for special-constraint lowering is an error.
 
+Constraint family names use lowercase kebab-case: `regular`, `indicator`,
+`one-hot`, and `sos1`. [`ConstraintKind::as_str`](crate::ConstraintKind::as_str)
+and `Display` return the same canonical name, also used by Python's `str()`.
+New families follow the [naming convention](crate::ConstraintKind#canonical-names):
+hyphens separate words, acronyms are lowercase, and digits remain attached.
+Language-level symbols such as `OneHotConstraint` and `add_one_hot_constraint`,
+and protobuf field names, retain their respective naming conventions.
+
 - [v3 (Stage Pattern)](#rust-sdk-v3-stage-pattern-migration-guide) — Constraint lifecycle stage parameterization
 - [v3 (Artifact API)](#rust-sdk-v3-artifact-api-migration-guide) — Local registry / archive draft split and renames
 

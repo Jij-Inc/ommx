@@ -124,6 +124,18 @@ impl From<ConstraintID> for u64 {
 /// It does not declare adapter support or wire reconstruction requirements.
 /// Additional families may be added; consumers must retain a rejecting fallback.
 ///
+/// # Canonical names
+///
+/// Every family has one stable lowercase kebab-case name: `regular`, `indicator`,
+/// `one-hot`, or `sos1`. New families follow the same convention: separate words
+/// with hyphens, lowercase acronyms, and keep digits attached (for example,
+/// `all-different`, `second-order-cone`, or `sos2`). These examples do not declare
+/// supported families.
+///
+/// [`Self::as_str`], [`std::fmt::Display`], and Python's `str()` use this same
+/// name for textual identifiers and user-facing messages. Rust/Python symbols
+/// and protobuf field names follow their own naming conventions.
+///
 /// The [`PartialOrd`] / [`Ord`] derives follow variant declaration order
 /// (`Regular < Indicator < OneHot < Sos1`), which is also the order in which
 /// [`ConstraintKinds`] iterates.
@@ -148,14 +160,27 @@ pub enum ConstraintKind {
 pub type ConstraintKinds = std::collections::BTreeSet<ConstraintKind>;
 
 impl ConstraintKind {
-    /// Stable family label for display and tabular column names.
+    /// The canonical lowercase kebab-case family name, also used by `Display`.
+    ///
+    /// ```
+    /// use ommx::ConstraintKind;
+    /// assert_eq!(ConstraintKind::OneHot.as_str(), "one-hot");
+    /// assert_eq!(ConstraintKind::OneHot.to_string(), "one-hot");
+    /// assert_eq!(ConstraintKind::Sos1.to_string(), "sos1");
+    /// ```
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Regular => "regular",
             Self::Indicator => "indicator",
-            Self::OneHot => "one_hot",
+            Self::OneHot => "one-hot",
             Self::Sos1 => "sos1",
         }
+    }
+}
+
+impl std::fmt::Display for ConstraintKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
