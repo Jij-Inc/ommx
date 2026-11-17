@@ -6,6 +6,15 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### Report invalid variable references as ValueError
+
+`Instance` and `ParametricInstance` now raise `ValueError` for undefined variable
+references when constructing a model or adding constraints. Setting an
+`Instance` objective uses the same exception. Fixed or dependent variables used
+in active objectives or constraints, and parameters used as Indicator controls
+or OneHot/SOS1 members, also raise `ValueError`. Diagnostics list the offending
+IDs for the checked reference set, and failed setters leave the model unchanged.
+
 ### Preserve finite bounds in the HiGHS adapter ([#1395](https://github.com/Jij-Inc/ommx/pull/1395))
 
 The HiGHS adapter now preserves finite variable and constraint bounds throughout

@@ -30,29 +30,8 @@ impl Instance {
         dependency_keys: &VariableIDSet,
         fixed_ids: &VariableIDSet,
     ) -> crate::Result<()> {
-        // Check if all required IDs are defined
-        if !required_ids.is_subset(variable_ids) {
-            let id = *required_ids.difference(variable_ids).next().unwrap();
-            crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
-        }
-
-        // Check if any required ID is a dependent variable (used as a key in decision_variable_dependency)
-        if let Some(&id) = required_ids.intersection(dependency_keys).next() {
-            crate::bail!(
-                { ?id },
-                "Dependent variable cannot be used in objectives or constraints: {id:?}",
-            );
-        }
-
-        // Check if any required ID is a fixed variable.
-        if let Some(&id) = required_ids.intersection(fixed_ids).next() {
-            crate::bail!(
-                { ?id },
-                "Fixed variable {id:?} cannot be used in objectives or constraints",
-            );
-        }
-
-        Ok(())
+        validate_defined_ids(required_ids, variable_ids)?;
+        validate_active_ids(required_ids, dependency_keys, fixed_ids)
     }
 
     /// Validate that all required variable IDs are defined in the instance
@@ -108,6 +87,9 @@ impl Instance {
     /// assert_eq!(*solution.sense(), Some(Sense::Minimize));
     /// assert_eq!(*solution.objective(), 2.0);
     /// ```
+    ///
+    /// Invalid variable references return [`VariableReferenceError`] in the
+    /// error chain, before changing this instance.
     pub fn set_objective(&mut self, objective: Function) -> crate::Result<()> {
         // Validate that all variables in the objective are defined
         self.validate_required_ids(objective.required_ids())?;
@@ -126,6 +108,9 @@ impl Instance {
     /// present in `decision_variables` and must not be substitution-
     /// dependency keys, matching the validation enforced by
     /// [`Self::insert_constraint`].
+    ///
+    /// Invalid variable references return [`VariableReferenceError`] in the
+    /// error chain, before changing this instance.
     pub fn add_constraint(
         &mut self,
         constraint: Constraint,
@@ -144,10 +129,12 @@ impl Instance {
     /// where the [`Instance`] builder enforces `Kind::Binary` and the same
     /// invariant must hold for the post-construction `add_*` setters.
     fn require_binary_variable(&self, id: VariableID) -> crate::Result<()> {
-        let dv = self
-            .decision_variables
-            .get(&id)
-            .ok_or_else(|| crate::error!("Variable {id:?} is not defined in decision_variables"))?;
+        let dv =
+            self.decision_variables
+                .get(&id)
+                .ok_or_else(|| VariableReferenceError::Undefined {
+                    ids: BTreeSet::from([id]),
+                })?;
         if dv.kind() != crate::decision_variable::Kind::Binary {
             crate::bail!({ ?id }, "Variable {id:?} must be binary");
         }
@@ -162,6 +149,9 @@ impl Instance {
     ///   indicator variable) must be present in `decision_variables` and must
     ///   not be substitution-dependency keys.
     /// - The indicator variable must have [`Kind::Binary`](crate::decision_variable::Kind).
+    ///
+    /// Invalid variable references return [`VariableReferenceError`] in the
+    /// error chain, before changing this instance.
     pub fn add_indicator_constraint(
         &mut self,
         constraint: crate::IndicatorConstraint,
@@ -181,6 +171,9 @@ impl Instance {
     /// the [`Instance`] builder's invariants: the one-hot set must be
     /// non-empty and every variable in it must be defined and have
     /// [`Kind::Binary`](crate::decision_variable::Kind).
+    ///
+    /// Invalid variable references return [`VariableReferenceError`] in the
+    /// error chain, before changing this instance.
     pub fn add_one_hot_constraint(
         &mut self,
         constraint: crate::OneHotConstraint,
@@ -202,6 +195,9 @@ impl Instance {
     /// Returns the newly assigned [`crate::Sos1ConstraintID`]. Enforces the
     /// [`Instance`] builder's invariants: the variable set must be non-empty
     /// and every variable must be defined in `decision_variables`.
+    ///
+    /// Invalid variable references return [`VariableReferenceError`] in the
+    /// error chain, before changing this instance.
     pub fn add_sos1_constraint(
         &mut self,
         constraint: crate::Sos1Constraint,
@@ -274,6 +270,9 @@ impl Instance {
     /// - If the ID is in the inactive constraints, it replaces it.
     /// - Otherwise, it adds the constraint to the instance.
     ///
+    ///
+    /// Invalid variable references return [`VariableReferenceError`] in the
+    /// error chain, before changing this instance.
     pub fn insert_constraint(
         &mut self,
         id: ConstraintID,
@@ -301,6 +300,9 @@ impl Instance {
     /// This method is atomic: all constraints are validated before any insertion occurs.
     /// If any constraint fails validation, no constraints are inserted and an error is returned.
     ///
+    ///
+    /// Invalid variable references return [`VariableReferenceError`] in the
+    /// error chain, before changing this instance.
     pub fn insert_constraints(
         &mut self,
         constraints: Vec<(ConstraintID, Constraint)>,
@@ -372,23 +374,8 @@ impl ParametricInstance {
             .copied()
             .collect();
 
-        if !required_ids.is_subset(&known_ids) {
-            let id = *required_ids.difference(&known_ids).next().unwrap();
-            crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
-        }
-        if let Some(&id) = required_ids.intersection(&dependency_keys).next() {
-            crate::bail!(
-                { ?id },
-                "Dependent variable cannot be used in objectives or constraints: {id:?}",
-            );
-        }
-        if let Some(&id) = required_ids.intersection(&fixed_ids).next() {
-            crate::bail!(
-                { ?id },
-                "Fixed variable {id:?} cannot be used in objectives or constraints",
-            );
-        }
-        Ok(())
+        validate_defined_ids(&required_ids, &known_ids)?;
+        validate_active_ids(&required_ids, &dependency_keys, &fixed_ids)
     }
 
     /// Insert a new constraint with its context, picking an unused id.
@@ -402,6 +389,9 @@ impl ParametricInstance {
     /// All IDs referenced by the constraint must already be present in either
     /// `decision_variables` or `parameters`, and must not be substitution-
     /// dependency keys.
+    ///
+    /// Invalid variable references return [`VariableReferenceError`] in the
+    /// error chain, before changing this instance.
     pub fn add_constraint(
         &mut self,
         constraint: Constraint,
@@ -423,19 +413,8 @@ impl ParametricInstance {
     /// [`Self::validate_required_ids`], which permits parameters.
     fn require_decision_variables(&self, ids: VariableIDSet) -> crate::Result<()> {
         let variable_ids: VariableIDSet = self.decision_variables().keys().cloned().collect();
-        if !ids.is_subset(&variable_ids) {
-            let id = *ids.difference(&variable_ids).next().unwrap();
-            if self.parameters().contains_key(&id) {
-                crate::bail!(
-                    { ?id },
-                    "Parameter id {id:?} cannot occupy a structural variable position; \
-                     structural variables in indicator / one-hot / SOS1 constraints \
-                     must be decision variables",
-                );
-            }
-            crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
-        }
-        Ok(())
+        let parameter_ids = self.parameters().keys().copied().collect();
+        validate_structural_ids(&ids, &variable_ids, &parameter_ids)
     }
 
     /// Verify that the given id is a binary decision variable. Mirrors
@@ -446,13 +425,11 @@ impl ParametricInstance {
     /// [`Self::require_decision_variables`].
     fn require_binary_variable(&self, id: VariableID) -> crate::Result<()> {
         let dv = self.decision_variables().get(&id).ok_or_else(|| {
+            let ids = BTreeSet::from([id]);
             if self.parameters().contains_key(&id) {
-                crate::error!(
-                    "Parameter id {id:?} cannot occupy a structural variable position; \
-                     it must be a binary decision variable",
-                )
+                VariableReferenceError::ParameterInStructuralPosition { ids }
             } else {
-                crate::error!("Variable {id:?} is not defined in decision_variables")
+                VariableReferenceError::Undefined { ids }
             }
         })?;
         if dv.kind() != crate::decision_variable::Kind::Binary {
@@ -468,20 +445,16 @@ impl ParametricInstance {
     /// or parameters, but the indicator variable itself must be a binary
     /// decision variable — substitution cannot replace a structural variable
     /// position, and the indicator semantics require `Kind::Binary`.
+    ///
+    /// Invalid variable references return [`VariableReferenceError`] in the
+    /// error chain, before changing this instance.
     pub fn add_indicator_constraint(
         &mut self,
         constraint: crate::IndicatorConstraint,
         context: crate::ConstraintContext,
     ) -> crate::Result<crate::IndicatorConstraintID> {
-        // Structural position: the indicator variable must be a binary
-        // decision variable, not a parameter or a non-binary variable.
-        self.require_binary_variable(constraint.indicator_variable)?;
-        // `validate_required_ids` (variables ∪ parameters minus dependency
-        // keys) is allowed to see the indicator variable here too: the
-        // variable-vs-parameter axis is already enforced above, so this
-        // call's only added contribution for the indicator variable is the
-        // dependency-key check.
         self.validate_required_ids(constraint.required_ids())?;
+        self.require_binary_variable(constraint.indicator_variable)?;
         let id = self.next_constraint_number()?.into();
         self.indicator_constraint_collection
             .insert_active_with_context(id, constraint, context)?;
@@ -493,16 +466,21 @@ impl ParametricInstance {
     /// The one-hot set must be non-empty. All variables in the set are
     /// structural and must be binary decision variables (parameter ids and
     /// non-binary kinds are rejected). Dependency keys are also rejected.
+    ///
+    /// Invalid variable references return [`VariableReferenceError`] in the
+    /// error chain, before changing this instance.
     pub fn add_one_hot_constraint(
         &mut self,
         constraint: crate::OneHotConstraint,
         context: crate::ConstraintContext,
     ) -> crate::Result<crate::OneHotConstraintID> {
         validate_one_hot_non_empty(&constraint)?;
+        let required_ids = constraint.required_ids();
+        self.require_decision_variables(required_ids.clone())?;
+        self.validate_required_ids(required_ids)?;
         for var_id in &constraint.variables {
             self.require_binary_variable(*var_id)?;
         }
-        self.validate_required_ids(constraint.required_ids())?;
         let id = self.next_constraint_number()?.into();
         self.one_hot_constraint_collection
             .insert_active_with_context(id, constraint, context)?;
@@ -515,6 +493,9 @@ impl ParametricInstance {
     /// variables (parameter ids are rejected). The set must be non-empty.
     /// Dependency keys are also rejected. Unlike one-hot, SOS1 does not
     /// require `Kind::Binary`.
+    ///
+    /// Invalid variable references return [`VariableReferenceError`] in the
+    /// error chain, before changing this instance.
     pub fn add_sos1_constraint(
         &mut self,
         constraint: crate::Sos1Constraint,
@@ -778,7 +759,7 @@ mod tests {
         let err = result.unwrap_err();
         assert_eq!(
             err.to_string(),
-            "Undefined variable ID is used: VariableID(999)"
+            "Undefined variable IDs are used: {VariableID(999)}"
         );
         // Ensure no constraint was added
         assert_eq!(instance.active_constraints().len(), 0);
@@ -864,7 +845,7 @@ mod tests {
         let result = instance.insert_constraint(ConstraintID::from(1), constraint);
         assert_eq!(
             result.unwrap_err().to_string(),
-            "Dependent variable cannot be used in objectives or constraints: VariableID(2)"
+            "Dependent variables cannot be used in objectives or constraints: {VariableID(2)}"
         );
         // Ensure no constraint was added
         assert_eq!(instance.active_constraints().len(), 0);
@@ -1030,7 +1011,7 @@ mod tests {
         // Should fail with DependentVariableUsed error
         assert_eq!(
             result.unwrap_err().to_string(),
-            "Dependent variable cannot be used in objectives or constraints: VariableID(2)"
+            "Dependent variables cannot be used in objectives or constraints: {VariableID(2)}"
         );
         // Ensure objective was not changed
         assert_eq!(instance.objective, Function::from(linear!(1) + coeff!(1.0)));
@@ -1171,7 +1152,7 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
-            "Undefined variable ID is used: VariableID(999)"
+            "Undefined variable IDs are used: {VariableID(999)}"
         );
         // Ensure no constraints were added (atomic operation)
         assert_eq!(instance.active_constraints().len(), 0);
@@ -1303,7 +1284,7 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
-            "Dependent variable cannot be used in objectives or constraints: VariableID(2)"
+            "Dependent variables cannot be used in objectives or constraints: {VariableID(2)}"
         );
         // Ensure no constraints were added (atomic operation)
         assert_eq!(instance.active_constraints().len(), 0);

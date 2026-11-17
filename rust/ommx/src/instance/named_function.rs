@@ -74,11 +74,7 @@ impl Instance {
     ) -> crate::Result<NamedFunctionID> {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
 
-        for id in function.required_ids() {
-            if !variable_ids.contains(&id) {
-                crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
-            }
-        }
+        super::validate_defined_ids(&function.required_ids(), &variable_ids)?;
         let id = self.next_named_function_id();
 
         let named_function = NamedFunction { function };

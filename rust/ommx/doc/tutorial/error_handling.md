@@ -69,6 +69,15 @@ returns the typed error directly):
 - [`ParameterIDCollision`](crate::ParameterIDCollision) — identifies a
   decision-variable ID already owned by a parameter, so the caller can choose
   another ID before retrying construction or insertion.
+- [`VariableReferenceError`](crate::VariableReferenceError) — identifies
+  undefined, fixed, or dependent variable references in caller-supplied
+  objectives and constraints, and parameters used in structural positions
+  requiring decision variables. Each variant exposes the complete set of
+  offending IDs for the checked reference set through `ids()`. Callers can
+  declare missing variables, correct the references, or substitute fixed
+  values and dependency expressions before retrying. Named functions allow
+  fixed and dependent references but still require declared IDs. Python maps
+  these failures to `ValueError`.
 - [`ContentFactorError`](crate::ContentFactorError) — identifies coefficients
   that cannot be converted to a bounded rational multiplier, so the caller can
   change the coefficients or choose another normalization operation.

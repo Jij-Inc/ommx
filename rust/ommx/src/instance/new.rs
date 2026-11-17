@@ -72,7 +72,7 @@ mod tests {
                 constraints,
             )
             .unwrap_err(),
-            @r#"Undefined variable ID is used: VariableID(999)"#
+            @r#"Undefined variable IDs are used: {VariableID(999)}"#
         );
     }
 
@@ -101,7 +101,7 @@ mod tests {
                 constraints,
             )
             .unwrap_err(),
-            @r#"Undefined variable ID is used: VariableID(999)"#
+            @r#"Undefined variable IDs are used: {VariableID(999)}"#
         );
     }
 
@@ -198,7 +198,7 @@ mod tests {
                 constraints,
             )
             .unwrap_err(),
-            @r#"Undefined variable ID is used: VariableID(999)"#
+            @r#"Undefined variable IDs are used: {VariableID(999)}"#
         );
     }
 
@@ -228,7 +228,7 @@ mod tests {
                 constraints,
             )
             .unwrap_err(),
-            @r#"Undefined variable ID is used: VariableID(999)"#
+            @r#"Undefined variable IDs are used: {VariableID(999)}"#
         );
     }
 }
