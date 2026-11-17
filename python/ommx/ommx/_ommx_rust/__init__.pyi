@@ -7488,17 +7488,28 @@ class Instance:
         """
     def random_state(self, rng: Rng) -> State:
         r"""
-        Generate a random state for this instance using the provided random number generator.
+        Generate a state for tests and debugging, including solver-adapter tests.
 
         This method generates random values only for the Active Formulation's
         decision variables, as exposed by {attr}`~ommx.Instance.active_decision_variables`.
-        Generated values respect the bounds of each variable type.
+        Generated values are finite and belong to each variable's domain. Semi variables
+        may be zero outside their stored interval; finite-domain values come from the
+        enumerated set. Constraint feasibility and successful function evaluation are
+        not guaranteed, so infeasible instances can also be sampled.
+
+        Finite intervals are not clipped to a fixed scale. Values whose bound
+        residuals overflow are excluded consistently with domain validation.
+        Infinite intervals use a finite window with scale 100, near zero when
+        possible or near the finite endpoint otherwise.
+        At floating-point limits the window may contain just one representable value.
+        Generation emphasizes test cases such as endpoints: it is not uniform and
+        the distribution and seeded sequence may change between versions.
 
         **Args:**
         - `rng`: Random number generator to use for generating the state.
 
         **Returns:**
-        A randomly generated state that satisfies the variable bounds of this instance.
+        A randomly generated state that satisfies the variable domains of this instance.
         Only contains values for active decision variables.
 
         # Examples
@@ -7536,15 +7547,18 @@ class Instance:
         max_sample_id: typing.Optional[builtins.int] = None,
     ) -> Samples:
         r"""
-        Generate random samples for this instance.
+        Generate samples for tests and debugging using the same domain rules as
+        {meth}`random_state`. Constraint feasibility is not guaranteed.
 
         The generated samples will contain ``num_samples`` sample entries divided into
         ``num_different_samples`` groups, where each group shares the same state but has
         different sample IDs.
+        Independently generated groups may contain equal states; the requested group
+        count does not guarantee that many distinct state values.
 
         **Args:**
         - `rng`: Random number generator
-        - `num_different_samples`: Number of different states to generate
+        - `num_different_samples`: Number of independently generated state groups
         - `num_samples`: Total number of samples to generate
         - `max_sample_id`: Maximum sample ID (default: ``num_samples``)
 
@@ -12326,6 +12340,10 @@ class RemoteArtifactTransportError(RemoteArtifactError):
 
 @typing.final
 class Rng:
+    r"""
+    Deterministic proptest generator for public test and debugging utilities.
+    Generated distributions and sequences may change between versions.
+    """
     def __new__(cls) -> Rng:
         r"""
         Create a new random number generator with a deterministic seed.

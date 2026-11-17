@@ -6,6 +6,22 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### Generate test states for unbounded and large variable domains
+
+`Instance.random_state` and `random_samples` remain public test and debugging
+utilities, including for solver adapters. They now generate finite values within
+variable domains even when interval endpoints lie outside `[-100, 100]` or beyond
+the `i64` range. Finite intervals are not clipped to a fixed scale; infinite
+intervals use a finite window near zero or the finite endpoint. This fixes
+empty-range panics that could also leave the supplied `Rng` unusable.
+
+Interval values whose bound residuals overflow are excluded consistently with
+OMMX's domain validation.
+
+These utilities do not guarantee uniform distributions, stable sequences across
+versions, constraint feasibility, or successful function evaluation. Infeasible
+instances can still be sampled, and different sample groups can have equal states.
+
 ### Preserve finite bounds in the HiGHS adapter ([#1395](https://github.com/Jij-Inc/ommx/pull/1395))
 
 The HiGHS adapter now preserves finite variable and constraint bounds throughout

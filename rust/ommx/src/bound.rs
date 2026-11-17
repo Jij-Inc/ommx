@@ -11,6 +11,8 @@ use thiserror::Error;
 
 mod bounds;
 pub use bounds::Bounds;
+mod integer_value;
+pub use integer_value::IntegerValueParameters;
 
 #[non_exhaustive]
 #[derive(Debug, Error)]
@@ -566,42 +568,52 @@ impl Bound {
         }
     }
 
-    /// Arbitrary *finite* value within the bound
+    /// Generate finite values within this bound for tests and debugging.
     ///
-    /// `max_abs` is the maximum absolute value of the generated value
-    /// to keep floating point arithmetic stable.
-    pub fn arbitrary_containing(&self, max_abs: f64) -> BoxedStrategy<f64> {
-        assert!(max_abs > 0.0);
-        // RangeInclusive::arbitrary() does not support infinite range
-        match (self.lower, self.upper) {
-            (f64::NEG_INFINITY, f64::INFINITY) => (-max_abs..=max_abs).boxed(),
-            (f64::NEG_INFINITY, upper) => {
-                let upper = upper.min(max_abs);
-                prop_oneof![(-max_abs..=upper).boxed(), Just(upper)].boxed()
-            }
-            (lower, f64::INFINITY) => {
-                let lower = lower.max(-max_abs);
-                prop_oneof![(lower..=max_abs).boxed(), Just(lower)].boxed()
-            }
-            (lower, upper) => {
-                let lower = lower.max(-max_abs);
-                let upper = upper.min(max_abs);
-                if lower == upper {
-                    Just(lower).boxed()
-                } else {
-                    prop_oneof![Just(upper), Just(lower), (lower..=upper)].boxed()
-                }
-            }
+    /// Finite intervals are not clipped to `scale`. Values whose bound residuals
+    /// overflow are excluded, consistently with [`Self::contains`]. For infinite intervals,
+    /// `scale` selects a finite window near zero, or near the finite endpoint
+    /// when zero is excluded. It is not a maximum absolute value. The window
+    /// saturates at finite `f64` limits and may collapse to one representable value.
+    /// Endpoints are deliberately emphasized; no uniform distribution or stable
+    /// sequence across versions is promised.
+    ///
+    /// # Panics
+    /// Panics if `scale` is not finite and strictly positive.
+    pub fn arbitrary_containing(&self, scale: f64) -> BoxedStrategy<f64> {
+        let (mut lower, mut upper) = self.finite_generation_window(scale);
+        let atol = ATol::default();
+        if !self.contains(lower, atol) || !self.contains(upper, atol) {
+            // Bound membership also requires finite residuals. Intersect with
+            // the original window so tolerance never enlarges the exact domain.
+            let (finite_lower, finite_upper) = self.finite_feasible_extrema(atol);
+            lower = lower.max(finite_lower);
+            upper = upper.min(finite_upper);
         }
-    }
-
-    pub fn arbitrary_containing_integer(&self, max_abs: u64) -> BoxedStrategy<i64> {
-        let lower = self.lower.max(-(max_abs as f64)).ceil() as i64;
-        let upper = self.upper.min(max_abs as f64).floor() as i64;
         if lower == upper {
             Just(lower).boxed()
         } else {
-            (lower..=upper).boxed()
+            prop_oneof![Just(lower), Just(upper), lower..=upper].boxed()
+        }
+    }
+
+    // Keep the window inside the domain even when its endpoint is far from zero.
+    fn finite_generation_window(&self, scale: f64) -> (f64, f64) {
+        assert!(
+            scale.is_finite() && scale > 0.0,
+            "scale must be finite and positive"
+        );
+        match (self.lower, self.upper) {
+            (f64::NEG_INFINITY, f64::INFINITY) => (-scale, scale),
+            (f64::NEG_INFINITY, upper) => {
+                let upper = upper.min(scale);
+                ((upper.min(0.0) - scale).max(-f64::MAX), upper)
+            }
+            (lower, f64::INFINITY) => {
+                let lower = lower.max(-scale);
+                (lower, (lower.max(0.0) + scale).min(f64::MAX))
+            }
+            (lower, upper) => (lower, upper),
         }
     }
 }
@@ -642,6 +654,59 @@ mod tests {
     use approx::assert_abs_diff_eq;
 
     use super::*;
+
+    // Independent of Bound::arbitrary(): that intentionally uses small finite
+    // endpoints for algebra tests. Exercise the full f64 representation here.
+    fn generation_bounds() -> impl Strategy<Value = Bound> {
+        let endpoint = prop_oneof![
+            Just(f64::NEG_INFINITY),
+            Just(f64::INFINITY),
+            Just(-f64::MAX),
+            Just(f64::MAX),
+            Just(101.0),
+            Just(-101.0),
+            any::<f64>().prop_filter("finite endpoint", |x| x.is_finite()),
+        ];
+        (endpoint.clone(), endpoint)
+            .prop_filter_map("valid bound", |(a, b)| Bound::new(a.min(b), a.max(b)).ok())
+    }
+
+    proptest! {
+        #[test]
+        fn generated_values_and_shrinks_stay_in_full_range_domains(
+            bound in generation_bounds(),
+            scale in prop_oneof![Just(1.0), Just(100.0), Just(f64::MAX)],
+        ) {
+            use proptest::strategy::ValueTree;
+            let mut runner = crate::random::Rng::deterministic();
+            for _ in 0..8 {
+                let mut tree = bound.arbitrary_containing(scale).new_tree(&mut runner).unwrap();
+                loop {
+                    let value = tree.current();
+                    prop_assert!(value.is_finite());
+                    prop_assert!(bound.lower() <= value && value <= bound.upper());
+                    prop_assert!(bound.contains(value, ATol::default()));
+                    if !tree.simplify() { break; }
+                }
+            }
+            let integers = IntegerValueParameters::new(bound, 100);
+            prop_assert_eq!(integers.is_ok(), bound.lower().ceil() <= bound.upper().floor());
+            if let Ok(parameters) = integers {
+                let strategy = parameters.strategy();
+                for _ in 0..8 {
+                    let mut tree = strategy.new_tree(&mut runner).unwrap();
+                    loop {
+                        let value = tree.current();
+                        prop_assert!(value.is_finite());
+                        prop_assert_eq!(value, value.round());
+                        prop_assert!(bound.lower() <= value && value <= bound.upper());
+                        prop_assert!(bound.contains(value, ATol::default()));
+                        if !tree.simplify() { break; }
+                    }
+                }
+            }
+        }
+    }
 
     fn finite_domain_wire(values: Vec<f64>) -> v1::DecisionVariable {
         v1::DecisionVariable {
