@@ -148,7 +148,7 @@ def test_one_hot_variable_not_defined():
         variables=[x[0], DecisionVariable.binary(999)]
     )  # 999 doesn't exist
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ValueError, match="999"):
         Instance.from_components(
             decision_variables=x,
             objective=objective,
@@ -167,7 +167,7 @@ def test_sos1_variable_not_defined():
         variables=[x[0], DecisionVariable.continuous(999, lower=0, upper=10)]
     )  # 999 doesn't exist
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ValueError, match="999"):
         Instance.from_components(
             decision_variables=x,
             objective=objective,

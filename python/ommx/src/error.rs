@@ -537,6 +537,7 @@ fn preparation_target_not_reached_to_pyerr(
 define_ommx_error_mappings!(
     ommx::Sos1BigMPromotionBatchRejected => sos1_big_m_promotion_batch_rejected_to_pyerr,
     ommx::ParseError => parse_error_to_pyerr,
+    ommx::VariableReferenceError => value_error,
     ommx::artifact::local_registry::InvalidLocalRegistryImageRef => invalid_local_registry_image_ref_to_pyerr,
     ommx::experiment::AttachmentNotFound => attachment_not_found_to_pyerr,
     ommx::DecisionVariableError => decision_variable_error_to_pyerr,

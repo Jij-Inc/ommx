@@ -278,6 +278,10 @@ impl ParametricInstanceBuilder {
     /// - The RHS expressions of `decision_variable_dependency` reference IDs
     ///   outside `decision_variables` or `parameters`
     /// - Construction-time `active`, `fixed`, and `dependent` sets are not pairwise disjoint
+    ///
+    /// Invalid expression references carry [`VariableReferenceError`] in the
+    /// error chain. It reports undeclared IDs, fixed/dependent active references,
+    /// or parameters used where structural decision variables are required.
     pub fn build(self) -> crate::Result<ParametricInstance> {
         let sense = self
             .sense
@@ -321,19 +325,9 @@ impl ParametricInstanceBuilder {
             .cloned()
             .collect();
 
-        // Validate that all variable IDs in objective and constraints are defined
-        for id in objective.required_ids() {
-            if !all_variable_ids.contains(&id) {
-                crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
-            }
-        }
-        // Validate named_functions: map keys own IDs, and all referenced variable IDs must exist.
+        validate_defined_ids(&objective.required_ids(), &all_variable_ids)?;
         for nf in self.named_functions.values() {
-            for id in nf.function.required_ids() {
-                if !all_variable_ids.contains(&id) {
-                    crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
-                }
-            }
+            validate_defined_ids(&nf.function.required_ids(), &all_variable_ids)?;
         }
         let named_functions =
             NamedFunctionTable::new(self.named_functions, self.named_function_labels)?;
@@ -343,18 +337,14 @@ impl ParametricInstanceBuilder {
         // must be a binary decision variable (not a parameter).
         let validate_indicator = |ic: &crate::IndicatorConstraint| -> crate::Result<()> {
             let indicator_id = ic.indicator_variable;
-            let Some(dv) = decision_variables.get(&indicator_id) else {
-                if parameter_ids.contains(&indicator_id) {
-                    crate::bail!(
-                        { ?indicator_id },
-                        "Parameter id {indicator_id:?} cannot occupy the structural indicator-variable position; it must be a binary decision variable",
-                    );
+            validate_defined_ids(&ic.required_ids(), &all_variable_ids)?;
+            let dv = decision_variables.get(&indicator_id).ok_or_else(|| {
+                VariableReferenceError::ParameterInStructuralPosition {
+                    // The full reference check above already rejected unknown
+                    // IDs, so a non-decision-variable control is a parameter.
+                    ids: BTreeSet::from([indicator_id]),
                 }
-                crate::bail!(
-                    { ?indicator_id },
-                    "Indicator variable {indicator_id:?} is not defined in decision_variables",
-                );
-            };
+            })?;
             if dv.kind() != crate::decision_variable::Kind::Binary {
                 crate::bail!(
                     { ?indicator_id },
@@ -394,19 +384,15 @@ impl ParametricInstanceBuilder {
                     "One-hot constraint {id:?} has no variables; one-hot constraints must contain at least one variable"
                 )));
             }
+            validate_structural_ids(
+                &value.variables,
+                |id| decision_variable_ids.contains(id),
+                |id| parameter_ids.contains(id),
+            )?;
             for var_id in &value.variables {
-                let Some(dv) = decision_variables.get(var_id) else {
-                    if parameter_ids.contains(var_id) {
-                        crate::bail!(
-                            { ?var_id },
-                            "Parameter id {var_id:?} cannot occupy a structural one-hot variable position; it must be a binary decision variable",
-                        );
-                    }
-                    crate::bail!(
-                        { ?var_id },
-                        "One-hot variable {var_id:?} is not defined in decision_variables",
-                    );
-                };
+                let dv = decision_variables
+                    .get(var_id)
+                    .expect("validated one-hot variable");
                 if dv.kind() != crate::decision_variable::Kind::Binary {
                     crate::bail!({ ?var_id }, "One-hot variable {var_id:?} must be binary");
                 }
@@ -429,20 +415,11 @@ impl ParametricInstanceBuilder {
                     "SOS1 constraint {id:?} has no variables; SOS1 constraints must contain at least one variable"
                 )));
             }
-            for var_id in &value.variables {
-                if !decision_variable_ids.contains(var_id) {
-                    if parameter_ids.contains(var_id) {
-                        crate::bail!(
-                            { ?var_id },
-                            "Parameter id {var_id:?} cannot occupy a structural SOS1 variable position; it must be a decision variable",
-                        );
-                    }
-                    crate::bail!(
-                        { ?var_id },
-                        "SOS1 variable {var_id:?} is not defined in decision_variables",
-                    );
-                }
-            }
+            validate_structural_ids(
+                &value.variables,
+                |id| decision_variable_ids.contains(id),
+                |id| parameter_ids.contains(id),
+            )?;
         }
 
         // Validate that constraints and inactive_constraints keys are disjoint
@@ -465,14 +442,10 @@ impl ParametricInstanceBuilder {
                 );
             }
         }
-        for id in self.decision_variable_dependency.required_ids() {
-            if !all_variable_ids.contains(&id) {
-                crate::bail!(
-                    { ?id },
-                    "Undefined variable ID is used in decision_variable_dependency: {id:?}",
-                );
-            }
-        }
+        validate_defined_ids(
+            &self.decision_variable_dependency.required_ids(),
+            &all_variable_ids,
+        )?;
 
         let constraint_collection = ConstraintCollection::with_context(
             constraints,
@@ -500,19 +473,16 @@ impl ParametricInstanceBuilder {
             one_hot_constraint_collection: &one_hot_constraint_collection,
             sos1_constraint_collection: &sos1_constraint_collection,
         };
-        for_each_constraint_collection!(created, collections, |_, collection| {
-            for constraint in collection
-                .active()
+        // Special families already validated all references alongside their
+        // structural rules above. Only regular constraints remain unchecked.
+        for constraint in constraint_collection.active().values().chain(
+            constraint_collection
+                .inactive()
                 .values()
-                .chain(collection.inactive().values().map(|(row, _)| row))
-            {
-                for id in constraint.required_ids() {
-                    if !all_variable_ids.contains(&id) {
-                        crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
-                    }
-                }
-            }
-        });
+                .map(|(row, _)| row),
+        ) {
+            validate_defined_ids(&constraint.required_ids(), &all_variable_ids)?;
+        }
         // Construction invariant: raw active, fixed, and dependent sets must be pairwise disjoint.
         // - active: IDs appearing in objective or constraints
         // - fixed: IDs in the decision-variable table's fixed-value column
@@ -524,21 +494,7 @@ impl ParametricInstanceBuilder {
         let fixed: VariableIDSet = decision_variables.fixed_values().keys().copied().collect();
         let dependent: VariableIDSet = self.decision_variable_dependency.keys().collect();
 
-        // Check active ∩ dependent = ∅
-        if let Some(id) = active.intersection(&dependent).next() {
-            crate::bail!(
-                { ?id },
-                "Dependent variable cannot be used in objectives or constraints: {id:?}",
-            );
-        }
-
-        // Check active ∩ fixed = ∅
-        if let Some(id) = active.intersection(&fixed).next() {
-            crate::bail!(
-                { ?id },
-                "Fixed variable {id:?} cannot be used in objectives or constraints",
-            );
-        }
+        validate_active_ids(&active, &dependent, &fixed)?;
 
         // Check fixed ∩ dependent = ∅
         if let Some(id) = fixed.intersection(&dependent).next() {
@@ -997,7 +953,7 @@ mod tests {
 
         let msg = err.to_string();
         assert!(
-            msg.contains("Undefined variable ID is used in decision_variable_dependency")
+            msg.contains("Undefined variable IDs are used")
                 && msg.contains(&format!("{undefined:?}")),
             "unexpected error: {msg}",
         );
@@ -1033,7 +989,7 @@ mod tests {
 
         let msg = err.to_string();
         assert!(
-            msg.contains("Parameter id") && msg.contains("structural"),
+            msg.contains("Parameter IDs") && msg.contains("structural"),
             "unexpected error: {msg}"
         );
     }
@@ -1097,7 +1053,7 @@ mod tests {
 
         let msg = err.to_string();
         assert!(
-            msg.contains("Parameter id") && msg.contains("structural"),
+            msg.contains("Parameter IDs") && msg.contains("structural"),
             "unexpected error: {msg}"
         );
     }

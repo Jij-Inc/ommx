@@ -225,7 +225,8 @@ impl ParametricInstance {
     /// Returned collections always use typed IDs.
     ///
     /// Raises {class}`ValueError` if a decision variable and parameter use the
-    /// same ID.
+    /// same ID, an expression references an undeclared ID, or a parameter is
+    /// used as an indicator control or OneHot/SOS1 member.
     ///
     /// **Parameterize objective coefficients, weights, and a capacity**
     ///
@@ -838,7 +839,8 @@ impl ParametricInstance {
     ///
     /// Raises {class}`ValueError` if the constraint references an id that is
     /// neither a defined decision variable nor a defined parameter, or if it
-    /// references an id currently used as a substitution-dependency key.
+    /// references a fixed variable or a substitution-dependency key.
+    /// Failure leaves this instance unchanged.
     pub fn add_constraint(
         slf: Bound<'_, Self>,
         constraint: Constraint,
@@ -870,8 +872,9 @@ impl ParametricInstance {
     ///
     /// Raises {class}`ValueError` if the constraint references an id that
     /// is neither a defined decision variable nor a defined parameter, or
-    /// if it references an id currently used as a substitution-dependency
-    /// key.
+    /// if it references a fixed variable or a substitution-dependency key.
+    /// A parameter cannot be used as the indicator control and also raises
+    /// {class}`ValueError`. Failure leaves this instance unchanged.
     pub fn add_indicator_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::IndicatorConstraint,
@@ -888,6 +891,10 @@ impl ParametricInstance {
     }
 
     /// Add a one-hot constraint to this parametric instance.
+    ///
+    /// Raises {class}`ValueError` for undefined, fixed, or dependent variable
+    /// references, or parameters used as members. Failure leaves this instance
+    /// unchanged.
     pub fn add_one_hot_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::OneHotConstraint,
@@ -904,6 +911,10 @@ impl ParametricInstance {
     }
 
     /// Add a SOS1 constraint to this parametric instance.
+    ///
+    /// Raises {class}`ValueError` for undefined, fixed, or dependent variable
+    /// references, or parameters used as members. Failure leaves this instance
+    /// unchanged.
     pub fn add_sos1_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::Sos1Constraint,

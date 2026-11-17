@@ -23,6 +23,15 @@ These utilities do not guarantee uniform distributions, stable sequences across
 versions, constraint feasibility, or successful function evaluation. Infeasible
 instances can still be sampled, and different sample groups can have equal states.
 
+### Report invalid variable references as ValueError ([#1400](https://github.com/Jij-Inc/ommx/pull/1400))
+
+`Instance` and `ParametricInstance` now raise `ValueError` for undefined variable
+references when constructing a model or adding constraints. Setting an
+`Instance` objective uses the same exception. Fixed or dependent variables used
+in active objectives or constraints, and parameters used as Indicator controls
+or OneHot/SOS1 members, also raise `ValueError`. Diagnostics list the offending
+IDs for the checked reference set, and failed setters leave the model unchanged.
+
 ### Keep the SampleSet summary schema consistent for empty results ([#1401](https://github.com/Jij-Inc/ommx/pull/1401))
 
 `SampleSet.summary` always returns `objective` (`float64`) and `feasible`
