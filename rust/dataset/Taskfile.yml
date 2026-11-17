@@ -1,0 +1,22 @@
+version: '3'
+
+tasks:
+  test:
+    desc: Test dataset Artifact packaging
+    cmds:
+      - cargo test -p dataset {{.CLI_ARGS}}
+
+  clippy:
+    desc: Lint dataset Artifact packaging
+    cmds:
+      - cargo clippy -p dataset --all-targets {{.CLI_ARGS}} -- -D warnings
+
+  format:
+    desc: Format dataset packaging code
+    cmds:
+      - cargo fmt -p dataset
+
+  format:check:
+    desc: Check dataset packaging formatting
+    cmds:
+      - cargo fmt -p dataset -- --check

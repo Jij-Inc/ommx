@@ -42,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Setup Environment
-        uses: ./.github/actions/setup-test-environment
+        uses: ./.github/actions/setup-rust
       - name: Install cargo-codspeed
         run: cargo install cargo-codspeed --locked
       - name: Build CodSpeed Benchmark Target(s)
@@ -62,16 +62,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: ./.github/actions/setup-python
         with:
           # CodSpeed looks working with `sys.monitoring`, which has been introduced in 3.12,
           # but updates in 3.13 seems to be required for generating trace information.
           # https://docs.python.org/3/library/sys.monitoring.html
           python-version: ${{ env.UV_PYTHON }}
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/setup-rust
 
       - name: Build wheel
         env:

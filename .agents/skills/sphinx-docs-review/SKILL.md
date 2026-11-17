@@ -127,7 +127,7 @@ verifies publication, not code execution.
 
 - After PyO3 public API or docstring changes:
   ```
-  task python:stubgen
+  task python:ommx:stubgen
   ```
 - When API examples are added, changed, or moved from the Book, rebuild the
   current SDK before checking the affected Reference doctests. Stub generation

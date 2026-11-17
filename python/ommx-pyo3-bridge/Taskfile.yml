@@ -1,0 +1,106 @@
+version: '3'
+
+tasks:
+  test:
+    desc: Validate the bridge and its independent consumer fixture
+    cmds:
+      - task: ::python:sync:test
+      - task: lint
+      - task: test-rust
+      - task: receiver-test
+      - task: check
+      - task: runtime-test
+      - task: doc:check
+
+  test-rust:
+    desc: Run Rust tests for the bridge and fixture
+    cmds:
+      - task: ::python:cargo
+        vars:
+          CARGO_ARGS: test -p ommx-pyo3-bridge -p ommx-pyo3-bridge-fixture {{.CLI_ARGS}}
+
+  receiver-test:
+    desc: Check the receiver contract without Rust SDK or stub-generator dependencies
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - |
+        deps=$(cargo tree -p ommx-pyo3-bridge --no-default-features --edges normal,build --prefix none)
+        case "$deps" in
+          *"ommx v"*|*"prost v"*|*"pyo3-stub-gen v"*)
+            echo 'Receiver-only bridge unexpectedly depends on an SDK or codec' >&2
+            exit 1
+            ;;
+        esac
+      - task: ::python:cargo
+        vars:
+          CARGO_ARGS: test -p ommx-pyo3-bridge --no-default-features {{.CLI_ARGS}}
+
+  check:
+    desc: Check generated fixture stubs and typing
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - uv sync --locked --only-group typecheck --no-install-workspace --inexact
+      - task: ::python:sync:lint
+      - task: ::python:cargo
+        vars:
+          CARGO_ARGS: run -p ommx-pyo3-bridge-fixture --bin stub_gen
+      - uv run --no-sync ruff format python/ommx-pyo3-bridge/fixture/ommx_pyo3_bridge_fixture.pyi
+      - git diff --exit-code -- python/ommx-pyo3-bridge/fixture/ommx_pyo3_bridge_fixture.pyi
+      - uv run --no-sync pyright --project python/ommx-pyo3-bridge/fixture/pyrightconfig.json
+
+  runtime-test:
+    desc: Test transfer between independently compiled Python extensions
+    dir: '{{.ROOT_DIR}}'
+    env:
+      VIRTUAL_ENV: '{{.ROOT_DIR}}/.venv'
+    cmds:
+      - uv sync --locked --only-group build --only-group test --no-install-workspace --inexact
+      - uv run --no-sync maturin develop --manifest-path python/ommx-pyo3-bridge/fixture/Cargo.toml
+      - uv run --no-sync pytest -vv python/ommx-pyo3-bridge/fixture/tests
+
+  lint:
+    desc: Lint the bridge and fixture
+    cmds:
+      - task: ruff
+      - task: clippy
+
+  ruff:
+    desc: Run Ruff for bridge fixture sources
+    cmds:
+      - task: ::python:sync:lint
+      - uv run --no-sync ruff check .
+
+  clippy:
+    desc: Run Clippy for the bridge and fixture
+    cmds:
+      - task: ::python:cargo
+        vars:
+          CARGO_ARGS: clippy -p ommx-pyo3-bridge -p ommx-pyo3-bridge-fixture --all-targets {{.CLI_ARGS}} -- -D warnings
+
+  format:
+    desc: Format bridge and fixture sources
+    cmds:
+      - task: ::python:sync:lint
+      - uv run --no-sync ruff format . {{.CLI_ARGS}}
+      - cargo fmt -p ommx-pyo3-bridge -p ommx-pyo3-bridge-fixture {{if .CLI_ARGS}}-- {{.CLI_ARGS}}{{end}}
+
+  format:check:
+    desc: Check bridge and fixture formatting
+    cmds:
+      - task: format
+        vars:
+          CLI_ARGS: --check
+
+  doc:
+    desc: Generate bridge API documentation
+    cmds:
+      - task: ::python:cargo
+        vars:
+          CARGO_ARGS: doc --no-deps -p ommx-pyo3-bridge {{.CLI_ARGS}}
+
+  doc:check:
+    desc: Check bridge rustdoc without warnings
+    env:
+      RUSTDOCFLAGS: -D warnings
+    cmds:
+      - task: doc

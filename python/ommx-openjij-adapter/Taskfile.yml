@@ -10,6 +10,7 @@ tasks:
   test:
     desc: Run all tests for OMMX OpenJij Adapter
     cmds:
+      - task: ::python:sync:test
       - task: pytest
       - task: pyright
       - task: markdown-code-runner
@@ -18,21 +19,34 @@ tasks:
   pytest:
     desc: Run pytest tests
     cmds:
-      - uv run pytest -vv --doctest-modules
+      - uv run --no-sync pytest -vv --doctest-modules
 
   pyright:
     desc: Run pyright type checking
     cmds:
-      - uv run pyright
+      - uv run --no-sync pyright
 
   markdown-code-runner:
     desc: Run markdown code runner
     cmds:
-      - uv run markdown-code-runner --verbose README.md
+      - uv run --no-sync markdown-code-runner --verbose README.md
 
   lint:
     desc: Lint by ruff check
     cmds:
-      - uv sync --locked --only-group lint --no-install-workspace --inexact
+      - task: ::python:sync:lint
       - uv run --no-sync ruff check python/ommx-openjij-adapter
     dir: ../..
+
+  format:
+    desc: Format ommx-openjij-adapter
+    cmds:
+      - task: ::python:sync:lint
+      - uv run --no-sync ruff format . {{.CLI_ARGS}}
+
+  format:check:
+    desc: Check ommx-openjij-adapter formatting
+    cmds:
+      - task: format
+        vars:
+          CLI_ARGS: --check

@@ -1,0 +1,13 @@
+name: Setup Emscripten
+description: Prepare the dedicated Rust, Emscripten and Node toolchain
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup-rust
+      with:
+        toolchain: nightly
+        targets: wasm32-unknown-emscripten
+    - uses: mymindstorm/setup-emsdk@v14
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'

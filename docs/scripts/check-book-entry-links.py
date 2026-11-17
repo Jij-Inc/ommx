@@ -9,7 +9,7 @@ from urllib.parse import unquote, urlsplit
 
 
 BOOK = "https://jij-inc-ommx.readthedocs-hosted.com/"
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class Anchors(HTMLParser):
