@@ -683,11 +683,47 @@ mod tests {
             .prop_filter_map("valid bound", |(a, b)| Bound::new(a.min(b), a.max(b)).ok())
     }
 
+    #[test]
+    fn generated_values_respect_documented_unbounded_windows() {
+        use proptest::strategy::ValueTree;
+
+        let mut runner = crate::random::Rng::deterministic();
+        for (lower, upper, expected_lower, expected_upper) in [
+            (f64::NEG_INFINITY, f64::INFINITY, -100.0, 100.0),
+            (101.0, f64::INFINITY, 101.0, 201.0),
+            (-50.0, f64::INFINITY, -50.0, 100.0),
+            (f64::NEG_INFINITY, -101.0, -201.0, -101.0),
+            (f64::NEG_INFINITY, 50.0, -100.0, 50.0),
+        ] {
+            let strategy = Bound::new(lower, upper)
+                .unwrap()
+                .arbitrary_containing(100.0);
+            for _ in 0..64 {
+                let mut tree = strategy.new_tree(&mut runner).unwrap();
+                loop {
+                    let value = tree.current();
+                    assert!(expected_lower <= value && value <= expected_upper);
+                    if !tree.simplify() {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     proptest! {
         #[test]
         fn generated_values_and_shrinks_stay_in_full_range_domains(
             bound in generation_bounds(),
-            unbounded_sampling_radius in prop_oneof![Just(1.0), Just(100.0), Just(f64::MAX)],
+            unbounded_sampling_radius in prop_oneof![
+                Just(f64::from_bits(1)),
+                Just(f64::MIN_POSITIVE),
+                Just(1.0),
+                Just(100.0),
+                Just(f64::MAX),
+                any::<f64>().prop_filter("positive finite radius", |x| x.is_finite() && *x > 0.0),
+            ],
+            integer_radius in 1_u64..=u64::MAX,
         ) {
             use proptest::strategy::ValueTree;
             let mut runner = crate::random::Rng::deterministic();
@@ -701,7 +737,7 @@ mod tests {
                     if !tree.simplify() { break; }
                 }
             }
-            let integers = IntegerValueParameters::new(bound, 100);
+            let integers = IntegerValueParameters::new(bound, integer_radius);
             prop_assert_eq!(integers.is_ok(), bound.lower().ceil() <= bound.upper().floor());
             if let Ok(parameters) = integers {
                 let strategy = parameters.strategy();
