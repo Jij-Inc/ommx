@@ -71,8 +71,16 @@ pub fn validate_structural_ids(
     variables: &VariableIDSet,
     parameters: &VariableIDSet,
 ) -> crate::Result<()> {
-    let known = variables.union(parameters).copied().collect();
-    validate_defined_ids(required, &known)?;
+    // Builders reuse the model's sets across rows; inspect only this row's
+    // references instead of copying every declared ID for each constraint.
+    let ids: BTreeSet<_> = required
+        .iter()
+        .filter(|id| !variables.contains(id) && !parameters.contains(id))
+        .copied()
+        .collect();
+    if !ids.is_empty() {
+        return Err(VariableReferenceError::Undefined { ids }.into());
+    }
     let ids: BTreeSet<_> = required.intersection(parameters).copied().collect();
     if !ids.is_empty() {
         return Err(VariableReferenceError::ParameterInStructuralPosition { ids }.into());
@@ -253,6 +261,59 @@ mod tests {
                 } else {
                     check(result.unwrap_err(), &expected);
                     assert_eq!(instance, original);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn structural_builders_distinguish_mixed_reference_roles() {
+        for one_hot in [true, false] {
+            for (members, expected) in [
+                (
+                    vec![0, 10, 20, 100],
+                    Some(VariableReferenceError::Undefined { ids: ids() }),
+                ),
+                (
+                    vec![0, 100],
+                    Some(VariableReferenceError::ParameterInStructuralPosition {
+                        ids: [100.into()].into(),
+                    }),
+                ),
+                (vec![0], None),
+            ] {
+                let builder = ParametricInstance::builder()
+                    .sense(Sense::Minimize)
+                    .objective(Function::Zero)
+                    .decision_variables(BTreeMap::from([(
+                        0.into(),
+                        crate::DecisionVariable::binary(),
+                    )]))
+                    .parameters(ParameterTable::from_ids([100.into()].into()))
+                    .active_constraints(BTreeMap::new());
+                let members = members.into_iter().map(VariableID::from).collect();
+                let result = if one_hot {
+                    builder
+                        .active_one_hot_constraints(BTreeMap::from([(
+                            0.into(),
+                            OneHotConstraint::new(members).unwrap(),
+                        )]))
+                        .build()
+                } else {
+                    builder
+                        .active_sos1_constraints(BTreeMap::from([(
+                            0.into(),
+                            Sos1Constraint::new(members).unwrap(),
+                        )]))
+                        .build()
+                };
+                if let Some(expected) = expected {
+                    assert_eq!(
+                        result.unwrap_err().downcast_ref::<VariableReferenceError>(),
+                        Some(&expected),
+                    );
+                } else {
+                    result.unwrap();
                 }
             }
         }
