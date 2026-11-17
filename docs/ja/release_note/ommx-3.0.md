@@ -6,7 +6,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-### 空のSampleSetでもsummaryのスキーマを維持
+### 空のSampleSetでもsummaryのスキーマを維持 ([#1401](https://github.com/Jij-Inc/ommx/pull/1401))
 
 `SampleSet.summary` は、常に `objective`（`float64`）、`feasible`（`bool`）の
 順で列を返し、indexは名前が `sample_id`、型が `uint64` になります。
