@@ -767,9 +767,9 @@ impl SampleSet {
             entries,
             &DataFrameSchema::new(
                 &[
-                    Column::new("sample_id", "uint64"),
-                    Column::new("objective", "float64"),
-                    Column::new("feasible", "bool"),
+                    Column::of::<u64>("sample_id"),
+                    Column::of::<f64>("objective"),
+                    Column::of::<bool>("feasible"),
                 ],
                 Some("sample_id".into()),
             ),

@@ -30,12 +30,13 @@ fn rows<'py>(
 fn required_scalars_and_empty_operations() {
     check(|py, scope| {
         let columns = [
-            Column::new("id", "uint64"),
-            Column::new("objective", "float64"),
-            Column::new("feasible", "bool"),
+            Column::of::<u64>("id"),
+            Column::of::<f64>("objective"),
+            Column::of::<bool>("feasible"),
+            Column::of::<i64>("signed"),
         ];
         let schema = DataFrameSchema::new(&columns, Some("id".into()));
-        let entries = rows(py, scope, c"[{'feasible': True, 'id': 7, 'objective': 1.5}, {'id': 2**64-1, 'objective': float('inf'), 'feasible': False}]")?;
+        let entries = rows(py, scope, c"[{'feasible': True, 'id': 7, 'objective': 1.5, 'signed': -(2**63)}, {'id': 2**64-1, 'objective': float('inf'), 'feasible': False, 'signed': 2**63-1}]")?;
         scope.set_item("frame", schema.build(py, &entries)?)?;
         scope.set_item("empty", schema.build(py, &[])?)?;
         py.run(
@@ -43,8 +44,9 @@ fn required_scalars_and_empty_operations() {
 expected = pd.DataFrame({
     'objective': pd.Series([1.5, float('inf')], dtype='float64'),
     'feasible': pd.Series([True, False], dtype='bool'),
+    'signed': pd.Series([-(2**63), 2**63-1], dtype='int64'),
 })
-expected.columns = pd.Index(['objective', 'feasible'], dtype=object)
+expected.columns = pd.Index(['objective', 'feasible', 'signed'], dtype=object)
 expected.index = pd.Index([7, 2**64-1], dtype='uint64', name='id')
 pd.testing.assert_frame_equal(frame, expected)
 pd.testing.assert_frame_equal(empty, expected.iloc[:0])
@@ -63,10 +65,10 @@ pd.testing.assert_frame_equal(empty[empty.feasible], empty)
 fn nullable_scalars_preserve_large_integers_and_present_nan() {
     check(|py, scope| {
         let columns = [
-            Column::new("unsigned", "UInt64"),
-            Column::new("signed", "Int64"),
-            Column::new("value", "Float64"),
-            Column::new("flag", "boolean"),
+            Column::of::<Option<u64>>("unsigned"),
+            Column::of::<Option<i64>>("signed"),
+            Column::of::<Option<f64>>("value"),
+            Column::of::<Option<bool>>("flag"),
         ];
         let schema = DataFrameSchema::new(&columns, None);
         let entries = rows(py, scope, c"[{'unsigned': 2**64-1, 'signed': -(2**63), 'value': float('nan'), 'flag': True}, {'unsigned': 2**63+1, 'signed': 2**63-1, 'value': float('inf'), 'flag': False}, {}, {'unsigned': None, 'signed': pd.NA, 'value': None, 'flag': None}]")?;
@@ -95,22 +97,26 @@ pd.testing.assert_frame_equal(pd.concat([frame, empty]), frame)
 #[test]
 fn strings_ignore_inference_and_storage_defaults() {
     check(|py, scope| {
-        let columns = [Column::new("name", "string")];
-        let schema = DataFrameSchema::new(&columns, None);
         // The pyarrow storage preference must not become an implicit dependency.
         py.run(c"previous_storage = pd.options.mode.string_storage\npd.options.mode.string_storage = 'pyarrow'", Some(scope), None)?;
         let result = (|| {
-            for code in [
-                c"[]" as &CStr,
-                c"[{}, {'name': None}, {'name': pd.NA}]",
-                c"[{'name': 'x'}, {'name': None}]",
-                c"[{'name': 'x'}, {'name': '日本語'}]",
+            for columns in [
+                [Column::of::<String>("name")],
+                [Column::of::<str>("name")],
+                [Column::of::<Option<String>>("name")],
             ] {
-                let entries = rows(py, scope, code)?;
-                scope.set_item("frame", schema.build(py, &entries)?)?;
-                scope.set_item("rows", entries)?;
-                py.run(
-                    c"
+                let schema = DataFrameSchema::new(&columns, None);
+                for code in [
+                    c"[]" as &CStr,
+                    c"[{}, {'name': None}, {'name': pd.NA}]",
+                    c"[{'name': 'x'}, {'name': None}]",
+                    c"[{'name': 'x'}, {'name': '日本語'}]",
+                ] {
+                    let entries = rows(py, scope, code)?;
+                    scope.set_item("frame", schema.build(py, &entries)?)?;
+                    scope.set_item("rows", entries)?;
+                    py.run(
+                        c"
 expected_dtype = pd.StringDtype(storage='python')
 assert frame.name.dtype == expected_dtype
 assert frame.name.dtype.storage == 'python'
@@ -122,9 +128,10 @@ for actual, row in zip(frame.name, rows):
     else:
         assert actual == value
 ",
-                    Some(scope),
-                    None,
-                )?;
+                        Some(scope),
+                        None,
+                    )?;
+                }
             }
             Ok(())
         })();
@@ -144,10 +151,10 @@ fn object_identity_and_declared_dynamic_column_order() {
         scope.set_item("constraint_id", id)?;
         let key = String::from("parameters.a");
         let columns = [
-            Column::new("id", "object"),
-            Column::new(key.as_str(), "string"),
-            Column::new(9u64, "float64"),
-            Column::new("members", "object"),
+            Column::of::<Py<PyAny>>("id"),
+            Column::of::<String>(key.as_str()),
+            Column::of::<f64>(9u64),
+            Column::of::<Py<pyo3::types::PySet>>("members"),
         ];
         let schema = DataFrameSchema::new(&columns, Some("id".into()));
         let entries = rows(
@@ -176,12 +183,12 @@ assert 9 in empty.columns
 #[test]
 fn malformed_schemas_and_undeclared_data_are_rejected() {
     check(|py, scope| {
-        let duplicate = [Column::new("x", "object"), Column::new("x", "object")];
+        let duplicate = [Column::of::<Py<PyAny>>("x"), Column::of::<Py<PyAny>>("x")];
         assert!(DataFrameSchema::new(&duplicate, None)
             .build(py, &[])
             .unwrap_err()
             .is_instance_of::<PyValueError>(py));
-        let columns = [Column::new("x", "uint64")];
+        let columns = [Column::of::<u64>("x")];
         assert!(DataFrameSchema::new(&columns, Some("missing".into()))
             .build(py, &[])
             .unwrap_err()

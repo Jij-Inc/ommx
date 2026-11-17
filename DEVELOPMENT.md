@@ -151,8 +151,24 @@ lockfile:
 uv run --no-sync --with 'pandas>=2,<3' python ci-scripts/run-rust-with-python.py cargo test -p _ommx_rust --lib pandas::schema::tests
 ```
 
-New table builders should declare their ordered columns, pandas dtypes, and
-index with `pandas::schema::DataFrameSchema` in the Python binding crate.
+New table builders should declare their ordered columns and index with
+`pandas::schema::DataFrameSchema` in the Python binding crate. Select each
+column's storage through `PandasColumnType`, for example:
+
+```rust
+let columns = [
+    Column::of::<u64>("sample_id"),
+    Column::of::<Option<f64>>("dual_variable"),
+    Column::of::<String>("name"),
+];
+```
+
+The trait maps `u64`, `i64`, `f64`, and `bool` to their NumPy dtypes;
+`Option<T>` selects nullable storage. `String` and `str` use nullable strings,
+and `Py<T>` keeps Python objects in object columns. These mappings describe
+pandas storage independently of Python stub annotations. Row values still come
+from the owning API and are checked by pandas during conversion.
+
 Resolve dynamic column groups before constructing the schema. The builder
 constructs typed columns directly, fixes nullable string storage to Python,
 and preserves the difference between missing and present NaN values in nullable

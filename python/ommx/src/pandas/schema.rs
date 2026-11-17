@@ -41,25 +41,102 @@ impl ColumnName<'_> {
     }
 }
 
-/// One column's label and pandas dtype spelling.
+/// Storage representations supported by the binding's DataFrame builder.
 ///
-/// Use `string` for nullable strings backed by Python storage, `object` for
-/// domain objects/collections, NumPy dtype names for required scalar values,
-/// and `Int64`/`UInt64`/`Float64`/`boolean` for nullable scalars. Missing keys
-/// become `pd.NA`; object columns otherwise retain their values unchanged.
-/// For `Float64`, only `None`/`pd.NA` are absent; a present NaN or infinity
-/// remains a value. Column labels use an object Index on pandas 2 and 3.
+/// This is a pandas representation contract, independent of Python stub types.
+/// String storage is always Python-backed and nullable. Object storage retains
+/// domain objects and collections without coercion.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Dtype {
+    UInt64,
+    Int64,
+    Float64,
+    Bool,
+    NullableUInt64,
+    NullableInt64,
+    NullableFloat64,
+    NullableBool,
+    String,
+    Object,
+}
+
+impl Dtype {
+    const fn nullable(self) -> Self {
+        match self {
+            Self::UInt64 => Self::NullableUInt64,
+            Self::Int64 => Self::NullableInt64,
+            Self::Float64 => Self::NullableFloat64,
+            Self::Bool => Self::NullableBool,
+            other => other,
+        }
+    }
+
+    fn pandas_name(self) -> &'static str {
+        match self {
+            Self::UInt64 => "uint64",
+            Self::Int64 => "int64",
+            Self::Float64 => "float64",
+            Self::Bool => "bool",
+            Self::NullableUInt64 => "UInt64",
+            Self::NullableInt64 => "Int64",
+            Self::NullableFloat64 => "Float64",
+            Self::NullableBool => "boolean",
+            Self::String => "string",
+            Self::Object => "object",
+        }
+    }
+}
+
+/// Select a pandas storage representation from a Rust column value type.
+///
+/// This trait selects storage, not a Python type annotation or a Rust row
+/// decoder. The owning API still supplies row values; pandas validates their
+/// conversion. `Option<T>` selects nullable storage, with `None`/`pd.NA` for
+/// absence. Nullable floats preserve present NaN and infinity values.
+pub trait PandasColumnType {
+    const DTYPE: Dtype;
+}
+
+macro_rules! scalar_column_types {
+    ($($ty:ty => $dtype:ident),* $(,)?) => {
+        $(impl PandasColumnType for $ty {
+            const DTYPE: Dtype = Dtype::$dtype;
+        })*
+    };
+}
+
+scalar_column_types! {
+    u64 => UInt64,
+    i64 => Int64,
+    f64 => Float64,
+    bool => Bool,
+    String => String,
+    str => String,
+}
+
+impl<T: PandasColumnType> PandasColumnType for Option<T> {
+    const DTYPE: Dtype = T::DTYPE.nullable();
+}
+
+impl<T> PandasColumnType for Py<T> {
+    const DTYPE: Dtype = Dtype::Object;
+}
+
+/// One column's label and storage selected through [`PandasColumnType`].
+///
+/// Missing row keys become `pd.NA`; object columns otherwise retain their
+/// values unchanged. Column labels use an object Index on pandas 2 and 3.
 #[derive(Clone, Copy, Debug)]
 pub struct Column<'a> {
     name: ColumnName<'a>,
-    dtype: &'a str,
+    dtype: Dtype,
 }
 
 impl<'a> Column<'a> {
-    pub fn new(name: impl Into<ColumnName<'a>>, dtype: &'a str) -> Self {
+    pub fn of<T: PandasColumnType + ?Sized>(name: impl Into<ColumnName<'a>>) -> Self {
         Self {
             name: name.into(),
-            dtype,
+            dtype: T::DTYPE,
         }
     }
 }
@@ -123,7 +200,7 @@ impl<'a> DataFrameSchema<'a> {
             }
             let kwargs = PyDict::new(py);
             let values = match column.dtype {
-                "string" => {
+                Dtype::String => {
                     let dtype_args = PyDict::new(py);
                     dtype_args.set_item("storage", "python")?;
                     kwargs.set_item(
@@ -132,7 +209,7 @@ impl<'a> DataFrameSchema<'a> {
                     )?;
                     values.into_any()
                 }
-                "Float64" => {
+                Dtype::NullableFloat64 => {
                     // FloatingArray's explicit mask preserves a present NaN.
                     // pd.array/Series(..., dtype="Float64") masks NaN as missing.
                     let numpy = py.import("numpy")?;
@@ -154,7 +231,7 @@ impl<'a> DataFrameSchema<'a> {
                         .call_method1("FloatingArray", (numbers, mask))?
                 }
                 dtype => {
-                    kwargs.set_item("dtype", dtype)?;
+                    kwargs.set_item("dtype", dtype.pandas_name())?;
                     values.into_any()
                 }
             };
