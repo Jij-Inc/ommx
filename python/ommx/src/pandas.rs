@@ -618,23 +618,30 @@ pub fn raw_entries_to_dataframe<'py>(
 
 /// Build a sorted `pandas.DataFrame` from pre-built entry dicts.
 ///
-/// Sorts by `sort_by` columns before setting the index. Empty inputs
-/// still get the index name set to `index_col`.
+/// `schema` defines ordered column names and pandas dtypes, including the
+/// index column. Materialize this schema for both empty and non-empty inputs,
+/// then sort by `sort_by` columns before setting the index.
 pub fn sorted_entries_to_dataframe<'py>(
     py: Python<'py>,
     entries: Vec<Bound<'py, PyAny>>,
+    schema: &[(&str, &str)],
     sort_by: &[&str],
     ascending: &[bool],
     index_col: &str,
 ) -> PyResult<Bound<'py, PyDataFrame>> {
     let pandas = py.import("pandas")?;
-    let df = pandas.call_method1("DataFrame", (entries,))?;
-    if df.getattr("empty")?.extract::<bool>()? {
-        return df
-            .call_method1("rename_axis", (index_col,))?
-            .cast_into()
-            .map_err(Into::into);
+    let kwargs = PyDict::new(py);
+    kwargs.set_item(
+        "columns",
+        schema.iter().map(|(name, _)| *name).collect::<Vec<_>>(),
+    )?;
+    let dtypes = PyDict::new(py);
+    for (name, dtype) in schema {
+        dtypes.set_item(*name, *dtype)?;
     }
+    let df = pandas
+        .call_method("DataFrame", (entries,), Some(&kwargs))?
+        .call_method1("astype", (dtypes,))?;
     let sort_args = PyDict::new(py);
     sort_args.set_item("by", sort_by.to_vec())?;
     sort_args.set_item("ascending", ascending.to_vec())?;

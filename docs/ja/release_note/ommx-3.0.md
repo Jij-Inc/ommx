@@ -15,6 +15,14 @@ Indicator の制御変数・OneHot/SOS1 の構成変数として指定した場�
 エラーメッセージには検証対象の参照集合に含まれる該当IDを列挙し、設定に失敗した場合は
 モデルを変更しません。
 
+### 空のSampleSetでもsummaryのスキーマを維持 ([#1401](https://github.com/Jij-Inc/ommx/pull/1401))
+
+`SampleSet.summary` は、常に `objective`（`float64`）、`feasible`（`bool`）の
+順で列を返し、indexは名前が `sample_id`、型が `uint64` になります。
+空の結果も同じスキーマを持つため、空の場合の分岐を挟まずに列選択・boolean filter・
+結合を行えます。非空の結果でも、以前は `int64` と推論されていた小さなサンプルIDを
+`uint64` に統一します。実行可能性と目的値が同じ候補はサンプルIDの昇順に並びます。
+
 ### HiGHS アダプターで有限の境界値を保持 ([#1395](https://github.com/Jij-Inc/ommx/pull/1395))
 
 HiGHS アダプターは、`1e20` 以上の値も含め、変数と制約の有限の境界値を

@@ -15,6 +15,15 @@ in active objectives or constraints, and parameters used as Indicator controls
 or OneHot/SOS1 members, also raise `ValueError`. Diagnostics list the offending
 IDs for the checked reference set, and failed setters leave the model unchanged.
 
+### Keep the SampleSet summary schema consistent for empty results ([#1401](https://github.com/Jij-Inc/ommx/pull/1401))
+
+`SampleSet.summary` always returns `objective` (`float64`) and `feasible`
+(`bool`) columns, in that order, with a `uint64` index named `sample_id`.
+An empty result now has the same schema, so column selection, boolean filtering,
+and concatenation work without a special empty-result branch. Non-empty
+summaries also use `uint64` for small sample IDs previously inferred as `int64`.
+Candidates tied on feasibility and objective are ordered by ascending sample ID.
+
 ### Preserve finite bounds in the HiGHS adapter ([#1395](https://github.com/Jij-Inc/ommx/pull/1395))
 
 The HiGHS adapter now preserves finite variable and constraint bounds throughout
