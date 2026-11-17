@@ -1,6 +1,9 @@
 //! Thin wrapper around `pandas.DataFrame` for type-safe PyO3 bindings,
 //! plus shared helpers for building DataFrames from domain objects.
 
+pub mod schema;
+use schema::DataFrameSchema;
+
 use crate::constraint_kind::ConstraintFamilyInput;
 use ommx::EvaluatedConstraintBehavior;
 use ommx::SampledConstraintBehavior;
@@ -618,36 +621,20 @@ pub fn raw_entries_to_dataframe<'py>(
 
 /// Build a sorted `pandas.DataFrame` from pre-built entry dicts.
 ///
-/// `schema` defines ordered column names and pandas dtypes, including the
-/// index column. Materialize this schema for both empty and non-empty inputs,
-/// then sort by `sort_by` columns before setting the index.
+/// Materialize the explicit schema, then sort by columns or the named index.
 pub fn sorted_entries_to_dataframe<'py>(
     py: Python<'py>,
-    entries: Vec<Bound<'py, PyAny>>,
-    schema: &[(&str, &str)],
+    entries: Vec<Bound<'py, PyDict>>,
+    schema: &DataFrameSchema<'_>,
     sort_by: &[&str],
     ascending: &[bool],
-    index_col: &str,
 ) -> PyResult<Bound<'py, PyDataFrame>> {
-    let pandas = py.import("pandas")?;
-    let kwargs = PyDict::new(py);
-    kwargs.set_item(
-        "columns",
-        schema.iter().map(|(name, _)| *name).collect::<Vec<_>>(),
-    )?;
-    let dtypes = PyDict::new(py);
-    for (name, dtype) in schema {
-        dtypes.set_item(*name, *dtype)?;
-    }
-    let df = pandas
-        .call_method("DataFrame", (entries,), Some(&kwargs))?
-        .call_method1("astype", (dtypes,))?;
+    let df = schema.build(py, &entries)?;
     let sort_args = PyDict::new(py);
     sort_args.set_item("by", sort_by.to_vec())?;
     sort_args.set_item("ascending", ascending.to_vec())?;
-    let sorted = df.call_method("sort_values", (), Some(&sort_args))?;
-    sorted
-        .call_method1("set_index", (index_col,))?
+    df.as_any()
+        .call_method("sort_values", (), Some(&sort_args))?
         .cast_into()
         .map_err(Into::into)
 }

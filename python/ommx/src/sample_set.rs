@@ -2,8 +2,9 @@ use crate::{
     constraint_kind::{constraint_kind_collection, ConstraintFamilyInput},
     error::OmmxPyResult,
     pandas::{
-        constraint_id_col, entries_to_dataframe, sorted_entries_to_dataframe, PyDataFrame,
-        ToPandasEntry, WithSampleIds,
+        constraint_id_col, entries_to_dataframe,
+        schema::{Column, DataFrameSchema},
+        sorted_entries_to_dataframe, PyDataFrame, ToPandasEntry, WithSampleIds,
     },
     Solution,
 };
@@ -758,20 +759,22 @@ impl SampleSet {
                     "feasible",
                     feasible_map.get(sample_id).copied().unwrap_or(false),
                 )?;
-                Ok(dict.into_any())
+                Ok(dict)
             })
             .collect::<PyResult<_>>()?;
         sorted_entries_to_dataframe(
             py,
             entries,
-            &[
-                ("sample_id", "uint64"),
-                ("objective", "float64"),
-                ("feasible", "bool"),
-            ],
+            &DataFrameSchema::new(
+                &[
+                    Column::new("sample_id", "uint64"),
+                    Column::new("objective", "float64"),
+                    Column::new("feasible", "bool"),
+                ],
+                Some("sample_id".into()),
+            ),
             &["feasible", "objective", "sample_id"],
             &[false, ascending, true],
-            "sample_id",
         )
     }
 
