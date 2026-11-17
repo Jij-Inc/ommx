@@ -106,6 +106,7 @@ Run `task -l` to see all available commands.
 ### Python SDK Development
 - Top-level `ommx` is the public Python API surface re-exported from `ommx._ommx_rust`.
 - Prefer top-level `ommx` imports in user-facing Python code, examples, tests, and adapters unless the change is specifically about binding internals.
+- DataFrame-returning APIs must define column names, column order, column dtypes, and index names and dtypes independently of the number or values of rows for the same API arguments. Empty results must be zero-row tables with the same schema. Define the schema explicitly rather than relying on pandas inference. Document justified exceptions, such as dynamic sample columns or metadata columns, with their purpose and schema determination rules in the API docstring; document argument-controlled schema changes such as `include` there as well. Use `.agents/skills/python-sdk-review/SKILL.md` for schema validation guidance.
 
 ### Tutorial Writing
 - Lead with the user workflow and the one fact they must remember. Avoid opening with lifecycle details, edge cases, or internal mechanics.

@@ -66,6 +66,25 @@ AutoAPI, toctrees, or rendered documentation.
    - For user-visible text/HTML/table output, prefer snapshot tests over
      piecemeal string fragments.
 
+## DataFrame Schema Validation
+
+Follow the DataFrame API contract in [AGENTS.md](../../../AGENTS.md#python-sdk-development).
+
+- Read the PyO3 docstring for the concrete column order, dtypes, and index
+  schema. Check that construction enforces them before returning, including
+  when there are no rows; a `pandas.DataFrame` annotation cannot express this
+  column schema.
+- Compare empty output with a zero-row slice of non-empty output using
+  `pandas.testing.assert_frame_equal`, and assert the documented dtypes and
+  index names explicitly. Include representative values that could change
+  pandas inference, such as large unsigned IDs or missing optional values.
+- Exercise column selection, boolean filtering where applicable, and
+  concatenation of empty/non-empty outputs in both orders and empty/empty
+  outputs. Check schema and values, not only rendered snapshots.
+- For documented dynamic columns or argument-controlled schemas, test their
+  determination and ordering rules, including empty inputs. Do not expand a
+  focused fix to every table API solely because a shared helper is involved.
+
 ## Recurring Review Checks
 
 - A correct-looking generated stub is not enough. Verify whether the Rust
