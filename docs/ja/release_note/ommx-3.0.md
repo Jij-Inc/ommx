@@ -6,6 +6,12 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### pandasのバージョン間でsummaryの列ラベルの型を統一 ([#1404](https://github.com/Jij-Inc/ommx/pull/1404))
+
+`SampleSet.summary.columns` は、空の結果を含め、pandas 2・3 のどちらでも
+`object` 型の Index になります。列名と列順、各列の値の型、および行を識別する
+`sample_id` index は、引き続きドキュメントに記載したスキーマを維持します。
+
 ### 空のSampleSetでもsummaryのスキーマを維持 ([#1401](https://github.com/Jij-Inc/ommx/pull/1401))
 
 `SampleSet.summary` は、常に `objective`（`float64`）、`feasible`（`bool`）の

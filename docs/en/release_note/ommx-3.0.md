@@ -6,6 +6,12 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### Keep summary column labels consistent across pandas versions ([#1404](https://github.com/Jij-Inc/ommx/pull/1404))
+
+`SampleSet.summary.columns` now uses an `object` Index on both pandas 2 and 3,
+including for empty results. Column names and order, column value dtypes, and
+the `sample_id` row index retain their documented schema.
+
 ### Keep the SampleSet summary schema consistent for empty results ([#1401](https://github.com/Jij-Inc/ommx/pull/1401))
 
 `SampleSet.summary` always returns `objective` (`float64`) and `feasible`
