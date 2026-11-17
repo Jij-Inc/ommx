@@ -6,7 +6,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-### Generate test states for unbounded and large variable domains
+### Generate test states for unbounded and large variable domains ([#1403](https://github.com/Jij-Inc/ommx/pull/1403))
 
 `Instance.random_state` and `random_samples` remain public test and debugging
 utilities, including for solver adapters. They now generate finite values within

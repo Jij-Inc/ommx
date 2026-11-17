@@ -6,7 +6,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-### 無限区間や大きな変数定義域でのテスト用状態生成を修正
+### 無限区間や大きな変数定義域でのテスト用状態生成を修正 ([#1403](https://github.com/Jij-Inc/ommx/pull/1403))
 
 `Instance.random_state` と `random_samples` は、solver adapterも利用できる
 テスト・デバッグ用の公開APIとして維持します。区間の端点が `[-100, 100]` や
