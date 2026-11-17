@@ -262,7 +262,7 @@ class TestInstanceNamedFunctions:
         x = DecisionVariable.binary(0)
         rogue = NamedFunction(id=0, function=DecisionVariable.binary(999))
 
-        with pytest.raises(RuntimeError, match="VariableID\\(999\\)"):
+        with pytest.raises(ValueError, match="VariableID\\(999\\)"):
             Instance.from_components(
                 decision_variables=[x],
                 objective=x,
@@ -292,7 +292,7 @@ class TestInstanceNamedFunctions:
         p = Parameter(100, name="p")
         rogue = NamedFunction(id=0, function=DecisionVariable.binary(999))
 
-        with pytest.raises(RuntimeError, match="VariableID\\(999\\)"):
+        with pytest.raises(ValueError, match="VariableID\\(999\\)"):
             ParametricInstance.from_components(
                 decision_variables=[x],
                 parameters=[p],

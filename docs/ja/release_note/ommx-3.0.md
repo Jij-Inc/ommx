@@ -6,6 +6,15 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 不正な変数参照を ValueError で報告 ([#1400](https://github.com/Jij-Inc/ommx/pull/1400))
+
+`Instance` と `ParametricInstance` の構築や制約追加で未定義の変数を参照すると、
+`ValueError` を返すようになりました。`Instance` の目的関数設定も同じ例外を返します。
+固定済み変数・依存変数をアクティブな目的関数や制約で参照した場合や、パラメータを
+Indicator の制御変数・OneHot/SOS1 の構成変数として指定した場合も `ValueError` になります。
+エラーメッセージには検証対象の参照集合に含まれる該当IDを列挙し、設定に失敗した場合は
+モデルを変更しません。
+
 ### 空のSampleSetでもsummaryのスキーマを維持 ([#1401](https://github.com/Jij-Inc/ommx/pull/1401))
 
 `SampleSet.summary` は、常に `objective`（`float64`）、`feasible`（`bool`）の

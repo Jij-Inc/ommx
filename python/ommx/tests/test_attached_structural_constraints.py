@@ -167,7 +167,7 @@ def test_one_hot_add_rejects_undefined_variable():
         variables=[DecisionVariable.binary(0), DecisionVariable.binary(99)]
     )
 
-    with pytest.raises(Exception, match="99"):
+    with pytest.raises(ValueError, match="99"):
         instance.add_one_hot_constraint(bad)
 
     assert not any(
@@ -271,7 +271,7 @@ def test_sos1_add_rejects_undefined_variable():
         variables=[DecisionVariable.binary(0), DecisionVariable.binary(99)]
     )
 
-    with pytest.raises(Exception, match="99"):
+    with pytest.raises(ValueError, match="99"):
         instance.add_sos1_constraint(bad)
 
 
@@ -302,7 +302,7 @@ def test_one_hot_on_parametric_rejects_parameter_id_in_variables():
         variables=[DecisionVariable.binary(0), DecisionVariable.binary(100)]
     )
 
-    with pytest.raises(Exception, match="(structural|parameter)"):
+    with pytest.raises(ValueError, match="structural"):
         parametric.add_one_hot_constraint(bad)
 
     assert not any(
@@ -317,7 +317,7 @@ def test_sos1_on_parametric_rejects_parameter_id_in_variables():
         variables=[DecisionVariable.binary(0), DecisionVariable.binary(100)]
     )
 
-    with pytest.raises(Exception, match="(structural|parameter)"):
+    with pytest.raises(ValueError, match="structural"):
         parametric.add_sos1_constraint(bad)
 
     assert not any(

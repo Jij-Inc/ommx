@@ -16504,7 +16504,7 @@
             },
             {
               "name": "add_constraint",
-              "doc": "Add a regular constraint to this instance.\n\nPicks an unused {class}`~ommx.ConstraintID`, drains the wrapper's\ncontext snapshot into this instance's SoA store, and returns an\n{class}`~ommx.AttachedConstraint` bound to the new id. The input\n{class}`~ommx.Constraint` is not mutated; subsequent writes that\nshould land in the instance must go through the returned handle.\nWhen modeling-label fields are provided, they replace the corresponding\nfields stored on the inserted constraint without modifying the input\nsnapshot. Omitted fields preserve the snapshot's existing values.\n\n**Args:**\n- `constraint`: Constraint to add\n- `name`: Optional modeling name for the inserted constraint\n- `subscripts`: Optional integer indices for the inserted constraint\n- `parameters`: Optional string-valued indices for the inserted constraint\n- `description`: Optional description for the inserted constraint\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable or one currently used as a substitution-dependency\nkey, matching the validation performed by other constraint-insertion\npaths.",
+              "doc": "Add a regular constraint to this instance.\n\nPicks an unused {class}`~ommx.ConstraintID`, drains the wrapper's\ncontext snapshot into this instance's SoA store, and returns an\n{class}`~ommx.AttachedConstraint` bound to the new id. The input\n{class}`~ommx.Constraint` is not mutated; subsequent writes that\nshould land in the instance must go through the returned handle.\nWhen modeling-label fields are provided, they replace the corresponding\nfields stored on the inserted constraint without modifying the input\nsnapshot. Omitted fields preserve the snapshot's existing values.\n\n**Args:**\n- `constraint`: Constraint to add\n- `name`: Optional modeling name for the inserted constraint\n- `subscripts`: Optional integer indices for the inserted constraint\n- `parameters`: Optional string-valued indices for the inserted constraint\n- `description`: Optional description for the inserted constraint\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable, a fixed variable, or a substitution-dependency key.\nDeclare missing variables or substitute fixed values and dependency\nexpressions before retrying. Failure leaves this instance unchanged.",
               "signatures": [
                 {
                   "parameters": [
@@ -16645,7 +16645,7 @@
             },
             {
               "name": "add_indicator_constraint",
-              "doc": "Add an indicator constraint to this instance.\n\nPicks an unused {class}`~ommx.IndicatorConstraintID`, drains the\nwrapper's context snapshot into this instance's SoA store, and\nreturns an {class}`~ommx.AttachedIndicatorConstraint` bound to the\nnew id.\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable or one currently used as a substitution-dependency\nkey.",
+              "doc": "Add an indicator constraint to this instance.\n\nPicks an unused {class}`~ommx.IndicatorConstraintID`, drains the\nwrapper's context snapshot into this instance's SoA store, and\nreturns an {class}`~ommx.AttachedIndicatorConstraint` bound to the\nnew id.\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable, a fixed variable, or a substitution-dependency key.\nFailure leaves this instance unchanged.",
               "signatures": [
                 {
                   "parameters": [
@@ -16746,7 +16746,7 @@
             },
             {
               "name": "add_one_hot_constraint",
-              "doc": "Add a one-hot constraint to this instance.",
+              "doc": "Add a one-hot constraint to this instance.\n\nRaises {class}`ValueError` for undefined, fixed, or dependent variable\nreferences. Failure leaves this instance unchanged.",
               "signatures": [
                 {
                   "parameters": [
@@ -16772,7 +16772,7 @@
             },
             {
               "name": "add_sos1_constraint",
-              "doc": "Add a SOS1 constraint to this instance.",
+              "doc": "Add a SOS1 constraint to this instance.\n\nRaises {class}`ValueError` for undefined, fixed, or dependent variable\nreferences. Failure leaves this instance unchanged.",
               "signatures": [
                 {
                   "parameters": [
@@ -18394,7 +18394,7 @@
             },
             {
               "name": "from_components",
-              "doc": "Create an instance from its components.\n\nConstraint mappings accept integer keys or IDs of the matching family.\nIntegers are promoted to that family's ID. IDs of another family raise\n{class}`TypeError`; keys that become duplicates raise {class}`ValueError`.\nReturned collections always use typed IDs.\n\n**Args:**\n- `sense`: Optimization sense (minimize or maximize)\n- `objective`: Objective function\n- `decision_variables`: List of decision variables\n- `active_constraints`: Mapping from regular constraint IDs to active constraints\n- `named_functions`: Optional list of named functions\n- `description`: Optional instance description\n\n**Returns:**\nA new Instance",
+              "doc": "Create an instance from its components.\n\nConstraint mappings accept integer keys or IDs of the matching family.\nIntegers are promoted to that family's ID. IDs of another family raise\n{class}`TypeError`; keys that become duplicates raise {class}`ValueError`.\nReturned collections always use typed IDs.\n\nRaises {class}`ValueError` if an objective, constraint, or named function\nreferences an undefined decision-variable ID.\n\n**Args:**\n- `sense`: Optimization sense (minimize or maximize)\n- `objective`: Objective function\n- `decision_variables`: List of decision variables\n- `active_constraints`: Mapping from regular constraint IDs to active constraints\n- `named_functions`: Optional list of named functions\n- `description`: Optional instance description\n\n**Returns:**\nA new Instance",
               "signatures": [
                 {
                   "parameters": [
@@ -27336,7 +27336,7 @@
             },
             {
               "name": "add_constraint",
-              "doc": "Add a regular constraint to this parametric instance.\n\nPicks an unused {class}`~ommx.ConstraintID`, drains the wrapper's\ncontext snapshot into this parametric instance's SoA store, and\nreturns an {class}`~ommx.AttachedConstraint` bound to the new id.\nThe input {class}`~ommx.Constraint` is not mutated; subsequent\nwrites that should land on this parametric instance must go through\nthe returned handle.\n\nRaises {class}`ValueError` if the constraint references an id that is\nneither a defined decision variable nor a defined parameter, or if it\nreferences an id currently used as a substitution-dependency key.",
+              "doc": "Add a regular constraint to this parametric instance.\n\nPicks an unused {class}`~ommx.ConstraintID`, drains the wrapper's\ncontext snapshot into this parametric instance's SoA store, and\nreturns an {class}`~ommx.AttachedConstraint` bound to the new id.\nThe input {class}`~ommx.Constraint` is not mutated; subsequent\nwrites that should land on this parametric instance must go through\nthe returned handle.\n\nRaises {class}`ValueError` if the constraint references an id that is\nneither a defined decision variable nor a defined parameter, or if it\nreferences a fixed variable or a substitution-dependency key.\nFailure leaves this instance unchanged.",
               "signatures": [
                 {
                   "parameters": [
@@ -27388,7 +27388,7 @@
             },
             {
               "name": "add_indicator_constraint",
-              "doc": "Add an indicator constraint to this parametric instance.\n\nPicks an unused {class}`~ommx.IndicatorConstraintID`, drains the\nwrapper's context snapshot into this parametric instance's SoA\nstore, and returns an\n{class}`~ommx.AttachedIndicatorConstraint` bound to the new id.\n\nRaises {class}`ValueError` if the constraint references an id that\nis neither a defined decision variable nor a defined parameter, or\nif it references an id currently used as a substitution-dependency\nkey.",
+              "doc": "Add an indicator constraint to this parametric instance.\n\nPicks an unused {class}`~ommx.IndicatorConstraintID`, drains the\nwrapper's context snapshot into this parametric instance's SoA\nstore, and returns an\n{class}`~ommx.AttachedIndicatorConstraint` bound to the new id.\n\nRaises {class}`ValueError` if the constraint references an id that\nis neither a defined decision variable nor a defined parameter, or\nif it references a fixed variable or a substitution-dependency key.\nA parameter cannot be used as the indicator control and also raises\n{class}`ValueError`. Failure leaves this instance unchanged.",
               "signatures": [
                 {
                   "parameters": [
@@ -27414,7 +27414,7 @@
             },
             {
               "name": "add_one_hot_constraint",
-              "doc": "Add a one-hot constraint to this parametric instance.",
+              "doc": "Add a one-hot constraint to this parametric instance.\n\nRaises {class}`ValueError` for undefined, fixed, or dependent variable\nreferences, or parameters used as members. Failure leaves this instance\nunchanged.",
               "signatures": [
                 {
                   "parameters": [
@@ -27440,7 +27440,7 @@
             },
             {
               "name": "add_sos1_constraint",
-              "doc": "Add a SOS1 constraint to this parametric instance.",
+              "doc": "Add a SOS1 constraint to this parametric instance.\n\nRaises {class}`ValueError` for undefined, fixed, or dependent variable\nreferences, or parameters used as members. Failure leaves this instance\nunchanged.",
               "signatures": [
                 {
                   "parameters": [
@@ -28353,7 +28353,7 @@
             },
             {
               "name": "from_components",
-              "doc": "Build a parametric instance from its model components.\n\nConstraint mappings accept integer keys or IDs of the matching family.\nIntegers are promoted to that family's ID. IDs of another family raise\n{class}`TypeError`; keys that become duplicates raise {class}`ValueError`.\nReturned collections always use typed IDs.\n\nRaises {class}`ValueError` if a decision variable and parameter use the\nsame ID.\n\n**Parameterize objective coefficients, weights, and a capacity**\n\nThis two-item knapsack family fixes the item count and uses parameters\nfor both coefficients and the right-hand-side constant. Parameter IDs\nare separate from the decision-variable IDs in the shared ID space.\n\n>>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense\n>>> n = 2\n>>> xs = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(n)]\n>>> profits = [Parameter(n + i, name=\"profit\", subscripts=[i]) for i in range(n)]\n>>> weights = [Parameter(2 * n + i, name=\"weight\", subscripts=[i]) for i in range(n)]\n>>> capacity = Parameter(3 * n, name=\"capacity\")\n>>> family = ParametricInstance.from_components(\n...     decision_variables=xs, parameters=profits + weights + [capacity],\n...     objective=sum(p * x for p, x in zip(profits, xs)),\n...     active_constraints={0: sum(w * x for w, x in zip(weights, xs)) <= capacity},\n...     sense=Sense.Maximize,\n... )\n>>> values = {p.id: value for p, value in zip(profits, [3, 2])}\n>>> values.update({w.id: value for w, value in zip(weights, [2, 1])})\n>>> values[capacity.id] = 2\n>>> instance = family.with_parameters(values)\n>>> solution = instance.evaluate({xs[0].id: 1, xs[1].id: 0})\n>>> assert solution.feasible and solution.objective == 3.0\n>>> assert not instance.evaluate({xs[0].id: 1, xs[1].id: 1}).feasible",
+              "doc": "Build a parametric instance from its model components.\n\nConstraint mappings accept integer keys or IDs of the matching family.\nIntegers are promoted to that family's ID. IDs of another family raise\n{class}`TypeError`; keys that become duplicates raise {class}`ValueError`.\nReturned collections always use typed IDs.\n\nRaises {class}`ValueError` if a decision variable and parameter use the\nsame ID, an expression references an undeclared ID, or a parameter is\nused as an indicator control or OneHot/SOS1 member.\n\n**Parameterize objective coefficients, weights, and a capacity**\n\nThis two-item knapsack family fixes the item count and uses parameters\nfor both coefficients and the right-hand-side constant. Parameter IDs\nare separate from the decision-variable IDs in the shared ID space.\n\n>>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense\n>>> n = 2\n>>> xs = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(n)]\n>>> profits = [Parameter(n + i, name=\"profit\", subscripts=[i]) for i in range(n)]\n>>> weights = [Parameter(2 * n + i, name=\"weight\", subscripts=[i]) for i in range(n)]\n>>> capacity = Parameter(3 * n, name=\"capacity\")\n>>> family = ParametricInstance.from_components(\n...     decision_variables=xs, parameters=profits + weights + [capacity],\n...     objective=sum(p * x for p, x in zip(profits, xs)),\n...     active_constraints={0: sum(w * x for w, x in zip(weights, xs)) <= capacity},\n...     sense=Sense.Maximize,\n... )\n>>> values = {p.id: value for p, value in zip(profits, [3, 2])}\n>>> values.update({w.id: value for w, value in zip(weights, [2, 1])})\n>>> values[capacity.id] = 2\n>>> instance = family.with_parameters(values)\n>>> solution = instance.evaluate({xs[0].id: 1, xs[1].id: 0})\n>>> assert solution.feasible and solution.objective == 3.0\n>>> assert not instance.evaluate({xs[0].id: 1, xs[1].id: 1}).feasible",
               "signatures": [
                 {
                   "parameters": [

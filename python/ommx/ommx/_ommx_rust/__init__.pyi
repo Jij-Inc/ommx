@@ -5831,7 +5831,12 @@ class Instance:
         >>> assert (solution.sense, solution.objective) == (Sense.Minimize, 2.0)
         """
     @objective.setter
-    def objective(self, value: ToFunction) -> None: ...
+    def objective(self, value: ToFunction) -> None:
+        r"""
+        Set the objective, rejecting undefined, fixed, or dependent variable
+        references with {class}`ValueError`. Failure preserves both the current
+        objective and output objective.
+        """
     @property
     def output_objective(self) -> typing.Optional[OutputObjective]:
         r"""
@@ -6226,6 +6231,9 @@ class Instance:
         {class}`TypeError`; keys that become duplicates raise {class}`ValueError`.
         Returned collections always use typed IDs.
 
+        Raises {class}`ValueError` if an objective, constraint, or named function
+        references an undefined decision-variable ID.
+
         **Args:**
         - `sense`: Optimization sense (minimize or maximize)
         - `objective`: Objective function
@@ -6584,9 +6592,9 @@ class Instance:
         - `description`: Optional description for the inserted constraint
 
         Raises {class}`ValueError` if the constraint references an undefined
-        decision variable or one currently used as a substitution-dependency
-        key, matching the validation performed by other constraint-insertion
-        paths.
+        decision variable, a fixed variable, or a substitution-dependency key.
+        Declare missing variables or substitute fixed values and dependency
+        expressions before retrying. Failure leaves this instance unchanged.
         """
     def add_indicator_constraint(
         self, constraint: IndicatorConstraint
@@ -6600,18 +6608,24 @@ class Instance:
         new id.
 
         Raises {class}`ValueError` if the constraint references an undefined
-        decision variable or one currently used as a substitution-dependency
-        key.
+        decision variable, a fixed variable, or a substitution-dependency key.
+        Failure leaves this instance unchanged.
         """
     def add_one_hot_constraint(
         self, constraint: OneHotConstraint
     ) -> AttachedOneHotConstraint:
         r"""
         Add a one-hot constraint to this instance.
+
+        Raises {class}`ValueError` for undefined, fixed, or dependent variable
+        references. Failure leaves this instance unchanged.
         """
     def add_sos1_constraint(self, constraint: Sos1Constraint) -> AttachedSos1Constraint:
         r"""
         Add a SOS1 constraint to this instance.
+
+        Raises {class}`ValueError` for undefined, fixed, or dependent variable
+        references. Failure leaves this instance unchanged.
         """
     def lower_special_constraints(
         self,
@@ -11219,7 +11233,8 @@ class ParametricInstance:
         Returned collections always use typed IDs.
 
         Raises {class}`ValueError` if a decision variable and parameter use the
-        same ID.
+        same ID, an expression references an undeclared ID, or a parameter is
+        used as an indicator control or OneHot/SOS1 member.
 
         **Parameterize objective coefficients, weights, and a capacity**
 
@@ -11483,7 +11498,8 @@ class ParametricInstance:
 
         Raises {class}`ValueError` if the constraint references an id that is
         neither a defined decision variable nor a defined parameter, or if it
-        references an id currently used as a substitution-dependency key.
+        references a fixed variable or a substitution-dependency key.
+        Failure leaves this instance unchanged.
         """
     def add_indicator_constraint(
         self, constraint: IndicatorConstraint
@@ -11498,18 +11514,27 @@ class ParametricInstance:
 
         Raises {class}`ValueError` if the constraint references an id that
         is neither a defined decision variable nor a defined parameter, or
-        if it references an id currently used as a substitution-dependency
-        key.
+        if it references a fixed variable or a substitution-dependency key.
+        A parameter cannot be used as the indicator control and also raises
+        {class}`ValueError`. Failure leaves this instance unchanged.
         """
     def add_one_hot_constraint(
         self, constraint: OneHotConstraint
     ) -> AttachedOneHotConstraint:
         r"""
         Add a one-hot constraint to this parametric instance.
+
+        Raises {class}`ValueError` for undefined, fixed, or dependent variable
+        references, or parameters used as members. Failure leaves this instance
+        unchanged.
         """
     def add_sos1_constraint(self, constraint: Sos1Constraint) -> AttachedSos1Constraint:
         r"""
         Add a SOS1 constraint to this parametric instance.
+
+        Raises {class}`ValueError` for undefined, fixed, or dependent variable
+        references, or parameters used as members. Failure leaves this instance
+        unchanged.
         """
     def get_decision_variable_by_id(
         self, variable_id: builtins.int

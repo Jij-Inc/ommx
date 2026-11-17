@@ -271,6 +271,10 @@ impl InstanceBuilder {
     ///   corresponding decision-variable, named-function, or constraint collection
     /// - The keys of `decision_variable_dependency` are not in `decision_variables`
     /// - Construction-time `active`, `fixed`, and `dependent` sets are not pairwise disjoint
+    ///
+    /// Invalid expression references carry [`VariableReferenceError`] in the
+    /// error chain. It reports undeclared IDs, fixed/dependent active references,
+    /// or parameters used where structural decision variables are required.
     pub fn build(self) -> crate::Result<Instance> {
         let sense = self
             .sense
@@ -295,19 +299,9 @@ impl InstanceBuilder {
         // Collect all variable IDs for host-level validation.
         let variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
 
-        // Validate that all variable IDs in objective and constraints are defined
-        for id in objective.required_ids() {
-            if !variable_ids.contains(&id) {
-                crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
-            }
-        }
-        // Validate named_functions: map keys own IDs, and all referenced variable IDs must exist.
+        validate_defined_ids(&objective.required_ids(), &variable_ids)?;
         for nf in self.named_functions.values() {
-            for id in nf.function.required_ids() {
-                if !variable_ids.contains(&id) {
-                    crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
-                }
-            }
+            validate_defined_ids(&nf.function.required_ids(), &variable_ids)?;
         }
         let named_functions =
             NamedFunctionTable::new(self.named_functions, self.named_function_labels)?;
@@ -316,12 +310,10 @@ impl InstanceBuilder {
         for value in self.indicator_constraints.values() {
             // Check that indicator_variable exists and is binary
             let indicator_id = value.indicator_variable;
-            let Some(dv) = decision_variables.get(&indicator_id) else {
-                crate::bail!(
-                    { ?indicator_id },
-                    "Indicator variable {indicator_id:?} is not defined in decision_variables",
-                );
-            };
+            validate_defined_ids(&value.required_ids(), &variable_ids)?;
+            let dv = decision_variables
+                .get(&indicator_id)
+                .expect("validated indicator variable");
             if dv.kind() != crate::decision_variable::Kind::Binary {
                 crate::bail!(
                     { ?indicator_id },
@@ -332,12 +324,10 @@ impl InstanceBuilder {
         for (ic, _reason) in self.inactive_indicator_constraints.values() {
             // Check that indicator_variable exists and is binary
             let indicator_id = ic.indicator_variable;
-            let Some(dv) = decision_variables.get(&indicator_id) else {
-                crate::bail!(
-                    { ?indicator_id },
-                    "Indicator variable {indicator_id:?} is not defined in decision_variables",
-                );
-            };
+            validate_defined_ids(&ic.required_ids(), &variable_ids)?;
+            let dv = decision_variables
+                .get(&indicator_id)
+                .expect("validated indicator variable");
             if dv.kind() != crate::decision_variable::Kind::Binary {
                 crate::bail!(
                     { ?indicator_id },
@@ -369,13 +359,11 @@ impl InstanceBuilder {
                     "One-hot constraint {id:?} has no variables; one-hot constraints must contain at least one variable"
                 )));
             }
+            validate_structural_ids(&value.variables, |id| variable_ids.contains(id), |_| false)?;
             for var_id in &value.variables {
-                let Some(dv) = decision_variables.get(var_id) else {
-                    crate::bail!(
-                        { ?var_id },
-                        "One-hot variable {var_id:?} is not defined in decision_variables",
-                    );
-                };
+                let dv = decision_variables
+                    .get(var_id)
+                    .expect("validated one-hot variable");
                 if dv.kind() != crate::decision_variable::Kind::Binary {
                     crate::bail!({ ?var_id }, "One-hot variable {var_id:?} must be binary");
                 }
@@ -396,14 +384,7 @@ impl InstanceBuilder {
                     "SOS1 constraint {id:?} has no variables; SOS1 constraints must contain at least one variable"
                 )));
             }
-            for var_id in &value.variables {
-                if !variable_ids.contains(var_id) {
-                    crate::bail!(
-                        { ?var_id },
-                        "SOS1 variable {var_id:?} is not defined in decision_variables",
-                    );
-                }
-            }
+            validate_structural_ids(&value.variables, |id| variable_ids.contains(id), |_| false)?;
         }
 
         // Validate that constraints and inactive_constraints keys are disjoint
@@ -453,19 +434,16 @@ impl InstanceBuilder {
             one_hot_constraint_collection: &one_hot_constraint_collection,
             sos1_constraint_collection: &sos1_constraint_collection,
         };
-        for_each_constraint_collection!(created, collections, |_, collection| {
-            for constraint in collection
-                .active()
+        // Special families already validated all references alongside their
+        // structural rules above. Only regular constraints remain unchecked.
+        for constraint in constraint_collection.active().values().chain(
+            constraint_collection
+                .inactive()
                 .values()
-                .chain(collection.inactive().values().map(|(row, _)| row))
-            {
-                for id in constraint.required_ids() {
-                    if !variable_ids.contains(&id) {
-                        crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
-                    }
-                }
-            }
-        });
+                .map(|(row, _)| row),
+        ) {
+            validate_defined_ids(&constraint.required_ids(), &variable_ids)?;
+        }
         // Construction invariant: raw active, fixed, and dependent sets must be pairwise disjoint.
         // - active: IDs appearing in objective or constraints
         // - fixed: IDs in the decision-variable table's fixed-value column
@@ -477,21 +455,7 @@ impl InstanceBuilder {
         let fixed: VariableIDSet = decision_variables.fixed_values().keys().copied().collect();
         let dependent: VariableIDSet = self.decision_variable_dependency.keys().collect();
 
-        // Check active ∩ dependent = ∅
-        if let Some(id) = active.intersection(&dependent).next() {
-            crate::bail!(
-                { ?id },
-                "Dependent variable cannot be used in objectives or constraints: {id:?}",
-            );
-        }
-
-        // Check active ∩ fixed = ∅
-        if let Some(id) = active.intersection(&fixed).next() {
-            crate::bail!(
-                { ?id },
-                "Fixed variable {id:?} cannot be used in objectives or constraints",
-            );
-        }
+        validate_active_ids(&active, &dependent, &fixed)?;
 
         // Check fixed ∩ dependent = ∅
         if let Some(id) = fixed.intersection(&dependent).next() {
@@ -1003,7 +967,7 @@ mod tests {
 
         let msg = err.to_string();
         assert!(
-            msg.contains("Dependent variable cannot be used")
+            msg.contains("Dependent variables cannot be used")
                 && msg.contains(&format!("{:?}", var_id)),
             "unexpected error: {msg}"
         );
@@ -1039,7 +1003,7 @@ mod tests {
 
         let msg = err.to_string();
         assert!(
-            msg.contains("Dependent variable cannot be used")
+            msg.contains("Dependent variables cannot be used")
                 && msg.contains(&format!("{:?}", var_id)),
             "unexpected error: {msg}"
         );

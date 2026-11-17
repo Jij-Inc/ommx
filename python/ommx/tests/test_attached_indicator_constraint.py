@@ -194,7 +194,7 @@ def test_add_rejects_undefined_indicator_variable():
         equality=Equality.EqualToZero,
     )
 
-    with pytest.raises(Exception, match="99"):
+    with pytest.raises(ValueError, match="99"):
         instance.add_indicator_constraint(bad)
 
     assert not any(
@@ -279,7 +279,7 @@ def test_add_indicator_rejects_parameter_in_indicator_variable_position():
         equality=Equality.EqualToZero,
     )
 
-    with pytest.raises(Exception, match="(structural|parameter)"):
+    with pytest.raises(ValueError, match="structural"):
         parametric.add_indicator_constraint(bad)
 
     assert not any(

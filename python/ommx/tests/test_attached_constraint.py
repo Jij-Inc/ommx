@@ -256,7 +256,7 @@ def test_add_constraint_rejects_undefined_variable():
         equality=Equality.EqualToZero,
     )
 
-    with pytest.raises(Exception, match="99"):
+    with pytest.raises(ValueError, match="99"):
         instance.add_constraint(bad_constraint)
 
     # Instance is unchanged.

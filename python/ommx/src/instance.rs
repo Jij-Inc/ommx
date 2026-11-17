@@ -445,6 +445,9 @@ impl Instance {
     /// {class}`TypeError`; keys that become duplicates raise {class}`ValueError`.
     /// Returned collections always use typed IDs.
     ///
+    /// Raises {class}`ValueError` if an objective, constraint, or named function
+    /// references an undefined decision-variable ID.
+    ///
     /// **Args:**
     /// - `sense`: Optimization sense (minimize or maximize)
     /// - `objective`: Objective function
@@ -739,6 +742,9 @@ impl Instance {
         Function(self.inner.objective().clone())
     }
 
+    /// Set the objective, rejecting undefined, fixed, or dependent variable
+    /// references with {class}`ValueError`. Failure preserves both the current
+    /// objective and output objective.
     #[setter]
     pub fn set_objective(&mut self, objective: Function) -> OmmxPyResult<()> {
         self.inner.set_objective(objective.0)?;
@@ -1229,9 +1235,9 @@ impl Instance {
     /// - `description`: Optional description for the inserted constraint
     ///
     /// Raises {class}`ValueError` if the constraint references an undefined
-    /// decision variable or one currently used as a substitution-dependency
-    /// key, matching the validation performed by other constraint-insertion
-    /// paths.
+    /// decision variable, a fixed variable, or a substitution-dependency key.
+    /// Declare missing variables or substitute fixed values and dependency
+    /// expressions before retrying. Failure leaves this instance unchanged.
     #[pyo3(signature = (constraint, name=None, *, subscripts=None, parameters=None, description=None))]
     pub fn add_constraint(
         slf: Bound<'_, Self>,
@@ -1268,8 +1274,8 @@ impl Instance {
     /// new id.
     ///
     /// Raises {class}`ValueError` if the constraint references an undefined
-    /// decision variable or one currently used as a substitution-dependency
-    /// key.
+    /// decision variable, a fixed variable, or a substitution-dependency key.
+    /// Failure leaves this instance unchanged.
     pub fn add_indicator_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::IndicatorConstraint,
@@ -1286,6 +1292,9 @@ impl Instance {
     }
 
     /// Add a one-hot constraint to this instance.
+    ///
+    /// Raises {class}`ValueError` for undefined, fixed, or dependent variable
+    /// references. Failure leaves this instance unchanged.
     pub fn add_one_hot_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::OneHotConstraint,
@@ -1302,6 +1311,9 @@ impl Instance {
     }
 
     /// Add a SOS1 constraint to this instance.
+    ///
+    /// Raises {class}`ValueError` for undefined, fixed, or dependent variable
+    /// references. Failure leaves this instance unchanged.
     pub fn add_sos1_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::Sos1Constraint,

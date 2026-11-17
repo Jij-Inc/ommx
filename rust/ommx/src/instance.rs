@@ -43,6 +43,9 @@ mod substitute;
 mod unary_encode;
 mod v1_hint_export;
 mod v1_hint_promotion;
+mod variable_reference;
+pub use variable_reference::VariableReferenceError;
+use variable_reference::{validate_active_ids, validate_defined_ids, validate_structural_ids};
 
 pub use analysis::{DecisionVariableRole, DecisionVariableUsage, DecisionVariableUsageEntry};
 pub use arbitrary::{InstanceParameters, InstanceSpace};
