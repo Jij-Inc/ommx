@@ -338,14 +338,13 @@ impl ParametricInstanceBuilder {
         let validate_indicator = |ic: &crate::IndicatorConstraint| -> crate::Result<()> {
             let indicator_id = ic.indicator_variable;
             validate_defined_ids(&ic.required_ids(), &all_variable_ids)?;
-            validate_structural_ids(
-                &VariableIDSet::from_iter([indicator_id]),
-                &decision_variable_ids,
-                &parameter_ids,
-            )?;
-            let dv = decision_variables
-                .get(&indicator_id)
-                .expect("validated indicator variable");
+            let dv = decision_variables.get(&indicator_id).ok_or_else(|| {
+                VariableReferenceError::ParameterInStructuralPosition {
+                    // The full reference check above already rejected unknown
+                    // IDs, so a non-decision-variable control is a parameter.
+                    ids: BTreeSet::from([indicator_id]),
+                }
+            })?;
             if dv.kind() != crate::decision_variable::Kind::Binary {
                 crate::bail!(
                     { ?indicator_id },
@@ -386,9 +385,9 @@ impl ParametricInstanceBuilder {
                 )));
             }
             validate_structural_ids(
-                &value.required_ids(),
-                &decision_variable_ids,
-                &parameter_ids,
+                &value.variables,
+                |id| decision_variable_ids.contains(id),
+                |id| parameter_ids.contains(id),
             )?;
             for var_id in &value.variables {
                 let dv = decision_variables
@@ -417,9 +416,9 @@ impl ParametricInstanceBuilder {
                 )));
             }
             validate_structural_ids(
-                &value.required_ids(),
-                &decision_variable_ids,
-                &parameter_ids,
+                &value.variables,
+                |id| decision_variable_ids.contains(id),
+                |id| parameter_ids.contains(id),
             )?;
         }
 
@@ -474,15 +473,16 @@ impl ParametricInstanceBuilder {
             one_hot_constraint_collection: &one_hot_constraint_collection,
             sos1_constraint_collection: &sos1_constraint_collection,
         };
-        for_each_constraint_collection!(created, collections, |_, collection| {
-            for constraint in collection
-                .active()
+        // Special families already validated all references alongside their
+        // structural rules above. Only regular constraints remain unchecked.
+        for constraint in constraint_collection.active().values().chain(
+            constraint_collection
+                .inactive()
                 .values()
-                .chain(collection.inactive().values().map(|(row, _)| row))
-            {
-                validate_defined_ids(&constraint.required_ids(), &all_variable_ids)?;
-            }
-        });
+                .map(|(row, _)| row),
+        ) {
+            validate_defined_ids(&constraint.required_ids(), &all_variable_ids)?;
+        }
         // Construction invariant: raw active, fixed, and dependent sets must be pairwise disjoint.
         // - active: IDs appearing in objective or constraints
         // - fixed: IDs in the decision-variable table's fixed-value column

@@ -359,7 +359,7 @@ impl InstanceBuilder {
                     "One-hot constraint {id:?} has no variables; one-hot constraints must contain at least one variable"
                 )));
             }
-            validate_defined_ids(&value.required_ids(), &variable_ids)?;
+            validate_structural_ids(&value.variables, |id| variable_ids.contains(id), |_| false)?;
             for var_id in &value.variables {
                 let dv = decision_variables
                     .get(var_id)
@@ -384,7 +384,7 @@ impl InstanceBuilder {
                     "SOS1 constraint {id:?} has no variables; SOS1 constraints must contain at least one variable"
                 )));
             }
-            validate_defined_ids(&value.required_ids(), &variable_ids)?;
+            validate_structural_ids(&value.variables, |id| variable_ids.contains(id), |_| false)?;
         }
 
         // Validate that constraints and inactive_constraints keys are disjoint
@@ -434,15 +434,16 @@ impl InstanceBuilder {
             one_hot_constraint_collection: &one_hot_constraint_collection,
             sos1_constraint_collection: &sos1_constraint_collection,
         };
-        for_each_constraint_collection!(created, collections, |_, collection| {
-            for constraint in collection
-                .active()
+        // Special families already validated all references alongside their
+        // structural rules above. Only regular constraints remain unchecked.
+        for constraint in constraint_collection.active().values().chain(
+            constraint_collection
+                .inactive()
                 .values()
-                .chain(collection.inactive().values().map(|(row, _)| row))
-            {
-                validate_defined_ids(&constraint.required_ids(), &variable_ids)?;
-            }
-        });
+                .map(|(row, _)| row),
+        ) {
+            validate_defined_ids(&constraint.required_ids(), &variable_ids)?;
+        }
         // Construction invariant: raw active, fixed, and dependent sets must be pairwise disjoint.
         // - active: IDs appearing in objective or constraints
         // - fixed: IDs in the decision-variable table's fixed-value column

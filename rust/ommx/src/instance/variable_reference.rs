@@ -43,8 +43,8 @@ impl VariableReferenceError {
 }
 
 pub fn validate_defined_ids(required: &VariableIDSet, known: &VariableIDSet) -> crate::Result<()> {
-    let ids: BTreeSet<_> = required.difference(known).copied().collect();
-    if !ids.is_empty() {
+    if !required.is_subset(known) {
+        let ids = required.difference(known).copied().collect();
         return Err(VariableReferenceError::Undefined { ids }.into());
     }
     Ok(())
@@ -55,35 +55,44 @@ pub fn validate_active_ids(
     dependent: &VariableIDSet,
     fixed: &VariableIDSet,
 ) -> crate::Result<()> {
-    let ids: BTreeSet<_> = required.intersection(dependent).copied().collect();
-    if !ids.is_empty() {
+    if !required.is_disjoint(dependent) {
+        let ids = required.intersection(dependent).copied().collect();
         return Err(VariableReferenceError::Dependent { ids }.into());
     }
-    let ids: BTreeSet<_> = required.intersection(fixed).copied().collect();
-    if !ids.is_empty() {
+    if !required.is_disjoint(fixed) {
+        let ids = required.intersection(fixed).copied().collect();
         return Err(VariableReferenceError::Fixed { ids }.into());
     }
     Ok(())
 }
 
-pub fn validate_structural_ids(
-    required: &VariableIDSet,
-    variables: &VariableIDSet,
-    parameters: &VariableIDSet,
+pub fn validate_structural_ids<'a>(
+    required: impl IntoIterator<Item = &'a VariableID>,
+    is_decision_variable: impl Fn(&VariableID) -> bool,
+    is_parameter: impl Fn(&VariableID) -> bool,
 ) -> crate::Result<()> {
-    // Builders reuse the model's sets across rows; inspect only this row's
-    // references instead of copying every declared ID for each constraint.
-    let ids: BTreeSet<_> = required
-        .iter()
-        .filter(|id| !variables.contains(id) && !parameters.contains(id))
-        .copied()
-        .collect();
-    if !ids.is_empty() {
-        return Err(VariableReferenceError::Undefined { ids }.into());
+    // Iterate the owner's existing member set without copying it. Successful
+    // checks allocate nothing; only invalid references populate the payloads.
+    let mut undefined = BTreeSet::new();
+    let mut structural_parameters = BTreeSet::new();
+    for &id in required {
+        if is_decision_variable(&id) {
+            continue;
+        }
+        if is_parameter(&id) {
+            structural_parameters.insert(id);
+        } else {
+            undefined.insert(id);
+        }
     }
-    let ids: BTreeSet<_> = required.intersection(parameters).copied().collect();
-    if !ids.is_empty() {
-        return Err(VariableReferenceError::ParameterInStructuralPosition { ids }.into());
+    if !undefined.is_empty() {
+        return Err(VariableReferenceError::Undefined { ids: undefined }.into());
+    }
+    if !structural_parameters.is_empty() {
+        return Err(VariableReferenceError::ParameterInStructuralPosition {
+            ids: structural_parameters,
+        }
+        .into());
     }
     Ok(())
 }

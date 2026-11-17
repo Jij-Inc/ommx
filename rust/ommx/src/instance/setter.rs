@@ -411,10 +411,12 @@ impl ParametricInstance {
     /// would not be substitutable in a way that preserves the constraint's
     /// semantics. Function-body ids continue to be validated through
     /// [`Self::validate_required_ids`], which permits parameters.
-    fn require_decision_variables(&self, ids: VariableIDSet) -> crate::Result<()> {
-        let variable_ids: VariableIDSet = self.decision_variables().keys().cloned().collect();
-        let parameter_ids = self.parameters().keys().copied().collect();
-        validate_structural_ids(&ids, &variable_ids, &parameter_ids)
+    fn require_decision_variables(&self, ids: &BTreeSet<VariableID>) -> crate::Result<()> {
+        validate_structural_ids(
+            ids,
+            |id| self.decision_variables().contains_key(id),
+            |id| self.parameters().contains_key(id),
+        )
     }
 
     /// Verify that the given id is a binary decision variable. Mirrors
@@ -475,9 +477,8 @@ impl ParametricInstance {
         context: crate::ConstraintContext,
     ) -> crate::Result<crate::OneHotConstraintID> {
         validate_one_hot_non_empty(&constraint)?;
-        let required_ids = constraint.required_ids();
-        self.require_decision_variables(required_ids.clone())?;
-        self.validate_required_ids(required_ids)?;
+        self.require_decision_variables(&constraint.variables)?;
+        self.validate_required_ids(constraint.required_ids())?;
         for var_id in &constraint.variables {
             self.require_binary_variable(*var_id)?;
         }
@@ -502,9 +503,8 @@ impl ParametricInstance {
         context: crate::ConstraintContext,
     ) -> crate::Result<crate::Sos1ConstraintID> {
         validate_sos1_non_empty(&constraint)?;
-        let required_ids = constraint.required_ids();
-        self.require_decision_variables(required_ids.clone())?;
-        self.validate_required_ids(required_ids)?;
+        self.require_decision_variables(&constraint.variables)?;
+        self.validate_required_ids(constraint.required_ids())?;
         let id = self.next_constraint_number()?.into();
         self.sos1_constraint_collection
             .insert_active_with_context(id, constraint, context)?;
