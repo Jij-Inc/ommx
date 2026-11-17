@@ -3,6 +3,8 @@ use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
+/// Deterministic proptest generator for public test and debugging utilities.
+/// Generated distributions and sequences may change between versions.
 #[pyclass]
 #[derive(Deref, Default)]
 pub struct Rng(Arc<Mutex<ommx::random::Rng>>);

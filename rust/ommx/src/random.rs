@@ -259,11 +259,21 @@ pub fn arbitrary_bounds(ids: impl Iterator<Item = VariableID>) -> BoxedStrategy<
     strategy
 }
 
-pub fn arbitrary_state_within_bounds(bounds: &Bounds, max_abs: f64) -> BoxedStrategy<State> {
+/// Generate finite test values using [`Bound::arbitrary_containing`].
+/// `unbounded_sampling_radius` selects a neighborhood of the point in each
+/// infinite bound closest to zero, intersected with that bound. It does not
+/// restrict finite intervals.
+pub fn arbitrary_state_within_bounds(
+    bounds: &Bounds,
+    unbounded_sampling_radius: f64,
+) -> BoxedStrategy<State> {
     let mut stratety = Just(HashMap::new()).boxed();
     for (id, bound) in bounds {
         let raw_id = *id.deref();
-        stratety = (stratety, bound.arbitrary_containing(max_abs))
+        stratety = (
+            stratety,
+            bound.arbitrary_containing(unbounded_sampling_radius),
+        )
             .prop_map(move |(mut state, value)| {
                 state.insert(raw_id, value);
                 state

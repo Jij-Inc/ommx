@@ -6,6 +6,21 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 無限区間や大きな変数定義域でのテスト用状態生成を修正 ([#1403](https://github.com/Jij-Inc/ommx/pull/1403))
+
+`Instance.random_state` と `random_samples` は、solver adapterも利用できる
+テスト・デバッグ用の公開APIとして維持します。区間の端点が `[-100, 100]` や
+`i64` の範囲を超えていても、変数の定義域に属する有限値を生成します。
+無限区間では、定義域内で0に最も近い点を中心とする半径
+`unbounded_sampling_radius = 100` の範囲と、定義域との共通部分を使います。
+有限区間にはこの半径による制限を適用しません。
+境界との差がoverflowする値は、OMMXの定義域検証に合わせて生成範囲から除きます。
+空区間によるpanicと、それに伴って同じ `Rng` が利用不能になる問題を修正しました。
+
+一様分布、バージョン間での生成列の一致、制約の実行可能性、関数評価の成功は
+保証しません。実行不能なInstanceでも生成でき、異なるsample groupの状態が
+同じ値になる場合もあります。
+
 ### 不正な変数参照を ValueError で報告 ([#1400](https://github.com/Jij-Inc/ommx/pull/1400))
 
 `Instance` と `ParametricInstance` の構築や制約追加で未定義の変数を参照すると、

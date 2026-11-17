@@ -2,6 +2,22 @@
 
 This document covers migration of the OMMX Rust SDK (`ommx` crate) across major versions.
 
+Test-state generation uses finite windows for infinite intervals and no longer
+clips finite intervals to a fixed magnitude cap. Values with overflowing bound
+residuals are excluded consistently with domain validation.
+The former `max_abs` argument to `Bound::arbitrary_containing` and
+`random::arbitrary_state_within_bounds` is now `unbounded_sampling_radius`: it
+selects a neighborhood of the point in an infinite bound closest to zero,
+intersected with that bound, and does not restrict finite intervals.
+Replace `bound.arbitrary_containing_integer(max_abs)` with
+`IntegerValueParameters::new(bound, unbounded_sampling_radius)?.strategy()`.
+The parameter constructor rejects zero radii and bounds without an integer;
+validated parameters always produce a `BoxedStrategy<f64>`.
+Use the generated integer-valued `f64` directly
+in a `State`. This supports representable integers beyond `i64` without saturating
+conversions.
+These generators are test/debug utilities; distributions and sequences may change.
+
 V3 makes `Kind`, `ConstraintKind`, and `Provenance` non-exhaustive. Add explicit rejecting
 fallback arms in semantic consumers. See the [extension contract](crate::doc::extension_contract)
 for the variable-domain and constraint-family compatibility boundary.
