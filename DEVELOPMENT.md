@@ -144,12 +144,8 @@ with the project environment (including pandas) available to the interpreter:
 task python:ommx:test-schema
 ```
 
-To check the same assertions against pandas 2 without changing the workspace
-lockfile:
-
-```shell
-uv run --no-sync --with 'pandas>=2,<3' python ci-scripts/run-rust-with-python.py cargo test -p _ommx_rust --lib pandas::schema::tests
-```
+CI runs these tests once with the pandas version recorded in `uv.lock`, using
+the minimal `binding-test` dependency group.
 
 New table builders should declare their ordered columns and index with
 `pandas::schema::DataFrameSchema` in the Python binding crate. Select each

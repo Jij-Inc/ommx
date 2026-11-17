@@ -1,7 +1,13 @@
 use super::*;
 use std::ffi::CStr;
+use std::sync::Mutex;
+
+// The string-storage test changes a process-wide pandas option. Serialize
+// these tests so it cannot change another test's expected-frame construction.
+static PANDAS_OPTIONS: Mutex<()> = Mutex::new(());
 
 fn check(test: impl FnOnce(Python<'_>, &Bound<'_, PyDict>) -> PyResult<()>) {
+    let _options = PANDAS_OPTIONS.lock().unwrap();
     Python::initialize();
     Python::attach(|py| {
         let scope = PyDict::new(py);

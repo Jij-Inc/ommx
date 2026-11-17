@@ -236,7 +236,10 @@ impl<'a> DataFrameSchema<'a> {
                 }
             };
             let series = pandas.call_method("Series", (values,), Some(&kwargs))?;
-            data.set_item(name, series)?;
+            // DataFrame also infers an Index from dict keys internally, even
+            // with explicit `columns`. Use positional keys until after
+            // construction so string-storage defaults cannot affect labels.
+            data.set_item(data.len(), series)?;
         }
         let kwargs = PyDict::new(py);
         // Preserve row count even for an explicitly zero-column schema.
@@ -244,11 +247,9 @@ impl<'a> DataFrameSchema<'a> {
         // Column labels themselves must not inherit pandas 3 string inference.
         let column_args = PyDict::new(py);
         column_args.set_item("dtype", "object")?;
-        kwargs.set_item(
-            "columns",
-            pandas.call_method("Index", (names.keys(),), Some(&column_args))?,
-        )?;
+        let columns = pandas.call_method("Index", (names.keys(),), Some(&column_args))?;
         let mut frame = pandas.call_method("DataFrame", (data,), Some(&kwargs))?;
+        frame.setattr("columns", columns)?;
         if let Some(index) = self.index {
             frame = frame.call_method1("set_index", (index.to_python(py)?,))?;
         }
