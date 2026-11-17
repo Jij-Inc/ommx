@@ -2078,10 +2078,12 @@ impl Instance {
     /// enumerated set. Constraint feasibility and successful function evaluation are
     /// not guaranteed, so infeasible instances can also be sampled.
     ///
-    /// Finite intervals are not clipped to a fixed scale. Values whose bound
-    /// residuals overflow are excluded consistently with domain validation.
-    /// Infinite intervals use a finite window with scale 100, near zero when
-    /// possible or near the finite endpoint otherwise.
+    /// Infinite intervals use a fixed ``unbounded_sampling_radius`` of 100 around the
+    /// point in the bound closest to zero, intersected with the bound. For
+    /// example, ``[101, +inf)`` uses ``[101, 201]``, while ``[-50, +inf)`` uses
+    /// ``[-50, 100]``. Finite intervals are not restricted by this radius.
+    /// Values whose bound residuals overflow are excluded consistently with
+    /// domain validation.
     /// At floating-point limits the window may contain just one representable value.
     /// Generation emphasizes test cases such as endpoints: it is not uniform and
     /// the distribution and seeded sequence may change between versions.

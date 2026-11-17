@@ -570,18 +570,22 @@ impl Bound {
 
     /// Generate finite values within this bound for tests and debugging.
     ///
-    /// Finite intervals are not clipped to `scale`. Values whose bound residuals
-    /// overflow are excluded, consistently with [`Self::contains`]. For infinite intervals,
-    /// `scale` selects a finite window near zero, or near the finite endpoint
-    /// when zero is excluded. It is not a maximum absolute value. The window
-    /// saturates at finite `f64` limits and may collapse to one representable value.
+    /// For infinite intervals, `unbounded_sampling_radius` is the radius around
+    /// the point in the bound closest to zero. The sampling window is the
+    /// intersection of that neighborhood with the bound. For example, radius
+    /// 100 gives `[-100, 100]` for an unbounded variable, `[101, 201]` for
+    /// `[101, +inf)`, and `[-50, 100]` for `[-50, +inf)`.
+    /// Finite intervals are not restricted by this radius. Values whose bound
+    /// residuals overflow are excluded, consistently with [`Self::contains`].
+    /// The window saturates at finite `f64` limits and may collapse to one
+    /// representable value.
     /// Endpoints are deliberately emphasized; no uniform distribution or stable
     /// sequence across versions is promised.
     ///
     /// # Panics
-    /// Panics if `scale` is not finite and strictly positive.
-    pub fn arbitrary_containing(&self, scale: f64) -> BoxedStrategy<f64> {
-        let (mut lower, mut upper) = self.finite_generation_window(scale);
+    /// Panics if `unbounded_sampling_radius` is not finite and strictly positive.
+    pub fn arbitrary_containing(&self, unbounded_sampling_radius: f64) -> BoxedStrategy<f64> {
+        let (mut lower, mut upper) = self.finite_generation_window(unbounded_sampling_radius);
         let atol = ATol::default();
         if !self.contains(lower, atol) || !self.contains(upper, atol) {
             // Bound membership also requires finite residuals. Intersect with
@@ -598,20 +602,28 @@ impl Bound {
     }
 
     // Keep the window inside the domain even when its endpoint is far from zero.
-    fn finite_generation_window(&self, scale: f64) -> (f64, f64) {
+    fn finite_generation_window(&self, unbounded_sampling_radius: f64) -> (f64, f64) {
         assert!(
-            scale.is_finite() && scale > 0.0,
-            "scale must be finite and positive"
+            unbounded_sampling_radius.is_finite() && unbounded_sampling_radius > 0.0,
+            "Unbounded sampling radius must be finite and positive"
         );
         match (self.lower, self.upper) {
-            (f64::NEG_INFINITY, f64::INFINITY) => (-scale, scale),
+            (f64::NEG_INFINITY, f64::INFINITY) => {
+                (-unbounded_sampling_radius, unbounded_sampling_radius)
+            }
             (f64::NEG_INFINITY, upper) => {
-                let upper = upper.min(scale);
-                ((upper.min(0.0) - scale).max(-f64::MAX), upper)
+                let upper = upper.min(unbounded_sampling_radius);
+                (
+                    (upper.min(0.0) - unbounded_sampling_radius).max(-f64::MAX),
+                    upper,
+                )
             }
             (lower, f64::INFINITY) => {
-                let lower = lower.max(-scale);
-                (lower, (lower.max(0.0) + scale).min(f64::MAX))
+                let lower = lower.max(-unbounded_sampling_radius);
+                (
+                    lower,
+                    (lower.max(0.0) + unbounded_sampling_radius).min(f64::MAX),
+                )
             }
             (lower, upper) => (lower, upper),
         }
@@ -675,12 +687,12 @@ mod tests {
         #[test]
         fn generated_values_and_shrinks_stay_in_full_range_domains(
             bound in generation_bounds(),
-            scale in prop_oneof![Just(1.0), Just(100.0), Just(f64::MAX)],
+            unbounded_sampling_radius in prop_oneof![Just(1.0), Just(100.0), Just(f64::MAX)],
         ) {
             use proptest::strategy::ValueTree;
             let mut runner = crate::random::Rng::deterministic();
             for _ in 0..8 {
-                let mut tree = bound.arbitrary_containing(scale).new_tree(&mut runner).unwrap();
+                let mut tree = bound.arbitrary_containing(unbounded_sampling_radius).new_tree(&mut runner).unwrap();
                 loop {
                     let value = tree.current();
                     prop_assert!(value.is_finite());

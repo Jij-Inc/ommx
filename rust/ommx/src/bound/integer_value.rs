@@ -3,27 +3,29 @@ use proptest::prelude::*;
 
 /// Validated parameters for generating integer-valued `f64` test values.
 ///
-/// [`Self::new`] validates that the bound contains an integer and the scale is
-/// positive. The private fields retain the inward-rounded integer bound and
-/// validated scale, so [`Self::strategy`] is infallible and reusable.
+/// [`Self::new`] validates that the bound contains an integer and the
+/// `unbounded_sampling_radius` is positive. The private fields retain the
+/// inward-rounded integer bound and validated radius, so [`Self::strategy`]
+/// is infallible and reusable.
 ///
 /// Values use the same representation as [`crate::v1::State`], including
 /// representable integers outside `i64`. The generator does not sample all
-/// mathematical integers uniformly. Finite intervals are not clipped to the
-/// scale; infinite intervals use the window semantics of
+/// mathematical integers uniformly. Finite intervals are not restricted by the
+/// radius; infinite intervals use the neighborhood of the integer bound's point
+/// closest to zero, intersected with that bound, as described by
 /// [`Bound::arbitrary_containing`]. Values with overflowing bound residuals are
 /// excluded consistently with domain validation.
 #[derive(Debug, Clone, Copy)]
 pub struct IntegerValueParameters {
     bound: Bound,
-    scale: u64,
+    unbounded_sampling_radius: u64,
 }
 
 impl IntegerValueParameters {
     /// Validate parameters before creating an integer-value strategy.
     ///
     /// # Errors
-    /// Returns an error if `scale` is zero or `bound` contains no integer.
+    /// Returns an error if `unbounded_sampling_radius` is zero or `bound` contains no integer.
     ///
     /// ```
     /// use ommx::{Bound, IntegerValueParameters, random::sample_deterministic};
@@ -35,8 +37,11 @@ impl IntegerValueParameters {
     /// assert!(IntegerValueParameters::new(Bound::new(0.1, 0.9)?, 100).is_err());
     /// # Ok::<(), ommx::Error>(())
     /// ```
-    pub fn new(bound: Bound, scale: u64) -> crate::Result<Self> {
-        crate::ensure!(scale > 0, "Integer-value generation scale must be positive");
+    pub fn new(bound: Bound, unbounded_sampling_radius: u64) -> crate::Result<Self> {
+        crate::ensure!(
+            unbounded_sampling_radius > 0,
+            "Unbounded sampling radius must be positive"
+        );
         let integer_bound =
             Bound::new(bound.lower().ceil(), bound.upper().floor()).map_err(|_| {
                 crate::error!(
@@ -45,7 +50,7 @@ impl IntegerValueParameters {
             })?;
         Ok(Self {
             bound: integer_bound,
-            scale,
+            unbounded_sampling_radius,
         })
     }
 
@@ -53,7 +58,7 @@ impl IntegerValueParameters {
     /// Distributions and generated sequences may change between versions.
     pub fn strategy(&self) -> BoxedStrategy<f64> {
         self.bound
-            .arbitrary_containing(self.scale as f64)
+            .arbitrary_containing(self.unbounded_sampling_radius as f64)
             .prop_map(f64::round)
             .boxed()
     }
@@ -74,15 +79,17 @@ mod tests {
     }
 
     #[test]
-    fn rejects_zero_scale_before_strategy_creation() {
+    fn rejects_zero_radius_before_strategy_creation() {
         for bound in [Bound::default(), Bound::new(101.0, 102.0).unwrap()] {
             let error = IntegerValueParameters::new(bound, 0).unwrap_err();
-            assert!(error.to_string().contains("scale must be positive"));
+            assert!(error
+                .to_string()
+                .contains("sampling radius must be positive"));
         }
     }
 
     #[test]
-    fn validated_parameters_are_reusable_at_scale_and_representation_limits() {
+    fn validated_parameters_are_reusable_at_radius_and_representation_limits() {
         let mut rng = Rng::deterministic();
         for bound in [
             Bound::default(),
@@ -92,8 +99,9 @@ mod tests {
             Bound::new(f64::MAX, f64::INFINITY).unwrap(),
             Bound::new(-f64::MAX, f64::MAX).unwrap(),
         ] {
-            for scale in [1, 100, u64::MAX] {
-                let parameters = IntegerValueParameters::new(bound, scale).unwrap();
+            for unbounded_sampling_radius in [1, 100, u64::MAX] {
+                let parameters =
+                    IntegerValueParameters::new(bound, unbounded_sampling_radius).unwrap();
                 for _ in 0..16 {
                     let value = sample(&mut rng, parameters.strategy());
                     assert!(value.is_finite());

@@ -11,12 +11,16 @@ use fnv::FnvHashSet;
 use proptest::prelude::*;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-fn arbitrary_integer_state(bounds: &Bounds, scale: u64) -> BoxedStrategy<State> {
+fn arbitrary_integer_state(
+    bounds: &Bounds,
+    unbounded_sampling_radius: u64,
+) -> BoxedStrategy<State> {
     let mut strategy = Just(HashMap::new()).boxed();
     for (id, bound) in bounds {
         let raw_id = id.into_inner();
-        let parameters = IntegerValueParameters::new(*bound, scale)
-            .expect("integer variable bounds are normalized and the internal scale is positive");
+        let parameters = IntegerValueParameters::new(*bound, unbounded_sampling_radius).expect(
+            "integer variable bounds are normalized and the internal sampling radius is positive",
+        );
         let values = parameters.strategy();
         strategy = (strategy, values)
             .prop_map(move |(mut state, value)| {
@@ -28,12 +32,15 @@ fn arbitrary_integer_state(bounds: &Bounds, scale: u64) -> BoxedStrategy<State> 
     strategy.prop_map(|state| state.into()).boxed()
 }
 
-fn arbitrary_semi_integer_state(bounds: &Bounds, scale: u64) -> BoxedStrategy<State> {
+fn arbitrary_semi_integer_state(
+    bounds: &Bounds,
+    unbounded_sampling_radius: u64,
+) -> BoxedStrategy<State> {
     let mut strategy = Just(HashMap::new()).boxed();
     for (id, bound) in bounds {
         let raw_id = id.into_inner();
-        let parameters = IntegerValueParameters::new(*bound, scale).expect(
-            "semi-integer variable bounds are normalized and the internal scale is positive",
+        let parameters = IntegerValueParameters::new(*bound, unbounded_sampling_radius).expect(
+            "semi-integer variable bounds are normalized and the internal sampling radius is positive",
         );
         let values = parameters.strategy();
         strategy = (strategy, prop_oneof![values, Just(0.0)])
@@ -46,11 +53,17 @@ fn arbitrary_semi_integer_state(bounds: &Bounds, scale: u64) -> BoxedStrategy<St
     strategy.prop_map(|state| state.into()).boxed()
 }
 
-fn arbitrary_continuous_state(bounds: &Bounds, scale: f64) -> BoxedStrategy<State> {
+fn arbitrary_continuous_state(
+    bounds: &Bounds,
+    unbounded_sampling_radius: f64,
+) -> BoxedStrategy<State> {
     let mut strategy = Just(HashMap::new()).boxed();
     for (id, bound) in bounds {
         let raw_id = id.into_inner();
-        strategy = (strategy, bound.arbitrary_containing(scale))
+        strategy = (
+            strategy,
+            bound.arbitrary_containing(unbounded_sampling_radius),
+        )
             .prop_map(move |(mut state, value)| {
                 state.insert(raw_id, value);
                 state
@@ -60,13 +73,19 @@ fn arbitrary_continuous_state(bounds: &Bounds, scale: f64) -> BoxedStrategy<Stat
     strategy.prop_map(|state| state.into()).boxed()
 }
 
-fn arbitrary_semi_continuous_state(bounds: &Bounds, scale: f64) -> BoxedStrategy<State> {
+fn arbitrary_semi_continuous_state(
+    bounds: &Bounds,
+    unbounded_sampling_radius: f64,
+) -> BoxedStrategy<State> {
     let mut strategy = Just(HashMap::new()).boxed();
     for (id, bound) in bounds {
         let raw_id = id.into_inner();
         strategy = (
             strategy,
-            prop_oneof![bound.arbitrary_containing(scale), Just(0.0)],
+            prop_oneof![
+                bound.arbitrary_containing(unbounded_sampling_radius),
+                Just(0.0)
+            ],
         )
             .prop_map(move |(mut state, value)| {
                 state.insert(raw_id, value);
@@ -97,8 +116,9 @@ impl Instance {
     /// Only active decision variables are included. Each value is finite and
     /// belongs to its variable's domain; constraint feasibility and successful
     /// function evaluation are not guaranteed. Infeasible instances can therefore
-    /// also be sampled. Infinite intervals use a finite window with scale 100;
-    /// finite intervals and enumerated domains are not clipped to that scale.
+    /// also be sampled. Infinite intervals use `unbounded_sampling_radius = 100`
+    /// around the point in the bound closest to zero, intersected with the bound.
+    /// Finite intervals and enumerated domains are not restricted by this radius.
     /// Interval values with overflowing bound residuals are excluded. Semi variables
     /// may also be zero outside their stored interval.
     ///

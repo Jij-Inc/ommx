@@ -11,8 +11,9 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 `Instance.random_state` and `random_samples` remain public test and debugging
 utilities, including for solver adapters. They now generate finite values within
 variable domains even when interval endpoints lie outside `[-100, 100]` or beyond
-the `i64` range. Finite intervals are not clipped to a fixed scale; infinite
-intervals use a finite window near zero or the finite endpoint. This fixes
+the `i64` range. Infinite intervals use a fixed `unbounded_sampling_radius` of 100
+around the point in the bound closest to zero, intersected with the bound.
+Finite intervals are not restricted by this radius. This fixes
 empty-range panics that could also leave the supplied `Rng` unusable.
 
 Interval values whose bound residuals overflow are excluded consistently with
