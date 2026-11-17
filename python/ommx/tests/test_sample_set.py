@@ -73,6 +73,7 @@ def test_summary_schema_and_pandas_operations(sample_id):
             "feasible": pd.Series(dtype="bool"),
         },
         index=pd.Index([], dtype="uint64", name="sample_id"),
+        columns=pd.Index(["objective", "feasible"], dtype="object"),
     )
     pd.testing.assert_frame_equal(empty, expected_empty)
     pd.testing.assert_frame_equal(empty, nonempty.iloc[:0])
@@ -82,6 +83,7 @@ def test_summary_schema_and_pandas_operations(sample_id):
 
     for frame in (empty, nonempty):
         assert list(frame.columns) == ["objective", "feasible"]
+        assert frame.columns.dtype == "object"
         assert frame["objective"].dtype == "float64"
         assert frame["feasible"].dtype == "bool"
         assert frame.index.dtype == "uint64"

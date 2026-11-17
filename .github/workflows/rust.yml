@@ -58,7 +58,10 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Run tests
-        run: cargo test
+        run: uv run --no-project --with 'pandas>=2,<3' python ci-scripts/run-rust-with-python.py cargo test
+
+      - name: Test DataFrame schemas with pandas 3
+        run: uv run --no-project --with 'pandas>=3,<4' python ci-scripts/run-rust-with-python.py cargo test -p _ommx_rust --lib pandas::schema::tests
 
       - name: Test SDK-independent bridge receivers
         run: task pyo3-bridge:receiver-test

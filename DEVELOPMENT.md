@@ -137,6 +137,27 @@ This command lets `uv` create a venv and install the required packages including
 task python:test
 ```
 
+The binding's internal DataFrame schema tests embed Python in Rust. Run them
+with the project environment (including pandas) available to the interpreter:
+
+```shell
+task python:ommx:test-schema
+```
+
+To check the same assertions against pandas 2 without changing the workspace
+lockfile:
+
+```shell
+uv run --no-sync --with 'pandas>=2,<3' python ci-scripts/run-rust-with-python.py cargo test -p _ommx_rust --lib pandas::schema::tests
+```
+
+New table builders should declare their ordered columns, pandas dtypes, and
+index with `pandas::schema::DataFrameSchema` in the Python binding crate.
+Resolve dynamic column groups before constructing the schema. The builder
+constructs typed columns directly, fixes nullable string storage to Python,
+and preserves the difference between missing and present NaN values in nullable
+floating-point columns. Keep the choice of domain values in the owning API.
+
 ### Versioning
 
 The OMMX Python SDK and adapters are versioned together with [semantic versioning](https://semver.org/).

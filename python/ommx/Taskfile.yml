@@ -50,6 +50,12 @@ tasks:
       - uv run pyright --project python/ommx python/ommx
     dir: ../..
 
+  test-schema:
+    desc: Test Rust DataFrame schema construction with the active Python environment
+    cmds:
+      - uv run --no-sync python ci-scripts/run-rust-with-python.py cargo test -p _ommx_rust --lib pandas::schema::tests
+    dir: ../..
+
   lint:
     desc: Lint by ruff check
     cmds:
