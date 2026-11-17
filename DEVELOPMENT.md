@@ -145,7 +145,9 @@ task python:ommx:test-schema
 ```
 
 CI runs these tests once with the pandas version recorded in `uv.lock`, using
-the minimal `binding-test` dependency group.
+the minimal `binding-test` dependency group. `task rust:test-all` runs the full
+Rust workspace suite with the same environment; its Taskfile `env` settings
+obtain `PYO3_PYTHON` and `PYTHONPATH` from `uv run`.
 
 New table builders should declare their ordered columns and index with
 `pandas::schema::DataFrameSchema` in the Python binding crate. Select each

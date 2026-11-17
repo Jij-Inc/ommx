@@ -61,7 +61,7 @@ jobs:
         run: uv sync --locked --only-group binding-test --no-install-workspace
 
       - name: Run tests
-        run: uv run --no-sync python ci-scripts/run-rust-with-python.py cargo test
+        run: task rust:test-all
 
       - name: Test SDK-independent bridge receivers
         run: task pyo3-bridge:receiver-test
