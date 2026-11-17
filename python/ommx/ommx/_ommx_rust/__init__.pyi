@@ -12951,12 +12951,15 @@ class SampleSet:
         r"""
         A materialized overview with one row per sample ID.
 
-        The index is ``sample_id`` and the columns are ``objective`` and
-        ``feasible``. Feasibility matches {attr}`~ommx.SampleSet.feasible`, including
+        The index is named ``sample_id`` with dtype ``uint64``. The columns are
+        ``objective`` (``float64``), then ``feasible`` (``bool``), including when
+        there are no samples: the empty table has shape ``(0, 2)`` with the same
+        column and index dtypes. Feasibility matches {attr}`~ommx.SampleSet.feasible`, including
         variable kinds and bounds plus constraints with roles ACTIVE or FEASIBILITY_CHECK.
         Feasible candidates appear first; within each feasibility group, objective
         values are ascending for minimization and descending for maximization,
-        according to {attr}`~ommx.SampleSet.sense`.
+        according to {attr}`~ommx.SampleSet.sense`. Ties are ordered by ascending
+        sample ID.
 
         The index keeps the candidate's ID rather than its displayed row position;
         use that ID with {meth}`~ommx.SampleSet.get`. Identical assignments under
