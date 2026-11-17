@@ -86,8 +86,12 @@ def test_summary_schema_and_pandas_operations(sample_id):
         assert frame["feasible"].dtype == "bool"
         assert frame.index.dtype == "uint64"
         assert frame.index.name == "sample_id"
-        pd.testing.assert_frame_equal(frame[frame["feasible"]], frame)
-        pd.testing.assert_frame_equal(frame[~frame["feasible"]], empty)
+        feasible = frame[frame["feasible"]]
+        infeasible = frame[~frame["feasible"]]
+        assert isinstance(feasible, pd.DataFrame)
+        assert isinstance(infeasible, pd.DataFrame)
+        pd.testing.assert_frame_equal(feasible, frame)
+        pd.testing.assert_frame_equal(infeasible, empty)
         pd.testing.assert_frame_equal(pd.concat([empty, frame]), frame)
         pd.testing.assert_frame_equal(pd.concat([frame, empty]), frame)
 
@@ -133,6 +137,6 @@ def test_summary_all_infeasible_filter_preserves_schema():
     samples = model.evaluate_samples([{x.id: 0.5}])
     frame = samples.summary
     assert frame["feasible"].tolist() == [False]
-    pd.testing.assert_frame_equal(
-        frame[frame["feasible"]], model.evaluate_samples([]).summary
-    )
+    feasible = frame[frame["feasible"]]
+    assert isinstance(feasible, pd.DataFrame)
+    pd.testing.assert_frame_equal(feasible, model.evaluate_samples([]).summary)
