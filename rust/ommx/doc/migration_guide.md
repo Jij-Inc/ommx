@@ -7,7 +7,8 @@ before mutation with `EmptySampleIDs`; duplicate IDs still produce
 `DuplicatedSampleIDError`. Use `error.downcast_ref::<DuplicatedSampleIDError>()`
 before reading the conflicting `id()`. `Sampled::new` and protobuf parsing also
 reject entries with no IDs. Empty collections remain valid, and
-`Sampled::constants` with no IDs returns an empty collection.
+`Sampled::constants` now returns `ommx::Result<Self>` and rejects repeated IDs
+with `DuplicatedSampleIDError`. With no IDs it returns an empty collection.
 `Sampled::new_no_dedup` and `Sampled::new_dedup` now return `ommx::Result<Self>`
 and reject repeated sample IDs with `DuplicatedSampleIDError`, rather than
 keeping the last value. This applies even when the values are equal. Handle

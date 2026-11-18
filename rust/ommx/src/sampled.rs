@@ -100,13 +100,29 @@ pub struct EmptySampleIDs;
 impl<T> Sampled<T> {
     /// Associate a constant value with the supplied IDs, or return an empty
     /// collection when there are no IDs.
-    pub fn constants(ids: impl Iterator<Item = SampleID>, value: T) -> Self {
-        let map: FnvHashMap<_, _> = ids.map(|id| (id, 0)).collect();
-        if map.is_empty() {
-            return Self::default();
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DuplicatedSampleIDError`] in the error chain if an ID occurs
+    /// more than once.
+    pub fn constants(ids: impl Iterator<Item = SampleID>, value: T) -> crate::Result<Self> {
+        let mut offsets =
+            FnvHashMap::with_capacity_and_hasher(ids.size_hint().0, Default::default());
+        for id in ids {
+            match offsets.entry(id) {
+                std::collections::hash_map::Entry::Occupied(_) => {
+                    return Err(DuplicatedSampleIDError { id }.into());
+                }
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(0);
+                }
+            }
+        }
+        if offsets.is_empty() {
+            return Ok(Self::default());
         }
         let data = vec![value];
-        Self { offsets: map, data }
+        Ok(Self { offsets, data })
     }
 
     /// Append one value under every supplied sample ID.
@@ -122,21 +138,19 @@ impl<T> Sampled<T> {
         ids: impl IntoIterator<Item = SampleID>,
         value: T,
     ) -> crate::Result<()> {
-        let mut new_ids = Vec::new();
         let mut seen = FnvHashSet::default();
         for id in ids {
             if self.offsets.contains_key(&id) || !seen.insert(id) {
                 return Err(DuplicatedSampleIDError { id }.into());
             }
-            new_ids.push(id);
         }
-        if new_ids.is_empty() {
+        if seen.is_empty() {
             return Err(EmptySampleIDs.into());
         }
 
         let offset = self.data.len();
         self.data.push(value);
-        for id in new_ids {
+        for id in seen {
             self.offsets.insert(id, offset);
         }
         Ok(())
@@ -484,11 +498,28 @@ mod tests {
     }
 
     #[test]
+    fn constants_reject_repeated_ids_without_consuming_remaining_input() {
+        let ids = [SampleID(u64::MAX), SampleID(0), SampleID(u64::MAX)]
+            .into_iter()
+            .chain(std::iter::once_with(|| {
+                panic!("input after the duplicate must not be consumed")
+            }));
+        let error = Sampled::constants(ids, 10).unwrap_err();
+        assert_eq!(
+            error
+                .downcast_ref::<DuplicatedSampleIDError>()
+                .unwrap()
+                .id(),
+            SampleID(u64::MAX)
+        );
+    }
+
+    #[test]
     fn empty_constants_do_not_store_unaddressable_values() {
-        let empty = Sampled::constants(std::iter::empty(), 10);
+        let empty = Sampled::constants(std::iter::empty(), 10).unwrap();
         assert_eq!(empty.num_samples(), 0);
         assert!(empty.chunk().is_empty());
-        let shared = Sampled::constants([SampleID(1), SampleID(2)].into_iter(), 10);
+        let shared = Sampled::constants([SampleID(1), SampleID(2)].into_iter(), 10).unwrap();
         assert_eq!(shared.num_samples(), 2);
         assert_eq!(shared.chunk().len(), 1);
     }

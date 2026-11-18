@@ -120,11 +120,12 @@ mod tests {
 
     #[test]
     fn empty_constants_roundtrip_without_empty_id_entries() {
-        let samples: v1::Samples =
-            Sampled::constants(std::iter::empty(), v1::State::default()).into();
+        let samples: v1::Samples = Sampled::constants(std::iter::empty(), v1::State::default())
+            .unwrap()
+            .into();
         assert!(samples.entries.is_empty());
         assert!(samples.parse(&()).unwrap().chunk().is_empty());
-        let values: v1::SampledValues = Sampled::constants(std::iter::empty(), 1.0).into();
+        let values: v1::SampledValues = Sampled::constants(std::iter::empty(), 1.0).unwrap().into();
         assert!(values.entries.is_empty());
         assert!(values.parse(&()).unwrap().chunk().is_empty());
     }
