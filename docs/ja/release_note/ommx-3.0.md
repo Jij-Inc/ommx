@@ -6,6 +6,14 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 制約のメソッドチェーンで同じオブジェクトを返す ([#1406](https://github.com/Jij-Inc/ommx/pull/1406))
+
+単独の `Constraint`、`IndicatorConstraint`、`OneHotConstraint`、
+`Sos1Constraint` のメタデータ setter が、同じ Python オブジェクトを返すように
+なりました。`c.set_name("limit").set_subscripts([1])` の返り値を代入しなくても、
+両方の変更が `c` に反映されます。`Constraint` のメタデータ追加メソッドと
+`partial_evaluate()` も同様に修正しました。
+
 ### 無限区間や大きな変数定義域でのテスト用状態生成を修正 ([#1403](https://github.com/Jij-Inc/ommx/pull/1403))
 
 `Instance.random_state` と `random_samples` は、solver adapterも利用できる
