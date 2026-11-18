@@ -6,16 +6,6 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-### Reject samples without IDs ([#1407](https://github.com/Jij-Inc/ommx/pull/1407))
-
-`Samples.append([], state)` now raises `ValueError` without changing the
-collection. Previously it stored a state despite reporting zero additional
-samples, which could cause unexpected evaluation errors. Protobuf entries
-without sample IDs are also rejected on import.
-
-Empty collections remain valid. An empty State under a valid sample ID is
-also accepted; the Instance checks required variable IDs when evaluating it.
-
 ### Generate test states for unbounded and large variable domains ([#1403](https://github.com/Jij-Inc/ommx/pull/1403))
 
 `Instance.random_state` and `random_samples` remain public test and debugging
@@ -32,6 +22,16 @@ OMMX's domain validation.
 These utilities do not guarantee uniform distributions, stable sequences across
 versions, constraint feasibility, or successful function evaluation. Infeasible
 instances can still be sampled, and different sample groups can have equal states.
+
+### Reject samples without IDs ([#1407](https://github.com/Jij-Inc/ommx/pull/1407))
+
+`Samples.append([], state)` now raises `ValueError` without changing the
+collection. Previously it stored a state despite reporting zero additional
+samples, which could cause unexpected evaluation errors. Protobuf entries
+without sample IDs are also rejected on import.
+
+Empty collections remain valid. An empty State under a valid sample ID is
+also accepted; the Instance checks required variable IDs when evaluating it.
 
 ### Report invalid variable references as ValueError ([#1400](https://github.com/Jij-Inc/ommx/pull/1400))
 

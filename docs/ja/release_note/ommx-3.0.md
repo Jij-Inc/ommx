@@ -6,16 +6,6 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-### ID のないサンプルを拒否する ([#1407](https://github.com/Jij-Inc/ommx/pull/1407))
-
-`Samples.append([], state)` はコレクションを変更せずに `ValueError` を
-送出するようになりました。従来はサンプル数が増えないまま内部に State が保存され、
-評価時に予期しないエラーになる場合がありました。サンプル ID のない protobuf の
-エントリーも読み込み時に拒否します。
-
-空のコレクションは引き続き利用できます。有効なサンプル ID に対応する空の State も
-受け入れ、モデルに必要な変数 ID が含まれるかどうかは Instance の評価時に検証します。
-
 ### 無限区間や大きな変数定義域でのテスト用状態生成を修正 ([#1403](https://github.com/Jij-Inc/ommx/pull/1403))
 
 `Instance.random_state` と `random_samples` は、solver adapterも利用できる
@@ -30,6 +20,16 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 一様分布、バージョン間での生成列の一致、制約の実行可能性、関数評価の成功は
 保証しません。実行不能なInstanceでも生成でき、異なるsample groupの状態が
 同じ値になる場合もあります。
+
+### ID のないサンプルを拒否する ([#1407](https://github.com/Jij-Inc/ommx/pull/1407))
+
+`Samples.append([], state)` はコレクションを変更せずに `ValueError` を
+送出するようになりました。従来はサンプル数が増えないまま内部に State が保存され、
+評価時に予期しないエラーになる場合がありました。サンプル ID のない protobuf の
+エントリーも読み込み時に拒否します。
+
+空のコレクションは引き続き利用できます。有効なサンプル ID に対応する空の State も
+受け入れ、モデルに必要な変数 ID が含まれるかどうかは Instance の評価時に検証します。
 
 ### 不正な変数参照を ValueError で報告 ([#1400](https://github.com/Jij-Inc/ommx/pull/1400))
 
