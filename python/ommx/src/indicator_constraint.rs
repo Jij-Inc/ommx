@@ -113,27 +113,30 @@ impl IndicatorConstraint {
     }
 
     /// Set the name. Returns self for method chaining (snapshot mutation).
-    pub fn set_name(&mut self, name: String) -> Self {
-        self.1.label.name = Some(name);
-        self.clone()
+    pub fn set_name(mut slf: PyRefMut<'_, Self>, name: String) -> PyRefMut<'_, Self> {
+        slf.1.label.name = Some(name);
+        slf
     }
 
     /// Set the subscripts. Returns self for method chaining (snapshot mutation).
-    pub fn set_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
-        self.1.label.subscripts = subscripts;
-        self.clone()
+    pub fn set_subscripts(mut slf: PyRefMut<'_, Self>, subscripts: Vec<i64>) -> PyRefMut<'_, Self> {
+        slf.1.label.subscripts = subscripts;
+        slf
     }
 
     /// Set the description. Returns self for method chaining (snapshot mutation).
-    pub fn set_description(&mut self, description: String) -> Self {
-        self.1.label.description = Some(description);
-        self.clone()
+    pub fn set_description(mut slf: PyRefMut<'_, Self>, description: String) -> PyRefMut<'_, Self> {
+        slf.1.label.description = Some(description);
+        slf
     }
 
     /// Replace all parameters. Returns self for method chaining (snapshot mutation).
-    pub fn set_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
-        self.1.label.parameters = parameters.into_iter().collect();
-        self.clone()
+    pub fn set_parameters(
+        mut slf: PyRefMut<'_, Self>,
+        parameters: HashMap<String, String>,
+    ) -> PyRefMut<'_, Self> {
+        slf.1.label.parameters = parameters.into_iter().collect();
+        slf
     }
 
     fn __repr__(&self) -> String {

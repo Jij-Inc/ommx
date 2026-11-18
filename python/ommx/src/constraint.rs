@@ -171,51 +171,54 @@ impl Constraint {
     /// **Returns:** Self (modified in-place) for method chaining
     #[pyo3(signature = (state, *, atol=None))]
     pub fn partial_evaluate(
-        &mut self,
+        mut slf: PyRefMut<'_, Self>,
         state: State,
         atol: Option<f64>,
-    ) -> crate::error::OmmxPyResult<Self> {
+    ) -> crate::error::OmmxPyResult<PyRefMut<'_, Self>> {
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        self.0.partial_evaluate(&state.0, atol)?;
-        Ok(self.clone())
+        slf.0.partial_evaluate(&state.0, atol)?;
+        Ok(slf)
     }
 
     /// Set the name of the constraint
     /// Returns self for method chaining
-    pub fn set_name(&mut self, name: String) -> Self {
-        self.1.label.name = Some(name);
-        self.clone()
+    pub fn set_name(mut slf: PyRefMut<'_, Self>, name: String) -> PyRefMut<'_, Self> {
+        slf.1.label.name = Some(name);
+        slf
     }
 
     /// Set the subscripts of the constraint
     /// Returns self for method chaining
-    pub fn set_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
-        self.1.label.subscripts = subscripts;
-        self.clone()
+    pub fn set_subscripts(mut slf: PyRefMut<'_, Self>, subscripts: Vec<i64>) -> PyRefMut<'_, Self> {
+        slf.1.label.subscripts = subscripts;
+        slf
     }
 
     /// Add subscripts to the constraint
     /// Returns self for method chaining
-    pub fn add_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
-        self.1.label.subscripts.extend(subscripts);
-        self.clone()
+    pub fn add_subscripts(mut slf: PyRefMut<'_, Self>, subscripts: Vec<i64>) -> PyRefMut<'_, Self> {
+        slf.1.label.subscripts.extend(subscripts);
+        slf
     }
 
     /// Set the description of the constraint
     /// Returns self for method chaining
-    pub fn set_description(&mut self, description: String) -> Self {
-        self.1.label.description = Some(description);
-        self.clone()
+    pub fn set_description(mut slf: PyRefMut<'_, Self>, description: String) -> PyRefMut<'_, Self> {
+        slf.1.label.description = Some(description);
+        slf
     }
 
     /// Set the parameters of the constraint
     /// Returns self for method chaining
-    pub fn set_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
-        self.1.label.parameters = parameters.into_iter().collect();
-        self.clone()
+    pub fn set_parameters(
+        mut slf: PyRefMut<'_, Self>,
+        parameters: HashMap<String, String>,
+    ) -> PyRefMut<'_, Self> {
+        slf.1.label.parameters = parameters.into_iter().collect();
+        slf
     }
 
     /// Add parameters to the constraint.
@@ -223,16 +226,23 @@ impl Constraint {
     /// Existing keys are overwritten, and keys not mentioned in `parameters`
     /// are preserved. Use `set_parameters` to replace the whole map.
     /// Returns self for method chaining
-    pub fn add_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
-        self.1.label.parameters.extend(parameters);
-        self.clone()
+    pub fn add_parameters(
+        mut slf: PyRefMut<'_, Self>,
+        parameters: HashMap<String, String>,
+    ) -> PyRefMut<'_, Self> {
+        slf.1.label.parameters.extend(parameters);
+        slf
     }
 
     /// Add a parameter to the constraint
     /// Returns self for method chaining
-    pub fn add_parameter(&mut self, key: String, value: String) -> Self {
-        self.1.label.parameters.insert(key, value);
-        self.clone()
+    pub fn add_parameter(
+        mut slf: PyRefMut<'_, Self>,
+        key: String,
+        value: String,
+    ) -> PyRefMut<'_, Self> {
+        slf.1.label.parameters.insert(key, value);
+        slf
     }
 
     /// Create an indicator constraint from this constraint.
