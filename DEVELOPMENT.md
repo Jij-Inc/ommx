@@ -141,13 +141,19 @@ The binding's internal DataFrame schema tests embed Python in Rust. Run them
 with the project environment (including pandas) available to the interpreter:
 
 ```shell
-task python:ommx:test-schema
+(
+  export PYO3_PYTHON PYTHONPATH
+  PYO3_PYTHON=$(uv run --no-sync python -c 'import sys; print(sys.executable)')
+  PYTHONPATH=$(uv run --no-sync python -c 'import os, sys; print(os.pathsep.join(path for path in sys.path if path))')
+  cargo test -p _ommx_rust --lib
+)
 ```
 
 CI runs these tests once with the pandas version recorded in `uv.lock`, using
-the minimal `binding-test` dependency group. `task rust:test-all` runs the full
-Rust workspace suite with the same environment; its Taskfile `env` settings
-obtain `PYO3_PYTHON` and `PYTHONPATH` from `uv run`.
+the minimal `binding-test` dependency group. The existing workspace-wide
+`cargo test` step uses the same environment settings: embedded CPython needs
+the project interpreter and module search path explicitly. To run only the
+schema tests locally, append `pandas::schema::tests` to the Cargo command.
 
 New table builders should declare their ordered columns and index with
 `pandas::schema::DataFrameSchema` in the Python binding crate. Select each

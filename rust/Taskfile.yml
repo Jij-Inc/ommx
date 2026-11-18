@@ -20,18 +20,6 @@ tasks:
     cmds:
       - cargo test -p ommx -p ommx-pyo3-bridge {{.CLI_ARGS}}
 
-  test-all:
-    desc: Run workspace Rust tests with the project's Python environment
-    dir: '{{.ROOT_DIR}}'
-    env:
-      PYO3_PYTHON:
-        sh: uv run --no-sync python -c 'import sys; print(sys.executable)'
-      # Embedded CPython does not automatically activate uv's virtualenv.
-      PYTHONPATH:
-        sh: uv run --no-sync python -c 'import os, sys; print(os.pathsep.join(path for path in sys.path if path))'
-    cmds:
-      - uv run --no-sync cargo test {{.CLI_ARGS}}
-
   check:
     desc: Run check for Rust SDK
     cmds:

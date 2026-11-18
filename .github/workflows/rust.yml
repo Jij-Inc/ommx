@@ -61,7 +61,12 @@ jobs:
         run: uv sync --locked --only-group binding-test --no-install-workspace
 
       - name: Run tests
-        run: task rust:test-all
+        run: |
+          export PYO3_PYTHON PYTHONPATH
+          PYO3_PYTHON=$(uv run --no-sync python -c 'import sys; print(sys.executable)')
+          # Embedded CPython does not automatically activate uv's virtualenv.
+          PYTHONPATH=$(uv run --no-sync python -c 'import os, sys; print(os.pathsep.join(path for path in sys.path if path))')
+          cargo test
 
       - name: Test SDK-independent bridge receivers
         run: task pyo3-bridge:receiver-test
