@@ -7,7 +7,9 @@ before mutation with `EmptySampleIDs`; duplicate IDs still produce
 `DuplicatedSampleIDError`. Use `error.downcast_ref::<DuplicatedSampleIDError>()`
 before reading the conflicting `id()`. `Sampled::new` and protobuf parsing also
 reject entries with no IDs. Empty collections remain valid, and
-`Sampled::constants` with no IDs returns an empty collection.
+`Sampled::constants` with no IDs returns an empty collection. For repeated IDs,
+`Sampled::new_no_dedup` and `Sampled::new_dedup` retain the last value as before,
+but no longer keep overwritten values for evaluation or serialization.
 
 Test-state generation uses finite windows for infinite intervals and no longer
 clips finite intervals to a fixed magnitude cap. Values with overflowing bound

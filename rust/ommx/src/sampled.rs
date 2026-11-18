@@ -18,6 +18,12 @@ impl SampleID {
 
 pub type SampleIDSet = BTreeSet<SampleID>;
 
+/// Values indexed by sample ID, optionally sharing one stored value across IDs.
+///
+/// Each ID identifies exactly one value, and every stored value has at least one
+/// ID. An empty collection stores no values. Constructors and [`Self::append`]
+/// preserve these invariants; validation of a state against a model belongs to
+/// the model's evaluation operation.
 #[derive(Debug, Clone)]
 pub struct Sampled<T> {
     offsets: FnvHashMap<SampleID, usize>,
@@ -155,16 +161,30 @@ impl<T> Sampled<T> {
         Ok(out)
     }
 
+    /// Construct samples without sharing storage between different IDs.
+    ///
+    /// If an ID occurs repeatedly, its last value replaces the earlier value.
     pub fn new_no_dedup(iter: impl Iterator<Item = (SampleID, T)>) -> Self {
         let mut offsets = FnvHashMap::default();
         let mut data = Vec::new();
-        for (n, (id, value)) in iter.enumerate() {
-            offsets.insert(id, n);
-            data.push(value);
+        for (id, value) in iter {
+            match offsets.entry(id) {
+                std::collections::hash_map::Entry::Occupied(entry) => {
+                    data[*entry.get()] = value;
+                }
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(data.len());
+                    data.push(value);
+                }
+            }
         }
         Self { offsets, data }
     }
 
+    /// Construct samples, sharing storage between equal values.
+    ///
+    /// If an ID occurs repeatedly, its last value replaces the earlier value
+    /// before equal values are grouped.
     pub fn new_dedup<I>(iter: I) -> Self
     where
         I: Iterator<Item = (SampleID, T)>,
@@ -174,7 +194,8 @@ impl<T> Sampled<T> {
         let mut data = Vec::new();
         let mut value_to_offset: FnvHashMap<T, usize> = FnvHashMap::default();
 
-        for (id, value) in iter {
+        let values_by_id: FnvHashMap<_, _> = iter.collect();
+        for (id, value) in values_by_id {
             // Check if we already have this value using HashMap lookup (O(1))
             let offset = match value_to_offset.get(&value) {
                 Some(&existing_offset) => {
@@ -393,6 +414,32 @@ mod tests {
         assert_eq!(sampled.offsets[&SampleID(1)], sampled.offsets[&SampleID(2)]);
         assert_ne!(sampled.offsets[&SampleID(1)], sampled.offsets[&SampleID(3)]);
         assert_eq!(sampled.num_samples(), 3);
+    }
+
+    #[test]
+    fn repeated_ids_do_not_leave_values_for_evaluation() {
+        let pairs = [
+            (SampleID(1), 99),
+            (SampleID(1), 10),
+            (SampleID(2), 10),
+            (SampleID(1), 20),
+        ];
+        for sampled in [
+            Sampled::new_no_dedup(pairs.into_iter()),
+            Sampled::new_dedup(pairs.into_iter()),
+        ] {
+            let evaluated = sampled
+                .try_map_ref(|value| {
+                    if *value == 99 {
+                        bail!("overwritten value must not be evaluated");
+                    }
+                    Ok(*value)
+                })
+                .unwrap();
+            assert_eq!(evaluated.get(SampleID(1)), Some(&20));
+            assert_eq!(evaluated.get(SampleID(2)), Some(&10));
+            assert_eq!(evaluated.chunk().len(), 2);
+        }
     }
 
     #[test]

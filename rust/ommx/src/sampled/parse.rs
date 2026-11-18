@@ -131,6 +131,33 @@ mod tests {
 
     proptest! {
         #[test]
+        fn repeated_sample_ids_roundtrip(
+            pairs in prop::collection::vec((0u64..5, 0i32..5), 0..30)
+        ) {
+            let expected: FnvHashMap<_, _> = pairs.iter().copied().collect();
+            for sampled in [
+                Sampled::new_no_dedup(pairs.iter().map(|&(id, value)| (SampleID(id), value))),
+                Sampled::new_dedup(pairs.iter().map(|&(id, value)| (SampleID(id), value))),
+            ] {
+                prop_assert_eq!(sampled.num_samples(), expected.len());
+                for (&id, value) in &expected {
+                    prop_assert_eq!(sampled.get(SampleID(id)), Some(value));
+                }
+                prop_assert!(sampled.clone().chunk().iter().all(|(_, ids)| !ids.is_empty()));
+
+                let values = sampled.clone().map(f64::from);
+                let encoded: v1::SampledValues = values.clone().into();
+                prop_assert_eq!(encoded.parse(&()).unwrap(), values);
+
+                let samples = sampled.map(|value| v1::State {
+                    entries: [(0, f64::from(value))].into(),
+                });
+                let encoded: v1::Samples = samples.clone().into();
+                prop_assert_eq!(encoded.parse(&()).unwrap(), samples);
+            }
+        }
+
+        #[test]
         fn sample_groups_roundtrip(
             samples in (0usize..20).prop_flat_map(|count| crate::random::arbitrary_samples(
                 crate::random::SamplesParameters::new(count.div_ceil(2), count, 100).unwrap(),
