@@ -61,8 +61,10 @@ returns the typed error directly):
   in-crate tests and downstream code that wants to react programmatically.
 - [`DuplicatedSampleIDError`](crate::DuplicatedSampleIDError) — identifies a
   sample ID already present in a [`Sampled`](crate::Sampled) collection or
-  repeated in one append input, so the caller can choose another ID and retry
-  the atomic append.
+  repeated in constructor or append input, so the caller can choose another
+  ID and retry. `Sampled::new_no_dedup` and `Sampled::new_dedup` return
+  `ommx::Result` and preserve this signal, including when repeated IDs have
+  equal values. Append validates the IDs before mutation.
 - [`EmptySampleIDs`](crate::EmptySampleIDs) — identifies an appended value
   without any sample IDs, so the caller can supply at least one ID and retry.
   [`Sampled::append`](crate::Sampled::append) returns `ommx::Result` and preserves

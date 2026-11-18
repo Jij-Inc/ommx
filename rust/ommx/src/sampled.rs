@@ -61,7 +61,7 @@ impl<T> From<(SampleID, T)> for Sampled<T> {
     }
 }
 
-/// A sample ID already present in a collection or repeated in one append input.
+/// A sample ID already present in a collection or repeated in constructor or append input.
 ///
 /// Use [`Self::id`] to identify the conflicting ID before correcting the input
 /// and retrying the atomic operation.
@@ -163,14 +163,17 @@ impl<T> Sampled<T> {
 
     /// Construct samples without sharing storage between different IDs.
     ///
-    /// If an ID occurs repeatedly, its last value replaces the earlier value.
-    pub fn new_no_dedup(iter: impl Iterator<Item = (SampleID, T)>) -> Self {
+    /// # Errors
+    ///
+    /// Returns [`DuplicatedSampleIDError`] in the error chain if an ID occurs
+    /// more than once, even when the associated values are equal.
+    pub fn new_no_dedup(iter: impl Iterator<Item = (SampleID, T)>) -> crate::Result<Self> {
         let mut offsets = FnvHashMap::default();
         let mut data = Vec::new();
         for (id, value) in iter {
             match offsets.entry(id) {
-                std::collections::hash_map::Entry::Occupied(entry) => {
-                    data[*entry.get()] = value;
+                std::collections::hash_map::Entry::Occupied(_) => {
+                    return Err(DuplicatedSampleIDError { id }.into());
                 }
                 std::collections::hash_map::Entry::Vacant(entry) => {
                     entry.insert(data.len());
@@ -178,14 +181,17 @@ impl<T> Sampled<T> {
                 }
             }
         }
-        Self { offsets, data }
+        Ok(Self { offsets, data })
     }
 
     /// Construct samples, sharing storage between equal values.
     ///
-    /// If an ID occurs repeatedly, its last value replaces the earlier value
-    /// before equal values are grouped.
-    pub fn new_dedup<I>(iter: I) -> Self
+    /// # Errors
+    ///
+    /// Returns [`DuplicatedSampleIDError`] in the error chain if an ID occurs
+    /// more than once, even when the associated values are equal. Equal values
+    /// under different IDs are valid and share storage.
+    pub fn new_dedup<I>(iter: I) -> crate::Result<Self>
     where
         I: Iterator<Item = (SampleID, T)>,
         T: Hash + Eq + Clone,
@@ -194,8 +200,13 @@ impl<T> Sampled<T> {
         let mut data = Vec::new();
         let mut value_to_offset: FnvHashMap<T, usize> = FnvHashMap::default();
 
-        let values_by_id: FnvHashMap<_, _> = iter.collect();
-        for (id, value) in values_by_id {
+        for (id, value) in iter {
+            let entry = match offsets.entry(id) {
+                std::collections::hash_map::Entry::Occupied(_) => {
+                    return Err(DuplicatedSampleIDError { id }.into());
+                }
+                std::collections::hash_map::Entry::Vacant(entry) => entry,
+            };
             // Check if we already have this value using HashMap lookup (O(1))
             let offset = match value_to_offset.get(&value) {
                 Some(&existing_offset) => {
@@ -210,10 +221,10 @@ impl<T> Sampled<T> {
                     new_offset
                 }
             };
-            offsets.insert(id, offset);
+            entry.insert(offset);
         }
 
-        Self { offsets, data }
+        Ok(Self { offsets, data })
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&SampleID, &T)> {
@@ -363,7 +374,8 @@ mod tests {
                 (SampleID(5), 20), // Same value as SampleID(2)
             ]
             .into_iter(),
-        );
+        )
+        .unwrap();
 
         // Should have 5 samples but only 3 data entries (deduplication occurred)
         assert_eq!(sampled.num_samples(), 5);
@@ -417,28 +429,31 @@ mod tests {
     }
 
     #[test]
-    fn repeated_ids_do_not_leave_values_for_evaluation() {
-        let pairs = [
-            (SampleID(1), 99),
-            (SampleID(1), 10),
-            (SampleID(2), 10),
-            (SampleID(1), 20),
-        ];
-        for sampled in [
-            Sampled::new_no_dedup(pairs.into_iter()),
-            Sampled::new_dedup(pairs.into_iter()),
-        ] {
-            let evaluated = sampled
-                .try_map_ref(|value| {
-                    if *value == 99 {
-                        bail!("overwritten value must not be evaluated");
-                    }
-                    Ok(*value)
-                })
-                .unwrap();
-            assert_eq!(evaluated.get(SampleID(1)), Some(&20));
-            assert_eq!(evaluated.get(SampleID(2)), Some(&10));
-            assert_eq!(evaluated.chunk().len(), 2);
+    fn constructors_reject_repeated_ids_without_consuming_remaining_input() {
+        for repeated_value in [10, 20] {
+            let pairs = [
+                (SampleID(7), 10),
+                (SampleID(8), 10),
+                (SampleID(7), repeated_value),
+            ];
+            for dedup in [false, true] {
+                let iter = pairs.into_iter().chain(std::iter::once_with(|| {
+                    panic!("input after the duplicate must not be consumed")
+                }));
+                let error = if dedup {
+                    Sampled::new_dedup(iter)
+                } else {
+                    Sampled::new_no_dedup(iter)
+                }
+                .unwrap_err();
+                assert_eq!(
+                    error
+                        .downcast_ref::<DuplicatedSampleIDError>()
+                        .unwrap()
+                        .id(),
+                    SampleID(7),
+                );
+            }
         }
     }
 
@@ -557,8 +572,8 @@ mod tests {
             (SampleID(4), 20), // Duplicate value
         ];
 
-        let no_dedup = Sampled::new_no_dedup(data.iter().copied());
-        let dedup = Sampled::new_dedup(data.iter().copied());
+        let no_dedup = Sampled::new_no_dedup(data.iter().copied()).unwrap();
+        let dedup = Sampled::new_dedup(data.iter().copied()).unwrap();
 
         // Both should have the same number of samples
         assert_eq!(no_dedup.num_samples(), 4);

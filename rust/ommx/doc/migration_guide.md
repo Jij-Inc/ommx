@@ -7,9 +7,12 @@ before mutation with `EmptySampleIDs`; duplicate IDs still produce
 `DuplicatedSampleIDError`. Use `error.downcast_ref::<DuplicatedSampleIDError>()`
 before reading the conflicting `id()`. `Sampled::new` and protobuf parsing also
 reject entries with no IDs. Empty collections remain valid, and
-`Sampled::constants` with no IDs returns an empty collection. For repeated IDs,
-`Sampled::new_no_dedup` and `Sampled::new_dedup` retain the last value as before,
-but no longer keep overwritten values for evaluation or serialization.
+`Sampled::constants` with no IDs returns an empty collection.
+`Sampled::new_no_dedup` and `Sampled::new_dedup` now return `ommx::Result<Self>`
+and reject repeated sample IDs with `DuplicatedSampleIDError`, rather than
+keeping the last value. This applies even when the values are equal. Handle
+the result with `?` and supply distinct sample IDs; equal values under distinct
+IDs remain valid, and `new_dedup` shares their storage.
 
 Test-state generation uses finite windows for infinite intervals and no longer
 clips finite intervals to a fixed magnitude cap. Values with overflowing bound

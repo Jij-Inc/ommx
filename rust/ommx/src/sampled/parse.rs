@@ -131,14 +131,25 @@ mod tests {
 
     proptest! {
         #[test]
-        fn repeated_sample_ids_roundtrip(
+        fn constructors_reject_duplicate_ids_or_roundtrip(
             pairs in prop::collection::vec((0u64..5, 0i32..5), 0..30)
         ) {
             let expected: FnvHashMap<_, _> = pairs.iter().copied().collect();
-            for sampled in [
+            let mut seen = FnvHashSet::default();
+            let duplicate = pairs.iter().find(|(id, _)| !seen.insert(*id)).map(|&(id, _)| id);
+            for result in [
                 Sampled::new_no_dedup(pairs.iter().map(|&(id, value)| (SampleID(id), value))),
                 Sampled::new_dedup(pairs.iter().map(|&(id, value)| (SampleID(id), value))),
             ] {
+                if let Some(id) = duplicate {
+                    let error = result.unwrap_err();
+                    prop_assert_eq!(
+                        error.downcast_ref::<DuplicatedSampleIDError>().unwrap().id(),
+                        SampleID(id),
+                    );
+                    continue;
+                }
+                let sampled = result.unwrap();
                 prop_assert_eq!(sampled.num_samples(), expected.len());
                 for (&id, value) in &expected {
                     prop_assert_eq!(sampled.get(SampleID(id)), Some(value));
