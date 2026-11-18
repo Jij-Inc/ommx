@@ -46,5 +46,8 @@ An empty dictionary or empty iterable creates no samples; use ``[{}]`` or
 
 {meth}`~ommx.Instance.evaluate_samples` accepts these inputs directly, so an
 explicit Samples construction is optional. {meth}`~ommx.Samples.append` adds
-an assignment under one or more new IDs and rejects duplicate IDs without
-changing the collection.
+an assignment under one or more new IDs and rejects empty ID lists and
+duplicate IDs without changing the collection. Sample IDs identify candidates;
+they are independent of the variable IDs in each State. An empty State can
+represent a candidate for a constant model. Whether a State supplies the
+variables required by a particular Instance is checked at evaluation time.

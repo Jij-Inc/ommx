@@ -65,6 +65,7 @@ impl<T> From<(SampleID, T)> for Sampled<T> {
 /// let error = sampled
 ///     .append([ommx::SampleID::from(0)], "replacement")
 ///     .unwrap_err();
+/// let error = error.downcast_ref::<ommx::DuplicatedSampleIDError>().unwrap();
 /// assert_eq!(error.id(), ommx::SampleID::from(0));
 /// ```
 #[derive(Debug, thiserror::Error)]
@@ -80,9 +81,24 @@ impl DuplicatedSampleIDError {
     }
 }
 
+/// An appended value has no sample ID identifying it.
+///
+/// Supply at least one sample ID before retrying [`Sampled::append`] or
+/// [`Sampled::new`]. An empty collection is valid; represent it with
+/// [`Sampled::default`] rather than an entry with no IDs.
+#[derive(Debug, thiserror::Error)]
+#[error("sample IDs must contain at least one ID")]
+#[non_exhaustive]
+pub struct EmptySampleIDs;
+
 impl<T> Sampled<T> {
+    /// Associate a constant value with the supplied IDs, or return an empty
+    /// collection when there are no IDs.
     pub fn constants(ids: impl Iterator<Item = SampleID>, value: T) -> Self {
-        let map = ids.map(|id| (id, 0)).collect();
+        let map: FnvHashMap<_, _> = ids.map(|id| (id, 0)).collect();
+        if map.is_empty() {
+            return Self::default();
+        }
         let data = vec![value];
         Self { offsets: map, data }
     }
@@ -91,21 +107,25 @@ impl<T> Sampled<T> {
     ///
     /// # Errors
     ///
-    /// Returns [`DuplicatedSampleIDError`] if an ID already exists in this
-    /// collection or occurs more than once in `ids`. All IDs are validated
-    /// before mutation, so the collection is unchanged when this method fails.
+    /// The error chain contains [`EmptySampleIDs`] if `ids` is empty, or
+    /// [`DuplicatedSampleIDError`] if an ID already exists in this collection
+    /// or occurs more than once in `ids`. All IDs are validated before mutation,
+    /// so the collection is unchanged when this method fails.
     pub fn append(
         &mut self,
         ids: impl IntoIterator<Item = SampleID>,
         value: T,
-    ) -> std::result::Result<(), DuplicatedSampleIDError> {
+    ) -> crate::Result<()> {
         let mut new_ids = Vec::new();
         let mut seen = FnvHashSet::default();
         for id in ids {
             if self.offsets.contains_key(&id) || !seen.insert(id) {
-                return Err(DuplicatedSampleIDError { id });
+                return Err(DuplicatedSampleIDError { id }.into());
             }
             new_ids.push(id);
+        }
+        if new_ids.is_empty() {
+            return Err(EmptySampleIDs.into());
         }
 
         let offset = self.data.len();
@@ -376,12 +396,54 @@ mod tests {
     }
 
     #[test]
+    fn empty_id_append_is_rejected_before_mutation() {
+        for mut sampled in [Sampled::default(), Sampled::from((SampleID(7), 10))] {
+            let before_ids = sampled.ids();
+            let before_data = sampled.data.clone();
+            for _ in 0..2 {
+                let error = sampled.append([], 20).unwrap_err();
+                assert!(error.is::<EmptySampleIDs>());
+                assert_eq!(sampled.ids(), before_ids);
+                assert_eq!(sampled.data, before_data);
+            }
+            sampled.append([SampleID(8), SampleID(9)], 30).unwrap();
+            assert_eq!(sampled.get(SampleID(8)), Some(&30));
+            assert_eq!(sampled.get(SampleID(9)), Some(&30));
+        }
+    }
+
+    #[test]
+    fn new_rejects_empty_id_groups_but_accepts_no_groups() {
+        let error = Sampled::new([vec![SampleID(0)], vec![]], [10, 20]).unwrap_err();
+        assert!(error.is::<EmptySampleIDs>());
+        let empty = Sampled::<i32>::new(Vec::<Vec<SampleID>>::new(), []).unwrap();
+        assert!(empty.data.is_empty());
+        assert!(empty.ids().is_empty());
+    }
+
+    #[test]
+    fn empty_constants_do_not_store_unaddressable_values() {
+        let empty = Sampled::constants(std::iter::empty(), 10);
+        assert_eq!(empty.num_samples(), 0);
+        assert!(empty.chunk().is_empty());
+        let shared = Sampled::constants([SampleID(1), SampleID(2)].into_iter(), 10);
+        assert_eq!(shared.num_samples(), 2);
+        assert_eq!(shared.chunk().len(), 1);
+    }
+
+    #[test]
     fn append_is_atomic_when_an_existing_id_follows_a_fresh_id() {
         let mut sampled = Sampled::from((SampleID(0), 10));
 
         let error = sampled.append([SampleID(1), SampleID(0)], 20).unwrap_err();
 
-        assert_eq!(error.id(), SampleID(0));
+        assert_eq!(
+            error
+                .downcast_ref::<DuplicatedSampleIDError>()
+                .unwrap()
+                .id(),
+            SampleID(0)
+        );
         assert_eq!(sampled.ids(), BTreeSet::from([SampleID(0)]));
         assert_eq!(sampled.get(SampleID(0)), Some(&10));
         assert_eq!(sampled.get(SampleID(1)), None);
@@ -394,7 +456,13 @@ mod tests {
 
         let error = sampled.append([SampleID(1), SampleID(1)], 20).unwrap_err();
 
-        assert_eq!(error.id(), SampleID(1));
+        assert_eq!(
+            error
+                .downcast_ref::<DuplicatedSampleIDError>()
+                .unwrap()
+                .id(),
+            SampleID(1)
+        );
         assert_eq!(sampled.ids(), BTreeSet::from([SampleID(0)]));
         assert_eq!(sampled.get(SampleID(0)), Some(&10));
         assert_eq!(sampled.get(SampleID(1)), None);

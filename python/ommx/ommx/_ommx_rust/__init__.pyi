@@ -13894,8 +13894,11 @@ class Samples:
 
     {meth}`~ommx.Instance.evaluate_samples` accepts these inputs directly, so an
     explicit Samples construction is optional. {meth}`~ommx.Samples.append` adds
-    an assignment under one or more new IDs and rejects duplicate IDs without
-    changing the collection.
+    an assignment under one or more new IDs and rejects empty ID lists and
+    duplicate IDs without changing the collection. Sample IDs identify candidates;
+    they are independent of the variable IDs in each State. An empty State can
+    represent a candidate for a constant model. Whether a State supplies the
+    variables required by a particular Instance is checked at evaluation time.
     """
     def __new__(cls, entries: ToSamples) -> Samples: ...
     @staticmethod
@@ -13921,9 +13924,10 @@ class Samples:
         r"""
         Append a sample with the given sample IDs and state.
 
-        Raises {class}`ValueError` if an ID already exists in this collection
-        or occurs more than once in `sample_ids`. The collection is unchanged
-        when validation fails.
+        Raises {class}`ValueError` if `sample_ids` is empty, an ID already exists
+        in this collection, or an ID occurs more than once in `sample_ids`.
+        The collection is unchanged when validation fails. An empty state is
+        allowed; {meth}`~ommx.Instance.evaluate_samples` checks required variable IDs.
         """
 
 @typing.final

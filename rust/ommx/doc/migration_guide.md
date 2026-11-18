@@ -2,6 +2,13 @@
 
 This document covers migration of the OMMX Rust SDK (`ommx` crate) across major versions.
 
+`Sampled::append` now returns `ommx::Result<()>`. It rejects an empty ID list
+before mutation with `EmptySampleIDs`; duplicate IDs still produce
+`DuplicatedSampleIDError`. Use `error.downcast_ref::<DuplicatedSampleIDError>()`
+before reading the conflicting `id()`. `Sampled::new` and protobuf parsing also
+reject entries with no IDs. Empty collections remain valid, and
+`Sampled::constants` with no IDs returns an empty collection.
+
 Test-state generation uses finite windows for infinite intervals and no longer
 clips finite intervals to a fixed magnitude cap. Values with overflowing bound
 residuals are excluded consistently with domain validation.
