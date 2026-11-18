@@ -90,7 +90,17 @@ live.set_name("capacity")
 assert model.active_constraints[live.constraint_id].name == "capacity"
 ```
 
-`dict(model.active_constraints)` で辞書を作っても、値は引き続きモデルに接続されています。独立させたい有効な行ごとに `detach()` を呼んでください。切り離した制約のsetterは呼出し元を変更してコピーを返すため、一つのオブジェクトに複数の変更を加えるときは、そのオブジェクトに対して個別に呼びます。
+`dict(model.active_constraints)` で辞書を作っても、値は引き続きモデルに接続されています。独立させたい有効な行ごとに `detach()` を呼んでください。切り離した制約のメタデータsetterは、呼出し元を変更して同じ Python オブジェクトを返すため、チェーンした呼出しもすべて同じオブジェクトを更新します。戻り値を別の変数に代入しても、参照先は同じです。独立した制約が必要な場合は `copy.copy` または `copy.deepcopy` を使ってください。
+
+```python
+from copy import copy
+
+alias = local.set_name("display").set_description("For display")
+assert alias is local
+independent = copy(local)
+independent.set_name("independent")
+assert local.name == "display"
+```
 
 ### 変数の役割を読む処理を置き換える
 

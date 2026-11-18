@@ -90,7 +90,17 @@ live.set_name("capacity")
 assert model.active_constraints[live.constraint_id].name == "capacity"
 ```
 
-A dictionary made with `dict(model.active_constraints)` still holds attached rows. Detach each active row you want to copy. On a detached constraint, a setter changes the receiver and returns a clone. To apply several edits to the same detached object, call its setters separately.
+A dictionary made with `dict(model.active_constraints)` still holds attached rows. Detach each active row you want to copy. On a detached constraint, metadata setters change and return the same Python object, so chained calls all update that object. Assigning the return value to another variable creates an alias. Use `copy.copy` or `copy.deepcopy` when you need an independent constraint.
+
+```python
+from copy import copy
+
+alias = local.set_name("display").set_description("For display")
+assert alias is local
+independent = copy(local)
+independent.set_name("independent")
+assert local.name == "display"
+```
 
 ### Replace a variable analysis query
 

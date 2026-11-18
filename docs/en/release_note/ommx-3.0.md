@@ -6,6 +6,14 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### Preserve constraint identity in method chains ([#1406](https://github.com/Jij-Inc/ommx/pull/1406))
+
+Metadata setters on standalone `Constraint`, `IndicatorConstraint`,
+`OneHotConstraint`, and `Sos1Constraint` now return the same Python object.
+Calling `c.set_name("limit").set_subscripts([1])` updates both fields on `c`,
+even when the return value is not assigned. The same correction applies to
+`Constraint`'s metadata append methods and `partial_evaluate()`.
+
 ### Generate test states for unbounded and large variable domains ([#1403](https://github.com/Jij-Inc/ommx/pull/1403))
 
 `Instance.random_state` and `random_samples` remain public test and debugging
