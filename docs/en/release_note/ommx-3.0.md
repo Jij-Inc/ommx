@@ -69,6 +69,12 @@ Failed solver calls and model error statuses raise `OMMXHighsAdapterError`
 without decoding a solution. Large finite bounds can still cause numerical
 failures; these are not reported as `InfeasibleDetected`.
 
+### Concrete adapter classes are final ([#1419](https://github.com/Jij-Inc/ommx/pull/1419))
+
+Type checkers now report an error when a class inherits from the HiGHS,
+OpenJij SA, PySCIPOpt, or Python-MIP adapter. To implement a custom adapter,
+subclass `ommx.adapter.SolverAdapter` or `ommx.adapter.SamplerAdapter`.
+
 ### OpenJij retains the supplied Instance by reference ([#1418](https://github.com/Jij-Inc/ommx/pull/1418))
 
 When constructing `OMMXOpenJijSAAdapter(instance)` directly, keep `instance`

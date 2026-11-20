@@ -65,6 +65,12 @@ HiGHS に設定された実行可能性の許容誤差を適用します。
 `OMMXHighsAdapterError` を送出します。大きな有限境界によって数値的な問題が
 生じる可能性は残りますが、その失敗を `InfeasibleDetected` として扱うことはありません。
 
+### 具象アダプターに `@final` を追加 ([#1419](https://github.com/Jij-Inc/ommx/pull/1419))
+
+HiGHS、OpenJij SA、PySCIPOpt、Python-MIP の具象アダプターを継承すると、
+型チェックでエラーになります。独自のアダプターを実装する場合は、
+`ommx.adapter.SolverAdapter` または `ommx.adapter.SamplerAdapter` を継承してください。
+
 ### OpenJij が渡された Instance を参照で保持 ([#1418](https://github.com/Jij-Inc/ommx/pull/1418))
 
 `OMMXOpenJijSAAdapter(instance)` を直接構築する場合は、結果のデコードを含め、
