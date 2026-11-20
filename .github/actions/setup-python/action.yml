@@ -1,0 +1,20 @@
+name: Setup Python
+description: Select uv and Python without synchronizing or building workspace packages
+inputs:
+  python-version:
+    description: Python version, including an optional free-threaded suffix
+    default: '3.11'
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v8.1.0
+      with:
+        python-version: ${{ inputs.python-version }}
+        ignore-nothing-to-cache: true
+    - name: Install selected interpreter
+      shell: bash
+      env:
+        SELECTED_PYTHON: ${{ inputs.python-version }}
+      run: |
+        uv python install "$SELECTED_PYTHON"
+        echo "UV_PYTHON=$(uv python find "$SELECTED_PYTHON")" >> "$GITHUB_ENV"

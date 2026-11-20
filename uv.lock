@@ -37,6 +37,7 @@ benchmark = [
     { name = "pytest-github-actions-annotate-failures" },
     { name = "syrupy", specifier = ">=4.7.2" },
 ]
+binding-test = [{ name = "pandas" }]
 build = [
     { name = "cibuildwheel" },
     { name = "maturin", specifier = ">=1.14.1,<2.0.0" },

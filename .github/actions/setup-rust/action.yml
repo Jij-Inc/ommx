@@ -1,0 +1,28 @@
+name: Setup Rust
+description: Select the Rust toolchain and restore build dependencies without Python
+inputs:
+  toolchain:
+    description: Rust toolchain
+    default: stable
+  components:
+    description: Additional Rust components
+    default: ''
+  targets:
+    description: Additional compilation targets
+    default: ''
+  cache:
+    description: Restore Cargo dependencies for compilation jobs
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ inputs.toolchain }}
+        components: ${{ inputs.components }}
+        targets: ${{ inputs.targets }}
+    - uses: Swatinem/rust-cache@v2
+      if: inputs.cache == 'true'
+      with:
+        # Python jobs select their interpreter before restoring Cargo artifacts.
+        env-vars: UV_PYTHON PYO3_PYTHON

@@ -162,6 +162,7 @@ impl ImageRef {
     /// re-parsing the [`Display`] form. Crate-private to keep the
     /// public surface decoupled from `oci_spec` — see the type-level
     /// canonicalisation invariant.
+    #[cfg(feature = "remote-artifact")]
     pub(crate) fn as_inner(&self) -> &Reference {
         &self.0
     }

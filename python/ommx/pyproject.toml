@@ -88,6 +88,9 @@ cache-keys = [
   { file = "src/**/*.md" },
   # Python SDK should be rebuilt when Rust SDK is updated.
   { file = "../../Cargo.lock" },
+  { file = "../ommx-pyo3-bridge/Cargo.toml" },
+  { file = "../ommx-pyo3-bridge/src/**/*.rs" },
+  { file = "../../rust/ommx-derive/src/**/*.rs" },
   { file = "../../rust/ommx/src/**/*.rs" },
   { file = "../../rust/ommx/agent_plugin/**/*.md" },
   { file = "../../rust/ommx/agent_plugin/**/*.json" },

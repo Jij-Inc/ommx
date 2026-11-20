@@ -64,33 +64,36 @@ Migration guides:
 
 This project uses [Taskfile](https://taskfile.dev/) for task management. **⚠️ All commands must be run from the project root directory.**
 
-**Essential Commands:**
+See [DEVELOPMENT.md](DEVELOPMENT.md) for ownership, environment preparation, and CI grouping.
+
 ```bash
-# Setup
-task python:sync               # Setup Python development environment
-task python:upgrade           # Install/upgrade dependencies
-
-# Testing
-task python:test              # Run all Python tests (linting, type checking, pytest)
-task rust:test               # Run Rust tests only
-task format                  # Format all code (Python and Rust)
-
-# Development
-task proto                   # Generate all protobuf code
-task rust:check             # Run cargo check
-task rust:clippy            # Run Rust linting
-task python:lint            # Run Python linting
-task python:stubgen         # Regenerate PyO3 stubs and top-level ommx exports
-
-# Documentation
-task book_en                # Build and open English documentation
+task python:sync              # Build and prepare the source-development environment
+task python:test              # SDK, bridge, and adapters, including Rust implementation tests
+task python:ommx:test-rust     # Binding Rust tests with the locked embedded-Python environment
+task python:bridge:test       # Bridge crate and independent consumer fixture
+task rust:test                # Rust SDK and derive crate, without Python
+task proto:test               # Generator tests and committed-output verification
+task dataset:test             # Dataset packaging
+task docs:test                # Both Books, code execution, and entry links
+task python:ommx:stubgen       # Generate SDK stubs, exports, and API metadata
+task format                   # Delegate formatting to every owner
+task ci:check                 # Validate GitHub Actions workflows
 ```
 
-**Package-Specific Testing:**
-- `task python:ommx:test` - Test main Python package
-- `task python:ommx-highs-adapter:test` - Test specific adapter (also: `ommx-pyscipopt-adapter`, `ommx-python-mip-adapter`, `ommx-openjij-adapter`)
+Task namespaces express product ownership, not implementation language or Cargo
+workspace membership. `rust:*` selects `ommx` and `ommx-derive`;
+`python:ommx:*` owns `_ommx_rust`, and `python:bridge:*` owns the bridge and
+fixture under `python/ommx-pyo3-bridge/`. Generator and dataset crates belong to
+`proto:*` and `dataset:*`. There is no public workspace-wide task namespace.
 
-Run `task -l` to see all available commands.
+Package test aggregates prepare source dependencies once. Focused pytest and
+Pyright tasks use `uv run --no-sync` and preserve an installed SDK wheel.
+Embedded-Python Cargo commands share the locked `binding-test` group and resolve
+`PYO3_PYTHON` and `PYTHONPATH` from that environment. `python:lint` includes
+Rust Clippy; `python:ruff` is the Python-only pass used by lightweight CI.
+
+Run `task -l` for all entry points. Pass Cargo arguments after `--`, for example
+`task python:ommx:test-rust -- --lib error::tests`.
 
 ## Development Guidelines
 
@@ -166,7 +169,7 @@ from ommx._ommx_rust import Function  # Binding-internal only
 
 ### 🧪 Testing & Quality
 - Python tests: `python/ommx/tests` for core SDK, each adapter has its own `tests/` directory
-- Always run `task format` before committing
+- Before committing, run the affected owners' format tasks from DEVELOPMENT.md. Use `task format` to format every area when all required tools are available.
 - After pushing a PR update, do not wait for remote CI checks by default, and do not report pending checks or merely-started check runs. Report once the requested work, focused local validation, commit, and push are done. Check or wait for CI only when the user explicitly asks, when debugging a failing check, or when the next action depends on the final CI result.
 
 ### 📊 Performance Claims Policy

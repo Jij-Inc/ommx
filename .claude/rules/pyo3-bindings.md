@@ -58,7 +58,7 @@ impl From<TypeName> for ommx::TypeName { ... }
 
 ## Generated files (do not edit manually)
 
-`task python:stubgen` runs `cargo run --bin stub_gen` which invokes pyo3-stub-gen to generate:
+`task python:ommx:stubgen` runs `cargo run --bin stub_gen` which invokes pyo3-stub-gen to generate:
 
 - **`ommx/_ommx_rust/__init__.pyi`** — type stubs for the compiled extension module
 - **`ommx/v1/__init__.py`** — re-exports from `_ommx_rust`, configured by `generate-init-py = ["ommx.v1", "ommx.artifact"]` in `pyproject.toml`
@@ -68,7 +68,7 @@ impl From<TypeName> for ommx::TypeName { ... }
 ## After making changes
 
 - `task python:sync` — rebuild the extension module (runs `uv sync` which triggers maturin)
-- `task python:stubgen` — regenerate all files listed above
+- `task python:ommx:stubgen` — regenerate all files listed above
 
 ## Free-threaded Python support
 

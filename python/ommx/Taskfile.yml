@@ -15,9 +15,18 @@ tasks:
   test:
     desc: Run tests for OMMX Python SDK
     cmds:
+      - task: ::python:sync:test
       - task: pyright
       - task: lint
+      - task: test-rust
       - task: pytest
+
+  test-rust:
+    desc: Run all Rust implementation tests for the Python SDK
+    cmds:
+      - task: ::python:cargo
+        vars:
+          CARGO_ARGS: test -p _ommx_rust {{.CLI_ARGS}}
 
   pytest:
     desc: Run pytest for OMMX Python SDK
@@ -29,44 +38,87 @@ tasks:
   pytest-doctest:
     desc: Run only doctest modules
     cmds:
-      - uv run pytest -vv --doctest-modules python/ommx/tests/test_doctests.py
+      - uv run --no-sync pytest -vv --doctest-modules python/ommx/tests/test_doctests.py
     dir: ../..
 
   pytest-bench:
     desc: Run persistent benchmark guardrails as tests
     cmds:
-      - uv run pytest -vv python/ommx/tests/test_bench_*.py -m benchmark_guardrail
+      - uv run --no-sync pytest -vv python/ommx/tests/test_bench_*.py -m benchmark_guardrail
     dir: ../..
 
   pytest-unit:
     desc: Run unit tests (excluding doctest and bench)
     cmds:
-      - uv run pytest -vv python/ommx/tests --ignore=python/ommx/tests/test_doctests.py --ignore-glob=python/ommx/tests/test_bench_*.py
+      - uv run --no-sync pytest -vv python/ommx/tests --ignore=python/ommx/tests/test_doctests.py --ignore-glob=python/ommx/tests/test_bench_*.py
     dir: ../..
 
   pyright:
     desc: Type check OMMX Python SDK
     cmds:
-      - uv run pyright --project python/ommx python/ommx
+      - uv run --no-sync pyright --project python/ommx python/ommx
     dir: ../..
 
   lint:
-    desc: Lint by ruff check
+    desc: Lint the Python SDK's Python and Rust code
     cmds:
-      - uv sync --locked --only-group lint --no-install-workspace --inexact
+      - task: ruff
+      - task: clippy
+
+  ruff:
+    desc: Run Ruff for the Python SDK
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - task: ::python:sync:lint
       - uv run --no-sync ruff check python/ommx
-    dir: ../..
+
+  clippy:
+    desc: Run Clippy for the Python SDK's Rust implementation
+    cmds:
+      - task: ::python:cargo
+        vars:
+          CARGO_ARGS: clippy -p _ommx_rust --all-targets {{.CLI_ARGS}} -- -D warnings
+
+  format:
+    desc: Format the Python SDK's Python and Rust code
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - task: ::python:sync:lint
+      - uv run --no-sync ruff format python/ommx {{.CLI_ARGS}}
+      - cargo fmt -p _ommx_rust {{if .CLI_ARGS}}-- {{.CLI_ARGS}}{{end}}
+
+  format:check:
+    desc: Check Python SDK formatting
+    cmds:
+      - task: format
+        vars:
+          CLI_ARGS: --check
+
+  stubgen:
+    desc: Generate SDK stubs, exports, and API reference metadata
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - task: ::python:sync:lint
+      - task: ::python:cargo
+        vars:
+          CARGO_ARGS: run -p _ommx_rust --bin stub_gen
+      - >-
+        uv run --no-sync ruff format
+        python/ommx/ommx/__init__.py
+        python/ommx/ommx/_ommx_rust/__init__.pyi
+        python/ommx/ommx/artifact/__init__.py
+        python/ommx/ommx/experiment/__init__.py
 
   bench:
     desc: Run the full benchmark suite for OMMX Python SDK
     cmds:
-      - uv run pytest python/ommx/tests/test_bench_*.py --codspeed
+      - uv run --no-sync pytest python/ommx/tests/test_bench_*.py --codspeed
     dir: ../..
 
   bench-guardrail:
     desc: Run persistent benchmark guardrails for OMMX Python SDK
     cmds:
-      - uv run pytest python/ommx/tests/test_bench_*.py --codspeed -m benchmark_guardrail
+      - uv run --no-sync pytest python/ommx/tests/test_bench_*.py --codspeed -m benchmark_guardrail
     dir: ../..
 
   build:pyodide:

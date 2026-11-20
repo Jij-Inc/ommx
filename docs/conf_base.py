@@ -108,12 +108,13 @@ python_use_unqualified_type_names = True
 
 # -- AutoAPI settings --------------------------------------------------------
 
+# Document importable packages, not adjacent integration or development scripts.
 autoapi_dirs = [
-    python_root / "ommx",
-    python_root / "ommx-python-mip-adapter",
-    python_root / "ommx-pyscipopt-adapter",
-    python_root / "ommx-highs-adapter",
-    python_root / "ommx-openjij-adapter",
+    python_root / "ommx" / "ommx",
+    python_root / "ommx-python-mip-adapter" / "ommx_python_mip_adapter",
+    python_root / "ommx-pyscipopt-adapter" / "ommx_pyscipopt_adapter",
+    python_root / "ommx-highs-adapter" / "ommx_highs_adapter",
+    python_root / "ommx-openjij-adapter" / "ommx_openjij_adapter",
 ]
 autoapi_options = [
     "members",

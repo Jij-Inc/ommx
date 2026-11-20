@@ -11,19 +11,6 @@ permissions:
   contents: read
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v7
-      - name: Setup Buf
-        uses: bufbuild/buf-setup-action@v1
-        with:
-          github_token: ${{ github.token }}
-      - uses: bufbuild/buf-lint-action@v1
-        with:
-          input: proto
-
   breaking:
     runs-on: ubuntu-latest
     steps:
@@ -38,15 +25,22 @@ jobs:
       - name: Check breaking changes
         run: buf breaking proto --against '.git#branch=origin/main,subdir=proto' --error-format=github-actions
 
-  format:
+  generator:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v7
-      - name: Setup Buf
-        uses: bufbuild/buf-setup-action@v1
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-rust
         with:
-          github_token: ${{ github.token }}
-      - name: Check formatted
-        run: buf format -d --exit-code
-        working-directory: proto
+          components: clippy, rustfmt
+      - uses: arduino/setup-protoc@v3
+        with:
+          version: '26.1'
+          repo-token: ${{ github.token }}
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ github.token }}
+      - name: Lint generator
+        run: cargo clippy -p protogen --all-targets -- -D warnings
+      - name: Test and regenerate Protobuf messages
+        run: task proto:test

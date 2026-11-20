@@ -1,20 +1,25 @@
-# https://taskfile.dev
-# yaml-language-server: $schema=https://taskfile.dev/schema.json
-version: "3"
+version: '3'
 
 tasks:
-  build:
-    desc: "Build the Sphinx documentation in docs/en"
-    cmds:
-      - uv run sphinx-build -b html -W --keep-going . _build/html
-
-  open:
-    desc: "Open the documentation in docs/en"
-    cmds:
-      - uv run python -m webbrowser file:///$(pwd)/_build/html/index.html
-
   default:
-    desc: "Build and open the documentation in docs/en"
     cmds:
       - task: build
       - task: open
+
+  build:
+    desc: Build the en Book from the prepared environment
+    cmds:
+      - uv run --no-sync sphinx-build -b html -W --keep-going . _build/html
+
+  test:
+    desc: Execute examples and validate links in the en Book
+    env:
+      OMMX_NB_EXECUTION: force
+    cmds:
+      - task: build
+      - uv run --no-sync python ../scripts/check-book-entry-links.py en _build/html
+
+  open:
+    desc: Open the built en Book
+    cmds:
+      - uv run --no-sync python -m webbrowser 'file://{{.ROOT_DIR}}/docs/en/_build/html/index.html'
