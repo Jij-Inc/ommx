@@ -13878,6 +13878,8 @@ class Samples:
 
     The constructor also accepts an existing Samples object, one State, or a
     nonempty variable-value mapping. A single assignment receives sample ID 0.
+    If all values convert to floats, the mapping represents a single assignment,
+    even when those values also implement the mapping protocol.
     An empty mapping or empty iterable creates no samples. Use ``[{}]`` or
     ``State({})`` to represent one empty assignment.
 

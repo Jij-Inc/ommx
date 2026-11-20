@@ -1,9 +1,9 @@
 use crate::error::OmmxPyResult;
 use ommx::{Message, Parse, SampleID};
 use pyo3::{
-    exceptions::{PyKeyError, PyTypeError},
+    exceptions::{PyException, PyKeyError, PyTypeError},
     prelude::*,
-    types::{PyBytes, PyMapping},
+    types::{PyBytes, PyList, PyMapping},
     Bound,
 };
 use std::collections::BTreeSet;
@@ -131,27 +131,37 @@ fn samples_from_any(entries: Bound<PyAny>) -> OmmxPyResult<Samples> {
 
 fn samples_from_mapping(mapping: &Bound<PyMapping>) -> OmmxPyResult<Samples> {
     let items = mapping.items()?;
-    let Some(first) = items.iter().next() else {
+    if items.is_empty() {
         return Ok(Samples::default());
-    };
+    }
 
-    // The values determine whether the keys are sample IDs or variable IDs.
-    let value = first.get_item(1)?;
-    if value.is_instance_of::<crate::State>() || value.is_instance_of::<PyMapping>() {
-        let mut sampled = ommx::Sampled::default();
-        for item in items {
-            let (id, state) = item.extract::<(u64, crate::State)>()?;
-            sampled.append([SampleID::from(id)], state.0)?;
+    // Prefer a single assignment when every value is numeric, including
+    // values that also implement Mapping. A mapping of states uses sample IDs.
+    let mut state = crate::State(Default::default());
+    for item in &items {
+        let (id, value) = item.extract::<(u64, Bound<PyAny>)>()?;
+        match value.extract::<f64>() {
+            Ok(number) => state.set(id, number),
+            Err(err)
+                if err.is_instance_of::<PyException>(value.py())
+                    && (value.is_instance_of::<crate::State>()
+                        || value.is_instance_of::<PyMapping>()) =>
+            {
+                return samples_with_explicit_ids(&items);
+            }
+            Err(err) => return Err(err.into()),
         }
-        return Ok(Samples(sampled));
     }
+    Ok(Samples::from(state.0))
+}
 
-    let mut state = ommx::v1::State::default();
+fn samples_with_explicit_ids(items: &Bound<PyList>) -> OmmxPyResult<Samples> {
+    let mut sampled = ommx::Sampled::default();
     for item in items {
-        let (id, value) = item.extract::<(u64, f64)>()?;
-        state.entries.insert(id, value);
+        let (id, state) = item.extract::<(u64, crate::State)>()?;
+        sampled.append([SampleID::from(id)], state.0)?;
     }
-    Ok(Samples::from(state))
+    Ok(Samples(sampled))
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]

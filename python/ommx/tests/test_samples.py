@@ -1,4 +1,5 @@
 from collections import UserDict
+from math import copysign
 
 import pytest
 from ommx import Samples, State, _ommx_rust
@@ -17,6 +18,35 @@ def test_samples_from_flat_and_empty_mappings():
     assert single.get_state(0).entries == {7: 37.0}
     assert Samples(UserDict()).sample_ids() == set()
     assert Samples(UserDict({7: {}})).sample_ids() == {7}
+
+
+def test_samples_mapping_matches_state_zero_normalization():
+    entries = UserDict({7: -0.0})
+    for value in (entries, State(entries)):
+        assert copysign(1.0, Samples(value).get_state(0).entries[7]) == 1.0
+
+
+def test_mapping_values_convertible_to_float():
+    class NumericMapping(float, UserDict[int, float]):
+        pass
+
+    both = NumericMapping()
+    both[3] = 9.0
+    assert Samples({7: both}).get_state(0).entries == {7: 0.0}
+    for entries in ({7: both, 8: 2.0}, {8: 2.0, 7: both}):
+        assert Samples(entries).get_state(0).entries == {7: 0.0, 8: 2.0}
+    for states in ({7: both, 8: {}}, {8: {}, 7: both}):
+        samples = Samples(states)
+        assert samples.get_state(7).entries == {3: 9.0}
+        assert samples.get_state(8).entries == {}
+
+
+def test_mapping_value_with_unavailable_numeric_conversion():
+    class StateMapping(UserDict[int, float]):
+        def __float__(self) -> float:
+            raise ValueError("No scalar value")
+
+    assert Samples({7: StateMapping({0: 37})}).get_state(7).entries == {0: 37.0}
 
 
 @pytest.mark.parametrize("entries", [{0: 1, 7: {}}, {7: {}, 0: 1}, {State({0: 1}): 37}])
