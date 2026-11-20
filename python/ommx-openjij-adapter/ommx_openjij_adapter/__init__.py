@@ -1,7 +1,10 @@
+from typing import final
+
 from .adapter import OMMXOpenJijSAAdapter as _OMMXOpenJijSAAdapter
 from ._decode import decode_to_samples
 
 
+@final
 class OMMXOpenJijSAAdapter(_OMMXOpenJijSAAdapter):
     """Sample optimization candidates with OpenJij simulated annealing.
 

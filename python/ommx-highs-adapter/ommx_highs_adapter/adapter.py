@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import asdict, dataclass, fields
-from typing import Any, Callable, ClassVar, Iterable, Mapping, cast
+from typing import Any, Callable, ClassVar, Iterable, Mapping, cast, final
 
 import highspy
 import numpy as np
@@ -541,6 +541,7 @@ def _dataframe(
     return dataframe
 
 
+@final
 class OMMXHighsAdapter(SolverAdapter):
     """
     OMMX Adapter for HiGHS solver.

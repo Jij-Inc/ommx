@@ -4,7 +4,16 @@ from ommx import ConstraintID, IndicatorConstraintID, Sos1ConstraintID
 import copy
 import math
 from dataclasses import asdict, dataclass, fields
-from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Mapping, Optional, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Iterable,
+    Mapping,
+    Optional,
+    cast,
+    final,
+)
 
 import pyscipopt
 from pyscipopt.scip import PY_SCIP_EVENTTYPE as SCIP_EVENTTYPE
@@ -645,6 +654,7 @@ def _dataframe(
     return dataframe
 
 
+@final
 class OMMXPySCIPOptAdapter(SolverAdapter):
     """Solve OMMX problems with SCIP through PySCIPOpt.
 

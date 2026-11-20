@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import copy
-from typing import ClassVar, Optional
+from typing import ClassVar, Optional, final
 
 import mip
 from opentelemetry import trace
@@ -40,6 +40,7 @@ _LINEAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS = {
 }
 
 
+@final
 class OMMXPythonMIPAdapter(SolverAdapter):
     INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
         [
