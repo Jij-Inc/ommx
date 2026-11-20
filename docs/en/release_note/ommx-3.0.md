@@ -6,7 +6,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-### Reject unregistered variable IDs in `Instance.substitute`
+### Reject unregistered variable IDs in `Instance.substitute` ([#1414](https://github.com/Jij-Inc/ommx/pull/1414))
 
 Register each target and every variable in its replacement expression with the
 instance before calling `substitute`. An unknown ID now raises `ValueError`
