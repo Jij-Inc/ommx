@@ -1,5 +1,7 @@
-from ommx import State
+from collections import UserDict
+
 import pytest
+from ommx import State
 
 
 def test_create_state_from_dict():
@@ -14,6 +16,22 @@ def test_create_state_from_dict():
     # dict[int, float | int]
     state = State({1: 0.0, 2: 1, 3: 0.0, 4: 1, 5: 1})
     assert len(state.entries) == 5
+
+
+def test_create_state_from_mapping():
+    state = State(UserDict({4: 37.5, 0: 2}))
+    assert state.entries == {4: 37.5, 0: 2.0}
+
+
+@pytest.mark.parametrize("entries", [{(0, 1): 37}, UserDict({(0, 1): 37}), {0: None}])
+def test_create_state_rejects_invalid_mapping(entries):
+    with pytest.raises(TypeError):
+        State(entries)
+
+
+def test_create_state_from_generator():
+    state = State((key, key + 0.5) for key in (0, 4))
+    assert state.entries == {0: 0.5, 4: 4.5}
 
 
 def test_create_state_from_list():

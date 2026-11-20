@@ -1,6 +1,11 @@
 use crate::error::OmmxPyResult;
 use ommx::Message;
-use pyo3::{exceptions::PyTypeError, prelude::*, types::PyBytes, Bound, PyAny};
+use pyo3::{
+    exceptions::PyTypeError,
+    prelude::*,
+    types::{PyBytes, PyMapping},
+    Bound, PyAny,
+};
 use pyo3_stub_gen::runtime::PyRuntimeType;
 use std::collections::{BTreeMap, HashMap};
 
@@ -37,13 +42,13 @@ impl<'py> FromPyObject<'_, 'py> for State {
         if let Ok(state) = ob.cast::<State>() {
             return Ok(state.borrow().clone());
         }
-        // Accept dict[int, float] / Mapping[int, float]
-        if let Ok(entries) = ob.extract::<HashMap<u64, f64>>() {
+        // A mapping iterates over keys. Read its items even when a key looks like a pair.
+        if let Ok(mapping) = ob.cast::<PyMapping>() {
             let mut state = ommx::v1::State::default();
-            state.entries = entries
-                .into_iter()
-                .map(|(k, v)| (k, normalize_zero(v)))
-                .collect();
+            for item in mapping.items()?.iter() {
+                let (key, value) = item.extract::<(u64, f64)>()?;
+                state.entries.insert(key, normalize_zero(value));
+            }
             return Ok(Self(state));
         }
         let err = || {
