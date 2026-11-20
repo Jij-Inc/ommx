@@ -19,6 +19,14 @@ input. The :class:`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter` Reference has a
 complete example of selecting a policy, preparing a model, and solving it
 without further preparation.
 
+When constructing an Adapter directly, keep the supplied Instance unchanged
+until you finish decoding all results. This includes the time spent configuring
+or running the backend via ``solver_input`` or ``sampler_input``. The Adapter may
+retain the Instance by reference to evaluate the returned values. If you need
+to edit the original in the meantime, pass ``copy.copy(instance)`` to the
+constructor. For ``*_without_preparation``, keep the input unchanged for the
+duration of the call.
+
 Packages developed in this repository
 -------------------------------------
 

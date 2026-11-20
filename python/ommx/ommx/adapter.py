@@ -230,16 +230,22 @@ class SolverAdapter(ABC):
     The :class:`ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter` Reference includes
     a complete custom-policy example from model construction to strict solve.
 
+    The caller must keep the input :class:`ommx.Instance` unchanged from
+    Adapter construction through the last :meth:`decode` call, including
+    while configuring or running the backend via :attr:`solver_input`.
+    The Adapter treats this Instance as read-only and may retain it by
+    reference for decoding. To edit the original during a solve, pass
+    ``copy.copy(instance)`` when constructing the Adapter.
+
     Encode the Instance's Active Formulation: its objective and sense,
     ``ommx_instance.active_decision_variables`` and their domains, and
     ``ommx_instance.active_constraints``. Backend-only auxiliary variables may
     be added separately. Preserve the correspondence between each active OMMX
     variable ID and its backend representation. Decoding must recover a value
-    for every active OMMX variable, construct a :class:`ommx.State`, and evaluate it against an
-    unchanged :class:`ommx.Instance` snapshot that is mathematically identical
-    to the exact input encoded for the backend. The Instance owns population of
-    fixed, dependent, and irrelevant variables and construction of the final
-    :class:`ommx.Solution`.
+    for every active OMMX variable, construct a :class:`ommx.State`, and
+    evaluate it against the exact input encoded for the backend. The Instance
+    populates fixed, dependent, and irrelevant variables and constructs the
+    final :class:`ommx.Solution`.
 
     **Implement a solver for independent binary choices**
 
@@ -378,7 +384,8 @@ class SolverAdapter(ABC):
 
         ``ommx_instance`` must belong to ``INPUT_CLASS``. Implementations must
         reject non-members with :class:`AdapterNotApplicableError` and must not
-        prepare or otherwise modify the input instance.
+        prepare or otherwise modify the input instance. The caller must keep
+        it unchanged until this method returns.
         """
         pass
 
@@ -396,17 +403,18 @@ class SamplerAdapter(SolverAdapter):
     """
     An abstract interface for OMMX Sampler Adapters, defining how samplers should be used with OMMX.
 
-    The exact-input, easy-API preparation, strict preparation-free API, and
-    active-variable contracts of :class:`SolverAdapter` also apply to sampler
-    adapters. A sampler whose
-    backend labels are the OMMX variable IDs may preserve that identity directly;
-    other representations need an explicit correspondence. In either case, each
-    decoded sample must contain a value for every variable in
+    The input and preparation contracts of :class:`SolverAdapter` also apply
+    to samplers. The caller must keep the Instance unchanged from construction
+    through the last :meth:`decode_to_sampleset` or :meth:`decode` call,
+    including while using :attr:`sampler_input` or :attr:`solver_input`.
+
+    A sampler whose backend labels are the OMMX variable IDs may preserve
+    that identity directly. Other representations need an explicit
+    correspondence. Each decoded sample must contain a value for every variable in
     ``ommx_instance.active_decision_variables`` before ``evaluate_samples`` is
-    called against an unchanged :class:`ommx.Instance` snapshot mathematically
-    identical to the encoded exact input. Backend formats that omit a
-    zero-interaction variable therefore need an adapter-owned decoding default
-    consistent with that format.
+    called against the exact input encoded for the backend. Backend formats
+    that omit a zero-interaction variable therefore need an adapter-owned
+    decoding default consistent with that format.
 
     Implement :meth:`sample_without_preparation`, :attr:`sampler_input` and
     :meth:`decode_to_sampleset`. The inherited solver interface selects
@@ -467,7 +475,8 @@ class SamplerAdapter(SolverAdapter):
 
         ``ommx_instance`` must belong to ``INPUT_CLASS``. Implementations must
         reject non-members with :class:`AdapterNotApplicableError` and must not
-        prepare or otherwise modify the input instance.
+        prepare or otherwise modify the input instance. The caller must keep
+        it unchanged until this method returns.
         """
         pass
 
