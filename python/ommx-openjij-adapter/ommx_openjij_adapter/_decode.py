@@ -29,7 +29,7 @@ def _decode_response(
             variable_id = int(variable)  # type: ignore[arg-type]
             if variable_ids is None or variable_id in variable_ids:
                 entries[variable_id] = value
-        state = State(entries=entries.items())
+        state = State(entries)
 
         # OpenJij does not issue sample IDs. Encode each occurrence as a
         # separate OMMX sample ID while sharing the decoded state.

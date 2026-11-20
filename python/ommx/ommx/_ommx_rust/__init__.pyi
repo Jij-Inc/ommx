@@ -189,11 +189,7 @@ ToSamples: TypeAlias = (
     | collections.abc.Mapping[int, ToState]
     | collections.abc.Iterable[ToState]
 )
-ToState: TypeAlias = (
-    State
-    | collections.abc.Mapping[int, float]
-    | collections.abc.Iterable[tuple[int, float]]
-)
+ToState: TypeAlias = State | collections.abc.Mapping[int, float]
 VariableIDLike: TypeAlias = builtins.int | DecisionVariable | AttachedDecisionVariable
 r"""
 A variable ID or decision-variable object. APIs using this type consume only the OMMX variable identity, not kind or bound metadata.
@@ -1957,7 +1953,7 @@ class Constraint:
 
         **Args:**
 
-        - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+        - `state`: A State object or a mapping from variable IDs to values
         - `atol`: Optional absolute tolerance for evaluation
 
         **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value. Query feasibility with ``is_feasible(atol=...)``
@@ -1972,7 +1968,7 @@ class Constraint:
 
         **Args:**
 
-        - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+        - `state`: A State object or a mapping from variable IDs to values
         - `atol`: Optional absolute tolerance for evaluation
 
         **Returns:** Self (modified in-place) for method chaining
@@ -7172,7 +7168,7 @@ class Instance:
         r"""
         Evaluate the given {class}`~ommx.State` into a {class}`~ommx.Solution`.
 
-        Accepts a State, an ID-to-value mapping, or an iterable of ID/value pairs.
+        Accepts a State or an ID-to-value mapping.
         This checks one candidate against this problem's variable domains and
         constraints and computes its output objective; it does not search for a
         better candidate or prove optimality. An infeasible candidate can still
@@ -7225,10 +7221,9 @@ class Instance:
         candidate for its **Active Formulation**. See {class}`~ommx.Instance` for these
         two roles of the intermediate representation.
 
-        Accepts a {class}`~ommx.State`, an ID-to-value mapping, or an iterable of ID/value
-        pairs. The returned State contains exactly the decision-variable IDs retained by
-        this Instance. Supply every active variable; missing active values are errors,
-        not opportunities to choose defaults.
+        Accepts a {class}`~ommx.State` or an ID-to-value mapping. The returned State
+        contains exactly the decision-variable IDs retained by this Instance.
+        Supply a value for every active variable. A missing active value raises an error.
 
         Use {meth}`~ommx.Instance.evaluate` to populate a candidate and then evaluate its
         objective, variable domains, and constraints, or
@@ -7408,9 +7403,8 @@ class Instance:
         the retained expressions. Calling {meth}`~ommx.NamedFunction.partial_evaluate`
         on an individual named function still rewrites that function's expression.
 
-        `state` accepts a {class}`~ommx.State`, an ID-to-value mapping, or an iterable of
-        `(variable_id, value)` pairs. `atol` is the absolute tolerance; `None` uses
-        the default from {func}`~ommx.get_default_atol`.
+        `state` accepts a {class}`~ommx.State` or an ID-to-value mapping. `atol` is the
+        absolute tolerance. Passing `None` uses the default from {func}`~ommx.get_default_atol`.
 
         **A fixed subproblem is not necessarily equivalent to the original**
 
@@ -10365,7 +10359,7 @@ class NamedFunction:
 
         **Args:**
 
-        - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+        - `state`: A State object or a mapping from variable IDs to values
         - `atol`: Optional absolute tolerance for evaluation
 
         **Returns:** {class}`~ommx.EvaluatedNamedFunction` containing the evaluated value
@@ -10380,7 +10374,7 @@ class NamedFunction:
 
         **Args:**
 
-        - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+        - `state`: A State object or a mapping from variable IDs to values
         - `atol`: Optional absolute tolerance for evaluation
 
         **Returns:** Self (modified in-place) for method chaining
@@ -15298,8 +15292,8 @@ class State:
     >>> result = instance.evaluate(candidate)
     >>> assert result.feasible and result.objective == 1.0
 
-    APIs accepting a State also accept an ID-to-value mapping or an iterable of
-    ID/value pairs. The assignment must use the IDs of the Instance being evaluated.
+    APIs accepting a State also accept an ID-to-value mapping. To use an iterable of pairs,
+    pass `dict(pairs)`. Use the variable IDs of the Instance being evaluated.
     After transforming a problem, evaluate the returned candidate with that
     transformed Instance so that its recorded fixed values, dependencies, retained
     constraints, and output objective can be interpreted correctly.

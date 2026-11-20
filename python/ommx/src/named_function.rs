@@ -86,7 +86,7 @@ impl NamedFunction {
     ///
     /// **Args:**
     ///
-    /// - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+    /// - `state`: A State object or a mapping from variable IDs to values
     /// - `atol`: Optional absolute tolerance for evaluation
     ///
     /// **Returns:** {class}`~ommx.EvaluatedNamedFunction` containing the evaluated value
@@ -112,7 +112,7 @@ impl NamedFunction {
     ///
     /// **Args:**
     ///
-    /// - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+    /// - `state`: A State object or a mapping from variable IDs to values
     /// - `atol`: Optional absolute tolerance for evaluation
     ///
     /// **Returns:** Self (modified in-place) for method chaining

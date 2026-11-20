@@ -1,5 +1,9 @@
-from ommx import State
+# pyright: reportUnnecessaryTypeIgnoreComment=error
+
+from collections import UserDict
+
 import pytest
+from ommx import Samples, State
 
 
 def test_create_state_from_dict():
@@ -16,15 +20,44 @@ def test_create_state_from_dict():
     assert len(state.entries) == 5
 
 
-def test_create_state_from_list():
-    state = State([(1, 0.0), (2, 1.0), (3, 0.0), (4, 1.0), (5, 1.0)])
-    assert len(state.entries) == 5
+def test_create_state_from_mapping():
+    state = State(UserDict({4: 37.5, 0: 2}))
+    assert state.entries == {4: 37.5, 0: 2.0}
 
-    state = State([(1, 0), (2, 1), (3, 0), (4, 1), (5, 1)])
-    assert len(state.entries) == 5
 
-    state = State([(1, 0.0), (2, 1.0), (3, 0), (4, 1), (5, 1)])
-    assert len(state.entries) == 5
+def test_create_state_from_state():
+    original = State({4: 37.5})
+    assert State(original).entries == {4: 37.5}
+
+
+def test_create_state_rejects_invalid_mapping():
+    with pytest.raises(TypeError):
+        State({(0, 1): 37})  # pyright: ignore[reportArgumentType]
+    with pytest.raises(TypeError):
+        State(UserDict({(0, 1): 37}))  # pyright: ignore[reportArgumentType]
+    with pytest.raises(TypeError):
+        State({0: None})  # pyright: ignore[reportArgumentType]
+
+
+def test_state_inputs_reject_pair_iterables():
+    pairs = [(0, 37.0)]
+    with pytest.raises(TypeError, match=r"dict\(pairs\)"):
+        State(pairs)  # pyright: ignore[reportArgumentType]
+    with pytest.raises(TypeError):
+        State(pair for pair in pairs)  # pyright: ignore[reportArgumentType]
+    with pytest.raises(TypeError):
+        State([(1, 0.0, 1.0)])  # pyright: ignore[reportArgumentType]
+    with pytest.raises(TypeError):
+        State((1, 0.0))  # pyright: ignore[reportArgumentType]
+    assert State(dict(pairs)).entries == {0: 37.0}
+
+
+def test_samples_accepts_iterable_of_mappings():
+    samples = Samples({0: value} for value in (37.0, 42.0))
+    assert samples.get_state(0).entries == {0: 37.0}
+    assert samples.get_state(1).entries == {0: 42.0}
+    with pytest.raises(TypeError):
+        Samples([[(0, 37.0)]])  # pyright: ignore[reportArgumentType]
 
 
 def test_create_state_from_v1_bytes_roundtrip():
@@ -36,28 +69,6 @@ def test_create_state_from_v1_bytes_roundtrip():
 
 def test_state_normalizes_negative_zero():
     """-0.0 should be normalized to 0.0 in State entries."""
-    # From dict
     state = State({1: -0.0, 2: 1.0})
     assert state.entries[1] == 0.0
     assert str(state.entries[1]) == "0.0"  # Not "-0.0"
-
-    # From iterable
-    state = State([(1, -0.0), (2, 1.0)])
-    assert state.entries[1] == 0.0
-    assert str(state.entries[1]) == "0.0"
-
-
-def test_create_size_mismatch():
-    with pytest.raises(TypeError) as e:
-        _state = State([(1, 0.0, 1.0)])  # type: ignore[arg-type]
-    assert (
-        "ommx.State can only be initialized with a `State`, `Mapping[int, float]`, or `Iterable[tuple[int, float]]`"
-        in str(e.value)
-    )
-
-    with pytest.raises(TypeError) as e:
-        _state = State((1, 0.0))  # type: ignore[arg-type]
-    assert (
-        "ommx.State can only be initialized with a `State`, `Mapping[int, float]`, or `Iterable[tuple[int, float]]`"
-        in str(e.value)
-    )

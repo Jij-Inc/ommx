@@ -141,7 +141,7 @@ impl Constraint {
     ///
     /// **Args:**
     ///
-    /// - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+    /// - `state`: A State object or a mapping from variable IDs to values
     /// - `atol`: Optional absolute tolerance for evaluation
     ///
     /// **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value. Query feasibility with ``is_feasible(atol=...)``
@@ -165,7 +165,7 @@ impl Constraint {
     ///
     /// **Args:**
     ///
-    /// - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+    /// - `state`: A State object or a mapping from variable IDs to values
     /// - `atol`: Optional absolute tolerance for evaluation
     ///
     /// **Returns:** Self (modified in-place) for method chaining
