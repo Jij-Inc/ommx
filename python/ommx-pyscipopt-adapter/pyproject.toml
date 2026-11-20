@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64", "wheel"]
+requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -24,6 +24,3 @@ dependencies = ["ommx >= 3.0.0rc2, < 4.0.0","PySCIPOpt >= 6.1.0, < 7.0.0"]
 Documentation = "https://jij-inc-ommx.readthedocs-hosted.com/en/latest/autoapi/ommx_pyscipopt_adapter/index.html"
 Repository = "https://github.com/Jij-Inc/ommx"
 Issues = "https://github.com/Jij-Inc/ommx/issues"
-
-[tool.setuptools.package-data]
-ommx_pyscipopt_adapter = ["py.typed"]
