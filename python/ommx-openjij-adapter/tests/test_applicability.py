@@ -87,11 +87,9 @@ def test_direct_accepts_arbitrary_degree_binary_minimization_without_mutation() 
     assert report.matching_clauses == [(0, "openjij-binary-hubo")]
 
     adapter = OMMXOpenJijSAAdapter(instance)
-    assert adapter.ommx_instance.to_v2_bytes() == before
+    assert adapter.ommx_instance is instance
+    assert adapter.sampler_input == {(0, 1, 2, 3): 1.0}
     assert instance.to_v2_bytes() == before
-
-    assert instance.convert_active_objective(Sense.Maximize)
-    assert adapter.ommx_instance.to_v2_bytes() == before
 
 
 def test_sampler_input_rejects_nonfinite_aggregated_interactions() -> None:
