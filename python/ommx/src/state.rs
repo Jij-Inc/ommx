@@ -46,8 +46,8 @@ impl<'py> FromPyObject<'_, 'py> for State {
             )
         })?;
         let mut state = ommx::v1::State::default();
-        for item in mapping.items()?.iter() {
-            let (key, value) = item.extract::<(u64, f64)>()?;
+        for item in mapping.call_method0("items")?.try_iter()? {
+            let (key, value) = item?.extract::<(u64, f64)>()?;
             state.entries.insert(key, normalize_zero(value));
         }
         Ok(Self(state))

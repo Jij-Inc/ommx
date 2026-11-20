@@ -1,5 +1,98 @@
+from collections import UserDict
+from math import copysign
+
 import pytest
 from ommx import Samples, State, _ommx_rust
+
+
+def test_samples_from_mapping_preserves_explicit_ids():
+    samples = Samples(UserDict({7: {0: 37}, 12: UserDict({3: 4.5})}))
+    assert samples.sample_ids() == {7, 12}
+    assert samples.get_state(7).entries == {0: 37.0}
+    assert samples.get_state(12).entries == {3: 4.5}
+
+
+def test_samples_from_flat_and_empty_mappings():
+    single = Samples(UserDict({7: 37.0}))
+    assert single.sample_ids() == {0}
+    assert single.get_state(0).entries == {7: 37.0}
+    assert Samples(UserDict()).sample_ids() == set()
+    assert Samples(UserDict({7: {}})).sample_ids() == {7}
+
+
+def test_samples_mapping_matches_state_zero_normalization():
+    entries = UserDict({7: -0.0})
+    for value in (entries, State(entries)):
+        assert copysign(1.0, Samples(value).get_state(0).entries[7]) == 1.0
+
+
+def test_mapping_values_convertible_to_float():
+    class NumericMapping(float, UserDict[int, float]):
+        pass
+
+    both = NumericMapping()
+    both[3] = 9.0
+    assert Samples({7: both}).get_state(0).entries == {7: 0.0}
+    for entries in ({7: both, 8: 2.0}, {8: 2.0, 7: both}):
+        assert Samples(entries).get_state(0).entries == {7: 0.0, 8: 2.0}
+    for states in ({7: both, 8: {}}, {8: {}, 7: both}):
+        samples = Samples(states)
+        assert samples.get_state(7).entries == {3: 9.0}
+        assert samples.get_state(8).entries == {}
+
+
+def test_mapping_value_with_unavailable_numeric_conversion():
+    class StateMapping(UserDict[int, float]):
+        def __float__(self) -> float:
+            raise ValueError("No scalar value")
+
+    assert Samples({7: StateMapping({0: 37})}).get_state(7).entries == {0: 37.0}
+
+
+@pytest.mark.parametrize("error", [RuntimeError("conversion failed"), MemoryError()])
+def test_samples_propagates_unexpected_numeric_conversion_errors(error):
+    class FailingMapping(UserDict[int, float]):
+        def __float__(self) -> float:
+            raise error
+
+    with pytest.raises(type(error)) as caught:
+        Samples({7: FailingMapping({0: 37})})
+    assert caught.value is error
+
+
+def test_samples_reads_each_state_before_fetching_the_next():
+    reads: list[int] = []
+
+    class Assignment(UserDict[int, float]):
+        def __getitem__(self, key: int) -> float:
+            reads.append(key)
+            return super().__getitem__(key)
+
+    class Batch(UserDict[int, Assignment]):
+        def __getitem__(self, key: int) -> Assignment:
+            if key == 9:
+                assert reads == [3]
+            return super().__getitem__(key)
+
+    samples = Samples(Batch({7: Assignment({3: 37}), 9: Assignment({4: 42})}))
+    assert reads == [3, 4]
+    assert samples.get_state(7).entries == {3: 37.0}
+    assert samples.get_state(9).entries == {4: 42.0}
+
+
+def test_samples_propagates_iterator_setup_error():
+    class BrokenBatch:
+        def __iter__(self):
+            raise RuntimeError("cannot open batch")
+
+    with pytest.raises(RuntimeError, match="cannot open batch"):
+        Samples(BrokenBatch())
+
+
+@pytest.mark.parametrize("entries", [{0: 1, 7: {}}, {7: {}, 0: 1}, {State({0: 1}): 37}])
+def test_samples_rejects_invalid_mappings(entries):
+    with pytest.raises(TypeError):
+        Samples(UserDict(entries))
 
 
 def test_create_samples_from_single_state():
