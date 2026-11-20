@@ -186,6 +186,9 @@ impl Instance {
 /// Evaluation reconstructs the substituted variables before evaluating these
 /// expressions. This does not establish equivalence of optimization problems;
 /// see [`Substitute`] for the caller's control over domain preservation.
+/// Register every target and every variable in a replacement expression as a
+/// decision variable before substitution. An unknown ID yields
+/// [`SubstitutionError::UndefinedSubstitutionVariable`].
 /// Fixed and dependent variables cannot be substitution targets. To extend
 /// a representation, substitute its remaining independent variables.
 ///
@@ -228,6 +231,11 @@ impl Substitute for Instance {
     ) -> Result<Self::Output, crate::SubstitutionError> {
         if acyclic.is_empty() {
             return Ok(self);
+        }
+        for variable in acyclic.keys().chain(acyclic.required_ids()) {
+            if !self.decision_variables.contains_key(&variable) {
+                return Err(SubstitutionError::UndefinedSubstitutionVariable { variable });
+            }
         }
         let plan = self.plan_substitution(acyclic)?;
         self.decision_variable_dependency =
@@ -376,6 +384,41 @@ mod tests {
     use super::*;
     use crate::{coeff, constraint::Equality, linear, DecisionVariable, Evaluate, Sense};
     use std::collections::BTreeMap;
+
+    #[test]
+    fn instance_rejects_undefined_substitution_ids_atomically() {
+        let x = VariableID::from(0);
+        let y = VariableID::from(1);
+        let unknown = VariableID::from(55);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(0) + linear!(1)),
+            BTreeMap::from([
+                (x, DecisionVariable::binary()),
+                (y, DecisionVariable::binary()),
+            ]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let before = instance.clone();
+        for invalid in [(unknown, Function::Zero), (y, Function::from(linear!(55)))] {
+            let error =
+                crate::substitute(&mut instance, [(x, Function::Zero), invalid]).unwrap_err();
+            assert_eq!(
+                error,
+                SubstitutionError::UndefinedSubstitutionVariable { variable: unknown }
+            );
+            assert_eq!(instance, before);
+            let state = crate::v1::State::from_iter([(0, 1.0), (1, 1.0)]);
+            assert_eq!(
+                *instance
+                    .evaluate(&state, ATol::default())
+                    .unwrap()
+                    .objective(),
+                2.0
+            );
+        }
+    }
 
     #[test]
     fn repeated_substitution_reports_the_assigned_variable() {

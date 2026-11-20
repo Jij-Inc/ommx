@@ -6,6 +6,12 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### `Instance.substitute` で未登録の変数 ID を検出
+
+置換対象の変数と置換式で参照する変数は、あらかじめ同じインスタンスに登録してください。
+未登録の ID があると `ValueError` が発生します。元のインスタンスは変更されず、
+引き続き状態を生成・評価できます。
+
 ### 制約のメソッドチェーンで同じオブジェクトを返す ([#1406](https://github.com/Jij-Inc/ommx/pull/1406))
 
 単独の `Constraint`、`IndicatorConstraint`、`OneHotConstraint`、
