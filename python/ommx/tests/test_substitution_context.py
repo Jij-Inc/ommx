@@ -14,8 +14,26 @@ from ommx import (
     Parameter,
     ParametricInstance,
     Polynomial,
+    Rng,
     Sense,
 )
+
+
+@pytest.mark.parametrize("unknown_target", [False, True], ids=["rhs", "target"])
+def test_instance_rejects_undefined_substitution_ids_atomically(unknown_target):
+    instance = Instance.minimize()
+    x = instance.new_binary("x")
+    instance.objective = x
+    before = instance.to_v2_bytes()
+
+    assignments = {55: x} if unknown_target else {x.id: DecisionVariable.binary(55)}
+    with pytest.raises(ValueError, match=r"Undefined variable ID.*VariableID\(55\)"):
+        instance.substitute(assignments)
+
+    assert instance.to_v2_bytes() == before
+    state = instance.random_state(Rng())
+    assert set(state.entries) == {x.id}
+    assert instance.evaluate(state).objective == state.entries[x.id]
 
 
 @pytest.mark.parametrize("parametric", [False, True])
