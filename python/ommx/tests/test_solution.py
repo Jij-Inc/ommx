@@ -44,3 +44,8 @@ def test_solution_state_iteration_follows_variable_id_order(slope):
     )
     assert solution.state.items() == expected
     assert list(solution.state.entries.items()) == expected
+    assert (
+        str(solution.state)
+        == repr(solution.state)
+        == f"State(entries={dict(expected)})"
+    )

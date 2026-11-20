@@ -209,7 +209,7 @@ impl State {
     }
 
     pub fn __repr__(&self) -> String {
-        format!("State(entries={:?})", self.0.entries)
+        format!("State(entries={:?})", self.entries())
     }
 
     fn __copy__(&self) -> Self {
