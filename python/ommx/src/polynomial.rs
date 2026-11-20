@@ -3,8 +3,25 @@ use crate::{Constraint, Function, Linear, Quadratic, Rng, State};
 use approx::AbsDiffEq;
 use ommx::MonomialDyn;
 use ommx::{ATol, Coefficient, CoefficientError, Evaluate};
-use pyo3::{prelude::*, types::PyDict, Bound, PyAny};
+use pyo3::{
+    prelude::*,
+    types::{PyDict, PyMapping},
+    Bound, PyAny,
+};
 use std::collections::BTreeMap;
+
+fn extract_terms(value: &Bound<'_, PyAny>) -> PyResult<BTreeMap<Vec<u64>, f64>> {
+    if value.is_instance_of::<PyDict>() {
+        return value.extract();
+    }
+    let mapping = value.cast::<PyMapping>()?;
+    let mut terms = BTreeMap::new();
+    for item in mapping.call_method0("items")?.try_iter()? {
+        let (ids, coefficient) = item?.extract::<(Vec<u64>, f64)>()?;
+        terms.insert(ids, coefficient);
+    }
+    Ok(terms)
+}
 
 /// Polynomial function of decision variables.
 ///
@@ -72,8 +89,18 @@ pyo3_stub_gen::inventory::submit! {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Polynomial {
+    /// `terms` maps each monomial to its coefficient. Each key is a `Sequence[int]`
+    /// of decision variable IDs. For example, `(0, 0, 2)` represents $x_0^2 x_2$,
+    /// and `()` represents the constant term.
     #[new]
-    pub fn new(terms: BTreeMap<Vec<u64>, f64>) -> crate::error::OmmxPyResult<Self> {
+    pub fn new(
+        #[gen_stub(override_type(
+            type_repr = "typing.Mapping[_typing._MonomialKey, builtins.float]",
+            imports = ("typing", "ommx._typing", "builtins")
+        ))]
+        #[pyo3(from_py_with = extract_terms)]
+        terms: BTreeMap<Vec<u64>, f64>,
+    ) -> crate::error::OmmxPyResult<Self> {
         let mut out = ommx::Polynomial::default();
         for (ids, coeff) in terms {
             match TryInto::<Coefficient>::try_into(coeff) {
