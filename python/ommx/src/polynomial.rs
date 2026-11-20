@@ -89,6 +89,9 @@ pyo3_stub_gen::inventory::submit! {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Polynomial {
+    /// `terms` maps each monomial to its coefficient. Each key is a `Sequence[int]`
+    /// of decision variable IDs. For example, `(0, 0, 2)` represents $x_0^2 x_2$,
+    /// and `()` represents the constant term.
     #[new]
     pub fn new(
         #[gen_stub(override_type(

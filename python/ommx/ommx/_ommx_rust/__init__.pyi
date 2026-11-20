@@ -11801,7 +11801,12 @@ class Polynomial:
     def __iadd__(self, rhs: Polynomial) -> Polynomial: ...
     def __new__(
         cls, terms: typing.Mapping[_typing._MonomialKey, builtins.float]
-    ) -> Polynomial: ...
+    ) -> Polynomial:
+        r"""
+        `terms` maps each monomial to its coefficient. Each key is a `Sequence[int]`
+        of decision variable IDs. For example, `(0, 0, 2)` represents $x_0^2 x_2$,
+        and `()` represents the constant term.
+        """
     def almost_equal(
         self, other: Polynomial, atol: builtins.float = 1e-06
     ) -> builtins.bool: ...
