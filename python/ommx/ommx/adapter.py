@@ -230,9 +230,10 @@ class SolverAdapter(ABC):
     The :class:`ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter` Reference includes
     a complete custom-policy example from model construction to strict solve.
 
-    The caller must keep the input :class:`ommx.Instance` unchanged from
-    Adapter construction through the last :meth:`decode` call, including
-    while configuring or running the backend via :attr:`solver_input`.
+    Callers must keep the supplied :class:`ommx.Instance` unchanged from
+    construction until they finish using the Adapter. This includes configuring
+    or running the backend via :attr:`solver_input` and decoding its results
+    with :meth:`decode`.
     The Adapter treats this Instance as read-only and may retain it by
     reference for decoding. To edit the original during a solve, pass
     ``copy.copy(instance)`` when constructing the Adapter.
@@ -404,9 +405,9 @@ class SamplerAdapter(SolverAdapter):
     An abstract interface for OMMX Sampler Adapters, defining how samplers should be used with OMMX.
 
     The input and preparation contracts of :class:`SolverAdapter` also apply
-    to samplers. The caller must keep the Instance unchanged from construction
-    through the last :meth:`decode_to_sampleset` or :meth:`decode` call,
-    including while using :attr:`sampler_input` or :attr:`solver_input`.
+    to samplers. Keep the Instance unchanged while using the Adapter, including
+    while running the backend via :attr:`sampler_input` or :attr:`solver_input`
+    and evaluating its response with :meth:`decode_to_sampleset` or :meth:`decode`.
 
     A sampler whose backend labels are the OMMX variable IDs may preserve
     that identity directly. Other representations need an explicit
