@@ -74,7 +74,8 @@ fn assert_collection_required_ids<T: ConstraintType>(make_row: impl Fn(u64) -> T
                 (SampleID::from(9), incomplete),
             ]
             .into_iter(),
-        );
+        )
+        .unwrap();
         assert!(collection.evaluate_samples(&samples, atol).is_err());
     }
 }

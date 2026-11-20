@@ -520,11 +520,10 @@ impl Evaluate for Function {
         atol: crate::ATol,
     ) -> crate::Result<Self::SampledOutput> {
         match self {
-            Function::Zero => Ok(Sampled::constants(samples.ids().into_iter(), 0.0)),
-            Function::Constant(c) => Ok(Sampled::constants(
-                samples.ids().into_iter(),
-                c.into_inner(),
-            )),
+            Function::Zero => Sampled::constants(samples.iter().map(|(id, _)| *id), 0.0),
+            Function::Constant(c) => {
+                Sampled::constants(samples.iter().map(|(id, _)| *id), c.into_inner())
+            }
             Function::Linear(f) => ensure_finite_sampled_results(
                 "polynomial function",
                 f.evaluate_samples(samples, atol)?,
@@ -549,6 +548,35 @@ mod tests {
     use crate::{coeff, linear, monomial, quadratic};
     use ::approx::AbsDiffEq;
     use proptest::prelude::*;
+
+    #[test]
+    fn constant_sample_evaluation_preserves_ids_and_shares_one_value() {
+        let samples = Sampled::new(
+            [
+                vec![crate::SampleID::from(u64::MAX), crate::SampleID::from(0)],
+                vec![crate::SampleID::from(7)],
+            ],
+            [crate::v1::State::default(), crate::v1::State::default()],
+        )
+        .unwrap();
+        for (function, value) in [(Function::Zero, 0.0), (Function::from(coeff!(3.0)), 3.0)] {
+            let evaluated = function
+                .evaluate_samples(&samples, crate::ATol::default())
+                .unwrap();
+            assert_eq!(evaluated.ids(), samples.ids());
+            assert!(evaluated.iter().all(|(_, actual)| *actual == value));
+            assert_eq!(evaluated.clone().chunk().len(), 1);
+            let encoded: crate::v1::SampledValues = evaluated.clone().into();
+            let restored: Sampled<f64> = encoded.try_into().unwrap();
+            assert_eq!(restored, evaluated);
+
+            let empty = function
+                .evaluate_samples(&Sampled::default(), crate::ATol::default())
+                .unwrap();
+            assert_eq!(empty.num_samples(), 0);
+            assert!(empty.chunk().is_empty());
+        }
+    }
 
     fn function_and_samples() -> impl Strategy<Value = (Function, Sampled<crate::v1::State>)> {
         Function::arbitrary()

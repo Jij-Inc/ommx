@@ -18,6 +18,12 @@ impl SampleID {
 
 pub type SampleIDSet = BTreeSet<SampleID>;
 
+/// Values indexed by sample ID, optionally sharing one stored value across IDs.
+///
+/// Each ID identifies exactly one value, and every stored value has at least one
+/// ID. An empty collection stores no values. Constructors and [`Self::append`]
+/// preserve these invariants; validation of a state against a model belongs to
+/// the model's evaluation operation.
 #[derive(Debug, Clone)]
 pub struct Sampled<T> {
     offsets: FnvHashMap<SampleID, usize>,
@@ -55,7 +61,7 @@ impl<T> From<(SampleID, T)> for Sampled<T> {
     }
 }
 
-/// A sample ID already present in a collection or repeated in one append input.
+/// A sample ID already present in a collection or repeated in constructor or append input.
 ///
 /// Use [`Self::id`] to identify the conflicting ID before correcting the input
 /// and retrying the atomic operation.
@@ -65,6 +71,7 @@ impl<T> From<(SampleID, T)> for Sampled<T> {
 /// let error = sampled
 ///     .append([ommx::SampleID::from(0)], "replacement")
 ///     .unwrap_err();
+/// let error = error.downcast_ref::<ommx::DuplicatedSampleIDError>().unwrap();
 /// assert_eq!(error.id(), ommx::SampleID::from(0));
 /// ```
 #[derive(Debug, thiserror::Error)]
@@ -80,37 +87,70 @@ impl DuplicatedSampleIDError {
     }
 }
 
+/// An appended value has no sample ID identifying it.
+///
+/// Supply at least one sample ID before retrying [`Sampled::append`] or
+/// [`Sampled::new`]. An empty collection is valid; represent it with
+/// [`Sampled::default`] rather than an entry with no IDs.
+#[derive(Debug, thiserror::Error)]
+#[error("sample IDs must contain at least one ID")]
+#[non_exhaustive]
+pub struct EmptySampleIDs;
+
 impl<T> Sampled<T> {
-    pub fn constants(ids: impl Iterator<Item = SampleID>, value: T) -> Self {
-        let map = ids.map(|id| (id, 0)).collect();
+    /// Associate a constant value with the supplied IDs, or return an empty
+    /// collection when there are no IDs.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DuplicatedSampleIDError`] in the error chain if an ID occurs
+    /// more than once.
+    pub fn constants(ids: impl Iterator<Item = SampleID>, value: T) -> crate::Result<Self> {
+        let mut offsets =
+            FnvHashMap::with_capacity_and_hasher(ids.size_hint().0, Default::default());
+        for id in ids {
+            match offsets.entry(id) {
+                std::collections::hash_map::Entry::Occupied(_) => {
+                    return Err(DuplicatedSampleIDError { id }.into());
+                }
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(0);
+                }
+            }
+        }
+        if offsets.is_empty() {
+            return Ok(Self::default());
+        }
         let data = vec![value];
-        Self { offsets: map, data }
+        Ok(Self { offsets, data })
     }
 
     /// Append one value under every supplied sample ID.
     ///
     /// # Errors
     ///
-    /// Returns [`DuplicatedSampleIDError`] if an ID already exists in this
-    /// collection or occurs more than once in `ids`. All IDs are validated
-    /// before mutation, so the collection is unchanged when this method fails.
+    /// The error chain contains [`EmptySampleIDs`] if `ids` is empty, or
+    /// [`DuplicatedSampleIDError`] if an ID already exists in this collection
+    /// or occurs more than once in `ids`. All IDs are validated before mutation,
+    /// so the collection is unchanged when this method fails.
     pub fn append(
         &mut self,
         ids: impl IntoIterator<Item = SampleID>,
         value: T,
-    ) -> std::result::Result<(), DuplicatedSampleIDError> {
-        let mut new_ids = Vec::new();
+    ) -> crate::Result<()> {
         let mut seen = FnvHashSet::default();
         for id in ids {
             if self.offsets.contains_key(&id) || !seen.insert(id) {
-                return Err(DuplicatedSampleIDError { id });
+                return Err(DuplicatedSampleIDError { id }.into());
             }
-            new_ids.push(id);
+        }
+        if seen.is_empty() {
+            return Err(EmptySampleIDs.into());
         }
 
         let offset = self.data.len();
         self.data.push(value);
-        for id in new_ids {
+        for id in seen {
             self.offsets.insert(id, offset);
         }
         Ok(())
@@ -135,17 +175,37 @@ impl<T> Sampled<T> {
         Ok(out)
     }
 
-    pub fn new_no_dedup(iter: impl Iterator<Item = (SampleID, T)>) -> Self {
+    /// Construct samples without sharing storage between different IDs.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DuplicatedSampleIDError`] in the error chain if an ID occurs
+    /// more than once, even when the associated values are equal.
+    pub fn new_no_dedup(iter: impl Iterator<Item = (SampleID, T)>) -> crate::Result<Self> {
         let mut offsets = FnvHashMap::default();
         let mut data = Vec::new();
-        for (n, (id, value)) in iter.enumerate() {
-            offsets.insert(id, n);
-            data.push(value);
+        for (id, value) in iter {
+            match offsets.entry(id) {
+                std::collections::hash_map::Entry::Occupied(_) => {
+                    return Err(DuplicatedSampleIDError { id }.into());
+                }
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(data.len());
+                    data.push(value);
+                }
+            }
         }
-        Self { offsets, data }
+        Ok(Self { offsets, data })
     }
 
-    pub fn new_dedup<I>(iter: I) -> Self
+    /// Construct samples, sharing storage between equal values.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DuplicatedSampleIDError`] in the error chain if an ID occurs
+    /// more than once, even when the associated values are equal. Equal values
+    /// under different IDs are valid and share storage.
+    pub fn new_dedup<I>(iter: I) -> crate::Result<Self>
     where
         I: Iterator<Item = (SampleID, T)>,
         T: Hash + Eq + Clone,
@@ -155,6 +215,12 @@ impl<T> Sampled<T> {
         let mut value_to_offset: FnvHashMap<T, usize> = FnvHashMap::default();
 
         for (id, value) in iter {
+            let entry = match offsets.entry(id) {
+                std::collections::hash_map::Entry::Occupied(_) => {
+                    return Err(DuplicatedSampleIDError { id }.into());
+                }
+                std::collections::hash_map::Entry::Vacant(entry) => entry,
+            };
             // Check if we already have this value using HashMap lookup (O(1))
             let offset = match value_to_offset.get(&value) {
                 Some(&existing_offset) => {
@@ -169,10 +235,10 @@ impl<T> Sampled<T> {
                     new_offset
                 }
             };
-            offsets.insert(id, offset);
+            entry.insert(offset);
         }
 
-        Self { offsets, data }
+        Ok(Self { offsets, data })
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&SampleID, &T)> {
@@ -322,7 +388,8 @@ mod tests {
                 (SampleID(5), 20), // Same value as SampleID(2)
             ]
             .into_iter(),
-        );
+        )
+        .unwrap();
 
         // Should have 5 samples but only 3 data entries (deduplication occurred)
         assert_eq!(sampled.num_samples(), 5);
@@ -376,12 +443,100 @@ mod tests {
     }
 
     #[test]
+    fn constructors_reject_repeated_ids_without_consuming_remaining_input() {
+        for repeated_value in [10, 20] {
+            let pairs = [
+                (SampleID(7), 10),
+                (SampleID(8), 10),
+                (SampleID(7), repeated_value),
+            ];
+            for dedup in [false, true] {
+                let iter = pairs.into_iter().chain(std::iter::once_with(|| {
+                    panic!("input after the duplicate must not be consumed")
+                }));
+                let error = if dedup {
+                    Sampled::new_dedup(iter)
+                } else {
+                    Sampled::new_no_dedup(iter)
+                }
+                .unwrap_err();
+                assert_eq!(
+                    error
+                        .downcast_ref::<DuplicatedSampleIDError>()
+                        .unwrap()
+                        .id(),
+                    SampleID(7),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn empty_id_append_is_rejected_before_mutation() {
+        for mut sampled in [Sampled::default(), Sampled::from((SampleID(7), 10))] {
+            let before_ids = sampled.ids();
+            let before_data = sampled.data.clone();
+            for _ in 0..2 {
+                let error = sampled.append([], 20).unwrap_err();
+                assert!(error.is::<EmptySampleIDs>());
+                assert_eq!(sampled.ids(), before_ids);
+                assert_eq!(sampled.data, before_data);
+            }
+            sampled.append([SampleID(8), SampleID(9)], 30).unwrap();
+            assert_eq!(sampled.get(SampleID(8)), Some(&30));
+            assert_eq!(sampled.get(SampleID(9)), Some(&30));
+        }
+    }
+
+    #[test]
+    fn new_rejects_empty_id_groups_but_accepts_no_groups() {
+        let error = Sampled::new([vec![SampleID(0)], vec![]], [10, 20]).unwrap_err();
+        assert!(error.is::<EmptySampleIDs>());
+        let empty = Sampled::<i32>::new(Vec::<Vec<SampleID>>::new(), []).unwrap();
+        assert!(empty.data.is_empty());
+        assert!(empty.ids().is_empty());
+    }
+
+    #[test]
+    fn constants_reject_repeated_ids_without_consuming_remaining_input() {
+        let ids = [SampleID(u64::MAX), SampleID(0), SampleID(u64::MAX)]
+            .into_iter()
+            .chain(std::iter::once_with(|| {
+                panic!("input after the duplicate must not be consumed")
+            }));
+        let error = Sampled::constants(ids, 10).unwrap_err();
+        assert_eq!(
+            error
+                .downcast_ref::<DuplicatedSampleIDError>()
+                .unwrap()
+                .id(),
+            SampleID(u64::MAX)
+        );
+    }
+
+    #[test]
+    fn empty_constants_do_not_store_unaddressable_values() {
+        let empty = Sampled::constants(std::iter::empty(), 10).unwrap();
+        assert_eq!(empty.num_samples(), 0);
+        assert!(empty.chunk().is_empty());
+        let shared = Sampled::constants([SampleID(1), SampleID(2)].into_iter(), 10).unwrap();
+        assert_eq!(shared.num_samples(), 2);
+        assert_eq!(shared.chunk().len(), 1);
+    }
+
+    #[test]
     fn append_is_atomic_when_an_existing_id_follows_a_fresh_id() {
         let mut sampled = Sampled::from((SampleID(0), 10));
 
         let error = sampled.append([SampleID(1), SampleID(0)], 20).unwrap_err();
 
-        assert_eq!(error.id(), SampleID(0));
+        assert_eq!(
+            error
+                .downcast_ref::<DuplicatedSampleIDError>()
+                .unwrap()
+                .id(),
+            SampleID(0)
+        );
         assert_eq!(sampled.ids(), BTreeSet::from([SampleID(0)]));
         assert_eq!(sampled.get(SampleID(0)), Some(&10));
         assert_eq!(sampled.get(SampleID(1)), None);
@@ -394,7 +549,13 @@ mod tests {
 
         let error = sampled.append([SampleID(1), SampleID(1)], 20).unwrap_err();
 
-        assert_eq!(error.id(), SampleID(1));
+        assert_eq!(
+            error
+                .downcast_ref::<DuplicatedSampleIDError>()
+                .unwrap()
+                .id(),
+            SampleID(1)
+        );
         assert_eq!(sampled.ids(), BTreeSet::from([SampleID(0)]));
         assert_eq!(sampled.get(SampleID(0)), Some(&10));
         assert_eq!(sampled.get(SampleID(1)), None);
@@ -442,8 +603,8 @@ mod tests {
             (SampleID(4), 20), // Duplicate value
         ];
 
-        let no_dedup = Sampled::new_no_dedup(data.iter().copied());
-        let dedup = Sampled::new_dedup(data.iter().copied());
+        let no_dedup = Sampled::new_no_dedup(data.iter().copied()).unwrap();
+        let dedup = Sampled::new_dedup(data.iter().copied()).unwrap();
 
         // Both should have the same number of samples
         assert_eq!(no_dedup.num_samples(), 4);

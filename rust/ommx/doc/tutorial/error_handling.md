@@ -11,7 +11,7 @@ structured fields.
 A small number of APIs return a typed error directly rather than
 `ommx::Result<T>` — specifically [`DecisionVariable::with_bound`](crate::DecisionVariable::with_bound),
 the [`SampleSet::best_feasible`](crate::SampleSet::best_feasible) family,
-[`Sampled::append`](crate::Sampled::append), and a few builders — because their
+and a few builders — because their
 single failure mode is already a
 **signal type** and the typed return surfaces that at the call site.
 Every such typed error implements [`std::error::Error`], so `?` still
@@ -61,8 +61,14 @@ returns the typed error directly):
   in-crate tests and downstream code that wants to react programmatically.
 - [`DuplicatedSampleIDError`](crate::DuplicatedSampleIDError) — identifies a
   sample ID already present in a [`Sampled`](crate::Sampled) collection or
-  repeated in one append input, so the caller can choose another ID and retry
-  the atomic append.
+  repeated in constructor or append input, so the caller can choose another
+  ID and retry. `Sampled::constants`, `Sampled::new_no_dedup`, and
+  `Sampled::new_dedup` return `ommx::Result` and preserve this signal, including
+  when repeated IDs have equal values. Append validates the IDs before mutation.
+- [`EmptySampleIDs`](crate::EmptySampleIDs) — identifies an appended value
+  without any sample IDs, so the caller can supply at least one ID and retry.
+  [`Sampled::append`](crate::Sampled::append) returns `ommx::Result` and preserves
+  both empty-ID and duplicate-ID signals for downcasting.
 - [`SamplesParametersError`](crate::random::SamplesParametersError) —
   identifies invalid relations among random-sample counts and the inclusive ID
   range, so the caller can correct the requested parameters before retrying.

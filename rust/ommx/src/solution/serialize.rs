@@ -134,7 +134,8 @@ mod tests {
                     entries: [(17, value)].into(),
                 },
             )
-        }));
+        }))
+        .unwrap();
         let samples = instance.evaluate_samples(&states, atol).unwrap();
         let bytes = samples.to_v2_bytes();
         let wire = v2::SampleSet::decode(bytes.as_slice()).unwrap();

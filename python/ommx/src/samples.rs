@@ -242,9 +242,10 @@ impl Samples {
 
     /// Append a sample with the given sample IDs and state.
     ///
-    /// Raises {class}`ValueError` if an ID already exists in this collection
-    /// or occurs more than once in `sample_ids`. The collection is unchanged
-    /// when validation fails.
+    /// Raises {class}`ValueError` if `sample_ids` is empty, an ID already exists
+    /// in this collection, or an ID occurs more than once in `sample_ids`.
+    /// The collection is unchanged when validation fails. An empty state is
+    /// allowed; {meth}`~ommx.Instance.evaluate_samples` checks required variable IDs.
     pub fn append(&mut self, sample_ids: Vec<u64>, state: crate::State) -> OmmxPyResult<()> {
         let ids: Vec<ommx::SampleID> = sample_ids.into_iter().map(ommx::SampleID::from).collect();
         self.0.append(ids, state.0)?;

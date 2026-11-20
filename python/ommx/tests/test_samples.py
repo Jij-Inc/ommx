@@ -1,5 +1,5 @@
 import pytest
-from ommx import Samples, State, _ommx_rust
+from ommx import Instance, SampleSet, Samples, State, _ommx_rust
 
 
 def test_create_samples_from_single_state():
@@ -209,3 +209,52 @@ def test_samples_append_duplicate_id_is_atomic(sample_ids: list[int]):
 
     assert samples.sample_ids() == {0}
     assert samples.get_state(0).entries == {1: 10.0}
+
+
+@pytest.mark.parametrize("entries", [[], {7: {0: 1}}])
+@pytest.mark.parametrize("state", [{}, {0: 1}])
+def test_append_rejects_empty_ids_atomically(entries, state):
+    samples = Samples(entries)
+    before = samples.to_v1_bytes()
+    before_ids = samples.sample_ids()
+    for _ in range(2):
+        with pytest.raises(ValueError, match="sample IDs must contain at least one ID"):
+            samples.append([], state)
+        assert samples.to_v1_bytes() == before
+        assert samples.sample_ids() == before_ids
+        assert samples.num_samples() == len(before_ids)
+    samples.append([8, 9], {0: 1})
+    assert samples.get_state(8).entries == samples.get_state(9).entries == {0: 1}
+
+
+def test_protobuf_rejects_sample_entry_without_ids():
+    with pytest.raises(ValueError, match="sample IDs must contain at least one ID"):
+        Samples.from_v1_bytes(b"\x0a\x02\x0a\x00")
+
+
+def test_empty_samples_remain_evaluable_after_rejected_append():
+    model = Instance.minimize()
+    model.objective = model.new_binary()
+    samples = Samples([])
+    with pytest.raises(ValueError, match="sample IDs must contain at least one ID"):
+        samples.append([], {})
+    assert samples.to_v1_bytes() == b""
+    result = model.evaluate_samples(samples)
+    assert result.num_samples() == 0
+    assert SampleSet.from_v1_bytes(result.to_v1_bytes()).num_samples() == 0
+
+
+def test_empty_state_is_validated_against_the_instance_at_evaluation():
+    samples = Samples([])
+    samples.append([7], {})
+    assert samples.get_state(7).entries == {}
+    constant = Instance.minimize()
+    assert constant.evaluate_samples(samples).num_samples() == 1
+    assert constant.evaluate_samples(Samples([])).num_samples() == 0
+    result = constant.evaluate_samples(Samples([]))
+    assert SampleSet.from_v1_bytes(result.to_v1_bytes()).num_samples() == 0
+
+    model = Instance.minimize()
+    model.objective = model.new_binary()
+    with pytest.raises(ValueError, match="state is missing required variable IDs"):
+        model.evaluate_samples(samples)

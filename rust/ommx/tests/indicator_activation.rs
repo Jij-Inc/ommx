@@ -53,7 +53,8 @@ fn skipped_zero_activated_indicator_preserves_both_policies() {
             (1.into(), State::from_iter([(0, 1.0), (1, 3.0)])),
         ]
         .into_iter(),
-    );
+    )
+    .unwrap();
     let samples = model.evaluate_samples(&states, ATol::default()).unwrap();
     let row = &solution.evaluated_indicator_constraints().inner()[&7.into()];
     assert_eq!(row.trigger_value, ommx::IndicatorTriggerValue::Zero);
@@ -231,7 +232,8 @@ fn all_wire_roots_declare_activation_feature_including_inactive_rows() {
                 (1.into(), State::from_iter([(0, 1.0), (1, 3.0)])),
             ]
             .into_iter(),
-        );
+        )
+        .unwrap();
         let samples = model.evaluate_samples(&states, ATol::default()).unwrap();
         let proto: v2::SampleSet = samples.clone().into();
         assert_eq!(proto.required_features.contains(&feature), zero);
