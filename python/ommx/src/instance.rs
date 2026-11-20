@@ -1943,7 +1943,7 @@ impl Instance {
 
     /// Evaluate the given {class}`~ommx.State` into a {class}`~ommx.Solution`.
     ///
-    /// Accepts a State, an ID-to-value mapping, or an iterable of ID/value pairs.
+    /// Accepts a State or an ID-to-value mapping.
     /// This checks one candidate against this problem's variable domains and
     /// constraints and computes its output objective; it does not search for a
     /// better candidate or prove optimality. An infeasible candidate can still

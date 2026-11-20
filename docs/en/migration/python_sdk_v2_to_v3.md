@@ -168,6 +168,15 @@ Declare the accepted input as `INPUT_CLASS` and implement `solve_without_prepara
 (migration-results)=
 ## 4. Evaluate candidates and read results
 
+### Pass variable assignments as mappings
+
+In v3, APIs that take one candidate accept a {class}`~ommx.State` or a
+`Mapping[int, float]` from variable IDs to values. Replace `State(pairs)` with
+`State(dict(pairs))` for a list, `zip`, or generator of pairs. If you already
+have a mapping, pass it directly, for example `instance.evaluate(entries)`.
+For multiple candidates, `Samples(dict(pairs) for pairs in candidates)` assigns
+sample IDs in iteration order.
+
 ### Select constraints by role
 
 Replace `relax_constraint` / `restore_constraint` with `deactivate_constraint` / `activate_constraint`, and `RemovedConstraint` with `InactiveConstraint`. The same naming applies to indicator, OneHot, and SOS1 families. Deactivation retains the row and its reason; `skip_feasibility_check=False` is the default. A row with `skip_feasibility_check=True` is still numerically evaluated, and evaluation errors still propagate.

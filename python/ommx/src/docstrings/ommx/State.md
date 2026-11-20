@@ -14,8 +14,8 @@ problem to obtain a {class}`~ommx.Solution` with evaluation results.
 >>> result = instance.evaluate(candidate)
 >>> assert result.feasible and result.objective == 1.0
 
-APIs accepting a State also accept an ID-to-value mapping or an iterable of
-ID/value pairs. The assignment must use the IDs of the Instance being evaluated.
+APIs accepting a State also accept an ID-to-value mapping. To use an iterable of pairs,
+pass `dict(pairs)`. Use the variable IDs of the Instance being evaluated.
 After transforming a problem, evaluate the returned candidate with that
 transformed Instance so that its recorded fixed values, dependencies, retained
 constraints, and output objective can be interpreted correctly.

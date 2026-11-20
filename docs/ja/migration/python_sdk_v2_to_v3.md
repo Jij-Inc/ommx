@@ -168,6 +168,14 @@ v2の `sample_qubo_sa` が返したのは生のサンプルです。v3のAdapter
 (migration-results)=
 ## 4. 候補を評価し、結果を取り出す
 
+### 変数の値をマッピングで渡す
+
+v3 で候補解を一つ受け取る API には、{class}`~ommx.State` または変数 ID から値への
+`Mapping[int, float]` を渡します。ID と値のペアをリスト、`zip`、ジェネレータで
+用意している場合は、`State(pairs)` を `State(dict(pairs))` に置き換えてください。
+すでにマッピングがある場合は `instance.evaluate(entries)` のように直接渡せます。
+複数の候補解には `Samples(dict(pairs) for pairs in candidates)` を使うと、順にサンプル ID が割り当てられます。
+
 ### Roleで検査対象を選ぶ
 
 `relax_constraint` / `restore_constraint` を `deactivate_constraint` / `activate_constraint` に、`RemovedConstraint` を `InactiveConstraint` に置き換えます。Indicator、OneHot、SOS1でも同じ命名を使います。無効化しても行と理由は保持され、`skip_feasibility_check=False` が既定値です。skipを指定した行も数値評価は行い、評価エラーも通常どおり伝播します。

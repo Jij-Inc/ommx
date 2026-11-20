@@ -12,9 +12,8 @@ and normalizes dependencies; {meth}`~ommx.Instance.evaluate` and
 the retained expressions. Calling {meth}`~ommx.NamedFunction.partial_evaluate`
 on an individual named function still rewrites that function's expression.
 
-`state` accepts a {class}`~ommx.State`, an ID-to-value mapping, or an iterable of
-`(variable_id, value)` pairs. `atol` is the absolute tolerance; `None` uses
-the default from {func}`~ommx.get_default_atol`.
+`state` accepts a {class}`~ommx.State` or an ID-to-value mapping. `atol` is the
+absolute tolerance. Passing `None` uses the default from {func}`~ommx.get_default_atol`.
 
 **A fixed subproblem is not necessarily equivalent to the original**
 
