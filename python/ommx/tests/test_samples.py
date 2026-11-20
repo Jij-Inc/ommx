@@ -49,6 +49,46 @@ def test_mapping_value_with_unavailable_numeric_conversion():
     assert Samples({7: StateMapping({0: 37})}).get_state(7).entries == {0: 37.0}
 
 
+@pytest.mark.parametrize("error", [RuntimeError("conversion failed"), MemoryError()])
+def test_samples_propagates_unexpected_numeric_conversion_errors(error):
+    class FailingMapping(UserDict[int, float]):
+        def __float__(self) -> float:
+            raise error
+
+    with pytest.raises(type(error)) as caught:
+        Samples({7: FailingMapping({0: 37})})
+    assert caught.value is error
+
+
+def test_samples_reads_each_state_before_fetching_the_next():
+    reads: list[int] = []
+
+    class Assignment(UserDict[int, float]):
+        def __getitem__(self, key: int) -> float:
+            reads.append(key)
+            return super().__getitem__(key)
+
+    class Batch(UserDict[int, Assignment]):
+        def __getitem__(self, key: int) -> Assignment:
+            if key == 9:
+                assert reads == [3]
+            return super().__getitem__(key)
+
+    samples = Samples(Batch({7: Assignment({3: 37}), 9: Assignment({4: 42})}))
+    assert reads == [3, 4]
+    assert samples.get_state(7).entries == {3: 37.0}
+    assert samples.get_state(9).entries == {4: 42.0}
+
+
+def test_samples_propagates_iterator_setup_error():
+    class BrokenBatch:
+        def __iter__(self):
+            raise RuntimeError("cannot open batch")
+
+    with pytest.raises(RuntimeError, match="cannot open batch"):
+        Samples(BrokenBatch())
+
+
 @pytest.mark.parametrize("entries", [{0: 1, 7: {}}, {7: {}, 0: 1}, {State({0: 1}): 37}])
 def test_samples_rejects_invalid_mappings(entries):
     with pytest.raises(TypeError):

@@ -1,9 +1,9 @@
 use crate::error::OmmxPyResult;
 use ommx::{Message, Parse, SampleID};
 use pyo3::{
-    exceptions::{PyException, PyKeyError, PyTypeError},
+    exceptions::{PyKeyError, PyTypeError, PyValueError},
     prelude::*,
-    types::{PyBytes, PyList, PyMapping},
+    types::{PyBytes, PyMapping},
     Bound,
 };
 use std::collections::BTreeSet;
@@ -103,12 +103,6 @@ impl From<ommx::v1::State> for Samples {
     }
 }
 
-fn type_error() -> PyErr {
-    PyTypeError::new_err(
-        "entries must be a State, Samples, Mapping[int, float], Mapping[int, ToState], or Iterable[ToState]",
-    )
-}
-
 fn samples_from_any(entries: Bound<PyAny>) -> OmmxPyResult<Samples> {
     if let Ok(samples) = entries.cast::<Samples>() {
         return Ok(samples.borrow().clone());
@@ -120,7 +114,7 @@ fn samples_from_any(entries: Bound<PyAny>) -> OmmxPyResult<Samples> {
         return samples_from_mapping(mapping);
     }
 
-    let iter = entries.try_iter().map_err(|_| type_error())?;
+    let iter = entries.try_iter()?;
     let mut sampled = ommx::Sampled::default();
     for (i, item) in iter.enumerate() {
         let state = item?.extract::<crate::State>()?;
@@ -130,38 +124,53 @@ fn samples_from_any(entries: Bound<PyAny>) -> OmmxPyResult<Samples> {
 }
 
 fn samples_from_mapping(mapping: &Bound<PyMapping>) -> OmmxPyResult<Samples> {
-    let items = mapping.items()?;
-    if items.is_empty() {
-        return Ok(Samples::default());
-    }
-
-    // Prefer a single assignment when every value is numeric, including
-    // values that also implement Mapping. A mapping of states uses sample IDs.
+    let mut items = mapping
+        .call_method0("items")?
+        .try_iter()?
+        .map(|item| item?.extract::<(u64, Bound<PyAny>)>());
     let mut state = crate::State(Default::default());
-    for item in &items {
-        let (id, value) = item.extract::<(u64, Bound<PyAny>)>()?;
+    // Keep only the leading values that can be interpreted as both numbers and
+    // states. The first unambiguous value determines how to read the remainder.
+    let mut ambiguous = Vec::new();
+    while let Some(item) = items.next() {
+        let (id, value) = item?;
+        let state_like =
+            value.is_instance_of::<crate::State>() || value.is_instance_of::<PyMapping>();
         match value.extract::<f64>() {
-            Ok(number) => state.set(id, number),
+            Ok(number) => {
+                state.set(id, number);
+                if !state_like {
+                    break;
+                }
+                ambiguous.push((id, value));
+            }
             Err(err)
-                if err.is_instance_of::<PyException>(value.py())
-                    && (value.is_instance_of::<crate::State>()
-                        || value.is_instance_of::<PyMapping>()) =>
+                if state_like
+                    && (err.is_instance_of::<PyTypeError>(value.py())
+                        || err.is_instance_of::<PyValueError>(value.py())) =>
             {
-                return samples_with_explicit_ids(&items);
+                ambiguous.push((id, value));
+                let mut sampled = ommx::Sampled::default();
+                for item in ambiguous.into_iter().map(Ok).chain(items) {
+                    let (id, value) = item?;
+                    sampled.append([SampleID::from(id)], value.extract::<crate::State>()?.0)?;
+                }
+                return Ok(Samples(sampled));
             }
             Err(err) => return Err(err.into()),
         }
     }
-    Ok(Samples::from(state.0))
-}
 
-fn samples_with_explicit_ids(items: &Bound<PyList>) -> OmmxPyResult<Samples> {
-    let mut sampled = ommx::Sampled::default();
+    drop(ambiguous);
     for item in items {
-        let (id, state) = item.extract::<(u64, crate::State)>()?;
-        sampled.append([SampleID::from(id)], state.0)?;
+        let (id, value) = item?;
+        state.set(id, value.extract()?);
     }
-    Ok(Samples(sampled))
+    if state.0.entries.is_empty() {
+        Ok(Samples::default())
+    } else {
+        Ok(Samples::from(state.0))
+    }
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
