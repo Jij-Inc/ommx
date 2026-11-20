@@ -30533,19 +30533,13 @@
                     {
                       "name": "terms",
                       "type_": {
-                        "display": "Mapping[Sequence[int], float]",
+                        "display": "Mapping[_typing._MonomialKey, float]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Sequence[int]",
+                            "display": "_typing._MonomialKey",
                             "link_target": null,
-                            "children": [
-                              {
-                                "display": "int",
-                                "link_target": null,
-                                "children": []
-                              }
-                            ]
+                            "children": []
                           },
                           {
                             "display": "float",

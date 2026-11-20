@@ -6,6 +6,7 @@ import collections.abc
 import datetime
 import enum
 import numpy
+from ommx import _typing
 from ommx import adapter
 from ommx import display
 from ommx.experiment import attachments
@@ -11799,7 +11800,7 @@ class Polynomial:
     def __rmul__(self, lhs: Function) -> Function: ...
     def __iadd__(self, rhs: Polynomial) -> Polynomial: ...
     def __new__(
-        cls, terms: typing.Mapping[typing.Sequence[builtins.int], builtins.float]
+        cls, terms: typing.Mapping[_typing._MonomialKey, builtins.float]
     ) -> Polynomial: ...
     def almost_equal(
         self, other: Polynomial, atol: builtins.float = 1e-06

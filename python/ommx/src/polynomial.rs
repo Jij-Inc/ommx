@@ -73,7 +73,13 @@ pyo3_stub_gen::inventory::submit! {
 #[pymethods]
 impl Polynomial {
     #[new]
-    pub fn new(terms: BTreeMap<Vec<u64>, f64>) -> crate::error::OmmxPyResult<Self> {
+    pub fn new(
+        #[gen_stub(override_type(
+            type_repr = "typing.Mapping[_typing._MonomialKey, builtins.float]",
+            imports = ("typing", "ommx._typing", "builtins")
+        ))]
+        terms: BTreeMap<Vec<u64>, f64>,
+    ) -> crate::error::OmmxPyResult<Self> {
         let mut out = ommx::Polynomial::default();
         for (ids, coeff) in terms {
             match TryInto::<Coefficient>::try_into(coeff) {
