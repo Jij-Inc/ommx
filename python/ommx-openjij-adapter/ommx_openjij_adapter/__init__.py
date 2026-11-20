@@ -132,8 +132,9 @@ class OMMXOpenJijSAAdapter(_OMMXOpenJijSAAdapter):
     **Follow the sampler interface across the backend call**
 
     For a small quadratic binary minimization, the exact-input constructor
-    exposes the QUBO coefficients for OpenJij. Decode its response with the
-    same adapter to evaluate each read against the encoded Instance:
+    exposes the QUBO coefficients for OpenJij. It retains the supplied
+    Instance by reference. Keep it unchanged until you finish using the
+    adapter, including when decoding OpenJij's response:
 
     >>> import openjij as oj
     >>> from ommx import Instance

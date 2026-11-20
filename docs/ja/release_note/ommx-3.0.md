@@ -65,6 +65,13 @@ HiGHS に設定された実行可能性の許容誤差を適用します。
 `OMMXHighsAdapterError` を送出します。大きな有限境界によって数値的な問題が
 生じる可能性は残りますが、その失敗を `InfeasibleDetected` として扱うことはありません。
 
+### OpenJij が渡された Instance を参照で保持 ([#1418](https://github.com/Jij-Inc/ommx/pull/1418))
+
+`OMMXOpenJijSAAdapter(instance)` を直接構築する場合は、結果のデコードを含め、
+Adapter を使い終えるまで `instance` を変更せずに保ってください。
+サンプリング中に元の問題を編集する場合は、コンストラクタに `copy.copy(instance)` を
+渡してください。クラスメソッドの `sample` と `solve` は引き続き準備用のコピーを作成します。
+
 ## 3.0.0 Release Candidate 1
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0rc1-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0rc1)

@@ -69,6 +69,14 @@ Failed solver calls and model error statuses raise `OMMXHighsAdapterError`
 without decoding a solution. Large finite bounds can still cause numerical
 failures; these are not reported as `InfeasibleDetected`.
 
+### OpenJij retains the supplied Instance by reference ([#1418](https://github.com/Jij-Inc/ommx/pull/1418))
+
+When constructing `OMMXOpenJijSAAdapter(instance)` directly, keep `instance`
+unchanged until you finish using the adapter, including decoding its results.
+If you need to edit the original during sampling, pass `copy.copy(instance)`
+to the constructor. The `sample` and `solve` class methods still prepare their
+own copy.
+
 ## 3.0.0 Release Candidate 1
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0rc1-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0rc1)

@@ -81,9 +81,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         )
 
     ommx_instance: Instance
-    """
-    Isolated copy of the exact Adapter input used to evaluate returned samples.
-    """
+    """Instance supplied to the constructor, used to encode and evaluate samples."""
 
     beta_min: float | None = None
     """ minimal value of inverse temperature """
@@ -129,7 +127,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         if not isinstance(ommx_instance, Instance):
             raise TypeError("ommx_instance must be an Instance")
         self.require_applicable(ommx_instance)
-        self.ommx_instance = copy.copy(ommx_instance)
+        self.ommx_instance = ommx_instance
         self.beta_min = beta_min
         self.beta_max = beta_max
         self.num_sweeps = num_sweeps
