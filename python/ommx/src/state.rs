@@ -197,15 +197,15 @@ impl State {
     }
 
     pub fn keys(&self) -> Vec<u64> {
-        self.0.entries.keys().copied().collect()
+        self.entries().into_keys().collect()
     }
 
     pub fn values(&self) -> Vec<f64> {
-        self.0.entries.values().copied().collect()
+        self.entries().into_values().collect()
     }
 
     pub fn items(&self) -> Vec<(u64, f64)> {
-        self.0.entries.iter().map(|(&k, &v)| (k, v)).collect()
+        self.entries().into_iter().collect()
     }
 
     pub fn __repr__(&self) -> String {
