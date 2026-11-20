@@ -2775,7 +2775,9 @@ impl Instance {
     ///
     /// **Args:**
     /// - `assignments`: A dict mapping decision variable IDs to the function
-    ///   expressions that should replace them.
+    ///   expressions that should replace them. Register each target and every
+    ///   variable in its replacement expression with this Instance first.
+    ///   An unknown ID raises ``ValueError`` and leaves the Instance unchanged.
     ///
     /// **Important:**
     /// This method performs an algebraic rewrite. It does not automatically
