@@ -13853,9 +13853,9 @@ class Samples:
 
     **Choose sample IDs or assign them automatically**
 
-    A dictionary from sample IDs to States or variable-value dictionaries preserves
+    A mapping from sample IDs to States or variable-value mappings preserves
     the supplied IDs. Use these IDs to associate results with a sampler's records.
-    An iterable of States or variable-value dictionaries assigns IDs from 0 in
+    An iterable of States or variable-value mappings assigns IDs from 0 in
     iteration order.
 
     >>> from ommx import Samples, State
@@ -13877,8 +13877,8 @@ class Samples:
     **Accepted inputs**
 
     The constructor also accepts an existing Samples object, one State, or a
-    nonempty variable-value dictionary. A single assignment receives sample ID 0.
-    An empty dictionary or empty iterable creates no samples; use ``[{}]`` or
+    nonempty variable-value mapping. A single assignment receives sample ID 0.
+    An empty mapping or empty iterable creates no samples. Use ``[{}]`` or
     ``State({})`` to represent one empty assignment.
 
     >>> single = Samples({5: 1.0})

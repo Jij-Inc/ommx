@@ -3,10 +3,10 @@ use ommx::{Message, Parse, SampleID};
 use pyo3::{
     exceptions::{PyKeyError, PyTypeError},
     prelude::*,
-    types::{PyBytes, PyDict},
+    types::{PyBytes, PyMapping},
     Bound,
 };
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass(skip_stub_type, module = "ommx._ommx_rust")]
 #[doc = include_str!("docstrings/ommx/Samples.md")]
@@ -28,7 +28,7 @@ impl pyo3_stub_gen::PyStubType for Samples {
 impl<'py> FromPyObject<'_, 'py> for Samples {
     type Error = PyErr;
     fn extract(ob: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
-        samples_from_any(ob.to_owned())
+        Ok(samples_from_any(ob.to_owned())?)
     }
 }
 
@@ -109,89 +109,49 @@ fn type_error() -> PyErr {
     )
 }
 
-fn samples_from_any(entries: Bound<PyAny>) -> PyResult<Samples> {
-    // pass through if already a Samples object
-    if let Ok(s) = entries.cast::<Samples>() {
-        return Ok(s.borrow().clone());
-    }
-
-    // Check dict first to handle the empty dict case before State's FromPyObject matches it
-    if let Ok(state_dict) = entries.extract::<HashMap<u64, f64>>() {
-        if state_dict.is_empty() {
-            return Ok(Samples::default());
-        }
-        let mut state = ommx::v1::State::default();
-        state.entries = state_dict;
-        return Ok(Samples::from(state));
+fn samples_from_any(entries: Bound<PyAny>) -> OmmxPyResult<Samples> {
+    if let Ok(samples) = entries.cast::<Samples>() {
+        return Ok(samples.borrow().clone());
     }
     if let Ok(state) = entries.cast::<crate::State>() {
         return Ok(Samples::from(state.borrow().0.clone()));
     }
-
-    // Try to extract as dict[int, State] or dict[int, dict[int, float]]
-    if let Ok(dict) = entries.cast::<PyDict>() {
-        let mut state_cand = ommx::v1::State::default();
-        let mut sample_cand: ommx::Sampled<ommx::v1::State> = ommx::Sampled::default();
-        for (key, value) in dict.iter() {
-            let sample_id: u64 = key.extract().map_err(|_| type_error())?;
-
-            if let Ok(value) = value.extract::<f64>() {
-                state_cand.entries.insert(sample_id, value);
-                continue;
-            }
-            if let Ok(state) = extract_state(&value) {
-                sample_cand
-                    .append(std::iter::once(SampleID::from(sample_id)), state)
-                    .expect("Python dict keys are unique");
-                continue;
-            }
-            return Err(type_error());
-        }
-        return Ok(
-            match (
-                state_cand.entries.is_empty(),
-                sample_cand.num_samples() == 0,
-            ) {
-                (true, true) => Samples::default(),
-                (false, true) => Samples::from(state_cand),
-                (true, false) => Samples(sample_cand),
-                (false, false) => {
-                    return Err(type_error());
-                }
-            },
-        );
+    if let Ok(mapping) = entries.cast::<PyMapping>() {
+        return samples_from_mapping(mapping);
     }
 
-    // Try to extract as iterable of State-like objects
-    if let Ok(iter) = entries.try_iter() {
+    let iter = entries.try_iter().map_err(|_| type_error())?;
+    let mut sampled = ommx::Sampled::default();
+    for (i, item) in iter.enumerate() {
+        let state = item?.extract::<crate::State>()?;
+        sampled.append([SampleID::from(i as u64)], state.0)?;
+    }
+    Ok(Samples(sampled))
+}
+
+fn samples_from_mapping(mapping: &Bound<PyMapping>) -> OmmxPyResult<Samples> {
+    let items = mapping.items()?;
+    let Some(first) = items.iter().next() else {
+        return Ok(Samples::default());
+    };
+
+    // The values determine whether the keys are sample IDs or variable IDs.
+    let value = first.get_item(1)?;
+    if value.is_instance_of::<crate::State>() || value.is_instance_of::<PyMapping>() {
         let mut sampled = ommx::Sampled::default();
-        for (i, item) in iter.enumerate() {
-            let sample_id = SampleID::from(i as u64);
-            let item = item?;
-            if let Ok(state) = extract_state(&item) {
-                sampled
-                    .append(std::iter::once(sample_id), state)
-                    .expect("enumerate produces unique sample IDs");
-                continue;
-            }
-            return Err(type_error());
+        for item in items {
+            let (id, state) = item.extract::<(u64, crate::State)>()?;
+            sampled.append([SampleID::from(id)], state.0)?;
         }
         return Ok(Samples(sampled));
     }
 
-    Err(type_error())
-}
-
-fn extract_state(value: &Bound<PyAny>) -> PyResult<ommx::v1::State> {
-    if let Ok(state) = value.extract::<crate::State>() {
-        return Ok(state.0);
+    let mut state = ommx::v1::State::default();
+    for item in items {
+        let (id, value) = item.extract::<(u64, f64)>()?;
+        state.entries.insert(id, value);
     }
-    if let Ok(state_dict) = value.extract::<HashMap<u64, f64>>() {
-        let mut state = ommx::v1::State::default();
-        state.entries = state_dict;
-        return Ok(state);
-    }
-    Err(type_error())
+    Ok(Samples::from(state))
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]

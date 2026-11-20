@@ -1,5 +1,28 @@
+from collections import UserDict
+
 import pytest
 from ommx import Samples, State, _ommx_rust
+
+
+def test_samples_from_mapping_preserves_explicit_ids():
+    samples = Samples(UserDict({7: {0: 37}, 12: UserDict({3: 4.5})}))
+    assert samples.sample_ids() == {7, 12}
+    assert samples.get_state(7).entries == {0: 37.0}
+    assert samples.get_state(12).entries == {3: 4.5}
+
+
+def test_samples_from_flat_and_empty_mappings():
+    single = Samples(UserDict({7: 37.0}))
+    assert single.sample_ids() == {0}
+    assert single.get_state(0).entries == {7: 37.0}
+    assert Samples(UserDict()).sample_ids() == set()
+    assert Samples(UserDict({7: {}})).sample_ids() == {7}
+
+
+@pytest.mark.parametrize("entries", [{0: 1, 7: {}}, {7: {}, 0: 1}, {State({0: 1}): 37}])
+def test_samples_rejects_invalid_mappings(entries):
+    with pytest.raises(TypeError):
+        Samples(UserDict(entries))
 
 
 def test_create_samples_from_single_state():
