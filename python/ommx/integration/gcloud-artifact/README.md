@@ -2,7 +2,7 @@
 
 `.github/workflows/gcloud-artifact.yml` runs after pushes to `main` and on manual
 dispatch from `main` in `Jij-Inc/ommx`. It builds the current Python SDK, then runs
-`gcloud-artifact-roundtrip.py` to continuously check real-registry compatibility.
+`roundtrip.py` to continuously check real-registry compatibility.
 The local Docker registry tests in `rust/ommx/tests/auth_e2e.rs` still run on PRs.
 
 Each authentication method is checked independently:
@@ -70,7 +70,7 @@ provider's condition. Manual dispatch from other branches is intentionally skipp
 ## Retention
 
 Images use `ci-gar-roundtrip-env` and `ci-gar-roundtrip-helper`, tagged with the GitHub run
-ID, attempt, and commit SHA. `gcloud-artifact-cleanup.json` deletes only packages
+ID, attempt, and commit SHA. `cleanup.json` deletes only packages
 with the `ci-gar-roundtrip-` prefix once they are older than seven days, including
 tagged versions. The legacy `ci-issue-606-` prefix remains in the policy so that
 artifacts created before the rename are also cleaned up. The original manually
@@ -82,7 +82,7 @@ Apply the policy from the repository root with an administrator account:
 ```sh
 gcloud artifacts repositories set-cleanup-policies ommx-artifacts \
   --project=ommx-testing --location=asia-northeast1 \
-  --policy=ci-scripts/gcloud-artifact-cleanup.json --no-dry-run
+  --policy=python/ommx/integration/gcloud-artifact/cleanup.json --no-dry-run
 ```
 
 This command replaces the repository's cleanup policies; inspect any existing
@@ -96,7 +96,7 @@ From the project root:
 
 ```sh
 uv sync --locked --package ommx --no-default-groups
-uv run --no-sync python ci-scripts/gcloud-artifact-roundtrip.py \
+uv run --no-sync python python/ommx/integration/gcloud-artifact/roundtrip.py \
   --repository asia-northeast1-docker.pkg.dev/ommx-testing/ommx-artifacts \
   --output-dir /tmp/ommx-gar-results
 ```

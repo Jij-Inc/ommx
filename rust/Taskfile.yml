@@ -4,31 +4,31 @@ version: "3"
 
 tasks:
   doc:
-    desc: Generate and Open documentation for Rust SDK
+    desc: Generate Rust SDK documentation
     cmds:
-      - cargo doc --no-deps -p ommx -p ommx-pyo3-bridge {{.CLI_ARGS}}
+      - cargo doc --no-deps -p ommx -p ommx-derive {{.CLI_ARGS}}
 
   doc:check:
     desc: Run cargo doc with warnings-as-errors (CI gate against broken rustdoc)
     env:
       RUSTDOCFLAGS: -D warnings
     cmds:
-      - cargo doc --no-deps -p ommx -p ommx-pyo3-bridge --features ommx/cli
+      - cargo doc --no-deps -p ommx -p ommx-derive --features ommx/cli
 
   test:
     desc: Run tests for Rust SDK
     cmds:
-      - cargo test -p ommx -p ommx-pyo3-bridge {{.CLI_ARGS}}
+      - cargo test -p ommx -p ommx-derive {{.CLI_ARGS}}
 
   check:
     desc: Run check for Rust SDK
     cmds:
-      - cargo check -p ommx -p ommx-pyo3-bridge {{.CLI_ARGS}}
+      - cargo check -p ommx -p ommx-derive {{.CLI_ARGS}}
 
   clippy:
     desc: Run clippy for Rust SDK
     cmds:
-      - cargo clippy --all-targets -- -D warnings
+      - cargo clippy -p ommx -p ommx-derive --all-targets {{.CLI_ARGS}} -- -D warnings
 
   set-version:
     desc: Set version for Rust SDK
@@ -36,24 +36,33 @@ tasks:
       - cargo set-version {{.CLI_ARGS}}
 
   format:
-    desc: Format Rust code
+    desc: Format Rust SDK crates
     cmds:
-      - cargo fmt --all
+      - cargo fmt -p ommx -p ommx-derive {{.CLI_ARGS}}
+
+  format:check:
+    desc: Check Rust SDK formatting
+    cmds:
+      - cargo fmt -p ommx -p ommx-derive -- --check
 
   insta:
-    desc: Run insta snapshot tests (use --accept to accept changes)
+    desc: Run Rust SDK snapshot tests (use --accept to accept changes)
     cmds:
-      - cargo insta test {{.CLI_ARGS}}
+      - for: [ommx, ommx-derive]
+        cmd: cargo insta test -p {{.ITEM}} {{.CLI_ARGS}}
 
   insta:review:
-    desc: Review insta snapshot changes
+    desc: Review Rust SDK snapshot changes
     cmds:
-      - cargo insta review
+      - for: [ommx, ommx-derive]
+        cmd: cargo insta review --manifest-path {{.ITEM}}/Cargo.toml
 
   insta:accept:
-    desc: Run insta tests and accept all changes
+    desc: Run Rust SDK snapshot tests and accept their changes
     cmds:
-      - cargo insta test --accept
+      - task: insta
+        vars:
+          CLI_ARGS: --accept {{.CLI_ARGS}}
 
   check:wasm32-emscripten:
     desc: Check OMMX for wasm32-unknown-emscripten target

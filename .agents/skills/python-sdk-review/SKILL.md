@@ -57,7 +57,7 @@ AutoAPI, toctrees, or rendered documentation.
      public PyO3 method should return the wrapper type rather than raw `PyAny`.
 
 5. Check runtime behavior and stub behavior together.
-   - Run `task python:stubgen` after PyO3 public API, docstring, or
+   - Run `task python:ommx:stubgen` after PyO3 public API, docstring, or
      `PyStubType` changes.
    - Inspect the generated `.pyi` for the affected items and confirm imports,
      optional defaults, overloads, and type aliases match the intended API.
@@ -113,7 +113,7 @@ through the project environment.
 
 - After PyO3 public API or `PyStubType` changes:
   ```
-  task python:stubgen
+  task python:ommx:stubgen
   cargo check -p _ommx_rust
   ```
 - For Python SDK behavior:

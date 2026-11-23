@@ -19,6 +19,41 @@ tasks:
       - buf generate --template buf.gen.docs.yaml
 
   format:
-    desc: Format all protobuf files
+    desc: Format schemas and generator sources
     cmds:
-    - buf format -w .
+      - buf format -w .
+      - cargo fmt -p protogen
+
+  test:
+    desc: Test the generator and verify committed generated Rust code
+    cmds:
+      - cargo test -p protogen
+      - task: rust
+      - |
+        if [ -n "$(git status --porcelain --untracked-files=all -- ../rust/ommx/src/ommx.*.rs)" ]; then
+          git status --short --untracked-files=all -- ../rust/ommx/src/ommx.*.rs
+          exit 1
+        fi
+
+  lint:
+    desc: Lint schemas and the Rust generator
+    cmds:
+      - task: lint-schema
+      - cargo clippy -p protogen --all-targets -- -D warnings
+
+  lint-schema:
+    desc: Lint Protobuf schemas
+    cmds:
+      - buf lint
+
+  breaking:
+    desc: Check schema compatibility against origin/main
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - buf breaking proto --against '.git#branch=origin/main,subdir=proto' --error-format=github-actions
+
+  format:check:
+    desc: Check schema and generator formatting
+    cmds:
+      - buf format -d --exit-code .
+      - cargo fmt -p protogen -- --check

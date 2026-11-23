@@ -19,7 +19,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-test-environment
+      - uses: ./.github/actions/setup-python
+      - uses: ./.github/actions/setup-rust
       - name: Build the current Python SDK
         run: uv sync --locked --package ommx --no-default-groups
 
@@ -35,7 +36,7 @@ jobs:
         env:
           TEST_TAG: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
         run: |
-          uv run --no-sync python ci-scripts/gcloud-artifact-roundtrip.py \
+          uv run --no-sync python python/ommx/integration/gcloud-artifact/roundtrip.py \
             --repository asia-northeast1-docker.pkg.dev/ommx-testing/ommx-artifacts \
             --tag "$TEST_TAG" --output-dir "$RUNNER_TEMP/gcloud-artifact-results"
       - name: Upload round-trip evidence

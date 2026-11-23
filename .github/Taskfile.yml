@@ -1,0 +1,8 @@
+version: '3'
+
+tasks:
+  check:
+    desc: Validate GitHub Actions workflows
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - actionlint

@@ -1,0 +1,38 @@
+name: Style and workflow checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-python
+      - uses: ./.github/actions/setup-rust
+        with:
+          components: rustfmt
+          cache: 'false'
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ github.token }}
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ github.token }}
+      - name: Check formatting by owner
+        run: task format:check
+      - name: Lint Python and documentation sources
+        run: task python:ruff docs:lint
+      - name: Lint Protobuf schemas
+        run: task proto:lint-schema
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+      - name: Check workflows
+        run: |
+          GOPATH=$(go env GOPATH)
+          export PATH="$GOPATH/bin:$PATH"
+          task ci:check

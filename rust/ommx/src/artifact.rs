@@ -79,6 +79,7 @@ pub use media_types::OCI_IMAGE_MANIFEST_MEDIA_TYPE;
 pub use remote_error::RemoteArtifactError;
 
 use anyhow::{Context, Result};
+#[cfg(feature = "remote-artifact")]
 use oci_spec::image::ImageManifest;
 
 #[cfg(feature = "remote-artifact")]

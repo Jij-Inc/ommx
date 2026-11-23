@@ -1,11 +1,12 @@
-# https://taskfile.dev
-# yaml-language-server: $schema=https://taskfile.dev/schema.json
-version: "3"
+version: '3'
 
 includes:
   ommx:
     taskfile: ommx/Taskfile.yml
     dir: ommx
+  bridge:
+    taskfile: ommx-pyo3-bridge/Taskfile.yml
+    dir: ommx-pyo3-bridge
   ommx-openjij-adapter:
     taskfile: ommx-openjij-adapter/Taskfile.yml
     dir: ommx-openjij-adapter
@@ -20,101 +21,144 @@ includes:
     dir: ommx-highs-adapter
 
 tasks:
-  sync:lint:
-    internal: true
-    cmds:
-      - uv sync --locked --only-group lint --no-install-workspace --inexact
-
   default:
-    desc: Sync and Run tests for all Python projects
     cmds:
-      - task: sync
       - task: test
 
   sync:
-    desc: Setup Python development environment, Rebuild Python SDK
+    desc: Build the Python SDK and prepare source-development dependencies
+    dir: '{{.ROOT_DIR}}'
     cmds:
-      - uv sync --all-extras
+      - uv sync --locked --all-packages --all-extras
+
+  sync:test:
+    internal: true
+    run: once
+    cmds:
+      - task: sync
+
+  sync:lint:
+    internal: true
+    run: once
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - uv sync --locked --only-group lint --no-install-workspace --inexact
+
+  sync:binding-test:
+    internal: true
+    run: once
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - uv sync --locked --only-group binding-test --no-install-workspace --inexact
+
+  cargo:
+    internal: true
+    cmds:
+      - task: sync:binding-test
+      - task: cargo:run
+        vars:
+          CARGO_ARGS: '{{.CARGO_ARGS}}'
+
+  cargo:run:
+    internal: true
+    dir: '{{.ROOT_DIR}}'
+    # Evaluate after preparation. Embedded CPython needs the virtualenv search path.
+    env:
+      PYO3_PYTHON:
+        sh: uv run --no-sync python -c 'import sys; print(sys.executable)'
+      PYTHONPATH:
+        sh: uv run --no-sync python -c 'import os, sys; print(os.pathsep.join(path for path in sys.path if path))'
+    cmds:
+      - uv run --no-sync cargo {{.CARGO_ARGS}}
 
   upgrade:
-    desc: Upgrade uv dependencies
+    desc: Upgrade Python workspace dependencies and rebuild the SDK
+    dir: '{{.ROOT_DIR}}'
     cmds:
-      - uv sync --all-extras --upgrade
-
-  format:
-    desc: Format Python code
-    cmds:
-      - task: sync:lint
-      - uv run --no-sync ruff format
+      - uv sync --all-packages --all-extras --upgrade
 
   test:
-    desc: Run tests for all Python projects
+    desc: Validate the Python SDK, bridge, and all adapters from source
     cmds:
+      - task: sync:test
       - task: ommx:test
-      - task: ommx-openjij-adapter:test
-      - task: ommx-python-mip-adapter:test
-      - task: ommx-pyscipopt-adapter:test
-      - task: ommx-highs-adapter:test
-
-  bench:
-    desc: Run benchmarks for OMMX Python SDK
-    cmds:
-      - task: ommx:bench
+      - task: bridge:test
+      - for: [ommx-openjij-adapter, ommx-python-mip-adapter, ommx-pyscipopt-adapter, ommx-highs-adapter]
+        task: '{{.ITEM}}:test'
+      # Shared selection and wheel-origin checks are Python-owned too.
+      - task: support:lint
 
   lint:
-    desc: Run ruff check for all Python projects
+    desc: Lint all Python-managed code, including its Rust implementations
+    cmds:
+      - task: ommx:lint
+      - task: bridge:lint
+      - for: [ommx-openjij-adapter, ommx-python-mip-adapter, ommx-pyscipopt-adapter, ommx-highs-adapter]
+        task: '{{.ITEM}}:lint'
+      - task: support:lint
+
+  ruff:
+    desc: Run only Ruff for all Python-managed code
+    cmds:
+      - task: ommx:ruff
+      - task: bridge:ruff
+      - for: [ommx-openjij-adapter, ommx-python-mip-adapter, ommx-pyscipopt-adapter, ommx-highs-adapter]
+        task: '{{.ITEM}}:lint'
+      - task: support:lint
+
+  format:
+    desc: Format all Python-managed code, including Rust implementations
+    cmds:
+      - task: ommx:format
+      - task: bridge:format
+      - for: [ommx-openjij-adapter, ommx-python-mip-adapter, ommx-pyscipopt-adapter, ommx-highs-adapter]
+        task: '{{.ITEM}}:format'
+      - task: support:format
+
+  format:check:
+    desc: Check formatting for all Python-managed code
+    cmds:
+      - task: ommx:format:check
+      - task: bridge:format:check
+      - for: [ommx-openjij-adapter, ommx-python-mip-adapter, ommx-pyscipopt-adapter, ommx-highs-adapter]
+        task: '{{.ITEM}}:format:check'
+      - task: support:format:check
+
+  support:lint:
+    internal: true
+    dir: '{{.ROOT_DIR}}'
     cmds:
       - task: sync:lint
-      - uv run --no-sync ruff check .
+      - uv run --no-sync ruff check python/scripts python/set-version.py conftest.py
+
+  support:format:
+    internal: true
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - task: sync:lint
+      - uv run --no-sync ruff format python/scripts python/set-version.py conftest.py {{.CLI_ARGS}}
+
+  support:format:check:
+    internal: true
+    cmds:
+      - task: support:format
+        vars:
+          CLI_ARGS: --check
 
   set-version:
-    desc: Set the version for all Python projects
+    desc: Update the SDK and adapter distribution versions
     cmds:
       - uv sync --locked --only-group maintenance --no-install-workspace --inexact
       - uv run --no-sync set-version.py {{.CLI_ARGS}}
+      - uv lock
       - task: sync
 
-  book:
-    desc: Build Sphinx documentation (ja and en)
+  bench:
+    desc: Run benchmarks for the Python SDK
     cmds:
-      - uv run sphinx-build -b html -W --keep-going ../docs/ja ../docs/ja/_build/html
-      - uv run sphinx-build -b html -W --keep-going ../docs/en ../docs/en/_build/html
-
-  book:test:
-    desc: Build Sphinx documentation with code execution (ja and en)
-    env:
-      OMMX_NB_EXECUTION: "force"
-    cmds:
-      - uv run sphinx-build -b html -W --keep-going ../docs/ja ../docs/ja/_build/html
-      - uv run sphinx-build -b html -W --keep-going ../docs/en ../docs/en/_build/html
-
-  book:test:ja:
-    desc: Build Sphinx documentation with code execution (ja only)
-    env:
-      OMMX_NB_EXECUTION: "force"
-    cmds:
-      - uv run sphinx-build -b html -W --keep-going ../docs/ja ../docs/ja/_build/html
-
-  book:test:en:
-    desc: Build Sphinx documentation with code execution (en only)
-    env:
-      OMMX_NB_EXECUTION: "force"
-    cmds:
-      - uv run sphinx-build -b html -W --keep-going ../docs/en ../docs/en/_build/html
-
-  stubgen:
-    desc: Generate stubs files for Rust extension
-    cmds:
-      - task: sync:lint
-      - cargo run -p _ommx_rust --bin stub_gen
-      - >-
-        uv run --no-sync ruff format
-        ommx/ommx/__init__.py
-        ommx/ommx/_ommx_rust/__init__.pyi
-        ommx/ommx/artifact/__init__.py
-        ommx/ommx/experiment/__init__.py
+      - task: ommx:bench
 
   ipython:
-    desc: Start an IPython shell
+    desc: Open IPython in the prepared development environment
     cmds:
-      - uv run ipython
+      - uv run --no-sync ipython

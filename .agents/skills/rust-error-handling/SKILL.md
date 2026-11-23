@@ -165,7 +165,7 @@ cargo tree -p _ommx_rust -e features -i pyo3
 ```
 
 Run `task python:sync` first when the project `.venv` is absent.
-Run `task python:stubgen` after a public PyO3 signature or docstring change.
+Run `task python:ommx:stubgen` after a public PyO3 signature or docstring change.
 Run `cargo fmt --all -- --check` and `git diff --check` before handoff.
 
 ## Checklist

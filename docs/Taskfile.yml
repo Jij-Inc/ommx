@@ -1,0 +1,42 @@
+version: '3'
+
+includes:
+  en:
+    taskfile: en/Taskfile.yml
+    dir: en
+  ja:
+    taskfile: ja/Taskfile.yml
+    dir: ja
+
+tasks:
+  build:
+    desc: Build both Book editions sequentially
+    cmds:
+      - task: en:build
+      - task: ja:build
+
+  test:
+    desc: Execute and validate both Book editions sequentially
+    cmds:
+      - task: en:test
+      - task: ja:test
+
+  lint:
+    desc: Lint documentation configuration, extensions, and scripts
+    cmds:
+      - task: :python:sync:lint
+      - uv run --no-sync ruff check .
+
+  format:
+    # The upstream-generated renderer retains pyo3-stub-gen's formatting.
+    desc: Format handwritten documentation Python sources
+    cmds:
+      - task: :python:sync:lint
+      - uv run --no-sync ruff format --config 'include = ["*.py", "*.pyi"]' --extend-exclude pyo3_stub_gen_ext.py . {{.CLI_ARGS}}
+
+  format:check:
+    desc: Check documentation Python formatting
+    cmds:
+      - task: format
+        vars:
+          CLI_ARGS: --check

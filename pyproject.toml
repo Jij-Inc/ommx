@@ -35,6 +35,10 @@ lint = [
 typecheck = [
   "pyright>=1.1.394",
 ]
+# Python dependencies available to Rust tests embedding the Python SDK runtime.
+binding-test = [
+  "pandas",
+]
 test = [
   "markdown-code-runner>=2.1.0",
   "pytest>=8.3.4",

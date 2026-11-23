@@ -15,14 +15,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/setup-rust
 
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --bin ommx --features cli
+      - name: Build CLI
+        run: cargo build -p ommx --release --bin ommx --features cli
 
       - uses: actions/upload-artifact@v7
         with:
@@ -70,7 +66,7 @@ jobs:
       - name: List loaded images
         run: |
           OUTPUT=$(./ommx list)
-          echo $OUTPUT
+          echo "$OUTPUT"
           [[ $OUTPUT =~ ghcr.io/jij-inc/ommx/random_lp_instance: ]]
 
   push:
@@ -96,9 +92,7 @@ jobs:
           chmod +x ./ommx
 
       # Create a new image tagged with the current commit hash
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/setup-rust
       - name: Build image
         run: cargo run --release --example create_artifact --features cli
 
@@ -111,7 +105,7 @@ jobs:
       # so push always sources from the registry by image name.)
       - name: Push image to ghcr.io
         run: |
-          ./ommx push ghcr.io/jij-inc/ommx/random_lp_instance:$(git rev-parse --short HEAD)
+          ./ommx push "ghcr.io/jij-inc/ommx/random_lp_instance:$(git rev-parse --short HEAD)"
         env:
           OMMX_BASIC_AUTH_DOMAIN: ghcr.io
           OMMX_BASIC_AUTH_USERNAME: ${{ github.actor }}
