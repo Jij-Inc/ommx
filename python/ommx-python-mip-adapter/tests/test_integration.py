@@ -1,6 +1,6 @@
 import pytest
 
-from ommx import DecisionVariable, Instance, Optimality, Sense, Solution
+from ommx import Bound, DecisionVariable, Instance, Kind, Optimality, Sense, Solution
 from ommx.adapter import InfeasibleDetected, UnboundedDetected, NoSolutionReturned
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
@@ -31,6 +31,19 @@ def test_integration_lp(generater):
         assert ommx_state.entries[key] == pytest.approx(
             expected_solution.entries[key], abs=1e-6
         )
+
+
+@pytest.mark.parametrize("fixed", [0, 1])
+def test_solve_preserves_fixed_binary_bound(fixed):
+    instance = Instance.minimize()
+    x = DecisionVariable(0, Kind.Binary, Bound(fixed, fixed))
+    instance.add_decision_variable(x)
+    instance.objective = x if fixed == 1 else -x
+
+    solution = OMMXPythonMIPAdapter.solve(instance)
+
+    assert solution.state.entries[x.id] == fixed
+    assert solution.feasible
 
 
 def test_integration_milp():

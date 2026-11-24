@@ -4,10 +4,12 @@ import highspy
 import pytest
 
 from ommx import (
+    Bound,
     Constraint,
     DecisionVariable,
     Equality,
     Instance,
+    Kind,
     Optimality,
     Sense,
     Solution,
@@ -15,6 +17,19 @@ from ommx import (
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
 from ommx_highs_adapter import OMMXHighsAdapter, OMMXHighsAdapterError
+
+
+@pytest.mark.parametrize("fixed", [0, 1])
+def test_solve_preserves_fixed_binary_bound(fixed):
+    instance = Instance.minimize()
+    x = DecisionVariable(0, Kind.Binary, Bound(fixed, fixed))
+    instance.add_decision_variable(x)
+    instance.objective = x if fixed == 1 else -x
+
+    solution = OMMXHighsAdapter.solve(instance)
+
+    assert solution.state.entries[x.id] == fixed
+    assert solution.feasible
 
 
 def test_variable_domains_and_column_mapping():
