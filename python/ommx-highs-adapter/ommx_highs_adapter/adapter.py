@@ -649,7 +649,7 @@ class OMMXHighsAdapter(SolverAdapter):
          - Bounds
        * - ``Kind.Binary``
          - ``HighsVarType.kInteger``
-         - ``[0, 1]``
+         - ``[0, 0]``, ``[0, 1]``, or ``[1, 1]``, from the OMMX variable
        * - ``Kind.Integer``
          - ``HighsVarType.kInteger``
          - ``[var.bound.lower, var.bound.upper]``
