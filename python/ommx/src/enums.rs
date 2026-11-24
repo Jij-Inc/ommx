@@ -140,15 +140,6 @@ impl DecisionVariableRole {
         *self as isize
     }
 
-    fn __repr__(&self) -> &'static str {
-        match self {
-            DecisionVariableRole::Active => "DecisionVariableRole.Active",
-            DecisionVariableRole::Fixed => "DecisionVariableRole.Fixed",
-            DecisionVariableRole::Dependent => "DecisionVariableRole.Dependent",
-            DecisionVariableRole::Irrelevant => "DecisionVariableRole.Irrelevant",
-        }
-    }
-
     fn __str__(&self) -> &'static str {
         match self {
             DecisionVariableRole::Active => "active",
@@ -216,13 +207,6 @@ impl Sense {
         *self as i32
     }
 
-    fn __repr__(&self) -> String {
-        match self {
-            Sense::Minimize => "Sense.Minimize".to_string(),
-            Sense::Maximize => "Sense.Maximize".to_string(),
-        }
-    }
-
     fn __str__(&self) -> String {
         format!("{}", *self as i32)
     }
@@ -279,13 +263,6 @@ impl Equality {
     /// Convert to Protocol Buffer equality value
     pub fn to_pb(&self) -> i32 {
         *self as i32
-    }
-
-    fn __repr__(&self) -> &str {
-        match self {
-            Equality::EqualToZero => "Equality.EqualToZero",
-            Equality::LessThanOrEqualToZero => "Equality.LessThanOrEqualToZero",
-        }
     }
 
     fn __str__(&self) -> &str {
@@ -381,14 +358,6 @@ impl Optimality {
         *self as i32
     }
 
-    fn __repr__(&self) -> String {
-        match self {
-            Optimality::Unspecified => "Optimality.Unspecified".to_string(),
-            Optimality::Optimal => "Optimality.Optimal".to_string(),
-            Optimality::NotOptimal => "Optimality.NotOptimal".to_string(),
-        }
-    }
-
     fn __str__(&self) -> String {
         format!("{}", *self as i32)
     }
@@ -444,13 +413,6 @@ impl Relaxation {
     /// Convert to Protocol Buffer relaxation value
     pub fn to_pb(&self) -> i32 {
         *self as i32
-    }
-
-    fn __repr__(&self) -> String {
-        match self {
-            Relaxation::Unspecified => "Relaxation.Unspecified".to_string(),
-            Relaxation::LpRelaxed => "Relaxation.LpRelaxed".to_string(),
-        }
     }
 
     fn __str__(&self) -> String {

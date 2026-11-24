@@ -15405,7 +15405,6 @@ class DecisionVariableRole(enum.Enum):
     """
 
     def __hash__(self) -> builtins.int: ...
-    def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
 @typing.final
@@ -15433,7 +15432,6 @@ class Equality(enum.Enum):
         r"""
         Convert to Protocol Buffer equality value
         """
-    def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
 @typing.final
@@ -15464,7 +15462,6 @@ class Optimality(enum.Enum):
         r"""
         Convert to Protocol Buffer optimality value
         """
-    def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
 @typing.final
@@ -15491,7 +15488,6 @@ class Relaxation(enum.Enum):
         r"""
         Convert to Protocol Buffer relaxation value
         """
-    def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
 @typing.final
@@ -15519,7 +15515,6 @@ class Sense(enum.Enum):
         r"""
         Convert to Protocol Buffer sense value
         """
-    def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
 def _run_cli(args: typing.Sequence[builtins.str]) -> builtins.int: ...
