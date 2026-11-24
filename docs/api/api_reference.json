@@ -8877,7 +8877,56 @@
           "name": "DecisionVariableRole",
           "doc": "How a decision variable obtains its value in an {class}`~ommx.Instance`.\n\nRoles are derived from the Instance's current structure and can change after\ntransformation. They are separate from Binary, Integer, or other variable kinds.\nQuery one role with {meth}`~ommx.Instance.decision_variable_role`, or all roles\nwith {meth}`~ommx.Instance.decision_variable_roles`.\n\n| Role | Meaning | Value for candidate evaluation |\n| --- | --- | --- |\n| `Active` | Belongs to the current Active Formulation | Supplied by the caller |\n| `Fixed` | A retained variable outside the Active Formulation with a recorded fixed value | Restored from that value |\n| `Dependent` | Neither active nor fixed; represented by an expression in other variables | Computed from that expression |\n| `Irrelevant` | Neither active, fixed, nor dependent | Supplied by the caller, or filled with a default when omitted |\n\nActive constraints include regular and special constraints, including an\nIndicator's controlling Binary variable. References only from named functions,\ninactive constraints, output objectives, or dependency right-hand sides do not\nmake a variable active. Being irrelevant to solver input does not mean its value\ncannot affect reporting.\n\n{meth}`~ommx.Instance.populate_state` explains reconstruction, defaults,\ncanonicalization, and consistency assertions with executable examples.",
           "bases": [],
-          "methods": [],
+          "methods": [
+            {
+              "name": "__hash__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__str__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
           "attributes": [
             {
               "name": "Active",
@@ -8907,7 +8956,98 @@
           "name": "Equality",
           "doc": "Equality type for constraints",
           "bases": [],
-          "methods": [],
+          "methods": [
+            {
+              "name": "__hash__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__str__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "from_pb",
+              "doc": "Convert from Protocol Buffer equality value",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Equality",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "to_pb",
+              "doc": "Convert to Protocol Buffer equality value",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
           "attributes": [
             {
               "name": "EqualToZero",
@@ -26077,7 +26217,82 @@
           "name": "Optimality",
           "doc": "Optimality status of a solution",
           "bases": [],
-          "methods": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__str__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "from_pb",
+              "doc": "Convert from Protocol Buffer optimality value",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Optimality",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "to_pb",
+              "doc": "Convert to Protocol Buffer optimality value",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
           "attributes": [
             {
               "name": "NotOptimal",
@@ -33303,7 +33518,82 @@
           "name": "Relaxation",
           "doc": "Relaxation status of a solution",
           "bases": [],
-          "methods": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__str__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "from_pb",
+              "doc": "Convert from Protocol Buffer relaxation value",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Relaxation",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "to_pb",
+              "doc": "Convert to Protocol Buffer relaxation value",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
           "attributes": [
             {
               "name": "LpRelaxed",
@@ -37680,7 +37970,98 @@
           "name": "Sense",
           "doc": "Sense of optimization (minimize or maximize)",
           "bases": [],
-          "methods": [],
+          "methods": [
+            {
+              "name": "__hash__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__str__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "from_pb",
+              "doc": "Convert from Protocol Buffer sense value",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Sense",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "to_pb",
+              "doc": "Convert to Protocol Buffer sense value",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
           "attributes": [
             {
               "name": "Maximize",
