@@ -6,6 +6,7 @@ import collections.abc
 import datetime
 import enum
 import numpy
+from ommx import _typing
 from ommx import adapter
 from ommx import display
 from ommx.experiment import attachments
@@ -11799,8 +11800,13 @@ class Polynomial:
     def __rmul__(self, lhs: Function) -> Function: ...
     def __iadd__(self, rhs: Polynomial) -> Polynomial: ...
     def __new__(
-        cls, terms: typing.Mapping[typing.Sequence[builtins.int], builtins.float]
-    ) -> Polynomial: ...
+        cls, terms: typing.Mapping[_typing._MonomialKey, builtins.float]
+    ) -> Polynomial:
+        r"""
+        `terms` maps each monomial to its coefficient. Each key is a `Sequence[int]`
+        of decision variable IDs. For example, `(0, 0, 2)` represents $x_0^2 x_2$,
+        and `()` represents the constant term.
+        """
     def almost_equal(
         self, other: Polynomial, atol: builtins.float = 1e-06
     ) -> builtins.bool: ...
