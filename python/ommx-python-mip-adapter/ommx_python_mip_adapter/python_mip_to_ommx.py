@@ -5,11 +5,13 @@ import mip
 
 from mip.exceptions import ParameterNotAvailable
 from ommx import (
+    Bound,
     Constraint,
     DecisionVariable,
     Equality,
     Function,
     Instance,
+    Kind,
     Linear,
     Sense,
 )
@@ -33,7 +35,12 @@ class OMMXInstanceBuilder:
         for var in self.model.vars:
             if var.var_type == mip.BINARY:
                 decision_variables.append(
-                    DecisionVariable.binary(var.idx, name=var.name)
+                    DecisionVariable(
+                        var.idx,
+                        Kind.Binary,
+                        Bound(float(var.lb), float(var.ub)),
+                        name=var.name,
+                    )
                 )
             elif var.var_type == mip.INTEGER:
                 decision_variables.append(

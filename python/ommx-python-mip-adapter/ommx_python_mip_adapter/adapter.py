@@ -413,29 +413,22 @@ class OMMXPythonMIPAdapter(SolverAdapter):
     def _set_decision_variables(self):
         for var in self.instance.active_decision_variables:
             if var.kind == Kind.Binary:
-                self.model.add_var(
-                    name=str(var.id),
-                    var_type=mip.BINARY,
-                )
+                var_type = mip.BINARY
             elif var.kind == Kind.Integer:
-                self.model.add_var(
-                    name=str(var.id),
-                    var_type=mip.INTEGER,
-                    lb=var.bound.lower,  # type: ignore
-                    ub=var.bound.upper,  # type: ignore
-                )
+                var_type = mip.INTEGER
             elif var.kind == Kind.Continuous:
-                self.model.add_var(
-                    name=str(var.id),
-                    var_type=mip.CONTINUOUS,
-                    lb=var.bound.lower,  # type: ignore
-                    ub=var.bound.upper,  # type: ignore
-                )
+                var_type = mip.CONTINUOUS
             else:
                 raise OMMXPythonMIPAdapterError(
                     f"Not supported decision variable kind: "
                     f"id: {var.id}, kind: {var.kind}"
                 )
+            self.model.add_var(
+                name=str(var.id),
+                var_type=var_type,
+                lb=var.bound.lower,  # type: ignore
+                ub=var.bound.upper,  # type: ignore
+            )
 
     def _as_lin_expr(
         self,

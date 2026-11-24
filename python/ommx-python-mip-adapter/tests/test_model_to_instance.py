@@ -1,8 +1,24 @@
 import mip
+import pytest
 
 from ommx import ConstraintKind, Equality, Kind, Sense
 
 from ommx_python_mip_adapter import model_to_instance
+
+
+@pytest.mark.parametrize("fixed", [0, 1])
+def test_import_preserves_fixed_binary_bound(fixed, monkeypatch):
+    model = mip.Model(solver_name=mip.CBC)
+    x = model.add_var(name="x", var_type=mip.BINARY, lb=fixed, ub=fixed)
+    model.objective = x
+    # CBC reports fixed binary columns as INTEGER. Other backends retain BINARY.
+    monkeypatch.setattr(model.solver, "var_get_var_type", lambda var: mip.BINARY)
+
+    instance = model_to_instance(model)
+
+    variable = instance.get_decision_variable_by_id(x.idx)
+    assert variable.kind == Kind.Binary
+    assert (variable.bound.lower, variable.bound.upper) == (fixed, fixed)
 
 
 def test_milp():
