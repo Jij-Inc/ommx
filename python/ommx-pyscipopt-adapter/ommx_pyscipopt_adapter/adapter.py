@@ -1179,20 +1179,19 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     def _set_decision_variables(self):
         for var in self.instance.active_decision_variables:
             if var.kind == Kind.Binary:
-                self.model.addVar(name=str(var.id), vtype="B")
+                vtype = "B"
             elif var.kind == Kind.Integer:
-                self.model.addVar(
-                    name=str(var.id), vtype="I", lb=var.bound.lower, ub=var.bound.upper
-                )
+                vtype = "I"
             elif var.kind == Kind.Continuous:
-                self.model.addVar(
-                    name=str(var.id), vtype="C", lb=var.bound.lower, ub=var.bound.upper
-                )
+                vtype = "C"
             else:
                 raise OMMXPySCIPOptAdapterError(
                     f"Unsupported decision variable kind: "
                     f"id: {var.id}, kind: {var.kind}"
                 )
+            self.model.addVar(
+                name=str(var.id), vtype=vtype, lb=var.bound.lower, ub=var.bound.upper
+            )
 
         # Check if objective is quadratic to add auxiliary variable
         degree = self.instance.objective.degree()

@@ -649,7 +649,7 @@ class OMMXHighsAdapter(SolverAdapter):
          - Bounds
        * - ``Kind.Binary``
          - ``HighsVarType.kInteger``
-         - ``[0, 1]``
+         - ``[0, 0]``, ``[0, 1]``, or ``[1, 1]``, from the OMMX variable
        * - ``Kind.Integer``
          - ``HighsVarType.kInteger``
          - ``[var.bound.lower, var.bound.upper]``
@@ -1213,23 +1213,17 @@ class OMMXHighsAdapter(SolverAdapter):
 
         for i, var in enumerate(variables):
             var_ids.append(var.id)
-            if var.kind == Kind.Binary:
-                lower[i] = 0
-                upper[i] = 1
-                types[i] = integer
-            elif var.kind == Kind.Integer:
-                lower[i] = var.bound.lower
-                upper[i] = var.bound.upper
+            if var.kind in (Kind.Binary, Kind.Integer):
                 types[i] = integer
             elif var.kind == Kind.Continuous:
-                lower[i] = var.bound.lower
-                upper[i] = var.bound.upper
                 types[i] = continuous
             else:
                 raise OMMXHighsAdapterError(
                     f"Unsupported decision variable kind: "
                     f"id: {var.id}, kind: {var.kind}"
                 )
+            lower[i] = var.bound.lower
+            upper[i] = var.bound.upper
         # Pass typed arrays directly, avoiding addVariables' per-item validation
         # and conversions between NumPy arrays and Python lists.
         empty_indices = np.empty(0, dtype=np.int32)
