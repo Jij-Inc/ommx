@@ -49,7 +49,7 @@ See [DEVELOPMENT.md](./DEVELOPMENT.md) to work on OMMX, or the [Adapter API Refe
 [![CodSpeed Badge](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://codspeed.io/Jij-Inc/ommx?utm_source=badge)
 
 ## License
-© 2024 Jij Inc.
+© JIJ Inc.
 
 This project is licensed under either of
 

@@ -20,8 +20,8 @@ sys.path.insert(0, str(_docs_root / "api"))
 # -- Project information -----------------------------------------------------
 
 project = "OMMX"
-copyright = "2024, Jij Inc."
-author = "Jij Inc."
+copyright = "JIJ Inc."
+author = "JIJ Inc."
 
 pyproject_toml = tomlkit.loads((python_root / "ommx" / "pyproject.toml").read_text())
 version = str(pyproject_toml["project"]["version"])  # type: ignore
