@@ -1182,10 +1182,11 @@ class OMMXHighsAdapter(SolverAdapter):
         ):
             raise OMMXHighsAdapterError(f"HiGHS failed to solve the model: {status}")
 
-        solution = data.getSolution()
+        # highspy copies the full column vector on each property access.
+        col_value = data.getSolution().col_value
         return State(
             entries={
-                var.id: solution.col_value[i]
+                var.id: col_value[i]
                 for i, var in enumerate(self.instance.active_decision_variables)
             }
         )
