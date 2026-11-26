@@ -1,4 +1,5 @@
 import sys
+from unittest.mock import Mock
 
 import highspy
 import pytest
@@ -32,7 +33,7 @@ def test_solve_preserves_fixed_binary_bound(fixed):
     assert solution.feasible
 
 
-def test_variable_domains_and_column_mapping():
+def test_variable_domains_and_column_mapping(monkeypatch):
     binary = DecisionVariable.binary(100)
     integer = DecisionVariable.integer(7, lower=-3, upper=4)
     continuous = DecisionVariable.continuous(42, lower=-2.5, upper=6.5)
@@ -60,8 +61,12 @@ def test_variable_domains_and_column_mapping():
         assert lp.col_cost_[column] == cost
 
     assert model.run() == highspy.HighsStatus.kOk
+    # highspy copies the full column vector each time the property is read.
+    read_col_value = Mock(wraps=highspy.HighsSolution.col_value.__get__)
+    monkeypatch.setattr(highspy.HighsSolution, "col_value", property(read_col_value))
     state = adapter.decode_to_state(model)
     assert state.entries == pytest.approx({100: 0, 7: -3, 42: -2.5})
+    read_col_value.assert_called_once()
 
 
 @pytest.mark.parametrize("bound", [1e20, 1e30, sys.float_info.max, float("inf")])
