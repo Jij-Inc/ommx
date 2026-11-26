@@ -7,7 +7,7 @@ name = "ommx_openjij_adapter"
 version = "3.0.0rc2"
 
 description = "OMMX Adapter for OpenJij."
-authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
+authors = [{ name = "JIJ Inc.", email = "info@j-ij.com" }]
 readme = "README.md"
 
 requires-python = ">=3.11"
