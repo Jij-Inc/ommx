@@ -1,5 +1,5 @@
 import OMMXProof.Instance
-import OMMXProof.Instance.Transform.SOS1BigM.Formulation
+import OMMXProof.Instance.Transform.SOS1BigM.SelectorFormulation
 import Mathlib.Tactic
 
 /-!
@@ -24,20 +24,30 @@ namespace Plan
 def constraint {source : Instance n} (plan : Plan source) : SOS1Constraint n :=
   source.sos1Constraints.get plan.constraintIndex
 
+/-- The shared selector layout induced by the selected source constraint.
+
+Binary source members are reused directly; every other member receives a fresh
+selector in the order determined by the resulting `Finset`. -/
+def selectorLayout {source : Instance n} (plan : Plan source) :
+    SelectorLayout n where
+  members := plan.constraint.members
+  freshMembers :=
+    (Finset.univ.filter fun i => source.domains i = .binary)ᶜ
+
 abbrev Member {source : Instance n} (plan : Plan source) :=
-  {i // i ∈ plan.constraint.members}
+  plan.selectorLayout.Member
 
 def memberState {source : Instance n} (plan : Plan source)
     (state : State n) : plan.Member → Rat :=
-  fun i => state i
+  plan.selectorLayout.memberState state
 
 def reusedMembers {source : Instance n} (plan : Plan source) :
     Finset plan.Member :=
-  Finset.univ.filter fun i => source.domains i = .binary
+  plan.selectorLayout.reusedMembers
 
 def freshMembers {source : Instance n} (plan : Plan source) :
     Finset plan.Member :=
-  plan.reusedMembersᶜ
+  plan.selectorLayout.freshMembers
 
 /-- Exact validation performed before rational selector bounds are extracted. -/
 def Valid {source : Instance n} (plan : Plan source) : Prop :=
@@ -90,9 +100,14 @@ theorem reusedBinary_of_domains {source : Instance n} (plan : Plan source)
     {state : State n} (hdomains : ∀ i, state i ∈ source.domains i) :
     GenericBinaryOn plan.reusedMembers (plan.memberState state) := by
   intro i hi
-  have hdomain : source.domains i = .binary :=
-    (Finset.mem_filter.mp hi).2
-  simpa [memberState, hdomain] using hdomains i
+  have hdomain : source.domains i = .binary := by
+    have hmem := hi
+    change
+      i ∈ ((Finset.univ.filter
+        fun i : plan.Member => source.domains i = .binary)ᶜ)ᶜ at hmem
+    rw [compl_compl] at hmem
+    exact (Finset.mem_filter.mp hmem).2
+  simpa [memberState, SelectorLayout.memberState, hdomain] using hdomains i
 
 theorem genericSOS1_memberState_iff_holds {source : Instance n}
     (plan : Plan source) (state : State n) :
@@ -103,43 +118,41 @@ theorem genericSOS1_memberState_iff_holds {source : Instance n}
   constructor
   · intro h i hi j hj hine hjne
     have hij :
-        (⟨i, hi⟩ : plan.Member) = (⟨j, hj⟩ : plan.Member) := by
+      (⟨i, hi⟩ : plan.Member) = (⟨j, hj⟩ : plan.Member) := by
       apply h
-      · simpa [memberState] using hine
-      · simpa [memberState] using hjne
+      · simpa [memberState, SelectorLayout.memberState] using hine
+      · simpa [memberState, SelectorLayout.memberState] using hjne
     exact congrArg Subtype.val hij
   · intro h i hi j hj
     apply Subtype.ext
     apply h i.val i.property j.val j.property
-    · simpa [memberState] using hi
-    · simpa [memberState] using hj
+    · simpa [memberState, SelectorLayout.memberState] using hi
+    · simpa [memberState, SelectorLayout.memberState] using hj
 
 abbrev freshCount {source : Instance n} (plan : Plan source) : Nat :=
-  plan.freshMembers.card
+  plan.selectorLayout.freshCount
 
 def freshMember {source : Instance n} (plan : Plan source)
     (j : Fin plan.freshCount) : plan.Member :=
-  (plan.freshMembers.orderIsoOfFin rfl j).val
+  plan.selectorLayout.freshMember j
 
 def freshIndex {source : Instance n} (plan : Plan source)
     (i : plan.Member) (hi : i ∈ plan.freshMembers) :
     Fin plan.freshCount :=
-  (plan.freshMembers.orderIsoOfFin rfl).symm ⟨i, hi⟩
+  plan.selectorLayout.freshIndex i hi
 
 @[simp]
 theorem freshMember_freshIndex {source : Instance n} (plan : Plan source)
     (i : plan.Member) (hi : i ∈ plan.freshMembers) :
     plan.freshMember (plan.freshIndex i hi) = i := by
-  simp [freshMember, freshIndex]
+  exact plan.selectorLayout.freshMember_freshIndex i hi
 
 @[simp]
 theorem freshIndex_freshMember {source : Instance n} (plan : Plan source)
     (j : Fin plan.freshCount) :
     plan.freshIndex (plan.freshMember j) (by
       exact (plan.freshMembers.orderIsoOfFin rfl j).property) = j := by
-  change (plan.freshMembers.orderIsoOfFin rfl).symm
-    ((plan.freshMembers.orderIsoOfFin rfl) j) = j
-  exact (plan.freshMembers.orderIsoOfFin rfl).symm_apply_apply j
+  exact plan.selectorLayout.freshIndex_freshMember j
 
 end Plan
 
